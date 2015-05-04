@@ -1,0 +1,108 @@
+#!/usr/bin/env python
+# ----------------------------------------------------------------------------
+# Copyright 2014 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+"""
+Usage for spearmint in neon:
+
+Requirements:
+Spearmint is expected to be installed in the same directory as neon, i.e.
+neon/../spearmint should exist.
+Spearmint in turn depends on google protobufs and on the flask web server
+
+Usage:
+The hyperopt executable manages the creation and running of a spearmint
+experiment.
+To set up a new experiment, create a hyper-yaml from you yaml by replacing
+parameters like
+      learning_rate: 0.1,
+with ranges like
+      learning_rate: !hyperopt stepsize FLOAT 0.1 1 ,
+where !hyperopt signals a parameter that should be tuned, followed by a unique
+name for that parameter ("stepsize" in this example). The type of variable can
+be INT or FLOAT (Spearmint also supports ENUM but I have not implementat that).
+The last two parameters are the beginning and end of the range.
+
+To create a spearmint experiment, run
+      bin/hyperopt init -y examples/hyper_mnist_cpu_mlp-784-100-10.yaml
+which will take the hyper-yaml and create a protobuf spear_config.pb from it.
+
+To run the experiment,
+      bin/hyperopt run -p 50000
+will start generating yaml files by combining the skeleton from the hyper-yaml
+and values picked by Spearmint using the protobuf. The results of a run are
+stored in neon_result_validation.txt by the custom experiment type
+WriteErrorToFile. The result from this file is then passed back to spearmint to
+pick the next set of parameters.
+Results are displayed by a webserver on the specified port, e.g.
+localhost:50000.
+
+"""
+
+import argparse
+import os
+import shutil
+import sys
+
+from neon.hyperopt import gen_config
+
+
+def parse_args():
+    """
+    Sets up and handles command line argument parsing.
+    """
+    parser = argparse.ArgumentParser(description='run spearmint hyperoptimize')
+    parser.add_argument('cmd', type=str,  action='store', default='def',
+                        help='init, run or reset ')
+    parser.add_argument('-p', '--port', type=int, action='store', default=5000,
+                        help='port number for visualization server')
+    parser.add_argument('-n', '--threads', type=int, action='store', default=1,
+                        help='number of simultaneous experiments')
+    parser.add_argument('-y', '--yaml', type=str, action='store',
+                        default='examples/hyper_iris_small.yaml',
+                        help='hyperyaml to generate protobuf from')
+    return parser.parse_args()
+
+def main():
+    """
+    Point of code entry.
+    """
+    argz = parse_args()
+    bin_path = os.path.dirname(os.path.realpath(__file__))
+    root = os.path.split(os.path.split(bin_path)[0])[0]
+    hyperopt_dir = os.path.expanduser(os.environ['HYPEROPT_PATH'])
+    hyperopt_dir = os.path.realpath(hyperopt_dir)
+    spearmint_dir = os.path.expanduser(os.environ['SPEARMINT_PATH'])
+    spearmint_dir = os.path.realpath(spearmint_dir)
+    if (argz.cmd == 'reset'):
+        shutil.rmtree(hyperopt_dir)
+        print("Running cleanup")
+    if (argz.cmd == 'run'):
+        os.chdir(hyperopt_dir)
+        os.system(os.path.join(spearmint_dir, 'spearmint') + ' '
+                  'spear_config.pb '
+                  '--driver=local --method=GPEIperSecChooser '
+                  '--method-args=noiseless=0 --polling-time=20 '
+                  '--max-concurrent=' + str(argz.threads) +
+                  ' -w --port=' + str(argz.port) )
+    if (argz.cmd == 'init'):
+        if not os.path.exists(hyperopt_dir):
+            os.makedirs(hyperopt_dir)
+        input_file = argz.yaml
+        shutil.copy2(input_file, os.path.join(hyperopt_dir, 'hyperyaml.yaml'))
+        gen_config.main(hyperopt_dir)
+
+if __name__ == '__main__':
+    result = main()
+    sys.exit(result)

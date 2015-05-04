@@ -1,0 +1,296 @@
+# ----------------------------------------------------------------------------
+# Copyright 2014 Nervana Systems Inc.
+# ----------------------------------------------------------------------------
+# Experiment settings to train/test the micro version of AlexNet CNN on ImageNet.
+# Compare to Caffe: https://github.com/BVLC/caffe/blob/master/models/bvlc_alexnet/train_val.prototxt
+
+
+
+!obj:experiments.FitPredictErrorExperiment {
+
+  metrics: {
+    train: [
+      !obj:metrics.MisclassPercentage {error_rank: 1},
+      !obj:metrics.MisclassPercentage {error_rank: 5},
+    ],
+    validation: [
+      !obj:metrics.MisclassPercentage {error_rank: 1},
+      !obj:metrics.MisclassPercentage {error_rank: 5},
+    ],
+  },
+
+  diagnostics: {
+    timing: False,
+    decorate_fc: [fprop_fc, bprop_fc, update_fc],
+    decorate_conv: [fprop_conv, bprop_conv, update_conv],
+    decorate_ew: [rectlin, add, subtract, multiply, divide, greater, not_equal,
+                  clip, log, argmax],
+
+    ranges: False,
+    verbosity: silent,
+    prefix: i1k16-micro,
+    decorate_ranges: [gdmwd_compound, fprop_fc, bprop_fc, update_fc, fprop_conv,
+                      bprop_conv, update_conv],
+  },
+
+  dataset: &ds !obj:datasets.Imageset {
+    repo_path: '~/data',
+    imageset: 'I1K',
+    square_crop: True,
+    save_dir: '~/data/I1K/imageset_batches',
+    output_image_size: &ois 256,
+    cropped_image_size: &cis 224,
+    macro_size: 3072,
+    num_channels: 3,
+    num_workers: 12,
+    mean_norm: True, # This just subtracts the mean, but doesn't divide by 128
+    unit_norm: False, # This norms magnitude to 1
+    ntrain: 2,
+    nval: 1,
+    backend_type: &bt np.float32,
+  },
+
+  weight_inits: [
+    # Init for the two FC layers
+    &wt_init_fc !obj:params.AutoUniformValGen {
+      relu: True,
+      bias_init: 1.0,
+    },
+    # used for lastlayer
+    &wt_initout !obj:params.AutoUniformValGen {
+      relu: True,
+      bias_init: -7.0,
+    },
+  ],
+
+  lrule: &gdm {
+    type: gradient_descent_momentum,
+    backend_type: *bt,
+    lr_params: {
+      learning_rate: 0.0002,
+      schedule: {
+              type: step,
+              ratio: 0.1,
+              step_epochs: 20,
+      },
+      momentum_params: {
+        type: constant,
+        initial_coef: 0.90,
+      },
+    },
+  },
+
+  lrule: &gdmwd {
+    type: gradient_descent_momentum_weight_decay,
+    lr_params: {
+      learning_rate: 0.0001,
+      weight_decay: .0005,
+      schedule: {
+              type: step,
+              ratio: 0.1,
+              step_epochs: 20,
+      },
+      momentum_params: {
+        type: constant,
+        initial_coef: 0.90,
+      },
+    },
+  },
+
+
+  model: !obj:models.MLP {
+    backend_type: *bt,
+    batch_norm: &bn True,
+    num_epochs: 2, # 1 or 10 or 60
+    batch_size: &bs 128,
+    step_print: 24,
+    serialized_path: '~/data/i1k-model2.prm',
+    overwrite_list: ['num_epochs'],
+    
+    layers: [
+      &datalayer !obj:layers.ImageDataLayer {
+        name: d0,
+        is_local: True,
+        nofm: 3,
+        ofmshape: [*cis, *cis],
+      },
+      !obj:layers.ConvLayer {
+        name: conv1,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        brule_init: *gdm,
+        weight_init: !obj:params.AutoUniformValGen {
+          relu: True,
+          islocal: True,
+          bias_init: 0.0,
+        },
+        nofm: 64,
+        fshape: [11, 11],
+        stride: 4,
+        pad: 3,
+        activation: !obj:transforms.RectLin {},
+      },
+      # !obj:layers.CrossMapResponseNormLayer {
+      #   name: rnorm1,
+      #   ksize: 5,
+      #   alpha: 0.0001,
+      #   beta: 0.75,
+      # },
+      !obj:layers.PoolingLayer {
+        name: pool1,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [3, 3],
+        stride: 2,
+      },
+      !obj:layers.ConvLayer {
+        name: conv2,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        brule_init: *gdm,
+        weight_init: !obj:params.AutoUniformValGen {
+          relu: True,
+          islocal: True,
+          bias_init: 1.0,
+        },
+        nofm: 192,
+        fshape: [5, 5],
+        pad: 2,
+        activation: !obj:transforms.RectLin {},
+      },
+      # !obj:layers.CrossMapResponseNormLayer {
+      #   name: rnorm2,
+      #   ksize: 5,
+      #   alpha: 0.0001,
+      #   beta: 0.75,
+      # },
+      !obj:layers.PoolingLayer {
+        name: pool2,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [3, 3],
+        stride: 2,
+      },
+      !obj:layers.ConvLayer {
+        name: conv3,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        brule_init: *gdm,
+        weight_init: !obj:params.AutoUniformValGen {
+          relu: True,
+          islocal: True,
+          bias_init: 0.0,
+        },
+        nofm: 384,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.ConvLayer {
+        name: conv4,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        brule_init: *gdm,
+        weight_init: !obj:params.AutoUniformValGen {
+          relu: True,
+          islocal: True,
+          bias_init: 1.0,
+        },
+        nofm: 256,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.ConvLayer {
+        name: conv5,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        brule_init: *gdm,
+        weight_init: !obj:params.AutoUniformValGen {
+          relu: True,
+          islocal: True,
+          bias_init: 1.0,
+        },
+        nofm: 256,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.PoolingLayer {
+        name: pool3,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [3, 3],
+        stride: 2,
+      },
+      !obj:layers.FCLayer {
+        name: fc4096a,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        brule_init: *gdm,
+        weight_init: *wt_init_fc,
+        nout: 4096,
+        activation: !obj:transforms.RectLin {},
+      },
+      # !obj:layers.DropOutLayer {
+      #   name: dropout1,
+      #   backend_type: *bt,
+      #   keep: 0.5,
+      # },
+      !obj:layers.FCLayer {
+        name: fc4096b,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        brule_init: *gdm,
+        weight_init: *wt_init_fc,
+        nout: 4096,
+        activation: !obj:transforms.RectLin {},
+      },
+      # !obj:layers.DropOutLayer {
+      #   name: dropout2,
+      #   backend_type: *bt,
+      #   keep: 0.5,
+      # },
+      &lastlayer !obj:layers.FCLayer {
+        name: fc1000,
+        backend_type: *bt,
+        lrule_init: *gdmwd,
+        brule_init: *gdm,
+        weight_init: *wt_initout,
+        nout: 1000,
+        activation: !obj:transforms.Softmax  {},
+      },
+      &costlayer !obj:layers.CostLayer {
+        name: cost,
+        ref_layer: *datalayer,
+        ref_label: 'labels',
+        raw_label: False, # Default is False
+        cost: !obj:transforms.CrossEntropy {
+          backend_type: *bt,
+          epsilon: 0.0005,
+          scale: 1000,
+        },
+      },
+    ],
+  },
+
+  # logging options that are passed to logging.basicConfig
+  # level value thresholds (set level lower to display them):
+  #   CRITICAL 50
+  #   ERROR    40
+  #   WARNING  30
+  #   INFO     20
+  #   DEBUG    10
+  #   NOTSET    0
+  logging: {
+    level: 20,
+    format: '%(asctime)-15s %(levelname)s:%(module)s - %(message)s'
+  },
+}

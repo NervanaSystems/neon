@@ -1,0 +1,200 @@
+#!/usr/bin/env python
+# ----------------------------------------------------------------------------
+# Copyright 2014 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+"""
+Driver script for running neon model experiments.
+"""
+
+import argparse
+import datetime
+import logging
+import sys
+from timeit import default_timer
+import yaml
+
+import neon
+from neon.backends import gen_backend
+from neon.util.persist import deserialize
+from neon.util.trace import Tracer
+from neon.metrics.metric import dump_metrics
+
+
+def parse_args():
+    """
+    Sets up and handles command line argument parsing.
+    """
+    parser = argparse.ArgumentParser(description='The Nervana Framework. '
+                                     'This executable allows one to run '
+                                     'experiments using a particular backend '
+                                     '(defaults to single process [possibly '
+                                     'multicore via BLAS multithreading] '
+                                     'float32 CPU unless at least one of -g, '
+                                     '-p, -m, -n, or -f are given).')
+    parser.add_argument('yaml_file', type=argparse.FileType('r'),
+                        help='experiment configuration settings')
+    parser.add_argument('-v', '--version', action='version',
+                        version=neon.__version__)
+    parser.add_argument('-c', '--cloud', action='store_true',
+                        help='Run your experiment in the Nervana Cloud')
+    parser.add_argument('-g', '--gpu', action='store',
+                        help="Attempt to run using a CUDA capable GPU backend."
+                             " If 'cudanet', use a cuda-convnet2 backend. "
+                             "If 'nervanagpu', use fp16/fp32 backend for "
+                             "Maxwell GPUs ")
+    parser.add_argument('-u', '--rounding', type=int,
+                        help=' 1 for stochastic rounding, 0 for deterministic')
+    parser.add_argument('-n', '--nrv', action='store_true',
+                        help='Attempt to run using the Nervana Engine hardware')
+    parser.add_argument('-p', '--datapar', action='store_true',
+                        help='Use parallelization to partition the data over '
+                             'multiple nodes')
+    parser.add_argument('-m', '--modelpar', action='store_true',
+                        help='Use parallelization to partition the model over '
+                             'multiple nodes')
+    parser.add_argument('-l', '--live', action='store_true',
+                        help='Perform inference on live data')
+    parser.add_argument('-f', '--flexpoint', action='store_true',
+                        help='Attempt to run a Nervana FlexPoint(TM) capable '
+                             'backend')
+    parser.add_argument('-r', '--rng_seed', type=int,
+                        help='Seed the random number generator for the backend'
+                             ' with the specified value.')
+    parser.add_argument('-i', '--device_id', type=int,
+                        help='Select accelerator device id to run process on')
+    parser.add_argument('-e', '--numerr_handling', action='store',
+                        type=yaml.load, help='Set how numeric errors are '
+                        'handled.  Python dict syntax, parameters are the same'
+                        ' as for numpy.set_err')
+    parser.add_argument('-s', '--profile', action='store',
+                        help=('Collect and write profiling stats to the file '
+                              'specified.  Or stdout if empty string.'))
+    parser.add_argument('-o', '--output', action='store',
+                        help=('Collect and write timing and a set of metrics '
+                              'to the file specified.  Or stdout if empty '
+                              'string.  We append if file exists'))
+    parser.add_argument('-d', '--debug', action='store_true',
+                        help='call ipython debugger on uncaught exception')
+    parser.add_argument('-t', '--trace', action='store', nargs=2,
+                        metavar=('file_filter', 'output_file'),
+                        help='Trace through function calls. Optional '
+                             'argument is a regex filter on the name of the '
+                             'source files to confine the trace to.')
+    return(parser.parse_args())
+
+
+def main():
+    """
+    Point of code entry.
+    """
+    # setup an initial console logger (may be overridden in config)
+    logging.basicConfig(level=30)  # WARN or higher
+    # read in yaml configuration and initialize objects
+    args = parse_args()
+    if args.profile is not None:
+        import cProfile
+        p = cProfile.Profile()
+        p.enable()
+        logging.warn("Profiling code to: %s",
+                     args.profile if args.profile != "" else "stdout")
+    if args.trace is not None:
+        tracer = Tracer.setup(args.trace[0], args.trace[1])
+    if args.output is not None:
+        start_date = str(datetime.datetime.now())
+        start_time = default_timer()
+        logging.info("Outputting timing and metrics to: %s",
+                     args.output if args.output != "" else "stdout")
+    if args.cloud:
+        # TODO: kick-off cloud job
+        logging.warning('Sorry!  We still need to add hooks for the Nervana '
+                        'cloud. In the meantime your Experiment will be run '
+                        'locally.')
+    try:
+        experiment = deserialize(args.yaml_file)
+        if hasattr(experiment, 'live'):
+            experiment.live = args.live
+        if hasattr(experiment, 'logging'):
+            logger = logging.getLogger()
+            handler = logger.handlers[0]
+            if "filename" in experiment.logging:
+                logging.warn("replacing console logging with file logging: %s",
+                             experiment.logging["filename"])
+                logger.removeHandler(handler)
+                handler = logging.FileHandler(experiment.logging["filename"])
+                logger.addHandler(handler)
+            if "format" in experiment.logging:
+                formatter = logging.Formatter(experiment.logging["format"])
+                handler.setFormatter(formatter)
+            if "level" in experiment.logging:
+                logging.warn("setting log level to: %d",
+                             experiment.logging["level"])
+                logger.setLevel(experiment.logging["level"])
+        if args.output is not None:
+            # compute a standard set of metrics
+            from neon.metrics import MisclassPercentage, AUC, LogLossMean
+            experiment.metrics = dict()
+            experiment.metrics["train"] = [MisclassPercentage(), AUC(),
+                                           LogLossMean()]
+            experiment.metrics["test"] = [MisclassPercentage(), AUC(),
+                                          LogLossMean()]
+            experiment.metrics["validation"] = [MisclassPercentage(), AUC(),
+                                                LogLossMean()]
+        # carry out the experiment
+        if not hasattr(experiment, 'backend') or experiment.backend is None:
+            backend = gen_backend(model=experiment.model, gpu=args.gpu,
+                                  nrv=args.nrv, datapar=args.datapar,
+                                  stochastic_round=args.rounding,
+                                  modelpar=args.modelpar,
+                                  flexpoint=args.flexpoint,
+                                  rng_seed=args.rng_seed,
+                                  numerr_handling=args.numerr_handling,
+                                  device_id=args.device_id)
+        else:
+            backend = experiment.backend
+            logger.info("utilizing %s backend from yaml file",
+                        backend.__class__.__name__)
+        experiment.initialize(backend)
+        result = experiment.run()
+        if args.profile is not None:
+            if args.profile == "":
+                p.disable()
+                p.print_stats("tottime")
+            else:
+                p.disable()
+                p.dump_stats(args.profile)
+        if args.output is not None:
+            # fill in any missing metric values
+            if result is None:
+                result = dict()
+            for dset in ["train", "test", "validation"]:
+                if dset not in result:
+                    result[dset] = dict()
+                for metric in [str(x) for x in experiment.metrics[dset]]:
+                    if metric not in result[dset]:
+                        result[dset][metric] = float("nan")
+            dump_metrics(args.output, args.yaml_file.name,
+                         start_date, default_timer() - start_time,
+                         backend.__class__.__name__, result)
+        return experiment, result, 0
+    except Exception as e:
+        if args.debug:
+            import ipdb, traceback
+            traceback.print_exc()
+            ipdb.post_mortem(sys.exc_info()[2])
+        else:
+            raise
+
+if __name__ == '__main__':
+    experiment, result, status = main()
+    sys.exit(status)

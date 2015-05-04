@@ -1,0 +1,10 @@
+include README.md
+include CONTRIBUTING.rst
+include setup.py
+include setup.cfg
+include Makefile
+include LICENSE
+
+graft neon
+graft doc
+prune doc/build

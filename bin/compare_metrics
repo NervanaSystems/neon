@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+# ----------------------------------------------------------------------------
+# Copyright 2014 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+"""
+Utility script to compare the metrics produced on the most recent of a given
+example against prior runs.
+"""
+
+import argparse
+import sys
+
+from neon.metrics.metric import compare_metrics
+
+def parse_args():
+    """
+    Sets up and handles command line argument parsing.
+    """
+    parser = argparse.ArgumentParser(description='Compare the most recent '
+                                     'run of a given experiment with prior '
+                                     'runs, using data taken from the '
+                                     'specified DB file.')
+    parser.add_argument('db_file', type=str,
+                        help='flat file containing prior run statistics')
+    parser.add_argument('yaml_file', type=str,
+                        help='experiment settings file to be compared')
+    parser.add_argument('-n', '--num_comps', type=int, default=10,
+                        help='number of most recent prior runs to compare to. '
+                             'Defaults to 10 if not specified')
+    parser.add_argument('-d', '--delimiter', default='\t',
+                        help='output field separator.  Defaults to tab char')
+    parser.add_argument('-c', '--no_color', action='store_true',
+                        help='turn off coloring of comparison diffs')
+    parser.add_argument('-t', '--color_threshold', type=float, default=.01,
+                        help='Difference magnitude (from prior run mean) '
+                             'needed to highlight in color.  Defaults to .01')
+    return(parser.parse_args())
+
+def main():
+    """Point of code entry"""
+    args = parse_args()
+    compare_metrics(args.db_file, args.yaml_file, max_comps=args.num_comps,
+                    field_sep=args.delimiter, escape_colors=not args.no_color,
+                    color_threshold=args.color_threshold)
+
+if __name__ == '__main__':
+  sys.exit(main())

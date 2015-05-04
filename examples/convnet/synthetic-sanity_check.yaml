@@ -1,0 +1,110 @@
+# ----------------------------------------------------------------------------
+# Copyright 2014 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+# Configuration for sanity (test) checking.
+
+!obj:experiments.FitPredictErrorExperiment {
+
+  dataset: &ds !obj:datasets.ToyImages {
+    repo_path: '~/data',
+    sample_pct: 100,
+  },
+
+  metrics: {
+    test: [
+      !obj:metrics.MisclassRate {},
+    ],
+  },
+
+  weight_inits: [
+    &wt_init !obj:params.UniformValGen {
+      low: -0.1,
+      high: 0.1,
+    },
+    &wt_initb !obj:params.UniformValGen {
+      low: -0.1,
+      high: 0.1,
+      bias_init: 0.0,
+    },
+  ],
+
+  lrule: &gdm {
+    type: gradient_descent_momentum,
+    lr_params: {
+      learning_rate: 0.01,
+      momentum_params: {
+        type: constant,
+        coef: 0.90,
+      },
+    },
+  },
+
+  model: !obj:models.MLP {
+    num_epochs: 2,
+    batch_size: &bs 32,
+    learning_rate: &lr 0.01,
+    layers: [
+      &datalayer !obj:layers.DataLayer {
+        name: d0,
+        is_local: True,
+        nofm: 3,
+        ofmshape: [32, 32],
+      },
+      !obj:layers.ConvLayer {
+        name: layer0,
+        lrule_init: *gdm,
+        weight_init: *wt_init,
+        nofm: 16,
+        fshape: [3, 3],
+      },
+      !obj:layers.PoolingLayer {
+        name: layer1,
+        op: 'max',
+        fshape: [2, 2],
+        stride: 2,
+      },
+      !obj:layers.FCLayer {
+        name: layer6,
+        lrule_init: *gdm,
+        nout: 100,
+        activation: !obj:transforms.RectLin {},
+        weight_init: *wt_initb,
+      },
+      !obj:layers.FCLayer {
+        name: layer7,
+        lrule_init: *gdm,
+        nout: 100,
+        activation: !obj:transforms.RectLeaky {},
+        weight_init: *wt_initb,
+      },
+      &lastlayer !obj:layers.FCLayer {
+        name: output,
+        lrule_init: *gdm,
+        nout: 2,
+        activation: !obj:transforms.Logistic {},
+        weight_init: *wt_init,
+      },
+      &costlayer !obj:layers.CostLayer {
+        name: cost,
+        ref_layer: *datalayer,
+        cost: !obj:transforms.CrossEntropy {},
+      },
+    ],
+  },
+
+  logging: {
+    level: 20,
+    format: '%(asctime)-15s %(levelname)s:%(module)s - %(message)s'
+  },
+}
