@@ -23,8 +23,7 @@ that it can be correctly copied to the device being used.
 We support loading datasets into host and device memory either all it once, or
 in chunks (one macro batch at a time), useful if your dataset is too large to
 fit in memory.  Note that macro batch loading is only supported in
-:class:`neon.datasets.imageset.Imageset` and :class:`neon.datasets.i1k.I1K`
-currently.
+:class:`neon.datasets.imageset.Imageset` currently.
 
 
 Available Datasets
@@ -39,7 +38,6 @@ Available Datasets
    neon.datasets.iris.Iris
    neon.datasets.mnist.MNIST
    neon.datasets.sparsenet.SPARSENET
-   neon.datasets.i1k.I1K
 
    neon.datasets.mobydick.MOBYDICK
 

@@ -44,9 +44,10 @@ Features that are unique to neon include:
    Maxwell GPUs. These are the fastest implementations of the benchmark
    deep networks.
 -  4.3s/macrobatch on AlexNet on Titan X (Full run on 1 GPU ~ 45 hrs)
--  Out of the box `fp16 AlexNet
-   model <examples/convnet/i1k-alexnet-fp16.yaml>`__ that has the same
-   accuracy as `fp32 <examples/convnet/i1k-alexnet-fp32.yaml>`__
+-  Out of the box `fp16 AlexNet model
+   <https://github.com/NervanaSystems/neon/blob/master/examples/convnet/i1k-alexnet-fp16.yaml>`__ 
+   that has the same accuracy as `fp32
+   <https://github.com/NervanaSystems/neon/blob/master/examples/convnet/i1k-alexnet-fp32.yaml>`__
 -  Integration with our fork
    (`cudanet <https://github.com/NervanaSystems/cuda-convnet2>`__) of
    Alex Krizhevsky's cuda-convnet2 library for Kepler GPU support
@@ -108,7 +109,7 @@ Running a simple MNIST model (on CPU)
 Running an Alexnet model (on GPU)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In `fp32 <examples/convnet/i1k-alexnet-fp32.yaml>`__:
+In `fp32 <https://github.com/NervanaSystems/neon/blob/master/examples/convnet/i1k-alexnet-fp32.yaml>`__:
 
 ::
 
@@ -118,7 +119,7 @@ In `fp32 <examples/convnet/i1k-alexnet-fp32.yaml>`__:
     # for cudanet (works with Kepler or Maxwell GPUs)
     neon --gpu cudanet examples/convnet/i1k-alexnet-fp32.yaml
 
-In `fp16 <examples/convnet/i1k-alexnet-fp16.yaml>`__:
+In `fp16 <https://github.com/NervanaSystems/neon/blob/master/examples/convnet/i1k-alexnet-fp16.yaml>`__:
 
 ::
 
