@@ -108,7 +108,7 @@ In [fp16](examples/convnet/i1k-alexnet-fp16.yaml):
 The complete documentation for neon is available
 [here](http://neon.nervanasys.com/docs/latest). Some useful starting points are:
 
-* [Using neon](http://neon.nervanasys.com/docs/latest/using_framework.html)
+* [Using neon](http://neon.nervanasys.com/docs/latest/using_neon.html)
 * [API](http://neon.nervanasys.com/docs/latest/api.html)
 * [Developing for neon](http://neon.nervanasys.com/docs/latest/developing_framework.html)
 
