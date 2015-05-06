@@ -148,10 +148,10 @@ The complete documentation for neon is available
 points are:
 
 -  `Using
-   neon <http://neon.nervanasys.com/docs/latest/using_framework.html>`__
+   neon <http://neon.nervanasys.com/docs/latest/using_neon.html>`__
 -  `API <http://neon.nervanasys.com/docs/latest/api.html>`__
 -  `Developing for
-   neon <http://neon.nervanasys.com/docs/latest/developing_framework.html>`__
+   neon <http://neon.nervanasys.com/docs/latest/developing_neon.html>`__
 
 Issues
 ~~~~~~

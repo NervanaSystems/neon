@@ -110,7 +110,7 @@ The complete documentation for neon is available
 
 * [Using neon](http://neon.nervanasys.com/docs/latest/using_neon.html)
 * [API](http://neon.nervanasys.com/docs/latest/api.html)
-* [Developing for neon](http://neon.nervanasys.com/docs/latest/developing_framework.html)
+* [Developing for neon](http://neon.nervanasys.com/docs/latest/developing_neon.html)
 
 
 ### Issues
