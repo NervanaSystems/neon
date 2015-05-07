@@ -104,7 +104,7 @@
     num_epochs: 4, # 1 or 10 or 60
     batch_size: &bs 128,
     step_print: 24,
-    serialized_path: '~/data/i1k-model2.prm',
+    serialized_path: '~/data/i1k-model4b.prm',
     overwrite_list: ['num_epochs'],
 
     layers: [
