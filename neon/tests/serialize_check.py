@@ -38,10 +38,6 @@ def parse_args():
                         type=int)
     parser.add_argument('--gpu', default="", help='Run GPU serialize check '
                         '(specify one of cudanet or nervanagpu')
-    parser.add_argument('--datapar', default=0, type=int,
-                        help='Run data parallel serialize check')
-    parser.add_argument('--modelpar', default=0, type=int,
-                        help='Run model parallel serialize check')
     return parser.parse_args()
 
 

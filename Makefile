@@ -138,6 +138,11 @@ test_all:
 	@echo "Running test_all..."
 	@tox -- -e CPU=$(CPU) GPU=$(GPU) DIST=$(DIST)
 
+integration: build
+	@echo "Running integration checks..."
+	@PYTHONPATH=${PYTHONPATH}:./ python neon/tests/integration_check.py \
+		--cpu $(CPU) --gpu $(GPU)
+
 serialize: build
 	@echo "Running serialize checks..."
 	@PYTHONPATH=${PYTHONPATH}:./ python neon/tests/serialize_check.py \
