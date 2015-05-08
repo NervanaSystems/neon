@@ -33,6 +33,16 @@ def integration_check(conf_file, result, tol, **be_args):
 
 
 if __name__ == '__main__':
+    try:
+        import nervanagpu  # noqa
+    except:
+        raise RuntimeError("Can't find nervanagpu")
+
+    try:
+        import cudanet  # noqa
+    except:
+        raise RuntimeError("Can't find cudanet")
+
     # setup an initial console logger (may be overridden in config)
     logging.basicConfig(level=40)  # ERROR or higher
     res = 0
