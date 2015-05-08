@@ -23,15 +23,6 @@ from neon.backends import gen_backend
 from neon.util.persist import deserialize
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description='Run sanity check examples')
-    parser.add_argument('--cpu', default=0, help='Run CPU sanity check',
-                        type=int)
-    parser.add_argument('--gpu', default="", help='Run GPU sanity check '
-                        '(specify one of cudanet or nervanagpu')
-    return parser.parse_args()
-
-
 def integration_check(conf_file, result, tol, **be_args):
     experiment = deserialize(os.path.join(dir, conf_file))
     backend = gen_backend(model=experiment.model, **be_args)
@@ -45,7 +36,6 @@ if __name__ == '__main__':
     # setup an initial console logger (may be overridden in config)
     logging.basicConfig(level=40)  # ERROR or higher
     res = 0
-    args = parse_args()
     script_dir = os.path.dirname(os.path.realpath(__file__))
 
     # Test 1: i1k-alexnet-fp16 (nervanagpu only)

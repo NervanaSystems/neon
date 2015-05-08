@@ -28,17 +28,6 @@ import sys
 from neon.backends import gen_backend
 from neon.util.persist import deserialize
 
-
-def parse_args():
-    parser = argparse.ArgumentParser(
-        description='Run serialize check examples')
-    parser.add_argument('--cpu', default=0, help='Run CPU serialize check',
-                        type=int)
-    parser.add_argument('--gpu', default="", help='Run GPU serialize check '
-                        '(specify one of cudanet or nervanagpu')
-    return parser.parse_args()
-
-
 def serialize_check(conf_file, result, tol, res_string, **be_args):
     experiment = deserialize(os.path.join(dir, conf_file))
     backend = gen_backend(model=experiment.model, **be_args)
@@ -51,7 +40,6 @@ if __name__ == '__main__':
     # setup an initial console logger (may be overridden in config)
     logging.basicConfig(level=40)  # ERROR or higher
     res = 0
-    # args = parse_args()
     script_dir = os.path.dirname(os.path.realpath(__file__))
     check_files = []
 
