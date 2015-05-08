@@ -29,7 +29,7 @@ from neon.backends import gen_backend
 from neon.util.persist import deserialize
 
 def serialize_check(conf_file, result, tol, res_string, **be_args):
-    experiment = deserialize(os.path.join(dir, conf_file))
+    experiment = deserialize(conf_file)
     backend = gen_backend(model=experiment.model, **be_args)
     experiment.initialize(backend)
     res = experiment.run()
@@ -41,6 +41,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=40)  # ERROR or higher
     res = 0
     script_dir = os.path.dirname(os.path.realpath(__file__))
+    script_dir = os.path.join(script_dir, 'tests_yamls')
     check_files = []
 
     toy = True

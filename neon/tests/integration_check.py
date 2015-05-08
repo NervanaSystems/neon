@@ -13,7 +13,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Sanity check
+Integration check
+Run several example networks and make sure their accuracy is within a tolerance
 """
 import argparse
 import logging
@@ -24,7 +25,7 @@ from neon.util.persist import deserialize
 
 
 def integration_check(conf_file, result, tol, **be_args):
-    experiment = deserialize(os.path.join(dir, conf_file))
+    experiment = deserialize(conf_file)
     backend = gen_backend(model=experiment.model, **be_args)
     experiment.initialize(backend)
     res = experiment.run()
@@ -37,6 +38,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=40)  # ERROR or higher
     res = 0
     script_dir = os.path.dirname(os.path.realpath(__file__))
+    script_dir = os.path.join(script_dir, 'tests_yamls')
 
     # Test 1: i1k-alexnet-fp16 (nervanagpu only)
     check_file = os.path.join(script_dir, 'i1k-alexnet-fp16.yaml')
