@@ -49,6 +49,8 @@ class FitExperiment(Experiment):
         req_param(self, ['dataset', 'model'])
         opt_param(self, ['backend'])
         opt_param(self, ['live'], False)
+        if self.backend is not None:
+            self.initialize(self.backend)
 
     def initialize(self, backend):
         if self.initialized:
