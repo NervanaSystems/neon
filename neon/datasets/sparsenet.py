@@ -72,7 +72,7 @@ class SPARSENET(Dataset):
             infile.close()
         return array
 
-    def load(self):
+    def load(self, backend=None, experiment=None):
         """
         main function
         """

@@ -89,7 +89,7 @@ class MOBYDICK(Dataset):
                 batchwise[batch] = batchdata
             return batchwise
 
-    def load(self):
+    def load(self, backend=None, experiment=None):
         self.initialize()
         if self.inputs['train'] is not None:
             return

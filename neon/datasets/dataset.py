@@ -71,7 +71,7 @@ class Dataset(object):
     def set_batch_size(self, batch_size):
         self.batch_size = batch_size
 
-    def load(self, backend=None):
+    def load(self, backend=None, experiment=None):
         """
         Makes the dataset data available for use.
         Needs to be implemented in every concrete Dataset child class.
@@ -81,6 +81,8 @@ class Dataset(object):
                      underlying data structure type used to hold this
                      data once loaded.  If None will use
                      `neon.backends.cpu.CPU`
+            experiment (neon.experiments.experiment.Experiment, optional): The
+                     object that loads this dataset.
 
         Raises:
             NotImplementedError: should be overridden in child class

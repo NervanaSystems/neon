@@ -84,7 +84,7 @@ class CIFAR10(Dataset):
             onehot[:, col] = (labels == col)
         return (full_image, onehot)
 
-    def load(self):
+    def load(self, backend=None, experiment=None):
         if self.inputs['train'] is not None:
             return
         if 'repo_path' in self.__dict__:

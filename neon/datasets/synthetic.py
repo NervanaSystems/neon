@@ -54,7 +54,7 @@ class UniformRandom(Dataset):
             onehot[:, col] = (labels == col)
         return (data, onehot)
 
-    def load(self):
+    def load(self, backend=None, experiment=None):
         self.inputs['train'], self.targets['train'] = (
             self.load_data((self.ntrain, self.nin)))
         self.inputs['test'], self.targets['test'] = (
@@ -128,7 +128,7 @@ class ToyImages(Dataset):
             onehot[:, col] = (labels == col)
         return (data, onehot)
 
-    def load(self):
+    def load(self, backend=None, experiment=None):
         ntotal = self.ntrain + self.ntest
         inds = np.arange(ntotal)
         np.random.shuffle(inds)
