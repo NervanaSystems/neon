@@ -126,12 +126,6 @@
         pad: 3,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.CrossMapResponseNormLayer {
-      #   name: rnorm1,
-      #   ksize: 5,
-      #   alpha: 0.0001,
-      #   beta: 0.75,
-      # },
       !obj:layers.PoolingLayer {
         name: pool1,
         op: 'max',
@@ -153,12 +147,6 @@
         pad: 2,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.CrossMapResponseNormLayer {
-      #   name: rnorm2,
-      #   ksize: 5,
-      #   alpha: 0.0001,
-      #   beta: 0.75,
-      # },
       !obj:layers.PoolingLayer {
         name: pool2,
         op: 'max',

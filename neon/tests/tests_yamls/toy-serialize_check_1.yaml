@@ -81,7 +81,6 @@
         is_local: True,
         nofm: 3,
         ofmshape: [32, 32],
-#        nout: 784,
       },
       !obj:layers.ConvLayer {
         name: layer1,
@@ -125,7 +124,7 @@
       &lastlayer !obj:layers.FCLayer {
         name: output,
         backend_type: *bt,
-        nout: 2, #10,
+        nout: 2,
         activation: !obj:transforms.Logistic {},
         weight_init: *wt_init,
         lrule_init: *ada,

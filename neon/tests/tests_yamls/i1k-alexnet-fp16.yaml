@@ -96,7 +96,7 @@
 
   lrule: &gdmwd {
     type: gradient_descent_momentum_weight_decay,
-    backend_type: *bt, ######################################################
+    backend_type: *bt,
     lr_params: {
       learning_rate: 0.0001,
       weight_decay: .0005,
@@ -145,12 +145,6 @@
         pad: 3,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.CrossMapResponseNormLayer {
-      #   name: rnorm1,
-      #   ksize: 5,
-      #   alpha: 0.0001,
-      #   beta: 0.75,
-      # },
       !obj:layers.PoolingLayer {
         name: pool1,
         backend_type: *bt,
@@ -174,12 +168,6 @@
         pad: 2,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.CrossMapResponseNormLayer {
-      #   name: rnorm2,
-      #   ksize: 5,
-      #   alpha: 0.0001,
-      #   beta: 0.75,
-      # },
       !obj:layers.PoolingLayer {
         name: pool2,
         backend_type: *bt,
@@ -252,11 +240,6 @@
         nout: 4096,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.DropOutLayer {
-      #   name: dropout1,
-      #   backend_type: *bt,
-      #   keep: 0.5,
-      # },
       !obj:layers.FCLayer {
         name: fc4096b,
         backend_type: *bt,
@@ -267,11 +250,6 @@
         nout: 4096,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.DropOutLayer {
-      #   name: dropout2,
-      #   backend_type: *bt,
-      #   keep: 0.5,
-      # },
       &lastlayer !obj:layers.FCLayer {
         name: fc1000,
         backend_type: *bt,
