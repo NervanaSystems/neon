@@ -46,7 +46,7 @@ ifneq ($(GPU), 0)
     endif
   else
     # we assume a Linux-like OS
-    ifneq ($(shell nvidia-smi > /dev/null 2>&1; echo $$?), 0)
+    ifneq ($(shell nvcc --version > /dev/null 2>&1; echo $$?), 0)
       $(info No CUDA capable GPU installed.  Forcing GPU=0)
       override GPU := 0
     endif
