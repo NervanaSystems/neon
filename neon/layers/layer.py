@@ -112,8 +112,8 @@ class Layer(YAMLable):
         ofmshape = []
         for dim in range(len(self.ifmshape)):
             assert self.ifmshape[dim] >= self.fshape[dim]
-            num = self.ifmshape[dim] - self.fshape[dim] + 1 + 2 * self.pad
-            ofmshape.extend([(num + self.stride - 1) / self.stride])
+            num = self.ifmshape[dim] - self.fshape[dim] + 2 * self.pad
+            ofmshape.extend([num // self.stride + 1])
         self.ofmshape = tuple(ofmshape)
         self.negpad = -self.pad
         self.ifmsize = np.prod(self.ifmshape)
