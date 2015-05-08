@@ -18,15 +18,14 @@ This has been tested for Maxwell Titan X GPU
 For AlexNet if we want to remove more randomness have to manually set:
 center=True, flip=False,
 #center=self.ds.predict, flip=True,
-in line 53 of imageset.py 
+in line 53 of imageset.py
 """
-
-import argparse
 import logging
 import os
 import sys
 from neon.backends import gen_backend
 from neon.util.persist import deserialize
+
 
 def serialize_check(conf_file, result, tol, res_string, **be_args):
     experiment = deserialize(conf_file)
@@ -34,7 +33,8 @@ def serialize_check(conf_file, result, tol, res_string, **be_args):
     experiment.initialize(backend)
     res = experiment.run()
     print float(res[res_string]['MisclassPercentage_TOP_1']), result,
-    assert abs(float(res[res_string]['MisclassPercentage_TOP_1']) - result) < tol
+    assert abs(
+        float(res[res_string]['MisclassPercentage_TOP_1']) - result) < tol
 
 if __name__ == '__main__':
     # setup an initial console logger (may be overridden in config)
@@ -61,77 +61,95 @@ if __name__ == '__main__':
             if os.path.isfile(os.path.expanduser(serialized_file)):
                 print "deleting:", serialized_file
                 os.remove(os.path.expanduser(serialized_file))
-        
+
         res_string = 'test'
-        
+
         tol = .01
         # Step 1: Run 5 epochs of ToyImages model and serialize, MODEL5
         be = "cpu"
         be_args = {'rng_seed': 0}
         print('cpu check: train 5 epochs of ToyImages on CPU -> MODEL5 '),
-        serialize_check(check_files[0], expected_result, tol, res_string, **be_args)
+        serialize_check(
+            check_files[0], expected_result, tol, res_string, **be_args)
         print('OK')
 
         # Step 2: Deserialize MODEL5 and compare inference performance
         be = "cpu"
         be_args = {'rng_seed': 0}
         print('cpu check: load MODEL5 and calc inference perf '),
-        serialize_check(check_files[0], expected_result, tol, res_string, **be_args)
+        serialize_check(
+            check_files[0], expected_result, tol, res_string, **be_args)
         print('OK')
 
         # Step 3a: Change backend to gpu and perform Step 2
         be = "gpu"
         be_args = {'rng_seed': 0}
         be_args[be] = "cudanet"
-        print(be_args[be] + ' check: load MODEL5 and calc inference perf on GPU '),
-        serialize_check(check_files[0], expected_result, tol, res_string, **be_args)
+        print(
+            be_args[
+                be] + ' check: load MODEL5 and calc inference perf on GPU '),
+        serialize_check(
+            check_files[0], expected_result, tol, res_string, **be_args)
         print('OK')
 
         # Step 3b: Change backend to gpu (nervanagpu) and perform Step 2
         be = "gpu"
         be_args = {'rng_seed': 0}
         be_args[be] = "nervanagpu"
-        print(be_args[be] + ' check: load MODEL5 and calc inference perf on GPU '),
-        serialize_check(check_files[0], expected_result, tol, res_string, **be_args)
+        print(
+            be_args[
+                be] + ' check: load MODEL5 and calc inference perf on GPU '),
+        serialize_check(
+            check_files[0], expected_result, tol, res_string, **be_args)
         print('OK')
-        
+
         tol = 1.2
         # Step 4: Train 10 epochs of ToyImages model and serialize, MODEL10
         be = "cpu"
         be_args = {'rng_seed': 0}
         print('cpu check: train 10 epochs of ToyImages on CPU -> MODEL10 '),
-        serialize_check(check_files[1], expected_result_2, tol, res_string, **be_args)
+        serialize_check(
+            check_files[1], expected_result_2, tol, res_string, **be_args)
         print('OK')
 
         # Step 5: Train 5 more epochs of MODEL5
         be = "cpu"
         be_args = {'rng_seed': 0}
-        print('cpu check: load MODEL5 on CPU and train 5 more epochs -> MODEL10B '),
-        serialize_check(check_files[2], expected_result_2, tol, res_string, **be_args)
+        print(
+            'cpu check: load MODEL5 & train 5 more epochs '),
+        serialize_check(
+            check_files[2], expected_result_2, tol, res_string, **be_args)
         print('OK')
-        
+
         tol = .01
         # Step 6: Change backends & Train 5 more epochs of MODEL5
         be = "gpu"
         be_args = {'rng_seed': 0}
         be_args[be] = "cudanet"
-        print(be_args[be] + ' check: load MODEL5 on GPU and train 5 more epochs -> MODEL10B '),
-        serialize_check(check_files[2], expected_result_3, tol, res_string, **be_args)
+        print(
+            be_args[
+                be] + ' check: load MODEL5 & train 5 more epochs '),
+        serialize_check(
+            check_files[2], expected_result_3, tol, res_string, **be_args)
         print('OK')
 
         # Step 7: Run 5 epochs of ToyImages model and serialize, MODEL5b
         be = "gpu"
         be_args = {'rng_seed': 0}
         be_args[be] = "nervanagpu"
-        print(be_args[be] + ' check: train 5 epochs of ToyImages on GPU -> MODEL5b '),
-        serialize_check(check_files[3], expected_result, tol, res_string, **be_args)
+        print(
+            be_args[
+                be] + ' check: train 5 epochs of ToyImages -> MODEL5b '),
+        serialize_check(
+            check_files[3], expected_result, tol, res_string, **be_args)
         print('OK')
-        
+
         # Step 7: Deserialize MODEL5 on CPU and compare inference performance
         be = "cpu"
         be_args = {'rng_seed': 0}
         print('cpu check: load MODEL5b and calc inference perf on CPU '),
-        serialize_check(check_files[3], expected_result, tol, res_string, **be_args)
+        serialize_check(
+            check_files[3], expected_result, tol, res_string, **be_args)
         print('OK')
 
     alexnet = True
@@ -153,40 +171,52 @@ if __name__ == '__main__':
             if os.path.isfile(os.path.expanduser(serialized_file)):
                 print "deleting:", serialized_file
                 os.remove(os.path.expanduser(serialized_file))
-        
+
         res_string = 'validation'
-        
+
         tol = .3
         # Step 1: Run 2 epochs of I1K model and serialize, MODEL2
         be = "gpu"
         be_args = {'rng_seed': 0}
         be_args[be] = "cudanet"
-        print(be_args[be] + ' check: train 2 epochs of ImageNet on GPU -> MODEL2'),
-        serialize_check(check_files[0], expected_result, tol, res_string, **be_args)
+        print(
+            be_args[
+                be] + ' check: train 2 epochs of ImageNet on GPU -> MODEL2'),
+        serialize_check(
+            check_files[0], expected_result, tol, res_string, **be_args)
         print('OK')
 
         # Step 2: Deserialize MODEL2 and compare inference performance on gpu
         be = "gpu"
         be_args = {'rng_seed': 0}
         be_args[be] = "cudanet"
-        print(be_args[be] + ' check: load MODEL2 on GPU and calc inference perf '),
-        serialize_check(check_files[0], expected_result, tol, res_string, **be_args)
+        print(
+            be_args[
+                be] + ' check: load MODEL2 on GPU and calc inference perf '),
+        serialize_check(
+            check_files[0], expected_result, tol, res_string, **be_args)
         print('OK')
 
         # Step 3: Run 4 epochs of I1K model and serialize, MODEL4
         be = "gpu"
         be_args = {'rng_seed': 0}
         be_args[be] = "cudanet"
-        print(be_args[be] + ' check: train 4 epochs of ImageNet on GPU -> MODEL4 '),
-        serialize_check(check_files[1], expected_result_2, tol, res_string, **be_args)
+        print(
+            be_args[
+                be] + ' check: train 4 epochs of ImageNet on GPU '),
+        serialize_check(
+            check_files[1], expected_result_2, tol, res_string, **be_args)
         print('OK')
 
         # Step 4: Run 2 more epochs of I1K model and serialize on MODEL2
         be = "gpu"
         be_args = {'rng_seed': 0}
         be_args[be] = "cudanet"
-        print(be_args[be] + ' check: load MODEL2 and train for 2 more epochs -> MODEL4b '),
-        serialize_check(check_files[2], expected_result_3, tol, res_string, **be_args)
+        print(
+            be_args[
+                be] + ' check: load MODEL2 & train for 2 more epochs '),
+        serialize_check(
+            check_files[2], expected_result_3, tol, res_string, **be_args)
         print('OK')
 
     sys.exit(res)

@@ -16,7 +16,6 @@
 Integration check
 Run several example networks and make sure their accuracy is within a tolerance
 """
-import argparse
 import logging
 import os
 import sys
@@ -95,8 +94,7 @@ if __name__ == '__main__':
             print('cpu check cifar-convnet '),
             integration_check(check_file, expected_result, tol, **be_args)
             print('OK')
-    
-    
+
     # Test 5: mnist mlp
     check_file = os.path.join(script_dir, 'mnist-mlp.yaml')
     expected_result = 7.35394
@@ -113,7 +111,7 @@ if __name__ == '__main__':
             print('cpu check mnist-mlp '),
             integration_check(check_file, expected_result, tol, **be_args)
             print('OK')
-    
+
     # Test 6: cifar mlp
     check_file = os.path.join(script_dir, 'cifar10-mlp.yaml')
     expected_result = 69.
@@ -130,13 +128,12 @@ if __name__ == '__main__':
             print('cpu check cifar-mlp '),
             integration_check(check_file, expected_result, tol, **be_args)
             print('OK')
-    
-    
+
     # Test 7: rnn, cpu only for now
     check_file = os.path.join(script_dir, 'moby-rnn.yaml')
     expected_result = 0.18162
     tol = .01
-    for be in ["cpu"]: # todo: "gpu" support
+    for be in ["cpu"]:  # todo: "gpu" support
         be_args = {'rng_seed': 0}
         if be == "gpu":
             for gpu in ["nervanagpu", "cudanet"]:
@@ -153,7 +150,7 @@ if __name__ == '__main__':
     check_file = os.path.join(script_dir, 'moby-lstm.yaml')
     expected_result = 0.16
     tol = .01
-    for be in ["cpu"]: # todo: "gpu" support
+    for be in ["cpu"]:  # todo: "gpu" support
         be_args = {'rng_seed': 0}
         if be == "gpu":
             for gpu in ["nervanagpu", "cudanet"]:

@@ -749,7 +749,7 @@ class GPU(Backend):
         """
         self.ng.log(a, out=out)
         return out
-    
+
     def tanh(self, a, out):
         """
         Elementwise tanh
