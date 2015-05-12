@@ -84,7 +84,7 @@ endif
 
 .PHONY: default build develop install uninstall test test_all sanity speed \
 	      grad all clean_pyc clean doc html style lint bench dist publish_doc \
-	      release integration
+	      release serialize integration
 
 default: build
 
@@ -144,8 +144,7 @@ integration: build
 
 serialize: build
 	@echo "Running serialize checks..."
-	@PYTHONPATH=${PYTHONPATH}:./ python neon/tests/serialize_check.py \
-		--cpu $(CPU) --gpu $(GPU) --datapar $(DIST) --modelpar $(DIST)
+	@PYTHONPATH=${PYTHONPATH}:./ python neon/tests/serialize_check.py
     
 sanity: build
 	@echo "Running sanity checks..."
