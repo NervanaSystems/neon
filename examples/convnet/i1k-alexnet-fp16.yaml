@@ -114,7 +114,7 @@
     backend_type: *bt,
     batch_norm: &bn True,
     num_epochs: 60,
-    batch_size: &bs 64,
+    batch_size: &bs 128,
     step_print: 24,
     overwrite_list: ['num_epochs'],
     serialized_path: '~/data/I1K/I1K_alexnet_fp16_model.prm',

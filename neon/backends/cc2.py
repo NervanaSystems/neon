@@ -1423,7 +1423,7 @@ class GPU(Backend):
         # Default sumwidth setting for most convolution layers except for
         # those with large output maps (in which case it's usually 4).
         # Following Khrizevsky's typical settings
-        sumwidth = 3 if ofmshape[-2] < 32 else ofmshape[-2]
+        sumwidth = 3 if ofmshape[-2] < 32 else 4
         cudanet.deconvolve_wts(
             deltas._tensor, inputs._tensor, out._tensor,
             ifmshape[-2], ofmshape[-2], ofmshape[-1], fwidth,

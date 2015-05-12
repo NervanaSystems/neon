@@ -390,14 +390,6 @@ Sparsenet
 
    neon.datasets.sparsenet.SPARSENET
 
-ImageNet
---------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.i1k.I1K
-
 Mobydick
 --------
 

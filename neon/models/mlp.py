@@ -221,6 +221,9 @@ class MLP(Model):
         See Also:
             predict_generator
         """
+        self.data_layer.init_dataset(dataset)
+        assert self.data_layer.has_set(setname)
+        self.data_layer.use_set(setname, predict=True)
         nrecs = self.batch_size * self.data_layer.num_batches
         outputs = self.backend.empty((self.class_layer.nout, nrecs))
         if self.data_layer.has_labels:
