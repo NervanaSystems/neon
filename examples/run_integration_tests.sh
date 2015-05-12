@@ -27,12 +27,14 @@ CMP_OPTS=""
 mkdir -p "$(dirname $OUT_FILE)"
 mkdir -p "$(dirname $LOG_FILE)"
 
-cpu_yaml=("recurrent/mobydick-lstm-small.yaml" \
-          "recurrent/mobydick-rnn-small.yaml")
-hpu_yaml=("convnet/i1k-alexnet-fp16.yaml")
-gpu_yaml=("convnet/i1k-alexnet-fp32.yaml")
-all_yaml=("convnet/mnist-small.yaml" "mlp/mnist-small.yaml" \
-          "convnet/cifar10-small.yaml" "mlp/cifar10-small.yaml")
+cpu_yaml=("${THIS_DIR}/recurrent/mobydick-lstm-small.yaml" \
+          "${THIS_DIR}/recurrent/mobydick-rnn-small.yaml")
+hpu_yaml=("${THIS_DIR}/convnet/i1k-alexnet-fp16.yaml")
+gpu_yaml=("${THIS_DIR}/convnet/i1k-alexnet-fp32.yaml")
+all_yaml=("${THIS_DIR}/convnet/mnist-small.yaml" \
+          "${THIS_DIR}/mlp/mnist-small.yaml" \
+          "${THIS_DIR}/convnet/cifar10-small.yaml" \
+          "${THIS_DIR}/mlp/cifar10-small.yaml")
 
 cpu_back=("cpu")
 hpu_back=("nervanagpu")
