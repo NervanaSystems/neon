@@ -84,7 +84,7 @@ endif
 
 .PHONY: default build develop install uninstall test test_all sanity speed \
 	      grad all clean_pyc clean doc html style lint bench dist publish_doc \
-	      release
+	      release integration
 
 default: build
 
@@ -139,9 +139,8 @@ test_all:
 	@tox -- -e CPU=$(CPU) GPU=$(GPU) DIST=$(DIST)
 
 integration: build
-	@echo "Running integration checks..."
-	@PYTHONPATH=${PYTHONPATH}:./ python neon/tests/integration_check.py \
-		--cpu $(CPU) --gpu $(GPU)
+	@echo "Running integration checks (this may take 10-20 minutes)..."
+	@examples/run_integration_tests.sh
 
 serialize: build
 	@echo "Running serialize checks..."
