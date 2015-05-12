@@ -58,7 +58,7 @@
     unit_norm: False, # This norms magnitude to 1
     # ntrain: 1, # Commenting this line uses entire dataset
     # nval: 1,
-    backend_type: &bt np.float32,
+    backend_type: &bt np.float16,
   },
 
   weight_inits: [

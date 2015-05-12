@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-# MLP on CIFAR-10, a quick+small network
+# MLP on CIFAR-10 with a Branch layer
 
 !obj:experiments.FitPredictErrorExperiment {
 
@@ -30,10 +30,12 @@
     ],
   },
 
-  weight_inits: &wt_init !obj:params.UniformValGen {
-    low: -0.1,
-    high: 0.1,
-  },
+  weight_inits: [
+    &wt_init !obj:params.UniformValGen {
+      low: -0.1,
+      high: 0.1,
+    },
+  ],
 
   lrule: &gdm {
     type: gradient_descent_momentum,
@@ -48,7 +50,7 @@
 
   model: !obj:models.MLP {
     num_epochs: 100,
-    batch_size: &bs 128,
+    batch_size: &bs 100,
     layers: [
       &datalayer !obj:layers.DataLayer {
         name: d0,
@@ -60,6 +62,25 @@
         lrule_init: *gdm,
         weight_init: *wt_init,
         activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.BranchLayer {
+        name: blayer,
+        sublayers: [
+          !obj:layers.FCLayer {
+            name: blayer1,
+            nout: 40,
+            lrule_init: *gdm,
+            weight_init: *wt_init,
+            activation: !obj:transforms.RectLin {},
+          },
+          !obj:layers.FCLayer {
+            name: blayer2,
+            nout: 10,
+            lrule_init: *gdm,
+            weight_init: *wt_init,
+            activation: !obj:transforms.RectLin {},
+          },
+        ],
       },
       &lastlayer !obj:layers.FCLayer {
         name: output,
