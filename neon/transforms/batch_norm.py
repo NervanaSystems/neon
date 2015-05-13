@@ -50,6 +50,8 @@ class BatchNorm(Activation):
 
     """
 
+    inference_warning_displayed = False
+
     def initialize(self, kwargs):
         """
         Initialize the Batch Normalization transform. This function will be
@@ -129,8 +131,11 @@ class BatchNorm(Activation):
         variance and mean statistics are computed , which seems
         to perform quite well.
         """
-        logger.warning("Batch Normalization inference mode not supported. "
-                       "Using training mode.")
+        if not BatchNorm.inference_warning_displayed:
+            logger.warning("Batch Normalization inference mode not supported. "
+                           "Using training mode.")
+            BatchNorm.inference_warning_displayed = True
+
         self.train_mode = True  # Set to 'False' to force inference mode
         if self.train_mode is False:
             if self._iscale is None:

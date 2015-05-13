@@ -132,6 +132,12 @@ def obj_multi_constructor(loader, tag_suffix, node):
             parts.insert(0, "neon")
             module = '.'.join(parts[:-1])
             cls = __import__(module)
+            if 'datasets' in parts:
+                # clear any previous datasets loaded with a different backend
+                cls.datasets.dataset.Dataset.inputs = {
+                    'train': None, 'test': None, 'validation': None}
+                cls.datasets.dataset.Dataset.targets = {
+                    'train': None, 'test': None, 'validation': None}
         else:
             raise err
     for comp in parts[1:]:

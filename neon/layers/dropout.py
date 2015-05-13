@@ -39,6 +39,10 @@ class DropOutLayer(Layer):
                                   Defaults to 0.5, and should lie in range
                                   [0, 1].
     """
+    def __init__(self, **kwargs):
+        self.is_random = True
+        super(DropOutLayer, self).__init__(**kwargs)
+
     def initialize(self, kwargs):
         opt_param(self, ['keep'], 0.5)
         super(DropOutLayer, self).initialize(kwargs)

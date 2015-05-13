@@ -91,6 +91,8 @@ def parse_args():
                         help='Trace through function calls. Optional '
                              'argument is a regex filter on the name of the '
                              'source files to confine the trace to.')
+    parser.add_argument('--integration', action='store_true',
+                        help='Run in integration testing mode')
     return(parser.parse_args())
 
 
@@ -122,6 +124,44 @@ def main():
                         'locally.')
     try:
         experiment = deserialize(args.yaml_file)
+        if args.integration:
+            logging.basicConfig(level=40)
+            from neon.metrics import MisclassPercentage
+            experiment.metrics = dict()
+            experiment.metrics["train"] = [MisclassPercentage()]
+            experiment.metrics["test"] = [MisclassPercentage()]
+            experiment.metrics["validation"] = [MisclassPercentage()]
+
+            # Removing dropout layers for integration testing
+            experiment.model.layers = [lyr for lyr in experiment.model.layers \
+                                       if not lyr.is_random]
+
+            # Don't do any (de)serialization
+            if hasattr(experiment.model, 'serialized_path'):
+                del experiment.model.serialized_path
+            if hasattr(experiment.model, 'deserialized_path'):
+                del experiment.model.deserialized_path
+
+            # Some tweaks to specific to each dataset
+            dataset_name = experiment.dataset.__class__.__name__
+            if dataset_name == 'Imageset':
+                if experiment.dataset.imageset == 'I1K':
+                    experiment.dataset.ntrain = 2
+                    experiment.dataset.nval = 1
+                    experiment.dataset.do_transforms = False
+                    experiment.model.num_epochs = 2
+                    experiment.metrics["test"] = []
+
+            if dataset_name in ['CIFAR10', 'MNIST', 'MOBYDICK']:
+                experiment.model.num_epochs = 5
+                experiment.metrics["validation"] = []
+
+            if dataset_name in ['CIFAR10', 'MNIST']:
+                experiment.dataset.sample_pct = 10
+
+            if args.gpu == 'cpu':
+                args.gpu = None
+
         if hasattr(experiment, 'live'):
             experiment.live = args.live
         if hasattr(experiment, 'logging'):
@@ -140,7 +180,7 @@ def main():
                 logging.warn("setting log level to: %d",
                              experiment.logging["level"])
                 logger.setLevel(experiment.logging["level"])
-        if args.output is not None:
+        if args.output is not None and not args.integration:
             # compute a standard set of metrics
             from neon.metrics import MisclassPercentage, AUC, LogLossMean
             experiment.metrics = dict()
@@ -183,9 +223,10 @@ def main():
                 for metric in [str(x) for x in experiment.metrics[dset]]:
                     if metric not in result[dset]:
                         result[dset][metric] = float("nan")
+            be_name = 'CPU' if args.gpu is None else args.gpu.lower()
             dump_metrics(args.output, args.yaml_file.name,
                          start_date, default_timer() - start_time,
-                         backend.__class__.__name__, result)
+                         be_name, result)
         return experiment, result, 0
     except Exception as e:
         if args.debug:

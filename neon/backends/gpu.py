@@ -750,6 +750,20 @@ class GPU(Backend):
         self.ng.log(a, out=out)
         return out
 
+    def tanh(self, a, out):
+        """
+        Elementwise tanh
+
+        Arguments:
+            a (GPUTensor): input tensor.
+            out (GPUTensor): where the result will be stored.
+
+        Returns:
+            GPUTensor: reference to out
+        """
+        self.ng.tanh(a, out=out)
+        return out
+
     def argmax(self, a, out, axis=0):
         """
         Calculates the indices of the maximal element value along the specified
