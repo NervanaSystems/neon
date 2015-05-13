@@ -150,8 +150,7 @@ def compare_metrics(dump_file, experiment_file, max_comps=10, field_sep="\t",
     to the console.
 
     Arguments:
-        dump_file (str): path to file to write. Will be created if doesn't
-                         exist, or appended to (without header if it does)
+        dump_file (str): path of file to caompare.
         experiment_file (str): path to yaml file used to run this experiment
         max_comps (int, optional): collect and compare statistics against
                                    max_comps most recent prior runs of the
@@ -175,6 +174,10 @@ def compare_metrics(dump_file, experiment_file, max_comps=10, field_sep="\t",
 
     def make_yellow(string):
         return "\033[93m%s\033[0m" % string
+
+    if not os.path.exists(dump_file):
+        print("file: %s doesn't exist.  Can't run comparisons" % dump_file)
+        return 1
 
     data = file(dump_file).readlines()
     if len(data) < 1 or not data[0].startswith("host"):

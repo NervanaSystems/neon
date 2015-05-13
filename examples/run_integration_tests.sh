@@ -13,12 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-# Run all subset of examples sequentially, while collecting timing and
+# Run all subsets of examples sequentially, while collecting timing and
 # performance information.  Stats against prior runs are compared as well as
 # appended to the named file.
+# usage: run_integration_tests.sh [out_file [log_file]]
 THIS_DIR=$(cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd)
 OUT_FILE="${HOME}/.nervana/integration_test_results.tsv"
 LOG_FILE="${HOME}/.nervana/integration_test_results.log"
+if [ "$#" -ge 1 ]; then
+  OUT_FILE="$1"
+  if [ "$#" -ge 2 ]; then
+    LOG_FILE="$2"
+  fi
+fi
 NEON_EXE="${THIS_DIR}/../bin/neon"
 NEON_OPTS="-r 0 --integration -o ${OUT_FILE}"  # non-distributed
 CMP_EXE="${THIS_DIR}/../bin/compare_metrics"
