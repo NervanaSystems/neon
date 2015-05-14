@@ -209,7 +209,6 @@ class Imageset(Dataset):
     def del_mini_batch_producer(self):
         if self.macro_decode_thread is not None:
             self.macro_decode_thread.join()
-        print "del_mini_batch_producer deleting self.inp_be"
         del self.inp_be
 
     def init_mini_batch_producer(self, batch_size, setname, predict=False):
