@@ -35,11 +35,6 @@
     &wt_init !obj:params.GaussianValGen {
       loc: 0.0,
       scale: 0.01,
-      bias_init: 0.0,
-    },
-    &wt_initb !obj:params.NodeNormalizedValGen {
-      scale: 4.0,
-      bias_init: 0.0,
     },
   ],
 
@@ -50,7 +45,7 @@
         learning_rate: 0.1,
         momentum_params: {
           type: constant,
-          coef: 0.0,
+          coef: 0.9,
         },
       },
     },
@@ -82,12 +77,11 @@
         name: output,
         nout: 10,
         lrule_init: *gdm,
-        weight_init: *wt_initb,
+        weight_init: *wt_init,
         activation: !obj:transforms.Logistic {},
       },
       &costlayer !obj:layers.CostLayer {
         name: cost,
-        ref_layer: *datalayer,
         cost: !obj:transforms.CrossEntropy {},
       },
     ],

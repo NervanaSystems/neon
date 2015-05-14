@@ -98,7 +98,7 @@ class MNIST(Dataset):
             array = np.fromfile(f, dtype='uint8')
         return array
 
-    def load(self):
+    def load(self, backend=None, experiment=None):
         if self.inputs['train'] is not None:
             return
         if 'repo_path' in self.__dict__:

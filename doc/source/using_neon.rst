@@ -54,6 +54,7 @@ Key neon Command-line Arguments
   passed in for ``SEED`` (should be an integer).  This aids in reproducing
   prior results
 
+
 Experiment File Format
 ----------------------
 A `YAML <http://www.yaml.org/>`_ configuration file is used to control the
@@ -103,3 +104,18 @@ Reporting Performance
 ---------------------
 See the :doc:`metrics` section to learn how to add one or more performance
 metrics to be computed on one or more dataset partitions.
+
+
+Working Interactively
+---------------------
+If you'd prefer not to utilize the ``neon`` command line executable and YAML
+files to generate experiments, you have the option of writing python code
+directly.
+
+Here's a basic example showing how to train a simple MLP and generate
+predictions:
+
+.. highlight:: python
+
+.. literalinclude:: ../../examples/mlp/mnist-small-noyaml.py
+   :linenos:

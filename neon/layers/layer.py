@@ -29,6 +29,7 @@ from neon.optimizers.gradient_descent import (GradientDescent,
 from neon.optimizers.adadelta import AdaDelta
 from neon.util.compat import range
 from neon.util.param import req_param, opt_param
+from neon.util.defaults import default_weight_init, default_lrule_init
 from neon.util.persist import YAMLable
 from neon.transforms.batch_norm import BatchNorm
 from neon.transforms.linear import Linear
@@ -48,7 +49,7 @@ class Layer(YAMLable):
         self.initialized = False
         self.__dict__.update(kwargs)
 
-        req_param(self, ['name'])
+        opt_param(self, ['name'], 'layer')
 
         opt_param(self, ['pre_act_dtype', 'output_dtype', 'deltas_dtype',
                          'weight_dtype', 'updates_dtype'], np.float32)
@@ -114,8 +115,8 @@ class Layer(YAMLable):
         ofmshape = []
         for dim in range(len(self.ifmshape)):
             assert self.ifmshape[dim] >= self.fshape[dim]
-            num = self.ifmshape[dim] - self.fshape[dim] + 1 + 2 * self.pad
-            ofmshape.extend([(num + self.stride - 1) / self.stride])
+            num = self.ifmshape[dim] - self.fshape[dim] + 2 * self.pad
+            ofmshape.extend([num // self.stride + 1])
         self.ofmshape = tuple(ofmshape)
         self.negpad = -self.pad
         self.ifmsize = np.prod(self.ifmshape)
@@ -246,7 +247,7 @@ class CostLayer(Layer):
 
     def initialize(self, kwargs):
         super(CostLayer, self).initialize(kwargs)
-        req_param(self, ['cost', 'ref_layer'])
+        req_param(self, ['cost'])
         opt_param(self, ['ref_label'], 'targets')
         opt_param(self, ['raw_label'], False)
         opt_param(self, ['category_label'], 'l_id')
@@ -461,7 +462,9 @@ class WeightLayer(Layer):
 
     def initialize(self, kwargs):
         super(WeightLayer, self).initialize(kwargs)
-        req_param(self, ['weight_init', 'lrule_init', 'nin', 'nout'])
+        req_param(self, ['nin', 'nout'])
+        opt_param(self, ['weight_init'], default_weight_init())
+        opt_param(self, ['lrule_init'], default_lrule_init())
         opt_param(self, ['accumulate'], False)
         opt_param(self, ['batch_norm'], False)
 

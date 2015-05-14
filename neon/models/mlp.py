@@ -49,6 +49,8 @@ class MLP(Model):
         self.data_layer = self.layers[0]
         self.cost_layer = self.layers[-1]
         self.class_layer = self.layers[-2]
+        if not hasattr(self.cost_layer, 'ref_layer'):
+            self.cost_layer.ref_layer = self.data_layer
         if self.initialized:
             return
         self.backend = backend

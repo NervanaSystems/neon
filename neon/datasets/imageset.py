@@ -160,7 +160,7 @@ class Imageset(Dataset):
         """
         self.__dict__.update(state)
 
-    def load(self):
+    def load(self, backend=None, experiment=None):
         bdir = os.path.expanduser(self.save_dir)
         cachefile = os.path.join(bdir, 'dataset_cache.pkl')
         if not os.path.exists(cachefile):

@@ -141,7 +141,7 @@ class Iris(Dataset):
         self.macro_batched = False
         self.__dict__.update(kwargs)
 
-    def load(self):
+    def load(self, backend=None, experiment=None):
         if self.inputs['train'] is not None:
             return
         # split the dataset so that for each class we have 30 train, 10

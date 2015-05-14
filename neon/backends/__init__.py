@@ -25,7 +25,7 @@ from neon.backends.cpu import CPU
 from neon.backends.par import NoPar, ModelPar, DataPar
 
 
-def gen_backend(model, gpu=None, nrv=False, datapar=False, modelpar=False,
+def gen_backend(model=None, gpu=None, nrv=False, datapar=False, modelpar=False,
                 flexpoint=False, rng_seed=None, numerr_handling=None,
                 half=False, stochastic_round=0, device_id=None):
     """
