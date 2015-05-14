@@ -57,11 +57,13 @@ class MacrobatchDecodeThread(Thread):
         img_macro = np.zeros((self.ds.macro_size, self.ds.npixels),
                              dtype=np.uint8)
 
+        do_center = self.ds.predict or not self.ds.dotransforms
+        do_flip = self.ds.dotransforms
         imgworker.decode_list(jpglist=jdict['data'],
                               tgt=img_macro[:mac_sz],
                               orig_size=self.ds.output_image_size,
                               crop_size=self.ds.cropped_image_size,
-                              center=self.ds.predict, flip=True,
+                              center=do_center, flip=do_flip,
                               rgb=self.ds.rgb,
                               nthreads=self.ds.num_workers)
         if mac_sz < self.ds.macro_size:
@@ -162,7 +164,7 @@ class Imageset(Dataset):
         bdir = os.path.expanduser(self.save_dir)
         cachefile = os.path.join(bdir, 'dataset_cache.pkl')
         if not os.path.exists(cachefile):
-            logger.warning("Batch dir cache not found in %s:", cachefile)
+            logger.error("Batch dir cache not found in %s:", cachefile)
             # response = 'Y'
             response = raw_input("Press Y to create, otherwise exit: ")
             if response == 'Y':
@@ -174,9 +176,9 @@ class Imageset(Dataset):
                 else:
                     self.bw = BatchWriter(**self.__dict__)
                 self.bw.run()
-                logger.warning('Done writing batches - please rerun to train.')
+                logger.error('Done writing batches - please rerun to train.')
             else:
-                logger.warning('Exiting...')
+                logger.error('Exiting...')
             sys.exit()
         cstats = deserialize(cachefile, verbose=False)
         if cstats['macro_size'] != self.macro_size:

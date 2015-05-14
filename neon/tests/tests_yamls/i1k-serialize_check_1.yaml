@@ -101,10 +101,10 @@
   model: !obj:models.MLP {
     backend_type: *bt,
     batch_norm: &bn True,
-    num_epochs: 4, # 1 or 10 or 60
+    num_epochs: 2, # 1 or 10 or 60
     batch_size: &bs 128,
     step_print: 24,
-    serialized_path: '~/data/i1k-model4.prm',
+    serialized_path: '~/data/i1k-model2.prm',
     overwrite_list: ['num_epochs'],
     
     layers: [
@@ -131,12 +131,6 @@
         pad: 3,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.CrossMapResponseNormLayer {
-      #   name: rnorm1,
-      #   ksize: 5,
-      #   alpha: 0.0001,
-      #   beta: 0.75,
-      # },
       !obj:layers.PoolingLayer {
         name: pool1,
         backend_type: *bt,
@@ -160,12 +154,6 @@
         pad: 2,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.CrossMapResponseNormLayer {
-      #   name: rnorm2,
-      #   ksize: 5,
-      #   alpha: 0.0001,
-      #   beta: 0.75,
-      # },
       !obj:layers.PoolingLayer {
         name: pool2,
         backend_type: *bt,
@@ -238,11 +226,6 @@
         nout: 4096,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.DropOutLayer {
-      #   name: dropout1,
-      #   backend_type: *bt,
-      #   keep: 0.5,
-      # },
       !obj:layers.FCLayer {
         name: fc4096b,
         backend_type: *bt,
@@ -253,11 +236,6 @@
         nout: 4096,
         activation: !obj:transforms.RectLin {},
       },
-      # !obj:layers.DropOutLayer {
-      #   name: dropout2,
-      #   backend_type: *bt,
-      #   keep: 0.5,
-      # },
       &lastlayer !obj:layers.FCLayer {
         name: fc1000,
         backend_type: *bt,

@@ -81,7 +81,6 @@
         is_local: True,
         nofm: 3,
         ofmshape: [32, 32],
-#        nout: 784,
       },
       !obj:layers.ConvLayer {
         name: layer1,

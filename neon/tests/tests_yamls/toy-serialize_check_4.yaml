@@ -1,0 +1,154 @@
+# Copyright 2015 Nervana Systems Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#    http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Step 1 of test
+# Train model through 5 epochs and generate results (CONTROL1).
+# Serialize MODEL_E5
+
+!obj:experiments.FitPredictErrorExperiment {
+
+  dataset: &ds !obj:datasets.ToyImages {
+    repo_path: '~/data',
+    sample_pct: 100,
+    backend_type: &bt np.float32,
+  },
+
+  metrics: {
+    train: [
+      !obj:metrics.MisclassPercentage {},
+    ],
+    test: [
+      !obj:metrics.MisclassPercentage {},
+    ],
+  },
+
+  weight_init: &wt_init !obj:params.UniformValGen {
+    low: -0.1,
+    high: 0.1,
+  },
+  
+  weight_init: &wt_init_1 !obj:params.UniformValGen {
+    low: -0.1,
+    high: 0.1,
+    relu: True,
+    bias_init: 0.0,
+  },
+
+  lrules: [
+    &gdm {
+      type: gradient_descent_momentum,
+      backend_type: *bt,
+      lr_params: {
+        learning_rate: 0.01,
+        momentum_params: {
+          type: constant, # linear_monotone, nesterov
+          coef: 0.90,
+        },
+      },
+    },
+    &ada {
+      type: adadelta,
+      backend_type: *bt,
+      lr_params: {
+        rho: &ro 0.95,
+        epsilon: &eps 0.000001,
+      },
+    },
+  ],
+  # CNN model specification
+  # essentially a multi-layer perceptron with convolutional and pooling layers
+  model: !obj:models.MLP {
+    backend_type: *bt,
+    num_epochs: 5,
+    batch_size: &bs 128,
+    serialized_path: '~/data/model5b.prm',
+    overwrite_list: ['num_epochs'],
+
+    layers: [
+      &datalayer !obj:layers.DataLayer {
+        name: d0,
+        is_local: True,
+        nofm: 3,
+        ofmshape: [32, 32],
+      },
+      !obj:layers.ConvLayer {
+        name: layer1,
+        backend_type: *bt,
+        nofm: 16,
+        batch_norm: True,
+        fshape: [5, 5],
+        weight_init: *wt_init,
+        lrule_init: *gdm,
+      },
+      !obj:layers.PoolingLayer {
+        name: layer2,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [2, 2],
+        stride: 2,
+      },
+      !obj:layers.ConvLayer {
+        name: layer3,
+        backend_type: *bt,
+        nofm: 32,
+        fshape: [5, 5],
+        weight_init: *wt_init_1,
+        lrule_init: *gdm,
+      },
+      !obj:layers.PoolingLayer {
+        name: layer4,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [2, 2],
+        stride: 2,
+      },
+      !obj:layers.FCLayer {
+        name: layer5,
+        backend_type: *bt,
+        nout: 100,
+        activation: !obj:transforms.RectLin {},
+        weight_init: *wt_init,
+        lrule_init: *ada,
+      },
+      &lastlayer !obj:layers.FCLayer {
+        name: output,
+        backend_type: *bt,
+        nout: 2,
+        activation: !obj:transforms.Logistic {},
+        weight_init: *wt_init,
+        lrule_init: *ada,
+      },
+      &costlayer !obj:layers.CostLayer {
+        name: cost,
+        ref_layer: *datalayer,
+        cost: !obj:transforms.CrossEntropy {
+            backend_type: *bt,
+        },
+      },
+    ],
+  },
+
+  # logging options that are passed to logging.basicConfig
+  # level value thresholds (set level lower to display them):
+  #   CRITICAL 50
+  #   ERROR    40
+  #   WARNING  30
+  #   INFO     20
+  #   DEBUG    10
+  #   NOTSET    0
+  logging: {
+    level: 20,
+    format: '%(asctime)-15s %(levelname)s:%(module)s - %(message)s'
+  },
+}

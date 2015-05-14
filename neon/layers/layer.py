@@ -57,6 +57,8 @@ class Layer(YAMLable):
         opt_param(self, ['activation'], Linear())
 
         opt_param(self, ['is_local', 'is_data', 'is_cost'], False)
+        opt_param(self, ['is_random'], False)
+
         opt_param(self, ['skip_act', 'has_params'], False)
         opt_param(self, ['prev_names'], [])
 
