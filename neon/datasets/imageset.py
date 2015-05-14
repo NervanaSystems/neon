@@ -209,6 +209,8 @@ class Imageset(Dataset):
     def del_mini_batch_producer(self):
         if self.macro_decode_thread is not None:
             self.macro_decode_thread.join()
+        print "del_mini_batch_producer deleting self.inp_be"
+        del self.inp_be
 
     def init_mini_batch_producer(self, batch_size, setname, predict=False):
         # local shortcuts
@@ -268,6 +270,7 @@ class Imageset(Dataset):
         # Allocate space for device side buffers
         inp_shape = (self.npixels, self.batch_size)
         self.inp_be = sbe(inp_shape, dtype=betype)
+        self.inp_be.name = "minibatch"
 
         lbl_shape = {lbl: (self.nclass[lbl], self.batch_size)
                      for lbl in self.label_list}
