@@ -56,8 +56,8 @@
     num_workers: 12,
     mean_norm: True, # This just subtracts the mean, but doesn't divide by 128
     unit_norm: False, # This norms magnitude to 1
-    #ntrain: 24,
-    #nval: 1,
+    # ntrain: 24,
+    # nval: 1,
     backend_type: &bt np.float32,
   },
 
@@ -112,7 +112,7 @@
   model: !obj:models.MLP {
     backend_type: *bt,
     batch_norm: &bn True,
-    num_epochs: 60, # 1 or 10 or 60
+    num_epochs: 60,
     batch_size: &bs 128,
     step_print: 24,
     serialized_path: '~/data/I1K/I1K_alexnet_fp32_model.prm',

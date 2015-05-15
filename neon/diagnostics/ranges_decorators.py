@@ -90,8 +90,8 @@ class Decorators(object):
                 the_max = be.zeros((1, 1), dtype=np.float32)
                 be.min(kwargs[item], axes=None, out=the_min)
                 be.max(kwargs[item], axes=None, out=the_max)
-                logger.info("%s: std=%s raw=%s min=%s max=%s",
-                            item.ljust(7),
+                logger.info("%s(%s): std=%s raw=%s min=%s max=%s",
+                            item.ljust(7), kwargs[item].dtype,
                             kwargs[item][0:2].asnumpyarray().astype(
                                 np.float32).std(1).__str__().ljust(28),
                             kwargs[item][0, 0:2].asnumpyarray(

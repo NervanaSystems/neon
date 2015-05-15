@@ -65,6 +65,7 @@ class MLP(Model):
             self.global_deltas = backend.zeros(
                 (2 * self.nin_max, self.batch_size),
                 dtype=self.layers[1].deltas_dtype)
+            self.global_deltas.name = "delta_pool"
 
         for idx, ll in enumerate(self.layers[1:-1]):
             ll.set_deltas_buf(self.global_deltas,
@@ -192,8 +193,6 @@ class MLP(Model):
             reference = self.backend.empty((1, nrecs))
         else:
             reference = self.backend.empty(outputs.shape)
-
-        self.set_train_mode(False)
 
         while self.data_layer.has_more_data():
             self.fprop()

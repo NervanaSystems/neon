@@ -197,23 +197,29 @@ class BatchNorm(Activation):
             outputs = outputs.reshape(self.in_shape)
 
         if self.train_mode:
-            # Calc batch statistics
-            backend.mean(inputs, axes=1, out=self._mean)
-            backend.variance(inputs, axes=1, out=self._vars, mean=self._mean)
-            # increment the global estimates (TODO: stop after an epoch)
-            backend.add(self._gvars, self._vars, self._gvars)
-            backend.add(self._gmean, self._mean, self._gmean)
-            self.nbatches += 1
+            if (self.backend.__module__ != 'neon.backends.gpu'):
+                # Calc batch statistics
+                backend.mean(inputs, axes=1, out=self._mean)
+                backend.variance(inputs, axes=1, out=self._vars,
+                                 mean=self._mean)
+                # increment the global estimates (TODO: stop after an epoch)
+                backend.add(self._gvars, self._vars, self._gvars)
+                backend.add(self._gmean, self._mean, self._gmean)
+                self.nbatches += 1
 
-            # Just store sqrt(vars + eps) since it's used as a unit
-            backend.add(self._vars, self._eps, self._vars)
-            backend.sqrt(self._vars, out=self._vars)
+                # Just store sqrt(vars + eps) since it's used as a unit
+                backend.add(self._vars, self._eps, self._vars)
+                backend.sqrt(self._vars, out=self._vars)
 
-            # Every operation below uses broadcasting over minibatch dim
-            backend.subtract(inputs, self._mean, out=self._xhat)
-            backend.divide(self._xhat, self._vars, out=self._xhat)
-            backend.multiply(self._xhat, self._gamma, out=outputs)
-            backend.add(outputs, self._beta, out=outputs)
+                # Every operation below uses broadcasting over minibatch dim
+                backend.subtract(inputs, self._mean, out=self._xhat)
+                backend.divide(self._xhat, self._vars, out=self._xhat)
+                backend.multiply(self._xhat, self._gamma, out=outputs)
+                backend.add(outputs, self._beta, out=outputs)
+            else:
+                backend.fprop_bn_compound(inputs, self._beta, self._gamma,
+                                          self._eps, self._vars, self._xhat,
+                                          out=outputs)
         else:
             # Inference mode: Using accumulated scale and shift
             backend.multiply(inputs, self._iscale, out=outputs)
@@ -245,17 +251,23 @@ class BatchNorm(Activation):
             pre_act = pre_act.reshape(self.in_shape)
             error = error.reshape(self.in_shape)
 
-        backend.multiply(self._xhat, error, out=pre_act)
-        backend.sum(pre_act, axes=1, out=self._gamma_updates)
-        backend.sum(error, axes=1, out=self._beta_updates)
+        if (self.backend.__module__ != 'neon.backends.gpu'):
+            backend.multiply(self._xhat, error, out=pre_act)
+            backend.sum(pre_act, axes=1, out=self._gamma_updates)
+            backend.sum(error, axes=1, out=self._beta_updates)
 
-        # Compute the backpropagated error into error
-        backend.multiply(self._xhat, self._gamma_updates, out=self._xhat)
-        backend.add(self._xhat, self._beta_updates, out=self._xhat)
-        backend.divide(self._xhat, float(self._xhat.shape[1]), out=self._xhat)
-        backend.subtract(error, self._xhat, out=error)
-        backend.multiply(error, self._gamma, out=error)
-        backend.divide(error, self._vars, out=error)
+            # Compute the backpropagated error into error
+            backend.multiply(self._xhat, self._gamma_updates, out=self._xhat)
+            backend.add(self._xhat, self._beta_updates, out=self._xhat)
+            backend.divide(self._xhat, float(self._xhat.shape[1]),
+                           out=self._xhat)
+            backend.subtract(error, self._xhat, out=error)
+            backend.multiply(error, self._gamma, out=error)
+            backend.divide(error, self._vars, out=error)
+        else:
+            backend.bprop_bn_compound(self._xhat, error, self._vars,
+                                      self._gamma,
+                                      self._beta_updates, self._gamma_updates)
 
         if self.is_local:
             pre_act = pre_act.reshape(self.orig_shape)
