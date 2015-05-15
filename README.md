@@ -1,8 +1,7 @@
 # neon
 
-[neon](https://github.com/NervanaSystems/neon) is
-<span style="color:red;">NE</span>rvana's pyth<span style="color:red;">ON</span>
-based Deep Learning Framework! We have designed it with the following
+[neon](https://github.com/NervanaSystems/neon) is Nervana's Python based
+Deep Learning framework. We have designed it with the following
 functionality in mind:
 
 * YAML for easy model specification (inspired by [pylearn2](https://github.com/lisa-lab/pylearn2))
@@ -50,14 +49,14 @@ information.
 
 ### Quick Install
 
-On a Mac OSX or Linux box enter the following to download and install neon,
-and use it to train your first multi-layer perceptron
+On a Mac OSX or Linux machine, enter the following to download and install
+neon, and use it to train your first multi-layer perceptron
 or convolutional neural networks below.
 
     git clone https://github.com/NervanaSystems/neon.git
     cd neon
     sudo make install
-    
+
 The above will install neon system-wide.  If you don't have sufficient
 privileges or would prefer an isolated installation, see our
 [virtualenv](http://neon.nervanasys.com/docs/latest/installation.htm#virtualenv)
@@ -73,7 +72,7 @@ definitions and possible choices.
 ### Running a simple MNIST model (on CPU)
 
 	neon examples/mlp/mnist-small.yaml
-	
+
 
 ### Running an Alexnet model (on GPU)
 
@@ -81,10 +80,10 @@ In [fp32](examples/convnet/i1k-alexnet-fp32.yaml):
 
 	# for nervangpu (requires Maxwell GPUs)
 	neon --gpu nervanagpu examples/convnet/i1k-alexnet-fp32.yaml
-	
+
 	# for cudanet (works with Kepler or Maxwell GPUs)
 	neon --gpu cudanet examples/convnet/i1k-alexnet-fp32.yaml
-	
+
 In [fp16](examples/convnet/i1k-alexnet-fp16.yaml):
 
 	neon --gpu nervanagpu examples/convnet/i1k-alexnet-fp16.yaml
@@ -101,7 +100,7 @@ In [fp16](examples/convnet/i1k-alexnet-fp16.yaml):
 	optimizers  --- learning rules
 	transforms  --- activation & cost functions
 	metrics     --- performance evaluation metrics
-  
+
 
 ### Documentation
 
@@ -148,12 +147,12 @@ such as [theano](https://github.com/Theano/Theano),
 
 ## Upcoming libraries
 
-We have separate, upcoming efforts on the following fronts: 
+We have separate, upcoming efforts on the following fronts:
 
 * Distributed models
 * Automatic differentiation
 * Integration with Nervana Cloud&trade;
-  
+
 
 ## License
 

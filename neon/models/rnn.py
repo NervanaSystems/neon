@@ -29,7 +29,64 @@ logger = logging.getLogger(__name__)
 
 class RNN(MLP):
     """
-    Recurrent neural network. Supports LSTM and standard RNN layers.
+    **Recurrent Neural Network**
+
+    Neon supports standard Recurrent Neural Networks (RNNs) as well as RNNs
+    with Long Short Term Memory cells (LSTMs). These models are trained on
+    sequence data, and therefore require a separate dataset format. Neon is
+    distributed with the Moby Dick dataset, which is a character-based encoding
+    of the book Moby Dick. Each character is represented in a one-hot encoding
+    as one of the 128 lowest ASCII chars.
+
+    *Dataset format and unrolling*
+
+    For the purpose of illustration, assume the entire source text is the 30
+    characters of ``'Your_shoe_fits_only_your_foot.'``. Note spaces have been
+    replaced by underscores for readability. To create minibatches of size 2,
+    we split the data into two subsequences ``'Your_shoe_fits_'`` and
+    ``'only_your_foot.'`` which are treated as separate, independent sequences.
+
+    The RNN is trained using truncated back-propagation through time (tBPTT),
+    which means that the network in unrolled for a on number of steps,
+    effectively turning it into a deep feed-forward network. To illustrate the
+    process, consider an unrolling depth of 5 on the text above: The first step
+    is to break each sequence into short chunks of the unrolling depth:
+
+    | ``'Your_'  'shoe_'  'fits_'``
+    | ``'only_'  'your_'  'foot.'``
+
+    The second step is to create minibatches from the columns of this
+    structure, e.g. the two sequences ``'Your_'`` and ``'only_'`` will form the
+    first minibatch. This procedure leaves us with 3 minibatches in total.
+    The reason for using columns rather than rows is that this way we start
+    processing the independent sequences in parallel. Then, as we move to the
+    next minibatch, we also move to the next consecutive time step, and
+    immediately use the hidden state of the network that was computed at the
+    previous time step.
+
+    In the actual neon data format, each letter becomes a one-hot encoded
+    vector, and thus each chunk is split up into a list over the unrolling
+    steps, i.e.
+
+    | ``'Your_'``
+    | ``'only_'``
+
+    becomes a list of tensors corresponding to the one-hot encodings of
+    ``['Y', 'o'], ['o', 'n'], ['u', 'l'], ['r', 'y'], [' ', ' ']``.
+    These lists form the elements of another list over the 3 minibatches that
+    make up the full dataset.
+
+    Note that in the more general case of datasets with multiple sequences of
+    unequal lengths, it would be necessary to pick the minibatch size to be
+    equal to the number of sequences, and the number of minibatches to be the
+    length of the sequences. Sequences would need to be padded to the maximum
+    length with an "empty character" code, e.g. the all-zeros vector rather
+    than a one-hot encoding.
+
+    In the Moby Dick example, the network is trained to predict one character
+    ahead, so the targets used for training are simply a copy of the inputs
+    shifted by one character into the future.
+
     """
     def __init__(self, **kwargs):
         self.accumulate = True

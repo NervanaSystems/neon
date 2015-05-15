@@ -13,8 +13,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-mobydick is a typewriterwritten book dataset.
-More info at: http://www.gutenberg.org/ebooks/2701
+mobydick is a character-based text dataset.
+The text is available at: http://www.gutenberg.org/ebooks/2701
 """
 
 import logging

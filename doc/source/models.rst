@@ -40,3 +40,5 @@ Adding a new type of Model
    parameters from a training dataset
 #. Write :func:`neon.models.model.Model.predict` to apply learned parameters
    to make predictions about another dataset.
+
+
