@@ -29,8 +29,7 @@ logger = logging.getLogger(__name__)
 
 class RNN(MLP):
     """
-    Recurrent Neural Network
-    ------------------------
+    **Recurrent Neural Network**
 
     Neon supports standard Recurrent Neural Networks (RNNs) as well as RNNs
     with Long Short Term Memory cells (LSTMs). These models are trained on
@@ -39,10 +38,10 @@ class RNN(MLP):
     of the book Moby Dick. Each character is represented in a one-hot encoding
     as one of the 128 lowest ASCII chars.
 
-    Dataset format and unrolling
-    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    *Dataset format and unrolling*
+
     For the purpose of illustration, assume the entire source text is the 30
-    characters of ``'Your shoe fits only your foot.'``. Note spaces have been
+    characters of ``'Your_shoe_fits_only_your_foot.'``. Note spaces have been
     replaced by underscores for readability. To create minibatches of size 2,
     we split the data into two subsequences ``'Your_shoe_fits_'`` and
     ``'only_your_foot.'`` which are treated as separate, independent sequences.
@@ -56,9 +55,9 @@ class RNN(MLP):
     | ``'Your_'  'shoe_'  'fits_'``
     | ``'only_'  'your_'  'foot.'``
 
-    The second step is to create minibatches from the colums of this structure,
-    e.g. the two sequences ``'Your_'`` and ``'only_'`` will form the first
-    minibatch. This procedure leaves us with 3 minibatches in total.
+    The second step is to create minibatches from the columns of this
+    structure, e.g. the two sequences ``'Your_'`` and ``'only_'`` will form the
+    first minibatch. This procedure leaves us with 3 minibatches in total.
     The reason for using columns rather than rows is that this way we start
     processing the independent sequences in parallel. Then, as we move to the
     next minibatch, we also move to the next consecutive time step, and
@@ -77,8 +76,8 @@ class RNN(MLP):
     These lists form the elements of another list over the 3 minibatches that
     make up the full dataset.
 
-    Note that in the more general case of datasets with multipe sequences of
-    unequal lengths, it would be neccessary to pick the minibatch size to be
+    Note that in the more general case of datasets with multiple sequences of
+    unequal lengths, it would be necessary to pick the minibatch size to be
     equal to the number of sequences, and the number of minibatches to be the
     length of the sequences. Sequences would need to be padded to the maximum
     length with an "empty character" code, e.g. the all-zeros vector rather
@@ -86,7 +85,7 @@ class RNN(MLP):
 
     In the Moby Dick example, the network is trained to predict one character
     ahead, so the targets used for training are simply a copy of the inputs
-    shifted by one charater into the future.
+    shifted by one character into the future.
 
     """
     def __init__(self, **kwargs):
