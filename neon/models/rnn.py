@@ -376,7 +376,6 @@ class RNN(MLP):
 
         mb_id = 0
         self.data_layer.reset_counter()
-        self.set_train_mode(False)
         while self.data_layer.has_more_data():
             mb_id += 1
             self.reset(mb_id)
