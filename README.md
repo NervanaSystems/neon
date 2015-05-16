@@ -46,6 +46,10 @@ information.
 
 * [Local install and dependencies](http://neon.nervanasys.com/docs/latest/installation.html)
 * Cloud-based access ([email us](mailto:demo@nervanasys.com) for an account)
+* Docker images
+    * [Base (CPU-only)](https://registry.hub.docker.com/u/kaixhin/neon/)
+    * [nervanagpu backend](https://registry.hub.docker.com/u/kaixhin/nervanagpu-neon/)
+    * [cudanet backend](https://registry.hub.docker.com/u/kaixhin/cudanet-neon/)
 
 ### Quick Install
 
