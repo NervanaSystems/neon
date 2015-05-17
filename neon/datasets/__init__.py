@@ -14,6 +14,7 @@
 # ----------------------------------------------------------------------------
 # import shortcuts
 from neon.datasets.cifar10 import CIFAR10  # noqa
+from neon.datasets.cifar100 import CIFAR100  # noqa
 from neon.datasets.iris import Iris  # noqa
 from neon.datasets.mnist import MNIST  # noqa
 from neon.datasets.mobydick import MOBYDICK  # noqa
