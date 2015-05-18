@@ -113,7 +113,7 @@ class Imageset(Dataset):
         targets (dict): structure housing the loaded train/test/validation
                         target data
 
-    Kwargs:
+    Keyword Args:
         repo_path (str, optional): where to locally host this dataset on disk
     """
     def __init__(self, **kwargs):

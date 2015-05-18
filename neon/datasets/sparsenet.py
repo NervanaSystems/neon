@@ -51,7 +51,7 @@ class SPARSENET(Dataset):
         targets (dict): structure housing the loaded train/test/validation
                         target data
 
-    Kwargs:
+    Keyword Args:
         repo_path (str, optional): where to locally host this dataset on disk
     """
     raw_base_url = 'http://redwood.berkeley.edu/bruno/sparsenet/'

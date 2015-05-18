@@ -52,7 +52,7 @@ class Iris(Dataset):
         targets (dict): structure housing the loaded train/test/validation
                         target data
 
-    Kwargs:
+    Keyword Args:
         repo_path (str, optional): where to locally host this dataset on disk
     """
     raw_inputs = numpy.array([[5.1, 3.5, 1.4, 0.2], [4.9, 3, 1.4, 0.2],
