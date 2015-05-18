@@ -25,7 +25,8 @@ class TestCIFAR100(object):
         data = CIFAR100(coarse=False, repo_path=self.tmp_repo)
         data.backend = CPU(rng_seed=0)
         data.backend.actual_batch_size = 128
-        data.backend.par = NoPar(data.backend)
+        par = NoPar()
+        par.associate(data.backend)
         data.load()
         assert len(data.inputs['train']) == 50000
         assert len(data.targets['train'][0]) == 100
@@ -35,7 +36,8 @@ class TestCIFAR100(object):
         data = CIFAR100(coarse=True, repo_path=self.tmp_repo)
         data.backend = CPU(rng_seed=0)
         data.backend.actual_batch_size = 128
-        data.backend.par = NoPar(data.backend)
+        par = NoPar()
+        par.associate(data.backend)
         data.load()
         assert len(data.inputs['train']) == 50000
         assert len(data.targets['train'][0]) == 20
