@@ -126,7 +126,3 @@ class CIFAR100(Dataset):
             self.format()
         else:
             raise AttributeError('repo_path not specified in config')
-
-
-import pdb
-pdb.set_trace()
