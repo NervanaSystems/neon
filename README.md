@@ -46,10 +46,8 @@ information.
 
 * [Local install and dependencies](http://neon.nervanasys.com/docs/latest/installation.html)
 * Cloud-based access ([email us](mailto:demo@nervanasys.com) for an account)
-* Docker images
-    * [Base (CPU-only)](https://registry.hub.docker.com/u/kaixhin/neon/)
-    * [nervanagpu backend](https://registry.hub.docker.com/u/kaixhin/nervanagpu-neon/)
-    * [cudanet backend](https://registry.hub.docker.com/u/kaixhin/cudanet-neon/)
+* [Docker images](http://neon.nervanasys.com/docs/latest/installation.html#docker-images>)
+  (community provided)
 
 ### Quick Install
 
@@ -62,9 +60,10 @@ or convolutional neural networks below.
     sudo make install
 
 The above will install neon system-wide.  If you don't have sufficient
-privileges or would prefer an isolated installation, see our
+privileges or would prefer an isolated installation, see either our
 [virtualenv](http://neon.nervanasys.com/docs/latest/installation.htm#virtualenv)
-based install.
+based install, or take a look at some of the community provided [docker
+images](http://neon.nervanasys.com/docs/latest/installation.html#docker-images).
 
 There are several examples built-in to neon in the `examples` directory for a
 user to get started. The YAML format is plain-text and can be edited to change
