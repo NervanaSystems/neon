@@ -45,12 +45,14 @@ class CIFAR100(Dataset):
 
     Kwargs:
         repo_path (str, optional): where to locally host this dataset on disk
+        coarse_labels (bool, optional): whether to load the coarse labels (20),
+                                        or the fine ones (100)
     """
     url = 'http://www.cs.utoronto.ca/~kriz/cifar-100-python.tar.gz'
 
-    def __init__(self, coarse=False, **kwargs):
+    def __init__(self, **kwargs):
         self.macro_batched = False
-        self.coarse = coarse
+        self.coarse_labels = False
         self.__dict__.update(kwargs)
 
     def initialize(self):
@@ -79,7 +81,7 @@ class CIFAR100(Dataset):
         full_image = np.float32(dict['data'])
         full_image /= 255.
 
-        label_type = 'coarse_labels' if self.coarse else 'fine_labels'
+        label_type = 'coarse_labels' if self.coarse_labels else 'fine_labels'
         labels = np.array(dict[label_type])
         onehot = np.zeros((len(labels), nclasses), dtype='float32')
         for col in range(nclasses):
@@ -95,7 +97,7 @@ class CIFAR100(Dataset):
             ncols = 32 * 32 * 3
 
             ntrain_total = 50000
-            nclasses = 20 if self.coarse else 100
+            nclasses = 20 if self.coarse_labels else 100
             save_dir = os.path.join(self.repo_path,
                                     self.__class__.__name__)
             self.fetch_dataset(save_dir)
@@ -124,3 +126,7 @@ class CIFAR100(Dataset):
             self.format()
         else:
             raise AttributeError('repo_path not specified in config')
+
+
+import pdb
+pdb.set_trace()
