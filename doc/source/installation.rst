@@ -237,6 +237,18 @@ You can always reactivate your virtualenv again at a later time, via
 delete the `.venv` directory.
 
 
+Docker Images
+-------------
+If you'd prefer to have a containerized installation of neon and its
+dependencies, the open source community has contributed the following
+`docker <http://www.docker.com/>`__ images (note that these are not
+supported/maintained by Nervana):
+
+- `base (CPU-only) <https://registry.hub.docker.com/u/kaixhin/neon/>`__
+- `nervanagpu backend <https://registry.hub.docker.com/u/kaixhin/nervanagpu-neon/>`__
+- `cudanet backend <https://registry.hub.docker.com/u/kaixhin/cudanet-neon/>`__
+
+
 Upgrading
 ---------
 
