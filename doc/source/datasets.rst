@@ -35,6 +35,7 @@ Available Datasets
    neon.datasets.imageset.Imageset
 
    neon.datasets.cifar10.CIFAR10
+   neon.datasets.cifar100.CIFAR100
    neon.datasets.iris.Iris
    neon.datasets.mnist.MNIST
    neon.datasets.sparsenet.SPARSENET
