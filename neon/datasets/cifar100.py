@@ -43,7 +43,7 @@ class CIFAR100(Dataset):
         targets (dict): structure housing the loaded train/test/validation
                         target data
 
-    Kwargs:
+    Keyword Args:
         repo_path (str, optional): where to locally host this dataset on disk
         coarse_labels (bool, optional): whether to load the coarse labels (20),
                                         or the fine ones (100)

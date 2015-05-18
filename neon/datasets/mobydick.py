@@ -41,7 +41,7 @@ class MOBYDICK(Dataset):
         targets (dict): structure housing the loaded train/test/validation
                         target data
 
-    Kwargs:
+    Keyword Args:
         repo_path (str, optional): where to locally host this dataset on disk
     """
     raw_base_url = 'http://www.gutenberg.org/cache/epub/2701/pg2701.txt'

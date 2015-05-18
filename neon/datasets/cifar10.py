@@ -43,7 +43,7 @@ class CIFAR10(Dataset):
         targets (dict): structure housing the loaded train/test/validation
                         target data
 
-    Kwargs:
+    Keyword Args:
         repo_path (str, optional): where to locally host this dataset on disk
     """
     url = 'http://www.cs.toronto.edu/~kriz/cifar-10-python.tar.gz'

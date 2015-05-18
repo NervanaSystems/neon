@@ -375,7 +375,7 @@ CIFAR10
    neon.datasets.cifar10.CIFAR10
 
 CIFAR100
--------
+--------
 
 .. autosummary::
    :toctree: generated/
