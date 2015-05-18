@@ -416,6 +416,36 @@ class RNN(MLP):
         See Also:
             predict_fullset
         """
+        # TODO: find some alternate way of re-assembling data that doesn't
+        # require allocating space for the entire dataset so we can avoid the
+        # call to predict_fullset
+        (pred_flat, targ_flat) = self.predict_fullset(dataset, setname)
+
+        for i in range(self.data_layer.num_batches):
+            start = i * self.unrolls * self.batch_size
+            end = start + (self.unrolls * self.batch_size)
+            yield (pred_flat[start:end], targ_flat[start:end])
+
+    def predict_fullset(self, dataset, setname):
+        """
+        Generate predicitons and true labels for the given dataset.
+        Note that this requires enough memory to house the predictions and
+        labels for the entire dataset at one time (not recommended for large
+        datasets, see predict_generator instead).
+
+        Agruments:
+            dataset: A neon dataset instance
+            setname: Which set to compute predictions for (test, train, val)
+
+        Returns:
+            tuple: on each call will yield a 2-tuple of outputs and references.
+                   The first item is the model probabilities for each class,
+                   and the second item is either the one-hot or raw labels with
+                   ground truth.
+
+        See Also:
+            predict_generator
+        """
         self.data_layer.init_dataset(dataset)
         assert self.data_layer.has_set(setname)
         self.data_layer.use_set(setname, predict=True)
@@ -424,8 +454,6 @@ class RNN(MLP):
         predlabels = self.backend.empty((1, self.batch_size))
         labels = self.backend.empty((1, self.batch_size))
 
-        # TODO: find some alternate way of re-assembling data that doesn't
-        # require allocating space for the entire dataset.
         outputs_pred = self.backend.zeros((self.data_layer.num_batches *
                                            self.unrolls, self.batch_size))
         outputs_targ = self.backend.zeros((self.data_layer.num_batches *
@@ -455,10 +483,7 @@ class RNN(MLP):
         pred_flat = outputs_pred.transpose().reshape((1, -1))
         targ_flat = outputs_targ.transpose().reshape((1, -1))
 
-        for i in range(self.data_layer.num_batches):
-            start = i * self.unrolls * self.batch_size
-            end = start + (self.unrolls * self.batch_size)
-            yield (pred_flat[start:end], targ_flat[start:end])
+        return (pred_flat, targ_flat)
 
     def write_string(self, pred, targ, setname):
             """ For text prediction, reassemble the batches and print out a
