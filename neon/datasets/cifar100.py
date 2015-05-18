@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-CIFAR-100 contains color images of 10 classes.
+CIFAR-100 contains color images of 100 classes.
 More info at: http://www.cs.toronto.edu/~kriz/cifar.html
 """
 
