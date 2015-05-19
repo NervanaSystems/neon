@@ -248,7 +248,7 @@
     num_epochs: 25,
     batch_size: &bs 30,
     serialized_path: './iris-mlp-simple.prm',
-    serialize_schedule: [3 10 20],
+    serialize_schedule: [3, 10, 20],
     layers: [
       &datalayer !obj:layers.DataLayer {
         # DataLayer parameters

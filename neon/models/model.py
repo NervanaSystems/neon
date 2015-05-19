@@ -93,7 +93,5 @@ class Model(object):
         else:
             dosave = self.epochs_complete % self.serialize_schedule == 0
 
-        mparams = self.get_params()
         if dosave:
-            serialize(mparams, self.serialized_path)
-
+            serialize(self.get_params(), self.serialized_path)

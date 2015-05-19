@@ -102,6 +102,7 @@ class DBN(Model):
                     self.backend.end(Block.minibatch, batch)
                 logger.info('epoch: %d, total training error: %0.5f',
                             self.epochs_complete, error / num_batches)
+                self.save_snapshot()
                 self.backend.end(Block.epoch, self.epochs_complete)
                 self.epochs_complete += 1
             self.epochs_complete = 0  # reset for next layer
