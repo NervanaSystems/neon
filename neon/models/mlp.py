@@ -39,6 +39,7 @@ class MLP(Model):
         opt_param(self, ['accumulate'], False)
         opt_param(self, ['reuse_deltas'], True)
         opt_param(self, ['timing_plots'], False)
+        opt_param(self, ['serialize_schedule'])
 
     def link(self, initlayer=None):
         for ll, pl in zip(self.layers, [initlayer] + self.layers[:-1]):
@@ -159,6 +160,7 @@ class MLP(Model):
             self.print_layers(debug=True)
             self.backend.end(Block.epoch, self.epochs_complete)
             self.epochs_complete += 1
+            self.save_snapshot()
         self.data_layer.cleanup()
 
     def set_train_mode(self, mode):
