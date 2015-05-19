@@ -235,15 +235,20 @@
     # serialized_path - the full location and name to a serialized .prm file
     #                   that we will use to cache this model.  Speeds up
     #                   subsequent use of this model for inference purposes.
-    # deserialize_path - the full location and name to deserialize a .prm file from
-    #                   that we will use to initialize this model. Defaults to
-    #                   serialized_path if deserialize_path doesn't exist
+    # deserialize_path - the full location and name to deserialize a .prm file
+    #                    from that we will use to initialize this model.
+    #                    Defaults to serialized_path if deserialize_path
+    #                    doesn't exist
+    # serialize_schedule - either an int specifying the epoch interval at
+    #                      at which to save snapshots of the model, or a list
+    #                      of ints specifying the epochs at which to save.
     # layers - list of neural network layer objects.  Models will typically
     #          have a single DataLayer, followed by 1 or more hidden layers,
     #          then a final CostLayer.
     num_epochs: 25,
     batch_size: &bs 30,
     serialized_path: './iris-mlp-simple.prm',
+    serialize_schedule: [3 10 20],
     layers: [
       &datalayer !obj:layers.DataLayer {
         # DataLayer parameters

@@ -41,4 +41,10 @@ Adding a new type of Model
 #. Write :func:`neon.models.model.Model.predict` to apply learned parameters
    to make predictions about another dataset.
 
+Saving models
+-------------
 
+Models can be saved by using the `serialized_path` option in the yaml file.
+To save snapshots of the model during training, use the `serialize_schedule`
+option.  The schedule can be either a list of ints if specific epochs are to
+be saved or a single int if saving is meant to occur at a constant interval.
