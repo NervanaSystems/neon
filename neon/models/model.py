@@ -75,18 +75,25 @@ class Model(object):
         If serialize_schedule is a single int, it will serialize when
         epochs_complete is a multiple of serialize_schedule
         """
-        if self.serialize_schedule is not None:
-            if hasattr(self, 'serialized_path'):
-                if isinstance(self.serialize_schedule, list):
-                    if self.epochs_complete in self.serialize_schedule:
-                        serialize(self.get_params(), self.serialized_path)
-                elif isinstance(self.serialize_schedule, int):
-                    if self.epochs_complete % self.serialize_schedule == 0:
-                        serialize(self.get_params(), self.serialized_path)
-                else:
-                    logger.error('Serialize schedule must be a list of epochs '
-                                 'or a single int indicating interval between '
-                                 'save epochs')
-            else:
-                logger.error('Serialize schedule specified, but no serialize '
-                             'path provided, not saving')
+        if self.serialize_schedule is None:
+            return
+
+        if not hasattr(self, 'serialized_path'):
+            logger.error('Serialize schedule specified, but no serialize '
+                         'path provided, not saving')
+            return
+
+        if not isinstance(self.serialize_schedule, (list, int)):
+            logger.error('Serialize schedule must be a list of epochs or a '
+                         'single int indicating interval between save epochs')
+            return
+
+        if isinstance(self.serialize_schedule, list):
+            dosave = self.epochs_complete in self.serialize_schedule
+        else:
+            dosave = self.epochs_complete % self.serialize_schedule == 0
+
+        mparams = self.get_params()
+        if dosave:
+            serialize(mparams, self.serialized_path)
+
