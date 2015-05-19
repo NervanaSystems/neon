@@ -157,6 +157,7 @@ class RNN(MLP):
             logger.info('epoch: %d, total training error: %0.5f',
                         self.epochs_complete, float(error.asnumpyarray()) /
                         self.data_layer.num_batches)
+            self.save_snapshot()
             if self.make_plots is True:
                 self.plot_layers(viz, suberrorlist, errorlist)
 

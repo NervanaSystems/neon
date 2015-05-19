@@ -19,6 +19,8 @@ must support.
 
 import logging
 
+from neon.util.persist import serialize
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,3 +66,22 @@ class Model(object):
                 lkey = ll.name + '_' + str(i)
                 ll.set_params(params_dict[lkey])
         self.epochs_complete = params_dict['epochs_complete']
+
+    def save_snapshot(self):
+        if self.serialize_schedule is not None:
+            if hasattr(self, 'serialized_path'):
+                if isinstance(self.serialize_schedule, list):
+                    if self.epochs_complete in self.serialize_schedule:
+                        serialize(self.get_params(), self.serialized_path)
+                elif isinstance(self.serialize_schedule, int):
+                    if self.epochs_complete % self.serialize_schedule == 0:
+                        serialize(self.get_params(), self.serialized_path)
+                else:
+                    logger.error('Serialize schedule must be a list of epochs '
+                                 'or a single int indicating interval between '
+                                 'save epochs')
+
+            else:
+                logger.error('Serialize schedule specified, but no serialize '
+                             'path provided, not saving')
+
