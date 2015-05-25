@@ -432,6 +432,12 @@ class GPU(Backend):
         self.ng.maximum(x, 0., out=out)
         return out
 
+    def rectleaky(self, x, slope, out):
+        out[:] = self.ng.maximum(x, x*slope)
+
+    def rectleaky_derivative(self, x, slope, out):
+        out[:] = self.ng.greater(x, 0) * (1.0 - slope) + slope
+
     def sum(self, tsr, axes, out):
         """
         Sum
