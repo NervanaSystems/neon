@@ -80,7 +80,6 @@ class BatchNorm(Activation):
         if self.is_local:
             self.in1d = (self.layer.nofm, 1)
             self.ofmsize = self.layer.ofmsize
-            self.orig_shape = (self.layer.nofm * self.ofmsize, self.batch_size)
             self.in_shape = (self.layer.nofm, self.ofmsize * self.batch_size)
         else:
             self.in_shape = (self.layer.nout, self.batch_size)
@@ -192,10 +191,6 @@ class BatchNorm(Activation):
                                  derivative function.
             outputs (array_like): Storage for the transformed output.
         """
-        if self.is_local:
-            inputs = inputs.reshape(self.in_shape)
-            outputs = outputs.reshape(self.in_shape)
-
         if self.train_mode:
             if (self.backend.__module__ != 'neon.backends.gpu'):
                 # Calc batch statistics
@@ -225,10 +220,6 @@ class BatchNorm(Activation):
             backend.multiply(inputs, self._iscale, out=outputs)
             backend.add(outputs, self._ishift, out=outputs)
 
-        if self.is_local:
-            inputs = inputs.reshape(self.orig_shape)
-            outputs = outputs.reshape(self.orig_shape)
-
     def bprop_func(self, backend, pre_act, error, skip_act=False):
         """
         Calculates the backpropagated error and gradients for gamma and beta
@@ -247,10 +238,6 @@ class BatchNorm(Activation):
                                 activations.
             skip_act (boolean): Not used
         """
-        if self.is_local:
-            pre_act = pre_act.reshape(self.in_shape)
-            error = error.reshape(self.in_shape)
-
         if (self.backend.__module__ != 'neon.backends.gpu'):
             backend.multiply(self._xhat, error, out=pre_act)
             backend.sum(pre_act, axes=1, out=self._gamma_updates)
@@ -268,7 +255,3 @@ class BatchNorm(Activation):
             backend.bprop_bn_compound(self._xhat, error, self._vars,
                                       self._gamma,
                                       self._beta_updates, self._gamma_updates)
-
-        if self.is_local:
-            pre_act = pre_act.reshape(self.orig_shape)
-            error = error.reshape(self.orig_shape)
