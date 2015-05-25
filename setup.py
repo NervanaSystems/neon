@@ -96,7 +96,7 @@ class NeonCommand(Command):
                                                    'imgworker.git#'
                                                    'egg=imgworker']
         if self.gpu == "1" or self.gpu == "cudanet":
-            self.distribution.install_requires += ['cudanet>=0.2.5',
+            self.distribution.install_requires += ['cudanet>=0.2.6',
                                                    'pycuda>=2014.1']
             self.distribution.dependency_links += ['git+https://github.com/'
                                                    'NervanaSystems/'
