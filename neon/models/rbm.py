@@ -87,12 +87,13 @@ class RBM(Model):
                 self.update(self.epochs_complete)
                 self.backend.end(Block.update, batch)
                 self.backend.end(Block.minibatch, batch)
-            logger.info('epoch: %d, total training error: %0.5f',
-                        self.epochs_complete,
-                        error.asnumpyarray() / num_batches)
-            self.save_snapshot()
-            self.backend.end(Block.epoch, self.epochs_complete)
             self.epochs_complete += 1
+            logger.info('epoch: %s, total training error: %0.5f',
+                        '{0:0{wid}}'.format(self.epochs_complete,
+                                            wid=len(str(self.num_epochs))),
+                        error.asnumpyarray() / num_batches)
+            self.backend.end(Block.epoch, self.epochs_complete - 1)
+            self.save_snapshot()
 
     def positive(self, inputs):
         """Wrapper for RBMLayer.positive"""
