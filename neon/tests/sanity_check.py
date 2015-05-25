@@ -62,10 +62,6 @@ if __name__ == '__main__':
         if (args.__dict__[be] != 0 and args.__dict__[be] != "" and
                 args.__dict__[be] != "0"):
             if be == "gpu":
-                if args.__dict__[be] == "nervanagpu":
-                    print("LeakyReLU not in nervanagpu yet.  sanity checking "
-                          "not yet supported")
-                    sys.exit(1)
                 be_args[be] = args.__dict__[be]
             elif be == "datapar":
                 be_args[be] = 1
