@@ -18,13 +18,6 @@
 
 !obj:experiments.FitPredictErrorExperiment {
 
-  dataset: &ds !obj:datasets.MOBYDICK {
-    repo_path: '~/data',
-    sample_pct: 10, # 10% gives 400 batches like in rnn2
-    data_dim: &dd 128,
-    unrolls: &ur 5,
-  },
-
   metrics: {
     train: [
       !obj:metrics.MisclassPercentage {},
@@ -32,6 +25,14 @@
     test: [
       !obj:metrics.MisclassPercentage {},
     ],
+  },
+
+
+  dataset: &ds !obj:datasets.MOBYDICK {
+    repo_path: '~/data',
+    sample_pct: 10, # 10% gives 400 batches like in rnn2
+    data_dim: &dd 96,
+    unrolls: &ur 5,
   },
 
   weight_inits: [
@@ -61,8 +62,16 @@
 
   # simple RNN model specification
   model: !obj:models.RNN {
+    num_params: {
+      name: rec,  # output:input:rec:lstm_x:lstm_ih:lstm_fh:lstm_oh:lstm_ch
+      eps: 0.001,
+      x: 12,
+      y: 60,
+      z: 63,
+      w: 55,
+    },
     num_epochs: 10,
-    batch_size: &bs 50,
+    batch_size: &bs 64,
     reset_period: 50,  # 50 for LSTM, 20 for RNN?
     unrolls: *ur,
     make_plots: False,
@@ -72,7 +81,7 @@
     layers: [
       &datalayer !obj:layers.DataLayer {
         name: d0,
-        nout: 128,
+        nout: *dd,
       },
       !obj:layers.RecurrentHiddenLayer {
         name: recurrent,
@@ -80,18 +89,18 @@
         nout: 64,
         unrolls: *ur,
         activation: !obj:transforms.Tanh {},
-        gate_activation: !obj:transforms.Logistic {},
-        weight_init: *wt_init,
-        weight_init_rec: *wt_init,
+        #gate_activation: !obj:transforms.Logistic {},
+        weight_init: *wt_initb,
+        weight_init_rec: *wt_initb,
       },
 
       &lastlayer !obj:layers.RecurrentOutputLayer {
         name: output,
         lrule_init: *gdm,
-        nout: 128,
+        nout: *dd,
         unrolls: *ur,
         activation: !obj:transforms.Logistic {},
-        weight_init: *wt_init,
+        weight_init: *wt_initb,
       },
 
       &costlayer !obj:layers.RecurrentCostLayer {

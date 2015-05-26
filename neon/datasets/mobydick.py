@@ -54,40 +54,47 @@ class MOBYDICK(Dataset):
         # perform additional setup that can't be done at initial construction
         pass
 
-    def read_txt_file(self, fname, dtype=None):
+    def read_txt_file(self, fname):
         """
-        Carries out the actual reading
+        Reads the text file, converts characters to one-hot encoding.
+
+        Uses 96 ASCII characters that are printable (32-128). Replaces
+        line breaks of the form \r\n with a single space. All unprintable
+        characters are mapped to 0 (UNK).
         """
         with open(fname, 'r') as f:
             text = f.read()
-            numbers = numpy.fromstring(text, dtype='int8')
-            assert(self.data_dim == 128), "one-hot encoded ASCII required"
-            onehots = numpy.zeros((self.data_dim, numbers.shape[0]))
+            text = text.replace('\r\n', ' ')  # remove line breaks
+            numbers = numpy.fromstring(text, dtype='uint8') - 31
+            numbers = numbers * (numbers <= 128 - 31)  # set UNK to 0
+            numbers = numbers * (numbers >= 32 - 31)  # set UNK to 0
+            assert(self.data_dim == 96), "one-hot ASCII required 96 dims"
+            array = numpy.zeros((self.data_dim, numbers.shape[0]),
+                                dtype='uint8')
             for i in range(numbers.shape[0]):
-                onehots[numbers[i], i] = 1
+                array[numbers[i], i] = 1
 
-        array = onehots
         return array
 
     def transpose_batches(self, data):
-            """
-            Transpose each minibatch within the dataset.
-            """
-            bs = self.data_dim * self.unrolls
-            dd = self.data_dim
-            if data.shape[0] % bs != 0:
-                logger.warning('Incompatible batch size. '
-                               'Discarding %d samples...',
-                               data.shape[0] % bs)
-            nbatches = data.shape[0] / bs
-            batchwise = [[] for k in range(nbatches)]
-            for batch in range(nbatches):
-                batchdata = [self.backend.array(data[(batch * bs + k * dd):
-                                                     (batch * bs + (k + 1) *
-                                                      dd)])
-                             for k in range(self.unrolls)]
-                batchwise[batch] = batchdata
-            return batchwise
+        """
+        Transpose each minibatch within the dataset.
+        """
+        bs = self.data_dim * self.unrolls
+        dd = self.data_dim
+        if data.shape[0] % bs != 0:
+            logger.warning('Incompatible batch size. '
+                           'Discarding %d samples...',
+                           data.shape[0] % bs)
+        nbatches = data.shape[0] / bs
+        batchwise = [[] for k in range(nbatches)]
+        for batch in range(nbatches):
+            batchdata = [self.backend.array(data[(batch * bs + k * dd):
+                                                 (batch * bs + (k + 1) *
+                                                  dd)])
+                         for k in range(self.unrolls)]
+            batchwise[batch] = batchdata
+        return batchwise
 
     def load(self, backend=None, experiment=None):
         self.initialize()
@@ -116,7 +123,7 @@ class MOBYDICK(Dataset):
             if not os.path.exists(repo_file):
                 self.download_to_repo(url, save_dir)
             logger.info('loading: %s' % name)
-            indat = self.read_txt_file(repo_file, 'float32')
+            indat = self.read_txt_file(repo_file)
 
             self.preinputs = dict()
             self.preinputs['train'] = indat[:, train_idcs]

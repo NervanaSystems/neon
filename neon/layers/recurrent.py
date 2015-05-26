@@ -139,8 +139,8 @@ class RecurrentOutputLayer(RecurrentLayer):
         self.backend.bprop_fc(self.deltas, self.weights, error)
         self.backend.update_fc(out=self.temp_out, inputs=inputs, deltas=error)
 
-        if numgrad == "output":
-            self.grad_log(numgrad, self.temp_out[12, 56])
+        if numgrad and (numgrad['name'] == "output"):
+            self.grad_log(numgrad['name'], self.temp_out[numgrad['x'], 56])
 
         self.backend.add(self.weight_updates, self.temp_out,
                          self.weight_updates)
@@ -172,30 +172,32 @@ class RecurrentHiddenLayer(RecurrentLayer):
         self.temp_in = make_zbuf(self.weight_shape, self.weight_dtype)
         self.temp_rec = make_zbuf(self.weight_rec_shape)
         # Extra temp buffers z[0]=w*x and z[1]=w*input.
-        self.z = [make_zbuf(self.out_shape) for k in range(2)]
+        self.preact_rec = make_zbuf(self.out_shape)
+        self.preact_in = make_zbuf(self.out_shape)
 
     def allocate_param_bufs(self):
         super(RecurrentHiddenLayer, self).allocate_param_bufs()
-        s_we_ge = self.weight_init_rec.generate  # pep8 forever!
-        self.weights_rec = s_we_ge(self.weight_rec_shape, self.weight_dtype)
-        self.updates_rec = self.backend.empty(self.weight_rec_shape,
+        weight_gen = self.weight_init_rec.generate
+        self.weights_rec = weight_gen(self.weight_rec_shape, self.weight_dtype)
+        self.updates_rec = self.backend.zeros(self.weight_rec_shape,
                                               self.updates_dtype)
-
         self.params.append(self.weights_rec)
         self.updates.append(self.updates_rec)
-        # added this loop because rec is an empty buffer that otherwise
-        # does not get initialized and gives nondeterministic behavior.
-        # Why do we use emtpy if all these things need to be zero anyway?
-        for upm in self.updates:
-            upm.fill(0.0)
+
         # Not ideal, since we just allocated this in the parent function, but
         # we can change the calling order later
         self.learning_rule.allocate_state(self.updates)
 
     def fprop(self, y, c, inputs, tau):
-        self.backend.fprop_fc(self.z[0], y, self.weights_rec)
-        self.backend.fprop_fc(self.z[1], inputs, self.weights)
-        self.backend.add(self.z[0], self.z[1], self.pre_act_list[tau])
+        self.backend.fprop_fc(out=self.preact_rec,
+                              inputs=y,
+                              weights=self.weights_rec)
+        self.backend.fprop_fc(out=self.preact_in,
+                              inputs=inputs,
+                              weights=self.weights)
+        self.backend.add(left=self.preact_rec,
+                         right=self.preact_in,
+                         out=self.pre_act_list[tau])
         self.activation.fprop_func(self.backend,
                                    self.pre_act_list[tau],
                                    self.output_list[tau])
@@ -231,15 +233,15 @@ class RecurrentHiddenLayer(RecurrentLayer):
                                    deltas=error)
             self.backend.add(self.updates_rec, self.temp_rec, self.updates_rec)
 
-            # **** email urs@nervanasys.com with questions ***
-            # Why only at tau > 0 vs. tau==0? why not weights vs weights_rec
             self.backend.bprop_fc(out=self.deltas,
                                   weights=self.weights_rec,
                                   deltas=error)
-        if numgrad == "input":
-            self.grad_log(numgrad, self.temp_in[12, 110])
-        if numgrad == "rec":
-            self.grad_log(numgrad, self.temp_rec[12, 63])
+        if numgrad and (numgrad['name'] == "input"):
+            self.grad_log(numgrad['name'], self.temp_in[numgrad['x'],
+                          numgrad['y']])
+        if numgrad and (numgrad['name'] == "rec"):
+            self.grad_log(numgrad['name'], self.temp_rec[numgrad['x'],
+                          numgrad['z']])
 
 
 class RecurrentLSTMLayer(RecurrentLayer):
@@ -537,8 +539,11 @@ class RecurrentLSTMLayer(RecurrentLayer):
             self.list_product(self.delta_buf, deltargs[ifoc])
             self.cell_bprop(self.delta_buf, cur_input, cur_output, tau,
                             ifoc, self.d_dh1[ifoc])
-            numtemp[ifoc + 'h'][0] = self.dh_dwh_buf[12, 55].asnumpyarray()
-            numtemp[ifoc + 'x'][0] = self.dh_dwx_buf[12, 110].asnumpyarray()
+            if numgrad:
+                tc = self.dh_dwh_buf[numgrad['x'], numgrad['w']].asnumpyarray()
+                numtemp[ifoc + 'h'][0] = tc
+                tc = self.dh_dwx_buf[numgrad['x'], numgrad['y']].asnumpyarray()
+                numtemp[ifoc + 'x'][0] = tc
 
         # e. collect terms
         self.list_sum(self.errs['hh'], self.d_dh1.values())
@@ -560,8 +565,11 @@ class RecurrentLSTMLayer(RecurrentLayer):
             self.list_product(self.delta_buf, deltargs[ifc])
             self.cell_bprop(self.delta_buf, cur_input, cur_output, tau,
                             ifc, self.dc_d_dh1[ifc])
-            numtemp[ifc + 'h'][1] = self.dh_dwh_buf[12, 55].asnumpyarray()
-            numtemp[ifc + 'x'][1] = self.dh_dwx_buf[12, 110].asnumpyarray()
+            if numgrad:
+                tc = self.dh_dwh_buf[numgrad['x'], numgrad['w']].asnumpyarray()
+                numtemp[ifc + 'h'][1] = tc
+                tc = self.dh_dwx_buf[numgrad['x'], numgrad['y']].asnumpyarray()
+                numtemp[ifc + 'x'][1] = tc
 
         # errs['ch'] = sum of dc_d{i,f,g}_dh1 terms
         # errs['hc'] = error_h * self.o_t * self.c_phip * self.f_t @ tau
@@ -573,8 +581,9 @@ class RecurrentLSTMLayer(RecurrentLayer):
         # wrap up:
         be.add(self.errs['hh'], self.errs['ch'], self.deltas)
         be.add(self.errs['cc'], self.errs['hc'], self.celtas)
-        if numgrad is not None and numgrad.startswith("lstm"):
-            ifoc_hx = numgrad[5:7]
+        if numgrad and (numgrad['name'] is not None) \
+                and numgrad['name'].startswith("lstm"):
+            ifoc_hx = numgrad['name'][5:7]
             logger.info("LSTM.bprop: analytic dh_dw%s[%d]= %e + %e = %e",
                         ifoc_hx, tau, numtemp[ifoc_hx][0], numtemp[ifoc_hx][1],
                         numtemp[ifoc_hx][0] + numtemp[ifoc_hx][1])
