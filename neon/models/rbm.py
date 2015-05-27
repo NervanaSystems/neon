@@ -88,9 +88,8 @@ class RBM(Model):
                 self.backend.end(Block.update, batch)
                 self.backend.end(Block.minibatch, batch)
             self.epochs_complete += 1
-            logger.info('epoch: %s, total training error: %0.5f',
-                        '{0:0{wid}}'.format(self.epochs_complete,
-                                            wid=len(str(self.num_epochs))),
+            logger.info('epoch: %d, total training error: %0.5f',
+                        self.epochs_complete,
                         error.asnumpyarray() / num_batches)
             self.backend.end(Block.epoch, self.epochs_complete - 1)
             self.save_snapshot()

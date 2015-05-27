@@ -110,18 +110,13 @@ class MLP(Model):
             return
         if partial is True:
             assert self.step_print != 0
-            dlnb = self.data_layer.num_batches
-            logger.info('%s.%s training error: %0.5f',
-                        '{0:0{wid}}'.format(self.epochs_complete,
-                                            wid=len(str(self.num_epochs))),
-                        '{0:0{wid}}'.format(num_batches / self.step_print,
-                                            wid=len(str(dlnb))),
+            logger.info('%d:%d training error: %0.5f', self.epochs_complete,
+                        num_batches / self.step_print,
                         rederr)
         else:
             errorval = rederr / num_batches
-            logger.info('epoch: %s, training error: %0.5f',
-                        '{0:0{wid}}'.format(self.epochs_complete,
-                                            wid=len(str(self.num_epochs))),
+            logger.info('epoch: %d, training error: %0.5f',
+                        self.epochs_complete,
                         errorval)
 
     def print_test_error(self, setname, misclass, nrecs):

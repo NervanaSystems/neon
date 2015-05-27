@@ -119,14 +119,12 @@ class RNN(MLP):
         errorlist = []
         suberrorlist = []
         suberror = self.backend.zeros((1, 1))
-        ep_digits = len(str(self.num_epochs))
         while self.epochs_complete < self.num_epochs:
             self.backend.begin(Block.epoch, self.epochs_complete)
             error.fill(0.0)
             mb_id = 1
             self.data_layer.reset_counter()
             dlnb = self.data_layer.num_batches
-            dlnb_digits = len(str(dlnb))
             while self.data_layer.has_more_data():
                 self.backend.begin(Block.minibatch, mb_id)
                 self.reset(mb_id)
@@ -146,20 +144,15 @@ class RNN(MLP):
                 suberrorlist.append(float(suberror.asnumpyarray()))
                 self.backend.add(error, suberror, error)
                 if self.step_print > 0 and mb_id % self.step_print == 0:
-                    logger.info('%s.%s logloss=%0.5f',
-                                '{0:0{wid}}'.format(self.epochs_complete,
-                                                    wid=ep_digits),
-                                '{0:0{wid}}'.format(mb_id /
-                                                    self.step_print,
-                                                    wid=dlnb_digits),
+                    logger.info('%d:%d logloss=%0.5f', self.epochs_complete,
+                                mb_id / self.step_print,
                                 float(error.asnumpyarray()) / dlnb)
                 self.backend.end(Block.minibatch, mb_id)
                 mb_id += 1
             self.epochs_complete += 1
             errorlist.append(float(error.asnumpyarray()) / dlnb)
-            logger.info('epoch: %s, total training error: %0.5f',
-                        '{0:0{wid}}'.format(self.epochs_complete,
-                                            wid=ep_digits),
+            logger.info('epoch: %d, total training error: %0.5f',
+                        self.epochs_complete,
                         float(error.asnumpyarray()) / dlnb)
             self.backend.end(Block.epoch, self.epochs_complete - 1)
             self.save_snapshot()
