@@ -21,7 +21,7 @@ example against prior runs.
 import argparse
 import sys
 
-from neon.metrics.metric import compare_metrics
+from neon.metrics.metric import MetricComparison
 
 def parse_args():
     """
@@ -40,19 +40,34 @@ def parse_args():
                              'Defaults to 10 if not specified')
     parser.add_argument('-d', '--delimiter', default='\t',
                         help='output field separator.  Defaults to tab char')
-    parser.add_argument('-c', '--no_color', action='store_true',
+    parser.add_argument('-C', '--no_color', action='store_true',
                         help='turn off coloring of comparison diffs')
     parser.add_argument('-t', '--color_threshold', type=float, default=.01,
                         help='Difference magnitude (from prior run mean) '
                              'needed to highlight in color.  Defaults to .01')
+    parser.add_argument('-B', '--no_backend_match', action='store_true',
+                        help='Compare prior runs across all types of backends')
+    parser.add_argument('-H', '--no_header', action='store_true',
+                        help='omit inclusion of a header line in output')
+    parser.add_argument('-e', '--min_exp_width', type=int, default=1,
+                        help='Left pad experiment field to have the specified '
+                             'length.  Defaults to 1 (no padding).')
+    parser.add_argument('-m', '--min_metric_name_width', type=int, default=1,
+                        help='Right pad metric name field to have the '
+                             'specified length.  Defaults to 1 (no padding).')
     return(parser.parse_args())
 
 def main():
     """Point of code entry"""
     args = parse_args()
-    compare_metrics(args.db_file, args.yaml_file, max_comps=args.num_comps,
-                    field_sep=args.delimiter, escape_colors=not args.no_color,
-                    color_threshold=args.color_threshold)
+    res = MetricComparison(args.db_file, args.yaml_file,
+                           max_comps=args.num_comps,
+                           match_backend=not args.no_backend_match)
+    res.print_results(field_sep=args.delimiter, escape_colors=not args.no_color,
+                      color_threshold=args.color_threshold,
+                      header=not args.no_header,
+                      min_exp_field_width=args.min_exp_width,
+                      min_metric_name_field_width=args.min_metric_name_width)
 
 if __name__ == '__main__':
   sys.exit(main())
