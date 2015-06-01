@@ -32,7 +32,8 @@ def serialize_check(conf_file, result, tol, res_string, **be_args):
     backend = gen_backend(model=experiment.model, **be_args)
     experiment.initialize(backend)
     res = experiment.run()
-    print float(res[res_string]['MisclassPercentage_TOP_1']), result,
+    print("{f}, {f}".format(float(res[res_string]['MisclassPercentage_TOP_1']),
+                            result))
     assert abs(
         float(res[res_string]['MisclassPercentage_TOP_1']) - result) < tol
 
@@ -69,7 +70,7 @@ if __name__ == '__main__':
         # delete previously serialized files
         for serialized_file in serialized_files:
             if os.path.isfile(os.path.expanduser(serialized_file)):
-                print "deleting:", serialized_file
+                print("deleting: {0}".format(serialized_file))
                 os.remove(os.path.expanduser(serialized_file))
 
         res_string = 'test'
@@ -179,7 +180,7 @@ if __name__ == '__main__':
         # delete previously serialized files
         for serialized_file in serialized_files:
             if os.path.isfile(os.path.expanduser(serialized_file)):
-                print "deleting:", serialized_file
+                print("deleting: {0}".format(serialized_file))
                 os.remove(os.path.expanduser(serialized_file))
 
         res_string = 'validation'

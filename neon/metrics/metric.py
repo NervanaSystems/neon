@@ -108,7 +108,7 @@ def dump_metrics(dump_file, experiment_file, start_time, elapsed_time,
         df = sys.stdout()
     elif not os.path.exists(dump_file) or os.path.getsize(dump_file) == 0:
         ensure_dirs_exist(dump_file)
-        df = file(dump_file, 'w')
+        df = open(dump_file, 'w')
         metric_names = []
         if isinstance(metrics, dict):
             metric_names = ["%s-%s" % (metric.lower(), dset.lower())
@@ -120,7 +120,7 @@ def dump_metrics(dump_file, experiment_file, start_time, elapsed_time,
                                  "yaml_name", "yaml_sha1", "start_time",
                                  "elapsed_time"] + metric_names) + "\n")
     else:
-        df = file(dump_file, 'a')
+        df = open(dump_file, 'a')
     info = os.uname()
     trunc_exp_name = ("..." + os.path.sep +
                       os.path.dirname(experiment_file).split(os.path.sep)[-1] +
@@ -170,7 +170,7 @@ class MetricComparison(object):
             raise OSError("file: %s doesn't exist.  Can't run comparisons" %
                           dump_file)
 
-        data = file(dump_file).readlines()
+        data = open(dump_file).readlines()
 
         if len(data) < 1 or not data[0].startswith("host"):
             raise OSError("file: %s seems to have invalid format" % dump_file)

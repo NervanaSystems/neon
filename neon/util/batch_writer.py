@@ -57,7 +57,7 @@ def proc_img(imgfile, is_string=False):
         im = im.resize((wnew, hnew), filt)
 
     if SQUARE_CROP is True:
-        (cx, cy) = map(lambda x: (x - TARGET_SIZE) / 2, (wnew, hnew))
+        (cx, cy) = map(lambda x: (x - TARGET_SIZE) // 2, (wnew, hnew))
         im = im.crop((cx, cy, cx+TARGET_SIZE, cy+TARGET_SIZE))
 
     buf = StringIO()
@@ -129,9 +129,9 @@ class BatchWriter(object):
             f.close()
 
         # Write out cached stats for this data
-        self.ntrain = (len(tlines) + self.batch_size - 1) / self.batch_size
+        self.ntrain = (len(tlines) + self.batch_size - 1) // self.batch_size
         self.train_nrec = len(tlines)
-        self.nval = (len(vlines) + self.batch_size - 1) / self.batch_size
+        self.nval = (len(vlines) + self.batch_size - 1) // self.batch_size
         self.val_nrec = len(vlines)
         self.train_start = 0
         self.val_start = 10 ** int(np.log10(self.ntrain * 10))
@@ -156,7 +156,7 @@ class BatchWriter(object):
         pool = Pool(processes=self.num_workers)
         psz = self.batch_size
         osz = self.output_image_size
-        npts = (len(imfiles) + psz - 1) / psz
+        npts = (len(imfiles) + psz - 1) // psz
 
         imfiles = [imfiles[i*psz: (i+1)*psz] for i in range(npts)]
 
@@ -284,7 +284,7 @@ class BatchWriterImagenet(BatchWriter):
             logger.info("created list of jpg files")
             logger.info("Number of training files = %d", num_train_files)
 
-            self.ntrain = (num_train_files + bsz - 1) / bsz
+            self.ntrain = (num_train_files + bsz - 1) // bsz
             self.train_nrec = num_train_files
             self.nclass = {'l_id': 1000}
             self.train_start = 0
@@ -297,7 +297,7 @@ class BatchWriterImagenet(BatchWriter):
                                  key=lambda x: x.name)
             num_val_files = len(v_jpegfiles)
 
-            self.nval = (num_val_files + bsz - 1) / bsz
+            self.nval = (num_val_files + bsz - 1) // bsz
             self.val_nrec = num_val_files
             self.val_start = 10 ** int(np.log10(self.ntrain) + 1)
             val_labels = {'l_id': np.array(val_labels, dtype=np.int32)}

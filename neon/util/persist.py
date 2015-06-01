@@ -180,8 +180,8 @@ def deserialize(load_path, verbose=True):
     See Also:
         serialize
     """
-    if not isinstance(load_path, file):
-        load_path = file(os.path.expandvars(os.path.expanduser(load_path)))
+    if isinstance(load_path, str):
+        load_path = open(os.path.expandvars(os.path.expanduser(load_path)))
     fname = load_path.name
 
     if verbose:
