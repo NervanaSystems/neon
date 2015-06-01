@@ -125,3 +125,5 @@ predictions:
 
 .. literalinclude:: ../../examples/mlp/mnist-small-noyaml.py
    :linenos:
+
+An example using an `iPython notebook <https://github.com/NervanaSystems/neon/tree/master/examples/mlp/mnist-notebook.ipynb>` is also provided.
