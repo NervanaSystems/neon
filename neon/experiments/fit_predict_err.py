@@ -157,7 +157,7 @@ class FitPredictErrorExperiment(FitExperiment):
         while True:
             try:
                 result = self.model.predict_live()
-                logger.info(result)
+                self.dataset.process_result(result.asnumpyarray())
             except KeyboardInterrupt:
                 logger.info('Execution interrupted.')
                 self.dataset.unload()
