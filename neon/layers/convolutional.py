@@ -53,9 +53,9 @@ class ConvLayer(WeightLayer):
 
         if self.shared_bias or self.batch_norm:
             self.bias_expand_view = self.bias_expand.reshape(
-                    (self.nofm, self.ofmsize))
+                (self.nofm, self.ofmsize))
             self.pre_act_view = self.pre_act.reshape(
-                    (self.nofm, self.ofmsize * self.batch_size))
+                (self.nofm, self.ofmsize * self.batch_size))
 
         self.allocate_param_bufs()
 

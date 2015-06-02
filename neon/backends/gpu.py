@@ -847,10 +847,8 @@ class GPU(Backend):
         Outputs are written to vs_item (updated velocity)
         and ps_item (updated weights)
         """
-        self.ng.subtract(self.ng.multiply(vs_item, momentum_coef),
-                         self.ng.multiply(us_item, learning_rate),
-                         out=vs_item)
-        self.ng.add(ps_item, vs_item, out=ps_item)
+        vs_item[:] = vs_item * momentum_coef - us_item * learning_rate
+        ps_item[:] = ps_item + vs_item
 
     def gdmwd_compound(self, ps_item, us_item, vs_item, momentum_coef,
                        learning_rate, wd, epoch):
@@ -871,16 +869,9 @@ class GPU(Backend):
             vs_item, the updated velocity.
             us_item, used as a temp buffer.
         """
-        self.ng.subtract(self.ng.multiply(vs_item, momentum_coef),
-                         self.ng.multiply(us_item, learning_rate),
-                         out=vs_item)
-
-        # weight decay
-        self.ng.multiply(self.ng.multiply(ps_item, wd),
-                         learning_rate, out=us_item)
-        self.ng.subtract(vs_item, us_item, out=vs_item)
-
-        self.ng.add(ps_item, vs_item, out=ps_item)
+        vs_item[:] = vs_item * momentum_coef - us_item * \
+            learning_rate - learning_rate * wd * ps_item
+        ps_item[:] = ps_item + vs_item
 
     def ada_update(self, ps_item, us_item, gs_item, ds_item, ls_item, ss_item,
                    rho, epsilon):
@@ -909,6 +900,23 @@ class GPU(Backend):
 
         # Final update to the params
         ps_item[:] = ps_item + ls_item
+
+    def rms_update(self, params, updates, run_squares, velocity, scratch_space,
+                   gamma, epsilon, learning_rate, momentum_coef):
+
+        # Update running squares
+        run_squares[:] = gamma * run_squares + (1. - gamma) * updates * updates
+
+        # Now scale the gradient by lr / rms(grad) (with a epsilon term for
+        # stability) and use it to update the params
+        if momentum_coef == 0:
+            params[:] = params - learning_rate * updates * self.ng.reciprocal(
+                self.ng.sqrt(run_squares) + epsilon)
+        else:
+            velocity[:] = velocity * momentum_coef - \
+                learning_rate * updates * \
+                self.ng.reciprocal(self.ng.sqrt(run_squares) + epsilon)
+            params[:] = params + velocity
 
     def fprop_bn_compound(self, inputs, beta, gamma, eps, xvar, xhat, out):
         """
