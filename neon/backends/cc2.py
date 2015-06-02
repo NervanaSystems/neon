@@ -1743,7 +1743,10 @@ class GPU(Backend):
         # stability)
         self.sqrt(run_squares, out=scratch_space)
         self.add(scratch_space, epsilon, out=scratch_space)
-        self.divide(learning_rate, scratch_space, out=scratch_space)
+        # reciprocal and multiply used instead of division because we don't
+        # currently support scalar numerator
+        self.reciprocal(scratch_space, out=scratch_space)
+        self.multiply(learning_rate, scratch_space, out=scratch_space)
         self.multiply(scratch_space, updates, out=scratch_space)
 
         # Now update the params

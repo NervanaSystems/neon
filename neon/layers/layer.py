@@ -581,7 +581,7 @@ class WeightLayer(Layer):
             lr = AdaDelta(name=lrname, lr_params=lrule_init['lr_params'])
         elif lrule_init['type'] == 'rmsprop':
             lr = RMSProp(name=lrname, lr_params=lrule_init['lr_params'],
-                param_dtype=dtype, gradient_dtype=dtype)
+                         param_dtype=dtype, gradient_dtype=dtype)
         else:
             raise AttributeError("invalid learning rule params specified")
         lr.initialize(self.backend)

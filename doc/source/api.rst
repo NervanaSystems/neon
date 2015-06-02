@@ -263,6 +263,7 @@ Gradient Descent
    neon.optimizers.gradient_descent.GradientDescentMomentum
    neon.optimizers.gradient_descent.GradientDescentMomentumWeightDecay
    neon.optimizers.adadelta.AdaDelta
+   neon.optimizers.rmsprop.RMSProp
 
 Parameter Related
 =================

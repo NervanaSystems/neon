@@ -19,7 +19,6 @@ i.e. how the learning should proceed.
 
 import logging
 from neon.optimizers.gradient_descent import GradientDescentMomentum
-from neon.util.param import opt_param
 
 logger = logging.getLogger(__name__)
 

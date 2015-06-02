@@ -225,9 +225,9 @@
   },
 
   lrule: &rms {
-    # gradient_descent_momentum parameters
+    # rmsprop parameters
     # ------------------------------------
-    # type - set this to graident_descent_momentum
+    # type - set this to rmsprop
     # lr_params - parameters associated with this type of learning rate. types:
     #   learning_rate - Suggested value for learning rate is 0.001
     #   gamma - exponential decay for tracking the squared gradient over time
