@@ -32,8 +32,8 @@ def serialize_check(conf_file, result, tol, res_string, **be_args):
     backend = gen_backend(model=experiment.model, **be_args)
     experiment.initialize(backend)
     res = experiment.run()
-    print("{f}, {f}".format(float(res[res_string]['MisclassPercentage_TOP_1']),
-                            result))
+    print("{:f}, {:f}".format(float(res[res_string]['MisclassPercentage_TOP_1']
+                                   ), result))
     assert abs(
         float(res[res_string]['MisclassPercentage_TOP_1']) - result) < tol
 
