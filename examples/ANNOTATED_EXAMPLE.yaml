@@ -195,12 +195,11 @@
     #   learning_rate - fraction of backpropagated gradient values to
     #                   add to this layers weights during each update
     #                   (should be <= 1.0)
-    #   backend - backend to use to store data constructed for these
-    #             layer updates
     #   momentum_params - dictionary containing several parameters that
     #                     can be used to adjust the learning rate over
     #                     time based on the curvature of gradient
-    #                     directions.  These parameters are:
+    #                     directions.  Omission of the momentum_params dict
+    #                     will use no momentum.  The dict parameters are:
     #     type - should be one of: constant, linear_monotone, nesterov
     #     initial_coef - initial momentum coefficient value.  0 disables
     #                    momentum, but a positive value gives portion of
@@ -218,6 +217,32 @@
     type: gradient_descent_momentum,
     lr_params: {
       learning_rate: 0.5,
+      momentum_params: {
+        type: constant,
+        coef: 0,
+      },
+    },
+  },
+
+  lrule: &rms {
+    # rmsprop parameters
+    # ------------------------------------
+    # type - set this to rmsprop
+    # lr_params - parameters associated with this type of learning rate. types:
+    #   learning_rate - Suggested value for learning rate is 0.001
+    #   gamma - exponential decay for tracking the squared gradient over time
+    #           default is 0.9
+    #   epsilon - value added to denominator term for numerical stability
+    #             default is 1e-6
+    #   momentum_params - dictionary containing several parameters that
+    #                     can be used to adjust the learning rate over
+    #                     time based on the curvature of gradient
+    #                     directions.  See the gradient_descent_momentum info
+    type: rmsprop,
+    lr_params: {
+      learning_rate: 0.001,
+      gamma: 0.9,
+      epsilon: 0.000001,
       momentum_params: {
         type: constant,
         coef: 0,

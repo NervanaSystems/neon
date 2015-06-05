@@ -61,7 +61,7 @@ or convolutional neural networks below.
 
 The above will install neon system-wide.  If you don't have sufficient
 privileges or would prefer an isolated installation, see either our
-[virtualenv](http://neon.nervanasys.com/docs/latest/installation.htm#virtualenv)
+[virtualenv](http://neon.nervanasys.com/docs/latest/installation.html#virtualenv)
 based install, or take a look at some of the community provided [docker
 images](http://neon.nervanasys.com/docs/latest/installation.html#docker-images).
 

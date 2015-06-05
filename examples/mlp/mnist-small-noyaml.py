@@ -18,16 +18,15 @@ Example that creates and uses a network without a configuration file.
 """
 
 import logging
-
-logging.basicConfig(level=20)
-logger = logging.getLogger()
-
 from neon.backends import gen_backend
 from neon.layers import FCLayer, DataLayer, CostLayer
 from neon.models import MLP
 from neon.transforms import RectLin, Logistic, CrossEntropy
 from neon.datasets import MNIST
 from neon.experiments import FitPredictErrorExperiment
+
+logging.basicConfig(level=20)
+logger = logging.getLogger()
 
 
 def create_model(nin):

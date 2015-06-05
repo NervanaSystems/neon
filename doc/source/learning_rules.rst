@@ -34,6 +34,7 @@ Available Learning Rules
    neon.optimizers.gradient_descent.GradientDescentMomentumWeightDecay
 
    neon.optimizers.adadelta.AdaDelta
+   neon.optimizers.rmsprop.RMSProp
 
 .. _extending_learningrule:
 

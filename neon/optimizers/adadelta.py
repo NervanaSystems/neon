@@ -36,11 +36,11 @@ class AdaDelta(LearningRule):
         if 'rho' in lr_params:
             self.rho = lr_params['rho']
         else:
-            raise AttributeError("Missing required parameter rho")
+            self.rho = 0.95
         if 'epsilon' in lr_params:
             self.epsilon = lr_params['epsilon']
         else:
-            raise AttributeError("Missing required parameter epsilon")
+            self.epsilon = 0.000001
         self.exp_gradsq_dtype = self.param_dtype
         self.exp_deltsq_dtype = self.param_dtype
         self.scratch_space_dtype = self.param_dtype

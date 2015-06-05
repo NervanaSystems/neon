@@ -95,6 +95,16 @@ class Dataset(object):
         """
         pass
 
+    def process_result(self, result):
+        """
+        Accept and process results of running inference.
+
+        Arguments:
+            result (ndarray): Array containing predictions obtained by
+                    processing a minibatch of input data.
+        """
+        pass
+
     def download_to_repo(self, url, repo_path):
         """
         Fetches the dataset to a local repository for future use.

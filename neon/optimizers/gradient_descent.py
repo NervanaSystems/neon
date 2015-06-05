@@ -91,10 +91,8 @@ class GradientDescentMomentum(GradientDescent):
         if 'momentum_params' in lr_params:
             self.momentum_params = lr_params['momentum_params']
         else:
-            raise AttributeError("Missing required momentum parameters")
+            self.momentum_params = None
         self.velocity = []
-        self.velocity_rec = None
-        self.velocity_LSTM = None
         self.velocity_dtype = param_dtype
         if 'schedule' in lr_params:
             self.schedule_flag = True
@@ -158,6 +156,8 @@ class GradientDescentMomentum(GradientDescent):
         saturate_epoch: saturated_coef is reached and held
         ...
         """
+        if self.momentum_params is None:
+            return 0.0
         coef = 0.0
         if 'coef' in self.momentum_params:
             coef = self.momentum_params['coef']

@@ -49,6 +49,12 @@
         },
       },
     },
+    &rms {
+      type: rmsprop,
+      lr_params: {
+        learning_rate: 0.001,
+      },
+    },
     &ada {
       type: adadelta,
       lr_params: {

@@ -1783,6 +1783,33 @@ class GPU(Backend):
                                 epsilon)
         self.add(ps_item, ls_item, out=ps_item)
 
+    def rms_update(self, params, updates, run_squares, velocity, scratch_space,
+                   gamma, epsilon, learning_rate, momentum_coef):
+
+        # Update running squares
+        self.multiply(run_squares, gamma, out=run_squares)
+        self.multiply(updates, updates, out=scratch_space)
+        self.multiply(scratch_space, 1.0 - gamma, out=scratch_space)
+        self.add(run_squares, scratch_space, out=run_squares)
+
+        # Now scale the gradient by lr / rms(grad) (with a epsilon term for
+        # stability)
+        self.sqrt(run_squares, out=scratch_space)
+        self.add(scratch_space, epsilon, out=scratch_space)
+        # reciprocal and multiply used instead of division because we don't
+        # currently support scalar numerator
+        self.reciprocal(scratch_space, out=scratch_space)
+        self.multiply(learning_rate, scratch_space, out=scratch_space)
+        self.multiply(scratch_space, updates, out=scratch_space)
+
+        # Now update the params
+        if momentum_coef == 0:
+            self.subtract(params, scratch_space, out=params)
+        else:
+            self.multiply(velocity, momentum_coef, out=velocity)
+            self.subtract(velocity, scratch_space, out=velocity)
+            self.add(params, velocity, out=params)
+
     def sync_stream(self):
         cudanet.sync_stream()
 

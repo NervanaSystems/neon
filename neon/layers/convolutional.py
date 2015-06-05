@@ -41,6 +41,8 @@ class ConvLayer(WeightLayer):
         if self.pad != 0 and isinstance(self.backend, CPU):
             raise NotImplementedError('pad != 0, for CPU backend in ConvLayer')
 
+        self.allocate_output_bufs()
+
         opt_param(self, ['shared_bias'], True)
         if self.shared_bias:
             self.bias_shape = (self.nofm, 1)
@@ -49,7 +51,12 @@ class ConvLayer(WeightLayer):
         else:
             self.bias_shape = (self.nout, 1)
 
-        self.allocate_output_bufs()
+        if self.shared_bias or self.batch_norm:
+            self.bias_expand_view = self.bias_expand.reshape(
+                (self.nofm, self.ofmsize))
+            self.pre_act_view = self.pre_act.reshape(
+                (self.nofm, self.ofmsize * self.batch_size))
+
         self.allocate_param_bufs()
 
         opt_param(self, ['prodbuf', 'bpropbuf', 'updatebuf'], None)
@@ -87,16 +94,14 @@ class ConvLayer(WeightLayer):
                                 local=self.local_conv)
         if self.use_biases is True:
             if self.shared_bias:
-                self.pre_act = self.pre_act.reshape(
-                    (self.nofm, self.ofmsize * self.batch_size))
-                self.backend.add(self.pre_act, self.biases, out=self.pre_act)
-                self.pre_act = self.pre_act.reshape(
-                    (self.nofm * self.ofmsize, self.batch_size))
+                self.backend.add(self.pre_act_view, self.biases,
+                                 out=self.pre_act_view)
             else:
                 self.backend.add(self.pre_act, self.biases, out=self.pre_act)
 
         if self.batch_norm:
-            self.bn.fprop_func(self.backend, self.pre_act, self.pre_act)
+            self.bn.fprop_func(self.backend,
+                               self.pre_act_view, self.pre_act_view)
 
         self.activation.fprop_func(self.backend, self.pre_act, self.output)
 
@@ -108,7 +113,8 @@ class ConvLayer(WeightLayer):
         upm = self.utemp if self.accumulate else self.updates
         u_idx = 0
         if self.batch_norm:
-            self.bn.bprop_func(self.backend, self.pre_act, error,
+            error_view = error.reshape(self.pre_act_view.shape)
+            self.bn.bprop_func(self.backend, self.pre_act_view, error_view,
                                self.skip_act)
             u_idx = 2
 
@@ -139,11 +145,8 @@ class ConvLayer(WeightLayer):
             # We can't reshape the error buffer since it might be global buffer
             if self.shared_bias:
                 self.backend.sum(error, axes=1, out=self.bias_expand)
-                self.bias_expand = self.bias_expand.reshape(
-                    (self.nofm, self.ofmsize))
-                self.backend.sum(self.bias_expand, axes=1, out=upm[u_idx+1])
-                self.bias_expand = self.bias_expand.reshape(
-                    (self.nofm * self.ofmsize, 1))
+                self.backend.sum(self.bias_expand_view, axes=1,
+                                 out=upm[u_idx+1])
             else:
                 self.backend.sum(error, axes=1, out=upm[u_idx+1])
 
