@@ -190,6 +190,8 @@ v0.9.0
   first requires an attribute of class Block (also defined in backend.py)
   indicating what type of computation is about to commence.  The second is a
   unique integer identifier that indicates which iteration we are in.
+* new persist_values parameter added with default value True to most of the
+  backend array initialization routines, as well as Tensor attribute.
 
 * rename axes parameter to axis in summarization operations (planned)
 

@@ -149,7 +149,7 @@ class GPU(Backend):
         return self.end.time_since(self.start)
 
     def uniform(self, low=0.0, high=1.0, shape=1, dtype=default_dtype,
-                name=None, allocator=drv.mem_alloc):
+                persist_values=True, name=None, allocator=drv.mem_alloc):
         """
         generate numpy random number and convert to a GPUTensor.
         If called with dype=None it will probably explode
@@ -159,7 +159,7 @@ class GPU(Backend):
                          rounding=self.ng.round_mode).set(ary)
 
     def normal(self, loc=0.0, scale=1.0, size=1, dtype=default_dtype,
-               name=None, allocator=drv.mem_alloc):
+               persist_values=True, name=None, allocator=drv.mem_alloc):
         """
         Gaussian/Normal random number sample generation
         """
@@ -563,53 +563,81 @@ class GPU(Backend):
         self.ng.sqrt(x, out=out)
         return out
 
-    def zeros(self, shape, dtype=default_dtype):
+    def zeros(self, shape, dtype=default_dtype, persist_values=True):
         """
         Allocate a new GPUTensor and fill it with zeros.
 
         Arguments:
             shape (tupel): Shape of the desired GPUTensor
             dtype (dtype): Optional datatype
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: output
         """
         return self.ng.zeros(shape, dtype=dtype)
 
-    def ones(self, shape, dtype=default_dtype):
+    def ones(self, shape, dtype=default_dtype, persist_values=True):
         """
         Allocate a new GPUTensor and fill it with ones.
 
         Arguments:
             shape (tupel): Shape of the desired GPUTensor
             dtype (dtype): Optional datatype
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: output
         """
         return self.ng.ones(shape, dtype=dtype)
 
-    def empty(self, shape, dtype=default_dtype):
+    def empty(self, shape, dtype=default_dtype, persist_values=True):
         """
         Allocate a new GPUTensor.
 
         Arguments:
             shape (tupel): Shape of the desired GPUTensor
             dtype (dtype): Optional datatype
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: output
         """
         return self.ng.empty(shape, dtype=dtype)
 
-    def array(self, ary, dtype=default_dtype, name=None,
+    def array(self, ary, dtype=default_dtype, persist_values=True, name=None,
               allocator=drv.mem_alloc):
         """
         Allocate a new GPUTensor and fill it with supplied numpy array.
 
         Arguments:
             ary (ndarray): Numpy array with source data
-            dtype (dtype): Optional datatype
+            dtype (dtype, optional): Optional datatype
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
             name (string): Name for the GPUTensor
             allocator (pycuda): Pycuda memory allocator
 

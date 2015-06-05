@@ -44,6 +44,13 @@ class GPUTensor(Tensor):
         dtype (None, optional): Underlying data type of the elements.
                                 Ignored for this backend as all values are
                                 stored in cudanet as float32's.
+        persist_values (bool, optional): If set to True (the default), the
+                                         values assigned to this Tensor will
+                                         persist across multiple begin and end
+                                         calls.  Setting to False may provide a
+                                         performance increase if values do
+                                         not need to be maintained across such
+                                         calls
 
     Notes:
         This implementation currently has the following limitations:
@@ -59,7 +66,8 @@ class GPUTensor(Tensor):
     _tensor = None
     _min_dims = 2
 
-    def __init__(self, obj, dtype=None, copy_to_device=True):
+    def __init__(self, obj, dtype=None, persist_values=True,
+                 copy_to_device=True):
         if type(obj) == cudanet.CUDAMatrix:
             self._tensor = obj
             self.shape = self._tensor.shape
@@ -91,6 +99,7 @@ class GPUTensor(Tensor):
             else:
                 self._tensor = obj
         self.dtype = dtype
+        self.persist_values = persist_values
 
     @property
     def raw(self):
@@ -447,7 +456,7 @@ class GPU(Backend):
         # a known cudanet issue as described here:
         # https://github.com/cudanet/cudanet/issues/19
 
-    def empty(self, shape, dtype=None):
+    def empty(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the GPUTensor class without initializing
         each element's value.
@@ -457,14 +466,21 @@ class GPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype_if_missing(dtype)
-        return self.tensor_cls(cudanet.empty(shape), dtype)
+        return self.tensor_cls(cudanet.empty(shape), dtype, persist_values)
 
-    def array(self, obj, dtype=None):
+    def array(self, obj, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the GPUTensor class based on the values
         and shape of obj passed.
@@ -477,6 +493,13 @@ class GPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: newly created data structure reference
@@ -485,9 +508,9 @@ class GPU(Backend):
         ndarray = numpy.array(obj, dtype=dtype)
         if ndarray.ndim == 1:
             ndarray = ndarray.reshape((1, ndarray.shape[0]))
-        return self.tensor_cls(ndarray, dtype)
+        return self.tensor_cls(ndarray, dtype, persist_values)
 
-    def zeros(self, shape, dtype=None):
+    def zeros(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the GPUTensor class setting each element
         value to 0.
@@ -497,6 +520,13 @@ class GPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: newly created data structure reference
@@ -504,9 +534,9 @@ class GPU(Backend):
         dtype = self.default_dtype_if_missing(dtype)
         return self.tensor_cls(cudanet.CUDAMatrix(numpy.zeros(shape,
                                                               dtype=dtype)),
-                               dtype)
+                               dtype, persist_values)
 
-    def ones(self, shape, dtype=None):
+    def ones(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the GPUTensor class setting each element
         value to 1.
@@ -516,6 +546,13 @@ class GPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: newly created data structure reference
@@ -523,7 +560,7 @@ class GPU(Backend):
         dtype = self.default_dtype_if_missing(dtype)
         return self.tensor_cls(cudanet.CUDAMatrix(numpy.ones(shape,
                                                              dtype=dtype)),
-                               dtype)
+                               dtype, persist_values)
 
     def _unwrap(self, obj):
         """
@@ -623,7 +660,8 @@ class GPU(Backend):
         cudanet.sync_stream()
         return 1000. * (now() - start_time)
 
-    def uniform(self, low=0.0, high=1.0, size=1, dtype=None):
+    def uniform(self, low=0.0, high=1.0, size=1, dtype=None,
+                persist_values=True):
         """
         Uniform random number sample generation.
 
@@ -637,13 +675,20 @@ class GPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: Of specified size filled with these random numbers.
         """
         seq = numpy.random.uniform(low, high, size)
         dtype = self.default_dtype_if_missing(None)
-        return self.tensor_cls(numpy.array(seq, dtype), dtype)
+        return self.tensor_cls(numpy.array(seq, dtype), dtype, persist_values)
 
     def fill_uniform_thresh(self, tsr, keepthresh=0.5, dtype=None):
         """
@@ -719,7 +764,8 @@ class GPU(Backend):
 
         self.add(ps_item, vs_item, out=ps_item)
 
-    def normal(self, loc=0.0, scale=1.0, size=1, dtype=None):
+    def normal(self, loc=0.0, scale=1.0, size=1, dtype=None,
+               persist_values=True):
         """
         Gaussian/Normal random number sample generation
 
@@ -731,13 +777,20 @@ class GPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             GPUTensor: Of specified size filled with these random numbers.
         """
         seq = numpy.random.normal(loc, scale, size)
         dtype = self.default_dtype_if_missing(None)
-        return self.tensor_cls(numpy.array(seq, dtype), dtype)
+        return self.tensor_cls(numpy.array(seq, dtype), dtype, persist_values)
 
     def add(self, left, right, out):
         """
