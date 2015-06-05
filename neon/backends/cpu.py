@@ -723,8 +723,7 @@ class CPU(Backend):
         return out
 
     def tanh(self, x, out):
-        np.exp(-2.0 * x._tensor, out=out._tensor)
-        np.divide(1. - out._tensor, 1. + out._tensor, out=out._tensor)
+        np.tanh(x._tensor, out=out._tensor)
         return out
 
     def rectlin(self, x, out):
