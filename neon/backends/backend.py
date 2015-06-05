@@ -31,7 +31,7 @@ class Backend(YAMLable):
         See the list of `implemented backends </backends.html>`_
     """
 
-    def empty(self, shape, dtype=None):
+    def empty(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of this backend's Tensor class, without
         initializing element values.  This is slightly faster than
@@ -44,6 +44,14 @@ class Backend(YAMLable):
             shape (int, list): length of each dimension of the Tensor.
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+
         Returns:
             Tensor: array object
 
@@ -57,7 +65,7 @@ class Backend(YAMLable):
         """
         raise NotImplementedError()
 
-    def array(self, obj, dtype=None):
+    def array(self, obj, dtype=None, persist_values=True):
         """
         Instantiate a new instance of this backend's Tensor class, populating
         elements based on obj values.
@@ -68,6 +76,13 @@ class Backend(YAMLable):
                               numpy.ndarray
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
         Returns:
             Tensor: array object
 
@@ -81,7 +96,7 @@ class Backend(YAMLable):
         """
         raise NotImplementedError()
 
-    def zeros(self, shape, dtype=None):
+    def zeros(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of this backend's Tensor class, populating
         each element with a value of 0.
@@ -90,6 +105,13 @@ class Backend(YAMLable):
             shape (int, list): length of each dimension of the Tensor.
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
         Returns:
             Tensor: array object
 
@@ -103,7 +125,7 @@ class Backend(YAMLable):
         """
         raise NotImplementedError()
 
-    def ones(self, shape, dtype=None):
+    def ones(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of this backend's Tensor class, populating
         each element with a value of 1.
@@ -112,6 +134,13 @@ class Backend(YAMLable):
             shape (int, list): length of each dimension of the Tensor.
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
         Returns:
             Tensor: array object
 
@@ -140,7 +169,8 @@ class Backend(YAMLable):
         """
         raise NotImplementedError()
 
-    def uniform(self, low=0.0, high=1.0, size=1, dtype=None):
+    def uniform(self, low=0.0, high=1.0, size=1, dtype=None,
+                persist_values=True):
         """
         Uniform random number generation of samples in range [low, high).
 
@@ -152,6 +182,13 @@ class Backend(YAMLable):
                                         Defaults to 1
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             Tensor: of shape size filled with these random numbers.
@@ -164,7 +201,8 @@ class Backend(YAMLable):
         """
         raise NotImplementedError("Can't create direct instances of Backend")
 
-    def normal(self, loc=0.0, scale=1.0, size=1, dtype=None):
+    def normal(self, loc=0.0, scale=1.0, size=1, dtype=None,
+               persist_values=True):
         """
         Gaussian/Normal random number generation of samples centered around
         mean loc, and with standard deviation scale.
@@ -178,6 +216,13 @@ class Backend(YAMLable):
                                         Defaults to 1
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             Tensor: of shape size filled with these random numbers.
@@ -1177,10 +1222,20 @@ class Tensor(object):
                                 lists) are also supported in addition to
                                 :py:class:`numpy.ndarray` objects
         dtype (numpy.dtype, optional): The underlying type of each element
+        persist_values (bool, optional): If set to True (the default), the
+                                         values assigned to this Tensor will
+                                         persist across multiple begin and end
+                                         calls.  Setting to False may provide a
+                                         performance increase if values do
+                                         not need to be maintained across such
+                                         calls
 
     Attributes:
         shape (list): array specifying the length of each dimension
         dtype (numpy.dtype): the underlying type given to each element.
+        persist_values (bool): whether the values in this Tensor will be
+                               maintained across backend/end callls.  A value
+                               of False can result in performance speed-ups.
         raw (object): the underlying backend specific data structure.  Could be
                       numpy.ndarray, cudamat.CUDAMatrix, etc. depending on the
                       backend.
@@ -1191,8 +1246,9 @@ class Tensor(object):
     shape = None
     dtype = None
     raw = None
+    persist_values = True
 
-    def __init__(self, object, dtype=None):
+    def __init__(self, object, dtype=None, persist_values=True):
         raise NotImplementedError()
 
     def __getitem__(self, key):

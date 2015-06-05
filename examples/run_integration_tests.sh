@@ -30,6 +30,7 @@ NEON_EXE="${THIS_DIR}/../bin/neon"
 NEON_OPTS="-r 0 --integration -o ${OUT_FILE}"  # non-distributed
 CMP_EXE="${THIS_DIR}/../bin/compare_metrics"
 CMP_OPTS=""
+CMP_FIRST_OPTS=""
 
 mkdir -p "$(dirname $OUT_FILE)"
 mkdir -p "$(dirname $LOG_FILE)"
@@ -63,9 +64,13 @@ run_yamls()
       if [ $? -eq 0 ]
       then
         PYTHONPATH="${THIS_DIR}/..:${PYTHONPATH}" \
-          $CMP_EXE $CMP_OPTS "$OUT_FILE" "$yaml"
+          $CMP_EXE $CMP_OPTS $CMP_FIRST_OPTS "$OUT_FILE" "$yaml"
+        if [ "$CMP_FIRST_OPTS" == "" ]
+        then
+          CMP_FIRST_OPTS="--no_header"
+        fi
       else
-        echo "problems running $yaml"
+        echo -e "problems running ${yaml}\t${backend}"
       fi
       echo "" >> "$LOG_FILE"
     done

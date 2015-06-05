@@ -217,7 +217,7 @@ class Dataset(object):
         if data.shape[0] % bs != 0:
             logger.warning('Incompatible batch size. Discarding %d samples...',
                            data.shape[0] % bs)
-        nbatches = data.shape[0] / bs
+        nbatches = data.shape[0] // bs
         batchwise = []
         for batch in range(nbatches):
             batchdata = np.empty((data.shape[1], bs))

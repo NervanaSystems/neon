@@ -118,11 +118,11 @@ ifdef INSTALL_REQUIRES
 	@pip install $(INSTALL_REQUIRES)
 endif
 
-develop: clean_pyc pip_check deps_install .git/hooks/pre-commit
+develop: deps_install
 	@echo "Running develop(DEV=$(DEV) CPU=$(CPU) GPU=$(GPU) DIST=$(DIST))..."
 	@pip install -e .
 
-install: clean_pyc pip_check deps_install
+install: deps_install
 	@echo "Running install(DEV=$(DEV) CPU=$(CPU) GPU=$(GPU) DIST=$(DIST))..."
 	@pip install .
 
@@ -185,10 +185,6 @@ html: doc
 
 style:
 	@-flake8 --exclude=.tox,build,dist,src .
-
-.git/hooks/pre-commit:
-	@flake8 --install-hook
-	@-touch .git/hooks/pre-commit
 
 lint:
 	@-pylint --output-format=colorized neon

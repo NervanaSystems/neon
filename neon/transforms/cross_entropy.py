@@ -28,7 +28,7 @@ def cross_entropy(backend, outputs, targets, temp, epsilon=2**-23,
     Evaluates cross entropy on pairwise elements from outputs and targets.
 
     Given that this is undefined for predicted outputs equal to exactly 0 or
-    1.0, we first clip these outputs to epsilon and 1.0 - epsilon respectively.
+    1.0, we first add epsilon prior to taking log
 
     Arguments:
         backend (Backend): The backend class to use for computation.
@@ -45,12 +45,12 @@ def cross_entropy(backend, outputs, targets, temp, epsilon=2**-23,
     # Compute (t-1)*log(1-y).
     backend.add(targets, -1.0, out=temp[0])
     backend.subtract(1.0, outputs, out=temp[1])
-    backend.clip(temp[1], epsilon, 1 - epsilon, out=temp[1])
+    backend.add(temp[1], epsilon, out=temp[1])
     backend.log(temp[1], out=temp[1])
     backend.multiply(temp[0], temp[1], out=temp[0])
 
     # Compute t*log(y).
-    backend.clip(outputs, epsilon, 1 - epsilon, out=temp[1])
+    backend.add(outputs, epsilon, out=temp[1])
     backend.log(temp[1], out=temp[1])
     backend.multiply(targets, temp[1], out=temp[1])
 
@@ -80,7 +80,7 @@ def cross_entropy_multi(backend, outputs, targets, temp, epsilon=2**-23,
     """
 
     # Compute (t*log(y)).
-    backend.clip(outputs, epsilon, 1, out=temp[1])
+    backend.add(outputs, epsilon, out=temp[1])
     backend.log(temp[1], out=temp[1])
     backend.multiply(targets, temp[1], out=temp[1])
     backend.multiply(temp[1], -1.0, out=temp[0])
@@ -219,7 +219,7 @@ class CrossEntropy(Cost):
         if isinstance(self.olayer.activation, Softmax):
             return self.ce_function(self.backend, self.outputbuf, targets,
                                     self.temp)
-        self.backend.clip(self.outputbuf, eps, 1.0 - eps, out=self.temp[0])
+        self.backend.add(self.outputbuf, eps, out=self.temp[0])
         self.backend.sum(self.temp[0], axes=0, out=self.temp[2])
         self.backend.divide(self.temp[0], self.temp[2], out=self.temp[0])
 

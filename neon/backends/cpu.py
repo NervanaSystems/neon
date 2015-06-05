@@ -36,6 +36,13 @@ class CPUTensor(Tensor):
                              types like lists and tuples are also supported.
         dtype (numpy.ndtype, optional): underlying data type of the elements.
                                         If None will use float32.
+        persist_values (bool, optional): If set to True (the default), the
+                                         values assigned to this Tensor will
+                                         persist across multiple begin and end
+                                         calls.  Setting to False may provide a
+                                         performance increase if values do
+                                         not need to be maintained across such
+                                         calls
 
     See also:
         CPU
@@ -49,7 +56,7 @@ class CPUTensor(Tensor):
     _tensor = None
     _min_dims = 2
 
-    def __init__(self, obj, dtype=None):
+    def __init__(self, obj, dtype=None, persist_values=True):
         if dtype is None:
             dtype = 'float32'
         if type(obj) != np.ndarray:
@@ -62,6 +69,7 @@ class CPUTensor(Tensor):
             self._tensor = self._tensor.reshape(self._tensor.shape + (1, ))
         self.shape = self._tensor.shape
         self.dtype = dtype
+        self.persist_values = persist_values
 
     @property
     def raw(self):
@@ -236,7 +244,7 @@ class CPU(Backend):
             in_dtype = self.default_dtype
         return in_dtype
 
-    def empty(self, shape, dtype=None):
+    def empty(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the CPUTensor class without initializing
         individual element values.
@@ -246,14 +254,21 @@ class CPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             CPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype_if_missing(dtype)
-        return self.tensor_cls(np.empty(shape, dtype), dtype)
+        return self.tensor_cls(np.empty(shape, dtype), dtype, persist_values)
 
-    def array(self, obj, dtype=None):
+    def array(self, obj, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the CPUTensor class setting each element
         value to what is specified in obj.
@@ -266,14 +281,21 @@ class CPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             CPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype_if_missing(dtype)
-        return self.tensor_cls(np.array(obj, dtype), dtype)
+        return self.tensor_cls(np.array(obj, dtype), dtype, persist_values)
 
-    def zeros(self, shape, dtype=None):
+    def zeros(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the CPUTensor class setting each element
         value to 0.
@@ -283,14 +305,21 @@ class CPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             CPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype_if_missing(dtype)
-        return self.tensor_cls(np.zeros(shape, dtype), dtype)
+        return self.tensor_cls(np.zeros(shape, dtype), dtype, persist_values)
 
-    def ones(self, shape, dtype=None):
+    def ones(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the CPUTensor class setting each element
         value to 1.
@@ -300,12 +329,19 @@ class CPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             CPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype_if_missing(dtype)
-        return self.tensor_cls(np.ones(shape, dtype), dtype)
+        return self.tensor_cls(np.ones(shape, dtype), dtype, persist_values)
 
     def _unwrap(self, obj):
         """
@@ -357,7 +393,8 @@ class CPU(Backend):
             logger.info("Seeding random number generator with: %s", str(seed))
         np.random.seed(seed)
 
-    def uniform(self, low=0.0, high=1.0, size=1, dtype=None):
+    def uniform(self, low=0.0, high=1.0, size=1, dtype=None,
+                persist_values=True):
         """
         Uniform random number sample generation.
 
@@ -371,11 +408,19 @@ class CPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             Tensor: Of specified size filled with these random numbers.
         """
-        return self.tensor_cls(np.random.uniform(low, high, size), dtype)
+        return self.tensor_cls(np.random.uniform(low, high, size), dtype,
+                               persist_values)
 
     def fill_uniform_thresh(self, a, keepthresh=0.5, dtype=None):
         """
@@ -399,7 +444,8 @@ class CPU(Backend):
             np.random.uniform(size=tsr._tensor.shape) < keepthresh,
             dtype=tsr._tensor.dtype)
 
-    def normal(self, loc=0.0, scale=1.0, size=1, dtype=None):
+    def normal(self, loc=0.0, scale=1.0, size=1, dtype=None,
+               persist_values=True):
         """
         Gaussian/Normal random number sample generation
 
@@ -411,11 +457,19 @@ class CPU(Backend):
             dtype (dtype, optional): Element data type.  If not specified we
                                      use default_dtype value ('float32'
                                      unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
 
         Returns:
             Tensor: Of specified size filled with these random numbers.
         """
-        return self.tensor_cls(np.random.normal(loc, scale, size), dtype)
+        return self.tensor_cls(np.random.normal(loc, scale, size), dtype,
+                               persist_values)
 
     def add(self, left, right, out):
         """
@@ -723,8 +777,7 @@ class CPU(Backend):
         return out
 
     def tanh(self, x, out):
-        np.exp(-2.0 * x._tensor, out=out._tensor)
-        np.divide(1. - out._tensor, 1. + out._tensor, out=out._tensor)
+        np.tanh(x._tensor, out=out._tensor)
         return out
 
     def rectlin(self, x, out):

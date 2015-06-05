@@ -13,15 +13,16 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Contains generic performance metric base class and utility functions.
+Contains generic performance metric base class, metric comparison class, and
+other utility functions.
 """
 
 import hashlib
+import math
 import os
 import sys
 
 import neon
-from neon.util.compat import range
 from neon.util.param import opt_param
 from neon.util.persist import YAMLable, ensure_dirs_exist
 
@@ -35,7 +36,7 @@ class Metric(YAMLable):
     Though metrics may examine device buffers, all computation is carried out
     on host, and the results are returned in host buffers.
 
-    This abstract base class defines which operations each metric must support
+    This base class defines which operations each metric must support
     to be used within our framework.
     """
     def __init__(self, **kwargs):
@@ -48,7 +49,7 @@ class Metric(YAMLable):
 
     def add(self, reference, outputs):
         """
-        Add the the expected reference and predicted outputs passed to the set
+        Add the expected reference and predicted outputs passed to the set
         of values used to calculate this metric.
 
         Arguments:
@@ -107,7 +108,7 @@ def dump_metrics(dump_file, experiment_file, start_time, elapsed_time,
         df = sys.stdout()
     elif not os.path.exists(dump_file) or os.path.getsize(dump_file) == 0:
         ensure_dirs_exist(dump_file)
-        df = file(dump_file, 'w')
+        df = open(dump_file, 'w')
         metric_names = []
         if isinstance(metrics, dict):
             metric_names = ["%s-%s" % (metric.lower(), dset.lower())
@@ -119,7 +120,7 @@ def dump_metrics(dump_file, experiment_file, start_time, elapsed_time,
                                  "yaml_name", "yaml_sha1", "start_time",
                                  "elapsed_time"] + metric_names) + "\n")
     else:
-        df = file(dump_file, 'a')
+        df = open(dump_file, 'a')
     info = os.uname()
     trunc_exp_name = ("..." + os.path.sep +
                       os.path.dirname(experiment_file).split(os.path.sep)[-1] +
@@ -142,99 +143,159 @@ def dump_metrics(dump_file, experiment_file, start_time, elapsed_time,
     df.close()
 
 
-def compare_metrics(dump_file, experiment_file, max_comps=10, field_sep="\t",
-                    escape_colors=True, color_threshold=.01):
+class MetricComparison(object):
     """
-    Compares the most recent run of experiment_file with up to max_comps
-    previous runs based on data collected in dump_file.  Results are displayed
-    to the console.
+    Embodies the results of comparing one most recent run of a particular type
+    of experiment against a prior set of runs.
 
     Arguments:
-        dump_file (str): path of file to caompare.
+        dump_file (str): path of file to compare.
         experiment_file (str): path to yaml file used to run this experiment
         max_comps (int, optional): collect and compare statistics against
                                    max_comps most recent prior runs of the
                                    same example.  Defaults to 10.
-        field_sep (str, optional): string used to separate each field in
-                                   dump_file.  Defaults to tab character.
-        escape_colors (bool, optional): Should we dump diffs in a different
-                                        color?  Default is true
-        color_threshold (float, optional): How different does a value have to
-                                           be from the comp mean to warrant
-                                           being colored?  Specifiy as a
-                                           percentage of the mean (as a value
-                                           between 0 and 1).  Defaults to .01
-                                           (i.e. 1%)
+        match_backend (bool, optional): Only compare metric results of the same
+                                        backend.  Defaults to True.
+        field_sep (str, optional): Dump file field separator.  Defaults to tab
+                                   character.
     """
-    def make_red(string):
-        return "\033[31m%s\033[0m" % string
+    def __init__(self, dump_file, experiment_file, max_comps=10,
+                 match_backend=True, field_sep='\t'):
+        self.dump_file = dump_file
+        self.experiment_file = experiment_file
+        self.experiment = None
+        self.backend = None
+        self.results = []
+        if not os.path.exists(dump_file):
+            raise OSError("file: %s doesn't exist.  Can't run comparisons" %
+                          dump_file)
 
-    def make_green(string):
-        return "\033[32m%s\033[0m" % string
+        data = open(dump_file).readlines()
 
-    def make_yellow(string):
-        return "\033[93m%s\033[0m" % string
+        if len(data) < 1 or not data[0].startswith("host"):
+            raise OSError("file: %s seems to have invalid format" % dump_file)
 
-    if not os.path.exists(dump_file):
-        print("file: %s doesn't exist.  Can't run comparisons" % dump_file)
-        return 1
-
-    data = file(dump_file).readlines()
-    if len(data) < 1 or not data[0].startswith("host"):
-        print("file: %s seems to have invalid format" % dump_file)
-        return 1
-    trunc_exp_name = ("..." + os.path.sep +
-                      os.path.dirname(experiment_file).split(os.path.sep)[-1] +
-                      os.path.sep +
-                      os.path.basename(experiment_file))
-    line_num = len(data) - 1
-    header = data[0].rstrip('\r\n').split(field_sep)
-    latest = None
-    comps = []
-    while line_num > 0 and len(comps) < max_comps:
-        if trunc_exp_name in data[line_num]:
-            if latest is None:
-                latest = data[line_num].rstrip('\r\n').split(field_sep)
+        self.experiment = ("..." + os.path.sep +
+                           os.path.dirname(experiment_file)
+                           .split(os.path.sep)[-1] + os.path.sep +
+                           os.path.basename(experiment_file))
+        line_num = len(data) - 1
+        header = {x[1]: x[0] for x in
+                  enumerate(data[0].rstrip('\r\n').split(field_sep))}
+        latest = None
+        comps = []
+        while line_num > 0 and len(comps) < max_comps:
+            if self.experiment in data[line_num]:
+                this_line = data[line_num].rstrip('\r\n').split(field_sep)
+                if (not match_backend or latest is None or
+                        self.backend == this_line[header['backend']]):
+                    if latest is None:
+                        latest = this_line
+                        self.backend = latest[header['backend']]
+                    else:
+                        comps.append(this_line)
+            line_num -= 1
+        if latest is None:
+            raise ValueError("unable to find any lines containing %s" %
+                             self.experiment)
+        for name, idx in [(x, header[x]) for x in sorted(header.keys())
+                          if x == "elapsed_time" or x.startswith("train-") or
+                          x.startswith("test-") or
+                          x.startswith("validation-")]:
+            val = float(latest[idx])
+            comp_sum = 0.0
+            comp_count = 0
+            for comp in comps:
+                if comp[idx] != "nan":
+                    comp_sum += float(comp[idx])
+                    comp_count += 1
+            if comp_count == 0:
+                comp_mean = float("nan")
             else:
-                comps.append(data[line_num].rstrip('\r\n').split(field_sep))
-        line_num -= 1
-    if latest is None:
-        print("unable to find any lines containing %s" % trunc_exp_name)
-        return 2
-    for idx in range(9, len(header)):
-        val = float(latest[idx])
-        comp_sum = 0.0
-        comp_count = 0
-        for comp in comps:
-            if comp[idx] != "nan":
-                comp_sum += float(comp[idx])
-                comp_count += 1
-        if comp_count == 0:
-            comp_mean = float("nan")
-        else:
-            comp_mean = comp_sum / comp_count
-        if latest[idx] == "nan":
-            val = make_yellow("nan") if escape_colors else "nan"
-        elif escape_colors and (comp_mean - val) > color_threshold * comp_mean:
-            # val has dropped substantially enough to warrant coloring
-            if header[idx].lower().startswith("auc"):
-                val = make_red(latest[idx])
+                comp_mean = comp_sum / comp_count
+            self.results.append({"metric": name, "value": val,
+                                 "comp_mean": comp_mean, "num_comps":
+                                 comp_count})
+
+    def __str__(self):
+        return ("Experiment: {0}, Backend: {1} ".format(self.experiment,
+                                                        self.backend) +
+                str(self.results))
+
+    def print_results(self, field_sep="\t", escape_colors=True,
+                      color_threshold=.01, header=True, min_exp_field_width=1,
+                      min_metric_name_field_width=1):
+        """
+        Prints metric comparison results to the console, formatted based on
+        parameters passed.
+
+        Arguments:
+            field_sep (str, optional): string used to separate each field in
+                                       dump_file.  Defaults to tab character.
+            escape_colors (bool, optional): Should we dump diffs in a different
+                                            color?  Default is True.
+            color_threshold (float, optional): How different does a value have
+                                               to be from the comp mean to
+                                               warrant being colored?  Specify
+                                               as a percentage of the mean (as
+                                               a value between 0 and 1).
+                                               Defaults to .01 (i.e. 1%)
+            header (bool, optional): Print the list of field names on the first
+                                     line.  Defaults to True.
+            min_exp_field_width (int, optional): Left pad the experiment field
+                                                 with spaces to ensure it is at
+                                                 least the specified number of
+                                                 characters.  Defaults to 1
+                                                 (i.e. don't pad).
+            min_metric_name_field_width (int, optional): Right pad the metric
+                                                         name field with spaces
+                                                         to give it a
+                                                         particular length.
+                                                         Defaults to 1 (i.e.
+                                                         don't pad).
+        """
+        def make_red(string):
+            return "\033[31m%s\033[0m" % string
+
+        def make_green(string):
+            return "\033[32m%s\033[0m" % string
+
+        def make_yellow(string):
+            return "\033[93m%s\033[0m" % string
+
+        if header:
+            print(field_sep.join(["experiment".rjust(min_exp_field_width),
+                                  "backend",
+                                  "metric".ljust(min_metric_name_field_width),
+                                  "value", "comp_mean", "num_comps"]))
+        for res in self.results:
+            val = res["value"]
+            comp_mean = res["comp_mean"]
+            if math.isnan(val):
+                val = make_yellow("nan") if escape_colors else "nan"
+            elif escape_colors:
+                if (comp_mean - val) > color_threshold * comp_mean:
+                    # val has dropped enough to warrant coloring
+                    if res["metric"].lower().startswith("auc"):
+                        val = make_red("{:05f}".format(val))
+                    else:
+                        val = make_green("{:05f}".format(val))
+                elif (val - comp_mean) > color_threshold * comp_mean:
+                    # val has increased enough to warrant coloring
+                    if res["metric"].lower().startswith("auc"):
+                        val = make_green("{:05f}".format(val))
+                    else:
+                        val = make_red("{:05f}".format(val))
+                else:
+                    # no coloring needed
+                    val = "{:05f}".format(val)
             else:
-                val = make_green(latest[idx])
-        elif escape_colors and (val - comp_mean) > color_threshold * comp_mean:
-            # val has increased substantially enough to warrant coloring
-            if header[idx].lower().startswith("auc"):
-                val = make_green(latest[idx])
+                val = "{:05f}".format(val)
+            if res["num_comps"] == 0:
+                comp_mean = make_yellow("nan") if escape_colors else "nan"
             else:
-                val = make_red(latest[idx])
-        else:
-            # no coloring needed
-            val = latest[idx]
-        if comp_count == 0:
-            comp_mean = make_yellow("nan") if escape_colors else "nan"
-        else:
-            comp_mean = "%0.5f" % comp_mean
-        print(field_sep + field_sep.join([header[idx] + ":", val,
-                                          ", prior " + str(comp_count) +
-                                          " item mean:", comp_mean]))
-    return 0
+                comp_mean = "{:05f}".format(comp_mean)
+            print(field_sep.join([self.experiment.rjust(min_exp_field_width),
+                                  self.backend, res["metric"]
+                                  .ljust(min_metric_name_field_width),
+                                  val, comp_mean, str(res["num_comps"])]))
