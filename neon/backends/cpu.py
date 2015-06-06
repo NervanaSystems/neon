@@ -1572,6 +1572,17 @@ class CPU(Backend):
                 self.dot(ofmd, ifm, updatebuf)
                 out[ifmind, ofmind] = updatebuf
 
+    def exp_mavg(self, mavg, newval, rho):
+        """
+        Calculate the exponential moving average
+
+        Arguments:
+            mavg:  The running value of the moving average
+            newval:  New sample to be added to the moving average
+            rho:  Interpolation value
+        """
+        mavg._tensor[:] = rho * mavg._tensor + (1.0 - rho) * newval._tensor
+
     def ada_update(self, ps_item, us_item, gs_item, ds_item, ls_item, ss_item,
                    rho, epsilon):
         # Accumulate E[Grad^2]
