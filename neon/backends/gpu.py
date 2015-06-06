@@ -901,6 +901,18 @@ class GPU(Backend):
             learning_rate - learning_rate * wd * ps_item
         ps_item[:] = ps_item + vs_item
 
+    def exp_mavg(self, mavg, newval, rho):
+        """
+        Calculate the exponential moving average
+
+        Arguments:
+            mavg:  The running value of the moving average
+            newval:  New sample to be added to the moving average
+            rho:  Interpolation value
+        """
+
+        mavg[:] = rho * mavg + (1.0 - rho) * newval
+
     def ada_update(self, ps_item, us_item, gs_item, ds_item, ls_item, ss_item,
                    rho, epsilon):
         """
@@ -946,7 +958,8 @@ class GPU(Backend):
                 self.ng.reciprocal(self.ng.sqrt(run_squares) + epsilon)
             params[:] = params + velocity
 
-    def fprop_bn_compound(self, inputs, beta, gamma, eps, xvar, xhat, out):
+    def fprop_bn_compound(self, inputs, beta, gamma, eps, xhat,
+                          xmean, xvar, gmean, gvar, rho, out):
         """
         Batch normalization forward pass, compounded to run in 3 kernel calls.
 
@@ -959,9 +972,13 @@ class GPU(Backend):
             xhat: normalized input (updated)
             out: normalized and rescaled input (updated)
         """
-        xvar[:] = self.ng.reciprocal(self.ng.sqrt(self.ng.var(inputs, axis=1) +
-                                                  eps))
-        xhat[:] = xvar * (inputs - self.ng.mean(inputs, axis=1))
+        xvar[:] = self.ng.var(inputs, axis=1)
+        xmean[:] = self.ng.mean(inputs, axis=1)
+        gmean[:] = gmean * rho + (1.0 - rho) * xmean
+        gvar[:] = gvar * rho + (1.0 - rho) * xvar
+
+        xvar[:] = self.ng.reciprocal(self.ng.sqrt(xvar + eps))
+        xhat[:] = xvar * (inputs - xmean)
         out[:] = xhat * gamma + beta
         return out
 

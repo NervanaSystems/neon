@@ -1776,6 +1776,17 @@ class GPU(Backend):
             deltas._tensor, inputs._tensor, out._tensor, ifmshape[-2],
             ifmshape[-2], ifmshape[-1], 1, 0, 1, nfilters, 1, ifmshape[-2])
 
+    def exp_mavg(self, mavg, newval, rho):
+        """
+        Calculate the exponential moving average
+
+        Arguments:
+            mavg:  The running value of the moving average
+            newval:  New sample to be added to the moving average
+            rho:  Interpolation value
+        """
+        mavg._tensor.add_mult(newval._tensor, rho, 1.0 - rho)
+
     def ada_update(self, ps_item, us_item, gs_item, ds_item, ls_item, ss_item,
                    rho, epsilon):
         cudanet.adadelta_update(us_item._tensor, gs_item._tensor,

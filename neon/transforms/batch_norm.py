@@ -50,8 +50,6 @@ class BatchNorm(Activation):
 
     """
 
-    inference_warning_displayed = False
-
     def initialize(self, kwargs):
         """
         Initialize the Batch Normalization transform. This function will be
@@ -70,8 +68,9 @@ class BatchNorm(Activation):
         self.__dict__.update(kwargs)
         self.dtype = self.layer.weight_dtype
         self.bigtype = np.float32 if self.dtype is np.float16 else self.dtype
-        opt_param(self, ['_iscale', '_ishift'])
         opt_param(self, ['_eps'], 1e-6)
+        opt_param(self, ['_rho'], 0.99)
+
         req_param(self, ['layer'])
 
         self.backend = self.layer.backend
@@ -87,7 +86,6 @@ class BatchNorm(Activation):
 
         self.train_mode = True
         logger.info("BatchNormalization set to train mode")
-        self.nbatches = 0
 
         self._xhat = self.backend.zeros(self.in_shape, dtype=self.dtype)
 
@@ -109,7 +107,7 @@ class BatchNorm(Activation):
 
     def get_params(self):
         np_params = dict()
-        for p in ['_gamma', '_beta']:
+        for p in ['_gamma', '_beta', '_gmean', '_gvars']:
             if hasattr(self, p):
                 p_tensor = getattr(self, p)
                 np_params[p] = np.array(p_tensor.asnumpyarray(),
@@ -118,43 +116,33 @@ class BatchNorm(Activation):
         return np_params
 
     def set_params(self, params_dict):
-        for p in ['_gamma', '_beta']:
+        for p in ['_gamma', '_beta', '_gmean', '_gvars']:
             if p in params_dict:
                 getattr(self, p)[:] = params_dict[p]
 
     def set_inference_mode(self):
         """
-        If implemented following Ioffe et al. 2015, there appears to be a bug
-        with using inference mode. As more data is accumulated, the prediction
-        gets worse and worse. As a workaround, stay in train mode where the
-        variance and mean statistics are computed , which seems
-        to perform quite well.
+        Sets to inference mode and uses global estimates of mean and var to
+        get inference scaling and shifting factors
         """
-        if not BatchNorm.inference_warning_displayed:
-            logger.warning("Batch Normalization inference mode not supported. "
-                           "Using training mode.")
-            BatchNorm.inference_warning_displayed = True
+        # Global mean and var to be used during inference
+        if self.train_mode is True:
+            self._iscale = self.backend.zeros(self.in1d, dtype=self.bigtype)
+            self._ishift = self.backend.zeros(self.in1d, dtype=self.bigtype)
+            # normalize global variance -- inference scaling factor
+            m = self.batch_size
+            if self.is_local:
+                m *= self.ofmsize
+            unbiaser = float(m / (m - 1.))
+            self.backend.multiply(self._gvars, unbiaser, self._iscale)
+            self.backend.add(self._iscale, self._eps, self._iscale)
+            self.backend.sqrt(self._iscale, out=self._iscale)
+            self.backend.divide(self._gamma, self._iscale, self._iscale)
 
-        self.train_mode = True  # Set to 'False' to force inference mode
-        if self.train_mode is False:
-            if self._iscale is None:
-                # normalize global variance -- inference scaling factor
-                self.backend.divide(self._gvars, self.nbatches, self._gvars)
-                m = self.batch_size
-                if self.is_local:
-                    m *= self.ofmsize
-                unbiaser = float(m / (m - 1.))
-                self.backend.multiply(self._gvars, unbiaser, self._gvars)
-                self.backend.add(self._gvars, self._eps, self._gvars)
-                self.backend.sqrt(self._gvars, out=self._gvars)
-                self.backend.divide(self._gamma, self._gvars, self._gvars)
-                self._iscale = self._gvars
-
-                # normalize global mean -- inference shifting factor
-                self.backend.divide(self._gmean, self.nbatches, self._gmean)
-                self.backend.multiply(self._gmean, self._gvars, self._gmean)
-                self.backend.subtract(self._beta, self._gmean, self._gmean)
-                self._ishift = self._gmean
+            # normalize global mean -- inference shifting factor
+            self.backend.multiply(self._gmean, self._iscale, self._ishift)
+            self.backend.subtract(self._beta, self._ishift, self._ishift)
+            self.train_mode = False
 
     def apply_function(self, backend, inputs, outputs):
         """
@@ -197,10 +185,10 @@ class BatchNorm(Activation):
                 backend.mean(inputs, axes=1, out=self._mean)
                 backend.variance(inputs, axes=1, out=self._vars,
                                  mean=self._mean)
-                # increment the global estimates (TODO: stop after an epoch)
-                backend.add(self._gvars, self._vars, self._gvars)
-                backend.add(self._gmean, self._mean, self._gmean)
-                self.nbatches += 1
+
+                # update the global estimates
+                backend.exp_mavg(self._gvars, self._vars, self._rho)
+                backend.exp_mavg(self._gmean, self._mean, self._rho)
 
                 # Just store sqrt(vars + eps) since it's used as a unit
                 backend.add(self._vars, self._eps, self._vars)
@@ -213,7 +201,9 @@ class BatchNorm(Activation):
                 backend.add(outputs, self._beta, out=outputs)
             else:
                 backend.fprop_bn_compound(inputs, self._beta, self._gamma,
-                                          self._eps, self._vars, self._xhat,
+                                          self._eps,
+                                          self._xhat, self._mean, self._vars,
+                                          self._gmean, self._gvars, self._rho,
                                           out=outputs)
         else:
             # Inference mode: Using accumulated scale and shift

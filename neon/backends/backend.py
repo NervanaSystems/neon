@@ -1199,6 +1199,17 @@ class Backend(YAMLable):
         """
         raise NotImplementedError()
 
+    def exp_mavg(self, mavg, newval, rho):
+        """
+        Calculate the exponential moving average
+
+        Arguments:
+            mavg (Tensor):  The running value of the moving average
+            newval (Tensor):  New sample to be added to the moving average
+            rho (float):  Interpolation value
+        """
+        raise NotImplementedError()
+
     def distribute(self, data):
         return self.par.distribute(data)
 
