@@ -103,7 +103,7 @@
   },
 
   logging: {
-    level: 10,  # 10 debug, 20 info, 30 warning
+    level: 20,  # 10 debug, 20 info, 30 warning
     format: '%(asctime)-15s %(levelname)s:%(module)s - %(message)s'
   },
 }

@@ -28,7 +28,7 @@
   },
 
   # Enable predictions to generate example output strings. Requires CPU backend
-  #predictions: [train, test],
+  # predictions: [train, test],
 
   dataset: &ds !obj:datasets.MOBYDICK {
     repo_path: '~/data',
@@ -126,7 +126,7 @@
   },
 
   logging: {
-    level: 10,  # 10 debug, 20 info, 30 warning
+    level: 20,  # 10 debug, 20 info, 30 warning
     format: '%(asctime)-15s %(levelname)s:%(module)s - %(message)s'
   },
 }
