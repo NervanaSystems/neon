@@ -33,6 +33,7 @@
     sample_pct: 10, # 10% gives 400 batches like in rnn2
     data_dim: &dd 96,
     unrolls: &ur 5,
+    backend_type: &bt np.float64,  # 64 is needed for numerical gradients
   },
 
   weight_inits: [
@@ -63,12 +64,13 @@
   # simple RNN model specification
   model: !obj:models.RNN {
     num_params: {
-      name: rec,  # output:input:rec:lstm_x:lstm_ih:lstm_fh:lstm_oh:lstm_ch
-      eps: 0.001,
+      name: output,  # output:input:rec:lstm_x:lstm_ih:lstm_fh:lstm_oh:lstm_ch
+      eps: 0.000001, # use 1e-6 and fp64 if possible
       x: 12,
       y: 60,
       z: 63,
       w: 55,
+      v: 56,
     },
     num_epochs: 10,
     batch_size: &bs 64,
@@ -80,11 +82,13 @@
     shortcut_deriv: False,
     layers: [
       &datalayer !obj:layers.DataLayer {
-        name: d0,
+        name: datalayer,
+        backend_type: *bt,
         nout: *dd,
       },
       !obj:layers.RecurrentHiddenLayer {
         name: recurrent,
+        backend_type: *bt,
         lrule_init: *gdm,
         nout: 64,
         unrolls: *ur,
@@ -96,6 +100,7 @@
 
       &lastlayer !obj:layers.RecurrentOutputLayer {
         name: output,
+        backend_type: *bt,
         lrule_init: *gdm,
         nout: *dd,
         unrolls: *ur,
@@ -105,8 +110,11 @@
 
       &costlayer !obj:layers.RecurrentCostLayer {
         name: cost,
+        backend_type: *bt,
         ref_layer: *datalayer,
-        cost: !obj:transforms.CrossEntropy {},
+        cost: !obj:transforms.CrossEntropy {
+          backend_type: *bt,
+        },
       },
     ],
   },

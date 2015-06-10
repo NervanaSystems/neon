@@ -65,10 +65,20 @@ class Layer(YAMLable):
 
         opt_param(self, ['backend_type'], 'np.float32')
         if self.backend_type == 'np.float16':
-            logger.info("Setting layer dtype to float16")
+            logger.warning("Setting layer dtype to float16")
             for some_type in ['pre_act_dtype', 'output_dtype', 'deltas_dtype',
                               'weight_dtype', 'updates_dtype']:
                 setattr(self, some_type, np.float16)
+        elif self.backend_type == 'np.float64':
+            logger.warning("Setting layer dtype to float64")
+            for some_type in ['pre_act_dtype', 'output_dtype', 'deltas_dtype',
+                              'weight_dtype', 'updates_dtype']:
+                setattr(self, some_type, np.float64)
+        else:
+            logger.warning("Setting layer dtype to float32")
+            for some_type in ['pre_act_dtype', 'output_dtype', 'deltas_dtype',
+                              'weight_dtype', 'updates_dtype']:
+                setattr(self, some_type, np.float32)
 
     def set_previous_layer(self, pl):
         if pl.is_local:

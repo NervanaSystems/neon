@@ -34,10 +34,16 @@ class Cost(object):
         opt_param(self, ['outputbuf', 'temp'], None)
         opt_param(self, ['scale'], 1.0)
 
-        opt_param(self, ['backend_type'], 'np.float32')
+        opt_param(self, ['backend_type'], np.float32)
         if self.backend_type == 'np.float16':
-            logger.info("Setting cost dtype to float16")
+            logger.warning("Setting cost dtype to float16")
             setattr(self, 'temp_dtype', np.float16)
+        elif self.backend_type == 'np.float64':
+            logger.warning("Setting cost dtype to float64")
+            setattr(self, 'temp_dtype', np.float64)
+        else:
+            logger.warning("Setting cost dtype to float32")
+            setattr(self, 'temp_dtype', np.float32)
 
     def initialize(self, kwargs):
         self.__dict__.update(kwargs)

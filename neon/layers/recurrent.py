@@ -29,7 +29,6 @@ class RecurrentLayer(WeightLayer):
     def allocate_output_bufs(self):
         make_zbuf = self.backend.zeros
         opt_param(self, ['out_shape'], (self.nout, self.batch_size))
-
         self.output = make_zbuf(self.out_shape, self.output_dtype)
 
         self.pre_act = self.activation.pre_act_buffer(self.backend,
@@ -95,7 +94,7 @@ class RecurrentCostLayer(CostLayer):
         self.backend.divide(self.deltas, self.batch_size, out=self.deltas)
 
     def set_targets(self):
-        '''for num_grad. normally this is done in bprop'''
+        # used for num_grad. normally this is done inside bprop
         self.targets = getattr(self.ref_layer, self.ref_label)
 
     def get_cost(self):
@@ -140,7 +139,8 @@ class RecurrentOutputLayer(RecurrentLayer):
         self.backend.update_fc(out=self.temp_out, inputs=inputs, deltas=error)
 
         if numgrad and (numgrad['name'] == "output"):
-            self.grad_log(numgrad['name'], self.temp_out[numgrad['x'], 56])
+            self.grad_log(numgrad['name'], self.temp_out[numgrad['x'],
+                                                         numgrad['v']])
 
         self.backend.add(self.weight_updates, self.temp_out,
                          self.weight_updates)
@@ -168,21 +168,21 @@ class RecurrentHiddenLayer(RecurrentLayer):
         super(RecurrentHiddenLayer, self).allocate_output_bufs()
 
         # these buffers are specific to RHL:
-        # might want self.temp_in=temp_out, to save a buffer.
-        self.temp_in = make_zbuf(self.weight_shape, self.weight_dtype)
-        self.temp_rec = make_zbuf(self.weight_rec_shape)
+        # might want self.Wx_up_part=temp_out, to save a buffer.
+        self.Wx_up_part = make_zbuf(self.weight_shape, self.weight_dtype)
+        self.Wh_up_part = make_zbuf(self.weight_rec_shape, self.weight_dtype)
         # Extra temp buffers z[0]=w*x and z[1]=w*input.
-        self.preact_rec = make_zbuf(self.out_shape)
-        self.preact_in = make_zbuf(self.out_shape)
+        self.preact_rec = make_zbuf(self.out_shape, self.weight_dtype)
+        self.preact_in = make_zbuf(self.out_shape, self.weight_dtype)
 
     def allocate_param_bufs(self):
         super(RecurrentHiddenLayer, self).allocate_param_bufs()
         weight_gen = self.weight_init_rec.generate
         self.weights_rec = weight_gen(self.weight_rec_shape, self.weight_dtype)
-        self.updates_rec = self.backend.zeros(self.weight_rec_shape,
-                                              self.updates_dtype)
+        self.Wh_updates = self.backend.zeros(self.weight_rec_shape,
+                                             self.updates_dtype)
         self.params.append(self.weights_rec)
-        self.updates.append(self.updates_rec)
+        self.updates.append(self.Wh_updates)
 
         # Not ideal, since we just allocated this in the parent function, but
         # we can change the calling order later
@@ -220,27 +220,27 @@ class RecurrentHiddenLayer(RecurrentLayer):
             self.backend.multiply(error, self.pre_act_list[tau], out=error)
 
         # input weight update (apply curr. delta)
-        self.backend.update_fc(out=self.temp_in,
+        self.backend.update_fc(out=self.Wx_up_part,
                                inputs=inputs,
                                deltas=error)
-        self.backend.add(self.weight_updates, self.temp_in,
+        self.backend.add(self.weight_updates, self.Wx_up_part,
                          self.weight_updates)
 
         if (tau > 0):
             # recurrent weight update (apply prev. delta)
-            self.backend.update_fc(out=self.temp_rec,
+            self.backend.update_fc(out=self.Wh_up_part,
                                    inputs=self.output_list[tau - 1],
                                    deltas=error)
-            self.backend.add(self.updates_rec, self.temp_rec, self.updates_rec)
+            self.backend.add(self.Wh_updates, self.Wh_up_part, self.Wh_updates)
 
             self.backend.bprop_fc(out=self.deltas,
                                   weights=self.weights_rec,
                                   deltas=error)
         if numgrad and (numgrad['name'] == "input"):
-            self.grad_log(numgrad['name'], self.temp_in[numgrad['x'],
+            self.grad_log(numgrad['name'], self.Wx_up_part[numgrad['x'],
                           numgrad['y']])
         if numgrad and (numgrad['name'] == "rec"):
-            self.grad_log(numgrad['name'], self.temp_rec[numgrad['x'],
+            self.grad_log(numgrad['name'], self.Wh_up_part[numgrad['x'],
                           numgrad['z']])
 
 
@@ -262,7 +262,15 @@ class RecurrentLSTMLayer(RecurrentLayer):
         self.allocate_param_bufs()
 
     def allocate_output_bufs(self):
-        """ all the activations and temp buffers live here """
+        """
+        all the activations, deltas and temp buffers live here.
+        activations:       {i,f,o,g}_t
+        preactivations:    net_{i,f,o,g}
+        gate level deltas: self.d_dh1{i,f,o,c}
+        cell level deltas: self.dc_d_dh1{i,f,c}
+        final deltas:      errs{hh, hc, ch, cc}
+        cell state:        c_t, c_phi, c_phip
+        """
         super(RecurrentLSTMLayer, self).allocate_output_bufs()
 
         # things that are not initalized by the super class
@@ -315,7 +323,21 @@ class RecurrentLSTMLayer(RecurrentLayer):
         self.temp_t = 0
 
     def allocate_param_bufs(self):
-        """ Weights and updates live here """
+        """
+        params and updates are dictionaries passed to the learning rule.
+        self.params is the collection of 12 tensors:
+        W_{i,f,o,c}x
+        W_{i,f,o,c}h
+        b_{i,f,o,c}
+
+        self.updates is a similar collection of 12 tensors:
+        W_{i,f,o,c}x_updates
+        W_{i,f,o,c}h_updates
+        b_{i,f,o,c}_updates
+
+        these are further subdivided into per gate dictionaries containing
+        gatedic['c'] = [Wcx, Wch, b_c, net_g, g_t]
+        """
         super(RecurrentLSTMLayer, self).allocate_param_bufs()
 
         be = self.backend
@@ -433,6 +455,27 @@ class RecurrentLSTMLayer(RecurrentLayer):
         used in bprop. [TODO] check for redundant buffers
         self.activation is tanh
         self.gate_activation is logistic
+
+        Visualization of the LSTM cell:
+
+         c(t)   h(t)
+        __|______|___________
+        |  \     x---       |  multiplicative gate: output
+        |   \    |   \      |
+        |    \   O    \     |  nonlinearity
+        |     \ /      \    |
+        |     _+ __     \   |  memory cell
+        |    /     \     \  |
+        |   x       x     \ |  multiplicative gates: forget and input
+        |  / \     / \    | |
+        | |   |   |   |   | |
+        | |   O   O   O   O |  gate nonlinearities
+        |_|___|___|___|___|_|
+          |   f   g   i   o
+         c(t-1)    h(t-1)
+
+        this depicts the unrolled LSTM cell where loop connecting the cell to
+        itself via the forget gate
         """
         be = self.backend  # shorthand
 

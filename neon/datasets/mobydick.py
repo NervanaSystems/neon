@@ -23,6 +23,7 @@ import os
 
 from neon.datasets.dataset import Dataset
 from neon.util.compat import range
+from neon.util.param import opt_param
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,17 @@ class MOBYDICK(Dataset):
         self.macro_batched = False
         self.__dict__.update(kwargs)
 
+        opt_param(self, ['backend_type'], 'np.float32')
+        if self.backend_type == 'np.float16':
+            logger.warning("Setting data dtype to float16")
+            self.backend_type = numpy.float16
+        elif self.backend_type == 'np.float64':
+            logger.warning("Setting data dtype to float64")
+            self.backend_type = numpy.float64
+        else:
+            logger.warning("Setting data dtype to float32")
+            self.backend_type = numpy.float32
+
     def initialize(self):
         # perform additional setup that can't be done at initial construction
         pass
@@ -76,7 +88,7 @@ class MOBYDICK(Dataset):
 
         return array
 
-    def transpose_batches(self, data):
+    def transpose_batches(self, data, dtype):
         """
         Transpose each minibatch within the dataset.
         """
@@ -91,7 +103,7 @@ class MOBYDICK(Dataset):
         for batch in range(nbatches):
             batchdata = [self.backend.array(data[(batch * bs + k * dd):
                                                  (batch * bs + (k + 1) *
-                                                  dd)])
+                                                  dd)], dtype)
                          for k in range(self.unrolls)]
             batchwise[batch] = batchdata
         return batchwise
@@ -142,7 +154,7 @@ class MOBYDICK(Dataset):
                 offbyone[0:length - self.data_dim, :] = splay_3d[self.data_dim:
                                                                  length, :]
                 self.targets[dataset] = offbyone
-            self.format()  # runs transpose_batches
+            self.format(dtype=self.backend_type)  # runs transpose_batches
 
         else:
             raise AttributeError('repo_path not specified in config')
