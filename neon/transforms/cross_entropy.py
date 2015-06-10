@@ -56,7 +56,7 @@ def cross_entropy(backend, outputs, targets, temp, epsilon=2**-23,
 
     # Compute t*log(y) - (t-1)*log(1-y)
     backend.subtract(temp[0], temp[1], out=temp[0])
-    result = backend.empty((1, 1))
+    result = backend.empty((1, 1), dtype=outputs.dtype)
     if scale_by_batchsize:
         backend.divide(temp[0], temp[0].shape[1], temp[0])
     return backend.sum(temp[0], axes=None, out=result)

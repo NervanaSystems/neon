@@ -22,7 +22,7 @@ from neon.backends.backend import Block
 from neon.diagnostics.visualize_rnn import VisualizeRNN
 from neon.models.mlp import MLP
 from neon.util.compat import range
-from neon.util.param import req_param
+from neon.util.param import req_param, opt_param, ensure_dtype
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,8 @@ class RNN(MLP):
     make up the full dataset.
 
     Note that in the more general case of datasets with multiple sequences of
-    unequal lengths, it would be necessary to pick the minibatch size to be
+    unequal lengths, it would be necessary to pick the product of unrolling
+    steps and number of minibatches to be
     equal to the number of sequences, and the number of minibatches to be the
     length of the sequences. Sequences would need to be padded to the maximum
     length with an "empty character" code, e.g. the all-zeros vector rather
@@ -95,6 +96,7 @@ class RNN(MLP):
         super(RNN, self).__init__(**kwargs)
         req_param(self, ['unrolls'])
         self.rec_layer = self.layers[1]
+        opt_param(self, ['num_grad_params'], None)
 
     def link(self, initlayer=None):
         """
@@ -112,9 +114,10 @@ class RNN(MLP):
         self.print_layers()
         self.data_layer.init_dataset(dataset)
         self.data_layer.use_set('train')
-        # "output":"input":"rec"
-        #           "lstm_x":"lstm_ih":"lstm_fh":"lstm_oh":"lstm_ch"
-        self.grad_checker(numgrad="output")
+        if (self.num_grad_params is not None) \
+                and (str(ensure_dtype(self.backend_type)) ==
+                     "<type 'numpy.float64'>"):
+            self.grad_checker(numgrad=self.num_grad_params)
         logger.info('commencing model fitting')
         errorlist = []
         suberrorlist = []
@@ -195,7 +198,7 @@ class RNN(MLP):
                                  self.cost_layer.targets)
 
     def fprop(self, debug=False, eps_tau=-1, eps=0,
-              num_target=None, num_i=0, num_j=0):
+              num=None):
         """
         Adding numerical gradient functionality here to avoid duplicate fprops.
         TODO: Make a version where the for tau loop is inside the layer. The
@@ -210,27 +213,31 @@ class RNN(MLP):
 
         # loop for rec_layer
         for tau in range(0, self.unrolls):
-            if tau == eps_tau:
-                numpy_target = num_target[num_i, num_j].asnumpyarray()
-                num_target[num_i, num_j] = (numpy_target + eps)
+            if num and num['target'] and (tau == eps_tau):
+                # inject epsilon for numerical gradient
+                numpy_target = num['target'][num['i'], num['j']].asnumpyarray()
+                num['target'][num['i'], num['j']] = (numpy_target + eps)
             if debug:
-                logger.debug("in RNNB.fprop, tau %d, input %d" % (tau,
-                             inputs[tau].asnumpyarray().argmax(0)[0]))
+                logger.debug("in RNNB.fprop, tau %d, input %s" % (tau,
+                             inputs[tau].asnumpyarray().argmax(0)[0:5]))
             self.rec_layer.fprop(y[tau-1], c[tau-1], inputs[tau], tau)
-            if tau == eps_tau:
-                num_target[num_i, num_j] = numpy_target
+            if num and num['target'] and (tau == eps_tau):
+                # remove epsilon
+                num['target'][num['i'], num['j']] = numpy_target
 
         # loop for class_layer
         for tau in range(0, self.unrolls):
-            if tau == eps_tau:
-                numpy_target = num_target[num_i, num_j].asnumpyarray()
-                num_target[num_i, num_j] = (numpy_target + eps)
+            if num and num['target'] and (tau == eps_tau):
+                # inject epsilon for numerical gradient
+                numpy_target = num['target'][num['i'], num['j']].asnumpyarray()
+                num['target'][num['i'], num['j']] = (numpy_target + eps)
             if debug:
-                logger.debug("in RNNB.fprop, tau %d, input %d" % (tau,
-                             inputs[tau].asnumpyarray().argmax(0)[0]))
+                logger.debug("in RNNB.fprop, tau %d, input %s" % (tau,
+                             inputs[tau].asnumpyarray().argmax(0)[0:5]))
             self.class_layer.fprop(y[tau], tau)
-            if tau == eps_tau:
-                num_target[num_i, num_j] = numpy_target
+            if num and num['target'] and (tau == eps_tau):
+                # remove epsilon
+                num['target'][num['i'], num['j']] = numpy_target
         # cost layer fprop is a pass.
 
     def bprop(self, debug, numgrad=None):
@@ -314,7 +321,7 @@ class RNN(MLP):
             if 'c_t' in self.rec_layer.__dict__:
                 self.backend.add(temp1c, temp2c, out=self.rec_layer.celtas)
 
-    def grad_checker(self, numgrad="lstm_ch"):
+    def grad_checker(self, numgrad=None):
         """
         Check gradients for LSTM layer:
           - W is replicated, only inject the eps once, repeat, average.
@@ -326,61 +333,63 @@ class RNN(MLP):
         for layer in self.layers:
             logger.info("%s", str(layer))
 
-        if numgrad is "output":
-            num_target = self.class_layer.weights
-            anl_target = self.class_layer.weight_updates
-            num_i, num_j = 15, 56
-        elif numgrad is "input":
-            num_target = self.rec_layer.weights
-            anl_target = self.rec_layer.weight_updates
-            num_i, num_j = 12, 110  # 110 is "n"
-        elif numgrad is "rec":
-            num_target = self.rec_layer.weights_rec
-            anl_target = self.rec_layer.updates_rec
-            num_i, num_j = 12, 63
-        elif numgrad is "lstm_x":
-            num_target = self.rec_layer.Wfx
-            anl_target = self.rec_layer.Wfx_updates
-            num_i, num_j = 12, 110
-        elif numgrad is "lstm_ih":
-            num_target = self.rec_layer.Wih
-            anl_target = self.rec_layer.Wih_updates
-            num_i, num_j = 12, 55
-        elif numgrad is "lstm_fh":
-            num_target = self.rec_layer.Wfh
-            anl_target = self.rec_layer.Wfh_updates
-            num_i, num_j = 12, 55
-        elif numgrad is "lstm_oh":
-            num_target = self.rec_layer.Woh
-            anl_target = self.rec_layer.Woh_updates
-            num_i, num_j = 12, 55
-        elif numgrad is "lstm_ch":
-            num_target = self.rec_layer.Wch
-            anl_target = self.rec_layer.Wch_updates
-            num_i, num_j = 12, 55
+        num = {'target': None, 'i': 0, 'j': 0}
 
-        eps = 1e-6  # better to use float64 in cpu.py for this
-        numerical = 0  # initialize buffer
+        if numgrad['name'] == "output":
+            num['target'] = self.class_layer.weights
+            anl_target = self.class_layer.weight_updates
+            num['i'], num['j'] = numgrad['u'], numgrad['v']
+        elif numgrad['name'] == "input":
+            num['target'] = self.rec_layer.weights
+            anl_target = self.rec_layer.weight_updates
+            num['i'], num['j'] = numgrad['x'], numgrad['y']
+        elif numgrad['name'] == "rec":
+            num['target'] = self.rec_layer.weights_rec
+            anl_target = self.rec_layer.Wh_updates
+            num['i'], num['j'] = numgrad['x'], numgrad['z']
+
+        elif numgrad['name'] == "lstm_fx":
+            num['target'] = self.rec_layer.Wfx
+            anl_target = self.rec_layer.Wfx_updates
+            num['i'], num['j'] = numgrad['x'], numgrad['y']
+        elif numgrad['name'] == "lstm_ih":
+            num['target'] = self.rec_layer.Wih
+            anl_target = self.rec_layer.Wih_updates
+            num['i'], num['j'] = numgrad['x'], numgrad['w']
+        elif numgrad['name'] == "lstm_fh":
+            num['target'] = self.rec_layer.Wfh
+            anl_target = self.rec_layer.Wfh_updates
+            num['i'], num['j'] = numgrad['x'], numgrad['w']
+        elif numgrad['name'] == "lstm_oh":
+            num['target'] = self.rec_layer.Woh
+            anl_target = self.rec_layer.Woh_updates
+            num['i'], num['j'] = numgrad['x'], numgrad['w']
+        elif numgrad['name'] == "lstm_ch":
+            num['target'] = self.rec_layer.Wch
+            anl_target = self.rec_layer.Wch_updates
+            num['i'], num['j'] = numgrad['x'], numgrad['w']
+        else:
+            logger.error("No such numgrad target: '%s'", numgrad['name'])
+            raise AttributeError
+
+        eps = numgrad['eps']
+        numerical = 0
         #  loop to inject epsilon in different unrolling stages
         for eps_tau in range(0, self.unrolls):
             self.reset(1)  # clear hidden input
-            self.fprop(debug=False, eps_tau=eps_tau, eps=0,
-                       num_target=num_target, num_i=num_i, num_j=num_j)
+            self.fprop(debug=False, eps_tau=eps_tau, eps=0, num=num)
             self.cost_layer.set_targets()
             self.data_layer.reset_counter()
             self.cost_layer.cost.set_outputbuf(
                 self.class_layer.output_list[-1])
             suberror_eps = self.cost_layer.get_cost().asnumpyarray()
-
             self.reset(1)
-            self.fprop(debug=False, eps_tau=eps_tau, eps=eps,
-                       num_target=num_target, num_i=num_i, num_j=num_j)
+            self.fprop(debug=False, eps_tau=eps_tau, eps=eps, num=num)
             self.data_layer.reset_counter()
             self.cost_layer.cost.set_outputbuf(
                 self.class_layer.output_list[-1])
             suberror_ref = self.cost_layer.get_cost().asnumpyarray()
-
-            num_part = (suberror_eps - suberror_ref) / eps
+            num_part = (suberror_ref - suberror_eps) / eps
             logger.debug("numpart for  eps_tau=%d of %d is %e",
                          eps_tau, self.unrolls, num_part)
             numerical += num_part
@@ -388,42 +397,52 @@ class RNN(MLP):
         # bprop for analytical gradient
         self.bprop(debug=False, numgrad=numgrad)
 
-        analytical = anl_target[num_i, num_j].asnumpyarray()
-        logger.debug("---------------------------------------------")
+        analytical = anl_target[num['i'], num['j']].asnumpyarray()
+        logger.debug("--------------------------------------------------")
+        logger.debug("Numerical gradient checks: Only fp64 CPU supported")
         logger.debug("RNN grad_checker: suberror_eps %f", suberror_eps)
         logger.debug("RNN grad_checker: suberror_ref %f", suberror_ref)
         logger.debug("RNN grad_checker: numerical %e", numerical)
         logger.debug("RNN grad_checker: analytical %e", analytical)
         logger.debug("RNN grad_checker: ratio %e", 1./(numerical/analytical))
-        logger.debug("---------------------------------------------")
+        logger.debug("--------------------------------------------------")
 
     def predict_generator(self, dataset, setname):
         """
-        Generate flattened predicitons and true labels for the given dataset,
-        one mini-batch at a time.
-
-        Agruments:
-            dataset: A neon dataset instance
-            setname: Which set to compute predictions for (test, train, val)
-
-        Returns:
-            tuple: on each call will yield a 2-tuple of outputs and references.
-                   The first item is the model probabilities for each class,
-                   and the second item is either the one-hot or raw labels with
-                   ground truth.
-
-        See Also:
-            predict_fullset
+        Generate predicitons and true labels for the given dataset.
         """
-        # TODO: find some alternate way of re-assembling data that doesn't
-        # require allocating space for the entire dataset so we can avoid the
-        # call to predict_fullset
-        (pred_flat, targ_flat) = self.predict_fullset(dataset, setname)
+        self.data_layer.init_dataset(dataset)
+        assert self.data_layer.has_set(setname)
+        self.data_layer.use_set(setname, predict=True)
+        self.data_layer.reset_counter()
 
-        for i in range(self.data_layer.num_batches):
-            start = i * self.unrolls * self.batch_size
-            end = start + (self.unrolls * self.batch_size)
-            yield (pred_flat[start:end], targ_flat[start:end])
+        predlabels = self.backend.empty((1, self.batch_size))
+        labels = self.backend.empty((1, self.batch_size))
+
+        outputs_pred = self.backend.zeros((self.unrolls, self.batch_size))
+        outputs_targ = self.backend.zeros((self.unrolls, self.batch_size))
+
+        mb_id = 0
+        self.data_layer.reset_counter()
+        while self.data_layer.has_more_data():
+            mb_id += 1
+            self.reset(mb_id)
+            self.fprop(debug=False)
+            # time unrolling loop to disseminate fprop results
+            for tau in range(self.unrolls):
+                probs = self.class_layer.output_list[tau]
+                targets = self.data_layer.targets[tau]
+                self.backend.argmax(targets, axis=0, out=labels)
+                self.backend.argmax(probs, axis=0, out=predlabels)
+
+                # collect batches to re-assemble continuous data
+                outputs_pred[tau, :] = predlabels
+                outputs_targ[tau, :] = labels
+
+            yield (outputs_pred.reshape((1, self.unrolls * self.batch_size)),
+                   outputs_targ.reshape((1, self.unrolls * self.batch_size)))
+
+        self.data_layer.cleanup()
 
     def predict_fullset(self, dataset, setname):
         """
@@ -482,16 +501,24 @@ class RNN(MLP):
         pred_flat = outputs_pred.transpose().reshape((1, -1))
         targ_flat = outputs_targ.transpose().reshape((1, -1))
 
+        self.write_string(pred_flat, targ_flat, setname)
+
         return (pred_flat, targ_flat)
 
     def write_string(self, pred, targ, setname):
-            """ For text prediction, reassemble the batches and print out a
-            short contigous segment of target text and predicted text - useful
-            to check for off-by-one errors and the like"""
+            """
+            For text prediction, reassemble the batches and print out a short
+            contigous segment of target text and predicted text - useful to
+            check for off-by-one errors and the like.
+
+            Note: This is a debug function, it's not called anywhere by default
+            """
             import numpy as np
 
-            pred_int = pred[0, 2:40].asnumpyarray().ravel().astype(np.int8)
-            targ_int = targ[0, 2:40].asnumpyarray().ravel().astype(np.int8)
+            pred_int = pred[0, 100:140].asnumpyarray().ravel().astype(np.int8) \
+                + 31
+            targ_int = targ[0, 100:140].asnumpyarray().ravel().astype(np.int8) \
+                + 31
             # remove special characters, replace them with '#'
             pred_int[pred_int < 32] = 35
             targ_int[targ_int < 32] = 35
@@ -501,3 +528,5 @@ class RNN(MLP):
                          ''.join(targ_int.view('c')))
             logging.info("prediction for '%s' is: '%s'", setname,
                          ''.join(pred_int.view('c')))
+            logging.info("successes for '%s' are: '%s'", setname,
+                         ''.join((88 * (targ_int == pred_int) + 32).view('c')))

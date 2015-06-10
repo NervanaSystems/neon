@@ -32,8 +32,8 @@ class NoPar(object):
         backend.par = self
         self.backend = backend
 
-    def distribute(self, batchdata):
-        return self.backend.array(batchdata)
+    def distribute(self, batchdata, dtype):
+        return self.backend.array(batchdata, dtype)
 
     def reduce_tensor(self, tensor):
         return tensor.asnumpyarray()
@@ -152,8 +152,8 @@ class ModelPar(BasePar):
         backend.bprop_fc = self.bprop_fc
         backend.update_fc = self.update_fc
 
-    def distribute(self, batchdata):
-        return self.backend.array(batchdata)
+    def distribute(self, batchdata, dtype):
+        return self.backend.array(batchdata, dtype)
 
     def reduce_tensor(self, tensor):
         return tensor.asnumpyarray()
@@ -219,8 +219,8 @@ class DataPar(BasePar):
         backend.update_fc = self.update_fc
         backend.update_conv = self.update_conv
 
-    def distribute(self, batchdata):
-        return self.backend.array(batchdata[:, self.start:self.end])
+    def distribute(self, batchdata, dtype):
+        return self.backend.array(batchdata[:, self.start:self.end], dtype)
 
     def reduce_tensor(self, tensor):
         self.comm.Reduce([tensor.asnumpyarray(), self.mpi.FLOAT],

@@ -25,7 +25,11 @@ class VisualizeRNN(object):
     Visualzing weight matrices during training
     """
     def __init__(self):
-        import matplotlib.pyplot
+        import matplotlib
+        matplotlib.use('Agg')
+        from matplotlib import pyplot as plt  # noqa
+        matplotlib.rcParams['pdf.fonttype'] = 42  # ensure true type font
+
         self.plt = matplotlib.pyplot
         self.plt.interactive(1)
 

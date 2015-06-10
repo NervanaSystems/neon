@@ -21,10 +21,10 @@
   dataset: &ds !obj:datasets.MOBYDICK {
     repo_path: '~/data',
     sample_pct: 10, # 10% gives 400 batches like in rnn2
-    data_dim: &dd 128,
+    data_dim: &dd 96, # readable ASCII chars 32:128
     unrolls: &ur 5,
   },
- 
+
   metrics: {
     train: [
       !obj:metrics.MisclassPercentage {},
@@ -62,7 +62,7 @@
   # simple RNN model specification
   model: !obj:models.RNN {
     num_epochs: 10,
-    batch_size: &bs 50,
+    batch_size: &bs 128,
     reset_period: 50,  # 50 for LSTM, 20 for RNN?
     unrolls: *ur,
     make_plots: False,
@@ -72,7 +72,7 @@
     layers: [
       &datalayer !obj:layers.DataLayer {
         name: d0,
-        nout: 128,
+        nout: *dd,
       },
       !obj:layers.RecurrentLSTMLayer {
         name: recurrent,
@@ -88,7 +88,7 @@
       &lastlayer !obj:layers.RecurrentOutputLayer {
         name: output,
         lrule_init: *gdm,
-        nout: 128,
+        nout: *dd,
         unrolls: *ur,
         activation: !obj:transforms.Logistic {},
         weight_init: *wt_init,
@@ -103,7 +103,7 @@
   },
 
   logging: {
-    level: 10,  # 10 debug, 20 info, 30 warning
+    level: 20,  # 10 debug, 20 info, 30 warning
     format: '%(asctime)-15s %(levelname)s:%(module)s - %(message)s'
   },
 }

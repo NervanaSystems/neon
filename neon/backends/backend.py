@@ -1210,8 +1210,8 @@ class Backend(YAMLable):
         """
         raise NotImplementedError()
 
-    def distribute(self, data):
-        return self.par.distribute(data)
+    def distribute(self, data, dtype):
+        return self.par.distribute(data, dtype)
 
     def rank(self):
         return self.par.rank()

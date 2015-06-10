@@ -27,7 +27,7 @@ def xcov_cost(backend, outputs, targets, temp, blkidx,
     backend.multiply(temp[2], temp[2], temp[2])
     if scale_by_batchsize:
         backend.divide(temp[2], temp[2].shape[1], temp[2])
-    result = backend.empty((1, 1))
+    result = backend.empty((1, 1), dtype=outputs.dtype)
     backend.sum(temp[2], axes=None, out=result)
     return backend.multiply(result, 0.5, result)
 
