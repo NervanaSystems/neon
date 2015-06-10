@@ -22,7 +22,7 @@ from neon.backends.backend import Block
 from neon.diagnostics.visualize_rnn import VisualizeRNN
 from neon.models.mlp import MLP
 from neon.util.compat import range
-from neon.util.param import req_param, opt_param
+from neon.util.param import req_param, opt_param, ensure_dtype
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +96,7 @@ class RNN(MLP):
         super(RNN, self).__init__(**kwargs)
         req_param(self, ['unrolls'])
         self.rec_layer = self.layers[1]
-        opt_param(self, ['num_params'], None)
+        opt_param(self, ['num_grad_params'], None)
 
     def link(self, initlayer=None):
         """
@@ -114,9 +114,10 @@ class RNN(MLP):
         self.print_layers()
         self.data_layer.init_dataset(dataset)
         self.data_layer.use_set('train')
-
-        if self.num_params is not None:
-            self.grad_checker(numgrad=self.num_params)
+        if (self.num_grad_params is not None) \
+                and (str(ensure_dtype(self.backend_type)) ==
+                     "<type 'numpy.float64'>"):
+            self.grad_checker(numgrad=self.num_grad_params)
         logger.info('commencing model fitting')
         errorlist = []
         suberrorlist = []
@@ -337,17 +338,17 @@ class RNN(MLP):
         if numgrad['name'] == "output":
             num['target'] = self.class_layer.weights
             anl_target = self.class_layer.weight_updates
-            num['i'], num['j'] = 15, numgrad['v']  # numgrad['x'] was 15
+            num['i'], num['j'] = numgrad['u'], numgrad['v']
         elif numgrad['name'] == "input":
             num['target'] = self.rec_layer.weights
-            anl_target = self.rec_layer.weight_updates  # renamed back
-            num['i'], num['j'] = numgrad['x'], numgrad['y']  # 110 is "n"
+            anl_target = self.rec_layer.weight_updates
+            num['i'], num['j'] = numgrad['x'], numgrad['y']
         elif numgrad['name'] == "rec":
             num['target'] = self.rec_layer.weights_rec
             anl_target = self.rec_layer.Wh_updates
             num['i'], num['j'] = numgrad['x'], numgrad['z']
 
-        elif numgrad['name'] == "lstm_x":
+        elif numgrad['name'] == "lstm_fx":
             num['target'] = self.rec_layer.Wfx
             anl_target = self.rec_layer.Wfx_updates
             num['i'], num['j'] = numgrad['x'], numgrad['y']
@@ -388,7 +389,7 @@ class RNN(MLP):
             self.cost_layer.cost.set_outputbuf(
                 self.class_layer.output_list[-1])
             suberror_ref = self.cost_layer.get_cost().asnumpyarray()
-            num_part = (suberror_eps - suberror_ref) / eps
+            num_part = (suberror_ref - suberror_eps) / eps
             logger.debug("numpart for  eps_tau=%d of %d is %e",
                          eps_tau, self.unrolls, num_part)
             numerical += num_part
@@ -397,14 +398,14 @@ class RNN(MLP):
         self.bprop(debug=False, numgrad=numgrad)
 
         analytical = anl_target[num['i'], num['j']].asnumpyarray()
-        logger.debug("---------------------------------------------")
+        logger.debug("--------------------------------------------------")
         logger.debug("Numerical gradient checks: Only fp64 CPU supported")
         logger.debug("RNN grad_checker: suberror_eps %f", suberror_eps)
         logger.debug("RNN grad_checker: suberror_ref %f", suberror_ref)
         logger.debug("RNN grad_checker: numerical %e", numerical)
         logger.debug("RNN grad_checker: analytical %e", analytical)
         logger.debug("RNN grad_checker: ratio %e", 1./(numerical/analytical))
-        logger.debug("---------------------------------------------")
+        logger.debug("--------------------------------------------------")
 
     def predict_generator(self, dataset, setname):
         """
@@ -500,6 +501,8 @@ class RNN(MLP):
         pred_flat = outputs_pred.transpose().reshape((1, -1))
         targ_flat = outputs_targ.transpose().reshape((1, -1))
 
+        self.write_string(pred_flat, targ_flat, setname)
+
         return (pred_flat, targ_flat)
 
     def write_string(self, pred, targ, setname):
@@ -512,8 +515,10 @@ class RNN(MLP):
             """
             import numpy as np
 
-            pred_int = pred[0, 2:40].asnumpyarray().ravel().astype(np.int8)
-            targ_int = targ[0, 2:40].asnumpyarray().ravel().astype(np.int8)
+            pred_int = pred[0, 100:140].asnumpyarray().ravel().astype(np.int8) \
+                + 31
+            targ_int = targ[0, 100:140].asnumpyarray().ravel().astype(np.int8) \
+                + 31
             # remove special characters, replace them with '#'
             pred_int[pred_int < 32] = 35
             targ_int[targ_int < 32] = 35
@@ -523,3 +528,5 @@ class RNN(MLP):
                          ''.join(targ_int.view('c')))
             logging.info("prediction for '%s' is: '%s'", setname,
                          ''.join(pred_int.view('c')))
+            logging.info("successes for '%s' are: '%s'", setname,
+                         ''.join((88 * (targ_int == pred_int) + 32).view('c')))

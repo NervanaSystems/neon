@@ -27,13 +27,15 @@
     ],
   },
 
+  # Enable predictions to generate example output strings. Requires CPU backend
+  #predictions: [train, test],
 
   dataset: &ds !obj:datasets.MOBYDICK {
     repo_path: '~/data',
     sample_pct: 10, # 10% gives 400 batches like in rnn2
     data_dim: &dd 96,
     unrolls: &ur 5,
-    backend_type: &bt np.float64,  # 64 is needed for numerical gradients
+    backend_type: &bt np.float32,  # 64 is needed for numerical gradients
   },
 
   weight_inits: [
@@ -63,21 +65,25 @@
 
   # simple RNN model specification
   model: !obj:models.RNN {
-    num_params: {
-      name: output,  # output:input:rec:lstm_x:lstm_ih:lstm_fh:lstm_oh:lstm_ch
-      eps: 0.000001, # use 1e-6 and fp64 if possible
-      x: 12,
-      y: 60,
-      z: 63,
-      w: 55,
-      v: 56,
-    },
     num_epochs: 10,
     batch_size: &bs 64,
     reset_period: 50,  # 50 for LSTM, 20 for RNN?
     unrolls: *ur,
     make_plots: False,
     truncate: True,  # truncate the back-propagation through time
+    # Note: Numerical gradient checking is only supported with CPU fp64 backend
+    backend_type: *bt,
+    num_grad_params: {
+      name: output,  # For RNN: output, input, rec.
+                     # For LSTM: lstm_fx, lstm_ih, lstm_fh, lstm_oh, lstm_ch
+      eps: 0.000001, # use 1e-6 and fp64 if possible
+      x: 12,
+      y: 60,
+      z: 63,
+      w: 55,
+      v: 56,
+      u: 15,
+    },
 
     shortcut_deriv: False,
     layers: [

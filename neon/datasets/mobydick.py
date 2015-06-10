@@ -23,7 +23,7 @@ import os
 
 from neon.datasets.dataset import Dataset
 from neon.util.compat import range
-from neon.util.param import opt_param
+from neon.util.param import opt_param, ensure_dtype
 
 logger = logging.getLogger(__name__)
 
@@ -52,15 +52,8 @@ class MOBYDICK(Dataset):
         self.__dict__.update(kwargs)
 
         opt_param(self, ['backend_type'], 'np.float32')
-        if self.backend_type == 'np.float16':
-            logger.warning("Setting data dtype to float16")
-            self.backend_type = numpy.float16
-        elif self.backend_type == 'np.float64':
-            logger.warning("Setting data dtype to float64")
-            self.backend_type = numpy.float64
-        else:
-            logger.warning("Setting data dtype to float32")
-            self.backend_type = numpy.float32
+        self.backend_type = ensure_dtype(self.backend_type)  # string to dtype
+        logger.info("Setting dtype to" + str(self.backend_type))
 
     def initialize(self):
         # perform additional setup that can't be done at initial construction

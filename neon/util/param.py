@@ -17,6 +17,8 @@ Contains various functions for checking and setting required and optional
 parameters.
 """
 
+import numpy as np
+
 
 def req_param(obj, paramlist):
     for param in paramlist:
@@ -29,3 +31,21 @@ def opt_param(obj, paramlist, default_value=None):
     for param in paramlist:
         if not hasattr(obj, param):
             setattr(obj, param, default_value)
+
+
+def ensure_dtype(dtype):
+    """
+    Check if the provided dtype is in string format, and if so, convert to
+    actual dtype.
+    """
+    if dtype in ['float16', 'np.float16', 'numpy.float16']:
+        dtype = np.float16
+    elif dtype in ['float32', 'np.float32', 'numpy.float32']:
+        dtype = np.float32
+    elif dtype in ['float64', 'np.float64', 'numpy.float64']:
+        dtype = np.float64
+    elif dtype in [np.float32, np.float16, np.float64]:
+        pass
+    else:
+        raise ValueError('Datatype not understood')
+    return dtype
