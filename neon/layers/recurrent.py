@@ -263,13 +263,15 @@ class RecurrentLSTMLayer(RecurrentLayer):
 
     def allocate_output_bufs(self):
         """
-        all the activations, deltas and temp buffers live here.
-        activations:       {i,f,o,g}_t
-        preactivations:    net_{i,f,o,g}
-        gate level deltas: self.d_dh1{i,f,o,c}
-        cell level deltas: self.dc_d_dh1{i,f,c}
-        final deltas:      errs{hh, hc, ch, cc}
-        cell state:        c_t, c_phi, c_phip
+        all the activations, deltas and temp buffers live here::
+
+            activations:       {i,f,o,g}_t
+            preactivations:    net_{i,f,o,g}
+            gate level deltas: self.d_dh1{i,f,o,c}
+            cell level deltas: self.dc_d_dh1{i,f,c}
+            final deltas:      errs{hh, hc, ch, cc}
+            cell state:        c_t, c_phi, c_phip
+
         """
         super(RecurrentLSTMLayer, self).allocate_output_bufs()
 
@@ -325,18 +327,20 @@ class RecurrentLSTMLayer(RecurrentLayer):
     def allocate_param_bufs(self):
         """
         params and updates are dictionaries passed to the learning rule.
-        self.params is the collection of 12 tensors:
-        W_{i,f,o,c}x
-        W_{i,f,o,c}h
-        b_{i,f,o,c}
+        self.params is the collection of 12 tensors::
 
-        self.updates is a similar collection of 12 tensors:
-        W_{i,f,o,c}x_updates
-        W_{i,f,o,c}h_updates
-        b_{i,f,o,c}_updates
+            W_{i,f,o,c}x
+            W_{i,f,o,c}h
+            b_{i,f,o,c}
+
+        self.updates is a similar collection of 12 tensors::
+
+            W_{i,f,o,c}x_updates
+            W_{i,f,o,c}h_updates
+            b_{i,f,o,c}_updates
 
         these are further subdivided into per gate dictionaries containing
-        gatedic['c'] = [Wcx, Wch, b_c, net_g, g_t]
+        ``gatedic['c'] = [Wcx, Wch, b_c, net_g, g_t]``
         """
         super(RecurrentLSTMLayer, self).allocate_param_bufs()
 
@@ -428,54 +432,53 @@ class RecurrentLSTMLayer(RecurrentLayer):
     def fprop(self, y, cell, inputs, tau):
         """
         Forward pass for the google-style LSTM cell with forget gates, no
-        peepholes.
+        peepholes.  cell (``self.c_t``) and hidden (``self.output_list``)
+        activity variables will be updated as a result.
 
-        Inputs:
+        Arguments:
             y:      input from prev. time step (eg. one batch of (64, 50) size)
-            inputs: input from data (eg. one batch of (128, 50) size)
-            (tau):  unrolling step for BPTT
             cell:   state of memory cell from prev. time step (shape as y)
+            inputs: input from data (eg. one batch of (128, 50) size)
+            tau:    unrolling step for BPTT
 
-        Outputs:
-            self.c_t:         cell activity
-            self.output_list: hidden activity
+        Notes:
+            In math notation, forward pass::
 
-        In math notiation, forward pass:
-            i_t = s(Wix*x + Wih*h +b_i)
-            f_t = s(Wpx*x + Wfh*h +b_f)
-            o_t = s(Wox*x + Woh*h +b_o)
-            g_t = s(Wcx*x + Wch*h +b_c)
-            c_t = f_t .* c_t-1 + i_t .* g_t
-            h_t = o_t .* phi(c_t)
-            ------ output layer -----
-            y_t = s(W_yh * h_t)
-            e_t = xEnt(y, t)
+                i_t = s(Wix*x + Wih*h +b_i)
+                f_t = s(Wpx*x + Wfh*h +b_f)
+                o_t = s(Wox*x + Woh*h +b_o)
+                g_t = s(Wcx*x + Wch*h +b_c)
+                c_t = f_t .* c_t-1 + i_t .* g_t
+                h_t = o_t .* phi(c_t)
+                ------ output layer -----
+                y_t = s(W_yh * h_t)
+                e_t = xEnt(y, t)
 
-        The values are computed and stored for all unrolls so they can be
-        used in bprop. [TODO] check for redundant buffers
-        self.activation is tanh
-        self.gate_activation is logistic
+            The values are computed and stored for all unrolls so they can be
+            used in bprop. [TODO] check for redundant buffers
+            self.activation is tanh
+            self.gate_activation is logistic
 
-        Visualization of the LSTM cell:
+            Visualization of the LSTM cell::
 
-         c(t)   h(t)
-        __|______|___________
-        |  \     x---       |  multiplicative gate: output
-        |   \    |   \      |
-        |    \   O    \     |  nonlinearity
-        |     \ /      \    |
-        |     _+ __     \   |  memory cell
-        |    /     \     \  |
-        |   x       x     \ |  multiplicative gates: forget and input
-        |  / \     / \    | |
-        | |   |   |   |   | |
-        | |   O   O   O   O |  gate nonlinearities
-        |_|___|___|___|___|_|
-          |   f   g   i   o
-         c(t-1)    h(t-1)
+                 c(t)   h(t)
+                __|______|___________
+                |  \     x---       |  multiplicative gate: output
+                |   \    |   \      |
+                |    \   O    \     |  nonlinearity
+                |     \ /      \    |
+                |     _+ __     \   |  memory cell
+                |    /     \     \  |
+                |   x       x     \ |  multiplicative gates: forget and input
+                |  / \     / \    | |
+                | |   |   |   |   | |
+                | |   O   O   O   O |  gate nonlinearities
+                |_|___|___|___|___|_|
+                  |   f   g   i   o
+                 c(t-1)    h(t-1)
 
-        this depicts the unrolled LSTM cell where loop connecting the cell to
-        itself via the forget gate
+            this depicts the unrolled LSTM cell where loop connecting the cell
+            to itself via the forget gate
         """
         be = self.backend  # shorthand
 
@@ -507,21 +510,24 @@ class RecurrentLSTMLayer(RecurrentLayer):
         error on the two inputs (4 errors total), and each of the weight
         updates has a contribution from the error to the cell and the hidden.
 
-
-        Inputs:
+        Arguments:
             error_h2: error injected into hidden
             error_c2: error injected directly into cell
 
-        Outputs:
-            error_h1: from h2 and c2: dh2/dh1 + dc2/dh1
-                                      existing  new
-            error_c1: from h2 and c2: dh2/dc1 + dc2/dc1
-                                      new       new
+        Notes:
 
-        [TODO] Two new terms to compute!
+            Outputs::
 
-        Basic derivation
-            In math, backward pass:
+                error_h1: from h2 and c2: dh2/dh1 + dc2/dh1
+                                          existing  new
+                error_c1: from h2 and c2: dh2/dc1 + dc2/dc1
+                                          new       new
+
+            [TODO] Two new terms to compute!
+
+            Basic derivation
+            In math, backward pass::
+
                 de_dJ = d/dJ CE(y,t)
                 dy_dJ = d/dJ sigm(wyh*h)
                 ------ hidden layer -----
@@ -533,9 +539,9 @@ class RecurrentLSTMLayer(RecurrentLayer):
                 do_dJ = d/dJ s(wcx*x+wch*h+b)
                 dg_dJ = d/dJ s(wcx*x+wch*h+b)
 
-        Over multiple time-steps, deltas feeds back in as error.
-        [TODO] Currently using a bunch of if statements to catch propagating
-        into outputs[-1], which should not wrap but be 0.
+            Over multiple time-steps, deltas feeds back in as error.
+            [TODO] Currently using a bunch of if statements to catch
+            propagating into outputs[-1], which should not wrap but be 0.
         """
         be = self.backend
 

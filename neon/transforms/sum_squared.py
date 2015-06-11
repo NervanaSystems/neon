@@ -38,7 +38,7 @@ def sum_squared_diffs(backend, outputs, targets, temp,
     backend.multiply(temp[0], temp[0], temp[0])
     if scale_by_batchsize:
         backend.divide(temp[0], temp[0].shape[1], temp[0])
-    result = backend.empty((1, 1))
+    result = backend.empty((1, 1), dtype=outputs.dtype)
     backend.sum(temp[0], axes=None, out=result)
     return backend.multiply(result, 0.5, result)
 
