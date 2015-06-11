@@ -21,7 +21,7 @@ NervanaGPU is available at `<https://github.com/NervanaSystems/nervanagpu>`
 import logging
 
 from neon.backends.backend import Backend
-from nervanagpu import NervanaGPU, GPUTensor
+from nervanagpu import NervanaGPU
 from neon.diagnostics.timing_decorators import FlopsDecorator
 import pycuda.driver as drv
 import numpy as np
