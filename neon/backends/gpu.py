@@ -21,7 +21,7 @@ NervanaGPU is available at `<https://github.com/NervanaSystems/nervanagpu>`
 import logging
 
 from neon.backends.backend import Backend
-from nervanagpu import NervanaGPU, GPUTensor
+from nervanagpu import NervanaGPU
 from neon.diagnostics.timing_decorators import FlopsDecorator
 import pycuda.driver as drv
 import numpy as np
@@ -155,8 +155,7 @@ class GPU(Backend):
         If called with dype=None it will probably explode
         """
         ary = np.random.uniform(low, high, shape)
-        return GPUTensor(ary.shape, dtype, allocator=allocator, name=name,
-                         rounding=self.ng.round_mode).set(ary)
+        return self.ng.array(ary, dtype=dtype, name=name)
 
     def normal(self, loc=0.0, scale=1.0, size=1, dtype=default_dtype,
                persist_values=True, name=None, allocator=drv.mem_alloc):
@@ -164,8 +163,7 @@ class GPU(Backend):
         Gaussian/Normal random number sample generation
         """
         ary = np.random.normal(loc, scale, size)
-        return GPUTensor(ary.shape, dtype, allocator=allocator, name=name,
-                         rounding=self.ng.round_mode).set(ary)
+        return self.ng.array(ary, dtype=dtype, name=name)
 
     def fprop_fc(self, out, inputs, weights, layer=None):
         """
@@ -644,8 +642,7 @@ class GPU(Backend):
         Returns:
             GPUTensor: output
         """
-        return GPUTensor(ary.shape, dtype, allocator=allocator, name=name,
-                         rounding=self.ng.round_mode).set(ary)
+        return self.ng.array(ary, dtype=dtype, name=name)
 
     def add(self, left, right, out):
         """

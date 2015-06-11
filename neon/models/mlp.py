@@ -241,8 +241,8 @@ class MLP(Model):
                                                               setname):
             start = batch * self.batch_size
             end = start + self.batch_size
-            outputs[:, start:end] = self.get_classifier_output()
-            reference[:, start:end] = self.cost_layer.get_reference()
+            outputs[:, start:end] = batch_preds
+            reference[:, start:end] = batch_refs
             batch += 1
 
         return outputs, reference
