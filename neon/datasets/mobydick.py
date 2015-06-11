@@ -64,8 +64,8 @@ class MOBYDICK(Dataset):
         Reads the text file, converts characters to one-hot encoding.
 
         Uses 96 ASCII characters that are printable (32-128). Replaces
-        line breaks of the form \r\n with a single space. All unprintable
-        characters are mapped to 0 (UNK).
+        line breaks of the form '<carriage ret><new line>' with a single
+        space. All unprintable characters are mapped to 0 (UNK).
         """
         with open(fname, 'r') as f:
             text = f.read()
