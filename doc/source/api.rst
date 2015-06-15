@@ -383,6 +383,14 @@ CIFAR100
 
    neon.datasets.cifar100.CIFAR100
 
+Housing
+-------
+
+.. autosummary::
+   :toctree: generated/
+
+   neon.datasets.housing.Housing
+
 Iris
 ----
 
