@@ -156,7 +156,8 @@ class Layer(YAMLable):
         opt_param(self, ['out_shape'], (self.nout, self.batch_size))
         opt_param(self, ['delta_shape'], (self.nin, self.batch_size))
 
-        self.output = make_zbuf(self.out_shape, self.output_dtype)
+        self.output = make_zbuf(self.out_shape, dtype=self.output_dtype,
+                                persist_values=True)
 
         self.pre_act = self.activation.pre_act_buffer(self.backend,
                                                       self.output,
@@ -171,7 +172,8 @@ class Layer(YAMLable):
 
         if delta_pool is None:
             self.deltas = self.backend.zeros(self.delta_shape,
-                                             self.deltas_dtype)
+                                             dtype=self.deltas_dtype,
+                                             persist_values=False)
         else:
             self.deltas = delta_pool[offset:(offset + self.delta_shape[0])]
 
@@ -510,14 +512,19 @@ class WeightLayer(Layer):
         self.weights = self.weight_init.generate(self.weight_shape,
                                                  self.weight_dtype)
         self.weights.name = self.name  # naming weights for timing diagnostics
-        self.weight_updates = make_ebuf(self.weight_shape, self.updates_dtype)
+        self.weight_updates = make_ebuf(self.weight_shape,
+                                        dtype=self.updates_dtype,
+                                        persist_values=True)
 
         self.use_biases = 'bias_init' in self.weight_init.__dict__
         opt_param(self, ['brule_init'], None)
         if self.use_biases is True:
-            self.biases = make_ebuf(self.bias_shape, self.weight_dtype)
+            self.biases = make_ebuf(self.bias_shape, dtype=self.weight_dtype,
+                                    persist_values=False)
             self.biases.fill(self.weight_init.bias_init)
-            self.bias_updates = make_ebuf(self.bias_shape, self.updates_dtype)
+            self.bias_updates = make_ebuf(self.bias_shape,
+                                          dtype=self.updates_dtype,
+                                          persist_values=False)
             self.params.extend([self.weights, self.biases])
             self.updates.extend([self.weight_updates, self.bias_updates])
         else:
@@ -525,7 +532,9 @@ class WeightLayer(Layer):
             self.updates.extend([self.weight_updates])
 
         if self.accumulate:
-            self.utemp = map(lambda x: make_ebuf(x.shape, self.updates_dtype),
+            self.utemp = map(lambda x: make_ebuf(x.shape,
+                                                 dtype=self.updates_dtype,
+                                                 persist_values=False),
                              self.updates)
         for upm in self.updates:
             upm.fill(0.0)

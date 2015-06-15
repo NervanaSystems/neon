@@ -87,18 +87,25 @@ class BatchNorm(Activation):
         self.train_mode = True
         logger.info("BatchNormalization set to train mode")
 
-        self._xhat = self.backend.zeros(self.in_shape, dtype=self.dtype)
+        self._xhat = self.backend.zeros(self.in_shape, dtype=self.dtype,
+                                        persist_values=False)
 
-        self._mean = self.backend.zeros(self.in1d, dtype=self.bigtype)
-        self._vars = self.backend.zeros(self.in1d, dtype=self.bigtype)
+        self._mean = self.backend.zeros(self.in1d, dtype=self.bigtype,
+                                        persist_values=False)
+        self._vars = self.backend.zeros(self.in1d, dtype=self.bigtype,
+                                        persist_values=False)
 
         # Global mean and var to be used during inference
-        self._gmean = self.backend.zeros(self.in1d, dtype=self.bigtype)
-        self._gvars = self.backend.zeros(self.in1d, dtype=self.bigtype)
+        self._gmean = self.backend.zeros(self.in1d, dtype=self.bigtype,
+                                         persist_values=True)
+        self._gvars = self.backend.zeros(self.in1d, dtype=self.bigtype,
+                                         persist_values=True)
 
         # learned params and their update buffers
-        self._beta = self.backend.zeros(self.in1d, dtype=self.bigtype)
-        self._gamma = self.backend.ones(self.in1d, dtype=self.bigtype)
+        self._beta = self.backend.zeros(self.in1d, dtype=self.bigtype,
+                                        persist_values=False)
+        self._gamma = self.backend.ones(self.in1d, dtype=self.bigtype,
+                                        persist_values=False)
         self.layer.params.extend([self._beta, self._gamma])
 
         self._beta_updates = self.backend.zeros(self.in1d, dtype=self.bigtype)

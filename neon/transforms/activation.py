@@ -65,7 +65,7 @@ class Activation(object):
         raise NotImplementedError("apply_derivative should be" +
                                   "overridden in child class.")
 
-    def pre_act_buffer(self, backend, output, dtype):
+    def pre_act_buffer(self, backend, output, dtype, persist_values=False):
         """
         Creates the pre_act_buffer
 
@@ -73,8 +73,10 @@ class Activation(object):
             backend (Backend): The backend class to use for computation.
             output (array_like): Output data buffer.
             dtype: dtype for pre_act_buffer
+            persist_values (bool): If False (default) values will not persist
+                                   across subsequent backend begin/end calls.
         """
-        return backend.zeros(output.shape, dtype)
+        return backend.zeros(output.shape, dtype, persist_values)
 
     def fprop_func(self, backend, inputs, outputs):
         """

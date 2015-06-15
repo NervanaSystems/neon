@@ -29,7 +29,8 @@ class RecurrentLayer(WeightLayer):
     def allocate_output_bufs(self):
         make_zbuf = self.backend.zeros
         opt_param(self, ['out_shape'], (self.nout, self.batch_size))
-        self.output = make_zbuf(self.out_shape, self.output_dtype)
+        self.output = make_zbuf(self.out_shape, dtype=self.output_dtype,
+                                persist_values=True)
 
         self.pre_act = self.activation.pre_act_buffer(self.backend,
                                                       self.output,
@@ -47,7 +48,9 @@ class RecurrentLayer(WeightLayer):
     def set_deltas_buf(self, delta_pool, offset):
         # create deltas buffer no matter what position relative to the data
         # layer we are. In the RNN even the first layer needs deltas.
-        self.deltas = self.backend.zeros(self.delta_shape, self.deltas_dtype)
+        self.deltas = self.backend.zeros(self.delta_shape,
+                                         dtype=self.deltas_dtype,
+                                         persist_values=False)
 
     def grad_log(self, ng, val):
         logger.info("%s.bprop inc '%s' by %f", self.__class__.__name__, ng,
@@ -122,7 +125,8 @@ class RecurrentOutputLayer(RecurrentLayer):
         make_zbuf = self.backend.zeros
         super(RecurrentOutputLayer, self).allocate_output_bufs()
         # super allocate will set the correct sizes for pre_act, output, berr
-        self.temp_out = make_zbuf(self.weight_shape, self.weight_dtype)
+        self.temp_out = make_zbuf(self.weight_shape, dtype=self.weight_dtype,
+                                  persist_values=False)
 
     def fprop(self, inputs, tau):
         self.backend.fprop_fc(self.pre_act_list[tau], inputs, self.weights)
@@ -169,11 +173,19 @@ class RecurrentHiddenLayer(RecurrentLayer):
 
         # these buffers are specific to RHL:
         # might want self.Wx_up_part=temp_out, to save a buffer.
-        self.Wx_up_part = make_zbuf(self.weight_shape, self.weight_dtype)
-        self.Wh_up_part = make_zbuf(self.weight_rec_shape, self.weight_dtype)
+        self.Wx_up_part = make_zbuf(self.weight_shape,
+                                    dtype=self.weight_dtype,
+                                    persist_values=False)
+        self.Wh_up_part = make_zbuf(self.weight_rec_shape,
+                                    dtype=self.weight_dtype,
+                                    persist_values=False)
         # Extra temp buffers z[0]=w*x and z[1]=w*input.
-        self.preact_rec = make_zbuf(self.out_shape, self.weight_dtype)
-        self.preact_in = make_zbuf(self.out_shape, self.weight_dtype)
+        self.preact_rec = make_zbuf(self.out_shape,
+                                    dtype=self.weight_dtype,
+                                    persist_values=False)
+        self.preact_in = make_zbuf(self.out_shape,
+                                   dtype=self.weight_dtype,
+                                   persist_values=False)
 
     def allocate_param_bufs(self):
         super(RecurrentHiddenLayer, self).allocate_param_bufs()
@@ -282,44 +294,59 @@ class RecurrentLSTMLayer(RecurrentLayer):
         # buffers for gate activation
         for a in ['i', 'f', 'o', 'g']:
             setattr(self, a + '_t',
-                    [be.zeros(net_sze) for k in range(self.unrolls)])
+                    [be.zeros(net_sze, dtype=None, persist_values=False)
+                     for k in range(self.unrolls)])
             setattr(self, 'net_' + a,
-                    [be.zeros(net_sze) for k in range(self.unrolls)])
+                    [be.zeros(net_sze, dtype=None, persist_values=False)
+                     for k in range(self.unrolls)])
 
         # outputs: pre-allocate for d{i,f,o,c}_dh1
-        self.d_dh1 = {gateid: be.zeros(net_sze) for
-                      gateid in ['i', 'f', 'o', 'c']}
-        self.dc_d_dh1 = {gateid: be.zeros(net_sze) for
-                         gateid in ['i', 'f', 'c']}
-        self.errs = {hcval: be.zeros(net_sze) for
-                     hcval in ['hh', 'hc', 'ch', 'cc']}
+        self.d_dh1 = {gateid: be.zeros(net_sze, dtype=None,
+                                       persist_values=False)
+                      for gateid in ['i', 'f', 'o', 'c']}
+        self.dc_d_dh1 = {gateid: be.zeros(net_sze, dtype=None,
+                                          persist_values=False)
+                         for gateid in ['i', 'f', 'c']}
+        self.errs = {hcval: be.zeros(net_sze, dtype=None, persist_values=False)
+                     for hcval in ['hh', 'hc', 'ch', 'cc']}
         self.gatedic = {}
         self.gatedic_u = {}
 
         # buffers for cell and output
-        self.c_t = [be.zeros(net_sze) for k in range(self.unrolls)]
-        self.c_phi = [be.zeros(net_sze) for k in range(self.unrolls)]
-        self.c_phip = [be.zeros(net_sze) for k in range(self.unrolls)]
-        self.output_list = [be.zeros(net_sze) for k in range(self.unrolls)]
+        self.c_t = [be.zeros(net_sze, dtype=None, persist_values=True)
+                    for k in range(self.unrolls)]
+        self.c_phi = [be.zeros(net_sze, dtype=None, persist_values=False)
+                      for k in range(self.unrolls)]
+        self.c_phip = [be.zeros(net_sze, dtype=None, persist_values=False)
+                       for k in range(self.unrolls)]
+        self.output_list = [be.zeros(net_sze, dtype=None, persist_values=True)
+                            for k in range(self.unrolls)]
 
         # pre-allocate preactivation buffers
-        self.temp_x = [be.zeros(net_sze) for k in range(self.unrolls)]
-        self.temp_h = [be.zeros(net_sze) for k in range(self.unrolls)]
+        self.temp_x = [be.zeros(net_sze, dtype=None, persist_values=False)
+                       for k in range(self.unrolls)]
+        self.temp_h = [be.zeros(net_sze, dtype=None, persist_values=False)
+                       for k in range(self.unrolls)]
 
         # pre-allocate derivative buffers
-        self.dh_dwx_buf = be.zeros((self.nout, self.nin))
-        self.dh_dwh_buf = be.zeros((self.nout, self.nout))
+        self.dh_dwx_buf = be.zeros((self.nout, self.nin), dtype=None,
+                                   persist_values=False)
+        self.dh_dwh_buf = be.zeros((self.nout, self.nout), dtype=None,
+                                   persist_values=False)
 
-        self.delta_buf = be.zeros(net_sze)
-        self.bsum_buf = be.zeros((self.nout, 1))
+        self.delta_buf = be.zeros(net_sze, dtype=None, persist_values=False)
+        self.bsum_buf = be.zeros((self.nout, 1), dtype=None,
+                                 persist_values=False)
 
         # This quantity seems to be computed repeatedly
         # error_h * self.o_t[tau] * self.c_phip[tau]
-        self.eh_ot_cphip = be.zeros(net_sze)
+        self.eh_ot_cphip = be.zeros(net_sze, dtype=None, persist_values=False)
 
         # error buffers
-        self.deltas = be.zeros((self.nout, self.batch_size))
-        self.celtas = be.zeros((self.nout, self.batch_size))
+        self.deltas = be.zeros((self.nout, self.batch_size), dtype=None,
+                               persist_values=True)
+        self.celtas = be.zeros((self.nout, self.batch_size), dtype=None,
+                               persist_values=True)
 
         # temp buffer for numerical gradient
         self.temp_t = 0
