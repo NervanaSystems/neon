@@ -127,7 +127,7 @@ class TestSerialization:
         # will load experiment from here and alter some
         # parameters programatically
         config_file = os.path.join( self.script_dir, \
-                'toy-serialize_check_base.yml' )
+                'toy_serialize_check_base.yml' )
 
         # run N steps in 1 shot 
         be='cpu'
