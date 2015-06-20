@@ -50,7 +50,7 @@ class TestSerialization:
             self.model_path = os.path.join( os.environ['WORKSPACE'],\
                     'data')
         else:
-            self.model_path = '~/data'
+            self.model_path = os.path.join( os.getenv("HOME"), 'data') #~/data/
         return
 
 
@@ -85,6 +85,10 @@ class TestSerialization:
             # save the model to this file
             last_saved_state = os.path.join(self.model_path,\
                                         '%d_shot_%d.prm' %(k,end_epoch))
+            print last_saved_state
+            if os.path.exists(last_saved_state):
+                print 'removing %s' %last_saved_state
+                os.remove(last_saved_state)
             experiment.model.serialized_path = last_saved_state
 
             
@@ -99,7 +103,7 @@ class TestSerialization:
                     if hasattr(layer,'weights'): # only looking at weights right now
                         # make sure the names of each layer are unique by adding index
                         intial_weights[ '%s_%d' %(layer.name, ind)  ] = \
-                                np.copy( layer.weights.raw )
+                                np.copy( layer.weights.asnumpyarray())
 
             # run up to epoch `end_epoch`
             res_2shot_half = experiment.run()
@@ -121,7 +125,7 @@ class TestSerialization:
         # compare the final state of the two models 
 
         N = 10 # total number of training epochs
-        k = 5   # split across k serial/deserial steps
+        k = 2   # split across k serial/deserial steps
 
         # this yaml contains basic model params
         # will load experiment from here and alter some
@@ -146,9 +150,37 @@ class TestSerialization:
                 'final states of 1 vs %d step learning runs not matching' %k
         return
 
+    def test_toyModel_compare_gpuOnly(self):
+        N = 10
+        k = 2
+        atol=0.0
+        rtol=.1
+
+        config_file = os.path.join( self.script_dir, \
+                'toy_serialize_check_base.yml' )
+
+        # run N steps in 1 shot 
+        be='gpu'
+        be_args = {'rng_seed': self.seed, be : 'cudanet' }
+        (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
+
+        # run N steps in k shots
+        (fstate_kshot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N, k, be, **be_args)
+
+
+        # comapre the initial weights
+        assert self.check_init_weights( init_w_kshot, init_w_1shot , rtol=rtol, atol=atol ),\
+                'initial model weights were not the same'
+
+        #compare the final model state for 1 step of N epochs vs. k steps of N/k epochs
+        assert self.model_compare( fstate_1shot, fstate_kshot ,rtol=rtol, atol=atol),\
+                'final states of 1 vs %d step learning runs not matching' %k
+        return
+
+
     # load up two model pkl files and compare the data stored in them
     @staticmethod
-    def model_compare( model1_file, model2_file):
+    def model_compare( model1_file, model2_file, atol=0.0, rtol=0.0):
         model1 = deserialize( model1_file )
         model2 = deserialize( model2_file )
 
@@ -160,10 +192,10 @@ class TestSerialization:
                 'mismtach in total epoch count' 
 
         # for MLP just layers should be left?
-        import pdb;pdb.set_trace()
         print 'checking the 1 versus k step outputs...'
         for ky in model1.keys():
-            assert TestSerialization.layer_compare(model1[ky], model2[ky]), 'Mismatch in layer %s' %ky
+            print ky
+            assert TestSerialization.layer_compare(model1[ky], model2[ky], atol=atol,rtol=rtol), 'Mismatch in layer %s' %ky
         print 'OK'
 
         return True
@@ -189,8 +221,10 @@ class TestSerialization:
     def val_compare( obj1, obj2, atol=0.0, rtol=0.0 ):
         assert type(obj1) == type(obj2), 'type mismatch'
         if isinstance(obj1, np.ndarray):
-            assert np.allclose(obj1, obj2, atol=atol, rtol=rtol), \
-                    'initial layer weight mismatch [%s]' %ky
+            if not np.allclose(obj1, obj2, atol=atol, rtol=rtol):
+                maxdiff = np.amax( np.divide(np.absolute( obj1 - obj2 ) , np.absolute(obj2) ) )
+                import pdb;pdb.set_trace()
+                assert False, 'layer weight mismatch max %f' %maxdiff
         if isinstance(obj1, list):
             assert len(obj1) == len(obj2), 'list length mismatch'
             for ind in range(len(obj1)):
