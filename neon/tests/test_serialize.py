@@ -191,7 +191,7 @@ class TestSerialization:
         return
 
     #---------------------------------------------------
-    @attr('cuda','hey')  # can we do this test by test
+    @attr('cuda')  # can we do this test by test
     def test_toyModel_compare_gpu_to_cpu(self):
         # run whole test on cpu and run it 1/2 on cpu the 1/2 on gpu
         # compare the outputs
