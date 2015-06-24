@@ -45,7 +45,7 @@ import cudanet
 #@attr('cuda')  # can we do this test by test
 class TestSerialization:
     def setup(self):
-        logging.basicConfig(level=30)  # ERROR or higher
+        logging.basicConfig(level=40)  # ERROR or higher
 
         self.seed=1234 # random seed
 
@@ -71,7 +71,7 @@ class TestSerialization:
     # so this generator has to be set to gpu even though there is 1 cpu only test
     # would prefer to tag each yieled tests seperately
     @attr('cuda')  
-    def test_generator(self):
+    def test_generator_serialization(self):
         # models to tests
         ModelYamls = ['toy_serialize_check_base.yml' , \
                             'i1k_serialize_check_base.yml']
@@ -85,10 +85,10 @@ class TestSerialization:
         # this generates the 3 test cases for the 2 different models
         for model_file in ModelYamls:
             # run everything on cpu
-            yield self.compare_cpuOnly,    model_file
+            yield self.compare_cpuOnly, model_file
 
             # run everything on gpu
-            yield self.compare_gpuOnly,    model_file
+            yield self.compare_gpuOnly, model_file
 
             # run model first on gpu then hand off 
             # serilized model to cpu b.e. to complete
@@ -99,6 +99,26 @@ class TestSerialization:
             yield self.compare_cpu_to_gpu, model_file
 
         return
+
+    #---------------------------------------------------
+    @staticmethod
+    def compare_checkPoints(N, k, onestep_file_root, kstep_file_root, atol=0.0, rtol=0.0):
+        # compare the checkpoints saved during the single step run
+        # with the files saved during the k step run
+
+        for ind in range( N/k, N, N/k):
+            # single step file name
+            file_parts = os.path.splitext( onestep_file_root )
+            onestep_fn = file_parts[0] + '_cp%d' %ind + file_parts[1] 
+
+            # multistep step file name
+            file_parts = os.path.splitext( kstep_file_root )
+            kstep_fn   = file_parts[0] + '%d' %ind + file_parts[1] 
+
+            assert TestSerialization.model_compare( onestep_fn, kstep_fn , atol=atol, rtol=rtol),\
+                    'checkpoint files not matching up [%s, %s]' \
+                    %(onestep_fn, kstep_fn)
+        return True
 
     #---------------------------------------------------
     def compare_cpuOnly(self,config_file):
@@ -120,21 +140,23 @@ class TestSerialization:
         # will load experiment from here and alter some
         # parameters programatically
 
-        # run N steps in 1 shot 
+        # run N steps in 1 big step
         be='cpu'
         be_args = {'rng_seed': self.seed}
-        (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
+        (fstate_1step, init_w_1step ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
-        # run N steps in k shots
-        (fstate_kshot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N, k, be, **be_args)
+        # run N steps in k steps
+        (fstate_kstep, init_w_kstep ) = self.run_experiment_in_steps(config_file, N, k, be, **be_args)
 
         # comapre the initial weights
-        assert self.check_init_weights( init_w_1shot, init_w_kshot , rtol=0.0, atol=0.0 ),\
+        assert self.check_init_weights( init_w_1step, init_w_kstep , rtol=0.0, atol=0.0 ),\
                 'initial model weights were not the same'
 
         #compare the final model state for 1 step of N epochs vs. k steps of N/k epochs
-        assert self.model_compare( fstate_1shot, fstate_kshot ),\
+        assert self.model_compare( fstate_1step, fstate_kstep ),\
                 'final states of 1 vs %d step learning runs not matching' %k
+
+        assert self.compare_checkPoints(N, k, fstate_1step, os.path.join( os.path.dirname(fstate_kstep),'%d_step_.prm' %k))
         return
 
     #---------------------------------------------------
@@ -146,20 +168,20 @@ class TestSerialization:
         atol=0.0
         rtol=.01
 
-        # run N steps in 1 shot 
+        # run N steps in 1 step 
         be='gpu'
         be_args = {'rng_seed': self.seed, be : self.back_end }
-        (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
+        (fstate_1step, init_w_1step ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
-        # run N steps in k shots
-        (fstate_kshot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N, k, be, **be_args)
+        # run N steps in k steps
+        (fstate_kstep, init_w_kstep ) = self.run_experiment_in_steps(config_file, N, k, be, **be_args)
 
         # comapre the initial weights
-        assert self.check_init_weights( init_w_kshot, init_w_1shot , rtol=rtol, atol=atol ),\
+        assert self.check_init_weights( init_w_kstep, init_w_1step , rtol=rtol, atol=atol ),\
                 'initial model weights were not the same'
 
         #compare the final model state for 1 step of N epochs vs. k steps of N/k epochs
-        assert self.model_compare( fstate_1shot, fstate_kshot ,rtol=rtol, atol=atol),\
+        assert self.model_compare( fstate_1step, fstate_kstep ,rtol=rtol, atol=atol),\
                 'final states of 1 vs %d step learning runs not matching' %k
         return
 
@@ -172,21 +194,21 @@ class TestSerialization:
         atol=0.0
         rtol=.01
 
-        # run N steps in 1 shot 
+        # run N steps in 1 step 
         be='gpu'
         be_args = {'rng_seed': self.seed, be : self.back_end }
-        (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
+        (fstate_1step, init_w_1step ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
-        # run N steps in k shots
-        (fstate_kshot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N, k, be, **be_args)
+        # run N steps in k steps
+        (fstate_kstep, init_w_kstep ) = self.run_experiment_in_steps(config_file, N, k, be, **be_args)
 
 
         # comapre the initial weights
-        assert self.check_init_weights( init_w_kshot, init_w_1shot , rtol=rtol, atol=atol ),\
+        assert self.check_init_weights( init_w_kstep, init_w_1step , rtol=rtol, atol=atol ),\
                 'initial model weights were not the same'
 
         #compare the final model state for 1 step of N epochs vs. k steps of N/k epochs
-        assert self.model_compare( fstate_1shot, fstate_kshot ,rtol=rtol, atol=atol),\
+        assert self.model_compare( fstate_1step, fstate_kstep ,rtol=rtol, atol=atol),\
                 'final states of 1 vs %d step learning runs not matching' %k
         return
 
@@ -201,27 +223,27 @@ class TestSerialization:
         atol=0.0
         rtol=.01
 
-        # run N steps in 2 shots and save the checkpoint which should be at int(N/2)
+        # run N steps in 2 steps and save the checkpoint which should be at int(N/2)
         be='cpu'
         be_args = {'rng_seed': self.seed}#, be : self.back_end }
-        (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
+        (fstate_1step, init_w_1step ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
-        # run N steps in 2 shots
+        # run N steps in 2 steps
         # first goes on the CPU
-        (fstate_half_shot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N/2, 1, be, **be_args)
+        (fstate_half_step, init_w_kstep ) = self.run_experiment_in_steps(config_file, N/2, 1, be, **be_args)
         # use the prm file from the 1/2 run above to init this run and finish the full N epochs with GPU
         be='gpu'
         be_args = {'rng_seed': self.seed, be : self.back_end }
-        (fstate_kshot, temp_init_w ) = self.run_experiment_in_steps(config_file, N, 1, be, \
-                init_config=fstate_half_shot, **be_args)
+        (fstate_kstep, temp_init_w ) = self.run_experiment_in_steps(config_file, N, 1, be, \
+                init_config=fstate_half_step, **be_args)
 
 
         # comapre the initial weights
-        assert self.check_init_weights( init_w_kshot, init_w_1shot , rtol=rtol, atol=atol ),\
+        assert self.check_init_weights( init_w_kstep, init_w_1step , rtol=rtol, atol=atol ),\
                 'initial model weights were not the same'
 
         #compare the final model state for 1 step of N epochs vs. k steps of N/k epochs
-        assert self.model_compare( fstate_1shot, fstate_kshot ,rtol=rtol, atol=atol),\
+        assert self.model_compare( fstate_1step, fstate_kstep ,rtol=rtol, atol=atol),\
                 'final states of 1 vs %d step learning runs not matching' %k
         return
 
@@ -235,29 +257,29 @@ class TestSerialization:
         atol=0.0
         rtol=.01
 
-        # run N steps in 2 shots and save the checkpoint which should be at int(N/2)
+        # run N steps in 2 steps and save the checkpoint which should be at int(N/2)
         be='cpu'
         be_args = {'rng_seed': self.seed}#, be : self.back_end }
-        (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
+        (fstate_1step, init_w_1step ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
-        # run N steps in 2 shots
+        # run N steps in 2 steps
         # first goes on the CPU
         be='gpu'
         be_args = {'rng_seed': self.seed, be : self.back_end }
-        (fstate_half_shot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N/2, 1, be, **be_args)
+        (fstate_half_step, init_w_kstep ) = self.run_experiment_in_steps(config_file, N/2, 1, be, **be_args)
         # use the prm file from the 1/2 run above to init this run and finish the full N epochs with GPU
         be='cpu'
         be_args = {'rng_seed': self.seed}
-        (fstate_kshot, temp_init_w ) = self.run_experiment_in_steps(config_file, N, 1, be, \
-                init_config=fstate_half_shot, **be_args)
+        (fstate_kstep, temp_init_w ) = self.run_experiment_in_steps(config_file, N, 1, be, \
+                init_config=fstate_half_step, **be_args)
 
 
         # comapre the initial weights
-        assert self.check_init_weights( init_w_kshot, init_w_1shot , rtol=rtol, atol=atol ),\
+        assert self.check_init_weights( init_w_kstep, init_w_1step , rtol=rtol, atol=atol ),\
                 'initial model weights were not the same'
 
         #compare the final model state for 1 step of N epochs vs. k steps of N/k epochs
-        assert self.model_compare( fstate_1shot, fstate_kshot ,rtol=rtol, atol=atol),\
+        assert self.model_compare( fstate_1step, fstate_kstep ,rtol=rtol, atol=atol),\
                 'final states of 1 vs %d step learning runs not matching' %k
         return
 
@@ -298,17 +320,16 @@ class TestSerialization:
 
             # save the model to this file
             last_saved_state = os.path.join(self.model_path,\
-                                        '%d_shot_%d.prm' %(k,end_epoch))
+                                        '%d_step_%d.prm' %(k,end_epoch))
             print last_saved_state
             if os.path.exists(last_saved_state):
                 print 'removing %s' %last_saved_state
                 os.remove(last_saved_state)
             experiment.model.serialized_path = last_saved_state
-
             
             experiment.model.serialize_schedule = k
-            experiment.model.save_checkpoints = k # keep copies of all checkpoint files for cp tests
-
+            if k ==  1:
+                experiment.model.save_checkpoints = N  # keep copies of all checkpoint files for cp tests
 
             backend = gen_backend(model=experiment.model, **be_args)
             experiment.initialize(backend)
@@ -323,7 +344,7 @@ class TestSerialization:
                                 np.copy( layer.weights.asnumpyarray())
 
             # run 
-            res_2shot_half = experiment.run()
+            res_2step_half = experiment.run()
 
         return ( last_saved_state  , intial_weights )
 
@@ -382,7 +403,7 @@ class TestSerialization:
 
     # takes 2 layer weight dictionaries generated in run_experiment_in_steps
     # and compares the weights to within the rel and abs tol values
-    # check the initial weights - should match the 1 shot run
+    # check the initial weights - should match the 1 step run
     @staticmethod
     def check_init_weights( layer1, layer2, rtol=0.0, atol=0.0 ):
         assert layer1.keys().sort() == layer2.keys().sort()
