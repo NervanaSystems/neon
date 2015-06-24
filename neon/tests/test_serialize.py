@@ -15,7 +15,17 @@
 Tests for checking serialization
 
 
+These tests will run a model in 2 ways:
+    (1) run a model for N steps
+    (2) run a model k times for N/k steps,
+          serializing and deserializing the
+          model at each of the k steps
+and compare the serialized output files.
 
+The goal is to check whether there are errors
+introduced by serializing and deserializing the
+model.  This is done by checking for consistency
+between the two.
 """
 
 from nose.plugins.attrib import attr
@@ -35,12 +45,15 @@ import cudanet
 #@attr('cuda')  # can we do this test by test
 class TestSerialization:
     def setup(self):
-        logging.basicConfig(level=40)  # ERROR or higher
-        self.script_dir = os.path.join(\
-                os.path.dirname(os.path.realpath(__file__)),\
-                'tests_yamls')
+        logging.basicConfig(level=30)  # ERROR or higher
 
         self.seed=1234 # random seed
+
+        # was using this to make it easy to check 
+        # cudanet but for real test this should be
+        # nervanagpu
+        self.back_end = 'nervanagpu'
+
 
         # check if this is running on Jenkins
         if os.environ.has_key('JENKINS_HOME'):
@@ -54,7 +67,41 @@ class TestSerialization:
         return
 
     #---------------------------------------------------
-    def test_toyModel_compare_cpuOnly(self):
+    # it appears that nose is ignoring the attr on the yielded functions
+    # so this generator has to be set to gpu even though there is 1 cpu only test
+    # would prefer to tag each yieled tests seperately
+    @attr('cuda')  
+    def test_generator(self):
+        # models to tests
+        ModelYamls = ['toy_serialize_check_base.yml' , \
+                            'i1k_serialize_check_base.yml']
+
+        yaml_dir = os.path.join(\
+                os.path.dirname(os.path.realpath(__file__)),\
+                'tests_yamls')
+
+        ModelYamls = [ os.path.join(yaml_dir, x) for x in ModelYamls ]
+
+        # this generates the 3 test cases for the 2 different models
+        for model_file in ModelYamls:
+            # run everything on cpu
+            yield self.compare_cpuOnly,    model_file
+
+            # run everything on gpu
+            yield self.compare_gpuOnly,    model_file
+
+            # run model first on gpu then hand off 
+            # serilized model to cpu b.e. to complete
+            yield self.compare_gpu_to_cpu, model_file
+
+            # run model first half on cgpu then hand off 
+            # serilized model to gpu b.e. to complete
+            yield self.compare_cpu_to_gpu, model_file
+
+        return
+
+    #---------------------------------------------------
+    def compare_cpuOnly(self,config_file):
         # init the toy model with known seed
         # save init weights locally for check later
         # run model for N steps and serialize model
@@ -69,11 +116,9 @@ class TestSerialization:
         N = 10 # total number of training epochs
         k = 2   # split across k serial/deserial steps
 
-        # this yaml contains basic model params
+        # config_file is the yaml that contains basic model params
         # will load experiment from here and alter some
         # parameters programatically
-        config_file = os.path.join( self.script_dir, \
-                'toy_serialize_check_base.yml' )
 
         # run N steps in 1 shot 
         be='cpu'
@@ -94,24 +139,20 @@ class TestSerialization:
 
     #---------------------------------------------------
     @attr('cuda')  # can we do this test by test
-    def test_toyModel_compare_gpuOnly(self):
+    def compare_gpuOnly(self,config_file):
         # same as test_toyModel_compare_cpuOnly except all is run on the gpu
-        N = 50
+        N = 10
         k = 5
         atol=0.0
         rtol=.01
 
-        config_file = os.path.join( self.script_dir, \
-                'toy_serialize_check_base.yml' )
-
         # run N steps in 1 shot 
         be='gpu'
-        be_args = {'rng_seed': self.seed, be : 'nervanagpu' }
+        be_args = {'rng_seed': self.seed, be : self.back_end }
         (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
         # run N steps in k shots
         (fstate_kshot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N, k, be, **be_args)
-
 
         # comapre the initial weights
         assert self.check_init_weights( init_w_kshot, init_w_1shot , rtol=rtol, atol=atol ),\
@@ -124,19 +165,16 @@ class TestSerialization:
 
     #---------------------------------------------------
     @attr('cuda')  # can we do this test by test
-    def test_toyModel_compare_gpuOnly(self):
+    def compare_gpuOnly(self, config_file):
         # same as test_toyModel_compare_cpuOnly except all is run on the gpu
-        N = 50
-        k = 5
+        N = 10
+        k = 2
         atol=0.0
         rtol=.01
 
-        config_file = os.path.join( self.script_dir, \
-                'toy_serialize_check_base.yml' )
-
         # run N steps in 1 shot 
         be='gpu'
-        be_args = {'rng_seed': self.seed, be : 'nervanagpu' }
+        be_args = {'rng_seed': self.seed, be : self.back_end }
         (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
         # run N steps in k shots
@@ -155,20 +193,17 @@ class TestSerialization:
 
     #---------------------------------------------------
     @attr('cuda')  # can we do this test by test
-    def test_toyModel_compare_cpu_to_gpu(self):
+    def compare_cpu_to_gpu(self, config_file):
         # run whole test on cpu and run it 1/2 on cpu the 1/2 on gpu
         # compare the outputs
         N = 10 # for this tests make sure that N/k is not an integer
-        k = 2  # k should be 2 here
+        k = 5  # k should be 2 here
         atol=0.0
         rtol=.01
 
-        config_file = os.path.join( self.script_dir, \
-                'toy_serialize_check_base.yml' )
-
         # run N steps in 2 shots and save the checkpoint which should be at int(N/2)
         be='cpu'
-        be_args = {'rng_seed': self.seed}#, be : 'nervanagpu' }
+        be_args = {'rng_seed': self.seed}#, be : self.back_end }
         (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
         # run N steps in 2 shots
@@ -176,7 +211,7 @@ class TestSerialization:
         (fstate_half_shot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N/2, 1, be, **be_args)
         # use the prm file from the 1/2 run above to init this run and finish the full N epochs with GPU
         be='gpu'
-        be_args = {'rng_seed': self.seed, be : 'nervanagpu' }
+        be_args = {'rng_seed': self.seed, be : self.back_end }
         (fstate_kshot, temp_init_w ) = self.run_experiment_in_steps(config_file, N, 1, be, \
                 init_config=fstate_half_shot, **be_args)
 
@@ -192,26 +227,23 @@ class TestSerialization:
 
     #---------------------------------------------------
     @attr('cuda')  # can we do this test by test
-    def test_toyModel_compare_gpu_to_cpu(self):
+    def compare_gpu_to_cpu(self, config_file ):
         # run whole test on cpu and run it 1/2 on cpu the 1/2 on gpu
         # compare the outputs
         N = 10 # for this tests make sure that N/k is not an integer
-        k = 2  # k should be 2 here
+        k = 5  # k should be 2 here
         atol=0.0
         rtol=.01
 
-        config_file = os.path.join( self.script_dir, \
-                'toy_serialize_check_base.yml' )
-
         # run N steps in 2 shots and save the checkpoint which should be at int(N/2)
         be='cpu'
-        be_args = {'rng_seed': self.seed}#, be : 'nervanagpu' }
+        be_args = {'rng_seed': self.seed}#, be : self.back_end }
         (fstate_1shot, init_w_1shot ) = self.run_experiment_in_steps(config_file, N, 1, be, **be_args)
 
         # run N steps in 2 shots
         # first goes on the CPU
         be='gpu'
-        be_args = {'rng_seed': self.seed, be : 'nervanagpu' }
+        be_args = {'rng_seed': self.seed, be : self.back_end }
         (fstate_half_shot, init_w_kshot ) = self.run_experiment_in_steps(config_file, N/2, 1, be, **be_args)
         # use the prm file from the 1/2 run above to init this run and finish the full N epochs with GPU
         be='cpu'
@@ -228,7 +260,6 @@ class TestSerialization:
         assert self.model_compare( fstate_1shot, fstate_kshot ,rtol=rtol, atol=atol),\
                 'final states of 1 vs %d step learning runs not matching' %k
         return
-
 
 
     def run_experiment_in_steps(self, config_file, N, k, be, init_config=None, **be_args): 
@@ -275,7 +306,10 @@ class TestSerialization:
             experiment.model.serialized_path = last_saved_state
 
             
-            experiment.model.serialize_schedule = k # may not be needed
+            experiment.model.serialize_schedule = k
+            experiment.model.save_checkpoints = k # keep copies of all checkpoint files for cp tests
+
+
             backend = gen_backend(model=experiment.model, **be_args)
             experiment.initialize(backend)
 
