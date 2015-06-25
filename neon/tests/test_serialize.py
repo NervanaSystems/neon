@@ -42,7 +42,7 @@ from neon.util.persist import deserialize
 import nervanagpu
 import cudanet
 
-#@attr('cuda')  # can we do this test by test
+@attr('slow')
 class TestSerialization:
     def setup(self):
         logging.basicConfig(level=40)  # ERROR or higher
