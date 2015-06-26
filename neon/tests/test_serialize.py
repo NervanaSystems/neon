@@ -82,11 +82,11 @@ class TestSerialization:
             yield self.compare_gpu_only, model_file
 
             # run model first on gpu then hand off
-            # serilized model to cpu b.e. to complete
+            # serialized model to cpu b.e. to complete
             yield self.compare_gpu_to_cpu, model_file
 
             # run model first half on cgpu then hand off
-            # serilized model to gpu b.e. to complete
+            # serialized model to gpu b.e. to complete
             yield self.compare_cpu_to_gpu, model_file
 
         return
@@ -125,7 +125,7 @@ class TestSerialization:
         #     - confirm weights are the same
         # run second model for N/k steps k times
         #   serializing model at each N/k steps
-        #   and starting next N/k steps by deserilizing
+        #   and starting next N/k steps by deserializing
         #   file saved at last step
         # compare the final state of the two models
         n = 10  # total number of training epochs
