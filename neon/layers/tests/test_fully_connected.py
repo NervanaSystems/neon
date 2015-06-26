@@ -14,6 +14,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from nose.plugins.attrib import attr
+
 from neon.backends.cpu import CPU
 from neon.layers import FCLayer
 
@@ -69,5 +71,19 @@ class TestFullyConnectedLayer(object):
 
     def test_cpu_bprop(self):
         backend = CPU(rng_seed=0)
+        layer = self.create_layer(backend=backend)
+        check_bprop(layer, backend)
+
+    @attr('cuda')
+    def test_gpu_fprop(self):
+        from neon.backends.cc2 import GPU
+        backend = GPU(rng_seed=0)
+        layer = self.create_layer(backend=backend)
+        check_fprop(layer, backend)
+
+    @attr('cuda')
+    def test_gpu_bprop(self):
+        from neon.backends.cc2 import GPU
+        backend = GPU(rng_seed=0)
         layer = self.create_layer(backend=backend)
         check_bprop(layer, backend)
