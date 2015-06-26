@@ -144,7 +144,7 @@ integration: build
 
 serialize: build
 	@echo "Running serialize checks..."
-	@PYTHONPATH=${PYTHONPATH}:./ python neon/tests/serialize_check.py
+	nosetests neon/tests/test_serialize.py
     
 sanity: build
 	@echo "Running sanity checks..."
