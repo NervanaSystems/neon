@@ -267,6 +267,13 @@
     # serialize_schedule - either an int specifying the epoch interval at
     #                      at which to save snapshots of the model, or a list
     #                      of ints specifying the epochs at which to save.
+    # save_checkpoints - sets the number of checkpoint files to save, otherwise
+    #                    only the most recent checkpoint is retained.
+    #                    This should be set to an integer > 1.  The files will
+    #                    be retained in the serialized_path directory and will
+    #                    have an extension "_cp<#>" added to the filename.  The
+    #                    index number on the file name corresponds to the checkpoint
+    #                    count.
     # layers - list of neural network layer objects.  Models will typically
     #          have a single DataLayer, followed by 1 or more hidden layers,
     #          then a final CostLayer.
@@ -274,6 +281,7 @@
     batch_size: &bs 30,
     serialized_path: './iris-mlp-simple.prm',
     serialize_schedule: [3, 10, 20],
+    # save_checkpoints: 2,
     layers: [
       &datalayer !obj:layers.DataLayer {
         # DataLayer parameters
