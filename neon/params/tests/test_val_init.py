@@ -22,6 +22,7 @@ from neon.params import (UniformValGen, AutoUniformValGen,
                          GaussianValGen, NormalValGen,
                          SparseEigenValGen, NodeNormalizedValGen,
                          IdentityValGen)
+from neon.util.testing import assert_tensor_equal
 
 
 class TestValInit(object):
@@ -125,4 +126,4 @@ class TestValInit(object):
         target = scale * np.eye(9, 3)
         identity = IdentityValGen(backend=self.be, scale=scale)
         params = identity.generate([9, 3])
-        assert params == target
+        assert_tensor_equal(params, target)
