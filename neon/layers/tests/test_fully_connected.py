@@ -18,7 +18,8 @@ from nose.plugins.attrib import attr
 
 from neon.backends.cpu import CPU
 from neon.layers import FCLayer
-
+from neon.params import IdentityValGen
+from neon.util.testing import assert_tensor_equal
 
 nin = 3
 nout = 2
@@ -27,38 +28,42 @@ batch_size = 10
 
 def check_fprop(layer, backend):
     inputs = backend.ones((nin, batch_size))
+    output = backend.ones((nout, batch_size))
     layer.fprop(inputs)
-    assert layer.output.shape == (nout, batch_size)
+    assert_tensor_equal(layer.output, output)
 
 
 def check_bprop(layer, backend):
         errors = backend.ones((nout, batch_size))
-        output = backend.ones((nin, batch_size))
+        deltas = backend.zeros((nin, batch_size))
+        deltas[:2] = backend.ones((nout, batch_size))
 
         # initialize deltas since they are not set
         # by the layer initialize method.
-        layer.deltas = output
+        layer.deltas = backend.ones((nin, batch_size))
 
         # layers should be refactored to remove references
         # to external layers. inputs can be cached during
         # fprop.
         class PreviousLayer(object):
 
-            def __init__(self, output):
+            def __init__(self):
                 self.is_data = True
-                self.output = output
+                self.output = backend.ones((nin, batch_size))
 
-        layer.prev_layer = PreviousLayer(output)
+        layer.prev_layer = PreviousLayer()
         layer.bprop(errors)
-        assert layer.deltas.shape == (nin, batch_size)
+        assert_tensor_equal(layer.deltas, deltas)
 
 
 class TestFullyConnectedLayer(object):
 
     def create_layer(self, backend):
+        weight_init = IdentityValGen()
         layer = FCLayer(nin=nin,
                         nout=nout,
                         batch_size=batch_size,
+                        weight_init=weight_init,
                         backend=backend)
         layer.set_weight_shape()
         layer.initialize([])
