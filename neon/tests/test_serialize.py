@@ -435,7 +435,7 @@ class TestSerialization:
         assert layer1.keys().sort() == layer2.keys().sort()
         for ky in layer1.keys():
             print ky
-            assert type(layer1[ky]) == type(layer2[ky])
+            assert isinstance(layer1[ky], type(layer2[ky]))
             assert TestSerialization.val_compare(layer1[ky], layer2[ky],
                                                  atol=atol, rtol=rtol)
         return True
