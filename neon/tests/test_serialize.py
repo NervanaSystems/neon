@@ -373,9 +373,9 @@ class TestSerialization:
             # save the model to this file
             last_saved_state = os.path.join(self.model_path,
                                             '%d_step_%d.prm' % (k, end_epoch))
-            print last_saved_state
+            print(last_saved_state)
             if os.path.exists(last_saved_state):
-                print 'removing %s' % last_saved_state
+                print('removing %s' % last_saved_state)
                 os.remove(last_saved_state)
             experiment.model.serialized_path = last_saved_state
 
@@ -413,14 +413,14 @@ class TestSerialization:
         assert model1.pop('epochs_complete') == model2.pop('epochs_complete')
 
         # for MLP just layers should be left?
-        print 'checking the 1 versus k step outputs...'
+        print('checking the 1 versus k step outputs...')
         for ky in model1.keys():
-            print ky
+            print(ky)
             assert TestSerialization.layer_compare(model1[ky],
                                                    model2[ky],
                                                    atol=atol,
                                                    rtol=rtol)
-        print 'OK'
+        print('OK')
 
         return True
 
@@ -431,7 +431,7 @@ class TestSerialization:
     def layer_compare(layer1, layer2, atol=0.0, rtol=0.0):
         assert layer1.keys().sort() == layer2.keys().sort()
         for ky in layer1.keys():
-            print ky
+            print(ky)
             assert isinstance(layer1[ky], type(layer2[ky]))
             assert TestSerialization.val_compare(layer1[ky], layer2[ky],
                                                  atol=atol, rtol=rtol)
