@@ -45,9 +45,6 @@ class TestSerialization:
 
         self.seed = 1234  # random seed
 
-        # was using this to make it easy to check
-        # cudanet but for real test this should be
-        # nervanagpu
         self.back_end = 'nervanagpu'
 
         # check if this is running on Jenkins
