@@ -81,6 +81,25 @@ Alternatively, the example:
 would result in the model state being snapshot to disk in ``my_mlp_model.prm``
 after each of the 10th, 20th, 30th, 40th, ... epochs of training.
 
+Previous snapshots can be saved instead of overwritten by adding the ``save_checkpoints``
+parameter and setting its value to the number of previous snapshots to retain.
+The checkpoint files will be retained in the same directory as the ``serialized_path``
+parameter with ``_cp`` and the checkpoint number added to the filename.  As an
+example:
+
+.. code-block:: yaml
+
+        model: !obj:models.MLP {
+          num_epochs: 100,
+          serialized_path: './my_mlp_model.prm',
+          serialize_schedule: 10,
+          save_checkpoints: 2
+
+This will save a snapshot file every 10 epochs and, while running, the two previous
+snapshot files will be saved as ``./my_mlp_model_cp<n-1>.prm`` and ``./my_mlp_model_cp<n>.prm``,
+where ``n`` ranges from 1 to 10. At the completion of 100 epoch, the last saved
+snapshot file will be identical to the final serialized model file saved to the
+final file state saved in path given by the ``serialized_path`` parameter.
 
 Loading saved models
 --------------------

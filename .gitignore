@@ -17,3 +17,5 @@ doc/source/generated
 .pkgs/
 hosts
 neon/hyperopt/expt
+.env
+nosetests.xml
