@@ -20,5 +20,6 @@ from neon.datasets.imageset import Imageset  # noqa
 from neon.datasets.iris import Iris  # noqa
 from neon.datasets.mnist import MNIST  # noqa
 from neon.datasets.mobydick import MOBYDICK  # noqa
+from neon.datasets.delimfiles import DelimFiles  # noqa
 from neon.datasets.sparsenet import SPARSENET  # noqa
 from neon.datasets.synthetic import ToyImages, UniformRandom  # noqa
