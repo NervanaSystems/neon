@@ -541,7 +541,8 @@ class WeightLayer(Layer):
         self.learning_rule = self.init_learning_rule(self.lrule_init)
         self.bias_rule = None
         if self.brule_init is not None and self.use_biases:
-            self.bias_rule = self.init_learning_rule(self.brule_init)
+            lrn = self.learning_rule.name + 'bias'
+            self.bias_rule = self.init_learning_rule(self.brule_init, name=lrn)
             self.bias_rule.allocate_state([self.updates[-1]])
             self.learning_rule.allocate_state(self.updates[:-1])
         else:
@@ -569,9 +570,12 @@ class WeightLayer(Layer):
         if self.batch_norm and mode is False:
             self.bn.set_inference_mode()
 
-    def init_learning_rule(self, lrule_init):
+    def init_learning_rule(self, lrule_init, name=None):
         dtype = self.weight_dtype  # TODO: Cool to reuse this here?
-        lrname = self.name + '_lr'
+        if name is None:
+            lrname = self.name + '_lr'
+        else:
+            lrname = name
         if lrule_init['type'] == 'gradient_descent':
             lr = GradientDescent(name=lrname,
                                  lr_params=lrule_init['lr_params'])
