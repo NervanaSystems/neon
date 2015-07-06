@@ -303,3 +303,33 @@ class OrthoNormalizedValGen(ValGen):
         if self.relu:
             q *= math.sqrt(2)
         return self.backend.array(q, dtype)
+
+
+class IdentityValGen(ValGen):
+    """
+    Identity matrix initialization. As described in Saxe et al.
+    (http://arxiv.org/pdf/1504.00941v2.pdf)
+    """
+    def __init__(self, **kwargs):
+        super(IdentityValGen, self).__init__(**kwargs)
+        opt_param(self, ['scale'], 1.0)
+
+    def generate(self, shape, dtype=None):
+        """
+        Construct and initialize a new Tensor object of the specified shape.
+
+        Arguments:
+            shape (list of ints): The size of each dimension of the Tensor.
+            dtype (dtype, optional): Element data type.  If not specifed we use
+                                     the default dtype associated with that
+                                     backend.
+
+        Returns:
+            neon.backends.Tensor: newly initialized data structure.
+        """
+        logger.info("Generating {cl_nm} values of shape {shape}".format(
+                    cl_nm=self.__class__.__name__, shape=shape))
+        if len(shape) != 2:
+            raise ValueError("Can only generate Tensors with exactly 2"
+                             " dimensions, you gave: {}".format(len(shape)))
+        return self.backend.array(self.scale * np.eye(*shape), dtype)

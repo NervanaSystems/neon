@@ -15,11 +15,14 @@
 # ----------------------------------------------------------------------------
 
 import math
+import numpy as np
 
-from neon.backends.cpu import CPU
-from neon.params.val_init import (UniformValGen, AutoUniformValGen,
-                                  GaussianValGen, NormalValGen,
-                                  SparseEigenValGen, NodeNormalizedValGen)
+from neon.backends import CPU
+from neon.params import (UniformValGen, AutoUniformValGen,
+                         GaussianValGen, NormalValGen,
+                         SparseEigenValGen, NodeNormalizedValGen,
+                         IdentityValGen)
+from neon.util.testing import assert_tensor_equal
 
 
 class TestValInit(object):
@@ -117,3 +120,10 @@ class TestValInit(object):
         assert out.asnumpyarray() >= - expected_val
         self.be.max(res, axes=None, out=out)
         assert out.asnumpyarray() < expected_val
+
+    def test_identity_gen(self):
+        scale = 3.0
+        target = scale * np.eye(9, 3)
+        identity = IdentityValGen(backend=self.be, scale=scale)
+        params = identity.generate([9, 3])
+        assert_tensor_equal(params, target)
