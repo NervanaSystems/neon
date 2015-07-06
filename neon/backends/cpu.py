@@ -1165,11 +1165,7 @@ class CPU(Backend):
             # Accumulate the weight updates, going over all
             # corresponding cells in the output feature maps.
             rflinks = links[dst]
-            eslice = deltas.take(ofmlocs[dst], axis=0)
-            if eslice.shape[1] > 1:
-                # vector eslices are treated as column vectors, so are already
-                # in the correct form, otherwise we need to flip.
-                eslice = eslice.transpose()
+            eslice = deltas.take(ofmlocs[dst], axis=0).transpose()
             if local is False:
                 self.dot(inputs.take(rflinks, axis=0), eslice, out=updatebuf)
                 self.add(out, updatebuf, out=out)
