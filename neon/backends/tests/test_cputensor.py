@@ -68,6 +68,12 @@ class TestCPUTensor(object):
         assert res.shape == expected_shape
         assert_tensor_equal(res, CPUTensor(3))
 
+    def test_1d_slicing(self):
+        tns = CPUTensor([[1, 2], [3, 4]])
+        res = tns[1]
+        assert res.shape == (1, 2)
+        assert_tensor_equal(res, CPUTensor([[3, 4]]))
+
     def test_range_slicing(self):
         tns = CPUTensor([[1, 2], [3, 4]])
         res = tns[0:2, 0]

@@ -71,6 +71,12 @@ class TestGPUTensor(object):
         assert res.shape == (1, 1)
         assert_tensor_equal(res, self.gpt([[3]]))
 
+    def test_1d_slicing(self):
+        tns = self.gpt([[1, 2], [3, 4]])
+        res = tns[1]
+        assert res.shape == (1, 2)
+        assert_tensor_equal(res, self.gpt([[3, 4]]))
+
     def test_range_slicing(self):
         tns = self.gpt([[1, 2], [3, 4]])
         res = tns[0:2, 0]
