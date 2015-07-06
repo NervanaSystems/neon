@@ -93,3 +93,47 @@ def test_rectleaky_derivative_cc2tensor():
     inputs = np.array([[4, 0], [-2, 9]])
     outputs = np.array([[1, 0.01], [0.01, 1]])
     compare_cc2_tensors(inputs, outputs, deriv=True)
+
+
+def test_rectleaky_slope_zero_rectlin_equiv():
+    be = CPU()
+    inputs = be.uniform(low=-5.0, high=10.0, size=(10, 10))
+    lin_buf = be.empty(inputs.shape)
+    leaky_buf = be.empty(inputs.shape)
+    be.rectlin(inputs, out=lin_buf)
+    be.rectleaky(inputs, slope=0.0, out=leaky_buf)
+    assert_tensor_equal(lin_buf, leaky_buf)
+
+
+def test_rectleaky_derivative_slope_zero_rectlin_equiv():
+    be = CPU()
+    inputs = be.uniform(low=-5.0, high=10.0, size=(10, 10))
+    lin_buf = be.empty(inputs.shape)
+    leaky_buf = be.empty(inputs.shape)
+    be.rectlin_derivative(inputs, out=lin_buf)
+    be.rectleaky_derivative(inputs, slope=0.0, out=leaky_buf)
+    assert_tensor_equal(lin_buf, leaky_buf)
+
+
+@attr('cuda')
+def test_cc2_rectleaky_slope_zero_rectlin_equiv():
+    from neon.backends.cc2 import GPU
+    be = GPU()
+    inputs = be.uniform(low=-5.0, high=10.0, size=(10, 10))
+    lin_buf = be.empty(inputs.shape)
+    leaky_buf = be.empty(inputs.shape)
+    be.rectlin(inputs, out=lin_buf)
+    be.rectleaky(inputs, slope=0.0, out=leaky_buf)
+    assert_tensor_equal(lin_buf, leaky_buf)
+
+
+@attr('cuda')
+def test_cc2_rectleaky_derivative_slope_zero_rectlin_equiv():
+    from neon.backends.cc2 import GPU
+    be = GPU()
+    inputs = be.uniform(low=-5.0, high=10.0, size=(10, 10))
+    lin_buf = be.empty(inputs.shape)
+    leaky_buf = be.empty(inputs.shape)
+    be.rectlin_derivative(inputs, out=lin_buf)
+    be.rectleaky_derivative(inputs, slope=0.0, out=leaky_buf)
+    assert_tensor_equal(lin_buf, leaky_buf)

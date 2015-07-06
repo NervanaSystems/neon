@@ -95,7 +95,7 @@ class Activation(object):
         Raises:
             NotImplementedError: Must be implemented in a child class.
         """
-        raise NotImplementedError("apply_both should be" +
+        raise NotImplementedError("fprop_func should be" +
                                   "overridden in child class.")
 
     def bprop_func(self, backend, pre_act, error, skip_act=False):
@@ -108,7 +108,7 @@ class Activation(object):
             backend (Backend): The backend class to use for computation.
             pre_act (array_like): pre_activation buffer
             error (array_like): error buffer
-            skip_act (Boolean): whether to skip the multiplication
+            skip_act (bool): whether to skip the multiplication
         """
         if skip_act is False:
             backend.multiply(error, pre_act, out=error)
