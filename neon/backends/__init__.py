@@ -117,7 +117,7 @@ def gen_backend(model=None, gpu=None, nrv=False, datapar=False, modelpar=False,
     if gpu is not None:
         gpu = gpu.lower()
         if sys.platform.startswith("linux"):
-            gpuflag = (os.system("nvidia-smi > /dev/null 2>&1") == 0)
+            gpuflag = (os.system("nvcc --version > /dev/null 2>&1") == 0)
         elif sys.platform.startswith("darwin"):
             gpuflag = (os.system("kextstat | grep -i cuda > /dev/null 2>&1") ==
                        0)

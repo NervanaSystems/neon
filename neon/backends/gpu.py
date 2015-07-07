@@ -430,10 +430,37 @@ class GPU(Backend):
         self.ng.maximum(x, 0., out=out)
         return out
 
+    def rectlin_derivative(self, x, out):
+        """
+        Rectified linear nonlinearity derivative
+
+        Arguments:
+            x (GPUTensor): Input tensor
+            out (GPUTensor): Output tensor
+        """
+        self.ng.greater(x, 0, out=out)
+        return out
+
     def rectleaky(self, x, slope, out):
+        """
+        Leaky rectified linear nonlinearity
+
+        Arguments:
+            x (GPUTensor): Input tensor
+            slope (float): amount of gradient to apply when unit is not active
+            out (GPUTensor): Output tensor
+        """
         out[:] = self.ng.maximum(x, x*slope)
 
     def rectleaky_derivative(self, x, slope, out):
+        """
+        Leaky rectified linear nonlinearity derivative
+
+        Arguments:
+            x (GPUTensor): Input tensor
+            slope (float): amount of gradient to apply when unit is not active
+            out (GPUTensor): Output tensor
+        """
         out[:] = self.ng.greater(x, 0) * (1.0 - slope) + slope
 
     def sum(self, tsr, axes, out):

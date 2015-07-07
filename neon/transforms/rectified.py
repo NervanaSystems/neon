@@ -83,7 +83,7 @@ class RectLin(Activation):
             error (array_like): error buffer
             skip_act (Boolean): whether to skip the multiplication
         """
-        backend.greater(pre_act, 0, out=pre_act)
+        backend.rectlin_derivative(pre_act, out=pre_act)
         super(RectLin, self).bprop_func(backend, pre_act, error, skip_act)
 
 
@@ -145,4 +145,5 @@ class RectLeaky(Activation):
             error (array_like): error buffer
             skip_act (Boolean): whether to skip the multiplication
         """
+        backend.rectleaky_derivative(pre_act, slope=self.slope, out=pre_act)
         super(RectLeaky, self).bprop_func(backend, pre_act, error, skip_act)

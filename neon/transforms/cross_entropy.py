@@ -56,7 +56,7 @@ def cross_entropy(backend, outputs, targets, temp, epsilon=2**-23,
 
     # Compute t*log(y) - (t-1)*log(1-y)
     backend.subtract(temp[0], temp[1], out=temp[0])
-    result = backend.empty((1, 1), dtype=outputs.dtype)
+    result = backend.empty((1, 1), dtype=outputs.dtype, persist_values=False)
     if scale_by_batchsize:
         backend.divide(temp[0], temp[0].shape[1], temp[0])
     return backend.sum(temp[0], axes=None, out=result)
@@ -84,7 +84,7 @@ def cross_entropy_multi(backend, outputs, targets, temp, epsilon=2**-23,
     backend.log(temp[1], out=temp[1])
     backend.multiply(targets, temp[1], out=temp[1])
     backend.multiply(temp[1], -1.0, out=temp[0])
-    result = backend.empty((1, 1), dtype=outputs.dtype)
+    result = backend.empty((1, 1), dtype=outputs.dtype, persist_values=False)
     if scale_by_batchsize:
         backend.divide(temp[0], temp[0].shape[1], temp[0])
     return backend.sum(temp[0], axes=None, out=result)
@@ -190,10 +190,15 @@ class CrossEntropy(Cost):
     def set_outputbuf(self, databuf):
         temp_dtype = self.temp_dtype
         if not self.outputbuf or self.outputbuf.shape != databuf.shape:
-            tempbuf1 = self.backend.zeros(databuf.shape, temp_dtype)
-            tempbuf2 = self.backend.zeros(databuf.shape, temp_dtype)
-            tempbuf3 = self.backend.zeros((1, databuf.shape[1]), temp_dtype)
-            tempbuf4 = self.backend.zeros(databuf.shape, temp_dtype)
+            tempbuf1 = self.backend.zeros(databuf.shape, dtype=temp_dtype,
+                                          persist_values=False)
+            tempbuf2 = self.backend.zeros(databuf.shape, dtype=temp_dtype,
+                                          persist_values=False)
+            tempbuf3 = self.backend.zeros((1, databuf.shape[1]),
+                                          dtype=temp_dtype,
+                                          persist_values=False)
+            tempbuf4 = self.backend.zeros(databuf.shape, dtype=temp_dtype,
+                                          persist_values=False)
             self.temp = [tempbuf1, tempbuf2, tempbuf3, tempbuf4]
         self.outputbuf = databuf
 

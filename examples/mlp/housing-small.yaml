@@ -1,0 +1,96 @@
+# ----------------------------------------------------------------------------
+# Copyright 2015 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+# Experiment settings to train/test a small 1 hidden layer x 10 hidden node
+# fully connected feed-forward neural network on the Boston housing dataset.
+
+!obj:experiments.FitPredictErrorExperiment {
+
+  dataset: &ds !obj:datasets.Housing {
+    repo_path: '~/data',
+    test_pct: 10,
+    sample_pct: 100,
+  },
+
+  metrics: {
+    train: [
+      !obj:metrics.MSE {},
+    ],
+    test: [
+      !obj:metrics.MSE {},
+    ],
+  },
+
+  weight_inits: [
+    &wt_init !obj:params.GaussianValGen {
+      loc: 30.0,
+      scale: 10,
+    },
+  ],
+
+  lrule: [
+    &gdm {
+      type: gradient_descent_momentum,
+      lr_params: {
+        learning_rate: 0.01,
+        momentum_params: {
+          type: constant,
+          coef: 0.9,
+        },
+      },
+    },
+  ],
+  # simple MLP model specification
+  model: !obj:models.MLP {
+    num_epochs: 10,
+    batch_size: &bs 1,
+    layers: [
+      &datalayer !obj:layers.DataLayer {
+        name: d0,
+        nout: 13,
+      },
+      !obj:layers.FCLayer {
+        name: h0,
+        nout: 3,
+        lrule_init: *gdm,
+        weight_init: *wt_init,
+        activation: !obj:transforms.Tanh {},
+      },
+      &lastlayer !obj:layers.FCLayer {
+        name: output,
+        nout: 1,
+        lrule_init: *gdm,
+        weight_init: *wt_init,
+        activation: !obj:transforms.Linear {},
+      },
+      &costlayer !obj:layers.CostLayer {
+        name: cost,
+        cost: !obj:transforms.SumSquaredDiffs {},
+      },
+    ],
+  },
+
+  # logging options that are passed to logging.basicConfig
+  # level value thresholds (set level lower to display them):
+  #   CRITICAL 50
+  #   ERROR    40
+  #   WARNING  30
+  #   INFO     20
+  #   DEBUG    10
+  #   NOTSET    0
+  logging: {
+    level: 20,
+    format: '%(asctime)-15s %(levelname)s:%(module)s - %(message)s'
+  },
+}

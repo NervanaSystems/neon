@@ -69,11 +69,11 @@ class Message(object):
 
     def create_sem(self, name, initial_value):
         try:
-            sem = ipc.Semaphore(name, ipc.O_CREX, 0660, initial_value)
+            sem = ipc.Semaphore(name, ipc.O_CREX, 0o660, initial_value)
         except ipc.ExistentialError:
             logger.warning('Deleting semaphore %s', name)
             self.destroy_sem(self.open_sem(name))
-            sem = ipc.Semaphore(name, ipc.O_CREX, 0660, initial_value)
+            sem = ipc.Semaphore(name, ipc.O_CREX, 0o660, initial_value)
         return sem
 
     def destroy_sem(self, sem):
@@ -82,11 +82,11 @@ class Message(object):
 
     def create_shmem(self, name, size):
         try:
-            memory = ipc.SharedMemory(name, ipc.O_CREX, 0660, size)
+            memory = ipc.SharedMemory(name, ipc.O_CREX, 0o660, size)
         except ipc.ExistentialError:
             logger.warning('Deleting shared memory %s', name)
             self.destroy_shmem(*self.open_shmem(name))
-            memory = ipc.SharedMemory(name, ipc.O_CREX, 0660, size)
+            memory = ipc.SharedMemory(name, ipc.O_CREX, 0o660, size)
         mapfile = mmap.mmap(memory.fd, memory.size)
         return memory, mapfile
 

@@ -86,6 +86,7 @@ class NeonCommand(Command):
                                                    'pep8-naming>=0.2.2',
                                                    'Pillow>=2.5.0',
                                                    'sphinx>=1.2.2',
+                                                   'posix_ipc>=1.0.0',
                                                    'sphinxcontrib-napoleon' +
                                                    '>=0.2.8',
                                                    'scikit-learn>=0.15.2',

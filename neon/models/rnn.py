@@ -108,9 +108,7 @@ class RNN(MLP):
         # self.print_layers()
 
     def fit(self, dataset):
-        viz = VisualizeRNN()
         error = self.backend.empty((1, 1))
-        mb_id = self.backend.empty((1, 1))
         self.print_layers()
         self.data_layer.init_dataset(dataset)
         self.data_layer.use_set('train')
@@ -118,9 +116,11 @@ class RNN(MLP):
                 and (str(ensure_dtype(self.backend_type)) ==
                      "<type 'numpy.float64'>"):
             self.grad_checker(numgrad=self.num_grad_params)
+        if self.make_plots is True:
+            viz = VisualizeRNN()
+            errorlist = []
+            suberrorlist = []
         logger.info('commencing model fitting')
-        errorlist = []
-        suberrorlist = []
         suberror = self.backend.zeros((1, 1))
         while self.epochs_complete < self.num_epochs:
             self.backend.begin(Block.epoch, self.epochs_complete)
@@ -144,7 +144,8 @@ class RNN(MLP):
                 self.cost_layer.cost.set_outputbuf(
                     self.class_layer.output_list[-1])
                 suberror = self.cost_layer.get_cost()
-                suberrorlist.append(float(suberror.asnumpyarray()))
+                if self.make_plots is True:
+                    suberrorlist.append(float(suberror.asnumpyarray()))
                 self.backend.add(error, suberror, error)
                 if self.step_print > 0 and mb_id % self.step_print == 0:
                     logger.info('%d:%d logloss=%0.5f', self.epochs_complete,
@@ -153,7 +154,8 @@ class RNN(MLP):
                 self.backend.end(Block.minibatch, mb_id)
                 mb_id += 1
             self.epochs_complete += 1
-            errorlist.append(float(error.asnumpyarray()) / dlnb)
+            if self.make_plots is True:
+                errorlist.append(float(error.asnumpyarray()) / dlnb)
             logger.info('epoch: %d, total training error: %0.5f',
                         self.epochs_complete,
                         float(error.asnumpyarray()) / dlnb)
