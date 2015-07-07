@@ -23,10 +23,10 @@ target class.  If not present, data is assumed to be unlabelled.
 import logging
 import numpy as np
 import os
-import cPickle as pickle
 
 from neon.datasets.dataset import Dataset
 from neon.ipc.shmem import Server
+from neon.util.compat import pickle
 from neon.util.param import opt_param
 
 
