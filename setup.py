@@ -19,7 +19,7 @@ from setuptools import setup, find_packages, Command
 import subprocess
 
 # Define version information
-VERSION = '0.8.1'
+VERSION = '0.8.2'
 FULLVERSION = VERSION
 write_version = True
 
