@@ -26,6 +26,12 @@ from neon.util.persist import YAMLable
 logger = logging.getLogger(__name__)
 
 
+def gen_weights(backend, is_local, distribution, *myargs, **kwargs):
+    if backend.is_dist:
+        kwargs['ptype'] = 'replica' if is_local else 'vfragment'
+    return getattr(backend, distribution)(*myargs, **kwargs)
+
+
 class ValGen(YAMLable):
     """
     Base class used to generate new Tensors initialized in a specific manner.
@@ -33,6 +39,7 @@ class ValGen(YAMLable):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
         opt_param(self, ['backend'])
+        opt_param(self, ['is_local'], False)
 
     def __str__(self):
         return ("{cl_nm} utilizing {be_nm} backend".format(
@@ -45,6 +52,13 @@ class ValGen(YAMLable):
         prior to generating values.
         """
         self.backend = backend
+
+    def log_weight_creation(self, shape):
+        if hasattr(self, 'is_local'):
+            if not self.is_local and self.backend.is_dist:
+                shape = (shape[0] * self.backend.num_dev, shape[1])
+        logger.info("Generating {cl_nm} values of shape {shape}".format(
+            cl_nm=self.__class__.__name__, shape=shape))
 
     def generate(self, shape, dtype=None):
         """
@@ -94,9 +108,10 @@ class UniformValGen(ValGen):
         Returns:
             neon.backends.Tensor: newly initialized data structure.
         """
-        logger.info("Generating {cl_nm} values of shape {shape}".format(
-                    cl_nm=self.__class__.__name__, shape=shape))
-        return self.backend.uniform(self.low, self.high, shape, dtype)
+        self.log_weight_creation(shape)
+        return gen_weights(self.backend, self.is_local, 'uniform',
+                           low=self.low, high=self.high, size=shape,
+                           dtype=dtype)
 
 
 class AutoUniformValGen(UniformValGen):
@@ -114,7 +129,6 @@ class AutoUniformValGen(UniformValGen):
     def __init__(self, **kwargs):
         super(AutoUniformValGen, self).__init__(**kwargs)
         opt_param(self, ['relu'], False)
-        opt_param(self, ['islocal'], False)
 
         self.low = float('nan')
         self.high = float('nan')
@@ -132,7 +146,7 @@ class AutoUniformValGen(UniformValGen):
         Returns:
             neon.backends.Tensor: newly initialized data structure.
         """
-        if self.islocal:
+        if self.is_local:
             self.low = - 1.0 / math.sqrt(shape[0])
         else:
             self.low = - 1.0 / math.sqrt(shape[-1])
@@ -173,9 +187,10 @@ class GaussianValGen(ValGen):
         Returns:
             neon.backends.Tensor: newly initialized data structure.
         """
-        logger.info("Generating {cl_nm} values of shape {shape}".format(
-                    cl_nm=self.__class__.__name__, shape=shape))
-        return self.backend.normal(self.loc, self.scale, shape, dtype)
+        self.log_weight_creation(shape)
+        return gen_weights(self.backend, self.is_local, 'normal',
+                           loc=self.loc, scale=self.scale, size=shape,
+                           dtype=dtype)
 
 
 # alias NormalValGen as GaussianValGen
@@ -219,8 +234,7 @@ class SparseEigenValGen(ValGen):
         Returns:
             neon.backends.Tensor: newly initialized data structure.
         """
-        logger.info("Generating {cl_nm} values of shape {shape}".format(
-                    cl_nm=self.__class__.__name__, shape=shape))
+        self.log_weight_creation(shape)
         if len(shape) < 2:
             raise ValueError("Can only generate Tensors with at least 2"
                              " dimensions, you gave: {}".format(len(shape)))
@@ -236,7 +250,7 @@ class SparseEigenValGen(ValGen):
             logger.info("dividing by max eigenvalue %2.2f", max_eig)
             weights = self.eigenvalue * weights / max_eig
         else:
-            logger.info("maxtrix is non-square, no eigenvalue scaling.")
+            logger.info("matrix is non-square, no eigenvalue scaling.")
         return self.backend.array(weights)
 
 
@@ -271,10 +285,16 @@ class NodeNormalizedValGen(ValGen):
         Returns:
             neon.backends.Tensor: newly initialized data structure.
         """
-        logger.info("Generating {cl_nm} values of shape {shape}".format(
-                    cl_nm=self.__class__.__name__, shape=shape))
-        node_norm = self.scale * math.sqrt(6.0 / sum(shape))
-        return self.backend.uniform(-node_norm, node_norm, shape, dtype)
+        self.log_weight_creation(shape)
+
+        denom = sum(shape)
+        if self.backend.is_dist and not self.is_local:
+            denom = shape[1] + shape[0] * self.backend.num_dev
+        node_norm = self.scale * math.sqrt(6.0 / denom)
+
+        return gen_weights(self.backend, self.is_local, 'uniform',
+                           low=-node_norm, high=node_norm, size=shape,
+                           dtype=dtype)
 
 
 class OrthoNormalizedValGen(ValGen):
@@ -285,17 +305,15 @@ class OrthoNormalizedValGen(ValGen):
     def __init__(self, **kwargs):
         super(OrthoNormalizedValGen, self).__init__(**kwargs)
         opt_param(self, ['relu'], False)
-        opt_param(self, ['islocal'], False)
 
     def generate(self, shape, dtype=None):
-        logger.info("Generating {cl_nm} values of shape {shape}".format(
-                    cl_nm=self.__class__.__name__, shape=shape))
+        self.log_weight_creation(shape)
         if len(shape) != 2:
             raise ValueError("Can only generate Tensors with exactly 2"
                              " dimensions, you gave: {}".format(len(shape)))
 
         # Non local, shape is O x I, local shape is (C x R x S) x O
-        oi_shape = shape if self.islocal else (shape[1], shape[0])
+        oi_shape = shape if self.is_local else (shape[1], shape[0])
         init_wts = np.random.normal(0.0, 1.0, oi_shape)
         u, _, v = np.linalg.svd(init_wts, full_matrices=False)
         q = u if u.shape == oi_shape else v

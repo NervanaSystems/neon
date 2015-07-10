@@ -30,6 +30,7 @@ class Backend(YAMLable):
     Notes:
         See the list of `implemented backends </backends.html>`_
     """
+    is_dist = False
 
     def empty(self, shape, dtype=None, persist_values=True):
         """
@@ -1210,17 +1211,29 @@ class Backend(YAMLable):
         """
         raise NotImplementedError()
 
-    def distribute(self, data, dtype):
-        return self.par.distribute(data, dtype)
+    def empty_like(self, ary, dtype=None, persist_values=True):
+        return self.empty(ary.shape, dtype=dtype,
+                          persist_values=persist_values)
 
-    def rank(self):
-        return self.par.rank()
+    def zeros_like(self, ary, dtype=None, persist_values=True):
+        return self.zeros(ary.shape, dtype=dtype,
+                          persist_values=persist_values)
+
+    def set(self, tensor, data):
+        tensor[:] = data
 
     def is_distributed(self):
-        return self.par.is_distributed()
+        return False
 
     def reduce_tensor(self, tensor):
-        return self.par.reduce_tensor(tensor)
+        return tensor.asnumpyarray()
+
+    def scatter(self, src, dest):
+        dest.copy_from(src)
+
+    def allocate_fragment(self, buf_shape, dtype=None, persist_values=True):
+        return self.empty(buf_shape, dtype=dtype,
+                          persist_values=persist_values)
 
 
 class Tensor(object):

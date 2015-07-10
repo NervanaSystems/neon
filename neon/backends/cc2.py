@@ -1364,6 +1364,26 @@ class GPU(Backend):
         """
         cudanet.dot(deltas._tensor, inputs.transpose()._tensor, out._tensor)
 
+    def update_fc_bias(self, err, out):
+        """
+        Compute the updated bias gradient for a fully connected network layer.
+
+        Arguments:
+            out (GPUTensor): Where to store the updated gradient value.
+            err (GPUTensor): backpropagated error
+        """
+        self.sum(err, axes=1, out=out)
+
+    def add_fc_bias(self, inputs, bias):
+        """
+        Add the bias for a fully connected network layer.
+
+        Arguments:
+            inputs (GPUTensor): the input to update.
+            bias (GPUTensor): the amount to increment
+        """
+        self.add(inputs, bias, out=inputs)
+
     def fprop_conv(self, out, inputs, weights, ofmshape, ofmsize, ofmlocs,
                    ifmshape, links, nifm, padding, stride, ngroups, fpropbuf,
                    local=False):

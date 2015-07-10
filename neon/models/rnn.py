@@ -98,18 +98,8 @@ class RNN(MLP):
         self.rec_layer = self.layers[1]
         opt_param(self, ['num_grad_params'], None)
 
-    def link(self, initlayer=None):
-        """
-        link function for the RNN differs from the MLP in that it does not
-        print the layers
-        """
-        for ll, pl in zip(self.layers, [initlayer] + self.layers[:-1]):
-            ll.set_previous_layer(pl)
-        # self.print_layers()
-
     def fit(self, dataset):
         error = self.backend.empty((1, 1))
-        self.print_layers()
         self.data_layer.init_dataset(dataset)
         self.data_layer.use_set('train')
         if (self.num_grad_params is not None) \

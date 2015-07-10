@@ -37,17 +37,16 @@ mkdir -p "$(dirname $LOG_FILE)"
 
 cpu_yaml=("${THIS_DIR}/recurrent/mobydick-lstm-small.yaml" \
           "${THIS_DIR}/recurrent/mobydick-rnn-small.yaml")
-hpu_yaml=("${THIS_DIR}/convnet/i1k-alexnet-fp16.yaml")
-gpu_yaml=("${THIS_DIR}/convnet/i1k-alexnet-fp32.yaml")
+gpu_yaml=("${THIS_DIR}/convnet/i1k-alexnet-fp16.yaml" \
+          "${THIS_DIR}/convnet/i1k-alexnet-fp32.yaml")
 all_yaml=("${THIS_DIR}/convnet/mnist-small.yaml" \
           "${THIS_DIR}/mlp/mnist-small.yaml" \
           "${THIS_DIR}/convnet/cifar10-small.yaml" \
           "${THIS_DIR}/mlp/cifar10-small.yaml")
 
 cpu_back=("cpu")
-hpu_back=("nervanagpu")
-gpu_back=("cudanet" "nervanagpu")
-all_back=("cpu" "cudanet" "nervanagpu")
+gpu_back=("nervanagpu")
+all_back=("cpu" "nervanagpu")
 
 
 run_yamls()
@@ -77,7 +76,7 @@ run_yamls()
   done
 }
 
-run_yamls hpu_yaml[@] hpu_back[@]
+# run_yamls hpu_yaml[@] hpu_back[@]
 run_yamls gpu_yaml[@] gpu_back[@]
 run_yamls cpu_yaml[@] cpu_back[@]
 run_yamls all_yaml[@] all_back[@]

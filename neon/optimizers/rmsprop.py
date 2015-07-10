@@ -66,9 +66,10 @@ class RMSProp(GradientDescentMomentum):
         super(RMSProp, self).allocate_state(params)
         for item in params:
             self.running_squares.append(
-                self.backend.zeros(item.shape, self.running_squares_dtype))
+                self.backend.zeros_like(item.shape,
+                                        self.running_squares_dtype))
             self.scratch_space.append(
-                self.backend.zeros(item.shape, self.scratch_space_dtype))
+                self.backend.zeros_like(item.shape, self.scratch_space_dtype))
 
     def apply_rule(self, params, updates, epoch):
         learning_rate = self.get_learning_rate(epoch)

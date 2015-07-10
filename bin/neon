@@ -57,12 +57,6 @@ def parse_args():
                         help=' 1 for stochastic rounding, 0 for deterministic')
     parser.add_argument('-n', '--nrv', action='store_true',
                         help='Attempt to run using the Nervana Engine hardware')
-    parser.add_argument('-p', '--datapar', action='store_true',
-                        help='Use parallelization to partition the data over '
-                             'multiple nodes')
-    parser.add_argument('-m', '--modelpar', action='store_true',
-                        help='Use parallelization to partition the model over '
-                             'multiple nodes')
     parser.add_argument('-l', '--live', action='store_true',
                         help='Perform inference on live data')
     parser.add_argument('-f', '--flexpoint', action='store_true',
@@ -71,8 +65,10 @@ def parse_args():
     parser.add_argument('-r', '--rng_seed', type=int,
                         help='Seed the random number generator for the backend'
                              ' with the specified value.')
-    parser.add_argument('-i', '--device_id', type=int,
-                        help='Select accelerator device id to run process on')
+    parser.add_argument('-i', '--device_id', type=int, nargs='+',
+                        help='Select accelerator device id(s) to run process '
+                        'on. (If specifying multiple devices, must occur at '
+                        'end of command)')
     parser.add_argument('-e', '--numerr_handling', action='store',
                         type=yaml.load, help='Set how numeric errors are '
                         'handled.  Python dict syntax, parameters are the same'
@@ -193,9 +189,8 @@ def main():
         # carry out the experiment
         if not hasattr(experiment, 'backend') or experiment.backend is None:
             backend = gen_backend(model=experiment.model, gpu=args.gpu,
-                                  nrv=args.nrv, datapar=args.datapar,
+                                  nrv=args.nrv,
                                   stochastic_round=args.rounding,
-                                  modelpar=args.modelpar,
                                   flexpoint=args.flexpoint,
                                   rng_seed=args.rng_seed,
                                   numerr_handling=args.numerr_handling,

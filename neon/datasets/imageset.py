@@ -25,6 +25,7 @@ from threading import Thread
 from neon.datasets.dataset import Dataset
 from neon.util.param import opt_param, req_param
 from neon.util.persist import deserialize
+from random import shuffle
 
 logger = logging.getLogger(__name__)
 
@@ -46,56 +47,47 @@ class MacrobatchDecodeThread(Thread):
         bsz = self.ds.batch_size
         b_idx = self.ds.macro_decode_buf_idx
         jdict = self.ds.get_macro_batch()
-        betype = self.ds.backend_type
-
+        ibetype = self.ds.img_dtype
         # This macrobatch could be smaller than macro_size for last macrobatch
         mac_sz = len(jdict['data'])
+        self.mac_sz = mac_sz
+        if self.ds.shuffle_macro:
+            shuffidx = range(mac_sz)
+            shuffle(shuffidx)
+            jdict['data'] = [jdict['data'][i] for i in shuffidx]
+            for k in self.ds.label_list:
+                jdict['labels'][k] = [jdict['labels'][k][i] for i in shuffidx]
+
         self.ds.tgt_macro[b_idx] = \
             jdict['targets'] if 'targets' in jdict else None
         lbl_macro = {k: jdict['labels'][k] for k in self.ds.label_list}
 
-        img_macro = np.zeros((self.ds.macro_size, self.ds.npixels),
-                             dtype=np.uint8)
-
         do_center = self.ds.predict or not self.ds.dotransforms
         do_flip = self.ds.dotransforms
         imgworker.decode_list(jpglist=jdict['data'],
-                              tgt=img_macro[:mac_sz],
+                              tgt=self.ds.uimg_macro[b_idx][:mac_sz],
                               orig_size=self.ds.output_image_size,
                               crop_size=self.ds.cropped_image_size,
                               center=do_center, flip=do_flip,
                               rgb=self.ds.rgb,
                               nthreads=self.ds.num_workers)
+
+        # This ensures we take the last partial minibatch
+        self.ds.minis_per_macro[b_idx] = -(-mac_sz // bsz)
+
+        for lbl in self.ds.label_list:
+            hl = np.squeeze(lbl_macro[lbl])
+            self.ds.lbl_one_hot[b_idx][lbl][:mac_sz] = \
+                np.eye(self.ds.nclass[lbl],
+                       dtype=ibetype)[hl].astype(ibetype, order='C')
+            if mac_sz < self.ds.macro_size:
+                self.ds.lbl_one_hot[b_idx][lbl][mac_sz:] = 0
+
+        np.subtract(self.ds.uimg_macro[b_idx], self.ds.mean_val,
+                    self.ds.img_macro[b_idx])
+
         if mac_sz < self.ds.macro_size:
-            img_macro[mac_sz:] = 0
-        # Leave behind the partial minibatch
-        self.ds.minis_per_macro[b_idx] = mac_sz / bsz
-
-        self.ds.lbl_one_hot[b_idx] = \
-            {lbl: [None for mini_idx in range(self.ds.minis_per_macro[b_idx])]
-                for lbl in self.ds.label_list}
-
-        self.ds.img_mini_T[b_idx] = \
-            [None for mini_idx in range(self.ds.minis_per_macro[b_idx])]
-
-        for mini_idx in range(self.ds.minis_per_macro[b_idx]):
-            s_idx = mini_idx * bsz
-            e_idx = (mini_idx + 1) * bsz
-            self.ds.img_mini_T[b_idx][mini_idx] = \
-                img_macro[s_idx:e_idx].T.astype(betype, order='C')
-
-            if self.ds.img_mini_T[b_idx][mini_idx].shape[1] < bsz:
-                tmp = self.ds.img_mini_T[b_idx][mini_idx].shape[0]
-                mb_residual = self.ds.img_mini_T[b_idx][mini_idx].shape[1]
-                filledbatch = np.vstack((img_macro[s_idx:e_idx],
-                                         np.zeros((bsz - mb_residual, tmp))))
-                self.ds.img_mini_T[b_idx][mini_idx] = \
-                    filledbatch.T.astype(betype, order='C')
-            for lbl in self.ds.label_list:
-                hl = np.squeeze(lbl_macro[lbl][s_idx:e_idx])
-                self.ds.lbl_one_hot[b_idx][lbl][mini_idx] = \
-                    np.eye(self.ds.nclass[lbl])[hl].T.astype(betype, order='C')
-
+            self.ds.img_macro[b_idx][mac_sz:] = 0
         return
 
 
@@ -121,7 +113,7 @@ class Imageset(Dataset):
         opt_param(self, ['preprocess_done'], False)
         opt_param(self, ['dotransforms', 'square_crop'], False)
         opt_param(self, ['mean_norm', 'unit_norm'], False)
-
+        opt_param(self, ['shuffle_macro'], False)
         opt_param(self, ['tdims'], 0)
         opt_param(self, ['label_list'], ['l_id'])
         opt_param(self, ['num_channels'], 3)
@@ -146,6 +138,7 @@ class Imageset(Dataset):
 
         self.rgb = True if self.num_channels == 3 else False
         self.norm_factor = 128. if self.mean_norm else 256.
+        self.img_dtype = np.int8
 
     def __getstate__(self):
         """
@@ -161,11 +154,18 @@ class Imageset(Dataset):
         self.__dict__.update(state)
 
     def load(self, backend=None, experiment=None):
+        '''
+        Imageset only supports nervanagpu based backends
+        '''
+        if not hasattr(self.backend, 'ng'):
+            raise DeprecationWarning("Only nervanagpu-based backends "
+                                     "supported.  For using cudanet backend, "
+                                     "revert to neon 0.8.2 ")
+
         bdir = os.path.expanduser(self.save_dir)
         cachefile = os.path.join(bdir, 'dataset_cache.pkl')
         if not os.path.exists(cachefile):
             logger.error("Batch dir cache not found in %s:", cachefile)
-            # response = 'Y'
             response = raw_input("Press Y to create, otherwise exit: ")
             if response == 'Y':
                 from neon.util.batch_writer import (BatchWriter,
@@ -214,7 +214,11 @@ class Imageset(Dataset):
     def init_mini_batch_producer(self, batch_size, setname, predict=False):
         # local shortcuts
         sbe = self.backend.empty
-        betype = self.backend_type
+        sbaf = self.backend.allocate_fragment
+        sbhe = self.backend.alloc_host_mem
+
+        ibetype = self.img_dtype
+
         sn = 'val' if (setname == 'validation') else setname
         osz = self.output_image_size
         csz = self.cropped_image_size
@@ -240,9 +244,11 @@ class Imageset(Dataset):
         self.mean_img.shape = (self.num_channels, osz, osz)
         pad = (osz - csz) / 2
         self.mean_crop = self.mean_img[:, pad:(pad + csz), pad:(pad + csz)]
-        self.mean_be = sbe((self.npixels, 1), dtype=betype)
-        self.mean_be.copy_from(self.mean_crop.reshape(
-            (self.npixels, 1)).astype(np.float32))
+        if self.mean_norm:
+            self.mean_val = self.mean_crop.reshape(
+                (1, self.npixels)).astype(np.uint8)
+        else:
+            self.mean_val = 127
 
         # Control params for macrobatch decoding thread
         self.macro_active_buf_idx = 0
@@ -252,40 +258,51 @@ class Imageset(Dataset):
 
         self.batch_size = batch_size
         self.predict = predict
-        self.minis_per_macro = [self.macro_size / batch_size
+        self.minis_per_macro = [self.macro_size / self.batch_size
                                 for i in range(self.macro_num_decode_buf)]
 
-        if self.macro_size % batch_size != 0:
+        if self.macro_size % self.batch_size != 0:
             raise ValueError('self.macro_size not divisible by batch_size')
 
         self.macro_idx = self.endb
         self.mini_idx = -1
 
         # Allocate space for host side image, targets and labels
-        self.img_mini_T = [None for i in range(self.macro_num_decode_buf)]
+        self.uimg_macro = [np.zeros((self.macro_size, self.npixels),
+                                    dtype=np.uint8)
+                           for i in range(self.macro_num_decode_buf)]
+        self.img_macro = [sbhe((self.macro_size, self.npixels), dtype=ibetype)
+                          for i in range(self.macro_num_decode_buf)]
         self.tgt_macro = [None for i in range(self.macro_num_decode_buf)]
-        self.lbl_one_hot = [None for i in range(self.macro_num_decode_buf)]
+        self.lbl_one_hot = [{lbl: sbhe((self.macro_size, self.nclass[lbl]),
+                                       dtype=ibetype)
+                             for lbl in self.label_list}
+                            for i in range(self.macro_num_decode_buf)]
 
         # Allocate space for device side buffers
         inp_shape = (self.npixels, self.batch_size)
-        self.inp_be = sbe(inp_shape, dtype=betype)
+        self.inp_be = sbaf(inp_shape, dtype=ibetype)
         self.inp_be.name = "minibatch"
+        self.inp_beT = sbe(self.inp_be.shape[::-1], dtype=ibetype)
 
         lbl_shape = {lbl: (self.nclass[lbl], self.batch_size)
                      for lbl in self.label_list}
-        self.lbl_be = {lbl: sbe(lbl_shape[lbl], dtype=betype)
+        self.lbl_be = {lbl: sbe(lbl_shape[lbl], dtype=ibetype)
                        for lbl in self.label_list}
+        self.lbl_beT = {lbl: sbe(self.lbl_be[lbl].shape[::-1], dtype=ibetype)
+                        for lbl in self.label_list}
 
-        # Allocate space for device side targets if necessary
-        tgt_shape = (self.tdims, self.batch_size)
-        self.tgt_be = sbe(tgt_shape, dtype=betype) if self.tdims != 0 else None
+        if self.backend.is_dist:
+            for lbl in self.label_list:
+                self.lbl_be[lbl].ptype = 'replica'
+                self.lbl_beT[lbl].ptype = 'replica'
 
+        self.tgt_be = None
         return num_batches
 
     def get_mini_batch(self, batch_idx):
         b_idx = self.macro_active_buf_idx
         self.mini_idx = (self.mini_idx + 1) % self.minis_per_macro[b_idx]
-
         # Decode macrobatches in a background thread,
         # except for the first one which blocks
         if self.mini_idx == 0:
@@ -310,24 +327,23 @@ class Imageset(Dataset):
         s_idx = self.mini_idx * self.batch_size
         e_idx = (self.mini_idx + 1) * self.batch_size
 
-        # See if we are a partial minibatch
-        self.inp_be.copy_from(self.img_mini_T[b_idx][self.mini_idx])
+        himg, hlbl = None, None
+        # Copy into device and then transpose on device
+        himg = self.img_macro[b_idx][s_idx:e_idx]
+        self.backend.scatter(himg, self.inp_beT)
+        self.backend.transpose(self.inp_beT, self.inp_be)
 
-        # Try to avoid this if possible as it inhibits async stream copy
-        if self.mean_norm:
-            self.backend.subtract(self.inp_be, self.mean_be, self.inp_be)
+        # Assume that the reference has to be replicated as long as
+        # the output layer is fully-connected
+        for lbl in self.label_list:
+            hlbl = self.lbl_one_hot[b_idx][lbl][s_idx:e_idx]
+            self.backend.set(self.lbl_beT[lbl], hlbl)
+
+        for lbl in self.label_list:
+            self.backend.transpose(self.lbl_beT[lbl], self.lbl_be[lbl])
 
         if self.unit_norm:
             self.backend.divide(self.inp_be, self.norm_factor, self.inp_be)
-
-        for lbl in self.label_list:
-            self.lbl_be[lbl].copy_from(
-                self.lbl_one_hot[b_idx][lbl][self.mini_idx])
-
-        if self.tgt_be is not None:
-            self.tgt_be.copy_from(
-                self.tgt_macro[b_idx][:, s_idx:e_idx]
-                    .astype(self.backend_type))
 
         return self.inp_be, self.tgt_be, self.lbl_be
 

@@ -131,14 +131,15 @@ class MNIST(Dataset):
                 elif 'labels' in repo_file and 'train' in repo_file:
                     indat = self.read_label_file(repo_file)
                     # Prep a 1-hot label encoding
-                    tmp = np.zeros((indat.shape[0], 10))
+                    tmp = np.zeros((indat.shape[0], 10), dtype=np.float32)
                     for col in range(10):
                         tmp[:, col] = indat == col
                     self.targets['train'] = tmp
                 elif 'labels' in repo_file and 't10k' in repo_file:
                     indat = self.read_label_file(
                         repo_file)[0:self.num_test_sample]
-                    tmp = np.zeros((self.num_test_sample, 10))
+                    tmp = np.zeros((self.num_test_sample, 10),
+                                   dtype=np.float32)
                     for col in range(10):
                         tmp[:, col] = indat == col
                     self.targets['test'] = tmp

@@ -67,7 +67,9 @@ class MisclassSum(Metric):
             raise ValueError("reference dimensions: %s, incompatible with "
                              "outputs dimensions: %s" %
                              (str(reference.shape), str(outputs.shape)))
+
         self.rec_count += reference.shape[-1]
+
         if len(outputs.shape) > 1 and outputs.shape[0] > 1:
             # vector of outputs per case.  Check if ground truth index in top-k
             # predictions (ordered by decreasing probability)

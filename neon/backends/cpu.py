@@ -114,6 +114,15 @@ class CPUTensor(Tensor):
         """
         return self._tensor
 
+    def asbuffer(self):
+        """
+        For the CPUTensor, the numpy ndarray itself exposes a buffer interface
+
+        Returns:
+            numpy.ndarray view or copy of the CPUTensor data.
+        """
+        return self._tensor
+
     def __getitem__(self, key):
         """
         Extract a subset view of the items via slice style indexing
@@ -239,7 +248,6 @@ class CPU(Backend):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
         self.err_init()
-        self.par = None
         self.rng_init()
 
     def default_dtype_if_missing(self, in_dtype):
@@ -1037,6 +1045,26 @@ class CPU(Backend):
         """
         self.dot(deltas, inputs.transpose(), out)
 
+    def update_fc_bias(self, err, out):
+        """
+        Compute the updated bias gradient for a fully connected network layer.
+
+        Arguments:
+            out (GPUTensor): Where to store the updated gradient value.
+            err (GPUTensor): backpropagated error
+        """
+        self.sum(err, axes=1, out=out)
+
+    def add_fc_bias(self, inputs, bias):
+        """
+        Add the bias for a fully connected network layer.
+
+        Arguments:
+            inputs (GPUTensor): the input to update.
+            bias (GPUTensor): the amount to increment
+        """
+        self.add(inputs, bias, out=inputs)
+
     def fprop_conv(self, out, inputs, weights, ofmshape, ofmsize, ofmlocs,
                    ifmshape, links, nifm, padding, stride, ngroups, fpropbuf,
                    local=False):
@@ -1171,7 +1199,7 @@ class CPU(Backend):
             eslice = deltas.take(ofmlocs[dst], axis=0).transpose()
             if local is False:
                 self.dot(inputs.take(rflinks, axis=0), eslice, out=updatebuf)
-                self.add(out, updatebuf, out=out)
+                self.add(out, updatebuf.reshape(out.shape), out=out)
             else:
                 self.dot(inputs.take(rflinks, axis=0), eslice,
                          out=out[(fsize*dst):(fsize*(dst+1))])

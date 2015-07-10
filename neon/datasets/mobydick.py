@@ -81,7 +81,7 @@ class MOBYDICK(Dataset):
 
         return array
 
-    def transpose_batches(self, data, dtype):
+    def transpose_batches(self, data, dtype, is_target=False):
         """
         Transpose each minibatch within the dataset.
         """
@@ -129,7 +129,6 @@ class MOBYDICK(Dataset):
                 self.download_to_repo(url, save_dir)
             logger.info('loading: %s' % name)
             indat = self.read_txt_file(repo_file)
-
             self.preinputs = dict()
             self.preinputs['train'] = indat[:, train_idcs]
             self.preinputs['test'] = indat[:, test_idcs]

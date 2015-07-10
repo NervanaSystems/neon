@@ -57,8 +57,6 @@ class FitExperiment(Experiment):
         if self.initialized:
             return
         self.backend = backend
-        self.model.link()
-        self.backend.par.init_model(self.model, self.backend)
         self.model.initialize(backend)
         self.initialized = True
 
@@ -68,8 +66,8 @@ class FitExperiment(Experiment):
         """
 
         # load the dataset, save it to disk if specified
-        self.dataset.set_batch_size(self.model.batch_size)
         self.dataset.backend = self.backend
+        self.dataset.set_distributed_batch_size(self.model)
         self.dataset.load(backend=self.backend, experiment=self)
         if hasattr(self.dataset, 'serialized_path') and (
                 self.dataset.serialized_path is not None):
@@ -108,5 +106,4 @@ class FitExperiment(Experiment):
         self.model.fit(self.dataset)
 
         if hasattr(self.model, 'serialized_path'):
-            if self.backend.rank() == 0:
-                serialize(self.model.get_params(), self.model.serialized_path)
+            serialize(self.model.get_params(), self.model.serialized_path)

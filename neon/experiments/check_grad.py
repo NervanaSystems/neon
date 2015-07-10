@@ -36,6 +36,13 @@ class GradientChecker(Experiment):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
+    def initialize(self, backend):
+        if self.initialized:
+            return
+        self.backend = backend
+        self.model.initialize(backend)
+        self.initialized = True
+
     def transfer(self, experiment):
         self.model = experiment.model
         self.dataset = experiment.dataset
@@ -152,8 +159,8 @@ class GradientChecker(Experiment):
             self.dataset = UniformRandom(self.model.batch_size,
                                          self.model.batch_size,
                                          datashape[0], datashape[1])
-            self.dataset.set_batch_size(self.model.batch_size)
             self.dataset.backend = self.model.backend
+            self.dataset.set_distributed_batch_size(self.model)
             self.dataset.load()
         ds = self.dataset
 

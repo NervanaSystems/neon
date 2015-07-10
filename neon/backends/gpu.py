@@ -32,13 +32,19 @@ logger = logging.getLogger(__name__)
 class GPU(Backend):
     """
     Sets up a NervanaGPU based backend for matrix operations.
-    Note that some functions defined in the generic Backend class such as are
-    cross-map pooling and normalization and adaDelta are not implemented for
+    Note that some functions defined in the generic Backend class such as
+    cross-map pooling and normalization and are not implemented for
     this backend.
     """
     default_dtype = np.float32
 
     def __init__(self, rng_seed, stochastic_round=False, device_id=0):
+        import pycuda.driver as drv
+        drv.init()
+        global ctx
+        ctx = drv.Device(device_id).make_context()
+        import atexit
+        atexit.register(ctx.pop)
         self.ng = NervanaGPU(stochastic_round=stochastic_round)
         logger.info("Initialized NervanaGPU with stochastic_round=%s",
                     stochastic_round)
@@ -81,11 +87,14 @@ class GPU(Backend):
         """
         self.mem_pool = self.ng.empty(shape, dtype=dtype)
 
-    def alloc_host_mem(self, shape, dtype):
+    def alloc_host_mem(self, shape, dtype=default_dtype):
         return drv.pagelocked_empty(shape, dtype, order="C", mem_flags=0)
 
     def create_stream(self):
         return drv.Stream()
+
+    def synchronize(self):
+        pass
 
     def async_copy(self, dest, src, stream=None):
         drv.memcpy_htod_async(dest.gpudata, src, stream)
@@ -148,17 +157,17 @@ class GPU(Backend):
         self.end.synchronize()
         return self.end.time_since(self.start)
 
-    def uniform(self, low=0.0, high=1.0, shape=1, dtype=default_dtype,
-                persist_values=True, name=None, allocator=drv.mem_alloc):
+    def uniform(self, low=0.0, high=1.0, size=1, dtype=default_dtype,
+                persist_values=True, name=None):
         """
         generate numpy random number and convert to a GPUTensor.
         If called with dype=None it will probably explode
         """
-        ary = np.random.uniform(low, high, shape)
+        ary = np.random.uniform(low, high, size)
         return self.ng.array(ary, dtype=dtype, name=name)
 
     def normal(self, loc=0.0, scale=1.0, size=1, dtype=default_dtype,
-               persist_values=True, name=None, allocator=drv.mem_alloc):
+               persist_values=True, name=None):
         """
         Gaussian/Normal random number sample generation
         """
@@ -204,6 +213,26 @@ class GPU(Backend):
             layer (Layer): The layer object.
         """
         self.ng.dot(deltas, inputs.T, out)
+
+    def update_fc_bias(self, err, out):
+        """
+        Compute the updated bias gradient for a fully connected network layer.
+
+        Arguments:
+            out (GPUTensor): Where to store the updated gradient value.
+            err (GPUTensor): backpropagated error
+        """
+        self.ng.sum(err, axis=1, out=out)
+
+    def add_fc_bias(self, inputs, bias):
+        """
+        Add the bias for a fully connected network layer.
+
+        Arguments:
+            inputs (GPUTensor): the input to update.
+            bias (GPUTensor): the amount to increment
+        """
+        self.ng.add(inputs, bias, out=inputs)
 
     def fprop_conv(self, out, inputs, weights, ofmshape, ofmsize, ofmlocs,
                    ifmshape, links, nifm, padding, stride, ngroups, fpropbuf,
@@ -418,6 +447,36 @@ class GPU(Backend):
 
         return out
 
+    def transpose(self, untransposed, transposed):
+        transposed[:] = untransposed.T
+
+    def crossent(self, y, t, partial, out, epsilon, doscale, ismulti=False):
+        sumbuf = partial.reshape((partial.size, 1))[:partial.shape[0]]
+        if ismulti:
+            self.ng.sum(-t * self.ng.log(y + epsilon),
+                        axis=None, partial=sumbuf, out=out)
+        else:
+            self.ng.sum((t - 1) * self.ng.log(1 - y + epsilon) -
+                        t * self.ng.log(y + epsilon),
+                        axis=None, partial=sumbuf, out=out)
+        if doscale:
+            out[:] = out / y.shape[1]
+        return out
+
+    def logistic_compound(self, inputs, outputs):
+        """
+        Applies logistic function and its derivative to the dataset passed.
+
+        Arguments:
+            inputs (array_like): Input data to be transformed. This also
+                                 acts as storage for the output of the
+                                 derivative function.
+            outputs (array_like): Storage for the transformed output.
+        """
+        # Apply the logistic function.
+        outputs[:] = self.ng.sig(inputs)
+        inputs[:] = (1.0 - outputs) * inputs
+
     def rectlin(self, x, out):
         """
         Rectified Linear nonlinearity
@@ -479,6 +538,19 @@ class GPU(Backend):
             self.ng.sum(tsr.reshape(sze, 1), axis=0, out=out)
         else:
             self.ng.sum(tsr, axis=axes, out=out)
+        return out
+
+    def norm(self, tsr, order, axis, out):
+        """
+        Sum
+
+        Arguments:
+            tsr  (GPUTensor): Input tensor
+            order (int): Axis along which the reduction is performed.\
+            axis (int): Axis along which the reduction is performed.\
+            out (GPUTensor): Output tensor
+        """
+        out[:] = self.ng.sum(tsr, axis=axis)
         return out
 
     def mean(self, tsr, axes, out):
@@ -628,7 +700,18 @@ class GPU(Backend):
         """
         return self.ng.ones(shape, dtype=dtype)
 
-    def empty(self, shape, dtype=default_dtype, persist_values=True):
+    def zeros_like(self, ary, dtype=default_dtype, persist_values=True,
+                   name=None):
+        return self.zeros(ary.shape, dtype=dtype,
+                          persist_values=persist_values)
+
+    def empty_like(self, ary, dtype=default_dtype, persist_values=True,
+                   name=None):
+        return self.empty(ary.shape, dtype=dtype,
+                          persist_values=persist_values, name=name)
+
+    def empty(self, shape, dtype=default_dtype, persist_values=True,
+              name=None):
         """
         Allocate a new GPUTensor.
 
@@ -647,6 +730,14 @@ class GPU(Backend):
             GPUTensor: output
         """
         return self.ng.empty(shape, dtype=dtype)
+
+    def copy(self, ary):
+        """
+        returns a copy of ary
+        """
+        res = self.empty_like(ary)
+        res.copy(ary)
+        return res
 
     def array(self, ary, dtype=default_dtype, persist_values=True, name=None,
               allocator=drv.mem_alloc):

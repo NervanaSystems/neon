@@ -46,8 +46,10 @@ class DropOutLayer(Layer):
     def initialize(self, kwargs):
         opt_param(self, ['keep'], 0.5)
         super(DropOutLayer, self).initialize(kwargs)
-        self.keepmask = self.backend.empty((self.nin, self.batch_size),
-                                           dtype=self.weight_dtype)
+        bkend = self.backend
+        make_zbuf = bkend.allocate_fragment if self.is_local else bkend.empty
+        self.keepmask = make_zbuf((self.nin, self.batch_size),
+                                  dtype=self.weight_dtype)
         self.train_mode = True
         self.allocate_output_bufs()
 

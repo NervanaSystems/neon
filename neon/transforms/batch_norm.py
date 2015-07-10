@@ -80,52 +80,61 @@ class BatchNorm(Activation):
             self.in1d = (self.layer.nofm, 1)
             self.ofmsize = self.layer.ofmsize
             self.in_shape = (self.layer.nofm, self.ofmsize * self.batch_size)
+            make_zbuf = self.backend.allocate_fragment
         else:
             self.in_shape = (self.layer.nout, self.batch_size)
             self.in1d = (self.layer.nout, 1)
+            make_zbuf = self.backend.empty
 
         self.train_mode = True
         logger.info("BatchNormalization set to train mode")
 
-        self._xhat = self.backend.zeros(self.in_shape, dtype=self.dtype,
-                                        persist_values=False)
+        self._xhat = make_zbuf(self.in_shape, dtype=self.dtype,
+                               persist_values=False)
 
-        self._mean = self.backend.zeros(self.in1d, dtype=self.bigtype,
+        bgtype = self.bigtype
+        self._mean = self.backend.zeros(self.in1d, dtype=bgtype,
                                         persist_values=False)
-        self._vars = self.backend.zeros(self.in1d, dtype=self.bigtype,
+        self._vars = self.backend.zeros(self.in1d, dtype=bgtype,
                                         persist_values=False)
-
-        # Global mean and var to be used during inference
-        self._gmean = self.backend.zeros(self.in1d, dtype=self.bigtype,
-                                         persist_values=True)
-        self._gvars = self.backend.zeros(self.in1d, dtype=self.bigtype,
-                                         persist_values=True)
 
         # learned params and their update buffers
-        self._beta = self.backend.zeros(self.in1d, dtype=self.bigtype,
+        self._beta = self.backend.zeros(self.in1d, dtype=bgtype,
                                         persist_values=False)
-        self._gamma = self.backend.ones(self.in1d, dtype=self.bigtype,
+        self._gamma = self.backend.ones(self.in1d, dtype=bgtype,
                                         persist_values=False)
+
         self.layer.params.extend([self._beta, self._gamma])
 
-        self._beta_updates = self.backend.zeros(self.in1d, dtype=self.bigtype)
-        self._gamma_updates = self.backend.zeros(self.in1d, dtype=self.bigtype)
+        if self.backend.is_dist:
+            self._beta.ptype = self._gamma.ptype = 'replica'
+            self._mean.ptype = self._vars.ptype = 'replica'
+
+        # Global mean and var to be used during inference
+        self._gmean = self.backend.zeros_like(self._mean, dtype=bgtype,
+                                              persist_values=True)
+        self._gvars = self.backend.zeros_like(self._vars, dtype=bgtype,
+                                              persist_values=True)
+
+        self._beta_updates = self.backend.zeros_like(self._beta, dtype=bgtype)
+        self._gamma_updates = self.backend.zeros_like(self._gamma,
+                                                      dtype=bgtype)
         self.layer.updates.extend([self._beta_updates, self._gamma_updates])
 
+    # MGPU Note:  Batch norm params can always be thought of as replicas
     def get_params(self):
         np_params = dict()
         for p in ['_gamma', '_beta', '_gmean', '_gvars']:
             if hasattr(self, p):
                 p_tensor = getattr(self, p)
-                np_params[p] = np.array(p_tensor.asnumpyarray(),
-                                        dtype=p_tensor.dtype).reshape(
-                    p_tensor.shape)
+                np_params[p] = p_tensor.asnumpyarray()
         return np_params
 
     def set_params(self, params_dict):
         for p in ['_gamma', '_beta', '_gmean', '_gvars']:
             if p in params_dict:
-                getattr(self, p)[:] = params_dict[p]
+                p_tensor = getattr(self, p)
+                self.backend.set(p_tensor, params_dict[p])
 
     def set_inference_mode(self):
         """
@@ -187,7 +196,13 @@ class BatchNorm(Activation):
             outputs (array_like): Storage for the transformed output.
         """
         if self.train_mode:
-            if (self.backend.__module__ != 'neon.backends.gpu'):
+            if hasattr(self.backend, 'ng'):
+                backend.fprop_bn_compound(inputs, self._beta, self._gamma,
+                                          self._eps,
+                                          self._xhat, self._mean, self._vars,
+                                          self._gmean, self._gvars, self._rho,
+                                          out=outputs)
+            else:
                 # Calc batch statistics
                 backend.mean(inputs, axes=1, out=self._mean)
                 backend.variance(inputs, axes=1, out=self._vars,
@@ -206,12 +221,7 @@ class BatchNorm(Activation):
                 backend.divide(self._xhat, self._vars, out=self._xhat)
                 backend.multiply(self._xhat, self._gamma, out=outputs)
                 backend.add(outputs, self._beta, out=outputs)
-            else:
-                backend.fprop_bn_compound(inputs, self._beta, self._gamma,
-                                          self._eps,
-                                          self._xhat, self._mean, self._vars,
-                                          self._gmean, self._gvars, self._rho,
-                                          out=outputs)
+
         else:
             # Inference mode: Using accumulated scale and shift
             backend.multiply(inputs, self._iscale, out=outputs)
@@ -235,7 +245,11 @@ class BatchNorm(Activation):
                                 activations.
             skip_act (boolean): Not used
         """
-        if (self.backend.__module__ != 'neon.backends.gpu'):
+        if hasattr(self.backend, 'ng'):
+            backend.bprop_bn_compound(self._xhat, error, self._vars,
+                                      self._gamma,
+                                      self._beta_updates, self._gamma_updates)
+        else:
             backend.multiply(self._xhat, error, out=pre_act)
             backend.sum(pre_act, axes=1, out=self._gamma_updates)
             backend.sum(error, axes=1, out=self._beta_updates)
@@ -248,7 +262,3 @@ class BatchNorm(Activation):
             backend.subtract(error, self._xhat, out=error)
             backend.multiply(error, self._gamma, out=error)
             backend.divide(error, self._vars, out=error)
-        else:
-            backend.bprop_bn_compound(self._xhat, error, self._vars,
-                                      self._gamma,
-                                      self._beta_updates, self._gamma_updates)

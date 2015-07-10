@@ -113,7 +113,9 @@ class DelimFiles(Dataset):
         assert self.server is not None
         data, header = self.server.receive()
         self.batchdata[:, 0] = data.view(self.input_dtype)
-        dbatchdata = self.backend.distribute(self.batchdata, self.input_dtype)
+        dbatchdata = self.backend.allocate_fragment(self.batchdata.shape,
+                                                    self.input_data)
+        self.backend.set(dbatchdata, self.batchdata)
         return dbatchdata, None
 
     def read_batch(self, batch_idx):
