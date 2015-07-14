@@ -271,6 +271,28 @@ class Dataset(object):
                                      test=True)
         return True if (setname in inputs_dic) else False
 
+    def split_set(self, pct, from_set='train', to_set='validation'):
+        """
+        Splits the specified percentage amount of from_set and places it into
+        to_set.
+
+        Arguments:
+            pct (float): The percentage of data to transfer, in [0, 100].
+            from_set (str): Where the data will be transfered from.
+            to_set (str): The set to be created with the transfered data.
+        """
+        if pct != 0:
+            from_idcs = np.arange(self.inputs[from_set].shape[0])
+            nto_actual = (self.inputs[from_set].shape[0] * int(pct) / 100)
+            np.random.seed(self.backend.rng_seed)
+            np.random.shuffle(from_idcs)
+            to_idcs = from_idcs[0:nto_actual]
+            from_idcs = from_idcs[nto_actual:]
+            self.inputs[to_set] = self.inputs[from_set][to_idcs]
+            self.targets[to_set] = self.targets[from_set][to_idcs]
+            self.inputs[from_set] = self.inputs[from_set][from_idcs]
+            self.targets[from_set] = self.targets[from_set][from_idcs]
+
     def init_mini_batch_producer(self, batch_size, setname, predict):
         """
         Setup the ability to generate mini-batches.

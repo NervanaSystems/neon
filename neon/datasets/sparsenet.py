@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 
 
 class SPARSENET(Dataset):
+
     """
     Sets up a Sparsenet dataset.
 
@@ -104,9 +105,9 @@ class SPARSENET(Dataset):
                         data = infile[infile.keys()[0]]
                         # patches are extracted so they can be cached
                         # doing non-overlapping 16x16 patches (1024 per image)
-                        patches = data.reshape(512/16, 16, 512/16, 16, 10)
+                        patches = data.reshape(512 / 16, 16, 512 / 16, 16, 10)
                         patches = patches.transpose(1, 3, 0, 2, 4)
-                        patches = patches.reshape(16, 16, 1024*10)
+                        patches = patches.reshape(16, 16, 1024 * 10)
                         logger.info("Caching to pickle file: %s", outfile)
                         pickle.dump(patches, outfile)
                         outfile.close()
@@ -119,6 +120,9 @@ class SPARSENET(Dataset):
                     self.inputs['train'] = indat
                 else:
                     logger.error('problems loading: %s', name)
+            if hasattr(self, 'validation_pct'):
+                self.split_set(
+                    self.validation_pct, from_set='train', to_set='validation')
             self.format()
         else:
             raise AttributeError('repo_path not specified in config')
