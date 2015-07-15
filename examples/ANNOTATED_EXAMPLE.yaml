@@ -275,6 +275,8 @@
     #                    have an extension "_cp<#>" added to the filename.  The
     #                    index number on the file name corresponds to the checkpoint
     #                    count.
+    # epoch_metrics - Same as the metrics parameter for the experiment, but 
+    #                 those are printed for each epochs.
     # layers - list of neural network layer objects.  Models will typically
     #          have a single DataLayer, followed by 1 or more hidden layers,
     #          then a final CostLayer.

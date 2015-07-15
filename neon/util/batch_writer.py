@@ -61,7 +61,7 @@ def proc_img(imgfile, is_string=False):
         im = im.crop((cx, cy, cx+TARGET_SIZE, cy+TARGET_SIZE))
 
     buf = StringIO()
-    im.save(buf, format='JPEG')
+    im.save(buf, format='JPEG', subsampling=0, quality=95)
     return buf.getvalue()
 
 
@@ -82,12 +82,10 @@ class BatchWriter(object):
         self.train_file = os.path.join(self.out_dir, 'train_file.csv.gz')
         self.val_file = os.path.join(self.out_dir, 'val_file.csv.gz')
         self.stats = os.path.join(self.out_dir, 'dataset_cache.pkl')
-        self.val_mean = np.zeros((self.output_image_size,
-                                 self.output_image_size,
-                                 self.num_channels), dtype=np.uint8)
-        self.train_mean = np.zeros((self.output_image_size,
-                                   self.output_image_size,
-                                   self.num_channels), dtype=np.uint8)
+        self.val_mean = np.zeros((self.num_channels,
+                                  self.output_image_size,
+                                 self.output_image_size), dtype=np.uint8)
+        self.train_mean = np.zeros_like(self.val_mean)
 
     def __str__(self):
         pairs = map(lambda a: a[0] + ': ' + a[1],
@@ -166,7 +164,7 @@ class BatchWriter(object):
         labels = [{k: v[i*psz: (i+1)*psz] for k, v in labels.iteritems()}
                   for i in range(npts)]
 
-        accum_buf = np.zeros((osz, osz, self.num_channels), dtype=np.int32)
+        accum_buf = np.zeros(self.train_mean.shape, dtype=np.int32)
         batch_mean = np.zeros(accum_buf.shape, dtype=np.uint8)
         logger.info("Writing %s batches...", name)
         for i, jpeg_file_batch in enumerate(imfiles):

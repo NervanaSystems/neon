@@ -111,7 +111,7 @@ class Imageset(Dataset):
     def __init__(self, **kwargs):
 
         opt_param(self, ['preprocess_done'], False)
-        opt_param(self, ['dotransforms', 'square_crop'], False)
+        opt_param(self, ['dotransforms', 'square_crop'], True)
         opt_param(self, ['mean_norm', 'unit_norm'], False)
         opt_param(self, ['shuffle_macro'], False)
         opt_param(self, ['tdims'], 0)
