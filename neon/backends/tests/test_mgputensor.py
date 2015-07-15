@@ -49,12 +49,12 @@ class TestGPU(object):
         d_a = self.be.empty((1, asize))
         u_a = self.be.empty((1, bsize))
         self.be.scatter(h_a, d_a)
-        self.be.reduce(d_a, u_a, async=True)
+        self.be.reduce(d_a, u_a)
         print(h_result)
-        print(d_a.tlis[0].asnumpyarray())
+        print(d_a.tlist[0].asnumpyarray())
 
         for i in range(nr):
-            np.testing.assert_allclose(d_a.tlis[i].asnumpyarray(),
+            np.testing.assert_allclose(d_a.tlist[i].asnumpyarray(),
                                        h_result, atol=1e-6, rtol=0)
 
     @attr('memset')

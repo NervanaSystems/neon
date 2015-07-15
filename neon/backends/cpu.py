@@ -255,6 +255,70 @@ class CPU(Backend):
             in_dtype = self.default_dtype
         return in_dtype
 
+    def zeros_like(self, ary, dtype=default_dtype, persist_values=True,
+                   name=None):
+        """
+        Instantiate a new instance of this backend's Tensor class, with the
+        shape taken from ary and populating each element with a value of 0.
+
+        Arguments:
+            ary (tensor object): Tensor to inherit the dimensions of.
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+        Returns:
+            Tensor: array object
+
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
+
+        See Also:
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
+        """
+        dtype = self.default_dtype_if_missing(dtype)
+        return self.tensor_cls(np.zeros(ary.shape, dtype),
+                               dtype, persist_values)
+
+    def empty_like(self, ary, dtype=default_dtype, persist_values=True,
+                   name=None):
+        """
+        Instantiate a new instance of this backend's Tensor class, with the
+        shape taken from ary.
+
+        Arguments:
+            ary (tensor object): Tensor to inherit the dimensions of.
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+        Returns:
+            Tensor: array object
+
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
+
+        See Also:
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
+        """
+        dtype = self.default_dtype_if_missing(dtype)
+        return self.tensor_cls(np.empty(ary.shape, dtype),
+                               dtype, persist_values)
+
     def empty(self, shape, dtype=None, persist_values=True):
         """
         Instantiate a new instance of the CPUTensor class without initializing

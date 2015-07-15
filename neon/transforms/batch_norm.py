@@ -19,7 +19,6 @@ Batch normalization transform functions and classes.
 import logging
 from neon.transforms.activation import Activation
 from neon.util.param import req_param, opt_param
-import numpy as np
 
 
 logger = logging.getLogger(__name__)
@@ -67,7 +66,6 @@ class BatchNorm(Activation):
         """
         self.__dict__.update(kwargs)
         self.dtype = self.layer.weight_dtype
-        self.bigtype = np.float32 if self.dtype is np.float16 else self.dtype
         opt_param(self, ['_eps'], 1e-6)
         opt_param(self, ['_rho'], 0.99)
 
@@ -92,16 +90,15 @@ class BatchNorm(Activation):
         self._xhat = make_zbuf(self.in_shape, dtype=self.dtype,
                                persist_values=False)
 
-        bgtype = self.bigtype
-        self._mean = self.backend.zeros(self.in1d, dtype=bgtype,
+        self._mean = self.backend.zeros(self.in1d, dtype=self.dtype,
                                         persist_values=False)
-        self._vars = self.backend.zeros(self.in1d, dtype=bgtype,
+        self._vars = self.backend.zeros(self.in1d, dtype=self.dtype,
                                         persist_values=False)
 
         # learned params and their update buffers
-        self._beta = self.backend.zeros(self.in1d, dtype=bgtype,
+        self._beta = self.backend.zeros(self.in1d, dtype=self.dtype,
                                         persist_values=False)
-        self._gamma = self.backend.ones(self.in1d, dtype=bgtype,
+        self._gamma = self.backend.ones(self.in1d, dtype=self.dtype,
                                         persist_values=False)
 
         self.layer.params.extend([self._beta, self._gamma])
@@ -111,14 +108,15 @@ class BatchNorm(Activation):
             self._mean.ptype = self._vars.ptype = 'replica'
 
         # Global mean and var to be used during inference
-        self._gmean = self.backend.zeros_like(self._mean, dtype=bgtype,
+        self._gmean = self.backend.zeros_like(self._mean, dtype=self.dtype,
                                               persist_values=True)
-        self._gvars = self.backend.zeros_like(self._vars, dtype=bgtype,
+        self._gvars = self.backend.zeros_like(self._vars, dtype=self.dtype,
                                               persist_values=True)
 
-        self._beta_updates = self.backend.zeros_like(self._beta, dtype=bgtype)
+        self._beta_updates = self.backend.zeros_like(self._beta,
+                                                     dtype=self.dtype)
         self._gamma_updates = self.backend.zeros_like(self._gamma,
-                                                      dtype=bgtype)
+                                                      dtype=self.dtype)
         self.layer.updates.extend([self._beta_updates, self._gamma_updates])
 
     # MGPU Note:  Batch norm params can always be thought of as replicas
@@ -143,8 +141,8 @@ class BatchNorm(Activation):
         """
         # Global mean and var to be used during inference
         if self.train_mode is True:
-            self._iscale = self.backend.zeros(self.in1d, dtype=self.bigtype)
-            self._ishift = self.backend.zeros(self.in1d, dtype=self.bigtype)
+            self._iscale = self.backend.zeros(self.in1d, dtype=self.dtype)
+            self._ishift = self.backend.zeros(self.in1d, dtype=self.dtype)
             # normalize global variance -- inference scaling factor
             m = self.batch_size
             if self.is_local:

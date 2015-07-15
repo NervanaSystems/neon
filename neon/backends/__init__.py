@@ -47,9 +47,6 @@ def gen_backend(model=None, gpu=None, nrv=False, flexpoint=False,
                               for computation (must be installed on the
                               system).  Defaults to False which implies a CPU
                               based backend.
-        flexpoint (bool, optional): If True, attempt to use FlexPoint(TM)
-                                    element typed data instead of the default
-                                    float32 which is in place if set to False.
         rng_seed (numeric, optional): Set this to a numeric value which can be
                                       used to seed the random number generator
                                       of the instantiated backend.  Defaults to
@@ -114,7 +111,11 @@ def gen_backend(model=None, gpu=None, nrv=False, flexpoint=False,
                                  device_id=device_id)
                     else:
                         from neon.backends.mgpu import MGPU
-                        num_dev = int(gpu.strip('nervanagpu'))
+                        try:
+                            num_dev = int(gpu.strip('nervanagpu'))
+                        except(ValueError):
+                            raise ValueError("invalid number of GPUs" +
+                                             " specified")
                         if device_id is not None and len(device_id) != num_dev:
                             raise RuntimeError("Incorrect number of devices"
                                                " specified ", device_id,

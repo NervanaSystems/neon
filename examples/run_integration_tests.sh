@@ -76,7 +76,6 @@ run_yamls()
   done
 }
 
-# run_yamls hpu_yaml[@] hpu_back[@]
 run_yamls gpu_yaml[@] gpu_back[@]
 run_yamls cpu_yaml[@] cpu_back[@]
 run_yamls all_yaml[@] all_back[@]

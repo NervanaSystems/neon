@@ -43,6 +43,7 @@ def cross_entropy(backend, outputs, targets, temp, epsilon=2**-23,
         Tensor: Calculated cross entropy values for each element.
     """
     if hasattr(backend, 'ng'):
+        # compund kernel call for NervanaGPU backend.
         result = temp[4]
         backend.crossent(outputs, targets, temp[0], result, epsilon,
                          scale_by_batchsize)

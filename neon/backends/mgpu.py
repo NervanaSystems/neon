@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2015 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -26,12 +26,15 @@ from neon.backends.gpu import GPU
 from nervanagpu import NervanaGPU, GPUTensor
 import pycuda.driver as drv
 import numpy as np
+from functools import wraps
+import atexit
 
 logger = logging.getLogger(__name__)
 
 
 def replicate(method):
     def decorate(cls):
+        @wraps(cls)
         def func(self, *args, **kwargs):
             if self.ng.block is not None:
                 self.call_stack.append((method, args, kwargs))
@@ -57,6 +60,7 @@ def replicate(method):
 
 def passthru(method):
     def decorate(cls):
+        @wraps(cls)
         def func(self, *args, **kwargs):
             tsrlist = []
             for idx, (tsr, ctx) in enumerate(zip(getattr(self, '_tensorlist'),
@@ -223,8 +227,6 @@ class MGPU(GPU):
 
     def __init__(self, rng_seed, stochastic_round=False, device_id=0,
                  num_dev=2):
-        import pycuda.driver as drv
-        import atexit
         drv.init()
         self.num_dev = num_dev
 
@@ -234,7 +236,7 @@ class MGPU(GPU):
             self.dev_list = device_id
 
         assert len(self.dev_list) == self.num_dev
-        assert self.num_dev < drv.Device.count()
+        assert self.num_dev <= drv.Device.count()
 
         self.ctxs = []
         self.devs = []

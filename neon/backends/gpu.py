@@ -451,6 +451,18 @@ class GPU(Backend):
         transposed[:] = untransposed.T
 
     def crossent(self, y, t, partial, out, epsilon, doscale, ismulti=False):
+        """
+        Computes cross entropy cost.
+
+        Arguments:
+            y (GPUTensor): Model outputs
+            t (GPUTensor): Targets
+            partial (GPUTensor): temporary buffer used for 2D reduction
+            out (GPUTensor): Storage for the cross entropy output
+            epsilon (float): constant for numerical stability
+            doscale (boolean): If True, cross_entropy is scaled by batch size
+            ismulti (boolean): If True, compute multi class cross_entropy
+        """
         sumbuf = partial.reshape((partial.size, 1))[:partial.shape[0]]
         if ismulti:
             self.ng.sum(-t * self.ng.log(y + epsilon),
@@ -468,10 +480,10 @@ class GPU(Backend):
         Applies logistic function and its derivative to the dataset passed.
 
         Arguments:
-            inputs (array_like): Input data to be transformed. This also
+            inputs (GPUTensor): Input data to be transformed. This also
                                  acts as storage for the output of the
                                  derivative function.
-            outputs (array_like): Storage for the transformed output.
+            outputs (GPUTensor): Storage for the transformed output.
         """
         # Apply the logistic function.
         outputs[:] = self.ng.sig(inputs)
@@ -540,17 +552,50 @@ class GPU(Backend):
             self.ng.sum(tsr, axis=axes, out=out)
         return out
 
-    def norm(self, tsr, order, axis, out):
+    def norm(self, tsr, order=None, axis=None, out=None):
         """
-        Sum
+        Calculates and returns the vector p-norms of the GPUTensor along the
+        specified axis.  The p-norm is defined on a vector A as
+        :math:`||A||_p = \sum_i(|A_i|^p)^{1/p}`.
 
         Arguments:
-            tsr  (GPUTensor): Input tensor
-            order (int): Axis along which the reduction is performed.\
-            axis (int): Axis along which the reduction is performed.\
-            out (GPUTensor): Output tensor
+            tsr (GPUTensor): the GPUTensor on which to find the norms
+            order (int): The order or p upon which the norm is calculated.
+                         Valid values include:
+                         None, inf, -inf, 0, 1, -1, 2, -2, ...
+            axis (int): The axis along which to compute vector norms.
+            out (GPUTensor): where to write the results to.  Must be
+                             of the expected result shape.
+
+        Returns:
+            GPUTensor: p-norm of tsr along the specified axis.
+
+        Raises:
+            IndexError if invalid axis specified
+            AttributeError if invalid order specified
+
+        See Also:
+            `numpy.linalg.norm`
         """
-        out[:] = self.ng.sum(tsr, axis=axis)
+        if not isinstance(axis, int) or axis < 0 or axis >= len(tsr.shape):
+            raise IndexError("invalid axis value: %s", axis)
+        if not isinstance(order, (int, float)):
+            raise AttributeError("invalid order value: %s", order)
+        if out is None:
+            raise AttributeError("No output tensor speficied", order)
+        if order == float('Inf'):
+            self.ng.max(self.fabs(tsr), axis, out)
+        elif order == float('-Inf'):
+            self.ng.min(self.fabs(tsr), axis, out)
+        elif order == 0:
+            tmp = self.zeros(tsr.shape)
+            self.ng.not_equal(tsr, tmp, tmp)
+            self.ng.sum(tmp, axis, out)
+        else:
+            tmp = self.empty(tsr.shape)
+            self.ng.power(self.fabs(tsr), order, tmp)
+            self.ng.sum(tmp, axis, out)
+            self.ng.power(out, (1.0 / order), out)
         return out
 
     def mean(self, tsr, axes, out):
@@ -702,11 +747,63 @@ class GPU(Backend):
 
     def zeros_like(self, ary, dtype=default_dtype, persist_values=True,
                    name=None):
+        """
+        Instantiate a new instance of this backend's Tensor class, with the
+        shape taken from ary and populating each element with a value of 0.
+
+        Arguments:
+            ary (tensor object): Tensor to inherit the dimensions of.
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+        Returns:
+            Tensor: array object
+
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
+
+        See Also:
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
+        """
         return self.zeros(ary.shape, dtype=dtype,
                           persist_values=persist_values)
 
     def empty_like(self, ary, dtype=default_dtype, persist_values=True,
                    name=None):
+        """
+        Instantiate a new instance of this backend's Tensor class, with the
+        shape taken from ary.
+
+        Arguments:
+            ary (tensor object): Tensor to inherit the dimensions of.
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+        Returns:
+            Tensor: array object
+
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
+
+        See Also:
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
+        """
         return self.empty(ary.shape, dtype=dtype,
                           persist_values=persist_values, name=name)
 
@@ -1012,8 +1109,9 @@ class GPU(Backend):
             vs_item, the updated velocity.
             us_item, used as a temp buffer.
         """
-        vs_item[:] = vs_item * momentum_coef - us_item * \
-            learning_rate - learning_rate * wd * ps_item
+        vs_item[:] = vs_item * momentum_coef \
+                   - us_item * learning_rate \
+                   - ps_item * learning_rate * wd
         ps_item[:] = ps_item + vs_item
 
     def exp_mavg(self, mavg, newval, rho):

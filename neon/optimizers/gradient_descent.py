@@ -243,8 +243,8 @@ class GradientDescentMomentumWeightDecay(GradientDescentMomentum):
                 self.backend.subtract(vs_item, us_item, out=vs_item)
                 # reuse us_item for weight decay term
                 # note: usually want to only apply for weights, not biases
-                self.backend.multiply(ps_item, self.weight_decay, out=us_item)
-                self.backend.multiply(us_item, learning_rate, out=us_item)
+                self.backend.multiply(ps_item, learning_rate*self.weight_decay,
+                                      out=us_item)
                 self.backend.subtract(vs_item, us_item, out=vs_item)
 
                 self.backend.add(ps_item, vs_item, out=ps_item)
