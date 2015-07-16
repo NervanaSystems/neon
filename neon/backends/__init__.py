@@ -116,7 +116,9 @@ def gen_backend(model=None, gpu=None, nrv=False, flexpoint=False,
                         except(ValueError):
                             raise ValueError("invalid number of GPUs" +
                                              " specified")
-                        if device_id is not None and len(device_id) != num_dev:
+                        if not device_id:
+                            device_id = range(num_dev)
+                        if len(device_id) != num_dev:
                             raise RuntimeError("Incorrect number of devices"
                                                " specified ", device_id,
                                                num_dev)
