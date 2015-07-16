@@ -24,7 +24,8 @@ Note that we only support parallel computation with multiple GPUs and not on
 multiple CPUs.  Moreover, multi-GPU computation is only supported via our
 ``nervanagpu`` backend, which requires Maxwell architecture devices.
 
-The parallel implementation used in neon has been tested on up to 8 GPUs.
+The parallel implementation used in neon has been tested on up to 8 GPUs.  All
+devices must be housed in the same machine.
 
 Parallelization Model
 ---------------------
@@ -47,8 +48,8 @@ the replica activations that are used for the next layer.
 
 Requirements
 ------------
-In order to parallelize across ``N`` nodes, the following conditions must be
-satisfied:
+In order to parallelize across ``N`` GPU device nodes, the following
+conditions must be satisfied:
 
 - In data parallel mode, the minibatch size must be a multiple of ``N``.
 - In model parallel mode, the number of output units of each fully connected
@@ -59,12 +60,42 @@ For example, an MLP with no convolutional layers that has 3 hidden layers with
 ``GCD(6, 200, 20) == 2``).  If the first layer had 12 hidden nodes, the model
 could be parallelized across 4 GPUs.
 
-Since AlexNet [AK2012]_has fully connected layers with outputs of 4096, 4096,
+Since AlexNet [AK2012]_ has fully connected layers with outputs of 4096, 4096,
 and 1000, it can be split across up to 8 GPUs (``GCD(4096, 1000) = 8``) as long
 as the minibatch supplied is divisible by 8.
 
+
+Usage
+=====
+
+The following example illustrates how to train a convnet on the MNIST dataset
+across 2 GPUs (devices selected by default):
+
+.. code-block:: bash
+
+    neon --gpu nervanagpu2 examples/convnet/mnist-small.yaml
+
+
+The following example illustrates how to train the same convnet with 2 GPUs,
+but specifying devices 1 and 2 (Note that the device_ids specified here do not
+necessarily correspond to how they appear when running ``nvidia-smi``):
+
+.. code-block:: bash
+
+    neon --gpu nervanagpu2 examples/convnet/mnist-small.yaml --device_id 1 2
+
+
+The following example illustrates how to train a convnet on the i1k alexnet
+model included with neon across 4 GPUs:
+
+.. code-block:: bash
+
+    neon --gpu nervanagpu4 examples/convnet/i1k-alexnet-fp32.yaml
+
+
 Known Issues
 ============
+
 Dropout Layers
 --------------
 Dropout layers occur between fully connected layers, which have replicated
@@ -89,31 +120,9 @@ consistent across model replicas.
 In fully connected layers, since activations are replicated on each device, the
 batch normalization parameters should be identical without need for sharing.
 
-Usage
------
 
-The following example illustrates how to train a convnet on the MNIST dataset
-across 2 GPUs (devices selected by default):
-
-.. code-block:: bash
-
-    neon --gpu nervanagpu2 examples/convnet/mnist-small.yaml
-
-The following example illustrates how to train the same convnet with 2 GPUs,
-but specifying devices 1 and 2 (Note that the device_ids specified here do not
-necessarily correspond to how they appear when running ``nvidia-smi``):
-
-.. code-block:: bash
-
-    neon --gpu nervanagpu2 examples/convnet/mnist-small.yaml --device_id 1 2
-
-
-The following example illustrates how to train a convnet on the i1k alexnet
-model included with neon across 4 GPUs:
-
-.. code-block:: bash
-
-    neon --gpu nervanagpu4 examples/convnet/i1k-alexnet-fp32.yaml
+References
+==========
 
 .. [AK2014] Alex Krizhevsky, One weird trick for parallelizing convolutional neural networks. http://arxiv.org/abs/1404.5997
 .. [AK2012] Alex Krizhevsky, Ilya Sutskever, Geoffrey Hinton, ImageNet classification with deep convolutional neural networks. http://www.cs.toronto.edu/~kriz/imgnet-paper-2012.pdf

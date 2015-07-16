@@ -274,7 +274,8 @@ class Imageset(Dataset):
                           for i in range(self.macro_num_decode_buf)]
         self.target_macro = [None for i in range(self.macro_num_decode_buf)]
         self.lbl_one_hot = [{lbl: self.backend.alloc_host_mem(
-                             (self.macro_size, self.nclass[lbl]), dtype=ibetype)
+                             (self.macro_size, self.nclass[lbl]),
+                             dtype=ibetype)
                              for lbl in self.label_list}
                             for i in range(self.macro_num_decode_buf)]
 

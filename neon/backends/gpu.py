@@ -1109,9 +1109,9 @@ class GPU(Backend):
             vs_item, the updated velocity.
             us_item, used as a temp buffer.
         """
-        vs_item[:] = vs_item * momentum_coef \
-                   - us_item * learning_rate \
-                   - ps_item * learning_rate * wd
+        vs_item[:] = (vs_item * momentum_coef -
+                      us_item * learning_rate -
+                      ps_item * learning_rate * wd)
         ps_item[:] = ps_item + vs_item
 
     def exp_mavg(self, mavg, newval, rho):

@@ -25,7 +25,7 @@ Overview
     git clone https://github.com/NervanaSystems/neon.git
     cd neon
 
-    # configure optional backends like GPU, distributed processing by editing
+    # configure optional backends like GPU by editing
     # setup.cfg with a text editor.
     nano setup.cfg
 
@@ -71,6 +71,8 @@ GPU=nervanagpu
   nervanagpu backend
 * `maxas <https://github.com/NervanaSystems/maxas/>`_ Assembler for NVIDIA
   Maxwell architecture.  Required for installing the nervanagpu backend.
+* Multiple GPU devices can be utilized in parallel, as described in the
+  :doc:`distributed` section.
 
 GPU=cudanet
 ^^^^^^^^^^^
@@ -103,13 +105,6 @@ DEV=1
 * `matplotlib <http://matplotlib.org>`_ Currently used for some basic
   visualizations like RNN features.
 
-DIST=1
-^^^^^^
-
-* `mpi4py <https://github.com/mpi4py/mpi4py>`_ for creation of distributed
-  Tensors in data and model parallel models.
-* `openmpi <http://www.open-mpi.org/>`_ required for mpi4py
-
 
 Configuration Setup
 -------------------
@@ -127,9 +122,9 @@ to the ``make`` command.  Below is an example showing the default values for
 As shown, the default set of options is fairly restrictive, so only the CPU
 based backend will be available:
 
-* Set ``GPU=nervanagpu`` (maxwell) or ``GPU=cudanet`` (kepler), if you have a CUDA capable GPU
+* Set ``GPU=nervanagpu`` (maxwell) or ``GPU=cudanet`` (kepler), if you have a
+  CUDA capable GPU
 * Set ``DEV=1``, if you plan to run unit tests, build documentation or develop neon 
-* Set ``DIST=1``, if you would like to run your model training in parallel via MPI
 
 To override what is defined in ``setup.cfg``, one can pass the appropriate
 options on the command-line (useful when doing in-place development).  Here's
@@ -138,60 +133,6 @@ an example:
 .. code-block:: bash
 
     make -e GPU=cudanet DEV=1 test
-
-
-.. _mpi_install:
-
-Installing MPI on an Ubuntu cluster (for distributed models)
-------------------------------------------------------------
-neon provides distributed implementations of convnets and MLPs in addition to the non-distributed implementations.
-It has been tested with
-`OpenMPI 1.8.1 <http://www.open-mpi.org/software/ompi/v1.8/>`_ and
-`mpi4py <https://github.com/mpi4py/mpi4py>`_.
-
-1. Install OpenMPI:
-
-.. code-block:: bash
-
-    cd <openmpi_source_dir>
-    ./configure --prefix=/<path_to_install_openmpi> --with-cuda
-    make all
-    sudo make install
-
-Make sure that ``PATH`` includes ``/<path_to_openmpi>/bin`` and
-``LD_LIBRARY_PATH`` includes ``/<path_to_openmpi>/lib``
-
-2. Install mpi4py:
-
-.. code-block:: bash
-
-  # set DIST=1 in setup.cfg then run:
-  make install
-  # or
-  make -e DIST=1 install
-  # or
-  cd <mpi4py_source_dir>
-	sudo python setup.py build --configure install
-
-3. Setup ``/etc/hosts`` with IPs of the nodes.
-e.g.:
-
-.. code-block:: bash
-
-	192.168.1.1 host1
-	192.168.1.2 host2
-
-4. Setup a hosts file to use with MPI ``-hostfile`` option.
-For additional info refer to `this document <http://cs.calvin.edu/curriculum/cs/374/homework/MPI/01/multicoreHostFiles.html>`_.
-e.g.:
-
-.. code-block:: bash
-
-	host1 slots=2
-	host2 slots=2
-
-5. Read through the :doc:`distributed` section to see how run neon in data or
-   model parallel mode using MPI.
 
 
 Virtualenv

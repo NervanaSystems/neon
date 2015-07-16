@@ -64,6 +64,7 @@ Nervana GPU
   :toctree: generated/
 
   neon.backends.gpu.GPU
+  neon.backends.mgpu.MGPU
 
 Nervana Hardware
 ----------------
@@ -185,7 +186,6 @@ Convolutional Layer
    :toctree: generated/
 
    neon.layers.convolutional.ConvLayer
-   neon.layers.convolutional.SubConvLayer
 
 Pooling Layers
 ---------------

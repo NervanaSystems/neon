@@ -70,13 +70,11 @@ class NeonCommand(Command):
     description = "Passes additional build type options to subsequent commands"
     user_options = [('cpu=', None, 'Add CPU backend related dependencies'),
                     ('gpu=', None, 'Add GPU backend related dependencies'),
-                    ('dist=', None, 'Add distributed related dependencies'),
                     ('dev=', None, 'Add development related dependencies')]
 
     def initialize_options(self):
         self.cpu = "0"
         self.gpu = "0"
-        self.dist = "0"
         self.dev = "0"
 
     def run(self):

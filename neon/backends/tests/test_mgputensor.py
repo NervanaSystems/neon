@@ -32,7 +32,11 @@ class TestGPU(object):
     def setup(self):
         from neon.backends.mgpu import MGPU, MGPUTensor
         # this code gets called prior to each test
-        self.be = MGPU(rng_seed=0, num_dev=2)
+        try:
+            self.be = MGPU(rng_seed=0, num_dev=2)
+        except AssertionError:
+            # likely that only one GPU device is available
+            self.be = MGPU(rng_seed=0, num_dev=1)
         self.gpt = MGPUTensor
 
     @attr('bbx')

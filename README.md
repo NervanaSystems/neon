@@ -4,14 +4,16 @@
 Deep Learning framework. We have designed it with the following
 functionality in mind:
 
-* YAML for easy model specification (inspired by [pylearn2](https://github.com/lisa-lab/pylearn2))
+* YAML for easy model specification (inspired by
+  [pylearn2](https://github.com/lisa-lab/pylearn2))
 * Python for easily adding models and support for many data formats
 * Support for commonly used models: convnets, MLPs, RNNs, LSTMs, autoencoders,
   RBMs
 * Support for common learning rules, activation functions and cost functions
-* Comparing performance of alternate numeric representations with 32-bit floating point (fp32) for
-  Deep Learning
-* Support for using [spearmint](https://github.com/JasperSnoek/spearmint) for hyperparameter optimization
+* Comparing performance of alternate numeric representations with 32-bit
+  floating point (fp32) for Deep Learning
+* Support for using [spearmint](https://github.com/JasperSnoek/spearmint) for
+  hyperparameter optimization
 * Swappable hardware backends: write code once and then deploy on CPUs, GPUs,
   or Nervana hardware
 

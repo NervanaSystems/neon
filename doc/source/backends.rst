@@ -49,9 +49,7 @@ Current Implementations
    neon.backends.cpu.CPU
    neon.backends.gpu.GPU
    neon.backends.cc2.GPU
-   neon.backends.par.NoPar
-   neon.backends.par.DataPar
-   neon.backends.par.ModelPar
+   neon.backends.mgpu.MGPU
 
 Adding a new Backend
 --------------------

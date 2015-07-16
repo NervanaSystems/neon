@@ -29,10 +29,6 @@ def parse_args():
                         type=int)
     parser.add_argument('--gpu', default="", help='Run GPU sanity check '
                         '(specify one of cudanet or nervanagpu')
-    parser.add_argument('--datapar', default=0, type=int,
-                        help='Run data parallel sanity check')
-    parser.add_argument('--modelpar', default=0, type=int,
-                        help='Run model parallel sanity check')
     return parser.parse_args()
 
 
@@ -54,22 +50,13 @@ if __name__ == '__main__':
     check_file = os.path.join(script_dir, '..', '..', 'examples',
                               'convnet', 'synthetic-sanity_check.yaml')
     expected_result = 0.5390625
-    # TODO: modelpar currently broken on synthetic-sanity_check.yaml
-    # (dimensions not aligned), so skipping for the moment.
-    # for be in ["cpu", "gpu", "datapar", "modelpar"]:
-    for be in ["cpu", "gpu", "datapar"]:
+    for be in ["cpu", "gpu"]:
         be_args = {'rng_seed': 0}
         if (args.__dict__[be] != 0 and args.__dict__[be] != "" and
                 args.__dict__[be] != "0"):
             if be == "gpu":
                 be_args[be] = args.__dict__[be]
-            elif be == "datapar":
-                be_args[be] = 1
             print('{} check '.format(be)),
-            if be == "datapar":
-                # temporary hack because we are not running via mpirun.
-                os.environ['OMPI_COMM_WORLD_LOCAL_RANK'] = '0'
-                os.environ['OMPI_COMM_WORLD_LOCAL_SIZE'] = '1'
             sanity_check(check_file, expected_result, **be_args)
             print('OK')
     sys.exit(res)
