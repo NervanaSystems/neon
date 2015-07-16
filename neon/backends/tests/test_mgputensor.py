@@ -39,9 +39,10 @@ class TestGPU(object):
             self.be = MGPU(rng_seed=0, num_dev=1)
         self.gpt = MGPUTensor
 
-    @attr('bbx')
     def reduction_test(self):
         nr = self.be.num_dev
+        if nr == 1: # This shouldn't be supported
+            return
         # create a numpy array as the test-bed
         asize = 9
         # round up to the nearest multiple of num_dev
@@ -61,17 +62,22 @@ class TestGPU(object):
             np.testing.assert_allclose(d_a.tlist[i].asnumpyarray(),
                                        h_result, atol=1e-6, rtol=0)
 
-    @attr('memset')
     def memset_test(self):
         # create a numpy array as the test-bed
         asize = 9
 
+        h_result = np.zeros((1, asize))
         d_a = self.be.zeros((1, asize))
-        print(d_a.tlist[0].asnumpyarray())
 
-    @attr('frag2rep')
+        for i in range(self.be.num_dev):
+            np.testing.assert_allclose(d_a.tlist[i].asnumpyarray(),
+                                       h_result, atol=1e-6, rtol=0)
+
+
     def frag2rep_test(self):
         nr = self.be.num_dev
+        if nr == 1: # This shouldn't be supported
+            return
         np.random.seed(0)
         # create a numpy array as the test-bed
         (rows, cols) = (24, 128)
