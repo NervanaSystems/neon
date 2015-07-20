@@ -59,6 +59,9 @@ Basic YAML Parameters
 * ``sample_pct``: most datasets implement this, which if given a value < 100
   will be used to uniformly downsample dataset records to the specified
   percentage
+* ``validation_pct``: Allows one to randomly select a portion of the original
+  train set data points to construct a separate validation set.  Any existing
+  validation set will be overwritten as a result.
 
 
 Adding a new type of Dataset

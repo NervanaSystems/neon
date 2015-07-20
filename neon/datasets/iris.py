@@ -161,4 +161,7 @@ class Iris(Dataset):
                                     self.raw_onehot_targets[v_idcs, :],
                                     self.raw_onehot_targets[c_idcs, :]))
             self.targets[name] = targets
+        if hasattr(self, 'validation_pct'):
+            self.split_set(
+                self.validation_pct, from_set='train', to_set='validation')
         self.format()
