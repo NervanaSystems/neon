@@ -2,202 +2,571 @@
 
 ## (unreleased)
 
-## v0.8.2 (2015-07-07)
+## v0.9.0 (2015-07-20)
 
 ### Modifications
 
-* Version bump for the v0.8.2 release [Scott Leishman]
+* Version bump for the v0.9.0 release. [Scott Leishman]
+
+* Merge branch 'MGPUMerge' into 'master' [Scott Leishman]
+
+  Mgpu merge
+
+  Cleanup on top of Multi-GPU branch, addresses small bugs and makes some readability improvements.
+
+  See merge request !31
+
+* Merge branch 'master' of gitlab.localdomain:algorithms/neon into MGPUMerge. [Scott Leishman]
+
+  Incorporate validation_pct changes.
+
+* Merge branch 'ZebTech-val_split'. [Scott Leishman]
+
+  Adds ability to partition training set cases into validation set.
+  Closes #58
+
+* Add more documentation, remove duplicated test. [Scott Leishman]
+
+* Implemented validation set splitting. [seba-1511]
+
+* Set default device list in gen_backend. [Alex Park]
+
+* Ignore mgpu tensor tests that require more than 1 device when only 1 device is present. [Alex Park]
+
+* Remove references to DIST, MGPU tests with &lt; 2 devices. [Scott Leishman]
+
+* Small fixes and code cleanup for MultiGPU. [Urs Koster]
+
+* Implement multigpu processing using weird trick (data parallel for local layers, model parallel for fully-connected layers) Remove compatibility with cudanet backend for imageset based models Remove mpi-based parallelism Remove dependency on NoPar structures Fix check_grad to initialize with backend Remove need to link and initialize layers separately Add documentation for multiple gpu usage, device id specification. [Alex Park]
+
+
+## v0.8.2 (2015-07-08)
+
+### Modifications
+
+* Version bump for the v0.8.2 release. [Scott Leishman]
 
 * Merge branch 'more_misc_fixes' into 'master' [Urs Koster]
 
-    Various bug fixes  Collection of fixes to address issues with 1D CPU
-    tensor handling, Leaky ReLU backprop, better GPU / CUDA checking,
-    liveness indication for Tensor values, and a new dataset to highlight
-    building regression models.  See merge request !27
+  Various bug fixes
+
+  Collection of fixes to address issues with 1D CPU tensor handling, Leaky ReLU backprop, better GPU / CUDA checking, liveness indication for Tensor values, and a new dataset to highlight building regression models.
+
+  See merge request !27
+
+* Merge branch 'master' into more_misc_fixes. [Scott Leishman]
 
 * Merge branch 'evren/refactor_tox' into 'master' [Scott Leishman]
 
-    Evren/refactor tox  The jenkins job for neon is using to to run tests
-    with python 2.7 and 3.4 but the xUnit output from nosetests is getting
-    overwritten since nosetests tries to write to the same file for both
-    tests (2.7 and 3.4).  This fix puts makes the two files have different
-    names.  Instead of changing Makefile, I put the fix in tox.ini.
-    Scott, I thought you would be best to look at this.  See merge request
-    !28
+  Evren/refactor tox
+
+  The jenkins job for neon is using to to run tests with python 2.7 and 3.4 but the xUnit output from nosetests is getting overwritten since nosetests tries to write to the same file for both tests (2.7 and 3.4).  This fix puts makes the two files have different names.
+
+  Instead of changing Makefile, I put the fix in tox.ini.
+
+  Scott, I thought you would be best to look at this.
+
+  See merge request !28
+
+* Try another way without hardwiring test attr filters. [Evren Tumer]
+
+* Changed tox.ini to stop py34 test from overwriting py27 nosetests.xml file. [Evren Tumer]
+
+* Make octal numbers python2 and python3 compliant. [Scott Leishman]
+
+* Use python3 compatible pickle. [Scott Leishman]
+
+* Initial inroads into flatfile dataset. [Scott Leishman]
+
+  Used for streaming (live) inference currently.  Other usecases do not yet work.
+
+* Port of multi learning rule param serialization fix. [Scott Leishman]
+
+  See #40162164201505
+
+* Add missing rectlin_derivative from NervanaGPU backend. [Scott Leishman]
+
+* Fix bug in RectLeaky bprop_func. [Scott Leishman]
+
+  Added unit tests, closes #39973152922213
+
+* Merge branch 'master' into more_misc_fixes. [Scott Leishman]
 
 * Merge branch 'evren/myl-250/serialize-error' into 'master' [Scott Leishman]
 
-    Evren/myl 250/serialize error  Generated new test for serialization.
-    Added feature for retaining a subset of the checkpoint files.  Added
-    test for checkpoint files.  See merge request !22
+  Evren/myl 250/serialize error
+
+  Generated new test for serialization.
+
+  Added feature for retaining a subset of the checkpoint files.
+
+  Added test for checkpoint files.
+
+  See merge request !22
+
+* Python3 compatible print. [Scott Leishman]
+
+* Remove no longer relevant comment. [Scott Leishman]
+
+* Fix small style issue. [Evren Tumer]
+
+* Merge branch 'evren/myl-250/serialize-error' of http://gitlab.localdomain/algorithms/neon into evren/myl-250/serialize-error. [Evren Tumer]
+
+  rebased on master
+
+* Added some docs for new checkpoint saving feature, added skip test for broken serialization tests. [Evren Tumer]
+
+* Have make serialize run test_serialize.py. [Scott Leishman]
+
+* Fixed style errors, remove i1k because it is freezing the test, added 'slow' label to the serialize test. [Evren Tumer]
+
+* Exclude serialization test from make test. [Evren Tumer]
+
+* Added checkpoint test. [Evren Tumer]
+
+* Added test generator, added code to keep some checkpoint files, added comments. [Evren Tumer]
+
+* Clean up hack. [Evren Tumer]
+
+* Added cpu-&gt;gpu handoff and gpu-&gt;cpu handoff tests. [Evren Tumer]
+
+* Fixed issue with python not expanding ~ in paths. [Evren Tumer]
+
+* Added yml and fixed name bug. [Evren Tumer]
+
+* Initial code for new serialization test. [Evren Tumer]
+
+* Added some docs for new checkpoint saving feature, added skip test for broken serialization tests. [Evren Tumer]
+
+* Have make serialize run test_serialize.py. [Scott Leishman]
+
+* Fixed style errors, remove i1k because it is freezing the test, added 'slow' label to the serialize test. [Evren Tumer]
+
+* Exclude serialization test from make test. [Evren Tumer]
+
+* Added checkpoint test. [Evren Tumer]
+
+* Added test generator, added code to keep some checkpoint files, added comments. [Evren Tumer]
+
+* Clean up hack. [Evren Tumer]
+
+* Added cpu-&gt;gpu handoff and gpu-&gt;cpu handoff tests. [Evren Tumer]
+
+* Fixed issue with python not expanding ~ in paths. [Evren Tumer]
+
+* Added yml and fixed name bug. [Evren Tumer]
+
+* Initial code for new serialization test. [Evren Tumer]
 
 * Merge branch 'fully_connected_layer_unit_tests' into 'master' [Scott Leishman]
 
-    Fully connected layer unit tests  CPU unittests of fprop/brop for
-    FCLayer that check if output/delta buffers are set to the right size.
-    See merge request !24
+  Fully connected layer unit tests
 
-* restored ANNOTATED_EXAMPLE. [Urs Koster]
+  CPU unittests of fprop/brop for FCLayer that check if output/delta buffers are set to the right size.
+
+  See merge request !24
+
+* Minor style fix. [Scott Leishman]
+
+* Tensor comparison fix for val_init test. [Scott Leishman]
+
+* Added numerical checks. [GabrielPereyra]
+
+* Added identity initialization for deterministic testing (doesn't import) [GabrielPereyra]
+
+* Added some GPU (cudanet) tests. [Scott Leishman]
+
+* CPU unit test of fprop/bprop for FCLayer. [GabrielPereyra]
+
+* Restored ANNOTATED_EXAMPLE. [Urs Koster]
+
+* Fixed CPU 1D indexing inconsistency. [Scott Leishman]
+
+  Closes MYL-221, #38758848739023
+
+* Fix CPU backend update when batch_size 1. [Scott Leishman]
+
+  Closes #47, MYL-260, #38750574965487
+
+* Add posix_ipc to dev requirements. [Scott Leishman]
+
+* Remove nvidia-smi dependency for cudanet GPU checking. [Scott Leishman]
+
+  Closes #51
+
+* Added housing data, simple regression network. [Scott Leishman]
+
+  Still to tune example, closes MYL-258, closes #33
+
+* Mark non-persistent tensor values.  Closes MYL-251. [Scott Leishman]
 
 * Merge branch 'NvgpuCompat' into 'master' [Scott Leishman]
 
-    Nvgpu compat  This is a pretty minor change but makes it easier to
-    keep up to date with changes in nervanagpu because it uses the ng
-    tensor constructors rather than the GPUTensor constructors directly.
-    (Recent changes to nervanagpu have changed the way the tensors are
-    constructed)  See merge request !21
+  Nvgpu compat
 
-* quick patch for RNN docs. [Scott Leishman]
+  This is a pretty minor change but makes it easier to keep up to date with changes in nervanagpu because it uses the ng tensor constructors rather than the GPUTensor constructors directly.  (Recent changes to nervanagpu have changed the way the tensors are constructed)
+
+  See merge request !21
+
+* Merge branch 'master' into NvgpuCompat. [Scott Leishman]
+
+* Quick patch for RNN docs. [Scott Leishman]
+
+* Minor fixes. [Scott Leishman]
+
+  Remove now un-needed import, extraneous function calls during fullset
+  prediction.
+
+* Change array creation routines to use nervanagpu calls rather than instantiating GPUTensor directly. [Alex Park]
 
 * Merge branch 'MYL261-RNN2' into 'master' [Scott Leishman]
 
-    RNN and LSTM updates  Fixes issue with prediction using GPU backend.
-    Closes #16  - Minor cleanup to numerical gradient code, removing
-    hardcoded element indices. - Mobydick dataset changed to use only the
-    96 printable ASCII characters and to remove line breaks from text. -
-    Updated dtype handling so fp64 with CPU backend is supported. Used for
-    numerical gradients. - Some additional documentation for LSTM layer.
-    See merge request !20
+  RNN and LSTM updates
+
+  Fixes issue with prediction using GPU backend.  Closes #16
+
+  - Minor cleanup to numerical gradient code, removing hardcoded element indices.
+  - Mobydick dataset changed to use only the 96 printable ASCII characters and to remove line breaks from text.
+  - Updated dtype handling so fp64 with CPU backend is supported. Used for numerical gradients.
+  - Some additional documentation for LSTM layer.
+
+  See merge request !20
+
+* Update default logging level for rnn, lstm examples. [Scott Leishman]
+
+* RNN cleanup: - added documentation to annotated_example yaml - restored functionality to generate strings from predictions - cleaned up dtype checking. [Urs Koster]
+
+* Restored ability to run numerical gradients in fp64, in a clean way using the backend_type in the yaml. [Urs Koster]
+
+* Fixes issue with prediction using GPU backend.     Minor cleanup to numerical gradient code, removing hardcoded element indices     Mobydick dataset changed to use only the 96 printable ASCII characters and     to remove line breaks from text. [Urs Koster]
 
 * Merge branch 'bnormfix2' into 'master' [Urs Koster]
 
-    Bnormfix2  Corrects calculation of global means and variances used
-    during batch norm inference  - Uses exponential moving average to keep
-    a running estimate of the global average mean and variance - Added
-    some helper functions to ensure efficient computation of moving
-    average without allocating extra space - Requires latest version of
-    cuda-convnet2 to ensure correct computation for cc2 backend - May make
-    things slower for nervanagpu during training due to extra overhead of
-    computing global stats that wasn't happening before  See merge request
-    !18
+  Bnormfix2
+
+  Corrects calculation of global means and variances used during batch norm inference
+
+  - Uses exponential moving average to keep a running estimate of the global average mean and variance
+  - Added some helper functions to ensure efficient computation of moving average without allocating extra space
+  - Requires latest version of cuda-convnet2 to ensure correct computation for cc2 backend
+  - May make things slower for nervanagpu during training due to extra overhead of computing global stats that wasn't happening before
+
+  See merge request !18
+
+* Correct calculation of global means and variances used during batch norm inference. [Urs Koster]
 
 * Merge branch 'misc_fixes' into 'master' [Anil Thomas]
 
-    Miscellaneous fixes and updates  Collection of various small fixes
-    including: * MOP updates to express value persistence across backend
-    begin and end calls * Removal of extraneous backend clip calls where
-    appropriate * python 3 compatibility fixes * Revamped metrics
-    comparison * training error notation updates * serialization testing
-    fixes * make develop target fixes  See merge request !17
+  Miscellaneous fixes and updates
+
+  Collection of various small fixes including:
+  * MOP updates to express value persistence across backend begin and end calls
+  * Removal of extraneous backend clip calls where appropriate
+  * python 3 compatibility fixes
+  * Revamped metrics comparison
+  * training error notation updates
+  * serialization testing fixes
+  * make develop target fixes
+
+  See merge request !17
+
+* Merge branch 'master' into misc_fixes. [Scott Leishman]
 
 * Merge pull request #46 from itsb/master. [Scott Leishman]
 
-    fix broken link in README
+  fix broken link in README
+
+* Fix broken link in README. [itsb]
 
 * Merge branch 'rmsprop2' into 'master' [Scott Leishman]
 
-    Rmsprop2  Implement RMSprop, inheriting from GradientDescentMomentum -
-    Simplify calling of compounded kernels in nervanagpu for learning
-    rules - Change default behavior of gradient descent with momentum if
-    momentum params are not included to behave as if momentum_coef is 0 -
-    Change default settings of adadelta to use suggested values for rho
-    and epsilon if not provided - Update documentation for optimizers -
-    Include example of rmsprop in ANNOTATED_EXAMPLE.yaml - Include example
-    of rmsprop in mnist-tuned.yaml  closes MYL-118, #43  See merge request
-    !15
+  Rmsprop2
+
+  Implement RMSprop, inheriting from GradientDescentMomentum
+  - Simplify calling of compounded kernels in nervanagpu for learning rules
+  - Change default behavior of gradient descent with momentum if momentum params are not included to behave as if momentum_coef is 0
+  - Change default settings of adadelta to use suggested values for rho and epsilon if not provided
+  - Update documentation for optimizers
+  - Include example of rmsprop in ANNOTATED_EXAMPLE.yaml
+  - Include example of rmsprop in mnist-tuned.yaml
+
+  closes MYL-118, #43
+
+  See merge request !15
+
+* Doc and style updates, plus rms_update fix for cc2. [Scott Leishman]
+
+* Merge branch 'master' into rmsprop2. [Scott Leishman]
 
 * Merge branch 'clients' into 'master' [Anil Thomas]
 
-    Shared-memory based IPC mechanism - this is to support third party
-    applications that want to interface with neon for live inference.
+  Shared-memory based IPC mechanism - this is to support third party
+  applications that want to interface with neon for live inference.
+
+* Shared-memory based IPC mechanism. [Anil Thomas]
+
+  This is to support third party applications that want to interface
+  with neon for live inference.
 
 * Merge branch 'notebook' into 'master' [Anil Thomas]
 
-    iPython notebook example  Added an iPython notebook example using neon
-    to train an MNIST MLP and visualize results.  See merge request !13
+  iPython notebook example
+
+  Added an iPython notebook example using neon to train an MNIST MLP and visualize results.
+
+  See merge request !13
+
+* Changed default backend to CPU. [Arjun Bansal]
+
+* Added iPython notebook example. [Arjun Bansal]
+
+* - Implement RMSprop, inheriting from GradientDescentMomentum - Simplify calling of compounded kernels in nervanagpu for learning rules - Change default behavior of gradient descent with momentum if momentum params are not included to behave as if momentum_coef is 0 - Change default settings of adadelta to use suggested values for rho and epsilon if not provided - Update documentation for optimizers - Include example of rmsprop in ANNOTATED_EXAMPLE.yaml - Include example of rmsprop in mnist-tuned.yaml. [Alex Park]
+
+  Add init for RMSProp from WeightLayer, Inherit from GradientDescentMomentum because of common characteristics
+
+  Update documentation, make default values for optimizer params, change default behavior of gradient descent with momentum if momentum params are not included to behave as if momentum_coef is 0
+
+  Revert mnist-tuned back to using gradient descent momentum
 
 * Ensure pip utilizes newest cudanet version. [Scott Leishman]
 
 * Merge branch 'BatchNormReshape2' into 'master' [Urs Koster]
 
-    Batch norm reshape  - Change how reshaping is done for local layers in
-    batch norm and shared biases. - Reduce chance of memory leak in
-    nervanagpu calls by reducing creation of reshape references. - Use new
-    behavior of cudanet to return reshape views rather than reshape
-    underlying tensor  See merge request !11
+  Batch norm reshape
+
+  - Change how reshaping is done for local layers in batch norm and shared biases.
+  - Reduce chance of memory leak in nervanagpu calls by reducing creation of reshape references.
+  - Use new behavior of cudanet to return reshape views rather than reshape underlying tensor
+
+  See merge request !11
+
+* Improved handling of tensor allocations by using views. -clean up unnecessary tensor allocations -rather than reshaping repeatedly, store a reusable reshaped view -Moved reshaping for batch norm -update Makefile dependency for cudanet to 0.2.6. [Urs Koster]
+
+* Fix minor formatting issue in serialize check. [Scott Leishman]
+
+* Added persist_values to tensors and their creation. [Scott Leishman]
+
+  Closes MYL-246.  Note that no tensors have been initialized as not being
+  persistent as of yet (deferring to default in all cases).
+
+* Work around backend clip calls where possible.  Closes MYL-247. [Scott Leishman]
+
+* Remove unused pre-commit hook. [Scott Leishman]
+
+  Prevented make develop based install where users didn't have appropriate pep8
+  version already in place.
+
+* Python3 compatibility fixes.  Closes #35. [Scott Leishman]
+
+* Revamped metrics comparison. [Scott Leishman]
+
+  * Now compare across like backends only (by default).
+  * Make output more tabular, and easier to see at a glance.
+
+* Revert leading zero to colon based notation. [Scott Leishman]
+
+* Leading zero epoch and partial mini-batch display. [Scott Leishman]
+
+  Closes #40.
 
 * Merge branch 'RectleakyGPU' into 'master' [Scott Leishman]
 
-    Rectleaky gpu  Add RectLeaky to gpu backend to address github issue
-    #39  See merge request !10
+  Rectleaky gpu
+
+  Add RectLeaky to gpu backend to address github issue #39
+
+  See merge request !10
+
+* Restore nervanagpu based sanity checks. [Scott Leishman]
+
+* Add RectLeaky activation for gpu backend. [Alex Park]
 
 * Merge branch 'SerializeSnapshots' into 'master' [Scott Leishman]
 
-    Serialize snapshots  Add option to yaml allowing model snapshots to be
-    serialized on a schedule.  Snapshots will be serialized to provided
-    `serialize_path` and the schedule can be  either:  -  explicitly
-    specified using a list of ints, `[N1, N2, N3, ...]`, indicating that
-    serialization will occur after epoch `N1`, epoch `N2`, epoch `N3`,
-    etc., or -  specified using an integer interval, `N`, indicating that
-    serialization will occur every `N` epochs.  See merge request !8
+  Serialize snapshots
+
+  Add option to yaml allowing model snapshots to be serialized on a schedule.  Snapshots will be serialized to provided `serialize_path` and the schedule can be  either:
+
+  -  explicitly specified using a list of ints, `[N1, N2, N3, ...]`, indicating that serialization will occur after epoch `N1`, epoch `N2`, epoch `N3`, etc., or
+  -  specified using an integer interval, `N`, indicating that serialization will occur every `N` epochs.
+
+  See merge request !8
+
+* Expanded docs. [Scott Leishman]
+
+  Also fixed ANNOTATED_EXAMPLE
+
+* Rewrite save_snapshot to show control flow a little more clearly. [Alex Park]
+
+* Documentation for serialize schedule. [Alex Park]
+
+* Implement snapshot saving according to an epoch list or epoch interval for mlp and rnn models. [Alex Park]
 
 * Merge branch 'ZebTech-cifar100' into 'master' [Scott Leishman]
 
-    Addition of CIFAR100 dataset
+  Addition of CIFAR100 dataset
+
+* Minor docstring format updates. [Scott Leishman]
+
+* Fixed MNIST and CIFAR100 testing. [seba-1511]
+
+* Merge remote-tracking branch 'neon/master' into cifar100. [seba-1511]
 
 * Support prediction generation for RNNs and LSTMs. [Scott Leishman]
 
-    This fixes #23.
+  This fixes #23.
 
 * Merge branch 'cifar100' of https://github.com/ZebTech/neon into ZebTech-cifar100. [Scott Leishman]
 
 * Merge branch 'Kaixhin-docker_readme' [Scott Leishman]
 
-    Added Docker image links to install docs and README.  Fixes #24.
+  Added Docker image links to install docs and README.  Fixes #24.
+
+* Move docker image links into source install docs. [Scott Leishman]
+
+  Provided reference links from README and quick-start page.
+
+* Update readme with Docker images. [Kaixhin]
+
+* Removed debugging lines. [seba-1511]
+
+* Added CIFAR100 to the ANNOTED_EXAMPLE. [seba-1511]
+
+* Added CIFAR100 to the documentation. [seba-1511]
+
+* Moved coarse-labels as art of kwargs. [seba-1511]
+
+* Fixed number of classes in docstring. [seba-1511]
+
+* Added CIFAR100 loader. Closes issue #28. [seba-1511]
 
 * Merge branch 'rnn-docs' into 'master' [Scott Leishman]
 
-    Rnn docs  Added doc-strings describing the dataset format expected for
-    Recurrent Neural Networks (RNNs).  See merge request !7
+  Rnn docs
+
+  Added doc-strings describing the dataset format expected for Recurrent Neural Networks (RNNs).
+
+  See merge request !7
+
+* Fix section headings, other typos. [Scott Leishman]
+
+  Also fix minor doc path issue to ensure docstrings are parsed from local
+  build area.
+
+* Updated documentation for recurrent networks and datasets. [Urs Koster]
 
 * Merge branch 'bn-compound2' into 'master' [Scott Leishman]
 
-    Bn compound2  Added gpu backend calls for fprop and bprop pass of
-    Batch Normalization, which results in a 10% overall speedup on
-    Alexnet. Also deletes minibatch provider at the end of training to
-    free up device DDR for inference.  See merge request !6
+  Bn compound2
+
+  Added gpu backend calls for fprop and bprop pass of Batch Normalization, which results in a 10% overall speedup on Alexnet. Also deletes minibatch provider at the end of training to free up device DDR for inference.
+
+  See merge request !6
+
+* Removed extraneous RNN train_mode false call. [Scott Leishman]
+
+* Delete minibatch provider after training to save memory. [Urs Koster]
+
+* Added gpu backend calls for fprop and bprop pass of Batch Normalization, which results in a 10% overall. [Urs Koster]
 
 * Merge branch 'noyaml' into 'master' [Scott Leishman]
 
-    Noyaml  Add example code to create networks without .yaml.  See merge
-    request !4
+  Noyaml
+
+  Add example code to create networks without .yaml.
+
+  See merge request !4
+
+* Added noyaml example to docs. [Scott Leishman]
+
+* Merge branch 'master' into noyaml. [Scott Leishman]
 
 * Merge branch 'IntegrationTest' into 'master' [Scott Leishman]
 
-    Added Integration tests  * Added integration tests based on our
-    current example networks and backends.   * Requires Maxwell GPU with
-    nervanagpu and cudanet backends installed, as well as imagenet
-    dataset.   * New command line parameter `--integration` that cleans up
-    YAML files to make them more easily     reproducible.   * Currently
-    requires manual inspection of results relative to prior runs on the
-    same machine to     determine if outputs are feasible. * Added
-    tolerances to the serialization tests.  See merge request !2
+  Added Integration tests
+
+  * Added integration tests based on our current example networks and backends.
+    * Requires Maxwell GPU with nervanagpu and cudanet backends installed, as well as imagenet dataset.
+    * New command line parameter `--integration` that cleans up YAML files to make them more easily
+      reproducible.
+    * Currently requires manual inspection of results relative to prior runs on the same machine to
+      determine if outputs are feasible.
+  * Added tolerances to the serialization tests.
+
+  See merge request !2
+
+* Allow CL params for outfile and logfile to integration tests. [Scott Leishman]
+
+* Serialize Makefile cleanup. [Scott Leishman]
+
+* Merge branch 'master' into IntegrationTest. [Scott Leishman]
 
 * Merge pull request #20 from Kaixhin/change_cuda_check. [Scott Leishman]
 
-    Change GPU check to CUDA SDK check. Closes issue #19
+  Change GPU check to CUDA SDK check. Closes issue #19
 
-* documentation link updates. [Scott Leishman]
+* Change GPU check to CUDA SDK check. Closes issue #19. [Kaixhin]
+
+* Cleanup prior integration approach files. [Scott Leishman]
+
+* Ensure integration tests run from all directories. [Scott Leishman]
+
+* Swap branch with non-branch yaml again. [Alex Park]
+
+* Allow reuse of example yamls for integration testing - Add integration command line option to neon executable - Adjust yaml options in integration mode - Among other things, drop serialization path, remove sources of randomization - Add is_random attribute to layers to identify drop-able layers   (Just dropout for now) - Make dotransforms have the correct behavior in Imageset - Change batch norm warnings to static to avoid proliferation of messages across many layers - Switch branch and small layers for cifar mlp since they were incorrectly labeled - Create integration test script in examples directory that uses existing metrics code - Correct i1k-alexnet-fp16 to use fp16 as backend data type. [Alex Park]
+
+* Added checks for nervanagpu and cudanet in dev tests. [Arjun Bansal]
+
+* Style fixes. [Arjun Bansal]
+
+* Deleted commented layers in tests yamls. [Arjun Bansal]
+
+* Moved test yamls to a separate subdirectory. [Arjun Bansal]
+
+* Deleted the cpu/gpu command line parameters for serialize and integration since they aren't used right now. [Arjun Bansal]
+
+* Added tolerances for serialization tests. [Arjun Bansal]
+
+* Added integration tests. [Arjun Bansal]
+
+* Add example code to create networks without .yaml. [Anil Thomas]
+
+  It is possible to create and use networks without using a .yaml file.
+  This is illustrated by examples/mlp/mnist-small-noyaml.py.
+
+* Simplify the expression for computing output dims. [Anil Thomas]
+
+  This is for computing dimensions of an output feature map in a
+  convolutional or pooling layer.
+
+* Let datasets have access to the experiment object. [Anil Thomas]
+
+  Custom plug-ins may use this functionality instead of defining own
+  experiment classes.
+
+* Documentation link updates. [Scott Leishman]
 
 * Merge pull request #13 from kellyp/master. [Scott Leishman]
 
-    Update readme with correct using neon link
+  Update readme with correct using neon link
 
-* fix broken links in docs, remove i1K. [Scott Leishman]
+* Update readme with correct using neon link. [Kelly Plummer]
 
-* convnet/i1k-alexnet-fp16.yaml was using float32 &amp; mb=64. fixed. [Arjun Bansal]
+* Fix broken links in docs, remove i1K. [Scott Leishman]
+
+* Convnet/i1k-alexnet-fp16.yaml was using float32 &amp; mb=64. fixed. [Arjun Bansal]
 
 * Change the value of the sumWidth parameter. [Anil Thomas]
 
-    This parameter affects the performance of the weight gradient
-    computation in the cudanet backend.
+  This parameter affects the performance of the weight gradient computation
+  in the cudanet backend.
 
 * Fix computation of the number of samples. [Anil Thomas]
 
-    This issue was causing neon to compute the number of samples
-    incorrectly when &quot;predictions&quot; is specified in the .yaml file and the
-    number of samples in the validation set is different from that in the
-    training set.
+  This issue was causing neon to compute the number of samples
+  incorrectly when &quot;predictions&quot; is specified in the .yaml file
+  and the number of samples in the validation set is different
+  from that in the training set.
 
 
 ## v0.8.1 (2015-05-04)
