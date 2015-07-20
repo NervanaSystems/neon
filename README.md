@@ -77,37 +77,37 @@ definitions and possible choices.
 
 ### Running a simple MNIST model (on CPU)
 
-	neon examples/mlp/mnist-small.yaml
+    neon examples/mlp/mnist-small.yaml
 
 
 ### Running an Alexnet model (on Maxwell GPU)
 
 In [fp32](examples/convnet/i1k-alexnet-fp32.yaml):
 
-	# for nervangpu (requires Maxwell GPUs)
-	neon --gpu nervanagpu examples/convnet/i1k-alexnet-fp32.yaml
+    # for nervangpu (requires Maxwell GPUs)
+    neon --gpu nervanagpu examples/convnet/i1k-alexnet-fp32.yaml
 
 In [fp16](examples/convnet/i1k-alexnet-fp16.yaml):
 
-	neon --gpu nervanagpu examples/convnet/i1k-alexnet-fp16.yaml
+    neon --gpu nervanagpu examples/convnet/i1k-alexnet-fp16.yaml
 
 Distributed across 4 Maxwell GPUs in the same machine
 ("weird-trick" style parallelization):
 
-  neon --gpu nervanagpu4 examples/convnet/i1k-alexnet-fp32.yaml
+    neon --gpu nervanagpu4 examples/convnet/i1k-alexnet-fp32.yaml
 
 
 ### Code organization
 
-	backends    --- implementation of different hardware backends
-	datasets    --- support for common datasets CIFAR-10, ImageNet, MNIST etc.
-	diagnostics --- hooks to measure timing and numeric ranges
-	hyperopt    --- hooks for hyperparameter optimization
-	layers      --- layer code
-	models      --- model code
-	optimizers  --- learning rules
-	transforms  --- activation & cost functions
-	metrics     --- performance evaluation metrics
+    backends    --- implementation of different hardware backends
+    datasets    --- support for common datasets CIFAR-10, ImageNet, MNIST etc.
+    diagnostics --- hooks to measure timing and numeric ranges
+    hyperopt    --- hooks for hyperparameter optimization
+    layers      --- layer code
+    models      --- model code
+    optimizers  --- learning rules
+    transforms  --- activation & cost functions
+    metrics     --- performance evaluation metrics
 
 
 ### Documentation
