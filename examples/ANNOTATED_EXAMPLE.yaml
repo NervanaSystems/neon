@@ -142,8 +142,8 @@
     #             the Iris dir directly)
     # sample_pct - if 100, full dataset will be used, otherwise we uniformly
     #              downsample records to the specified percentage
-    # validation_pct - creates validation dataset with this percentage of the 
-    #                  train set
+    # validation_pct - creates separate validation dataset utilizing the
+    #                  specified percentage of the training set data
     repo_path: '~/data',
     sample_pct: 100,
   },

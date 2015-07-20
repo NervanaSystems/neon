@@ -274,7 +274,7 @@ class Dataset(object):
     def split_set(self, pct, from_set='train', to_set='validation'):
         """
         Splits the specified percentage amount of from_set and places it into
-        to_set.
+        to_set.  Any existing data in to_set will be dropped.
 
         Arguments:
             pct (float): The percentage of data to transfer, in [0, 100].
