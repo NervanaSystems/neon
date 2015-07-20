@@ -30,6 +30,7 @@ class Backend(YAMLable):
     Notes:
         See the list of `implemented backends </backends.html>`_
     """
+    is_dist = False
 
     def empty(self, shape, dtype=None, persist_values=True):
         """
@@ -1210,17 +1211,81 @@ class Backend(YAMLable):
         """
         raise NotImplementedError()
 
-    def distribute(self, data, dtype):
-        return self.par.distribute(data, dtype)
+    def empty_like(self, ary, dtype=None, persist_values=True):
+        """
+        Instantiate a new instance of this backend's Tensor class, with the
+        shape taken from ary.
 
-    def rank(self):
-        return self.par.rank()
+        Arguments:
+            ary (tensor object): Tensor to inherit the dimensions of.
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+        Returns:
+            Tensor: array object
+
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
+
+        See Also:
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
+        """
+        return self.empty(ary.shape, dtype=dtype,
+                          persist_values=persist_values)
+
+    def zeros_like(self, ary, dtype=None, persist_values=True):
+        """
+        Instantiate a new instance of this backend's Tensor class, with the
+        shape taken from ary and populating each element with a value of 0.
+
+        Arguments:
+            ary (tensor object): Tensor to inherit the dimensions of.
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+        Returns:
+            Tensor: array object
+
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
+
+        See Also:
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
+        """
+        return self.zeros(ary.shape, dtype=dtype,
+                          persist_values=persist_values)
+
+    def set(self, tensor, data):
+        tensor[:] = data
 
     def is_distributed(self):
-        return self.par.is_distributed()
+        return False
 
     def reduce_tensor(self, tensor):
-        return self.par.reduce_tensor(tensor)
+        return tensor.asnumpyarray()
+
+    def scatter(self, src, dest):
+        dest.copy_from(src)
+
+    def allocate_fragment(self, buf_shape, dtype=None, persist_values=True):
+        return self.empty(buf_shape, dtype=dtype,
+                          persist_values=persist_values)
 
 
 class Tensor(object):

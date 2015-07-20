@@ -68,8 +68,12 @@ class Dataset(object):
             # use CPU as a default backend
             self.backend = CPU()
 
-    def set_batch_size(self, batch_size):
-        self.batch_size = batch_size
+    def set_distributed_batch_size(self, model):
+        self.batch_size = model.batch_size
+        self.fragment_data = False
+        if self.backend.is_dist:
+            if model.layers[1].is_local and self.backend.num_dev > 1:
+                self.fragment_data = True
 
     def load(self, backend=None, experiment=None):
         """
@@ -202,7 +206,7 @@ class Dataset(object):
             self.inputs['train'] = self.inputs['train'][train_idcs]
             self.targets['train'] = self.targets['train'][train_idcs]
 
-    def transpose_batches(self, data, dtype):
+    def transpose_batches(self, data, dtype, is_target=False):
         """
         Transpose and distribute each minibatch within a dataset.
 
@@ -213,17 +217,33 @@ class Dataset(object):
         Returns:
             list: List of device loaded mini-batches of data.
         """
-        bs = self.backend.actual_batch_size
+        bs = self.backend.batch_size
+        sba = self.backend.array
         if data.shape[0] % bs != 0:
             logger.warning('Incompatible batch size. Discarding %d samples...',
                            data.shape[0] % bs)
         nbatches = data.shape[0] // bs
         batchwise = []
-        for batch in range(nbatches):
-            batchdata = np.empty((data.shape[1], bs))
-            batchdata[...] = data[batch * bs:(batch + 1) * bs].transpose()
-            dev_batchdata = self.backend.distribute(batchdata, dtype)
-            batchwise.append(dev_batchdata)
+        if not self.backend.is_dist:
+            batchwise = [sba(data[idx * bs:(idx + 1) * bs].transpose().copy())
+                         for idx in range(nbatches)]
+        else:
+            batchwise = []
+            if is_target or not self.fragment_data:
+                devshape = (bs, data.shape[1])
+                ptype = 'replica'
+            else:
+                devshape = (bs / self.backend.num_dev, data.shape[1])
+                ptype = 'fragment'
+            dev_batchdata_t = self.backend.empty(devshape)
+            dev_batchdata_t.ptype = ptype
+            for batch in range(nbatches):
+                self.backend.set(dev_batchdata_t,
+                                 data[batch * bs:(batch + 1) * bs])
+                dev_batchdata = self.backend.empty(dev_batchdata_t.shape[::-1])
+                dev_batchdata[:] = dev_batchdata_t.T
+                dev_batchdata.ptype = dev_batchdata_t.ptype
+                batchwise.append(dev_batchdata)
         return batchwise
 
     def format(self, dtype=np.float32):
@@ -233,11 +253,13 @@ class Dataset(object):
         this function also copies the data to the device memory.
         """
         assert self.backend is not None
-        for dataset in (self.inputs, self.targets):
+        for dsname in ('inputs', 'targets'):
+            dataset = getattr(self, dsname)
             for key in dataset:
                 item = dataset[key]
                 if item is not None:
-                    dataset[key] = self.transpose_batches(item, dtype)
+                    dataset[key] = self.transpose_batches(item, dtype,
+                                                          dsname == 'targets')
 
     def get_batch(self, data, batch):
         """

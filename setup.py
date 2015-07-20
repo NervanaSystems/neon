@@ -19,7 +19,7 @@ from setuptools import setup, find_packages, Command
 import subprocess
 
 # Define version information
-VERSION = '0.8.2'
+VERSION = '0.9.0'
 FULLVERSION = VERSION
 write_version = True
 
@@ -70,13 +70,11 @@ class NeonCommand(Command):
     description = "Passes additional build type options to subsequent commands"
     user_options = [('cpu=', None, 'Add CPU backend related dependencies'),
                     ('gpu=', None, 'Add GPU backend related dependencies'),
-                    ('dist=', None, 'Add distributed related dependencies'),
                     ('dev=', None, 'Add development related dependencies')]
 
     def initialize_options(self):
         self.cpu = "0"
         self.gpu = "0"
-        self.dist = "0"
         self.dev = "0"
 
     def run(self):
@@ -98,19 +96,17 @@ class NeonCommand(Command):
                                                    'egg=imgworker']
         if self.gpu == "1" or self.gpu == "cudanet":
             self.distribution.install_requires += ['cudanet>=0.2.7',
-                                                   'pycuda>=2014.1']
+                                                   'pycuda>=2015.1']
             self.distribution.dependency_links += ['git+https://github.com/'
                                                    'NervanaSystems/'
                                                    'cuda-convnet2.git#'
                                                    'egg=cudanet']
         if self.gpu == "nervanagpu":
-            self.distribution.install_requires += ['nervanagpu>=0.3.2']
+            self.distribution.install_requires += ['nervanagpu>=0.3.3']
             self.distribution.dependency_links += ['git+https://github.com/'
                                                    'NervanaSystems/'
                                                    'nervanagpu.git#'
                                                    'egg=nervanagpu']
-        if self.dist == "1":
-            self.distribution.install_requires += ['mpi4py>=1.3.1']
 
     def finalize_options(self):
         pass

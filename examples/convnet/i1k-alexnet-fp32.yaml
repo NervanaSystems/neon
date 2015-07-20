@@ -82,7 +82,7 @@
       schedule: {
               type: step,
               ratio: 0.1,
-              step_epochs: 20,
+              step_epochs: 10,
       },
       momentum_params: {
         type: constant,
@@ -95,11 +95,11 @@
     type: gradient_descent_momentum_weight_decay,
     lr_params: {
       learning_rate: 0.0001,
-      weight_decay: .0005,
+      weight_decay: .05,
       schedule: {
               type: step,
               ratio: 0.1,
-              step_epochs: 20,
+              step_epochs: 10,
       },
       momentum_params: {
         type: constant,
@@ -112,7 +112,7 @@
   model: !obj:models.MLP {
     backend_type: *bt,
     batch_norm: &bn True,
-    num_epochs: 60,
+    num_epochs: 30,
     batch_size: &bs 128,
     step_print: 24,
     serialized_path: '~/data/I1K/I1K_alexnet_fp32_model.prm',

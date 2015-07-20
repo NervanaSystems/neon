@@ -44,10 +44,10 @@ class PoolingLayer(Layer):
         self.tempbuf = None
         self.initialize_local()
         self.allocate_output_bufs()
-        if self.backend.__module__ == 'neon.backends.gpu':
+        if hasattr(self.backend, 'ng'):
             self.pool_params = self.backend.ng.pool_layer(
                 dtype=self.output_dtype,
-                op=self.op, N=self.batch_size, C=self.nifm,
+                op=self.op, N=self.output.shape[1], C=self.nifm,
                 D=1, H=self.ifmshape[0], W=self.ifmshape[1], J=self.maxout,
                 T=1, R=self.fshape[0], S=self.fshape[1],
                 pad_d=0, pad_h=self.pad, pad_w=self.pad,

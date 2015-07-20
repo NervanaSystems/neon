@@ -14,7 +14,7 @@
 # import shortcuts
 from neon.layers.boltzmann import RBMLayer  # noqa
 from neon.layers.compositional import BranchLayer, ListLayer  # noqa
-from neon.layers.convolutional import (ConvLayer, SubConvLayer)  # noqa
+from neon.layers.convolutional import ConvLayer  # noqa
 from neon.layers.dropout import DropOutLayer  # noqa
 from neon.layers.fully_connected import FCLayer  # noqa
 from neon.layers.layer import (Layer, DataLayer, ImageDataLayer,  # noqa

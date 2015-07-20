@@ -19,7 +19,6 @@
 DEV := $(strip $(shell grep -i '^ *DEV *=' setup.cfg | cut -f 2 -d '='))
 CPU := $(strip $(shell grep -i '^ *CPU *=' setup.cfg | cut -f 2 -d '='))
 GPU := $(strip $(shell grep -i '^ *GPU *=' setup.cfg | cut -f 2 -d '='))
-DIST := $(strip $(shell grep -i '^ *DIST *=' setup.cfg | cut -f 2 -d '='))
 
 # get release version info
 RELEASE := $(strip $(shell grep '^VERSION *=' setup.py | cut -f 2 -d '=' \
@@ -69,17 +68,12 @@ else
   ifeq ($(GPU), cudanet)
     INSTALL_REQUIRES := $(INSTALL_REQUIRES) \
       'git+https://github.com/NervanaSystems/cuda-convnet2.git\#egg=cudanet>=0.2.7' \
-      'pycuda>=2014.1'
+      'pycuda>=2015.1'
   endif
   ifeq ($(GPU), nervanagpu)
     INSTALL_REQUIRES := $(INSTALL_REQUIRES) \
-      'git+https://github.com/NervanaSystems/nervanagpu.git\#egg=nervanagpu>=0.3.2'
+      'git+https://github.com/NervanaSystems/nervanagpu.git\#egg=nervanagpu>=0.3.3'
   endif
-endif
-ifeq ($(DIST), 0)
-  NOSE_ATTRS := $(NOSE_ATTRS),'!dist'
-else
-  INSTALL_REQUIRES := $(INSTALL_REQUIRES) 'mpi4py>=1.3.1'
 endif
 
 .PHONY: default build develop install uninstall test test_all sanity speed \
@@ -89,9 +83,8 @@ endif
 default: build
 
 build: clean_pyc
-	@echo "Running build(DEV=$(DEV) CPU=$(CPU) GPU=$(GPU) DIST=$(DIST))..."
-	@python setup.py neon --dev $(DEV) --cpu $(CPU) --gpu $(GPU) --dist $(DIST) \
-		build
+	@echo "Running build(DEV=$(DEV) CPU=$(CPU) GPU=$(GPU))..."
+	@python setup.py neon --dev $(DEV) --cpu $(CPU) --gpu $(GPU) build
 
 pip_check:
 ifeq (, $(shell which pip))
@@ -119,11 +112,11 @@ ifdef INSTALL_REQUIRES
 endif
 
 develop: deps_install
-	@echo "Running develop(DEV=$(DEV) CPU=$(CPU) GPU=$(GPU) DIST=$(DIST))..."
+	@echo "Running develop(DEV=$(DEV) CPU=$(CPU) GPU=$(GPU))..."
 	@pip install -e .
 
 install: deps_install
-	@echo "Running install(DEV=$(DEV) CPU=$(CPU) GPU=$(GPU) DIST=$(DIST))..."
+	@echo "Running install(DEV=$(DEV) CPU=$(CPU) GPU=$(GPU))..."
 	@pip install .
 
 uninstall: pip_check
@@ -136,7 +129,7 @@ test: build
 
 test_all:
 	@echo "Running test_all..."
-	@tox -- -e CPU=$(CPU) GPU=$(GPU) DIST=$(DIST)
+	@tox -- -e CPU=$(CPU) GPU=$(GPU)
 
 integration: build
 	@echo "Running integration checks (this may take 10-20 minutes)..."
@@ -149,12 +142,12 @@ serialize: build
 sanity: build
 	@echo "Running sanity checks..."
 	@PYTHONPATH=${PYTHONPATH}:./ python neon/tests/sanity_check.py \
-		--cpu $(CPU) --gpu $(GPU) --datapar $(DIST) --modelpar $(DIST)
+		--cpu $(CPU) --gpu $(GPU)
 
 speed: build
 	@echo "Running speed checks..."
 	@PYTHONPATH=${PYTHONPATH}:./ python neon/tests/speed_check.py \
-		--cpu $(CPU) --gpu $(GPU) --datapar $(DIST) --modelpar $(DIST)
+		--cpu $(CPU) --gpu $(GPU)
 
 grad: build
 	@echo "Running gradient checks..."

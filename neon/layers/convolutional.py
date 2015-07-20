@@ -19,7 +19,7 @@ Neural network layers involving the application of convolutional filters.
 import logging
 from neon.backends.cpu import CPU
 from neon.layers.layer import WeightLayer
-from neon.util.param import opt_param, req_param
+from neon.util.param import opt_param
 
 logger = logging.getLogger(__name__)
 
@@ -51,12 +51,6 @@ class ConvLayer(WeightLayer):
         else:
             self.bias_shape = (self.nout, 1)
 
-        if self.shared_bias or self.batch_norm:
-            self.bias_expand_view = self.bias_expand.reshape(
-                (self.nofm, self.ofmsize))
-            self.pre_act_view = self.pre_act.reshape(
-                (self.nofm, self.ofmsize * self.batch_size))
-
         self.allocate_param_bufs()
 
         opt_param(self, ['prodbuf', 'bpropbuf', 'updatebuf'], None)
@@ -65,9 +59,9 @@ class ConvLayer(WeightLayer):
             self.bpropbuf = self.backend.empty((self.fsize, self.batch_size))
             self.updatebuf = self.backend.empty(self.weights.shape)
 
-        if self.backend.__module__ == 'neon.backends.gpu':
+        if hasattr(self.backend, 'ng'):
             self.conv_params = self.backend.ng.conv_layer(
-                N=self.batch_size, C=self.nifm, K=self.nofm,
+                N=self.output.shape[1], C=self.nifm, K=self.nofm,
                 D=1, H=self.ifmshape[0], W=self.ifmshape[1], T=1,
                 R=self.fshape[0], S=self.fshape[1],
                 pad_d=0, pad_h=self.pad, pad_w=self.pad,
@@ -76,12 +70,31 @@ class ConvLayer(WeightLayer):
                 dtype=self.weight_dtype)
             self.prodbuf = self.bpropbuf = self.updatebuf = self.conv_params
 
+        if self.backend.is_dist:
+            self.bprop_events = self.backend.make_events()
+            self.update_events = self.backend.make_events()
+        else:
+            self.bprop_events = None
+            self.update_events = None
+
     def set_weight_shape(self):
         if hasattr(self, 'local_conv') and self.local_conv:
             weight_shape = (self.fsize * self.ofmsize, self.nofm)
         else:
             weight_shape = (self.fsize, self.nofm)
         opt_param(self, ['weight_shape'], weight_shape)
+
+    def make_views(self):
+        if self.shared_bias or self.batch_norm:
+            self.bias_expand_view = self.bias_expand.reshape(
+                (self.nofm, self.ofmsize))
+            self.pre_act_view = self.pre_act.reshape(
+                (self.nofm, self.ofmsize * self.output.shape[1]))
+
+    def make_mempool(self):
+        nr = self.backend.num_dev
+        poolsize = -(-self.weights.size // nr) * nr
+        self.mempool = self.backend.empty((poolsize, 1), self.updates_dtype)
 
     def fprop(self, inputs):
         self.backend.fprop_conv(out=self.pre_act, inputs=inputs,
@@ -156,66 +169,19 @@ class ConvLayer(WeightLayer):
             if self.use_biases is True:
                 self.backend.add(upm[1], self.updates[1], out=self.updates[1])
 
+    def share_updates(self):
+        assert self.backend.is_dist and self.is_local
+        assert self.mempool is not None
 
-class SubConvLayer(ConvLayer):
-    """
-    Convolutional layer with workaround for modulo 16 number of filters
-    """
-    def __init__(self, **kwargs):
-        super(SubConvLayer, self).__init__(**kwargs)
-        req_param(self, ['endidx'])
+        self.backend.synchronize()
+        for dbuf in self.updates:
+            nr = self.backend.num_dev
+            poolsize = -(-dbuf.size // nr) * nr
+            ubuf = self.mempool[:poolsize]
+            self.backend.reduce(dbuf, ubuf)
 
-    def initialize(self, kwargs):
-        super(SubConvLayer, self).initialize(kwargs)
-        self.rowendidx = self.endidx * self.ofmsize
-        self.bigoutput = self.output
-        self.suboutput = self.backend.zeros(
-            (self.rowendidx, self.batch_size), self.output_dtype)
-
-    def fprop(self, inputs):
-        self.output = self.bigoutput
-        super(SubConvLayer, self).fprop(inputs)
-        self.suboutput.fill(0.0)
-        self.suboutput[:] = self.output[:self.rowendidx, :]
-        self.output = self.suboutput
-
-    def bprop(self, error):
-        inputs = self.prev_layer.output
-        if self.activation is not None:
-            self.backend.multiply(error, self.pre_act[:self.rowendidx],
-                                  out=self.pre_act[:self.rowendidx])
-        self.pre_act[self.rowendidx:] = 0.
-        self.weights[self.endidx:] = 0.
-        error = self.pre_act
-        if self.deltas is not None:
-            self.backend.bprop_conv(out=self.deltas, weights=self.weights,
-                                    deltas=error, ofmshape=self.ofmshape,
-                                    ofmsize=self.ofmsize,
-                                    ofmlocs=self.ofmlocs,
-                                    ifmshape=self.ifmshape, links=self.links,
-                                    padding=self.pad, stride=self.stride,
-                                    nifm=self.nifm, ngroups=1,
-                                    bpropbuf=self.bpropbuf,
-                                    local=self.local_conv)
-
-        upm = self.utemp if self.accumulate else self.updates
-
-        self.backend.update_conv(out=upm[0], inputs=inputs,
-                                 weights=self.weights, deltas=error,
-                                 ofmshape=self.ofmshape,
-                                 ofmsize=self.ofmsize,
-                                 ofmlocs=self.ofmlocs,
-                                 ifmshape=self.ifmshape, links=self.links,
-                                 nifm=self.nifm, padding=self.pad,
-                                 stride=self.stride, ngroups=1,
-                                 fwidth=self.fshape[-1],
-                                 updatebuf=self.updatebuf,
-                                 local=self.local_conv,
-                                 layer=self)
-
-        if self.use_biases is True:
-            self.backend.sum(error, axes=1, out=upm[1])
-        if self.accumulate:
-            self.backend.add(upm[0], self.updates[0], out=self.updates[0])
-            if self.use_biases is True:
-                self.backend.add(upm[1], self.updates[1], out=self.updates[1])
+        if self.batch_norm:
+            self.backend.divide(self.bn._beta_updates, self.backend.num_dev,
+                                out=self.bn._beta_updates)
+            self.backend.divide(self.bn._gamma_updates, self.backend.num_dev,
+                                out=self.bn._gamma_updates)

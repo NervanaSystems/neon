@@ -5,7 +5,6 @@ from math import floor
 
 from neon.datasets.synthetic import UniformRandom
 from neon.backends.cpu import CPU
-from neon.backends.par import NoPar
 
 
 class TestValidationUniformRandom(object):
@@ -16,9 +15,7 @@ class TestValidationUniformRandom(object):
         ntrain, ntest, nin, nout = 100, 10, 10, 5
         data = UniformRandom(ntrain, ntest, nin, nout, validation_pct=split)
         data.backend = CPU(rng_seed=0)
-        data.backend.actual_batch_size = batch_size
-        par = NoPar()
-        par.associate(data.backend)
+        data.backend.batch_size = batch_size
         data.load()
         split /= 100.0
         nb_batches = ntrain // batch_size
@@ -35,9 +32,7 @@ class TestValidationUniformRandom(object):
         ntrain, ntest, nin, nout = 100, 10, 10, 5
         data = UniformRandom(ntrain, ntest, nin, nout, validation_pct=split)
         data.backend = CPU(rng_seed=0)
-        data.backend.actual_batch_size = batch_size
-        par = NoPar()
-        par.associate(data.backend)
+        data.backend.batch_size = batch_size
         data.load()
         split /= 100.0
         nb_batches = ntrain // batch_size

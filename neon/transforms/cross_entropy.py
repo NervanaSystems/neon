@@ -42,24 +42,34 @@ def cross_entropy(backend, outputs, targets, temp, epsilon=2**-23,
     Returns:
         Tensor: Calculated cross entropy values for each element.
     """
-    # Compute (t-1)*log(1-y).
-    backend.add(targets, -1.0, out=temp[0])
-    backend.subtract(1.0, outputs, out=temp[1])
-    backend.add(temp[1], epsilon, out=temp[1])
-    backend.log(temp[1], out=temp[1])
-    backend.multiply(temp[0], temp[1], out=temp[0])
+    if hasattr(backend, 'ng'):
+        # compund kernel call for NervanaGPU backend.
+        result = temp[4]
+        backend.crossent(outputs, targets, temp[0], result, epsilon,
+                         scale_by_batchsize)
+        return result
+    else:
+        # Compute (t-1)*log(1-y).
+        backend.add(targets, -1.0, out=temp[0])
+        backend.subtract(1.0, outputs, out=temp[1])
+        backend.add(temp[1], epsilon, out=temp[1])
+        backend.log(temp[1], out=temp[1])
+        backend.multiply(temp[0], temp[1], out=temp[0])
 
-    # Compute t*log(y).
-    backend.add(outputs, epsilon, out=temp[1])
-    backend.log(temp[1], out=temp[1])
-    backend.multiply(targets, temp[1], out=temp[1])
+        # Compute t*log(y).
+        backend.add(outputs, epsilon, out=temp[1])
+        backend.log(temp[1], out=temp[1])
+        backend.multiply(targets, temp[1], out=temp[1])
 
-    # Compute t*log(y) - (t-1)*log(1-y)
-    backend.subtract(temp[0], temp[1], out=temp[0])
-    result = backend.empty((1, 1), dtype=outputs.dtype, persist_values=False)
-    if scale_by_batchsize:
-        backend.divide(temp[0], temp[0].shape[1], temp[0])
-    return backend.sum(temp[0], axes=None, out=result)
+        # Compute t*log(y) - (t-1)*log(1-y)
+        backend.subtract(temp[0], temp[1], out=temp[0])
+
+        if scale_by_batchsize:
+            backend.divide(temp[0], temp[0].shape[1], temp[0])
+        result = backend.empty((1, 1), dtype=temp[0].dtype,
+                               persist_values=False)
+        backend.sum(temp[0], axes=None, out=result)
+        return result
 
 
 def cross_entropy_multi(backend, outputs, targets, temp, epsilon=2**-23,
@@ -78,16 +88,22 @@ def cross_entropy_multi(backend, outputs, targets, temp, epsilon=2**-23,
     Returns:
         Tensor: Calculated cross entropy values for each element.
     """
-
-    # Compute (t*log(y)).
-    backend.add(outputs, epsilon, out=temp[1])
-    backend.log(temp[1], out=temp[1])
-    backend.multiply(targets, temp[1], out=temp[1])
-    backend.multiply(temp[1], -1.0, out=temp[0])
-    result = backend.empty((1, 1), dtype=outputs.dtype, persist_values=False)
-    if scale_by_batchsize:
-        backend.divide(temp[0], temp[0].shape[1], temp[0])
-    return backend.sum(temp[0], axes=None, out=result)
+    if hasattr(backend, 'ng'):
+        result = temp[4]
+        backend.crossent(outputs, targets, temp[0], result, epsilon,
+                         scale_by_batchsize, ismulti=True)
+        return result
+    else:
+        # Compute (t*log(y)).
+        backend.clip(outputs, epsilon, 1, out=temp[1])
+        backend.log(temp[1], out=temp[1])
+        backend.multiply(targets, temp[1], out=temp[1])
+        backend.multiply(temp[1], -1.0, out=temp[0])
+        if scale_by_batchsize:
+            backend.divide(temp[0], temp[0].shape[1], temp[0])
+        result = backend.empty((1, 1), dtype=temp[0].dtype,
+                               persist_values=False)
+        return backend.sum(temp[0], axes=None, out=result)
 
 
 def cross_entropy_derivative(backend, outputs, targets, temp, scale=1.0,
@@ -146,7 +162,8 @@ def shortcut_derivative(backend, outputs, targets, temp, scale=1.0):
     Derivative has simpler form and removes numerical errors
     """
     backend.subtract(outputs, targets, out=temp[0])
-    backend.multiply(temp[0], scale, out=temp[0])
+    if scale != 1.0:
+        backend.multiply(temp[0], scale, out=temp[0])
     return temp[0]
 
 
@@ -199,7 +216,9 @@ class CrossEntropy(Cost):
                                           persist_values=False)
             tempbuf4 = self.backend.zeros(databuf.shape, dtype=temp_dtype,
                                           persist_values=False)
-            self.temp = [tempbuf1, tempbuf2, tempbuf3, tempbuf4]
+            tempbuf5 = self.backend.zeros((1, 1), temp_dtype,
+                                          persist_values=False)
+            self.temp = [tempbuf1, tempbuf2, tempbuf3, tempbuf4, tempbuf5]
         self.outputbuf = databuf
 
     def get_deltabuf(self):
@@ -240,7 +259,8 @@ class CrossEntropy(Cost):
         result = self.ce_function(self.backend, self.outputbuf, targets,
                                   self.temp, epsilon=self.epsilon,
                                   scale_by_batchsize=scale_by_batchsize)
-        self.backend.multiply(result, self.scale, out=result)
+        if self.scale != 1.0:
+            self.backend.multiply(result, self.scale, out=result)
         return result
 
     def apply_derivative(self, targets):

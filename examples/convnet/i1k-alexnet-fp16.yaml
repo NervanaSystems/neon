@@ -82,7 +82,7 @@
       schedule: {
               type: step,
               ratio: 0.1,
-              step_epochs: 20,
+              step_epochs: 10,
       },
       momentum_params: {
         type: constant,
@@ -100,7 +100,7 @@
       schedule: {
               type: step,
               ratio: 0.1,
-              step_epochs: 20,
+              step_epochs: 10,
       },
       momentum_params: {
         type: constant,
@@ -113,7 +113,7 @@
   model: !obj:models.MLP {
     backend_type: *bt,
     batch_norm: &bn True,
-    num_epochs: 60,
+    num_epochs: 30,
     batch_size: &bs 128,
     step_print: 24,
     serialized_path: '~/data/I1K/I1K_alexnet_fp16_model.prm',

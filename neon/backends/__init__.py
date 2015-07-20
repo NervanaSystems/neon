@@ -22,12 +22,11 @@ import sys
 
 # import shortcuts
 from neon.backends.cpu import CPU
-from neon.backends.par import NoPar, ModelPar, DataPar
 
 
-def gen_backend(model=None, gpu=None, nrv=False, datapar=False, modelpar=False,
-                flexpoint=False, rng_seed=None, numerr_handling=None,
-                half=False, stochastic_round=0, device_id=None):
+def gen_backend(model=None, gpu=None, nrv=False, flexpoint=False,
+                rng_seed=None, numerr_handling=None, half=False,
+                stochastic_round=0, device_id=None):
     """
     Construct and return a backend instance of the appropriate type based on
     the arguments given.  With no parameters, a single CPU core, float32
@@ -48,21 +47,6 @@ def gen_backend(model=None, gpu=None, nrv=False, datapar=False, modelpar=False,
                               for computation (must be installed on the
                               system).  Defaults to False which implies a CPU
                               based backend.
-        datapar (bool, optional): Set to True to ensure that data is
-                                  partitioned and each chunk is processed in
-                                  parallel on different compute cores. Requires
-                                  mpi4py.  Defaults to False which implies that
-                                  all data will be processed sequentially on a
-                                  single compute core.
-        modelpar (bool, optional): Set to True to ensure that the nodes in each
-                                   model layer are partitioned and distributed
-                                   across multiple compute cores.  Requires
-                                   mpi4py.  Defaults to False which implies
-                                   that all nodes in all model layers will be
-                                   processed by the same single compute core.
-        flexpoint (bool, optional): If True, attempt to use FlexPoint(TM)
-                                    element typed data instead of the default
-                                    float32 which is in place if set to False.
         rng_seed (numeric, optional): Set this to a numeric value which can be
                                       used to seed the random number generator
                                       of the instantiated backend.  Defaults to
@@ -98,22 +82,6 @@ def gen_backend(model=None, gpu=None, nrv=False, datapar=False, modelpar=False,
     logger = logging.getLogger(__name__)
     gpuflag = False
 
-    if datapar and modelpar:
-        raise NotImplementedError('Hybrid parallelization scheme not '
-                                  'implemented yet.  Try with at most one of'
-                                  'datapar or modelpar')
-    if modelpar:
-        par = ModelPar()
-    elif datapar:
-        par = DataPar()
-    else:
-        par = NoPar()
-
-    if par.device_id is not None:
-        if device_id is not None:
-            logger.warn('Ignoring device id specified in command line.')
-        device_id = par.device_id
-
     if gpu is not None:
         gpu = gpu.lower()
         if sys.platform.startswith("linux"):
@@ -130,23 +98,33 @@ def gen_backend(model=None, gpu=None, nrv=False, datapar=False, modelpar=False,
             except ImportError:
                 logger.warning("cudanet not found, can't run via GPU")
                 gpuflag = False
-        elif gpuflag and gpu == 'nervanagpu':
+        elif gpuflag and gpu.startswith('nervanagpu'):
             try:
                 import nervanagpu  # noqa
                 try:
-                    # import pycuda.autoinit
-                    import pycuda.driver as drv
-                    drv.init()
-                    device_id = device_id if device_id is not None else 0
-                    global ctx
-                    ctx = drv.Device(device_id).make_context()
-                    import atexit
-                    atexit.register(ctx.pop)
-                    from neon.backends.gpu import GPU
                     be_name = 'NervanaGPU'
-                    be = GPU(rng_seed=rng_seed,
-                             stochastic_round=stochastic_round,
-                             device_id=device_id)
+                    if gpu == 'nervanagpu':
+                        device_id = 0 if device_id is None else device_id[0]
+                        from neon.backends.gpu import GPU
+                        be = GPU(rng_seed=rng_seed,
+                                 stochastic_round=stochastic_round,
+                                 device_id=device_id)
+                    else:
+                        from neon.backends.mgpu import MGPU
+                        try:
+                            num_dev = int(gpu.strip('nervanagpu'))
+                        except(ValueError):
+                            raise ValueError("invalid number of GPUs" +
+                                             " specified")
+                        if not device_id:
+                            device_id = range(num_dev)
+                        if len(device_id) != num_dev:
+                            raise RuntimeError("Incorrect number of devices"
+                                               " specified ", device_id,
+                                               num_dev)
+                        be = MGPU(rng_seed=rng_seed,
+                                  stochastic_round=stochastic_round,
+                                  device_id=device_id, num_dev=num_dev)
                 except ImportError:
                     logger.warning("pycuda error, can't run via GPU")
                     gpuflag = False
@@ -176,5 +154,4 @@ def gen_backend(model=None, gpu=None, nrv=False, datapar=False, modelpar=False,
     logger.info("{} backend, RNG seed: {}, numerr: {}".format
                 (be_name, rng_seed, numerr_handling))
 
-    par.associate(be)
     return be

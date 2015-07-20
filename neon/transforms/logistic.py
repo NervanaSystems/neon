@@ -65,10 +65,13 @@ class Logistic(Activation):
                                  derivative function.
             outputs (array_like): Storage for the transformed output.
         """
-        # Apply the logistic function.
-        backend.logistic(inputs, outputs)
+        if hasattr(backend, 'ng'):
+            backend.logistic_compound(inputs, outputs)
+        else:
+            # Apply the logistic function.
+            backend.logistic(inputs, outputs)
 
-        # Apply the derivative of the logistic function, storing the result in
-        # inputs
-        backend.subtract(1.0, outputs, out=inputs)
-        backend.multiply(inputs, outputs, out=inputs)
+            # Apply the derivative of the logistic function, storing the
+            # result in inputs
+            backend.subtract(1.0, outputs, out=inputs)
+            backend.multiply(inputs, outputs, out=inputs)

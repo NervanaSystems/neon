@@ -70,7 +70,7 @@ process to train and run inference on a toy network:
 Parallelization
 ---------------
 Read through the :doc:`distributed` section to see how to run model training in
-data and model parallel modes using MPI.
+data and model parallel modes using multiple GPU devices.
 
 
 .. _train_models:

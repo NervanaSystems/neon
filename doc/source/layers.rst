@@ -40,7 +40,6 @@ Available Layers
    neon.layers.fully_connected.FCLayer
 
    neon.layers.convolutional.ConvLayer
-   neon.layers.convolutional.SubConvLayer
 
    neon.layers.pooling.PoolingLayer
    neon.layers.pooling.CrossMapPoolingLayer

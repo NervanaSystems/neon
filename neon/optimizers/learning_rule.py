@@ -67,9 +67,7 @@ class LearningRule(object):
                 plr = p + self.name
                 np_params[plr] = []
                 for p_tensor in p_list:
-                    np_params[plr].append(np.array(
-                        p_tensor.asnumpyarray(), dtype=p_tensor.dtype).reshape(
-                            p_tensor.shape))
+                    np_params[plr].append(p_tensor.asnumpyarray())
         return np_params
 
     def set_params(self, params_dict):
@@ -77,4 +75,4 @@ class LearningRule(object):
             plr = p + self.name
             if plr in params_dict:
                 for i in range(len(params_dict[plr])):
-                    getattr(self, p)[i][:] = params_dict[plr][i]
+                    self.backend.set(getattr(self, p)[i], params_dict[plr][i])
