@@ -1,0 +1,311 @@
+# ----------------------------------------------------------------------------
+# Copyright 2015 Nervana Systems Inc.
+# ----------------------------------------------------------------------------
+# VGG model B: 13 layer, abridged version of following link
+# https://gist.github.com/ksimonyan/211839e770f7b538e2d8#file-readme-md
+
+!obj:experiments.FitExperiment {
+
+
+
+  dataset: &ds !obj:datasets.Imageset {
+    repo_path: '~/data',
+    imageset: 'I1K',
+    square_crop: True,
+    save_dir: '~/data/I1K/imageset_batches',
+    output_image_size: &ois 256,
+    cropped_image_size: &cis 224,
+    macro_size: 3072,
+    num_channels: 3,
+    num_workers: 12,
+    mean_norm: True, # This just subtracts the mean, but doesn't divide by 128
+    unit_norm: False, # This norms magnitude to 1
+    # ntrain: 4, # Delete this line to use entire dataset for training
+    # nval: 1,
+    backend_type: &bt np.float32,  #########################################
+  },
+
+
+    metrics: {
+    train: [
+      !obj:metrics.MisclassPercentage {error_rank: 1},
+      !obj:metrics.MisclassPercentage {error_rank: 5},
+    ],
+    validation: [
+      !obj:metrics.MisclassPercentage {error_rank: 1},
+      !obj:metrics.MisclassPercentage {error_rank: 5},
+    ],
+  },
+
+  weight_inits: [
+    &wt_init0 !obj:params.AutoUniformValGen {
+      relu: True,
+    },
+    # Init for the two FC layers
+    &wt_init_fc !obj:params.AutoUniformValGen {
+      relu: True,
+    },
+    # used for lastlayer
+    &wt_initout !obj:params.AutoUniformValGen {
+      relu: True,
+    },
+  ],
+
+  lrule: &gdm {
+    type: gradient_descent_momentum,
+    backend_type: *bt,
+    lr_params: {
+      learning_rate: 0.0002, ############################ 10x
+      schedule: {
+              type: step,
+              ratio: 0.1,
+              step_epochs: 20,
+      },
+      momentum_params: {
+        type: constant,
+        initial_coef: 0.90,
+      },
+    },
+  },
+
+  lrule: &gdmwd {
+    type: gradient_descent_momentum_weight_decay,
+    backend_type: *bt,
+    lr_params: {
+      learning_rate: 0.0001, ############################ 10x
+      weight_decay: .0005,
+      schedule: {
+              type: step,
+              ratio: 0.1,
+              step_epochs: 20,
+      },
+      momentum_params: {
+        type: constant,
+        initial_coef: 0.90,
+      },
+    },
+  },
+
+  model: !obj:models.MLP {
+    backend_type: *bt,
+    batch_norm: &bn False, ################################################
+    num_epochs: 74,
+    batch_size: &bs 512, ################################# 128 only fits fp16
+    step_print: 6,
+    reuse_deltas: True,
+    # serialized_path: '~/data/I1K/I1K_vgg_model.prm',
+    layers: [
+      &datalayer !obj:layers.ImageDataLayer {
+        name: d0,
+        is_local: True,
+        nofm: 3,
+        ofmshape: [*cis, *cis],
+      },
+      !obj:layers.ConvLayer {
+        name: conv1_1,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 64,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.ConvLayer {
+        name: conv1_2,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 64,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.PoolingLayer {
+        name: pool1,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [2, 2],
+        stride: 2,
+      },
+      !obj:layers.ConvLayer {
+        name: conv2_1,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 128,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.ConvLayer {
+        name: conv2_2,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 128,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.PoolingLayer {
+        name: pool2,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [2, 2],
+        stride: 2,
+      },
+      !obj:layers.ConvLayer {
+        name: conv3_1,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 256,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.ConvLayer {
+        name: conv3_2,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 256,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.PoolingLayer {
+        name: pool3,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [2, 2],
+        stride: 2,
+      },
+      !obj:layers.ConvLayer {
+        name: conv4_1,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 512,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.ConvLayer {
+        name: conv4_2,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 512,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.PoolingLayer {
+        name: pool4,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [2, 2],
+        stride: 2,
+      },
+      !obj:layers.ConvLayer {
+        name: conv5_1,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 512,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.ConvLayer {
+        name: conv5_2,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init0,
+        nofm: 512,
+        fshape: [3, 3],
+        pad: 1,
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.PoolingLayer {
+        name: pool5,
+        backend_type: *bt,
+        op: 'max',
+        fshape: [2, 2],
+        stride: 2,
+      },
+      !obj:layers.FCLayer {
+        name: fc6,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init_fc,
+        nout: 4096, #4096 in original
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.DropOutLayer {
+        name: dropout1,
+        backend_type: *bt,
+        keep: 0.5,
+      },
+      !obj:layers.FCLayer {
+        name: fc7,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_init_fc,
+        nout: 4096, #4096 in original
+        activation: !obj:transforms.RectLin {},
+      },
+      !obj:layers.DropOutLayer {
+        name: dropout2,
+        backend_type: *bt,
+        keep: 0.5,
+      },
+      &lastlayer !obj:layers.FCLayer {
+        name: fc8,
+        backend_type: *bt,
+        batch_norm: *bn,
+        lrule_init: *gdmwd,
+        weight_init: *wt_initout,
+        nout: 1000,
+        activation: !obj:transforms.Softmax {},
+      },
+      &costlayer !obj:layers.CostLayer {
+        name: cost,
+        ref_layer: *datalayer,
+        ref_label: 'labels',
+        cost: !obj:transforms.CrossEntropy {
+          backend_type: *bt,
+          epsilon: 0.0005,
+          scale: 1000,
+        },
+      },
+    ],
+  },
+
+  # logging options that are passed to logging.basicConfig
+  # level value thresholds (set level lower to display them):
+  #   CRITICAL 50
+  #   ERROR    40
+  #   WARNING  30
+  #   INFO     20
+  #   DEBUG    10
+  #   NOTSET    0
+  logging: {
+    level: 20,
+    format: '%(asctime)-15s %(levelname)s:%(module)s - %(message)s'
+  },
+}
