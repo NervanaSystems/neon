@@ -146,6 +146,9 @@ class MOBYDICK(Dataset):
                 offbyone[0:length - self.data_dim, :] = splay_3d[self.data_dim:
                                                                  length, :]
                 self.targets[dataset] = offbyone
+            if hasattr(self, 'validation_pct'):
+                self.split_set(
+                    self.validation_pct, from_set='train', to_set='validation')
             self.format(dtype=self.backend_type)  # runs transpose_batches
 
         else:

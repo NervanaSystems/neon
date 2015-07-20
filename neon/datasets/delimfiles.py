@@ -25,7 +25,6 @@ import numpy as np
 import os
 
 from neon.datasets.dataset import Dataset
-from neon.ipc.shmem import Server
 from neon.util.compat import pickle
 from neon.util.param import opt_param
 
@@ -85,6 +84,7 @@ class DelimFiles(Dataset):
                                   dtype=self.input_dtype)
 
         if self.live:
+            from neon.ipc.shmem import Server
             self.predict = True
             req_size = (np.dtype(self.input_dtype).itemsize * self.batch_size *
                         self.item_size)

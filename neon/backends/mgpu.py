@@ -267,8 +267,8 @@ class MGPU(GPU):
         MGPUTensor.num_dev = num_dev
 
         self.ng = NervanaGPU(stochastic_round=stochastic_round)
-        logger.info("Initialized NervanaGPU with stochastic_round=%s",
-                    stochastic_round)
+        logger.info("Initialized %d device NervanaGPU, stochastic_round=%s",
+                    num_dev, stochastic_round)
         self.ng.block = None
         self.rng_seed = rng_seed
         self.rng_init()

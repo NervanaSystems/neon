@@ -41,7 +41,7 @@ class TestGPU(object):
 
     def reduction_test(self):
         nr = self.be.num_dev
-        if nr == 1: # This shouldn't be supported
+        if nr == 1:  # This shouldn't be supported
             return
         # create a numpy array as the test-bed
         asize = 9
@@ -73,10 +73,9 @@ class TestGPU(object):
             np.testing.assert_allclose(d_a.tlist[i].asnumpyarray(),
                                        h_result, atol=1e-6, rtol=0)
 
-
     def frag2rep_test(self):
         nr = self.be.num_dev
-        if nr == 1: # This shouldn't be supported
+        if nr == 1:  # This shouldn't be supported
             return
         np.random.seed(0)
         # create a numpy array as the test-bed
