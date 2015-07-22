@@ -126,7 +126,7 @@ class GradientDescentMomentum(GradientDescent):
                 self.backend.gdm_compound(ps_item=ps_item, us_item=us_item,
                                           vs_item=vs_item,
                                           momentum_coef=momentum_coef,
-                                          learning_rate=self.learning_rate,
+                                          learning_rate=learning_rate,
                                           epoch=epoch)
             else:
                 self.backend.multiply(vs_item, momentum_coef, out=vs_item)
@@ -234,7 +234,7 @@ class GradientDescentMomentumWeightDecay(GradientDescentMomentum):
                 self.backend.gdmwd_compound(ps_item=ps_item, us_item=us_item,
                                             vs_item=vs_item,
                                             momentum_coef=momentum_coef,
-                                            learning_rate=self.learning_rate,
+                                            learning_rate=learning_rate,
                                             wd=self.weight_decay,
                                             epoch=epoch)
             else:
