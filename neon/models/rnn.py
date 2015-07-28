@@ -146,9 +146,19 @@ class RNN(MLP):
             self.epochs_complete += 1
             if self.make_plots is True:
                 errorlist.append(float(error.asnumpyarray()) / dlnb)
-            logger.info('epoch: %d, total training error: %0.5f',
-                        self.epochs_complete,
-                        float(error.asnumpyarray()) / dlnb)
+            if isinstance(self.epoch_metrics, dict):
+                logger.info('Epoch %s metrics report:' %
+                            (self.epochs_complete))
+                for setname in self.epoch_metrics.keys():
+                    self.print_metric_score(
+                        dataset=dataset,
+                        setname=setname,
+                        metrics=self.epoch_metrics[setname]
+                    )
+            else:
+                logger.info('epoch: %d, total training error: %0.5f',
+                            self.epochs_complete,
+                            float(error.asnumpyarray()) / dlnb)
             self.backend.end(Block.epoch, self.epochs_complete - 1)
             self.save_snapshot()
             if self.make_plots is True:

@@ -40,6 +40,7 @@ class MLP(Model):
         opt_param(self, ['reuse_deltas'], True)
         opt_param(self, ['timing_plots'], False)
         opt_param(self, ['serialize_schedule'])
+        opt_param(self, ['epoch_metrics'], None)
 
     def link(self, initlayer=None):
         pass
@@ -135,6 +136,26 @@ class MLP(Model):
         logging.info("%s set misclass rate: %0.5f%%",
                      setname, 100. * misclassval)
 
+    def print_metric_score(self, dataset, setname, metrics):
+        """
+        Prints the metric scores of this model on the specified dataset.
+        """
+        if dataset.has_set(setname):
+            self.set_train_mode(False)
+            for metric in metrics:
+                metric.clear()
+            for outputs, targets in self.predict_generator(dataset, setname):
+                for metric in metrics:
+                    metric.add(outputs, targets)
+            self.set_train_mode(True)
+            self.data_layer.use_set('train', predict=False)
+            for metric in metrics:
+                metric_name = str(metric)
+                logger.info(
+                    '%s set %s %.5f', setname, metric_name, metric.report())
+            for metric in metrics:
+                metric.clear()
+
     def fit(self, dataset):
         """
         Learn model weights on the given datasets.
@@ -169,7 +190,17 @@ class MLP(Model):
                 self.backend.end(Block.minibatch, mb_id)
                 mb_id += 1
             self.epochs_complete += 1
-            self.print_training_error(error, self.data_layer.num_batches)
+            if isinstance(self.epoch_metrics, dict):
+                logger.info('Epoch %s metrics report:' %
+                            (self.epochs_complete))
+                for setname in self.epoch_metrics.keys():
+                    self.print_metric_score(
+                        dataset=dataset,
+                        setname=setname,
+                        metrics=self.epoch_metrics[setname]
+                    )
+            else:
+                self.print_training_error(error, self.data_layer.num_batches)
             self.print_layers(debug=True)
             self.backend.end(Block.epoch, self.epochs_complete - 1)
             self.save_snapshot()
