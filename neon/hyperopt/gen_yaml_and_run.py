@@ -49,7 +49,7 @@ def call_neon(params):
     yaml_file = os.path.join(experiment_dir, 'yamels',
                              'temp' + timestring + '.yaml')
     try:
-        os.mkdir('yamels')
+        os.mkdir(os.path.join(experiment_dir, 'yamels'))
     except OSError:
         "Directory exists"
     write_params(hyper_file, yaml_file, params)
