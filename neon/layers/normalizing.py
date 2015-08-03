@@ -56,7 +56,7 @@ class CrossMapResponseNormLayer(Layer):
         self.tempbuf = None
         if isinstance(self.backend, CPU) and not self.prev_layer.is_data:
             self.tempbuf = self.backend.empty(
-                (self.ifmshape[-2], self.ifmshape[-1], self.batch_size))
+                (1, self.ifmshape[-2], self.ifmshape[-1], self.batch_size))
 
     def fprop(self, inputs):
         self.backend.fprop_cmrnorm(out=self.output, inputs=inputs,
