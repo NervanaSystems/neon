@@ -96,8 +96,7 @@ def gen_backend(model=None, gpu=None, nrv=False, flexpoint=False,
                 be_name = 'Cudanet'
                 be = GPU(rng_seed=rng_seed, device_id=device_id)
             except ImportError:
-                logger.warning("cudanet not found, can't run via GPU")
-                gpuflag = False
+                raise RuntimeError("cudanet not found, can't run via GPU")
         elif gpuflag and gpu.startswith('nervanagpu'):
             try:
                 import nervanagpu  # noqa
