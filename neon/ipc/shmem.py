@@ -143,7 +143,10 @@ class Message(object):
 class Endpoint(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
-        id_string = "_" + self.channel_id 
+        if hasattr(self,"channel_id"):
+            id_string = "_" + self.channel_id 
+        else:
+            id_string = ""
         self.req_name = 'req' + id_string
         self.res_name = 'res' + id_string
         self.req_header_format = ''
