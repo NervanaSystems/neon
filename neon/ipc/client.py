@@ -4,9 +4,9 @@ import logging
 logging.basicConfig(level=20)
 logger = logging.getLogger(__name__)
 
-client1 = Client(channel_id="one")
+#client1 = Client(channel_id="one")
 
-client2 = Client(channel_id="two")
+#client2 = Client(channel_id="two")
 
 # Open a client connection to a server with the default name
 client = Client()
@@ -15,5 +15,10 @@ client = Client()
 # with channel_id "three"
 #client3 = Client(channel_id="three")
 
+data, header = client.receive()
+
 while True:
-    pass
+    string = raw_input('---> ')
+    client.send(string) 
+    data, header = client.receive()
+    print "received: ", data
