@@ -14,7 +14,7 @@ server3 = Server(req_size=1, res_size=1)
 server3.send('x')
 
 while True:
-    data, header = server3.receive()
+    data = server3.receive()
     print "received: ", data
     server3.send(data)
      

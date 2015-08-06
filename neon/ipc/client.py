@@ -15,10 +15,10 @@ client = Client()
 # with channel_id "three"
 #client3 = Client(channel_id="three")
 
-data, header = client.receive()
+data = client.receive()
 
 while True:
     string = raw_input('---> ')
     client.send(string) 
-    data, header = client.receive()
+    data = client.receive()
     print "received: ", data

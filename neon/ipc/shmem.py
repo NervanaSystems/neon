@@ -1,4 +1,4 @@
-# ---------------------------------------------------------------------------
+# ----------------------------------------------------------------------------
 # Copyright 2015 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -26,9 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class Message(object):
-    def __init__(self, suffix, header_format):
-        self.header_size = struct.calcsize(header_format)
-        self.header_format = header_format
+    def __init__(self, suffix):
 
         self.shmem_name = '/neon-shmem-' + suffix
         self.empty_sem_name = '/neon-empty-sem-' + suffix
@@ -43,9 +41,8 @@ class Message(object):
 
     def create(self, data_size):
         self.data_size = data_size
-        self.shmem_size = self.header_size + self.data_size
         self.memory, self.mapfile = self.create_shmem(self.shmem_name,
-                                                      self.shmem_size)
+                                                      self.data_size)
         self.empty_sem = self.create_sem(self.empty_sem_name, 1)
         self.fill_sem = self.create_sem(self.fill_sem_name, 0)
         self.mutex = self.create_sem(self.mutex_name, 1)
@@ -113,13 +110,10 @@ class Message(object):
         if mapfile is not None:
             mapfile.close()
 
-    def send(self, data, header):
+    def send(self, data):
         self.empty_sem.acquire()
         self.mutex.acquire()
         self.mapfile.seek(0)
-        if len(header) != 0:
-            packed_header = struct.pack(self.header_format, *header)
-            self.mapfile.write(packed_header)
         self.mapfile.write(np.getbuffer(data))
         self.mutex.release()
         self.fill_sem.release()
@@ -128,16 +122,11 @@ class Message(object):
         self.fill_sem.acquire()
         self.mutex.acquire()
         self.mapfile.seek(0)
-        if self.header_size != 0:
-            packed_header = self.mapfile.read(self.header_size)
-            header = struct.unpack(self.header_format, packed_header)
-        else:
-            header = ()
         buf = self.mapfile.read(self.data_size)
         data = np.frombuffer(buf, dtype=np.uint8)
         self.mutex.release()
         self.empty_sem.release()
-        return data, header
+        return data
 
 
 class Endpoint(object):
@@ -149,10 +138,8 @@ class Endpoint(object):
             id_string = ""
         self.req_name = 'req' + id_string
         self.res_name = 'res' + id_string
-        self.req_header_format = ''
-        self.res_header_format = ''
-        self.request = Message(self.req_name, self.req_header_format)
-        self.response = Message(self.res_name, self.res_header_format)
+        self.request = Message(self.req_name)
+        self.response = Message(self.res_name)
 
 
 class Server(Endpoint):
@@ -169,8 +156,8 @@ class Server(Endpoint):
         self.request.destroy()
         self.response.destroy()
 
-    def send(self, data, header=()):
-        self.response.send(data, header)
+    def send(self, data):
+        self.response.send(data)
 
     def receive(self):
         return self.request.receive()
@@ -190,8 +177,8 @@ class Client(Endpoint):
         self.request.close()
         self.response.close()
 
-    def send(self, data, header=()):
-        self.request.send(data, header)
+    def send(self, data):
+        self.request.send(data)
 
     def receive(self):
         return self.response.receive()
