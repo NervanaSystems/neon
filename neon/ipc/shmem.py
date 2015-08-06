@@ -142,11 +142,12 @@ class Message(object):
 
 class Endpoint(object):
     def __init__(self, **kwargs):
-        self.req_name = 'req'
-        self.res_name = 'res'
+        self.__dict__.update(kwargs)
+        id_string = "_" + self.channel_id 
+        self.req_name = 'req' + id_string
+        self.res_name = 'res' + id_string
         self.req_header_format = ''
         self.res_header_format = ''
-        self.__dict__.update(kwargs)
         self.request = Message(self.req_name, self.req_header_format)
         self.response = Message(self.res_name, self.res_header_format)
 
