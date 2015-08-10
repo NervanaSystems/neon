@@ -1,11 +1,12 @@
 import pika
 import uuid
 
-class FibonacciRpcClient(object):
-    def __init__(self):
+class NeonRpcClient(object):
+    def __init__(self,rpc_queue):
         self.connection = pika.BlockingConnection(pika.ConnectionParameters(
                 host='localhost'))
 
+        self.rpc_queue = rpc_queue
         self.channel = self.connection.channel()
 
         result = self.channel.queue_declare(exclusive=True)
@@ -22,7 +23,7 @@ class FibonacciRpcClient(object):
         self.response = None
         self.corr_id = str(uuid.uuid4())
         self.channel.basic_publish(exchange='',
-                                   routing_key='rpc_queue',
+                                   routing_key=self.rpc_queue,
                                    properties=pika.BasicProperties(
                                          reply_to = self.callback_queue,
                                          correlation_id = self.corr_id,
@@ -32,8 +33,10 @@ class FibonacciRpcClient(object):
             self.connection.process_data_events()
         return int(self.response)
 
-fibonacci_rpc = FibonacciRpcClient()
+neon_rpc = NeonRpcClient('rpc_queue')
 
-print " [x] Requesting fib(30)"
-response = fibonacci_rpc.call(30)
+arg = int(raw_input("Give an integer to square: "))
+
+print " [x] Making request"
+response = neon_rpc.call(arg)
 print " [.] Got %r" % (response,)
