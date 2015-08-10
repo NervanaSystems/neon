@@ -1,5 +1,19 @@
+"""
+This file defines server and client classes for performing RPC.
+Any number of RPC servers can serve requests on a given RPC queue.
+Any number of RPC clients can send requests to a given RPC queue.
+Load balancing about the existing servers on a queue happens automatically.
+If a server dies during a computation, another server will finish the computation.
+
+We don't presently have persistence guarantees for the messages, but that can
+    be added without a huge amount of extra effort.
+
+We should also deal with timeouts in a smarter way in the future.
+"""
+
 import pika
 import uuid
+
 
 class RpcServer(object):
     def __init__(self,rpc_queue, func):
@@ -10,9 +24,7 @@ class RpcServer(object):
         self.func = func
 
         channel = connection.channel()
-
         channel.queue_declare(queue=rpc_queue)
-
         channel.basic_qos(prefetch_count=1)
         channel.basic_consume(self.on_request, queue=rpc_queue)
 
