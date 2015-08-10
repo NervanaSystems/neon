@@ -1,6 +1,6 @@
 from rpc import RpcClient
 
-neon_rpc = RpcClient('rpc_queue')
+neon_rpc = RpcClient('my_rpc')
 
 arg = int(raw_input("Give an integer to square: "))
 

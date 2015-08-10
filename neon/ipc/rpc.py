@@ -9,14 +9,12 @@ class RpcServer(object):
 
         self.func = func
 
-        self.rpc_queue = rpc_queue
-
         channel = connection.channel()
 
-        channel.queue_declare(queue='rpc_queue')
+        channel.queue_declare(queue=rpc_queue)
 
         channel.basic_qos(prefetch_count=1)
-        channel.basic_consume(self.on_request, queue='rpc_queue')
+        channel.basic_consume(self.on_request, queue=rpc_queue)
 
         print " Serving requests"
         channel.start_consuming()
