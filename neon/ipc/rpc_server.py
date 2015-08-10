@@ -9,7 +9,7 @@ def square(n):
     return n * n
 
 def func(k):
-    return lambda x: pow(x,k)
+    return lambda x: pow(int(x),k)
 
 k = int(sys.argv[2])
 server = RpcServer(sys.argv[1],func(k))

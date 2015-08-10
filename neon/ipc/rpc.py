@@ -32,10 +32,9 @@ class RpcServer(object):
         channel.start_consuming()
 
     def on_request(self,ch,method,props,body):
-        n = int(body)
 
-        print " computing func(%s)" % (n,)
-        response = self.func(n)
+        print " computing func(%s)" % (body,)
+        response = self.func(body)
 
         ch.basic_publish(exchange='',
                          routing_key=props.reply_to,
@@ -76,5 +75,5 @@ class RpcClient(object):
                                    body=str(n))
         while self.response is None:
             self.connection.process_data_events()
-        return int(self.response)
+        return self.response
 
