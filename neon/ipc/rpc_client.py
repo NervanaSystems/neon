@@ -1,6 +1,11 @@
 from rpc import RpcClient
+import sys
 
-neon_rpc = RpcClient('my_rpc')
+if len(sys.argv) != 2:
+    print "Please supply rpc queue name"
+    sys.exit(1)
+
+neon_rpc = RpcClient(sys.argv[1])
 
 arg = int(raw_input("Give an integer to square: "))
 
