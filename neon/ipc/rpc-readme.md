@@ -1,3 +1,5 @@
+In order to use the rpc library, you need an AMQP server and you need pika.
+
 To see the rpc library in action, execute the following in 2 different terminals:
 
 1. `python rpc_server.py two 2`
