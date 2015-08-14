@@ -60,6 +60,7 @@ else
   INSTALL_REQUIRES := $(INSTALL_REQUIRES) 'nose>=1.3.0' 'Pillow>=2.5.0' \
     'flake8>=2.2.2' 'pep8-naming>=0.2.2' 'sphinx>=1.2.2' 'posix_ipc>=1.0.0' \
     'sphinxcontrib-napoleon>=0.2.8' 'scikit-learn>=0.15.2' 'matplotlib>=1.4.0' \
+		'pika>=0.9.14' \
     'git+https://github.com/NervanaSystems/imgworker.git\#egg=imgworker>=0.2.5'
 endif
 ifeq ($(GPU), 0)
