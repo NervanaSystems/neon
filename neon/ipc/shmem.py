@@ -16,11 +16,10 @@
 Shared-memory based IPC for accepting data from third-party applications.
 """
 
+import logging
+import mmap
 import numpy as np
 import posix_ipc as ipc
-import mmap
-import struct
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -132,8 +131,8 @@ class Message(object):
 class Endpoint(object):
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
-        if hasattr(self,"channel_id"):
-            id_string = "_" + self.channel_id 
+        if hasattr(self, "channel_id"):
+            id_string = "_" + self.channel_id
         else:
             id_string = ""
         self.req_name = 'req' + id_string
