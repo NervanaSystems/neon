@@ -55,9 +55,12 @@ class ConvLayer(WeightLayer):
 
         opt_param(self, ['prodbuf', 'bpropbuf', 'updatebuf'], None)
         if isinstance(self.backend, CPU):
-            self.prodbuf = self.backend.empty((self.nofm, self.batch_size))
-            self.bpropbuf = self.backend.empty((self.fsize, self.batch_size))
-            self.updatebuf = self.backend.empty(self.weights.shape)
+            self.prodbuf = self.backend.empty((self.nofm, self.batch_size),
+                                              dtype=self.weight_dtype)
+            self.bpropbuf = self.backend.empty((self.fsize, self.batch_size),
+                                               dtype=self.weight_dtype)
+            self.updatebuf = self.backend.empty(self.weights.shape,
+                                                dtype=self.weight_dtype)
 
         if hasattr(self.backend, 'ng'):
             self.conv_params = self.backend.ng.conv_layer(
