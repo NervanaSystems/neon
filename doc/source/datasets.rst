@@ -82,12 +82,12 @@ can be used for all training, testing and validation sets.
 ImageNet
 --------
 The raw images need to be downloaded from ILSVRC as a tar file. A neon script can convert the raw
-images into binaries, where --out_dir is where the processed batches will be stored, and --image_dir
-is where the original tar files are saved.
+images into binaries. data_dir is where the processed batches will be stored, and image_dir is 
+where the original tar files are saved.
 
 .. code-block:: bash
 
-    python neon/util/batch_writer.py  --out_dir /usr/local/data/tmp \
+    python neon/util/batch_writer.py  --data_dir /usr/local/data/tmp \
                                       --image_dir=/usr/local/data/I1K/imagenet_orig \
                                       --set_type=i1k
 
