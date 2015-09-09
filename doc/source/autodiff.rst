@@ -13,7 +13,6 @@ Construct an op-tree from a compound operation.
 .. code:: python
 
     from neon.backends import gen_backend, Autodiff
-    from neon.backends.backend import OpTreeNode # just for pretty print here
     import numpy as np
     be = gen_backend('nervanagpu')
     x0 = be.array(np.ones((3, 3)) * 1., name='x0')
@@ -49,8 +48,8 @@ The gradient with respect to certain variables can be called from an autodiff ob
 .. code:: python
 
     [x0_grad_op_tree, x1_grad_op_tree] = ad.get_grad_op_tree([x0, x1])
-    print(OpTreeNode.pp(x0_grad_op_tree))
-    print(OpTreeNode.pp(x1_grad_op_tree))
+    print(OpTreeNode.pp())
+    print(OpTreeNode.pp())
 
 Autodiff provides a few other functions:
 
