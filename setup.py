@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2015 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -19,7 +19,7 @@ from setuptools import setup, find_packages, Command
 import subprocess
 
 # Define version information
-VERSION = '0.9.0'
+VERSION = '1.0.0rc1'
 FULLVERSION = VERSION
 write_version = True
 
@@ -32,9 +32,17 @@ try:
 except:
     pass
 
+gpuflag = os.system("nvcc --version > /dev/null 2>&1") == 0
+if gpuflag:
+    package_data = {'neon': ['backends/kernels/sass/*.sass',
+                             'backends/kernels/cubin/*.cubin',
+                             'data/*.so']}
+else:
+    package_data = {'neon': []}
+
 if write_version:
     txt = "# " + ("-" * 77) + "\n"
-    txt += "# Copyright 2014 Nervana Systems Inc.\n"
+    txt += "# Copyright 2015 Nervana Systems Inc.\n"
     txt += "# Licensed under the Apache License, Version 2.0 "
     txt += "(the \"License\");\n"
     txt += "# you may not use this file except in compliance with the "
@@ -61,69 +69,18 @@ if write_version:
     finally:
         a.close()
 
-# Define dependencies
-dependency_links = []
-required_packages = ['numpy>=1.8.1', 'PyYAML>=3.11']
-
-
-class NeonCommand(Command):
-    description = "Passes additional build type options to subsequent commands"
-    user_options = [('cpu=', None, 'Add CPU backend related dependencies'),
-                    ('gpu=', None, 'Add GPU backend related dependencies'),
-                    ('dev=', None, 'Add development related dependencies')]
-
-    def initialize_options(self):
-        self.cpu = "0"
-        self.gpu = "0"
-        self.dev = "0"
-
-    def run(self):
-        if self.dev == "1":
-            self.distribution.install_requires += ['nose>=1.3.0',
-                                                   'flake8>=2.2.2',
-                                                   'pep8-naming>=0.2.2',
-                                                   'Pillow>=2.5.0',
-                                                   'sphinx>=1.2.2',
-                                                   'posix_ipc>=1.0.0',
-                                                   'pika>=0.9.14',
-                                                   'sphinxcontrib-napoleon' +
-                                                   '>=0.2.8',
-                                                   'scikit-learn>=0.15.2',
-                                                   'matplotlib>=1.4.0',
-                                                   'imgworker>=0.2.5']
-            self.distribution.dependency_links += ['git+https://github.com/'
-                                                   'NervanaSystems/'
-                                                   'imgworker.git#'
-                                                   'egg=imgworker']
-        if self.gpu == "1" or self.gpu == "cudanet":
-            self.distribution.install_requires += ['cudanet>=0.2.7',
-                                                   'pycuda>=2015.1']
-            self.distribution.dependency_links += ['git+https://github.com/'
-                                                   'NervanaSystems/'
-                                                   'cuda-convnet2.git#'
-                                                   'egg=cudanet']
-        if self.gpu == "nervanagpu":
-            self.distribution.install_requires += ['nervanagpu>=0.3.3']
-            self.distribution.dependency_links += ['git+https://github.com/'
-                                                   'NervanaSystems/'
-                                                   'nervanagpu.git#'
-                                                   'egg=nervanagpu']
-
-    def finalize_options(self):
-        pass
 
 setup(name='neon',
       version=VERSION,
-      description='Deep learning framework with configurable backends',
+      description="Nervana's deep learning framework",
       long_description=open('README.md').read(),
       author='Nervana Systems',
       author_email='info@nervanasys.com',
       url='http://www.nervanasys.com',
       license='License :: OSI Approved :: Apache Software License',
-      scripts=['bin/neon', 'bin/hyperopt'],
-      packages=find_packages(),
-      install_requires=required_packages,
-      cmdclass={'neon': NeonCommand},
+      scripts=['bin/neon', 'bin/nvis'],
+      packages=find_packages(exclude=["tests"]),
+      package_data=package_data,
       classifiers=['Development Status :: 3 - Alpha',
                    'Environment :: Console',
                    'Environment :: Console :: Curses',

@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2014 Nervana Systems Inc.
+.. Copyright 2015 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -14,47 +14,104 @@
 .. ---------------------------------------------------------------------------
 .. neon documentation master file
 
-neon: A highly configurable deep learning framework
-***************************************************
+neon
+====
 
 :Release: |version|
 :Date: |today|
 
-.. automodule:: neon
-   :members:
-   :show-inheritance:
+|neo|_ is Nervana_'s Python-based deep learning library. It provides
+ease of use while delivering the highest performance.
 
+Features include:
 
-Contents
---------
+* Support for commonly used models including convnets, RNNs, LSTMs, and autoencoders
+* Tight integration with our `state-of-the-art`_ GPU kernel library
+* 3s/macrobatch (3072 images) on AlexNet on Titan X (Full run on 1 GPU ~ 32 hrs)
+* Swappable hardware backends: write code once and deploy on CPUs, GPUs, or Nervana hardware
+
+New features in this release:
+
+* Fast image captioning model (matches CPU based NeuralTalk while ~200x faster)
+* Basic automatic differentiation support
+* A framework for visualization
+* and `many more`_.
+
+We use neon internally at Nervana to solve our `customers' problems`_
+in many domains. Consider joining us. We are hiring across several
+roles. Apply here_!
+
+.. |(TM)| unicode:: U+2122
+   :ltrim:
+.. _nervana: http://nervanasys.com
+.. |neo| replace:: neon
+.. _neo: https://github.com/nervanasystems/neon
+.. _state-of-the-art: https://github.com/soumith/convnet-benchmarks
+.. _customers' problems: http://www.nervanasys.com/products
+.. _here: http://www.nervanasys.com/careers
+.. _highest performance: https://github.com/soumith/convnet-benchmarks
+.. _many more: https://github.com/NervanaSystems/neon/blob/master/ChangeLog
 
 .. toctree::
-   :maxdepth: 2
+   :hidden:
+   :maxdepth: 1
+   :caption: For Users
 
-   quick_start
-   installation
-   using_neon
-   distributed
-   hyperparameter_tuning
-   developing_neon
-   ml_operational_layer
-   backends
-   models
-   layers
-   transforms
-   metrics
-   learning_rules
-   datasets
-   experiments
-   util
-   faq
-   api
+   user_guide.rst
+   tools.rst
 
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: Examples
 
+   examples.rst
 
-Indices and tables
-==================
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: neon Fundamentals
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   overview.rst
+   backends.rst
+   datasets.rst
+   initializers.rst
+   optimizers.rst
+   activations.rst
+   layers.rst
+   costs.rst
+   models.rst
+   metrics.rst
+   callbacks.rst
+   autodiff.rst
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :titlesonly:
+
+   faq.rst
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: For Developers
+
+   developer_guide.rst
+   design.rst
+   ml_operational_layer.rst
+   optree.rst
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: Full API
+
+   api.rst
+
+.. toctree::
+   :hidden:
+   :caption: neon Versions
+
+   previous_versions.rst
+

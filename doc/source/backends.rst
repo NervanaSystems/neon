@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2014 Nervana Systems Inc.
+.. Copyright 2015 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -16,50 +16,31 @@
 Backends
 ========
 
-Backends incorporate a basic multi-dimensional
-:class:`neon.backends.backend.Backend.Tensor` data structure as well the
-algebraic and deep learning specific operations that can be performed on them.
-
-Each implemented backend conforms to our :doc:`ml_operational_layer` API to
-ensure a consistent behavior.
-
-The Backend and Tensor classes share a lot in common with
-`numpy <http://www.numpy.org/>`_
-`ufunc's <http://docs.scipy.org/doc/numpy/reference/ufuncs.html>`_ and
-`ndarray's <http://docs.scipy.org/doc/numpy/reference/arrays.html>`_
-respectively, so if you've done numpy programming in the past you should
-already be fairly familiar with how to work with our Backend and Tensor
-objects.
-
-Our syntax differs slightly from numpy, and we also explicitly require that the
-user manage and specify target output Tensor buffers (most operations have a
-required ``out`` Tensor parameter -- in numpy this is usually optional).  While
-this requires a bit more effort on the part of the user, the benefit is improved
-efficiency and a (sometimes vastly) reduced memory footprint.  Unfortunately
-numpy may make intermediate copies of Tensor data, and our forcing explicit
-``out`` parameter specification avoids this.
-
-
-Current Implementations
------------------------
-
+Nervana GPU
+-----------
 .. autosummary::
-   :toctree: generated/
+   neon.backends.nervanagpu.NervanaGPU
 
-   neon.backends.cpu.CPU
-   neon.backends.gpu.GPU
-   neon.backends.cc2.GPU
-   neon.backends.mgpu.MGPU
+The NervanaGPU backend (also available in a separate GitHub repository_) consists
+of kernels written in MaxAs_ assembler and Python wrappers. It includes
+precompiled kernels for matrix operations such as GEMM and CONV. Kernels for
+element-wise operations are templated and build on the fly so multiple
+operations can be compounded into a single kernel, which avoids memory bandwidth
+bottlenecks. The backend follows the API defined by the MOP layer. Sequences of
+operations are performed using a lazy evaluation scheme where operations are
+pushed onto an OpTree and only evaluated when an explicit assignment is made
+using :doc:`optree` [:] syntax, or when a GEMM or CONV operation is performed.
+OpTrees can also be passed to :py:class:`Autodiff<neon.backends.autodiff.Autodiff>`
+for automatic differentiation.
 
-Adding a new Backend
---------------------
+.. _repository: https://github.com/NervanaSystems/nervanagpu
+.. _MaxAs: https://github.com/NervanaSystems/maxas
 
-1. Generate a subclass of :class:`neon.backends.backend.Backend` including an
-   associated tensor class :class:`neon.backends.backend.Backend.Tensor`.
+Nervana CPU
+-----------
+.. autosummary::
+   neon.backends.nervanacpu.NervanaCPU
 
-2. Implement overloaded operators to manipulate these tensor objects, as well
-   other operations.  Effectively this amounts to implementing our MOP API (see
-   :doc:`ml_operational_layer`)
-
-3. To date, these operations have attempted to more or less mimic numpy syntax
-   as much as possible.
+The NervanaCPU backend is build on top of NumPy linear algebra functions for ND
+arrays and supports automatic differentiation through the use of OpTrees via
+:py:class:`Autodiff<neon.backends.autodiff.Autodiff>`.

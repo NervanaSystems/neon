@@ -1,0 +1,461 @@
+# hgemm_common_128x64
+
+# Copyright 2014 Nervana Systems Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+# 
+#    http://www.apache.org/licenses/LICENSE-2.0
+# 
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+--:-:1:-:1      LDS.U.128 j0Ay0, [readAs + 4x<0*128 + 00>];
+--:-:1:-:1      LDS.U.128 j0Bx0, [readBs + 4x<0*64 +  00>];
+--:-:1:-:1      LDS.U.128 j0Ay4, [readAs + 4x<0*128 + 64>];
+--:-:1:-:1      LDS.U.128 j0Bx4, [readBs + 4x<0*64 +  32>];
+
+LOOP:
+
+<CODE>
+
+    our @top;
+    our %insert;
+
+    my @cOrder;
+    my @swirl = ([0,2],[1,2],[1,0],[0,0]);
+    my @y = (0,1,4,5);
+    foreach my $x (0,2,4,6)
+    {
+        foreach my $y (@y)
+        {
+            push @cOrder, [$x + $_->[0], $y + $_->[1]] foreach @swirl;
+        }
+        @y = reverse @y;
+    }
+
+    my $out = join '', @top;
+    
+    foreach my $j (0 .. 7)
+    {
+        my $odd      = $j & 1;
+        my $nOdd     = !$odd + 0;
+        my $rsOffset = ($j + 1) % 8;
+        my $rsPred   = $j == 7 ? '@P0' : '   ';
+
+        $insert{"j${j}c0"} = sprintf "--:-:1:-:1  %s LDS.U.128 j%dAy0, [readAs + 4x<%d*128 + 00>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c2"} = sprintf "--:-:1:-:1  %s LDS.U.128 j%dBx0, [readBs + 4x<%d*64 +  00>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c4"} = sprintf "--:-:1:-:1  %s LDS.U.128 j%dAy4, [readAs + 4x<%d*128 + 64>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c6"} = sprintf "--:-:1:-:1  %s LDS.U.128 j%dBx4, [readBs + 4x<%d*64 +  32>];\n", $rsPred, $nOdd, $rsOffset;
+
+        foreach my $c (0 .. 63)
+        {
+            my ($x,$y) = @{$cOrder[$c]};
+
+            my $ins    = $insert{"j${j}c$c"} || '';
+
+            my $yield  = $c == 32 ? 'Y' : '-';
+
+            my $wait   = $c == 0 ? '01' : '--';
+
+            my $stall  = (split "\n", $ins)[0] =~ /LDS|F2F|I2I|LDG|STS|BAR|BRA/ ? 0 : 1;
+
+            my $ctrl   = "$wait:-:-:$yield:$stall";
+
+            $out .= sprintf "%s      FFMA cx%dy%d, j%dBx%d, j%dAy%d, cx%dy%d;\n%s", $ctrl,  $x,$y,  $odd,$x,  $odd,$y,  $x,$y,  $ins;
+        }
+    }
+    return $out;
+
+</CODE>
+
+--:-:1:-:1      S2R threadId, SR_TID.X;
+--:-:2:-:1      S2R blockA, SR_CTAID.Y;
+--:-:3:-:1      S2R blockB, SR_CTAID.Z;
+--:-:4:-:1      S2R blockZ, SR_CTAID.X;
+
+<SCHEDULE_BLOCK>
+
+--:-:-:-:1      MOV alpha, param_alpha;
+--:-:-:-:1      MOV beta,  param_beta;
+
+// writeCs = (readAs / 4) * 64 + readBs;
+--:-:-:-:1      LOP.AND readAs, readAs, 0xff;
+--:-:-:-:1      LOP.AND readBs, readBs, 0xff;
+--:-:-:-:1      ISCADD  writeCs, readAs, readBs, 4;
+
+// readCs = ((threadId & 96) << 3) | (threadId & 31)   << 2;
+01:-:-:-:1      LOP.AND tid31,  threadId,  31;
+--:-:-:-:1      LOP.AND tid96,  threadId,  96;
+--:-:-:-:1      ISCADD readCs, tid96, tid31, 3;
+--:-:-:-:1      SHL    readCs, readCs, 2;
+
+// cx00 = blkB*64 + tid31;
+04:-:-:-:1      ISCADD cx00, blockB, tid31, 6;
+--:-:-:-:1      IADD   cx32, cx00, 32;
+
+// cy = blkA*128 + (tid96 >> 1)
+--:-:-:-:1      SHR.U32 cy00, tid96, 1;
+02:-:-:-:1      ISCADD  cy00, blockA, cy00, 7;
+
+// C += (cy*ldc + cx00) * 4;
+--:-:-:-:1      MOV  ldc,  param_ldc;
+--:-:-:-:1      MOV  ldcz, param_ldcz;
+--:-:-:-:1      XMAD.LO  ci, cy00, ldc, cx00, xmad_c;
+08:-:-:-:1      XMAD.LO2 ci, ldcz, blockZ, ci;
+--:-:-:-:1      LEA      C00y0.CC, ci, param_C[0],     1;
+--:-:-:-:1      LEA.HI.X C00y1,    ci, param_C[1], RZ, 1;
+
+--:-:-:-:1      ISETP.NE.AND P6, PT, beta, RZ, PT; // beta != 0
+
+--:-:-:-:1      SHL  ldc1, ldc, 1;
+--:-:-:-:1      SHL  ldc4, ldc, 3;
+--:-:-:-:1      ISCADD ldc60, ldc, -ldc4, 7;
+
+// Seed the Tausworthe
+--:-:-:-:1      LOP.XOR lfsr0, seed, cx00;
+--:-:-:-:1      CS2R lfsr1, SR_CLOCKLO;
+--:-:-:-:1      CS2R lfsr2, SR_GLOBALTIMERLO;
+--:-:-:-:1      LOP.AND clk_shf1, lfsr1, 31;
+--:-:-:-:1      LOP.AND clk_shf2, lfsr2, 31;
+--:-:-:-:1      LOP.XOR clk_shf1, clk_shf1, tid31;
+--:-:-:-:1      LOP.XOR clk_shf2, clk_shf2, tid31;
+--:-:-:-:1      SHF.R.U64 lfsr1, lfsr1, clk_shf1, lfsr1;
+--:-:-:-:1      SHF.R.U64 lfsr2, lfsr2, clk_shf2, lfsr2;
+
+</SCHEDULE_BLOCK>
+
+//--:-:1:-:2      I2F.F32.U32 temp, threadId;
+//01:-:-:-:1      F2F.F16.F32 temp, temp;
+
+--:-:-:-:3      IADD   C04y0.CC, C00y0, ldc4;
+--:-:-:-:1      MOV flags, param_flags;
+--:-:-:-:1      MOV d0, RZ;
+--:-:-:-:1      IADD   cy04, cy00,  4;
+--:-:-:-:1      IADD.X C04y1,    C00y1, RZ;
+--:-:-:-:4      IADD   C08y0.CC, C04y0, ldc4;
+--:-:-:-:1      MOV d1, RZ;
+--:-:-:-:1      IADD   cy08, cy00,  8;
+--:-:-:-:1      IADD.X C08y1,    C04y1, RZ;
+--:-:-:-:3      IADD   C12y0.CC, C08y0, ldc4;
+--:-:-:-:1      MOV d2, RZ;
+--:-:-:-:1      MOV d3, RZ;
+--:-:-:-:1      IADD   cy12, cy00,  12;
+--:-:-:-:0      IADD.X C12y1,    C08y1, RZ;
+
+--:-:-:-:5      BAR.SYNC 0;
+
+<CODE>
+
+    my $out;
+    foreach my $y (0..7)
+    {
+        $out .=
+            "--:-:-:-:5      IADD   C00y0.CC, C00y0, ldc60;\n" .
+            "--:-:-:-:1      IADD   cy00,     cy00,  60;\n" .
+            "--:-:-:-:1      IADD.X C00y1,    C00y1, RZ;\n" .
+            "--:-:-:-:5      IADD   C04y0.CC, C04y0, ldc60;\n" .
+            "--:-:-:-:1      IADD   cy04,     cy04,  60;\n" .
+            "--:-:-:-:1      IADD.X C04y1,    C04y1, RZ;\n" .
+            "--:-:-:-:5      IADD   C08y0.CC, C08y0, ldc60;\n" .
+            "--:-:-:-:1      IADD   cy08,     cy08,  60;\n" .
+            "--:-:-:-:1      IADD.X C08y1,    C08y1, RZ;\n" .
+            "--:-:-:-:5      IADD   C12y0.CC, C12y0, ldc60;\n" .
+            "--:-:-:-:1      IADD   cy12,     cy12,  60;\n" .
+            "--:-:-:-:1      IADD.X C12y1,    C12y1, RZ;\n\n"  if $y == 4;
+
+        $out .= sprintf(
+            "--:-:-:-:1      FMUL c0, cx0y%d, alpha;\n" .
+            "--:-:-:-:1      FMUL c1, cx1y%d, alpha;\n" .
+            "--:-:-:-:1      FMUL c2, cx2y%d, alpha;\n" .
+            "--:-:-:-:1      FMUL c3, cx3y%d, alpha;\n" .
+            "--:-:-:-:1      FMUL c4, cx4y%d, alpha;\n" .
+            "--:-:-:-:1      FMUL c5, cx5y%d, alpha;\n" .
+            "--:-:-:-:1      FMUL c6, cx6y%d, alpha;\n" .
+            "--:-:-:-:0      FMUL c7, cx7y%d, alpha;\n",
+            ($y) x 8);
+
+        $out .= "--:-:-:-:5      CAL STORE_C;\n\n";
+    }
+    return $out;
+
+</CODE>
+
+--:-:-:-:1  @P4 STG.E.CS [Rand], seed;
+
+--:-:-:-:5      EXIT;
+
+
+STORE_C:
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      ISETP.LT.AND P4, PT, cx00, param_n, P6;
+--:-:-:-:1      ISETP.LT.AND P5, PT, cx32, param_n, P6;
+
+--:-:-:-:1      ISETP.LT.AND P0, PT, cy00, param_m, P4;
+--:-:-:-:1      ISETP.LT.AND P1, PT, cy00, param_m, P5;
+--:-:-:-:1      ISETP.LT.AND P2, PT, cy04, param_m, P4;
+--:-:-:-:1      ISETP.LT.AND P3, PT, cy04, param_m, P5;
+
+--:-:1:-:1  @P0 LDG.E.S16 d0, [C00y0 + 2x<00>];
+--:-:2:-:1  @P1 LDG.E.S16 d1, [C00y0 + 2x<32>];
+--:-:3:-:1  @P2 LDG.E.S16 d2, [C04y0 + 2x<00>];
+--:-:4:-:1  @P3 LDG.E.S16 d3, [C04y0 + 2x<32>];
+
+--:-:-:-:1      ISETP.LT.AND P4, PT, cx00, param_n, PT;
+--:-:-:-:1      ISETP.LT.AND P5, PT, cx32, param_n, PT;
+
+--:-:-:-:1      ISETP.LT.AND P0, PT, cy00, param_m, P4;
+--:-:-:-:1      ISETP.LT.AND P1, PT, cy00, param_m, P5;
+--:-:-:-:1      ISETP.LT.AND P2, PT, cy04, param_m, P4;
+--:-:-:-:1      ISETP.LT.AND P3, PT, cy04, param_m, P5;
+
+// Apply relu
+--:-:-:-:1      LOP.AND.NZ P6, RZ, flags, 2;
+--:-:-:-:1  @P6 FMNMX c0, c0, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c1, c1, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c2, c2, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c3, c3, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c4, c4, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c5, c5, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c6, c6, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c7, c7, RZ, !PT;
+
+// Stochastic Round flag
+--:-:-:-:0      LOP.AND.NZ   P6, RZ, flags, 1;
+
+</SCHEDULE_BLOCK>
+
+--:-:-:-:3      STS.128 [writeCs+4x<00>], c0;
+--:-:-:-:1      STS.128 [writeCs+4x<32>], c4;
+
+--:-:-:-:0      IADD cy00, cy00, 1;
+
+--:-:-:-:1      LDS c0, [readCs + 4x<0*64 + 00>];
+--:-:5:-:1      LDS c1, [readCs + 4x<0*64 + 32>];
+--:-:-:-:1      LDS c2, [readCs + 4x<1*64 + 00>];
+--:-:6:-:1      LDS c3, [readCs + 4x<1*64 + 32>];
+
+--:-:-:-:0      IADD cy04, cy04, 1;
+
+01:-:1:-:4      F2F.F32.F16 d0, d0;
+02:-:2:-:4      F2F.F32.F16 d1, d1;
+04:-:3:-:4      F2F.F32.F16 d2, d2;
+08:-:4:-:1      F2F.F32.F16 d3, d3;
+
+11:-:-:-:1      FFMA c0, d0, beta, c0;
+02:-:-:-:1      FFMA c1, d1, beta, c1;
+24:-:-:-:1      FFMA c2, d2, beta, c2;
+08:-:-:-:0      FFMA c3, d3, beta, c3;
+
+--:-:-:-:5  @P6 BRA.U DO_RANDOM1;
+
+--:-:-:-:0      ISETP.NE.AND P6, PT, beta, RZ, PT; // beta != 0
+--:-:1:-:4      F2F.F16.F32 c0, c0;
+--:-:2:-:4      F2F.F16.F32 c1, c1;
+--:-:3:-:4      F2F.F16.F32 c2, c2;
+--:-:4:-:1      F2F.F16.F32 c3, c3;
+
+--:-:-:-:5      BRA.U END_ROUND1;
+
+DO_RANDOM1:
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      ISETP.NE.AND P6, PT, beta, RZ, PT; // beta != 0
+
+// Strip mantissa and leave sign+exponent
+--:-:-:-:1      LOP32I.AND exp0, c0, 0xff800000;
+--:-:-:-:1      LOP32I.AND exp1, c1, 0xff800000;
+--:-:-:-:1      LOP32I.AND exp2, c2, 0xff800000;
+--:-:-:-:1      LOP32I.AND exp3, c3, 0xff800000;
+
+// Find the exponent that will shift 32 bits of integer data 
+// out past the lsb of this number as an fp16
+// exp *= 2^-10 * 2^-32  (2^-42)
+--:-:-:-:1      FMUL32I exp0, exp0, 0x2a800000;
+--:-:-:-:1      FMUL32I exp1, exp1, 0x2a800000;
+--:-:-:-:1      FMUL32I exp2, exp2, 0x2a800000;
+--:-:-:-:1      FMUL32I exp3, exp3, 0x2a800000;
+
+// lfsr0 = ((lfsr0 & 0xfffffffe) << 12) ^ (((lfsr0 << 13) ^ lfsr0) >> 19);
+--:-:-:-:1      LOP32I.AND lfsr0_1, lfsr0, 0xfffffffe;
+--:-:-:-:1      SHL lfsr0_1, lfsr0_1, 12;
+--:-:-:-:1      SHL lfsr0_2, lfsr0, 13;
+--:-:-:-:1      LOP.XOR lfsr0_2, lfsr0_2, lfsr0;
+--:-:-:-:1      SHR.U32 lfsr0_2, lfsr0_2, 19;
+--:-:-:-:1      LOP.XOR lfsr0, lfsr0_1, lfsr0_2;
+
+// lfsr1 = ((lfsr1 & 0xfffffff8) <<  4) ^ (((lfsr1 << 2)  ^ lfsr1) >> 25);
+--:-:-:-:1      LOP32I.AND lfsr1_1, lfsr1, 0xfffffff8;
+--:-:-:-:1      SHL lfsr1_1, lfsr1_1, 4;
+--:-:-:-:1      SHL lfsr1_2, lfsr1, 2;
+--:-:-:-:1      LOP.XOR lfsr1_2, lfsr1_2, lfsr1;
+--:-:-:-:1      SHR.U32 lfsr1_2, lfsr1_2, 25;
+--:-:-:-:1      LOP.XOR lfsr1, lfsr1_1, lfsr1_2;
+
+// lfsr2 = ((lfsr2 & 0xfffffff0) << 11) ^ (((lfsr2 << 3)  ^ lfsr2) >> 11);
+--:-:-:-:1      LOP32I.AND lfsr2_1, lfsr2, 0xfffffff0;
+--:-:-:-:1      SHL lfsr2_1, lfsr2_1, 11;
+--:-:-:-:1      SHL lfsr2_2, lfsr2, 3;
+--:-:-:-:1      LOP.XOR lfsr2_2, lfsr2_2, lfsr2;
+--:-:-:-:1      SHR.U32 lfsr2_2, lfsr2_2, 11;
+--:-:-:-:1      LOP.XOR lfsr2, lfsr2_1, lfsr2_2;
+
+// rand = lfsr0 ^ lfsr1 ^ lfsr2;
+// generate 3 other rotations of this rand
+--:-:-:-:1      LOP3.LUT  seed, lfsr0, lfsr1, lfsr2, 0x96;
+--:-:-:-:1      SHF.R.U64 rand1, seed,  4, seed;
+--:-:-:-:1      SHF.R.U64 rand2, seed,  8, seed;
+--:-:-:-:1      SHF.R.U64 rand3, seed, 12, seed;
+
+// Convert rand to float
+--:-:1:-:1      I2F.F32.U32.RZ rand0, seed;
+--:-:2:-:1      I2F.F32.U32.RZ rand1, rand1;
+--:-:3:-:1      I2F.F32.U32.RZ rand2, rand2;
+--:-:4:-:1      I2F.F32.U32.RZ rand3, rand3;
+
+// Scale the random number so msb is one below lsb of fp16
+// Add scaled random to number to round
+01:-:-:-:1      FFMA.RZ c0, rand0, exp0, c0;
+02:-:-:-:1      FFMA.RZ c1, rand1, exp1, c1;
+04:-:-:-:1      FFMA.RZ c2, rand2, exp2, c2;
+08:-:-:-:0      FFMA.RZ c3, rand3, exp3, c3;
+
+// Truncate number to fp16
+--:-:1:-:1      F2F.F16.F32.RZ c0, c0;
+--:-:2:-:1      F2F.F16.F32.RZ c1, c1;
+--:-:3:-:1      F2F.F16.F32.RZ c2, c2;
+--:-:4:-:1      F2F.F16.F32.RZ c3, c3;
+</SCHEDULE_BLOCK>
+
+END_ROUND1:
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      ISETP.LT.AND P4, PT, cx00, param_n, P6;
+--:-:-:-:1      ISETP.LT.AND P5, PT, cx32, param_n, P6;
+
+// Stochastic Round flag
+--:-:-:-:1      LOP.AND.NZ   P6, RZ, flags, 1;
+
+01:-:-:-:1  @P0 STG.E.S16 [C00y0 + 2x<00>], c0;
+02:5:-:-:1  @P1 STG.E.S16 [C00y0 + 2x<32>], c1;
+04:-:-:-:1  @P2 STG.E.S16 [C04y0 + 2x<00>], c2;
+08:6:-:-:1  @P3 STG.E.S16 [C04y0 + 2x<32>], c3;
+
+--:-:-:-:1      ISETP.LT.AND P0, PT, cy08, param_m, P4;
+--:-:-:-:1      ISETP.LT.AND P1, PT, cy08, param_m, P5;
+--:-:-:-:1      ISETP.LT.AND P2, PT, cy12, param_m, P4;
+--:-:-:-:1      ISETP.LT.AND P3, PT, cy12, param_m, P5;
+
+--:-:1:-:1  @P0 LDG.E.S16 d0, [C08y0 + 2x<00>];
+--:-:2:-:1  @P1 LDG.E.S16 d1, [C08y0 + 2x<32>];
+--:-:3:-:1  @P2 LDG.E.S16 d2, [C12y0 + 2x<00>];
+--:-:4:-:1  @P3 LDG.E.S16 d3, [C12y0 + 2x<32>];
+
+--:-:-:-:1      ISETP.LT.AND P4, PT, cx00, param_n, PT;
+--:-:-:-:1      ISETP.LT.AND P5, PT, cx32, param_n, PT;
+
+--:-:-:-:2      ISETP.LT.AND P0, PT, cy08, param_m, P4;
+--:-:-:-:2      ISETP.LT.AND P1, PT, cy08, param_m, P5;
+--:-:-:-:1      ISETP.LT.AND P2, PT, cy12, param_m, P4;
+--:-:-:-:1      ISETP.LT.AND P3, PT, cy12, param_m, P5;
+</SCHEDULE_BLOCK>
+
+10:-:-:-:4      IADD   C00y0.CC, C00y0, ldc1;
+--:-:-:-:1      IADD   cy08, cy08, 1;
+--:-:-:-:1      IADD   cy12, cy12, 1;
+--:-:-:-:1      IADD.X C00y1,    C00y1, RZ;
+20:-:-:-:6      IADD   C04y0.CC, C04y0, ldc1;
+--:-:-:-:0      IADD.X C04y1,    C04y1, RZ;
+
+--:-:-:-:1      LDS c0, [readCs + 4x<2*64 + 00>];
+--:-:5:-:1      LDS c1, [readCs + 4x<2*64 + 32>];
+--:-:-:-:1      LDS c2, [readCs + 4x<3*64 + 00>];
+--:-:6:-:1      LDS c3, [readCs + 4x<3*64 + 32>];
+
+01:-:1:-:4      F2F.F32.F16 d0, d0;
+02:-:2:-:4      F2F.F32.F16 d1, d1;
+04:-:3:-:4      F2F.F32.F16 d2, d2;
+08:-:4:-:1      F2F.F32.F16 d3, d3;
+
+11:-:-:-:1      FFMA c0, d0, beta, c0;
+02:-:-:-:1      FFMA c1, d1, beta, c1;
+24:-:-:-:1      FFMA c2, d2, beta, c2;
+08:-:-:-:0      FFMA c3, d3, beta, c3;
+
+--:-:-:-:5  @P6 BRA.U DO_RANDOM2;
+
+--:-:1:-:4      F2F.F16.F32 c0, c0;
+--:-:2:-:4      F2F.F16.F32 c1, c1;
+--:-:3:-:4      F2F.F16.F32 c2, c2;
+--:-:4:-:1      F2F.F16.F32 c3, c3;
+
+--:-:-:-:5      BRA.U END_ROUND2;
+
+DO_RANDOM2:
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      ISETP.NE.AND P6, PT, beta, RZ, PT; // beta != 0
+
+// Strip mantissa and leave sign+exponent
+--:-:-:-:1      LOP32I.AND exp0, c0, 0xff800000;
+--:-:-:-:1      LOP32I.AND exp1, c1, 0xff800000;
+--:-:-:-:1      LOP32I.AND exp2, c2, 0xff800000;
+--:-:-:-:1      LOP32I.AND exp3, c3, 0xff800000;
+
+// Find the exponent that will shift 32 bits of integer data 
+// out past the lsb of this number as an fp16
+// exp *= 2^-10 * 2^-32  (2^-42)
+--:-:-:-:1      FMUL32I exp0, exp0, 0x2a800000;
+--:-:-:-:1      FMUL32I exp1, exp1, 0x2a800000;
+--:-:-:-:1      FMUL32I exp2, exp2, 0x2a800000;
+--:-:-:-:1      FMUL32I exp3, exp3, 0x2a800000;
+
+--:-:-:-:1      SHF.R.U64 rand0, seed, 16, seed;
+--:-:-:-:1      SHF.R.U64 rand1, seed, 20, seed;
+--:-:-:-:1      SHF.R.U64 rand2, seed, 24, seed;
+--:-:-:-:1      SHF.R.U64 rand3, seed, 28, seed;
+
+// Convert rand to float
+--:-:1:-:1      I2F.F32.U32.RZ rand0, rand0;
+--:-:2:-:1      I2F.F32.U32.RZ rand1, rand1;
+--:-:3:-:1      I2F.F32.U32.RZ rand2, rand2;
+--:-:4:-:1      I2F.F32.U32.RZ rand3, rand3;
+
+// Scale the random number so msb is one below lsb of fp16
+// Add scaled random to number to round
+01:-:-:-:1      FFMA.RZ c0, rand0, exp0, c0;
+02:-:-:-:1      FFMA.RZ c1, rand1, exp1, c1;
+04:-:-:-:1      FFMA.RZ c2, rand2, exp2, c2;
+08:-:-:-:0      FFMA.RZ c3, rand3, exp3, c3;
+
+// Truncate number to fp16
+--:-:1:-:1      F2F.F16.F32.RZ c0, c0;
+--:-:2:-:1      F2F.F16.F32.RZ c1, c1;
+--:-:3:-:1      F2F.F16.F32.RZ c2, c2;
+--:-:4:-:1      F2F.F16.F32.RZ c3, c3;
+</SCHEDULE_BLOCK>
+
+END_ROUND2:
+
+--:-:-:-:0      ISETP.NE.AND P6, PT, beta, RZ, PT; // beta != 0
+
+01:-:-:-:1  @P0 STG.E.S16 [C08y0 + 2x<00>], c0;
+02:5:-:-:1  @P1 STG.E.S16 [C08y0 + 2x<32>], c1;
+
+--:-:-:-:0      LOP.AND.NZ P4, RZ, flags, 1;
+
+04:-:-:-:1  @P2 STG.E.S16 [C12y0 + 2x<00>], c2;
+08:6:-:-:1  @P3 STG.E.S16 [C12y0 + 2x<32>], c3;
+
+10:-:-:-:6      IADD   C08y0.CC, C08y0, ldc1;
+--:-:-:-:1      IADD.X C08y1,    C08y1, RZ;
+20:-:-:-:6      IADD   C12y0.CC, C12y0, ldc1;
+--:-:-:-:0      IADD.X C12y1,    C12y1, RZ;
+
+--:-:-:-:5      RET;

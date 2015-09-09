@@ -12,13 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
-# import shortcuts
-from neon.transforms.cross_entropy import CrossEntropy  # noqa
-from neon.transforms.linear import Linear  # noqa
-from neon.transforms.logistic import Logistic  # noqa
-from neon.transforms.rectified import RectLin, RectLeaky  # noqa
-from neon.transforms.softmax import Softmax  # noqa
-from neon.transforms.sum_squared import SumSquaredDiffs  # noqa
-from neon.transforms.tanh import Tanh  # noqa
-from neon.transforms.xcov import XCovariance  # noqa
+from neon.transforms.activation import (Identity, Rectlin, Softmax, Tanh,
+                                        Logistic)
+from neon.transforms.cost import (CrossEntropyBinary, CrossEntropyMulti,
+                                  SumSquared, Misclassification)

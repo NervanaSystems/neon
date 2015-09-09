@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2014 Nervana Systems Inc.
+.. Copyright 2015 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -12,52 +12,54 @@
 .. See the License for the specific language governing permissions and
 .. limitations under the License.
 .. ---------------------------------------------------------------------------
+
 .. currentmodule:: neon
 
 .. |Tensor| replace:: :py:class:`~neon.backends.backend.Tensor`
 .. |Backend| replace:: :py:class:`~neon.backends.backend.Backend`
 
-******************************
-ML OPerational Layer (MOP) API 
-******************************
+ML OPerational Layer (MOP) API
+===============================
 
-We expose the following API which we refer to as our ML operational layer (aka
+We expose the following API which we refer to as our ML operational layer (
 MOP layer). It currently consists of the functions defined in the following two
 interface classes, which we detail further on the rest of this page:
 
 .. autosummary::
-   :toctree: generated/
+   :nosignatures:
 
    neon.backends.backend.Tensor
    neon.backends.backend.Backend
 
+
 Basic Data Structure
-====================
+---------------------
 
 The |Tensor| class is used to represent an arbitrary dimensional array in which
 each element is stored using a consistent underlying type.
 
 We have the ability to instantiate and copy instances of this data
-structure, as well as initialize its elements, reshape its dimensions, and 
+structure, as well as initialize its elements, reshape its dimensions, and
 access metadata.
 
 |Tensor| Creation
------------------
+'''''''''''''''''
 
 .. autosummary::
+   :nosignatures:
 
    neon.backends.backend.Backend.empty
    neon.backends.backend.Backend.array
    neon.backends.backend.Backend.zeros
    neon.backends.backend.Backend.ones
-   neon.backends.backend.Backend.copy
-   neon.backends.backend.Backend.uniform
-   neon.backends.backend.Backend.normal
+   neon.backends.backend.Tensor.copy
+
 
 |Tensor| Manipulation
----------------------
+'''''''''''''''''''''
 
 .. autosummary::
+   :nosignatures:
 
    neon.backends.backend.Tensor.asnumpyarray
    neon.backends.backend.Tensor.take
@@ -66,52 +68,60 @@ access metadata.
    neon.backends.backend.Tensor.fill
    neon.backends.backend.Tensor.transpose
    neon.backends.backend.Tensor.reshape
-   neon.backends.backend.Tensor.repeat
-   neon.backends.backend.Tensor.free
 
-|Tensor| Attributes
--------------------
-
-.. autosummary::
-
-   neon.backends.backend.Tensor.shape
-   neon.backends.backend.Tensor.dtype
-   neon.backends.backend.Tensor.raw
 
 Arithmetic Operation Support
-============================
-
+-----------------------------
 Unary and binary arithmetic operations can be performed on |Tensor| objects via
 appropriate |Backend| calls.  In all cases it is up to the user to pre-allocate
 correctly sized output to house the result.
 
 Element-wise Binary Operations
-------------------------------
+''''''''''''''''''''''''''''''
 .. autosummary::
+   :nosignatures:
 
    neon.backends.backend.Backend.add
    neon.backends.backend.Backend.subtract
    neon.backends.backend.Backend.multiply
    neon.backends.backend.Backend.divide
+   neon.backends.backend.Backend.maximum
+   neon.backends.backend.Backend.minimum
+   neon.backends.backend.Backend.clip
 
 Element-wise Unary Transcendental Functions
--------------------------------------------
+'''''''''''''''''''''''''''''''''''''''''''
 .. autosummary::
+   :nosignatures:
 
    neon.backends.backend.Backend.log
+   neon.backends.backend.Backend.log2
    neon.backends.backend.Backend.exp
+   neon.backends.backend.Backend.exp2
    neon.backends.backend.Backend.power
+   neon.backends.backend.Backend.absolute
+   neon.backends.backend.Backend.sgn
+   neon.backends.backend.Backend.sqrt
+   neon.backends.backend.Backend.square
+   neon.backends.backend.Backend.reciprocal
+   neon.backends.backend.Backend.negative
+   neon.backends.backend.Backend.sig
+   neon.backends.backend.Backend.sig2
+   neon.backends.backend.Backend.tanh
+   neon.backends.backend.Backend.tanh2
+
 
 Matrix Algebra Operations
--------------------------
+'''''''''''''''''''''''''
 .. autosummary::
+   :nosignatures:
 
    neon.backends.backend.Backend.dot
 
 Logical Operation Support
-=========================
-
+-------------------------
 .. autosummary::
+   :nosignatures:
 
    neon.backends.backend.Backend.equal
    neon.backends.backend.Backend.not_equal
@@ -121,8 +131,9 @@ Logical Operation Support
    neon.backends.backend.Backend.less_equal
 
 Summarization Operation Support
-===============================
+-------------------------------
 .. autosummary::
+   :nosignatures:
 
    neon.backends.backend.Backend.sum
    neon.backends.backend.Backend.mean
@@ -130,61 +141,62 @@ Summarization Operation Support
    neon.backends.backend.Backend.max
    neon.backends.backend.Backend.argmin
    neon.backends.backend.Backend.argmax
-   neon.backends.backend.Backend.norm
-   neon.backends.backend.Backend.variance
+   neon.backends.backend.Backend.var
+   neon.backends.backend.Backend.std
 
 Initialization and Setup
-========================
+------------------------
 .. autosummary::
+   :nosignatures:
 
-   neon.backends.backend.Backend.rng_init
-   neon.backends.backend.Backend.err_init
+   neon.backends.backend.Backend.rng_reset
    neon.backends.backend.Backend.begin
    neon.backends.backend.Backend.end
 
 Higher Level Operation Support
-==============================
-
-Fully Connected Neural Network Layer
-------------------------------------
-.. autosummary::
-
-   neon.backends.backend.Backend.fprop_fc
-   neon.backends.backend.Backend.bprop_fc
-   neon.backends.backend.Backend.update_fc
+-------------------------------
 
 Convolutional Neural Network Layer
-----------------------------------
+''''''''''''''''''''''''''''''''''
 .. autosummary::
+   :nosignatures:
 
-   neon.backends.backend.Backend.fprop_conv
-   neon.backends.backend.Backend.bprop_conv
-   neon.backends.backend.Backend.update_conv
+   neon.backends.backend.Backend.conv_layer (new)
+   neon.backends.backend.Backend.fprop_conv (changed interface)
+   neon.backends.backend.Backend.bprop_conv (changed interface)
+   neon.backends.backend.Backend.update_conv (changed interface)
+
+Deconvolutional Neural Network Layer
+''''''''''''''''''''''''''''''''''''
+.. autosummary::
+   :nosignatures:
+
+   neon.backends.backend.Backend.deconv_layer (new)
 
 Pooling Neural Network Layer
-----------------------------
+''''''''''''''''''''''''''''
 .. autosummary::
+   :nosignatures:
 
-   neon.backends.backend.Backend.fprop_pool
-   neon.backends.backend.Backend.bprop_pool
-
-CrossMap Neural Network Layer
------------------------------
-.. autosummary::
-
-   neon.backends.backend.Backend.fprop_cmpool
-   neon.backends.backend.Backend.bprop_cmpool
-   neon.backends.backend.Backend.update_cmpool
-   neon.backends.backend.Backend.fprop_cmrnorm
-   neon.backends.backend.Backend.bprop_cmrnorm
+   neon.backends.backend.Backend.pool_layer (new)
+   neon.backends.backend.Backend.fprop_pool (changed interface)
+   neon.backends.backend.Backend.bprop_pool (changed interface)
 
 
-***************
 MOP API Changes
-***************
+---------------
+
+v1.0.0.RC1
+''''''''''
+
+* Basic ops produce op-tree
+* New Layer object, simplified fprop and bprop
+* Tensor shape, dtype now passed into the constructor
+* copy is now a Tensor function instead of a Backend function
+
 
 v0.9.0
-======
+''''''
 
 * begin and end functions now take two parameters: block and identifier.  The
   first requires an attribute of class Block (also defined in backend.py)
@@ -196,12 +208,12 @@ v0.9.0
 * rename axes parameter to axis in summarization operations (planned)
 
 v0.8.0
-======
+''''''
 
 * new function variance to compute the variance.
 
 v0.7.0
-======
+''''''
 
 * to support 3D convolutions:
 
@@ -211,16 +223,6 @@ v0.7.0
   * new parameter ifmsize has been added to fprop_cmpool, bprop_cmpool,
     update_cmpool
 
-* functions providing compiler hints:
-
-  * new Tensor.free() function indicating Tensor no longer in use and can be
-    cleaned up
-  * new backend begin() and end() functions to indicate the start and end of
-    repeated instructions (as would be present in loops and so forth).
-  * code can be processed to inject the above hints via
-    `neon.util.compiler_hints.py`.  To remove, pass the `-s` flag to the
-    command invocation.  Alternatively from the top level of the project, one
-    can call `make insert_compiler_hints` or `make strip_compiler_hints`
-
 * epsilon removed as a backend parameter (now associated with specific
   functions being used)
+

@@ -12,651 +12,913 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""
-Generic single neural network layer built to handle data from a particular
-backend.  We introduce several basic variants here to handle things like
-dataset inputs (DataLayer), objective function being optimized (CostLayer),
-and internal hidden WeightLayer and ActivationLayer
-"""
-
 import logging
-import numpy as np
-from neon.backends.cpu import CPU
-from neon.optimizers.gradient_descent import (GradientDescent,
-                                              GradientDescentPretrain,
-                                              GradientDescentMomentum,
-    GradientDescentMomentumWeightDecay)  # noqa
-from neon.optimizers.adadelta import AdaDelta
-from neon.optimizers.rmsprop import RMSProp
-from neon.util.compat import range
-from neon.util.param import req_param, opt_param, ensure_dtype
-from neon.util.defaults import default_weight_init, default_lrule_init
-from neon.util.persist import YAMLable
-from neon.transforms.batch_norm import BatchNorm
-from neon.transforms.linear import Linear
+
+from neon import NervanaObject
+from neon.backends import Autodiff
 
 logger = logging.getLogger(__name__)
 
 
-class Layer(YAMLable):
+class Layer(NervanaObject):
     """
-    Top-level generic neural network layer class from which all other layer
+    Top level generic neural network layer class from which all other layer
     types inherit.
 
-    Attributes:
+    Arguments:
         name (string): Name identifying this layer (in logs, etc.)
     """
-    def __init__(self, **kwargs):
-        self.initialized = False
-        self.__dict__.update(kwargs)
-
-        opt_param(self, ['name'], 'layer')
-
-        opt_param(self, ['pre_act_dtype', 'output_dtype', 'deltas_dtype',
-                         'weight_dtype', 'updates_dtype'], np.float32)
-        opt_param(self, ['prev_layer'])
-        opt_param(self, ['activation'], Linear())
-
-        opt_param(self, ['is_local', 'is_data', 'is_cost'], False)
-        opt_param(self, ['is_random'], False)
-
-        opt_param(self, ['skip_act', 'has_params'], False)
-        opt_param(self, ['prev_names'], [])
-
-        opt_param(self, ['backend_type'], 'np.float32')
-        self.backend_type = ensure_dtype(self.backend_type)  # string to dtype
-        logger.info("Setting layer dtype to" + str(self.backend_type))
-        for some_type in ['pre_act_dtype', 'output_dtype', 'deltas_dtype',
-                          'weight_dtype', 'updates_dtype']:
-            setattr(self, some_type, self.backend_type)
-
-    def set_previous_layer(self, pl):
-        if pl.is_local:
-            if self.is_local:
-                self.ifmshape = pl.ofmshape
-                self.nifm = pl.nofm
-            self.nin = pl.nofm * np.prod(pl.ofmshape)
-        else:
-            if self.is_local:
-                if not hasattr(self, 'ifmshape'):
-                    sqdim = np.int(np.sqrt(pl.nout))
-                    self.ifmshape = (sqdim, sqdim)
-                self.nifm = 1
-            self.nin = pl.nout
-        self.prev_layer = pl
-        if self.is_local:
-            self.link_local()
-        self.set_weight_shape()
-
-    def initialize(self, kwargs):
-        if self.initialized:
-            return
-        self.__dict__.update(kwargs)
-        req_param(self, ['backend', 'batch_size'])
-
-        self.output = None
+    def __init__(self, name="layer"):
+        super(Layer, self).__init__(name)
+        self.outputs = None
         self.deltas = None
-        self.initialized = True
-
-    def set_weight_shape(self):
-        pass
-
-    def link_local(self):
-        req_param(self, ['nifm', 'ifmshape', 'fshape'])
-
-        opt_param(self, ['ofmlocs', 'links'])
-        opt_param(self, ['deltasbuf', 'outputbuf'])
-
-        opt_param(self, ['nofm'], self.nifm)
-        opt_param(self, ['pooling'], False)
-        opt_param(self, ['stride'], 1)
-        opt_param(self, ['pad'], 0)
-
-        assert len(self.ifmshape) == len(self.fshape)
-        ofmshape = []
-        for dim in range(len(self.ifmshape)):
-            assert self.ifmshape[dim] >= self.fshape[dim]
-            num = self.ifmshape[dim] - self.fshape[dim] + 2 * self.pad
-            ofmshape.extend([num // self.stride + 1])
-        self.ofmshape = tuple(ofmshape)
-        self.negpad = -self.pad
-        self.ifmsize = np.prod(self.ifmshape)
-        self.ofmsize = np.prod(self.ofmshape)
-        self.fpsize = np.prod(self.fshape)
-        self.fsize = self.nifm * self.fpsize
-        self.nout = self.nofm * self.ofmsize
-        logger.debug('name=%s, nifm=%d, ifmshape=%s, ofmshape=%s',
-                     self.name, self.nifm, self.ifmshape, self.ofmshape)
-
-    def initialize_local(self):
-        if isinstance(self.backend, CPU):
-            self.make_aux_buffers(self.nifm, self.ifmshape, self.nofm,
-                                  self.ofmshape, self.fshape, self.stride)
+        self.has_params = False
 
     def __str__(self):
-        if self.is_local:
-            ionumstr = '{} x {} inputs, {} x {} nodes'.format(
-                self.nifm, self.format_tuple(self.ifmshape),
-                self.nofm, self.format_tuple(self.ofmshape))
-        else:
-            ionumstr = '{} inputs, {} nodes'.format(self.nin, self.nout)
-
-        ret = '{} {}: {}'.format(self.__class__.__name__, self.name, ionumstr)
-        ret += ', {} act_fn'.format(self.activation.__class__.__name__)
+        """
+        Format the layer as a printable string.
+        """
+        ret = '{} {}'.format(self.__class__.__name__, self.name)
         return ret
 
-    def format_tuple(self, tup):
-        result = '(' + str(tup[0])
-        for dim in range(1, len(tup)):
-            result += ' x ' + str(tup[dim])
-        return result + ')'
-
-    def allocate_output_bufs(self):
-        if self.is_local:
-            make_zbuf = self.backend.allocate_fragment
-        else:
-            make_zbuf = self.backend.empty
-
-        opt_param(self, ['out_shape'], (self.nout, self.batch_size))
-        opt_param(self, ['delta_shape'], (self.nin, self.batch_size))
-
-        self.output = make_zbuf(self.out_shape, dtype=self.output_dtype,
-                                persist_values=True)
-
-        self.pre_act = self.activation.pre_act_buffer(self.backend,
-                                                      self.output,
-                                                      self.pre_act_dtype)
-        if self.backend.is_dist:
-            self.output.ptype = 'fragment' if self.is_local else 'replica'
-
-    def set_deltas_buf(self, delta_pool, offset):
-        if self.is_local:
-            make_zbuf = self.backend.allocate_fragment
-        else:
-            make_zbuf = self.backend.empty
-
-        self.deltas = None
-        if self.prev_layer is None:
-            return
-        if self.prev_layer.is_data:
-            return
-
-        if delta_pool is None:
-            # Owned delta bufs are required for parallel mode
-            self.deltas = make_zbuf(self.delta_shape,
-                                    dtype=self.deltas_dtype,
-                                    persist_values=False)
-        else:
-            self.deltas = delta_pool[offset:(offset + self.delta_shape[0])]
-
-    def get_deltas_buf(self):
+    def fprop(self, inputs, inference=False):
         """
-        This just accesses the deltas for this layer except in the case of
-        a fully connected layer sending deltas back to a local layer in
-        parallel mode.  Then we must transition from replicas to fragments by
-        splitting the inputs across devices
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+
+        Returns:
+            Tensor: output data
         """
+        raise NotImplementedError
+
+    def _fprop_inference(self, inputs):
+        """
+        Apply the forward pass transformation to the input data.
+
+        May skip any computation not needed for doing inference only.
+
+        Calling bprop subsequently is not valid.
+
+        Arguments:
+            inputs (Tensor): input data
+
+        Returns:
+            Tensor: output data
+        """
+        raise NotImplementedError
+
+    def bprop(self, error):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
+        raise NotImplementedError
+
+    def serialize(self):
+        """
+        Get state parameters for this layer
+
+        Returns:
+            ?: whatever data this model wants to receive in order to restore state
+        """
+        if self.has_params:
+            return self.get_params()
+
+
+class Pooling(Layer):
+    """
+    Pooling layer implementation.
+
+    Arguments:
+        fshape (Union[int, Tuple[int, int]]): one or two dimensional shape
+            of pooling window
+        op (Optional[str]): pooling operation in [max, avg]. Defaults to "max"
+        strides (Optional[Union[int, dict]]): strides to apply pooling window
+            over. An int applies to both dimensions, or a dict with str_h
+            and str_w applies to h and w dimensions distinctly.  Defaults
+            to str_w = str_h = None
+        padding (Optional[Union[int, dict]]): padding to apply to edges of
+            input. An int applies to both dimensions, or a dict with pad_h
+            and pad_w applies to h and w dimensions distinctly.  Defaults
+            to pad_w = pad_h = None
+        name (Optional[str]): layer name. Defaults to "PoolingLayer"
+    """
+    def __init__(self, fshape, op="max", strides={}, padding={},
+                 name="PoolingLayer"):
+        super(Pooling, self).__init__(name)
+        self.poolparams = {'str_h': None, 'str_w': None, 'str_d': None, 'str_j': None,
+                           'pad_h': 0, 'pad_w': 0, 'pad_d': 0, 'pad_j': 0,
+                           'J': 1, 'T': 1, 'D': 1, 'op': op}  # 3D paramaters
+
+        # keep args around in __dict__ for get_description
+        self.op = op
+        self.fshape = fshape
+        self.strides = strides
+        self.padding = padding
+
+        if isinstance(fshape, int):
+            fshape = {'R': fshape, 'S': fshape}
+        elif isinstance(fshape, tuple):
+            fshape = {'R': fshape[0], 'S': fshape[1]}
+        if isinstance(strides, int):
+            strides = {'str_h': strides, 'str_w': strides}
+        if isinstance(padding, int):
+            padding = {'pad_h': padding, 'pad_w': padding}
+        for d in [fshape, strides, padding]:
+            self.poolparams.update(d)
+        self.nglayer = None
+
+    def init_buffers(self, inputs):
+        self.inputs = inputs
+        if self.nglayer is None:
+            assert hasattr(self.inputs, 'lshape')
+            self.poolparams['C'] = self.inputs.lshape[0]
+            self.poolparams['H'] = self.inputs.lshape[1]
+            self.poolparams['W'] = self.inputs.lshape[2]
+            self.poolparams['N'] = self.be.bsz
+            self.nglayer = self.be.pool_layer(self.be.default_dtype, **self.poolparams)
+            self.outputs = self.be.iobuf(self.nglayer.nOut, self.outputs)
+            self.outputs.lshape = (self.nglayer.K, self.nglayer.P, self.nglayer.Q)
+            self.deltas = self.be.iobuf(self.inputs.shape[0], self.deltas)
+
+    def fprop(self, inputs, inference=False):
+        self.init_buffers(inputs)
+        self.be.fprop_pool(self.nglayer, inputs, self.outputs)
+        return self.outputs
+
+    def bprop(self, error):
+        self.be.bprop_pool(self.nglayer, self.inputs, error, self.deltas)
         return self.deltas
 
-    def share_acts(self, inputs):
-        """
-        This is a no-op except in the case of a fully connected layer receiving
-        activations from a local or data layer in parallel mode.  Then we must
-        transition from fragments to replicas by sharing the inputs across
-        devices
-        """
-        return inputs
 
-    def make_links(self, nifm, ifmsize, ifmshape, ofmshape, fshape, stride):
-        # Figure out local connections to the previous layer.
-        # This function works for any number of dimensions.
-        ndims = len(ifmshape)
-        dimsizes = np.empty(ndims, dtype='int32')
-        for dim in range(ndims):
-            dimsizes[dim] = np.prod(ifmshape[dim:])
-        links = []
-        for ofmdim in np.ndindex(ofmshape):
-            # This variable tracks the top left corner of
-            # the receptive field.
-            src = ofmdim[-1]
-            for dim in range(-1, -ndims, -1):
-                src += dimsizes[dim] * ofmdim[dim - 1]
-            src *= stride
-            indlist = list(range(src, src + fshape[-1]))
-            for dim in range(-1, -ndims, -1):
-                indarray = np.array(indlist)
-                for dimind in range(1, fshape[dim - 1]):
-                    indlist.extend(list(indarray + dimind * dimsizes[dim]))
-            if self.pooling is False:
-                indarray = np.array(indlist)
-                for ifm in range(1, nifm):
-                    indlist.extend(list(indarray + ifm * ifmsize))
-            links.append(indlist)
-        self.links = np.array(links, dtype='int32')
-
-    def make_aux_buffers(self, nifm, ifmshape, nofm, ofmshape, fshape, stride):
-        buf_size = self.batch_size * nifm
-        if (self.prev_layer is not None and not self.prev_layer.is_data):
-            self.deltasbuf = self.backend.empty((self.ifmsize, buf_size))
-
-        assert self.ofmsize is not 0
-        ofmstarts = np.arange(0, (self.ofmsize * nofm), self.ofmsize)
-        self.ofmlocs = np.empty((self.ofmsize, nofm), dtype='int32')
-        for dst in range(self.ofmsize):
-            self.ofmlocs[dst] = ofmstarts + dst
-        self.make_links(nifm, self.ifmsize, ifmshape, ofmshape, fshape, stride)
-
-        if self.pooling is True:
-            self.outputbuf = self.backend.empty((self.ofmsize, buf_size))
-            if self.op == 'max':
-                self.tempbuf = np.empty(
-                    (self.ofmsize, self.batch_size * nifm), dtype='int32')
-            elif self.op == 'l2':
-                self.tempbuf = self.backend.empty(
-                    (self.fpsize, self.batch_size * nifm))
-
-    def fprop(self, inputs):
-        raise NotImplementedError('This class should not be instantiated.')
-
-    def bprop(self, error):
-        raise NotImplementedError('This class should not be instantiated.')
-
-    def share_updates(self):
-        pass
-
-    def update(self, epoch):
-        pass
-
-    def set_train_mode(self, mode):
-        pass
-
-
-class CostLayer(Layer):
+class ParameterLayer(Layer):
     """
-    Pseudo-layer that should sit in the last level of the network defining the
-    objective function to be optimized.
+    Intermediate class used for common functionality for any layer with weights.
+
+    Not intended to be used directly.
+
+    Arguments:
+        init (Optional[Initializer]): Initializer object to use for
+            initializing layer weights
+        name (Optional[str]): layer name. Defaults to "ParameterLayer"
     """
-    def __init__(self, **kwargs):
-        self.is_cost = True
-        self.nout = 1
-        super(CostLayer, self).__init__(**kwargs)
-
-    def initialize(self, kwargs):
-        super(CostLayer, self).initialize(kwargs)
-        req_param(self, ['cost'])
-        opt_param(self, ['ref_label'], 'targets')
-        opt_param(self, ['raw_label'], False)
-        opt_param(self, ['category_label'], 'l_id')
-        self.reference = None
-        self.cost.olayer = self.prev_layer
-        kwargs['raw_label'] = self.raw_label
-        self.cost.initialize(kwargs)
-        self.deltas = self.cost.get_deltabuf()
-
-    def __str__(self):
-        return ('{} {}: {} nodes, {} cost_fn'. format(
-                self.__class__.__name__, self.name, self.nin,
-                self.cost.__class__.__name__))
-
-    def set_reference(self):
-        if self.ref_layer is not None:
-            refs = getattr(self.ref_layer, self.ref_label)
-            if isinstance(refs, dict):
-                self.reference = refs[self.category_label]
-            else:
-                self.reference = refs
-
-    def fprop(self, inputs):
-        pass
-
-    def bprop(self, error):
-        # Since self.deltas already pointing to destination of act gradient
-        # we just have to scale by mini-batch size
-        self.set_reference()
-        self.cost.apply_derivative(self.reference)
-        self.backend.divide(self.deltas, self.backend.batch_size,
-                            out=self.deltas)
-
-    def get_cost(self):
-        self.set_reference()
-        scale_cost = hasattr(self.backend, 'ng')
-        result = self.cost.apply_function(self.reference,
-                                          scale_by_batchsize=scale_cost)
-        if not scale_cost:  # Check for fp16 backend and use scaling
-            self.backend.divide(result, self.backend.batch_size, result)
-        if self.backend.is_dist:
-            result.ptype = self.reference.ptype
-        return result
-
-    def get_reference(self):
-        self.set_reference()
-        return self.reference
-
-
-class DataLayer(Layer):
-    """
-    Typically the first layer of a neural network.  Connects a Dataset to the
-    network.
-    """
-    def __init__(self, **kwargs):
-        self.is_data = True
-        opt_param(self, ['has_labels'], False)
-        super(DataLayer, self).__init__(**kwargs)
-        # req_param(self, ['dataset'])
-
-    def initialize(self, kwargs):
-        super(DataLayer, self).initialize(kwargs)
-        self.reset_counter()
-        if self.is_local is True:
-            req_param(self, ['nofm', 'ofmshape'])
-            self.nout = self.nofm * np.prod(self.ofmshape)
-        else:
-            req_param(self, ['nout'])
-        self.out_shape = (self.nout, self.batch_size)
-
-    def init_dataset(self, dataset):
-        """
-        Must be called prior to consuming data.
-        Allows us to switch to a new dataset (useful for changing sets after
-        training).  No checking is done for input size, so should match the
-        dimensions of datasets between changes
-        """
-        self.dataset = dataset
-
-    def __str__(self):
-        if self.is_local:
-            ionumstr = '{} x {} nodes'.format(self.nofm,
-                                              self.format_tuple(self.ofmshape))
-        else:
-            ionumstr = "{} nodes".format(self.nout)
-
-        return ("{} {}: {}".format(self.__class__.__name__,
-                                   self.name, ionumstr))
-
-    def set_previous_layer(self, pl):
-        pass
-
-    def has_more_data(self):
-        return True if (self.batch_idx < self.num_batches) else False
-
-    def reset_counter(self):
-        self.batch_idx = 0
-
-    def fprop(self, inputs):
-        self.output, self.targets = self.dataset.get_mini_batch(self.batch_idx)
-        self.batch_idx += 1
-
-    def bprop(self, error):
-        pass
-
-    def has_set(self, setname):
-        return self.dataset.has_set(setname)
-
-    def use_set(self, setname, predict=False):
-        self.num_batches = self.dataset.init_mini_batch_producer(
-            batch_size=self.batch_size,
-            setname=setname,
-            predict=predict)
-        self.reset_counter()
-
-    def cleanup(self):
-        # delete helper queues if any
-        self.dataset.del_mini_batch_producer()
-
-
-class ImageDataLayer(DataLayer):
-
-    def __init__(self, **kwargs):
-        super(ImageDataLayer, self).__init__(**kwargs)
-
-    def fprop(self, inputs):
-        self.output, self.targets, self.labels = self.dataset.get_mini_batch(
-            self.batch_idx)
-        self.batch_idx += 1
-
-
-class ActivationLayer(Layer):
-    """
-    Just applies an activation to the inputs.
-    """
-    def set_previous_layer(self, pl):
-        if pl.is_local:
-            self.is_local = True
-            self.ifmshape = pl.ofmshape
-            self.nifm = pl.nofm
-            self.nin = pl.nofm * np.prod(pl.ofmshape)
-        else:
-            self.nin = pl.nout
-        self.prev_layer = pl
-
-    def initialize(self, kwargs):
-        super(ActivationLayer, self).initialize(kwargs)
-        req_param(self, ['activation'])
-        self.nout = self.nin
-        self.allocate_output_bufs()
-
-    def fprop(self, inputs):
-        self.pre_act[:] = inputs
-        self.activation.fprop_func(self.backend, self.pre_act, self.output)
-
-    def bprop(self, error):
-        self.activation.bprop_func(self.backend, self.pre_act, error,
-                                   self.skip_act)
-        if self.deltas is not None:
-            self.deltas[:] = error
-
-
-class SliceLayer(ActivationLayer):
-    """
-    Just takes a portion of the inputs and passes it on
-    Useful for limitations of the GPU convolutional layer
-    for a local layer, takes 0:end_idx feature maps
-    for a flat layer, takes 0:end_idx inputs
-    """
-    def __init__(self, **kwargs):
-        super(SliceLayer, self).__init__(**kwargs)
-        req_param(self, ['end_idx'])
-
-    def set_previous_layer(self, pl):
-        if pl.is_local:
-            self.is_local = True
-            self.ifmshape = pl.ofmshape
-            self.ofmshape = pl.ofmshape
-            self.nifm = pl.nofm
-            self.nin = pl.nofm * np.prod(pl.ofmshape)
-            self.nofm = self.end_idx
-        else:
-            self.nin = pl.nout
-        self.prev_layer = pl
-
-    def initialize(self, kwargs):
-        self.__dict__.update(kwargs)
-        req_param(self, ['backend', 'batch_size'])
-        self.output = None
-        self.deltas = None
-        if self.is_local:
-            self.nofm = self.end_idx
-            self.end_idx = np.prod(self.ifmshape) * self.end_idx
-        self.nout = self.end_idx
-        self.allocate_output_bufs()
-
-    def fprop(self, inputs):
-        self.output[:] = inputs[:self.end_idx]
-
-    def bprop(self, error):
-        self.deltas.fill(0.0)
-        self.deltas[:self.end_idx] = error
-
-
-class WeightLayer(Layer):
-    """
-    Typical hidden layer with weight parameters to be learned.
-    """
-    def __init__(self, **kwargs):
-        super(WeightLayer, self).__init__(**kwargs)
-        self.distributable = True
+    def __init__(self, init=None, name="ParameterLayer"):
+        super(ParameterLayer, self).__init__(name)
         self.has_params = True
-        self.params_initialized = False
+        self.init = init
+        self.W = None
+        self.weight_shape = None
+        self.states = []
 
-    def initialize(self, kwargs):
-        super(WeightLayer, self).initialize(kwargs)
-        req_param(self, ['nin', 'nout'])
-        opt_param(self, ['weight_init'], default_weight_init())
-        opt_param(self, ['lrule_init'], default_lrule_init())
-        opt_param(self, ['accumulate'], False)
-        opt_param(self, ['batch_norm'], False)
-        opt_param(self, ['mempool'])  # Used for parallel mode
+    def fprop(self, inputs, inference=False):
+        self.init_buffers(inputs)
+        if self.W is None:
+            self.init_params(self.weight_shape)
 
-        self.weight_init.initialize(self.backend)
-        self.params = []
-        self.updates = []
+    def init_params(self, shape):
+        """
+        Allocate layer parameter buffers and initialize them with the
+            supplied initializer.
 
-        if self.batch_norm:
-            self.bn = BatchNorm()
-            kwargs['layer'] = self
-            self.bn.initialize(kwargs)
+        Arguments:
+            shape (Union[int, tuple]): shape to allocate for layer paremeter
+                buffers.
+        """
+        self.W = self.be.empty(shape)
+        self.dW = self.be.empty_like(self.W)
+        self.init.fill(self.W)
 
     def get_params(self):
-        np_params = dict()
-        for p in ['weights', 'biases']:
-            if hasattr(self, p):
-                p_tensor = getattr(self, p)
-                np_params[p] = p_tensor.asnumpyarray()
+        """
+        Get layer parameters, gradients, and states for optimization
+        """
+        return ((self.W, self.dW), self.states)
 
-        if self.batch_norm:
-            np_params.update(self.bn.get_params())
+    def get_params_serialize(self, keep_states=True):
+        """
+        Get layer parameters. All parameters are needed for optimization, but
+        only Weights are serialized.
 
-        np_params.update(self.learning_rule.get_params())
-        if self.bias_rule is not None:
-            np_params.update(self.bias_rule.get_params())
-        return np_params
+        Arguments:
+            keep_states (bool): Control whether all parameters are returned
+                or just weights for serialization. Defaults to True.
+        """
+        serial_dict = {'params': self.W.asnumpyarray()}
+        if keep_states:
+            serial_dict['states'] = [s.asnumpyarray() for s in self.states]
+        return serial_dict
 
-    def set_params(self, params_dict):
-        for p in ['weights', 'biases']:
-            if p in params_dict:
-                self.backend.set(getattr(self, p), params_dict[p])
+    def set_params(self, W):
+        """
+        Set layer parameters (weights). Allocate space for other parameters but
+            do not initialize them.
 
-        if self.batch_norm:
-            self.bn.set_params(params_dict)
-        self.learning_rule.set_params(params_dict)
-        if self.bias_rule is not None:
-            self.bias_rule.set_params(params_dict)
+        Arguments:
+            W (Tensor): Tensor containing weights to use.
+        """
+        self.W = self.be.array(W)
+        self.dW = self.be.empty_like(self.W)
 
-    def make_views(self):
-        pass
+    def set_states(self, states):
+        self.states = [self.be.array(x) for x in states]
 
-    def allocate_param_bufs(self):
-        if self.params_initialized:
-            return
 
-        def make_ebuf(shape, dtype, persist_values):
-            b = self.backend.empty(shape, dtype, persist_values)
-            if self.backend.is_dist:
-                b.ptype = 'replica' if self.is_local else 'vfragment'
-            return b
+class Convolution(ParameterLayer):
+    """
+    Convolutional layer implementation.
 
-        self.weight_init.is_local = self.is_local
-        self.weights = self.weight_init.generate(self.weight_shape,
-                                                 self.weight_dtype)
-        self.weights.name = self.name  # naming weights for timing diagnostics
-        self.weight_updates = make_ebuf(self.weight_shape,
-                                        dtype=self.updates_dtype,
-                                        persist_values=True)
+    Arguments:
+        fshape (tuple(int)): three dimensional shape of convolution window
+        strides (Optional[Union[int, dict]]): strides to apply convolution
+            window over. An int applies to both dimensions, or a dict with
+            str_h and str_w applies to h and w dimensions distinctly.  Defaults
+            to str_w = str_h = None
+        padding (Optional[Union[int, dict]]): padding to apply to edges of
+            input. An int applies to both dimensions, or a dict with pad_h
+            and pad_w applies to h and w dimensions distinctly.  Defaults
+            to pad_w = pad_h = None
+        init (Optional[Initializer]): Initializer object to use for
+            initializing layer weights
+        name (Optional[str]): layer name. Defaults to "ConvolutionLayer"
+    """
 
-        self.make_views()
+    def __init__(self, fshape, strides={}, padding={}, init=None, name="ConvolutionLayer"):
+        super(Convolution, self).__init__(init, name)
+        self.nglayer = None
+        self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
+                           'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
+                           'T': 1, 'D': 1}  # 3D paramaters
 
-        self.use_biases = 'bias_init' in self.weight_init.__dict__
-        opt_param(self, ['brule_init'], None)
-        if self.use_biases is True:
-            self.biases = make_ebuf(self.bias_shape, dtype=self.weight_dtype,
-                                    persist_values=False)
-            self.biases.fill(self.weight_init.bias_init)
-            self.bias_updates = make_ebuf(self.bias_shape,
-                                          dtype=self.updates_dtype,
-                                          persist_values=False)
-            self.params.extend([self.weights, self.biases])
-            self.updates.extend([self.weight_updates, self.bias_updates])
-        else:
-            self.params.extend([self.weights])
-            self.updates.extend([self.weight_updates])
+        # keep around args in __dict__ for get_description.
+        self.fshape = fshape
+        self.strides = strides
+        self.padding = padding
 
-        if self.accumulate:
-            self.utemp = [make_ebuf(x.shape,
-                                    dtype=self.updates_dtype,
-                                    persist_values=False)
-                          for x in self.updates]
+        if isinstance(fshape, tuple):
+            fshape = {'R': fshape[0], 'S': fshape[1], 'K': fshape[2]}
+        if isinstance(strides, int):
+            strides = {'str_h': strides, 'str_w': strides}
+        if isinstance(padding, int):
+            padding = {'pad_h': padding, 'pad_w': padding}
+        for d in [fshape, strides, padding]:
+            self.convparams.update(d)
 
-        for upm in self.updates:
-            upm.fill(0.0)
-        self.learning_rule = self.init_learning_rule(self.lrule_init)
-        self.bias_rule = None
-        if self.brule_init is not None and self.use_biases:
-            lrn = self.learning_rule.name + 'bias'
-            self.bias_rule = self.init_learning_rule(self.brule_init, name=lrn)
-            self.bias_rule.allocate_state([self.updates[-1]])
-            self.learning_rule.allocate_state(self.updates[:-1])
-        else:
-            self.learning_rule.allocate_state(self.updates)
+    def init_buffers(self, inputs):
+        """
+        Helper for allocating output and delta buffers (but not initializing
+        them)
 
-        if self.backend.is_dist:
-            # Create a mempool used for sharing in parallel mode
-            self.make_mempool()
+        Arguments:
+            inputs (Tensor): tensor used for frop inputs, used to determine
+                shape of buffers being allocated.
+        """
+        self.inputs = inputs
+        if not self.nglayer:
+            assert hasattr(self.inputs, 'lshape')
+            self.convparams['C'] = self.inputs.lshape[0]
+            self.convparams['H'] = self.inputs.lshape[1]
+            self.convparams['W'] = self.inputs.lshape[2]
+            self.convparams['N'] = self.be.bsz
+            self.nglayer = self.be.conv_layer(self.be.default_dtype, **self.convparams)
+            self.outputs = self.be.iobuf(self.nglayer.nOut, self.outputs)
+            self.outputs.lshape = (self.nglayer.K, self.nglayer.P, self.nglayer.Q)
+            self.deltas = self.be.iobuf(self.inputs.shape[0], self.deltas)
 
-        self.params_initialized = True
+        if self.weight_shape is None:
+            self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
 
-    def update(self, epoch):
-        if self.is_local and self.backend.is_dist:
-            self.backend.redsynchronize()
-            self.backend.synchronize()
-            # for evt, strm in zip(self.update_events, self.backend.strms):
-            #     strm.wait_for_event(evt)
+    def fprop(self, inputs, inference=False):
+        super(Convolution, self).fprop(inputs)
+        self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs)
+        return self.outputs
 
-        if self.bias_rule is None:
-            self.learning_rule.apply_rule(self.params, self.updates, epoch)
-        else:
-            self.learning_rule.apply_rule(self.params[:-1],
-                                          self.updates[:-1], epoch)
-            self.bias_rule.apply_rule([self.params[-1]],
-                                      [self.updates[-1]], epoch)
+    def bprop(self, error, do_acts=True):
+        if do_acts:
+            self.be.bprop_conv(self.nglayer, self.W, error, self.deltas)
+        self.be.update_conv(self.nglayer, self.inputs, error, self.dW)
+        return self.deltas
 
-        if self.accumulate:
-            for upm in self.updates:
-                upm.fill(0.0)
 
-    def normalize_weights(self, wts):
-        norms = self.backend.norm(wts, order=2, axis=1)
-        self.backend.divide(wts, norms.reshape((norms.shape[0], 1)), out=wts)
+class Deconv(ParameterLayer):
+    """
+    Deconvolutional layer implementation.
 
-    def set_train_mode(self, mode):
-        if self.batch_norm and mode is False:
-            self.bn.set_inference_mode()
+    Arguments:
+        fshape (tuple): three dimensional shape of convolution window
+        strides (Optional[Union[int, dict]]): strides to apply convolution
+            window over. An int applies to both dimensions, or a dict with
+            str_h and str_w applies to h and w dimensions distinctly.  Defaults
+            to str_w = str_h = None
+        padding (Optional[Union[int, dict]]): padding to apply to edges of
+            input. An int applies to both dimensions, or a dict with pad_h
+            and pad_w applies to h and w dimensions distinctly.  Defaults
+            to pad_w = pad_h = None
+        init (Optional[Initializer]): Initializer object to use for
+            initializing layer weights
+        name (Optional[str]): layer name. Defaults to "DeconvolutionLayer"
+    """
+    def __init__(self, fshape, strides={}, padding={}, init=None, name="DeconvolutionLayer"):
+        super(Deconv, self).__init__(init, name)
+        self.nglayer = None
+        self.deconvparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
+                             'pad_h': 0, 'pad_w': 0, 'pad_d': 0}
 
-    def init_learning_rule(self, lrule_init, name=None):
-        dtype = self.weight_dtype  # TODO: Cool to reuse this here?
-        if name is None:
-            lrname = self.name + '_lr'
-        else:
-            lrname = name
-        if lrule_init['type'] == 'gradient_descent':
-            lr = GradientDescent(name=lrname,
-                                 lr_params=lrule_init['lr_params'])
-        elif lrule_init['type'] == 'gradient_descent_pretrain':
-            lr = GradientDescentPretrain(
-                name=lrname, lr_params=lrule_init['lr_params'])
-        elif lrule_init['type'] == 'gradient_descent_momentum':
-            lr = GradientDescentMomentum(
-                name=lrname, lr_params=lrule_init['lr_params'],
-                param_dtype=dtype, gradient_dtype=dtype)
-        elif lrule_init['type'] == 'gradient_descent_momentum_weight_decay':
-            lr = GradientDescentMomentumWeightDecay(
-                name=lrname, lr_params=lrule_init['lr_params'],
-                param_dtype=dtype, gradient_dtype=dtype)
-        elif lrule_init['type'] == 'adadelta':
-            lr = AdaDelta(name=lrname, lr_params=lrule_init['lr_params'])
-        elif lrule_init['type'] == 'rmsprop':
-            lr = RMSProp(name=lrname, lr_params=lrule_init['lr_params'],
-                         param_dtype=dtype, gradient_dtype=dtype)
-        else:
-            raise AttributeError("invalid learning rule params specified")
-        lr.initialize(self.backend)
-        return lr
+        # keep around args in __dict__ for get_description.
+        self.fshape = fshape
+        self.strides = strides
+        self.padding = padding
+
+        if isinstance(fshape, tuple):
+            # fshape[2] should now map to C (nifm)
+            fshape = {'R': fshape[0], 'S': fshape[1], 'C': fshape[2]}
+        if isinstance(strides, int):
+            strides = {'str_h': strides, 'str_w': strides}
+        if isinstance(padding, int):
+            padding = {'pad_h': padding, 'pad_w': padding}
+        for d in [fshape, strides, padding]:
+            self.deconvparams.update(d)
+
+    def init_buffers(self, inputs):
+        self.inputs = inputs
+        if not self.nglayer:
+            assert hasattr(self.inputs, 'lshape')
+            # We switch H, W and C with P, Q and K
+            # so that in the GPU, we can reverse calculate
+            # H and W
+            self.deconvparams['K'] = self.inputs.lshape[0]
+            self.deconvparams['P'] = self.inputs.lshape[1]
+            self.deconvparams['Q'] = self.inputs.lshape[2]
+            self.deconvparams['N'] = self.be.bsz
+            self.nglayer = self.be.deconv_layer(self.be.default_dtype, **self.deconvparams)
+            self.outputs = self.be.iobuf(self.nglayer.dimI2[0], self.outputs)
+            self.outputs.lshape = (self.nglayer.C, self.nglayer.H, self.nglayer.W)
+            self.deltas = self.be.iobuf(self.inputs.shape[0], self.deltas)
+
+        if self.weight_shape is None:
+            self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
+
+    def fprop(self, inputs, inference=False):
+        """
+        fprop for deconv is equivalent to bprop for conv.
+        bprop_conv takes in error and deltas as "E" and "grad_I"
+        for deconv, bprop_conv will take in input as "E" and output as "grad_I"
+        """
+        super(Deconv, self).fprop(inputs)
+        self.be.bprop_conv(layer=self.nglayer, F=self.W, E=inputs, grad_I=self.outputs)
+        return self.outputs
+
+    def bprop(self, error, do_acts=True):
+        """
+        bprop for deconv is equivalent to fprop for conv.
+        fprop_conv takes input and output as "I" and "O".
+        for deconv, fprop_conv will take error as input and delta as output
+        """
+        if do_acts:
+            self.be.fprop_conv(self.nglayer, error, self.W, self.deltas)
+        self.be.update_conv(self.nglayer, error, self.inputs, self.dW)
+        return self.deltas
+
+
+class Linear(ParameterLayer):
+    """
+    A fully connected layer implemented as the dot product of inputs and
+    weights.
+
+    Arguments:
+        nout (Union[int, tuple]): Desired size or shape of layer output
+        init (Optional[Initializer]): Initializer object to use for
+            initializing layer weights
+        name (Optional[str]): Layer name. Defaults to "LinearLayer"
+    """
+    def __init__(self, nout, init, name="LinearLayer"):
+        super(Linear, self).__init__(init, name)
+        self.nout = nout
+
+    def init_buffers(self, inputs):
+        self.inputs = inputs
+        if self.outputs is None:
+            self.nin = inputs.shape[0]
+            # non recurrent case:
+            if inputs.shape[1] == self.be.bsz:
+                self.outputs = self.be.iobuf(self.nout)
+                self.deltas = self.be.iobuf(self.nin)
+            else:
+                self.nsteps = inputs.shape[1] / self.be.bsz
+                self.outputs = self.be.iobuf((self.nout, self.nsteps))
+                self.deltas = self.be.iobuf((self.nin, self.nsteps))
+
+        if self.weight_shape is None:
+            self.weight_shape = (self.nout, inputs.shape[0])
+
+    def fprop(self, inputs, inference=False):
+        super(Linear, self).fprop(inputs)
+        self.be.compound_dot(A=self.W, B=inputs, C=self.outputs)
+        return self.outputs
+
+    def bprop(self, error, do_acts=True):
+        if do_acts:
+            self.be.compound_dot(A=self.W.T, B=error, C=self.deltas)
+        self.be.compound_dot(A=error, B=self.inputs.T, C=self.dW)
+        return self.deltas
+
+
+class Bias(ParameterLayer):
+    """
+    A bias layer implemented that adds a learned bias to inputs and produces
+    outputs of the same shape.
+
+    Arguments:
+        init (Optional[Initializer]): Initializer object to use for
+            initializing layer bias
+        name (Optional[str]): Layer name. Defaults to "BiasLayer"
+    """
+    def __init__(self, init, name="BiasLayer"):
+        super(Bias, self).__init__(init, name)
+        self.reshaped_outputs = None
+
+    def init_buffers(self, inputs):
+        self.inputs = inputs
+        self.outputs = inputs
+        if self.reshaped_outputs is None:
+            if hasattr(inputs, 'lshape'):
+                self.bsize = inputs.lshape[0]
+            else:
+                self.bsize = inputs.shape[0]
+            self.reshaped_outputs = self.outputs.reshape((self.bsize,
+                                                          self.outputs.size /
+                                                          self.bsize))
+        if self.weight_shape is None:
+            self.weight_shape = (self.bsize, 1)
+
+    def fprop(self, inputs, inference=False):
+        super(Bias, self).fprop(inputs)
+
+        # reshaped_outputs is a different view of outputs, which is
+        # the same as inputs (we call it outputs for naming reasons)
+        self.reshaped_outputs[:] = self.reshaped_outputs + self.W
+        return self.outputs
+
+    def bprop(self, error):
+        if not self.deltas:
+            self.deltas = error.reshape(self.reshaped_outputs.shape)
+        self.be.sum(self.deltas, axis=1, out=self.dW)
+        return error
+
+
+class Activation(Layer):
+    """
+    A layer that applies a specified transform to the inputs and
+    produces outputs of the same shape.
+
+    Generally used to implemenent nonlinearities for layer post activations.
+
+    Arguments:
+        transform (Transform): a transform object with fprop and bprop
+            functions to apply
+        name (Optional[str]): Layer name. Defaults to "ActivationLayer"
+    """
+    def __init__(self, transform, name="ActivationLayer"):
+        super(Activation, self).__init__(name)
+        self.transform = transform
+
+    def init_buffers(self, inputs):
+        self.inputs = inputs
+        if self.outputs is None:
+            self.outputs = self.inputs
+
+    def fprop(self, inputs, inference=False):
+        self.init_buffers(inputs)
+        self.outputs[:] = self.transform(self.inputs)
+        return self.outputs
+
+    def bprop(self, error):
+        error[:] = self.transform.bprop(self.inputs) * error
+        return error
+
+
+class Affine(list):
+    """
+    A linear layer with a learned bias and activation, implemented as a list
+    composing separate linear, bias and activation layers.
+
+    Arguments:
+        nout (Union[int, tuple]): Desired size or shape of layer output
+        init (Optional[Initializer]): Initializer object to use for
+            initializing layer weights and bias
+        bias (Initializer): an initializer to use for bias parameters
+        activation (Transform): a transform object with fprop and bprop
+            functions to apply
+        linear_name (str): the name to call the Linear layer. Defaults to 'LinearLayer'.
+        bias_name (str): the name to call the Bias layer. Defautls to 'BiasLayer'.
+        act_name (str): the name to call the Activation layer. Defaults to 'ActivationLayer'.
+
+    """
+    def __init__(self, nout, init, bias=None, batch_norm=False, activation=None,
+                 linear_name='LinearLayer', bias_name='BiasLayer',
+                 act_name='ActivationLayer'):
+        list.__init__(self)
+        self.append(Linear(nout, init, name=linear_name))
+        if bias is not None:
+            self.append(Bias(init=bias, name=bias_name))
+        if batch_norm:
+            self.append(BatchNorm())
+        if activation is not None:
+            self.append(Activation(transform=activation, name=act_name))
+
+
+class Conv(list):
+    """
+    A convolutional layer with a learned bias and activation, implemented as a
+    list composing separate Convolution, Bias and Activation layers.
+
+    Arguments:
+        fshape (tuple(int)): three dimensional shape of convolution window
+        init (Optional[Initializer]): Initializer object to use for
+            initializing layer weights and bias
+        strides (Optional[Union[int, dict]]): strides to apply convolution
+            window over. An int applies to both dimensions, or a dict with
+            str_h and str_w applies to h and w dimensions distinctly.  Defaults
+            to str_w = str_h = None
+        pad (Optional[Union[int, dict]]): padding to apply to edges of
+            input. An int applies to both dimensions, or a dict with pad_h
+            and pad_w applies to h and w dimensions distinctly.  Defaults
+            to pad_w = pad_h = None
+        bias (Initializer): an initializer to use for bias parameters
+        activation (Transform): a transform object with fprop and bprop
+            functions to apply
+        conv_name (str): the name to call the Convolutional layer. Defaults to 'ConvolutionLayer'
+        bias_name (str): the name to call the Bias layer. Defaults to 'BiasLayer'
+        act_name (str): the name to call the Activation layer. Defaults to ActivationLayer.
+
+    """
+    def __init__(self, fshape, init, strides={}, pad={}, bias=None, batch_norm=False,
+                 activation=None, conv_name='ConvolutionLayer',
+                 bias_name='BiasLayer', act_name='ActivationLayer'):
+        list.__init__(self)
+        self.append(Convolution(fshape=fshape, strides=strides, padding=pad, init=init))
+        if bias is not None:
+            self.append(Bias(init=bias))
+        if batch_norm:
+            self.append(BatchNorm())
+        if activation is not None:
+            self.append(Activation(transform=activation))
+
+
+class Dropout(Layer):
+    """
+    A dropout layer.
+
+    Applies an element-wise multiplication of inputs with a keep mask.
+
+    A keep mask is a tensor of ones and zeros of the same shape as the input.
+
+    Each fprop call generates an new keep mask stochastically where there
+    distribution of ones in the mask is controlled by the keep param.
+
+    Arguments:
+       keep (float): fraction of the inputs that should be stochastically kept.
+    """
+    def __init__(self, keep=0.5, name="droplayer"):
+        super(Dropout, self).__init__(name)
+        self.keep = keep
+        self.keep_mask = None
+
+    def init_buffers(self, inputs, inference):
+        self.inputs = inputs
+        if self.outputs is None:
+            self.outputs = self.be.zeros(inputs.shape)
+            if hasattr(self.inputs, 'lshape'):
+                self.outputs.lshape = self.inputs.lshape
+            if not inference:
+                self.keep_mask = self.be.zeros(inputs.shape)
+
+    def fprop(self, inputs, inference=False):
+        self.init_buffers(inputs, inference)
+        if inference:
+            return self._fprop_inference(inputs)
+        self.be.make_binary_mask(self.keep_mask, self.keep)
+        self.outputs[:] = self.keep_mask * inputs
+        return self.outputs
+
+    def _fprop_inference(self, inputs):
+        self.outputs[:] = inputs * self.keep
+        return self.outputs
+
+    def bprop(self, error, do_acts=False):
+        if self.deltas is None:
+            self.deltas = error
+        self.deltas[:] = self.keep_mask * error
+        return self.deltas
+
+
+class GeneralizedCost(NervanaObject):
+    """
+    A cost layer that applies the provided cost function and computes errors
+    with respect to inputs and targets.
+
+    Arguments:
+       costfunc (Cost): class with costfunc that computes errors
+    """
+    def __init__(self, costfunc, name=None):
+        super(GeneralizedCost, self).__init__(name)
+        self.costfunc = costfunc
+        self.cost = self.be.empty((1, 1))
+        self.outputs = None
+        self.deltas = None
+
+    def get_cost(self, inputs, targets):
+        """
+        Compute the cost function over the inputs and targets.
+
+        Arguments:
+            inputs (Tensor): Tensor containing input values to be compared to
+                targets
+            targets (Tensor): Tensor containing target values.
+
+        Returns:
+            Tensor containing cost
+        """
+        if self.outputs is None:
+            self.nstep = 1  # Non-recurrent case
+            if inputs.shape[1] != self.be.bsz:
+                self.nstep = inputs.shape[1] / self.be.bsz
+            # For non recurrent case, this is the same as be.iobuf(1)
+            self.outputs = self.be.iobuf((1, self.nstep))
+
+        self.outputs[:] = self.costfunc(inputs, targets)
+        self.cost[:] = self.be.mean(self.outputs, axis=1)
+        return self.cost
+
+    def get_errors(self, inputs, targets):
+        """
+        Compute the derivative of the cost function
+
+        Arguments:
+            inputs (Tensor): Tensor containing input values to be compared to
+                targets
+            targets (Tensor): Tensor containing target values.
+
+        Returns:
+            Tensor of same shape as the inputs containing their respective
+            deltas.
+        """
+        if self.deltas is None:
+            self.nstep = 1  # Non-recurrent case
+            if inputs.shape[1] != self.be.bsz:
+                self.nstep = inputs.shape[1] / self.be.bsz
+            self.deltas = self.be.empty_like(inputs)
+        # Cost function divides by (bsz * nsteps), so we multiply by nsteps here
+        # to get the average gradient over the batch (recurrent case only)
+        self.deltas[:] = self.costfunc.bprop(inputs, targets) * self.nstep
+        return self.deltas
+
+
+class GeneralizedCostMask(GeneralizedCost):
+    """
+    A cost layer that applies the provided cost function and computes errors
+    with respect to inputs and targets. Applies mask to deltas.
+
+    Arguments:
+       costfunc (Cost): class with costfunc that computes errors
+    """
+    def get_cost(self, inputs, targets_mask):
+        """
+        Compute the cost function over the inputs and targets.
+
+        Arguments:
+            inputs (Tensor): Tensor containing input values to be compared to
+                targets
+            targets_mask ((Tensor, Tensor)): Tuple with Tensor target values and Tensor mask
+
+        Returns:
+            Tensor containing cost
+        """
+        targets, mask = targets_mask
+        if self.outputs is None:
+            self.nstep = 1  # Non-recurrent case
+            if inputs.shape[1] != self.be.bsz:
+                self.nstep = inputs.shape[1] / self.be.bsz
+            # For non recurrent case, this is the same as be.iobuf(1)
+            self.outputs = self.be.iobuf((1, self.nstep))
+        masked_input = inputs * mask
+        self.outputs[:] = self.costfunc(masked_input, targets)
+        self.cost[:] = self.be.mean(self.outputs, axis=1) * self.nstep
+        return self.cost
+
+    def get_errors(self, inputs, targets_mask):
+        """
+        Compute the derivative of the cost function
+
+        Arguments:
+            inputs (Tensor): Tensor containing input values to be compared to
+                targets
+            targets_mask ((Tensor, Tensor)): Tuple with Tensor target values and Tensor mask
+
+        Returns:
+            Tensor of same shape as the inputs containing their respective
+            deltas.
+        """
+        targets, mask = targets_mask
+        if self.deltas is None:
+            self.nstep = 1  # Non-recurrent case
+            if inputs.shape[1] != self.be.bsz:
+                self.nstep = inputs.shape[1] / self.be.bsz
+            self.deltas = self.be.empty_like(inputs)
+        # Cost function divides by (bsz * nsteps), so we multiply by nsteps here
+        # to get the average gradient over the batch (recurrent case only)
+        self.deltas[:] = self.costfunc.bprop(inputs, targets) * self.nstep * mask
+
+        return self.deltas
+
+
+class BatchNorm(Layer):
+    """
+    A batch normalization layer as described in [Ioffe]_
+
+    Normalizes a batch worth of inputs by subtracting batch mean and dividing by
+    batch variance.  Then scales by learned factor gamma and shifts by learned bias beta.
+
+    Notes:
+
+    .. [Ioffe] arXiv:1502.03167
+    """
+    def __init__(self, rho=0.99, eps=1e-6, name="BatchNormLayer"):
+        super(BatchNorm, self).__init__(name)
+        self.allparams = None
+        self.x = None  # used to point to reshaped view of inputs
+        self.xhat = None
+        self.has_params = True
+        self.outputs = None
+        self.rho = rho
+        self.eps = eps
+        self.states = [[] for i in range(2)]
+
+    def set_bn_shape(self, inputs):
+        self.nfm = inputs.shape[0] if not hasattr(inputs, 'lshape') else inputs.lshape[0]
+        self.bn_shape = (self.nfm, inputs.size / self.nfm)
+
+    def init_buffers(self, inputs):
+        self.inputs = inputs
+        if self.x is None:
+            self.nout = self.inputs.shape[0]
+            self.outputs = self.be.iobuf(self.nout)
+
+            if hasattr(self.inputs, 'lshape'):
+                self.outputs.lshape = self.inputs.lshape
+            # This is for local layers -- the first dimension should be number of featuremaps
+            self.set_bn_shape(self.inputs)
+
+            self.x = self.inputs.reshape(self.bn_shape)
+            self.y = self.outputs.reshape(self.bn_shape)
+
+    def init_params(self, dim0):
+        self.beta = self.be.zeros((dim0, 1))
+        self.gamma = self.be.ones((dim0, 1))
+        self.params = [self.beta, self.gamma]
+
+        self.grad_params = [self.be.zeros_like(p) for p in self.params]
+        self.inf_params = [self.be.zeros_like(p) for p in self.params]
+
+        (self.grad_beta, self.grad_gamma) = self.grad_params
+        (self.gmean, self.gvar) = self.inf_params
+
+        self.allparams = self.params + self.inf_params
+
+        self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
+
+    def fprop(self, inputs, inference=False):
+        """
+        Normalize inputs (x) over batch mean and variance.
+        xhat = (x - xmean) / xvar
+
+        Scale and shift normalized inputs (xhat) by learned parameters gamma and beta.
+        y = xhat * gamma + beta
+
+        Accumulate partial results to global mean and variance buffers used for inference.
+        """
+        if inference:
+            return self._fprop_inference(inputs)
+        self.init_buffers(inputs)
+        if self.allparams is None:
+            self.init_params(self.nfm)
+
+        # These are cached op-trees
+        self.xvar = self.be.var(self.x, axis=1)
+        self.xmean = self.be.mean(self.x, axis=1)
+        self.xhat = (self.x - self.xmean) / self.be.sqrt(self.xvar + self.eps)
+
+        self.gmean[:] = self.gmean * self.rho + (1.0 - self.rho) * self.xmean
+        self.gvar[:] = self.gvar * self.rho + (1.0 - self.rho) * self.xvar
+        self.y[:] = self.xhat * self.gamma + self.beta
+        return self.outputs
+
+    def _fprop_inference(self, inputs):
+        """
+        Apply one linear transformation that captures normalization, gamma scaling and beta shift.
+        """
+        self.init_buffers(inputs)
+        xhat = (self.x - self.gmean) / self.be.sqrt(self.gvar + self.eps)  # Op-tree only
+        self.y[:] = xhat * self.gamma + self.beta
+        return self.outputs
+
+    def bprop(self, error):
+        """
+        Compute gradients for learning gamma and beta as well as layer weights.
+        """
+        if not self.deltas:
+            self.deltas = error.reshape(self.bn_shape)
+
+        self.grad_gamma[:] = self.be.sum(self.xhat * self.deltas, axis=1)
+        self.grad_beta[:] = self.be.sum(self.deltas, axis=1)
+        xtmp = (self.xhat * self.grad_gamma + self.grad_beta) / float(self.x.shape[1])
+        self.deltas[:] = self.gamma * (self.deltas - xtmp) / self.be.sqrt(self.xvar + self.eps)
+        return error
+
+    def get_params(self):
+        return self.plist
+
+    def get_params_serialize(self, keep_states=True):
+        serial_dict = {'params': [p.asnumpyarray() for p in self.allparams]}
+        if keep_states:
+            serial_dict['states'] = [[s.asnumpyarray() for s in slist] for slist in self.states]
+        return serial_dict
+
+    def set_params(self, allparams):
+        self.allparams = [self.be.array(x) for x in allparams]
+        self.params = self.allparams[:2]
+        self.inf_params = self.allparams[2:]
+        self.grad_params = [self.be.zeros_like(p) for p in self.params]
+
+        (self.beta, self.gamma) = self.params
+        (self.grad_beta, self.grad_gamma) = self.grad_params
+        (self.gmean, self.gvar) = self.inf_params
+        self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
+
+    def set_states(self, states):
+        self.states = [[self.be.array(x) for x in slist] for slist in states]
+
+
+class BatchNormAutodiff(BatchNorm):
+
+    """
+    An example to use autodiff in batchnorm.
+    """
+
+    def __init__(self, rho=0.99, eps=1e-6, name="BatchNormAutodiffLayer"):
+        super(BatchNormAutodiff, self).__init__(rho, eps, name)
+
+    def get_forward_optree(self):
+        """
+        Initialize the fprop optree for batchnorm.
+        """
+        # get fprop op-tree
+        xvar = self.be.var(self.x, axis=1)
+        xmean = self.be.mean(self.x, axis=1)
+        xhat = (self.x - xmean) / self.be.sqrt(xvar + self.eps)
+        return xhat * self.gamma + self.beta
+
+    def fprop(self, inputs, inference=False):
+        """
+        Compute the actual fprop from op-tree, update the global estimations
+        """
+        if inference:
+            return self._fprop_inference(inputs)
+        self.init_buffers(inputs)
+        if self.allparams is None:
+            self.init_params(self.nfm)
+            self.fprop_op_tree = self.get_forward_optree()
+
+        # the actual f-prop
+        self.y[:] = self.fprop_op_tree
+
+        # for inference
+        self.gmean[:] = (self.gmean * self.rho + (1.0 - self.rho) * self.be.mean(self.x, axis=1))
+        self.gvar[:] = (self.gvar * self.rho + (1.0 - self.rho) * self.be.var(self.x, axis=1))
+
+        return self.outputs
+
+    def bprop(self, error):
+        """
+        Use Autodiff.back_prop_grad to back propagate gradients for the
+        corresponding tensors.
+        """
+        if not self.deltas:
+            self.deltas = error.reshape(self.bn_shape)
+
+        # autodiff will automatically cache and reuse the object
+        # if we know the `error` buffer at init, we can also create the autodiff
+        # object at layer's init
+        ad = Autodiff(self.fprop_op_tree, self.be, next_error=self.deltas)
+
+        # back propagate
+        ad.back_prop_grad([self.x, self.gamma, self.beta],
+                          [self.deltas, self.grad_gamma, self.grad_beta])
+
+        return error

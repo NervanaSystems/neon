@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2014 Nervana Systems Inc.
+.. Copyright 2015 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -12,440 +12,181 @@
 .. See the License for the specific language governing permissions and
 .. limitations under the License.
 .. ---------------------------------------------------------------------------
-.. currentmodule:: neon
-.. _api:
+.. neon API documentation
 
-*************
-API Reference
-*************
-
-Architecture
-------------
-
-.. figure:: _static/framework_architecture.png
-   :alt: neon architecture
-
-API Functions
--------------
-
-.. _api.functions:
-
-Backends
-========
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.backends.backend.Backend
-   neon.backends.backend.Tensor
-
-CPU
----
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.backends.cpu.CPU
-   neon.backends.cpu.CPUTensor
-
-Cudanet GPU
------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.backends.cc2.GPU
-   neon.backends.cc2.GPUTensor
-
-Nervana GPU
------------
-
-.. autosummary::
-  :toctree: generated/
-
-  neon.backends.gpu.GPU
-  neon.backends.mgpu.MGPU
-
-Nervana Hardware
-----------------
-
-To add
+API
+===
 
 
-Models
-======
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.models.model.Model
-
-MLP
----
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.models.mlp.MLP
-
-Autoencoder
------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.models.autoencoder.Autoencoder
-
-Balance Network
+``neon`` module
 ---------------
 
-.. autosummary::
-   :toctree: generated/
+.. automodule:: neon
 
-   neon.models.balance.Balance
 
-RBM
----
+``neon.backends``
+-----------------
 
 .. autosummary::
    :toctree: generated/
+   :nosignatures:
 
-   neon.models.rbm.RBM
-
-DBN
----
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.models.dbn.DBN
-
-Recurrent Neural Network
-------------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.models.rnn.RNN
+   neon.backends.gen_backend
+   neon.backends.backend.Tensor
+   neon.backends.backend.Backend
+   neon.backends.backend.OpTreeNode
+   neon.backends.nervanacpu.CPUTensor
+   neon.backends.nervanacpu.NervanaCPU
+   neon.backends.nervanagpu.GPUTensor
+   neon.backends.nervanagpu.NervanaGPU
+   neon.backends.autodiff.Autodiff
+   neon.backends.autodiff.GradNode
+   neon.backends.autodiff.GradUtil.get_grad_back
+   neon.backends.autodiff.GradUtil.is_invalid
 
 
-Layers
-======
+``neon.callbacks``
+------------------
 
 .. autosummary::
    :toctree: generated/
+   :nosignatures:
 
-   neon.layers.layer.Layer
+   neon.callbacks.callbacks.Callbacks
+   neon.callbacks.callbacks.Callback
+   neon.callbacks.callbacks.SerializeModelCallback
+   neon.callbacks.callbacks.TrainCostCallback
+   neon.callbacks.callbacks.ValidationCallback
+   neon.callbacks.callbacks.ProgressBarCallback
+   neon.callbacks.callbacks.TrainLoggerCallback
+   neon.callbacks.callbacks.SaveBestStateCallback
+   neon.callbacks.callbacks.EarlyStopCallback
 
-Cost Layer
-----------
 
-.. autosummary::
-   :toctree: generated/
-
-   neon.layers.layer.CostLayer
-
-Activation Layer
-----------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.layers.layer.ActivationLayer
-   neon.layers.layer.SliceLayer
-
-Data Layer
-----------
+``neon.data``
+-------------
 
 .. autosummary::
    :toctree: generated/
+   :nosignatures:
 
-   neon.layers.layer.DataLayer
-   neon.layers.layer.ImageDataLayer
+   neon.data.dataiterator.DataIterator
+   neon.data.image.Image
+   neon.data.image.ImgMaster
+   neon.data.imagecaption.ImageCaption
+   neon.data.loader.load_cifar10
+   neon.data.loader.load_mnist
+   neon.data.loader.load_text
+   neon.data.loader.load_dataset
+   neon.data.text.Text
 
-Weight Layer
-------------
 
-.. autosummary::
-   :toctree: generated/
-
-   neon.layers.layer.WeightLayer
-
-Fully Connected Layer
+``neon.initializers``
 ---------------------
 
 .. autosummary::
    :toctree: generated/
+   :nosignatures:
 
-   neon.layers.fully_connected.FCLayer
+   neon.initializers.initializer.GlorotUniform
+   neon.initializers.initializer.Constant
+   neon.initializers.initializer.Gaussian
+   neon.initializers.initializer.Uniform
 
-Convolutional Layer
--------------------
 
-.. autosummary::
-   :toctree: generated/
-
-   neon.layers.convolutional.ConvLayer
-
-Pooling Layers
+``neon.layers``
 ---------------
 
 .. autosummary::
    :toctree: generated/
+   :nosignatures:
 
-   neon.layers.pooling.PoolingLayer
-   neon.layers.pooling.CrossMapPoolingLayer
+   neon.layers.layer.Layer
+   neon.layers.layer.Pooling
+   neon.layers.layer.ParameterLayer
+   neon.layers.layer.Convolution
+   neon.layers.layer.Deconv
+   neon.layers.layer.Linear
+   neon.layers.layer.Bias
+   neon.layers.layer.Activation
+   neon.layers.layer.Affine
+   neon.layers.layer.Conv
+   neon.layers.layer.Dropout
+   neon.layers.layer.GeneralizedCost
+   neon.layers.layer.GeneralizedCostMask
+   neon.layers.layer.BatchNorm
+   neon.layers.merge.MergeSum
+   neon.layers.merge.MergeConcat
+   neon.layers.merge.MergeConcatSequence
+   neon.layers.recurrent.Recurrent
+   neon.layers.recurrent.LSTM
+   neon.layers.recurrent.GRU
 
-DropOut Layer
+``neon.models``
+---------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   neon.models.model.Model
+
+
+``neon.optimizers``
+-------------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   neon.optimizers.optimizer.Adadelta
+   neon.optimizers.optimizer.Adam
+   neon.optimizers.optimizer.GradientDescentMomentum
+   neon.optimizers.optimizer.RMSProp
+   neon.optimizers.optimizer.Schedule
+   neon.optimizers.optimizer.ExpSchedule
+   neon.optimizers.optimizer.MultiOptimizer
+
+``neon.transforms``
+-------------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   neon.transforms.activation.Identity
+   neon.transforms.activation.Rectlin
+   neon.transforms.activation.Softmax
+   neon.transforms.activation.Tanh
+   neon.transforms.activation.Logistic
+
+   neon.transforms.cost.CrossEntropyBinary
+   neon.transforms.cost.CrossEntropyMulti
+   neon.transforms.cost.SumSquared
+   neon.transforms.cost.Misclassification
+
+
+``neon.util``
 -------------
 
 .. autosummary::
    :toctree: generated/
+   :nosignatures:
 
-   neon.layers.dropout.DropOutLayer
+   neon.util.argparser.NeonArgparser
+   neon.util.persist.load_obj
+   neon.util.persist.save_obj
 
-Composite Layers
-----------------
 
-.. autosummary::
-   :toctree: generated/
-
-   neon.layers.compositional.CompositeLayer
-   neon.layers.compositional.BranchLayer
-   neon.layers.compositional.ListLayer
-
-Normalized Layers
------------------
+``neon.visualizations``
+-----------------------
 
 .. autosummary::
    :toctree: generated/
-
-   neon.layers.normalizing.CrossMapResponseNormLayer
-   neon.layers.normalizing.LocalContrastNormLayer
-
-Boltzmann Layers
-----------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.layers.boltzmann.RBMLayer
-
-Recurrent Layers
-----------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.layers.recurrent.RecurrentLayer
-   neon.layers.recurrent.RecurrentCostLayer
-   neon.layers.recurrent.RecurrentHiddenLayer
-   neon.layers.recurrent.RecurrentOutputLayer
-   neon.layers.recurrent.RecurrentLSTMLayer
-
-
-Learning Rules
-==============
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.optimizers.learning_rule.LearningRule
-
-Gradient Descent
-----------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.optimizers.gradient_descent.GradientDescent
-   neon.optimizers.gradient_descent.GradientDescentPretrain
-   neon.optimizers.gradient_descent.GradientDescentMomentum
-   neon.optimizers.gradient_descent.GradientDescentMomentumWeightDecay
-   neon.optimizers.adadelta.AdaDelta
-   neon.optimizers.rmsprop.RMSProp
-
-Parameter Related
-=================
-
-Value Initialization
---------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.params.val_init.UniformValGen
-   neon.params.val_init.AutoUniformValGen
-   neon.params.val_init.GaussianValGen
-   neon.params.val_init.SparseEigenValGen
-   neon.params.val_init.NodeNormalizedValGen
-   neon.params.val_init.OrthoNormalizedValGen
-
-
-Metrics
-=======
-
-Misclassification
------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.metrics.misclass.MisclassSum
-   neon.metrics.misclass.MisclassRate
-   neon.metrics.misclass.MisclassPercentage
-
-ROC
----
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.metrics.roc.AUC
-
-Loss
-----
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.metrics.loss.LogLossSum
-   neon.metrics.loss.LogLossMean
-
-Squared Error
--------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.metrics.sqerr.SSE
-   neon.metrics.sqerr.MSE
-
-
-Transforms
-==========
-
-Activation Functions
---------------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.transforms.linear.Linear
-   neon.transforms.rectified.RectLin
-   neon.transforms.rectified.RectLeaky
-   neon.transforms.logistic.Logistic
-   neon.transforms.tanh.Tanh
-   neon.transforms.softmax.Softmax
-   neon.transforms.batch_norm.BatchNorm
-
-Cost Functions
---------------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.transforms.sum_squared.SumSquaredDiffs
-   neon.transforms.cross_entropy.CrossEntropy
-   neon.transforms.xcov.XCovariance
-
-
-Datasets
-========
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.dataset.Dataset
-   neon.datasets.imageset.Imageset
-
-MNIST
------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.mnist.MNIST
-
-CIFAR10
--------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.cifar10.CIFAR10
-
-CIFAR100
---------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.cifar100.CIFAR100
-
-Housing
--------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.housing.Housing
-
-Iris
-----
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.iris.Iris
-
-Sparsenet
----------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.sparsenet.SPARSENET
-
-Mobydick
---------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.mobydick.MOBYDICK
-
-Synthetic
----------
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.datasets.synthetic.UniformRandom
-   neon.datasets.synthetic.ToyImages
-
-
-Experiments
-===========
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.experiments.experiment.Experiment
-   neon.experiments.fit.FitExperiment
-   neon.experiments.fit_predict_err.FitPredictErrorExperiment
-   neon.experiments.check_grad.GradientChecker
-
-
-Miscellaneous
-=============
-
-.. autosummary::
-   :toctree: generated/
-
-   neon.util.compat.PY3
-   neon.util.compat.range
-   neon.util.compat.StringIO
-
-   neon.util.batch_writer.BatchWriter
-   neon.util.batch_writer.BatchWriterImagenet
+   :nosignatures:
+
+   neon.visualizations.data.create_minibatch_x
+   neon.visualizations.data.create_epoch_x
+   neon.visualizations.data.h5_cost_data
+   neon.visualizations.figure.x_label
+   neon.visualizations.figure.cost_fig

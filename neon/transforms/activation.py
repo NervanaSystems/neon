@@ -12,103 +12,102 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""
-Contains activation function related code.
-"""
+from neon.transforms.transform import Transform
 
 
-class Activation(object):
+class Identity(Transform):
+    def __call__(self, x):
+        return x
+
+    def bprop(self, x):
+        return 1
+
+
+class Rectlin(Transform):
     """
-    Abstract activation function class.  Defines operations any concrete
-    activation function child must support.
+    ReLu activation function (Nair and  Hinton, ICML 2010)
+    Computes the function f(x) = max(0, x)
     """
+    def __call__(self, x):
+        return self.be.maximum(x, 0)
 
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-        self.gain = 1.0
+    def bprop(self, x):
+        return self.be.greater(x, 0)
 
-    def apply_function(self, backend, inputs, outputs):
+
+class Softmax(Transform):
+    """
+    SoftMax activation function.
+    Computes the function f(x_k) = exp(x_k) / sum_i(exp(x_i))
+    """
+    def __init__(self, epsilon=2**-23):
+        self.epsilon = epsilon
+
+    def __call__(self, x):
+        return (self.be.reciprocal(self.be.sum(
+                self.be.exp(x - self.be.max(x, axis=0)), axis=0)) *
+                self.be.exp(x - self.be.max(x, axis=0)))
+
+    def bprop(self, x):
+        return 1
+
+
+class Tanh(Transform):
+    """
+    Hyperbolic tangent activation function.
+    Computes the function f(x) = (1 - exp(-2x))  / (1 + exp(-2x))
+    """
+    def __call__(self, x):
+        return self.be.tanh(x)
+
+    def bprop(self, x):
+        return (1.0 - self.be.square(x))
+
+
+class Logistic(Transform):
+    """
+    Logistic sigmoid activation function.
+    Computes the function f(x) = 1  / (1 + exp(-x))
+    """
+    def __init__(self, shortcut=False):
+        """Initialize Logistic based on whether shortcut is True or False
+
+        Args:
+            shortcut (bool): if True shortcut is used
+                             if False, actual derivative is returned in bprop
+
         """
-        Computes the activation function value by applying it to each element
-        of the dataset passed.
+        super(Logistic, self).__init__()
 
-        Arguments:
-            dataset (array_like): The dataset upon which to apply the
-                                  activation function.
+        self.set_shortcut(shortcut)
+
+    def set_shortcut(self, shortcut):
+        """Method to set the bprop func to use shortcut
+           when gradients do not need to be calculated.
+
+           Arguments:
+               shortcut (bool): if True shortcut is used
+               if False, actual derivative is returned in bprop
+        """
+        self.shortcut = shortcut
+
+        if shortcut:
+            self.bprop_func = lambda x: 1
+        else:
+            self.bprop_func = lambda x: x * (1.0 - x)
+
+    def __call__(self, x):
+        return self.be.reciprocal(self.be.exp(-x) + 1.0)
+
+    def bprop(self, y):
+        """Returns the derivative of the logistic (sigmoid) function at y (output)
+        Args:
+            y (Tensor or OpTree): input. y = f(x)
 
         Returns:
-            array_like: A transformed copy of the input dataset with the same
-                        type and shape.
+            OpTree: Derivative of the Logistic (sigmoid)
+                    Returns 1 if shortcut is True
+                    Returns derivative (y*(1-y)) if shortcut is False
 
-        Raises:
-            NotImplementedError: Must be implemented in a child class.
         """
-        raise NotImplementedError("apply_function should be" +
-                                  "overridden in child class.")
-
-    def apply_derivative(self, backend, inputs, outputs):
-        """
-        Computes the activation function derivative value by applying it to
-        each element of the dataset passed.
-
-        Arguments:
-            dataset (array_like): The dataset upon which to apply the
-                                  activation function derivative.
-
-        Returns:
-            array_like: A transformed copy of the input dataset with the same
-                        type and shape.
-
-        Raises:
-            NotImplementedError: Must be implemented in a child class.
-        """
-        raise NotImplementedError("apply_derivative should be" +
-                                  "overridden in child class.")
-
-    def pre_act_buffer(self, backend, output, dtype, persist_values=False):
-        """
-        Creates the pre_act_buffer
-
-        Arguments:
-            backend (Backend): The backend class to use for computation.
-            output (array_like): Output data buffer.
-            dtype: dtype for pre_act_buffer
-            persist_values (bool): If False (default) values will not persist
-                                   across subsequent backend begin/end calls.
-        """
-        return backend.zeros(output.shape, dtype, persist_values)
-
-    def fprop_func(self, backend, inputs, outputs):
-        """
-        Function to apply during fprop
-        Typically computes the activation function and its derivative by
-        applying it to each element of the dataset passed, but there are
-        exceptions (RectLin).
-
-        Arguments:
-            backend (Backend): The backend class to use for computation.
-            inputs (array_like): Input data to be transformed. This also
-                                 acts as storage for the output of the
-                                 derivative function.
-            outputs (array_like): Storage for the transformed output.
-
-        Raises:
-            NotImplementedError: Must be implemented in a child class.
-        """
-        raise NotImplementedError("fprop_func should be" +
-                                  "overridden in child class.")
-
-    def bprop_func(self, backend, pre_act, error, skip_act=False):
-        """
-        Function to apply during bprop
-        Typically empty, but can be used to compute derivative during bprop
-        instead of storing it during fprop (used in RectLin).
-
-        Arguments:
-            backend (Backend): The backend class to use for computation.
-            pre_act (array_like): pre_activation buffer
-            error (array_like): error buffer
-            skip_act (bool): whether to skip the multiplication
-        """
-        if skip_act is False:
-            backend.multiply(error, pre_act, out=error)
+        return self.bprop_func(y)

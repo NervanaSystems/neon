@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2014 Nervana Systems Inc.
+.. Copyright 2015 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -11,64 +11,69 @@
 .. WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 .. See the License for the specific language governing permissions and
 .. limitations under the License.
-.. ---------------------------------------------------------------------------
+..  ---------------------------------------------------------------------------
 
 Frequently Asked Questions
 --------------------------
 
-Installation
-============
 
-* Does neon run on Microsoft Windows?
+How do I generate or change the backend configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-  * At this time we are only supporting Linux and Mac OSX based installations.
+NEON can use either the CPU or a supported GPU as the backend for training and running inference
+with models.  Currently only GPUs with the Maxwell architecture are supported.  There
+is a utility function called :py:func:`neon.backends.gen_backend` which is used to configure the backend.
+This function allows users to select the CPU or GPU backend as well as configure various settings
+such as the size of the data mini-batches, default data precision (e.g. 32 bit float), random number
+generator seed, and the GPU device to use for systems that have more than one GPU installed.
+The size of the data batches must be set when generating the backend.
 
-* During install on a Mac I get "yaml.h" file not found error when the PyYAML
-  package is being built.  Is that bad?
+Furthermore, this function will handle the house keeping tasks necessary when switching
+backends dynamically.  This function will also handle clean up tasks that are needed such
+as deleting the GPU context.
 
-  * It can safely be ignored in this situation.  The problem is that you don't
-    have libyaml installed so PyYAML will resort to its own (slightly slower)
-    implementation. Without it, neon will still be able to successfully parse
-    and read your Experiment's YAML files.
+Example usage of the gen_backend function:
 
-* When trying to install with GPU=cudanet or GPU=nervanagpu I get an
-  "nvcc: Command not found" error.  Why?
+.. code:: python
 
-  * First ensure that you actually have available a CUDA compliant graphics
-    card and that the CUDA drivers and SDK are installed correctly.  It can be
-    downloaded from: https://developer.nvidia.com/cuda-downloads
-  * Second, ensure that your PATH and/or LD_LIBRARY_PATH are updated to find
-    the CUDA installation, as described in:
-    http://docs.nvidia.com/cuda/cuda-getting-started-guide-for-linux/#post-installation-actions
-  * if you are running on the above command as the super user via ``sudo`` on
-    Ubuntu Linux, you may need to pass PATH and LD_LIBRARY_PATH from your
-    environment like so:
-    ``sudo env “PATH=$PATH” env “LD_LIBRARY_PATH=$LD_LIBRARY_PATH” make install``
+    # generate a GPU backend using 16 bit floating point
+    # running on GPU device with id = 1
+    import numpy as np
+    gen_backend(backend='gpu', batch_size=128,
+                default_dtype=np.float16, device_id=1)
+
+    #  use this backend for various work such as training a model
+
+    # to switch to a different backend call gen_backend again
+    gen_backend(backend='cpu', batch_size=128)
 
 
-Running
-=======
+Why does the number of batches per epoch change sometimes?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* The console output is too verbose, how do I reduce the amount of logging?
+When running model training the progress bar output will show the number of data batches
+processed every epoch. Sometimes this number will vary from epoch to epoch because the
+data is being handled in mini-batches and if the size of the data set is not an integer
+multiple of the mini-batch size there will be some differences from epoch to epoch in the
+data used in training. For example, during the first epoch of training, if the end of the
+data set is reached and there is not enough data for a full mini-batch, extra data will be
+pulled from the beginning of the data set to fill up a complete mini-batch. On the next epoch,
+the data used will start from where the last epoch left off, not from the beginning of the data
+set. This process will continue for each epoch of training and, since the next epoch may not
+start from the beginning of the data set, it is possible that for some of the epochs the
+last item of data will fall at the end of the mini-batch.  For such a case, no data will need
+to be append to the epoch and the mini-batch count for that epoch may be smaller than the
+other epochs.
 
-  * In the YAML file for your experiment, you can reduce the amount of logging
-    by increasing the numeric value of ``logging``'s ``level`` parameter.  A
-    value of 40 implies that only messages of type ERROR and CRITICAL will be
-    displayed for instance.
 
-* The console output is too sparse, how do I increase the amount of logging?
+How is padding implemented?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-  * In the YAML file for your experiment, you can increase the amount of logging
-    by decreasing the numeric value of ``logging``'s ``level`` parameter.  A
-    value of 10 implies that messages of type DEBUG, INFO, WARNING, ERROR, and
-    CRITICAL will all be displayed for instance.
 
-Contributing
-============
-
-* I think I found a bug, what do I do?
-
-  * Please search our
-    `Github issues <https://github.com/NervanaSystems/neon/issues>`_ list and 
-    if it hasn't already been addressed, file a new issue so we can take a
-    look.
+For convolution, deconvolution and pooling layers, zero padding can be added to the edges
+of the input data to a layer.  If this parameter is set to an integer, a uniform zero pad
+of that length will be added to the top, bottom, left and right of the input data.  If a
+dictionary with the keys 'pad_h' and 'pad_w' is used, then the H dimension of the data
+will be padded with a zero padding of length pad_h and the W dimension with a padding of
+length pad_w. Note that this is different from the cuda-convnet2 style of padding in that
+padding is added to both ends of the dimension instead of just one end.

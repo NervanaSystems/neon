@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""
-Utility functions for saving various types of objects state.
-"""
-
 import logging
 import os
-import yaml
 
 from neon.util.compat import pickle
+from neon import initializers
+from neon import transforms
+from neon import layers
 
 
 logger = logging.getLogger(__name__)
@@ -44,164 +42,7 @@ def ensure_dirs_exist(path):
     return path
 
 
-def convert_scalar_node(val):
-    """
-    Helper to extract and return the appropriately types value of a ScalarNode
-    object.
-
-    Arguments:
-        val: (yaml.nodes.ScalarNode): object to extract value from
-
-    Returns:
-        float, int, string: the actual value
-    """
-    if not isinstance(val, yaml.nodes.ScalarNode):
-        return val
-    if val.tag.endswith("int"):
-        return int(val.value)
-    elif val.tag.endswith("float"):
-        return float(val.value)
-    else:
-        # assume a string
-        return val.value
-
-
-def extract_child_node_vals(node, keys):
-    """
-    Helper to iterate through the immediate children of the yaml node object
-    passed, looking for the key values specified.
-
-    Arguments:
-        node (yaml.nodes.Node): the parent node upon which to begin the search
-        keys (list): set of strings indicating the child keys we want to
-                     extract corresponding values for.
-
-    Returns:
-        dict: with one item for each key.  value is value found in search for
-              that key, or None if not found.
-    """
-    res = dict()
-    for child in node.value:
-        # child node values are two element tuples, where the first is a scalar
-        # node, and the second can be other types of nodes.
-        tag = child[0].value
-        if isinstance(child[1], yaml.nodes.ScalarNode):
-            val = convert_scalar_node(child[1])
-        elif isinstance(child[1], yaml.nodes.SequenceNode):
-            val = [convert_scalar_node(x) for x in child[1].value]
-        elif isinstance(child[1], yaml.nodes.MappingNode):
-            val = dict()
-            for item in child[1].value:
-                val[item[0].value] = convert_scalar_node(item[1])
-        else:
-            logger.warning("unknown node type: %s, ignoring tag %s",
-                           str(type(child[1])), tag)
-            val = None
-        for key in keys:
-            if tag == key:
-                res[key] = val
-    for key in keys:
-        if key not in res:
-            res[key] = None
-    return res
-
-
-def obj_multi_constructor(loader, tag_suffix, node):
-    """
-    Utility function used to actually import and generate a new class instance
-    from its name and parameters
-
-    Arguments:
-        loader (yaml.loader.SafeLoader): carries out actual loading
-        tag_suffix (str): The latter portion of the tag, representing the full
-                          module and class name of the object being
-                          instantiated.
-        node (yaml.MappingNode): tag/value set specifying the parameters
-                                 required for constructing new objects of this
-                                 type
-    """
-    # extract class name and import neccessary module.
-    parts = tag_suffix.split('.')
-    module = '.'.join(parts[:-1])
-    try:
-        cls = __import__(module)
-    except ImportError as err:
-        # we allow a shortcut syntax that skips neon. from import path, try
-        # again with this prepended
-        if parts[0] != "neon":
-            parts.insert(0, "neon")
-            module = '.'.join(parts[:-1])
-            cls = __import__(module)
-            if 'datasets' in parts:
-                # clear any previous datasets loaded with a different backend
-                cls.datasets.dataset.Dataset.inputs = {
-                    'train': None, 'test': None, 'validation': None}
-                cls.datasets.dataset.Dataset.targets = {
-                    'train': None, 'test': None, 'validation': None}
-        else:
-            raise err
-    for comp in parts[1:]:
-        cls = getattr(cls, comp)
-
-    # need to create a new object
-    try:
-        res = cls(**loader.construct_mapping(node, deep=True))
-    except TypeError as e:
-        logger.warning("Unable to construct '%s' instance.  Error: %s",
-                       cls.__name__, e.message)
-        res = None
-    return res
-
-
-def initialize_yaml():
-    yaml.add_multi_constructor('!obj:', obj_multi_constructor,
-                               yaml.loader.SafeLoader)
-
-
-def deserialize(load_path, verbose=True):
-    """
-    Converts a serialized object into a python data structure.  We currently
-    support reading from the following file formats (expected filename
-    extension in brackets):
-
-        * python pickle (.pkl)
-        * YAML (.yaml)
-
-    Arguments:
-        load_path (str, File): path and name of the serialized on-disk file to
-                               load (or an already loaded file object).
-                               The type to write is inferred based on filename
-                               extension.  If no extension given, pickle format
-                               is attempted.
-
-    Returns:
-        object: Converted in-memory python data structure.
-
-    See Also:
-        serialize
-    """
-    if isinstance(load_path, str):
-        load_path = open(os.path.expandvars(os.path.expanduser(load_path)))
-    fname = load_path.name
-
-    if verbose:
-        logger.warn("deserializing object from:  %s", fname)
-
-    if (fname.lower().endswith('.yaml') or fname.lower().endswith('.yml')):
-        initialize_yaml()
-        return yaml.safe_load(load_path)
-    else:
-        try:
-            return pickle.load(load_path)
-        except AttributeError:
-            msg = ("Problems deserializing: %s.  Its possible the interface "
-                   "for this object has changed since being serialized.  You "
-                   "may need to remove and recreate it." % load_path)
-            logger.error(msg)
-            raise AttributeError(msg)
-
-
-def serialize(obj, save_path, verbose=True):
+def save_obj(obj, save_path, verbose=True):
     """
     Dumps a python data structure to a saved on-disk representation.  We
     currently support writing to the following file formats (expected filename
@@ -215,7 +56,7 @@ def serialize(obj, save_path, verbose=True):
                          file name)
 
     See Also:
-        deserialize
+        :py:func:`~neon.models.model.Model.serialize`
     """
     if save_path is None or len(save_path) == 0:
         return
@@ -227,11 +68,133 @@ def serialize(obj, save_path, verbose=True):
     pickle.dump(obj, open(save_path, 'wb'), -1)
 
 
-class YAMLable(yaml.YAMLObject):
+def load_obj(load_path, verbose=True):
+    """
+    Loads a saved on-disk representation to a python data structure. We
+    currently support the following file formats:
+
+        * python pickle (.pkl)
+
+    Arguments:
+        load_path (str): where to the load the serialized object (full path
+                            and file name)
 
     """
-    Base class for any objects we'd like to be able to safely parse from yaml
-    configuration strems (or dump suitable representation back out to such a
-    stream).
-    """
-    yaml_loader = yaml.SafeLoader
+    if isinstance(load_path, str):
+        load_path = os.path.expandvars(os.path.expanduser(load_path))
+        if load_path.endswith('.gz'):
+            import gzip
+            load_path = gzip.open(load_path)
+        else:
+            load_path = open(load_path)
+    fname = load_path.name
+
+    if verbose:
+        logger.warn("deserializing object from:  %s", fname)
+    try:
+        return pickle.load(load_path)
+    except AttributeError:
+        msg = ("Problems deserializing: %s.  Its possible the interface "
+               "for this object has changed since being serialized.  You "
+               "may need to remove and recreate it." % load_path)
+        logger.error(msg)
+        raise AttributeError(msg)
+
+
+def initialize_obj(yamldict, obj_type):
+    '''
+    Helper function for initializing object defined in YAML configuration
+    file.  Given the configuration and the type of object being configured
+    will create an instance of the 'obj_type' class using the parameters
+    for that object in the config file.
+
+    Arguments:
+        yamldict (dict): dictionary represenation of the YAML model
+                         configuration file
+        obj_type (module): neon module which contains the class definitions
+                           for the object being initialized (e.g.
+                           neon.initializers.initializer)
+
+    Returns:
+        object instance : a newly created instance of an object of
+                          type specified in by the 'type' in yamldict
+
+    '''
+    # get classname and pop off config since class
+    # not used as parameter for initialization
+    classname = yamldict.pop('type')
+
+    # get the reference to the class in the module
+    obj_class = getattr(obj_type, classname)
+
+    # create an instance of the class with the
+    # remaining parameters from the config
+    ret_obj = obj_class(**yamldict)
+
+    # put the classname back into the config
+    # for later use
+    yamldict['type'] = classname
+    return ret_obj
+
+
+def initialize_layer(layerdict):
+    '''
+    Helper function that instantiates a layer from the configuration
+    stored in the YAML configuration files.  This function takes the
+    configuration dictionary from a single layer.
+
+    Arguments:
+        layerdict (dict): dictionary with the layer configuration
+                          parmaters
+        lastlayer (bool): set True for final layer in model - used
+                          to infer whether shortcut can be used in
+                          nonlinear transform bprop calculation
+
+    Returns:
+        object instance: a newly created instance of a layer object
+    '''
+    # type of layer being created
+    layer_class = getattr(layers, layerdict.pop('type'))
+
+    # config the layer initializer if specified
+    if 'init' in layerdict:
+        yaml_init = layerdict.pop('init')
+        layerdict['init'] = initialize_obj(yaml_init, initializers)
+
+    # if we have a merge layer, we need to create the layers in its
+    # layer container before we create it.
+    if 'layer_container' in layerdict:
+        lc = layerdict['layer_container']
+        new_lc = []
+        for obj in lc:
+            if isinstance(obj, list):
+                new_lc.append([initialize_layer(l) for l in obj])
+            else:
+                new_lc.append(initialize_layer(l))
+        layerdict['layer_container'] = new_lc
+
+    # get_description isn't smart enough to figure
+    # out our macros yet, so writing out yaml gives
+    # Activation layers, which have transform as an attr.
+    if 'bias' in layerdict:
+        init = initialize_obj(layerdict['bias'], initializers)
+        layerdict['bias'] = init
+
+    if 'activation' in layerdict or 'transform' in layerdict:
+        trsf_name = None
+        key = None
+        if 'activation' in layerdict:
+            trsf_name = layerdict.pop('activation')
+            key = 'activation'
+        else:
+            trsf_name = layerdict.pop('transform')['type']
+            key = 'transform'
+
+        trsf_class = getattr(transforms, trsf_name)
+        layerdict[key] = trsf_class()
+
+    # safe_load / safe_dump prints lists, not tuples
+    if 'fshape' in layerdict and isinstance(layerdict['fshape'], list):
+        layerdict['fshape'] = tuple(layerdict['fshape'])
+
+    return layer_class(**layerdict)

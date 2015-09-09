@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2014 Nervana Systems Inc.
+.. Copyright 2015 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -13,8 +13,8 @@
 .. limitations under the License.
 .. ---------------------------------------------------------------------------
 
-neon Contribution Process
--------------------------
+Contribution Process
+--------------------
 
 1. File an issue:
 
@@ -37,37 +37,25 @@ neon Contribution Process
 
 .. code-block:: bash
 
-    # to do both steps at once:
     git checkout -b my_new_feature_branch
-    # or separately:
-    git branch my_new_feature_branch
-    git checkout my_new_feature_branch
 
-4. Locally build neon, with your build type configured (eg. with GPU):
+4. Locally build neon
 
 .. code-block:: bash
 
-    # to setup your build type defaults for all future commands, edit setup.cfg
-    vi setup.cfg
-    make develop
-    # or
-    make build
-    # or override for a specific command
-    make -e DEV=1 DIST=1 GPU=cudanet develop
+    make
 
 5. Ideally you'd start by creating one or more unit tests with the
    functionality you expect your new feature to perform.  These should reside
    under the appropriate tests subdirectory of whatever you are changing.
    Then hack away at the code until you feel your feature is complete.  Once
-   satisfied, run the code through the tests and various style checking:
+   satisfied, run the code through the following checks:
 
 .. code-block:: bash
 
-    make test   # ensure all are OK for each of your build types
-    make sanity # again ensure all pass OK
+    make check   # ensure this is clean or your patch won't be accepted
+    make test   # ensure all are OK
     make style  # ensure there are no style related issues
-    make speed  # ensure there are no performance regressions
-    make grad   # ensure sample gradient checks all pass OK
     make lint   # (optional).  We still have a fair bit to clean up currently!
 
 6. If necessary you may want to update and/or rebuild the documentation.
@@ -76,12 +64,12 @@ neon Contribution Process
 
 .. code-block:: bash
 
-    make doc         # builds documentation locally
+    make html  # builds docs locally, starts a webserver so you can view
 
-7. Commit your changes and push your feature branch to ypur github fork.  Be
+7. Commit your changes and push your feature branch to your github fork.  Be
    sure to add a descriptive message and reference the github issue associated
-   with your task (ex. #1).  You can create a sequence of separate commits in
-   this manner if your task is better broken down into separate components:
+   with your task (ex. #1).  You will also want to rebase your commits down to
+   a single sensible commit to make things clean for the merge proces:
 
 .. code-block:: bash
 
@@ -92,8 +80,8 @@ neon Contribution Process
 8. Create a new pull request to get your feature branch merged into master for
    others to use.  You'll first need to ensure your feature branch contains the
    latest changes from master.  Furthermore, internal devs will need to assign
-   the request to someone else for a code review.  You should also ensure all
-   your tests pass when run through the items defined in step 5.
+   the request to someone else for a code review.  You must also ensure there
+   are no erros when run through the items defined in step 5.
 
 .. code-block:: bash
 

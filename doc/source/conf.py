@@ -38,16 +38,16 @@ autodoc_default_flags = ['members', 'undoc-members', 'inherited-members']
 autosummary_generate = True
 
 # Napoleon settings (used to parse google and numpy style docstrings)
-napoleon_google_docstring = True
-napoleon_numpy_docstring = True
+napoleon_google_docstring = True 
+napoleon_numpy_docstring = False 
 napoleon_include_private_with_doc = False
-napoleon_include_special_with_doc = True
+napoleon_include_special_with_doc = False 
 napoleon_use_admonition_for_examples = False
 napoleon_use_admonition_for_notes = False
 napoleon_use_admonition_for_references = False
 napoleon_use_ivar = False
-napoleon_use_param = True
-napoleon_use_rtype = True
+napoleon_use_param = True 
+napoleon_use_rtype = True 
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -63,7 +63,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'neon'
-copyright = u'2014, Nervana Systems Inc.'
+copyright = u'2015, Nervana Systems Inc'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -104,7 +104,7 @@ exclude_patterns = []
 # show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'tango'
+pygments_style = 'murphy'
 
 # A list of ignored prefixes for module index sorting.
 # modindex_common_prefix = []
@@ -117,7 +117,7 @@ pygments_style = 'tango'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'nature'
+html_theme = 'neon_theme'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -125,7 +125,7 @@ html_theme = 'nature'
 # html_theme_options = {}
 
 # Add any paths that contain custom themes here, relative to this directory.
-# html_theme_path = []
+html_theme_path = ["."]
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -136,17 +136,17 @@ html_theme = 'nature'
 
 # The name of an image file (relative to this directory) to place at the top
 # of the sidebar.
-# html_logo = None
+html_logo = 'neon_theme/static/favicon.ico' 
 
 # The name of an image file (within the static path) to use as favicon of the
 # docs.  This file should be a Windows icon file (.ico) being 16x16 or 32x32
 # pixels large.
-# html_favicon = None
+html_favicon = 'neon_theme/static/favicon.ico' 
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ['neon_theme/static']
 
 # Add any extra paths that contain custom files (such as robots.txt or
 # .htaccess) here, relative to this directory. These files are copied
@@ -215,7 +215,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [('index', 'neon.tex', u'neon Documentation',
-                    u'Nervana Systems Inc.', 'manual'), ]
+                    u'Nervana Systems Inc', 'manual'), ]
 
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.
@@ -244,7 +244,7 @@ latex_documents = [('index', 'neon.tex', u'neon Documentation',
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'neon', u'neon Documentation',
-     [u'Nervana Systems Inc.'], 1)
+     [u'Nervana Systems Inc'], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -257,7 +257,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [('index', 'neon', u'neon Documentation',
-                      u'Nervana Systems Inc.', 'neon',
+                      u'Nervana Systems Inc', 'neon',
                       'One line description of project.', 'Miscellaneous'), ]
 
 # Documents to append as an appendix to all manuals.

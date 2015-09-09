@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2014 Nervana Systems Inc.
+.. Copyright 2015 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -16,57 +16,75 @@
 Layers
 ======
 
-Neural network models are typically composed of a data layer, several weight
-layers and a cost layer. Data layers are associated with a
-:doc:`data set <datasets>`, and cost layers with a
-:doc:`cost function<transforms>`. In addition to standard weight layers, there
+Neural network models are typically composed of a data source, several weight
+layers and a cost layer.  In addition to standard weight layers, there
 is a variety of model specific weight, pooling and normalization layers.
 
 
-Available Layers
-----------------
-
+Pooling Layers
+--------------
 .. autosummary::
-   :toctree: generated/
+   neon.layers.layer.Pooling
 
-   neon.layers.layer.Layer
-   neon.layers.layer.CostLayer
-   neon.layers.layer.DataLayer
-   neon.layers.layer.ImageDataLayer
-   neon.layers.layer.ActivationLayer
-   neon.layers.layer.SliceLayer
-   neon.layers.layer.WeightLayer
+Parameter Layer
+----------------
+.. autosummary::
+   neon.layers.layer.ParameterLayer
 
-   neon.layers.fully_connected.FCLayer
+Convolutional Layers
+--------------------
+.. autosummary::
+   neon.layers.layer.Convolution
+   neon.layers.layer.Deconv
 
-   neon.layers.convolutional.ConvLayer
+Linear Layer
+------------
+.. autosummary::
+   neon.layers.layer.Linear
 
-   neon.layers.pooling.PoolingLayer
-   neon.layers.pooling.CrossMapPoolingLayer
+Bias Layer
+----------
+.. autosummary::
+   neon.layers.layer.Bias
 
-   neon.layers.compositional.CompositeLayer
-   neon.layers.compositional.BranchLayer
-   neon.layers.compositional.ListLayer
+Activation Layer
+----------------
+.. autosummary::
+   neon.layers.layer.Activation
 
-   neon.layers.dropout.DropOutLayer
-   neon.layers.normalizing.CrossMapResponseNormLayer
-   neon.layers.normalizing.LocalContrastNormLayer
+Composite Layers
+-----------------
+.. autosummary::
+   neon.layers.layer.Affine
+   neon.layers.layer.Conv
 
-   neon.layers.boltzmann.RBMLayer
+Dropout Layer
+-------------
+.. autosummary::
+   neon.layers.layer.Dropout
 
-   neon.layers.recurrent.RecurrentLayer
-   neon.layers.recurrent.RecurrentCostLayer
-   neon.layers.recurrent.RecurrentOutputLayer
-   neon.layers.recurrent.RecurrentHiddenLayer
-   neon.layers.recurrent.RecurrentLSTMLayer
+Cost Layer
+----------
+.. autosummary::
+   neon.layers.layer.GeneralizedCost
+   neon.layers.layer.GeneralizedCostMask
 
+Batch Norm Layer
+----------------
+.. autosummary::
+   neon.layers.layer.BatchNorm
 
-.. _extending_layer:
-
-Adding a new type of Layer
+Gated Recurrent Unit Layer
 --------------------------
+.. autosummary::
+   neon.layers.recurrent.GRU
 
-#. Create a new subclass of :class:`neon.models.layer.Layer` to suit your
-   needs.
-#. Provide implementation of functions: :func:`neon.layers.layer.Layer.fprop`
-   :func:`neon.layers.layer.Layer.bprop` at a minimum.
+Long Short-Term Memory Layer
+----------------------------
+.. autosummary::
+   neon.layers.recurrent.LSTM
+
+Recurrent Layer
+----------------
+.. autosummary::
+   neon.layers.recurrent.Recurrent

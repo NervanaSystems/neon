@@ -1,6 +1,49 @@
-# Changelog
+# ChangeLog
 
-## (unreleased)
+## v1.0.0rc1 (2015-09-08):
+
+### Modifications
+
+* RNN/LSTM
+  * Code is cleaner and achieves state of the art results on the Penn Tree Bank
+    dataset using RNN/LSTM/GRU
+  * Fast image captioning model (~200x faster than CPU based NeuralTalk) on
+    flickr8k dataset
+* Basic automatic differentiation support
+* Framework for visualizations (supported via callbacks)
+* Top-down refactoring & redesign to enable quicker iteration while keeping the
+  speedups offered by our nervanagpu kernels
+  * Datasets are easier to specify
+  * Backend now uses OpTrees (similar to nervanagpu) to support autodiff
+  * nervanagpu merged in as a neon backend to simplify development and use
+  * YAML syntax is simplified (but not backwards compatible)
+  * Better documentation and wider test coverage
+
+The following features will be added in upcoming releases:
+
+* Advanced automatic differentiation & computational graph support
+* Support for Kepler and older generation GPUs
+* Multi-GPU support & hyperparameter optimization
+
+This release was made possible thanks to the heroic efforts of the following
+contributors:
+* Yinyin Liu
+* Yixing Lao
+* Alex Park
+* Evren Tumer
+* Gabriel Pereyra
+* JD Co-Reyes
+* Will Constable
+* Scott Leishman
+* Angel Zhang
+* Hunter Lang
+* Arjun Bansal
+* Anil Thomas
+* Augustus Odena
+* Urs Koster
+* Scott Gray
+* Jenkins
+
 
 ## v0.9.0 (2015-07-20)
 

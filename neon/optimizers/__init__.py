@@ -12,10 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-# import shortcuts
-from neon.optimizers.gradient_descent import (GradientDescent,  # noqa
-                                              GradientDescentPretrain,
-                                              GradientDescentMomentum,
-    GradientDescentMomentumWeightDecay)
-from neon.optimizers.adadelta import AdaDelta  # noqa
-from neon.optimizers.rmsprop import RMSProp  # noqa
+from neon.optimizers.optimizer import (GradientDescentMomentum, RMSProp,
+                                       Adadelta, Adam, Schedule, ExpSchedule,
+                                       MultiOptimizer)

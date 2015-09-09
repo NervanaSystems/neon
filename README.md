@@ -1,37 +1,20 @@
 # neon
 
 [neon](https://github.com/NervanaSystems/neon) is Nervana's Python based
-Deep Learning framework. We have designed it with the following
+Deep Learning framework and achieves the [fastest performance](https://github.com/soumith/convnet-benchmarks) on many common deep neural networks such as AlexNet, VGG and GoogLeNet.
+We have designed it with the following
 functionality in mind:
 
-* YAML for easy model specification (inspired by
-  [pylearn2](https://github.com/lisa-lab/pylearn2))
-* Python for easily adding models and support for many data formats
-* Support for commonly used models: convnets, MLPs, RNNs, LSTMs, autoencoders,
-  RBMs
-* Support for common learning rules, activation functions and cost functions
-* Comparing performance of alternate numeric representations with 32-bit
-  floating point (fp32) for Deep Learning
-* Support for using [spearmint](https://github.com/JasperSnoek/spearmint) for
-  hyperparameter optimization
-* Swappable hardware backends: write code once and then deploy on CPUs, GPUs,
-  or Nervana hardware
+* Support for commonly used models and examples: convnets, MLPs, RNNs, LSTMs, autoencoders
+* Tight integration with nervanagpu kernels for fp16 and fp32 ([benchmarks](https://github.com/soumith/convnet-benchmarks)) on Maxwell GPUs
+	* 3s/macrobatch (3072 images) on AlexNet on Titan X (Full run on 1 GPU ~ 32 hrs)
+	* Fast image captioning model (~200x faster than CPU based NeuralTalk)
+* Basic automatic differentiation support
+* Framework for visualization
+* Swappable hardware backends: write code once and then deploy on CPUs, GPUs, or Nervana hardware
 
-Features that are unique to neon include:
 
-* Tight integration with
-  [nervanagpu](https://github.com/NervanaSystems/nervanagpu) kernels for fp16
-  and fp32 ([benchmarks](https://github.com/soumith/convnet-benchmarks)) on
-  Maxwell GPUs. These are the fastest implementations of the benchmark deep
-  networks.
-* 3s/macrobatch on AlexNet on Titan X (Full run on 1 GPU ~ 32 hrs)
-* Out of the box [fp16 AlexNet model](examples/convnet/i1k-alexnet-fp16.yaml)
-  that has the same accuracy as [fp32](examples/convnet/i1k-alexnet-fp32.yaml)
-* Integration with our fork
-  ([cudanet](https://github.com/NervanaSystems/cuda-convnet2)) of Alex
-  Krizhevsky's cuda-convnet2 library for Kepler GPU support (note that the
-  v0.9.0 neon release breaks support for cudanet under certain types of data/models)
-* Support for our distributed processor (Nervana Engine&trade;) for deep learning.
+[New features](https://github.com/NervanaSystems/neon/blob/master/ChangeLog) in latest release.
 
 We use neon internally at Nervana to solve our customers' problems across many
 [domains](http://www.nervanasys.com/products/). We are hiring across several
@@ -47,10 +30,8 @@ information.
 
 ### Installation
 
-* [Local install and dependencies](http://neon.nervanasys.com/docs/latest/installation.html)
+* [Local install and dependencies](http://neon.nervanasys.com/docs/latest/user_guide.html#installation)
 * Cloud-based access ([email us](mailto:demo@nervanasys.com) for an account)
-* [Docker images](http://neon.nervanasys.com/docs/latest/installation.html#docker-images>)
-  (community provided)
 
 ### Quick Install
 
@@ -60,54 +41,20 @@ or convolutional neural networks below.
 
     git clone https://github.com/NervanaSystems/neon.git
     cd neon
-    sudo make install
-
-The above will install neon system-wide.  If you don't have sufficient
-privileges or would prefer an isolated installation, see either our
-[virtualenv](http://neon.nervanasys.com/docs/latest/installation.html#virtualenv)
-based install, or take a look at some of the community provided [docker
-images](http://neon.nervanasys.com/docs/latest/installation.html#docker-images).
-
-There are several examples built-in to neon in the `examples` directory for a
-user to get started. The YAML format is plain-text and can be edited to change
-various aspects of the model. See the
-[ANNOTATED\_EXAMPLE.yaml](examples/ANNOTATED_EXAMPLE.yaml) for some of the
-definitions and possible choices.
-
-
-### Running a simple MNIST model (on CPU)
-
-    neon examples/mlp/mnist-small.yaml
-
-
-### Running an Alexnet model (on Maxwell GPU)
-
-In [fp32](examples/convnet/i1k-alexnet-fp32.yaml):
-
-    # for nervangpu (requires Maxwell GPUs)
-    neon --gpu nervanagpu examples/convnet/i1k-alexnet-fp32.yaml
-
-In [fp16](examples/convnet/i1k-alexnet-fp16.yaml):
-
-    neon --gpu nervanagpu examples/convnet/i1k-alexnet-fp16.yaml
-
-Distributed across 4 Maxwell GPUs in the same machine
-("weird-trick" style parallelization):
-
-    neon --gpu nervanagpu4 examples/convnet/i1k-alexnet-fp32.yaml
+    make
+    . .venv/bin/activate
+    neon examples/mnist_mlp.yaml
+    # alternatively, use a script:
+    python examples/mnist_mlp.py
 
 
 ### Code organization
 
     backends    --- implementation of different hardware backends
-    datasets    --- support for common datasets CIFAR-10, ImageNet, MNIST etc.
-    diagnostics --- hooks to measure timing and numeric ranges
-    hyperopt    --- hooks for hyperparameter optimization
     layers      --- layer code
     models      --- model code
     optimizers  --- learning rules
     transforms  --- activation & cost functions
-    metrics     --- performance evaluation metrics
 
 
 ### Documentation
@@ -115,9 +62,9 @@ Distributed across 4 Maxwell GPUs in the same machine
 The complete documentation for neon is available
 [here](http://neon.nervanasys.com/docs/latest). Some useful starting points are:
 
-* [Using neon](http://neon.nervanasys.com/docs/latest/using_neon.html)
+* [Using neon](http://neon.nervanasys.com/docs/latest/user_guide.html)
 * [API](http://neon.nervanasys.com/docs/latest/api.html)
-* [Developing for neon](http://neon.nervanasys.com/docs/latest/developing_neon.html)
+* [Developing for neon](http://neon.nervanasys.com/docs/latest/developer_guide.html)
 
 
 ### Issues
@@ -132,7 +79,6 @@ For any bugs or feature requests please:
 3. File a new [issue](https://github.com/NervanaSystems/neon/issues) or submit
    a new [pull request](https://github.com/NervanaSystems/neon/pulls) if you
    have some code you'd like to contribute
-
 
 ## Machine learning OPerations (MOP) Layer
 
@@ -152,20 +98,9 @@ such as [theano](https://github.com/Theano/Theano),
 [torch](https://github.com/torch/torch7), and
 [caffe](https://github.com/BVLC/caffe) to interface with the Nervana Engine.
 
-
-## Upcoming libraries
-
-We have separate, upcoming efforts on the following fronts:
-
-* Automatic differentiation
-* Major refactoring enhancements to make the interface cleaner and easier to
-  use
-* Integration with Nervana Cloud&trade;
-
-
 ## License
 
-We are releasing [neon](https://github.com/NervanaSystems/neon) and
-[nervanagpu](https://github.com/NervanaSystems/nervanagpu) under an open source
-[Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) License. We welcome
-you to [contact us](mailto:info@nervanasys.com) with your use cases.
+We are releasing [neon](https://github.com/NervanaSystems/neon) under an open source
+[Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) License. We welcome you to [contact us](mailto:info@nervanasys.com) with your use cases.
+
+

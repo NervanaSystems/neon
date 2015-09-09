@@ -12,87 +12,200 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""
-Contains cost or loss function related code.
-"""
-from neon.util.param import opt_param, req_param, ensure_dtype
-import numpy as np
-import logging
-
-logger = logging.getLogger(__name__)
+from neon import NervanaObject
 
 
-class Cost(object):
+class Cost(NervanaObject):
     """
-    Abstract cost function class.  Defines operations any concrete
-    cost function child must support.
+    Base class for the cost functions
     """
-
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-        opt_param(self, ['outputbuf', 'temp'], None)
-        opt_param(self, ['scale'], 1.0)
-
-        opt_param(self, ['backend_type'], np.float32)
-        self.temp_dtype = ensure_dtype(self.backend_type)  # string to dtype
-        logger.info("Setting dtype to" + str(self.backend_type))
-
-    def initialize(self, kwargs):
-        self.__dict__.update(kwargs)
-        opt_param(self, ['backend'], self.olayer.backend)
-        opt_param(self, ['batch_size'], self.olayer.batch_size)
-        opt_param(self, ['olayer_data'], 'output')
-        req_param(self.olayer, [self.olayer_data])
-        # if not hasattr(self.olayer, self.olayer_data):
-        #     raise ValueError("Layer %s does not have buffer %s" %
-        #                      (self.olayer.name, self.olayer_data))
-        # else:
-        self.set_outputbuf(getattr(self.olayer, self.olayer_data))
-
-    def set_outputbuf(self, databuf):
+    def __call__(self, y, t):
         """
-        Called when we need to change the data that the cost function is
-        operating on.
-        In the derived costs, this will reallocate the temporary storage if
-        the outputbuf shape changes (hopefully infrequently)
-        """
-        self.outputbuf = databuf
+        Applies the cost function
 
-    def apply_function(self, targets):
-        """
-        Computes the cost function value by applying it pairwise against
-        correspondsing elements of the outputs and targets datasets passed.
-        Outputs and targets must have the same shape.
-
-        Arguments:
-            outputs (array_like): The dataset containing predicted values.
-            targets (array_like): The dataset containing true outcome values.
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
 
         Returns:
-            array_like: The cost values evaluated at each pair of the input
-                        datasets.
-
-        Raises:
-            NotImplementedError: Must be implemented in a child class.
+            OpTree: Returns the cost
         """
-        raise NotImplementedError("Should be overridden in child class.")
+        return self.func(y, t)
 
-    def apply_derivative(self, targets):
+    def bprop(self, y, t):
         """
-        Computes the cost function derivative value by applying it to
-        each corresponding element of the predicted outputs and known
-        target outcomes.  Outputs and targets must have the same shape.
+        Computes the derivative of the cost function
 
-        Arguments:
-            outputs (array_like): The dataset containing predicted values.
-            targets (array_like): The dataset containing true outcome values.
-            temp (array_like): Storage for intermediate results.
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
 
         Returns:
-            array_like: The derivative cost values evaluated at each pair of
-                        the input datasets.
-
-        Raises:
-            NotImplementedError: Must be implemented in a child class.
+            OpTree: Returns the derivative of the cost function
         """
-        raise NotImplementedError("Should be overridden in child class.")
+        return self.funcgrad(y, t)
+
+
+class Metric(Cost):
+    """
+    Base class for Metric
+
+    Meant for non-smooth costs that we just want to check on validation.
+    """
+    def __call__(self, y, t):
+        """
+        To implement in derived classes
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            float: Returns the metric
+        """
+        raise NotImplementedError()
+
+    def bprop(self, y, t):
+        """
+        Not relevant for Metric
+        """
+        pass
+
+
+class CrossEntropyBinary(Cost):
+    """
+    Applies the binary cross entropy function
+
+    Note:
+        bprop assumes that shortcut is used to calculate derivative
+    """
+    def __init__(self, epsilon=2 ** -23, scale=1):
+        """
+        Initialize the binary cross entropy function
+
+        Args:
+            epsilon (float): set the epsilon
+                             (small number to prevent log(0) errors)
+        """
+        self.epsilon = epsilon
+        self.scale = scale
+
+    def __call__(self, y, t):
+        """
+        Applies the binary cross entropy cost function
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            OpTree: Returns the binary cross entropy cost
+        """
+        a = - self.be.log(y + self.epsilon) * t
+        b = - self.be.log(1 - y + self.epsilon) * (1 - t)
+        return self.scale * self.be.sum(a + b, axis=0)
+
+    def bprop(self, y, t):
+        """
+        Computes the shortcut derivative of the binary cross entropy cost function
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            OpTree: Returns the (mean) shortcut derivative of the binary entropy
+                    cost function ``(y - t) / y.shape[1]``
+        """
+        return self.scale * (y - t) / y.shape[1]
+
+
+class CrossEntropyMulti(Cost):
+    """
+    Applies the multiclass cross entropy function
+
+    Note:
+        bprop assumes that shortcut is used to calculate derivative
+    """
+    def __init__(self, epsilon=2 ** -23, scale=1, usebits=False):
+        """
+        Initialize the multiclass cross entropy function
+
+        Args:
+            epsilon (float): set the epsilon
+                             (small number to prevent log(0) errors)
+            usebits (boolean): whether to display costs in bits or nats (default)
+        """
+        self.epsilon = epsilon
+        self.scale = scale
+        self.logfunc = self.be.log2 if usebits else self.be.log
+
+    def __call__(self, y, t):
+        """
+        Applies the multiclass cross entropy cost function
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            OpTree: Returns the multiclass cross entropy cost
+        """
+        return (self.scale *
+                self.be.sum(-t * self.logfunc(self.be.clip(y, self.epsilon, 1.0)), axis=0))
+
+    def bprop(self, y, t):
+        """
+        Computes the shortcut derivative of the multiclass cross entropy cost
+        function
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            OpTree: Returns the (mean) shortcut derivative of the multiclass
+            entropy cost function ``(y - t) / y.shape[1]``
+        """
+        return self.scale * (y - t) / y.shape[1]
+
+
+class SumSquared(Cost):
+    """
+    Applies the squared error cost function
+    """
+    def __init__(self):
+        """
+        Initialize the squared error cost functions
+        """
+        self.func = lambda y, t: self.be.sum(
+            self.be.square(y - t), axis=0) / 2.
+        self.funcgrad = lambda y, t: (y - t) / y.shape[1]
+
+
+class Misclassification(Metric):
+    """
+    Compute the misclassification error metric
+    """
+    def __init__(self):
+        self.preds = self.be.iobuf(1)
+        self.hyps = self.be.iobuf(1)
+        self.outputs = self.preds  # Contains per record metric
+
+    def __call__(self, y, t):
+        """
+        Compute the misclassification error metric
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            float: Returns the metric
+        """
+        # convert back from onehot and compare
+        self.preds[:] = self.be.argmax(y, axis=0)
+        self.hyps[:] = self.be.argmax(t, axis=0)
+        self.outputs[:] = self.be.not_equal(self.preds, self.hyps)
+
+        return self.outputs.get().mean()

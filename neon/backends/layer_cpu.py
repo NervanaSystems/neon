@@ -1,0 +1,282 @@
+# ----------------------------------------------------------------------------
+# Copyright 2014 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+"""
+CPU backend layers
+"""
+import math
+from operator import mul
+
+
+def ceil_div(x, y):
+    """
+    same as int(ceil(float(x)/y)), so no need to import math lib
+    """
+    return -(-x // y)
+
+
+def output_dim(X, S, padding, strides):
+    """
+    compute along 1 dimension, with these sizes, what will be the output dimension
+
+    Arguments:
+        X (int): input data dimension
+        S (int): filter dimension
+        padding (int): padding on each side
+        strides (int): striding
+    """
+    return ceil_div(X - S + 1 + 2 * padding, strides)
+
+
+class ConvLayer(object):
+
+    """
+    ConvLayer parameter object.
+    This then is passed as an argument to all the convolution operations.
+
+    N: Number of images in mini-batch
+    C: Number of input feature maps
+    K: Number of output feature maps
+
+    D: Depth  of input image
+    H: Height of input image
+    W: Width  of input image
+
+    T: Depth  of filter kernel
+    R: Height of filter kernel
+    S: Width  of filter kernel
+
+    padding: amount of zero-padding around the given edge
+    strides: factor to step the filters by in a given direction
+    """
+
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D=1, H=1, W=1,
+                 T=1, R=1, S=1,
+                 pad_d=0, pad_h=0, pad_w=0,
+                 str_d=1, str_h=1, str_w=1):
+
+        # Compute the output spatial dimensions
+        M = output_dim(D, T, pad_d, str_d)
+        P = output_dim(H, R, pad_h, str_h)
+        Q = output_dim(W, S, pad_w, str_w)
+
+        self.C = C
+        self.K = K
+        self.M = M
+        self.P = P
+        self.Q = Q
+        self.NCK = (N, C, K)
+        self.TRS = (T, R, S)
+        self.DHW = (D, H, W)
+        self.MPQ = (M, P, Q)
+        self.padding = (pad_d, pad_h, pad_w)
+        self.strides = (str_d, str_h, str_w)
+
+        self.dimI = (C, D, H, W, N)
+        self.dimF = (C, T, R, S, K)
+        self.dimO = (K, M, P, Q, N)
+        self.dimI2 = (C * D * H * W, N)
+        self.dimF2 = (C * T * R * S, K)
+        self.dimO2 = (K * M * P * Q, N)
+        self.sizeI = reduce(mul, self.dimI, 1)
+        self.sizeF = reduce(mul, self.dimF, 1)
+        self.sizeO = reduce(mul, self.dimO, 1)
+        self.nOut = reduce(mul, self.MPQ, 1) * K
+
+    def fprop_slice(self, q, S, X, padding, strides):
+        qs = q * strides - padding
+        sliceF = []
+        sliceI = []
+        for s in range(S):
+            x = qs + s
+            if x >= 0 and x < X:
+                sliceF.append(s)
+                sliceI.append(x)
+        return sliceF, sliceI
+
+    def bprop_slice(self, x, S, Q, padding, strides):
+        qs = x - (S - padding - 1)
+        sliceF = []
+        sliceO = []
+        for s in range(S):
+            q = qs + s
+            if q % strides == 0:
+                q //= strides
+                if q >= 0 and q < Q:
+                    sliceF.append(S - s - 1)
+                    sliceO.append(q)
+        return sliceF, sliceO
+
+
+class DeconvLayer(ConvLayer):
+
+    """
+    DeconvLayer parameter object.
+    This then is passed as an argument to all the convolution operations.
+
+    N: Number of images in mini-batch
+    C: Number of output feature maps
+    K: Number of input feature maps
+
+    P: Height of input
+    Q: Width of input
+
+    D: Depth  of output image
+    H: Height of output image
+    W: Width  of output image
+
+    T: Depth  of filter kernel
+    R: Height of filter kernel
+    S: Width  of filter kernel
+
+    padding: amount of zero-padding around the given edge
+    strides: factor to step the filters by in a given direction
+    """
+
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 P, Q,
+                 R=1, S=1,
+                 pad_d=0, pad_h=0, pad_w=0,
+                 str_d=1, str_h=1, str_w=1):
+
+        # Set T, M and D to be consts.
+        T = 1
+        M = 1
+        D = 1
+
+        # Cannot get exact, e.g. because not unique
+        H = (P - 1) * str_h - 2 * pad_h + R
+        W = (Q - 1) * str_w - 2 * pad_w + S
+
+        # Add below to get H and W tracked
+        self.H = H
+        self.W = W
+
+        self.C = C
+        self.K = K
+        self.M = M
+        self.P = P
+        self.Q = Q
+        self.NCK = (N, C, K)
+        self.TRS = (T, R, S)
+        self.DHW = (D, H, W)
+        self.MPQ = (M, P, Q)
+        self.padding = (pad_d, pad_h, pad_w)
+        self.strides = (str_d, str_h, str_w)
+
+        # Did not change the names of dimI, dimO, etc. even though dimI is now technically the
+        # dimension of the output
+        self.dimI = (C, D, H, W, N)
+        self.dimF = (C, T, R, S, K)
+        self.dimO = (K, M, P, Q, N)
+        self.dimI2 = (C * D * H * W, N)
+        self.dimF2 = (C * T * R * S, K)
+        self.dimO2 = (K * M * P * Q, N)
+        self.sizeI = reduce(mul, self.dimI, 1)
+        self.sizeF = reduce(mul, self.dimF, 1)
+        self.sizeO = reduce(mul, self.dimO, 1)
+        # nOut has to change because P and Q are now the inputs
+        self.nOut = reduce(mul, self.DHW, 1) * C
+
+
+class PoolLayer(object):
+
+    """
+    PoolLayer parameter object.
+    This then is passed as an argument to all pooling kernels.
+
+    op: max, avg, l2 pooling
+    N: Number of images in mini-batch
+
+    C: Number of input feature maps
+    D: Depth  of input image
+    H: Height of input image
+    W: Width  of input image
+
+    J: Size of feature map pooling window (maxout n_pieces)
+    T: Depth  of pooling window
+    R: Height of pooling window
+    S: Width  of pooling window
+
+    padding: amount of zero-padding around the given image or feature map edge
+    strides: factor to step the window by in a given direction (overlap allowed)
+
+    Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
+
+    """
+
+    def __init__(self, lib, dtype,
+                 op, N, C,
+                 D=1, H=1, W=1,
+                 J=1, T=1, R=1, S=1,
+                 pad_j=0, pad_d=0, pad_h=0, pad_w=0,
+                 str_j=None, str_d=None, str_h=None, str_w=None):
+
+        # default to non-overlapping
+        if str_j is None:
+            str_j = J
+        if str_d is None:
+            str_d = T
+        if str_h is None:
+            str_h = R
+        if str_w is None:
+            str_w = S
+
+        if str_j < J or str_d < T or str_h < R or str_w < S:
+            self.overlap = (math.ceil(float(J) / str_j) *
+                            math.ceil(float(T) / str_d) *
+                            math.ceil(float(R) / str_h) *
+                            math.ceil(float(S) / str_w))
+        else:
+            self.overlap = 0.0
+
+        # Compute the output dimensions
+        K = output_dim(C, J, pad_j, str_j)
+        M = output_dim(D, T, pad_d, str_d)
+        P = output_dim(H, R, pad_h, str_h)
+        Q = output_dim(W, S, pad_w, str_w)
+
+        self.op = op
+        self.C = C
+        self.K = K
+        self.M = M
+        self.P = P
+        self.Q = Q
+        self.N = N
+        self.JTRS = (J, T, R, S)
+        self.DHW = (D, H, W)
+        self.MPQ = (M, P, Q)
+        self.padding = (pad_j, pad_d, pad_h, pad_w)
+        self.strides = (str_j, str_d, str_h, str_w)
+
+        self.dimI = (C, D, H, W, N)
+        self.dimO = (K, M, P, Q, N)
+        self.dimF2 = None
+        self.dimI2 = (C * D * H * W, N)
+        self.dimO2 = (K * M * P * Q, N)
+        self.sizeI = reduce(mul, self.dimI, 1)
+        self.sizeO = reduce(mul, self.dimO, 1)
+        self.nOut = reduce(mul, self.MPQ, 1) * K
+
+    def pool_slice(self, q, S, X, pad, stride):
+        qs = q * stride - pad
+        sliceI = []
+        for s in range(S):
+            x = qs + s
+            if x >= 0 and x < X:
+                sliceI.append(x)
+        return sliceI
