@@ -31,7 +31,7 @@ class Constant(Initializer):
     A class for initializing parameter tensors with a single value.
 
     Args:
-        val (Optional[float]): The value to assign to all tensor elements
+        val (float, optional): The value to assign to all tensor elements
     """
     def __init__(self, val=0.0, name="constantInit"):
         super(Constant, self).__init__(name=name)
@@ -47,8 +47,8 @@ class Uniform(Initializer):
     a uniform distribution.
 
     Args:
-        low  (Optional[float]): Lower bound of range from which we draw values.
-        high (Optional[float]): Upper bound of range from which we draw values.
+        low  (float, optional): Lower bound of range from which we draw values.
+        high (float, optional): Upper bound of range from which we draw values.
     """
     def __init__(self, low=0.0, high=1.0, name="uniformInit"):
         super(Uniform, self).__init__(name=name)
@@ -64,8 +64,8 @@ class Gaussian(Initializer):
     a normal distribution.
 
     Args:
-        loc   (Optional[float]): The mean of the normal (mu).
-        scale (Optional[float]): The standard deviation of the normal (sigma).
+        loc   (float, optional): The mean of the normal (mu).
+        scale (float, optional): The standard deviation of the normal (sigma).
     """
     def __init__(self, loc=0.0, scale=1.0, name="gaussianInit"):
         super(Gaussian, self).__init__(name=name)

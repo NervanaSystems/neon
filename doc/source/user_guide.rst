@@ -30,10 +30,13 @@ versions of the following system software (Ubuntu package names shown):
 * ``python-virtualenv`` - Needed to configure an isolated environment
 * ``libhdf5-dev`` - (h5py) for callback hdf5 datasets
 * ``libyaml-dev`` - (pyyaml) for YAML input file parsing
+* ``libopencv-dev``, ``pkg-config`` - (imageset_decoder) optional requirement,
+  used to perform decoding of image data
 
 Though neon will run on a CPU, you'll get better performance by utilizing a
 recent GPU (Maxwell based architecture).  This requires installation of the
 `CUDA SDK and drivers <https://developer.nvidia.com/cuda-downloads>`_.
+
 
 Virtualenv based Install
 ''''''''''''''''''''''''

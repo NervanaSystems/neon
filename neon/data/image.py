@@ -44,9 +44,8 @@ def save_pbuf(pbuf, imshape, jpgname):
 
 class Msg(object):
     """
-    TODO: Not documenting this class because it may go away.
+    Data structure encapsulating a message.
     """
-
     def __init__(self, size):
         self.s_e = Semaphore(1)
         self.s_f = Semaphore(0)
@@ -70,12 +69,10 @@ class Msg(object):
 
 
 class ImgEndpoint(NervanaObject):
-    '''
+    """
     Parent class that sets up all common dataset config options that the client
     and server will share
-
-    TODO: Not documenting this class because it may go away.
-    '''
+    """
 
     SERVER_KILL = 255
     SERVER_RESET = 254
@@ -137,11 +134,9 @@ class ImgEndpoint(NervanaObject):
 
 
 class ImgMaster(ImgEndpoint):
-    '''
+    """
     This is just a client that starts its own server process
-
-    TODO: Not documenting this class because it may go away.
-    '''
+    """
     def __init__(self, repo_dir, inner_size, do_transforms=True, rgb=True,
                  multiview=False, set_name='train', subset_pct=100):
         super(ImgMaster, self).__init__(repo_dir, inner_size, do_transforms,
@@ -209,17 +204,17 @@ class ImgMaster(ImgEndpoint):
         self.request.send(set_code)
 
     def recv_response(self, callback):
-        '''
+        """
         callback is a function that will be executed while we have access
         to the shared block of memory
         we are switching between the response buffers modulo self.active_idx
-        '''
+        """
         self.response[self.active_idx].recv(callback)
 
     def init_batch_provider(self):
-        '''
+        """
         Launches the server as a separate process and sends an initial request
-        '''
+        """
         def server_start_cmd():
             d = ImgServer(*self.server_args)
             d.run_server()
@@ -229,15 +224,15 @@ class ImgMaster(ImgEndpoint):
         self.send_request(self.active_idx)
 
     def exit_batch_provider(self):
-        '''
+        """
         Sends kill signal to server
-        '''
+        """
         self.send_request(self.SERVER_KILL)
 
     def reset(self):
-        '''
+        """
         sends request to restart data from index 0
-        '''
+        """
         if self.start == 0:
             return
         # clear the old request
@@ -276,11 +271,9 @@ class ImgMaster(ImgEndpoint):
 
 
 class ImgServer(ImgEndpoint):
-    '''
+    """
     This class interfaces with the clibrary that does the actual decoding
-
-    TODO: Not documenting this class because it may go away.
-    '''
+    """
     libpath = os.path.dirname(os.path.realpath(__file__))
     try:
         _i1klib = ct.cdll.LoadLibrary(os.path.join(libpath, 'imageset_decoder.so'))

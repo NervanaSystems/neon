@@ -144,7 +144,7 @@ class Recurrent(ParameterLayer):
                              * steps: degree of model unrolling
                              * batch_size: number of inputs in each mini-batch
 
-            inference (Optional[bool]): Set to true if you are running
+            inference (bool, optional): Set to true if you are running
                                         inference (only care about forward
                                         propagation without associated backward
                                         propagation).  Default is False.
@@ -355,7 +355,7 @@ class LSTM(Recurrent):
         Arguments:
             deltas (list[Tensor]): error tensors for each time step
                 of unrolling
-            do_acts (Optional[do_acts[bool]]): Defaults to True
+            do_acts (bool, optional): Carry out activations.  Defaults to True
 
         Attributes:
             dW_input (Tensor): input weight gradients
@@ -598,7 +598,7 @@ class GRU(Recurrent):
 
         Arguments:
             deltas (Tensor): error tensors for each time step of unrolling
-            do_acts (Optional[do_acts[bool]]): Defaults to True
+            do_acts (bool, optional): Carry out activations.  Defaults to True
 
         Attributes:
             dW_input (Tensor): input weight gradients

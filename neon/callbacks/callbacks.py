@@ -308,7 +308,7 @@ class SerializeModelCallback(Callback):
         epoch_freq (int, optional): how often (in epochs) to serialize the
                                    model.  If not specified, we default to
                                    running every epoch.
-        history (Optional[int]): number of checkpoint files to retain, newest
+        history (int, optional): number of checkpoint files to retain, newest
                                  files up to this count are retained.  filename
                                  for the check point files will be
                                  <save_path>_<epoch>.
@@ -516,9 +516,9 @@ class TrainLoggerCallback(Callback):
     Arguments:
         model (Model): model object
 
-        epoch_freq (Optional[int]): how often (in epochs) to log training info.
+        epoch_freq (int, optional): how often (in epochs) to log training info.
                                     Defaults to every 1 epoch.
-        minibatch_freq (Optional[int]): how often (in minibatches) to log
+        minibatch_freq (int, optional): how often (in minibatches) to log
                                         training info, or None to log only on
                                         epoch boundaries.  Defaults to None.
     """

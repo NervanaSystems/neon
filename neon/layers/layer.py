@@ -97,18 +97,18 @@ class Pooling(Layer):
     Pooling layer implementation.
 
     Arguments:
-        fshape (Union[int, Tuple[int, int]]): one or two dimensional shape
+        fshape (int, tuple(int, int)): one or two dimensional shape
             of pooling window
-        op (Optional[str]): pooling operation in [max, avg]. Defaults to "max"
-        strides (Optional[Union[int, dict]]): strides to apply pooling window
+        op (str, optional): pooling operation in [max, avg]. Defaults to "max"
+        strides (int, dict, optional): strides to apply pooling window
             over. An int applies to both dimensions, or a dict with str_h
             and str_w applies to h and w dimensions distinctly.  Defaults
             to str_w = str_h = None
-        padding (Optional[Union[int, dict]]): padding to apply to edges of
+        padding (int, dict, optional): padding to apply to edges of
             input. An int applies to both dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
             to pad_w = pad_h = None
-        name (Optional[str]): layer name. Defaults to "PoolingLayer"
+        name (str, optional): layer name. Defaults to "PoolingLayer"
     """
     def __init__(self, fshape, op="max", strides={}, padding={},
                  name="PoolingLayer"):
@@ -165,9 +165,9 @@ class ParameterLayer(Layer):
     Not intended to be used directly.
 
     Arguments:
-        init (Optional[Initializer]): Initializer object to use for
+        init (Initializer, optional): Initializer object to use for
             initializing layer weights
-        name (Optional[str]): layer name. Defaults to "ParameterLayer"
+        name (str, optional): layer name. Defaults to "ParameterLayer"
     """
     def __init__(self, init=None, name="ParameterLayer"):
         super(ParameterLayer, self).__init__(name)
@@ -188,7 +188,7 @@ class ParameterLayer(Layer):
             supplied initializer.
 
         Arguments:
-            shape (Union[int, tuple]): shape to allocate for layer paremeter
+            shape (int, tuple): shape to allocate for layer paremeter
                 buffers.
         """
         self.W = self.be.empty(shape)
@@ -236,17 +236,17 @@ class Convolution(ParameterLayer):
 
     Arguments:
         fshape (tuple(int)): three dimensional shape of convolution window
-        strides (Optional[Union[int, dict]]): strides to apply convolution
+        strides (int, dict, optional): strides to apply convolution
             window over. An int applies to both dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
             to str_w = str_h = None
-        padding (Optional[Union[int, dict]]): padding to apply to edges of
+        padding (int, dict, optional): padding to apply to edges of
             input. An int applies to both dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
             to pad_w = pad_h = None
-        init (Optional[Initializer]): Initializer object to use for
+        init (Initializer, optional): Initializer object to use for
             initializing layer weights
-        name (Optional[str]): layer name. Defaults to "ConvolutionLayer"
+        name (str, optional): layer name. Defaults to "ConvolutionLayer"
     """
 
     def __init__(self, fshape, strides={}, padding={}, init=None, name="ConvolutionLayer"):
@@ -312,17 +312,17 @@ class Deconv(ParameterLayer):
 
     Arguments:
         fshape (tuple): three dimensional shape of convolution window
-        strides (Optional[Union[int, dict]]): strides to apply convolution
+        strides (int, dict, optional): strides to apply convolution
             window over. An int applies to both dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
             to str_w = str_h = None
-        padding (Optional[Union[int, dict]]): padding to apply to edges of
+        padding (int, dict, optional): padding to apply to edges of
             input. An int applies to both dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
             to pad_w = pad_h = None
-        init (Optional[Initializer]): Initializer object to use for
+        init (Initializer, optional): Initializer object to use for
             initializing layer weights
-        name (Optional[str]): layer name. Defaults to "DeconvolutionLayer"
+        name (str, optional): layer name. Defaults to "DeconvolutionLayer"
     """
     def __init__(self, fshape, strides={}, padding={}, init=None, name="DeconvolutionLayer"):
         super(Deconv, self).__init__(init, name)
@@ -392,10 +392,10 @@ class Linear(ParameterLayer):
     weights.
 
     Arguments:
-        nout (Union[int, tuple]): Desired size or shape of layer output
-        init (Optional[Initializer]): Initializer object to use for
+        nout (int, tuple): Desired size or shape of layer output
+        init (Initializer, optional): Initializer object to use for
             initializing layer weights
-        name (Optional[str]): Layer name. Defaults to "LinearLayer"
+        name (str, optional): Layer name. Defaults to "LinearLayer"
     """
     def __init__(self, nout, init, name="LinearLayer"):
         super(Linear, self).__init__(init, name)
@@ -435,9 +435,9 @@ class Bias(ParameterLayer):
     outputs of the same shape.
 
     Arguments:
-        init (Optional[Initializer]): Initializer object to use for
+        init (Initializer, optional): Initializer object to use for
             initializing layer bias
-        name (Optional[str]): Layer name. Defaults to "BiasLayer"
+        name (str, optional): Layer name. Defaults to "BiasLayer"
     """
     def __init__(self, init, name="BiasLayer"):
         super(Bias, self).__init__(init, name)
@@ -482,7 +482,7 @@ class Activation(Layer):
     Arguments:
         transform (Transform): a transform object with fprop and bprop
             functions to apply
-        name (Optional[str]): Layer name. Defaults to "ActivationLayer"
+        name (str, optional): Layer name. Defaults to "ActivationLayer"
     """
     def __init__(self, transform, name="ActivationLayer"):
         super(Activation, self).__init__(name)
@@ -509,8 +509,8 @@ class Affine(list):
     composing separate linear, bias and activation layers.
 
     Arguments:
-        nout (Union[int, tuple]): Desired size or shape of layer output
-        init (Optional[Initializer]): Initializer object to use for
+        nout (int, tuple): Desired size or shape of layer output
+        init (Initializer, optional): Initializer object to use for
             initializing layer weights and bias
         bias (Initializer): an initializer to use for bias parameters
         activation (Transform): a transform object with fprop and bprop
@@ -540,13 +540,13 @@ class Conv(list):
 
     Arguments:
         fshape (tuple(int)): three dimensional shape of convolution window
-        init (Optional[Initializer]): Initializer object to use for
+        init (Initializer, optional): Initializer object to use for
             initializing layer weights and bias
-        strides (Optional[Union[int, dict]]): strides to apply convolution
+        strides (int, dict, optional): strides to apply convolution
             window over. An int applies to both dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
             to str_w = str_h = None
-        pad (Optional[Union[int, dict]]): padding to apply to edges of
+        pad (int, dict, optional): padding to apply to edges of
             input. An int applies to both dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
             to pad_w = pad_h = None
