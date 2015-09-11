@@ -828,6 +828,17 @@ class NervanaGPU(Backend):
                     # push buf to main_stage
                     main_stage.append(buf)
                     main_stage_axis.append(None)
+                elif s['op'] == 'transpose':
+                    # the object being transposed must be optree here
+                    operand = main_stage.pop()
+                    main_stage_axis.pop()  # don't care the value
+                    # allocate buf for the operand shape
+                    buf = self._buf_malloc(operand.shape)
+                    # evaluate to buf
+                    stages.append(OpTreeNode({"op": "assign"}, buf, operand))
+                    # put the buf back to main_stage
+                    main_stage.append(buf.T)
+                    main_stage_axis.append(None)
                 elif s['op'] in OpCollection.reduction_ops:
                     # since 2d reduction is converted
                     assert s['axis'] is not None
@@ -849,7 +860,9 @@ class NervanaGPU(Backend):
                     # will not run into multiple-axis reduction problem
                     # just pop, build optree and put back
                     operand = main_stage.pop()
+                    axis = main_stage_axis.pop()
                     main_stage.append(OpTreeNode(s, operand, None))
+                    main_stage_axis.append(axis)  # cancelled out
                 elif s['op'] in OpCollection.binary_ops:  # not dot
                     # binary ops might run into multiple-axis reduction
                     right = main_stage.pop()
@@ -915,7 +928,7 @@ class NervanaGPU(Backend):
         reduction_axes = [False, False]
         for s in stack:
             if isinstance(s, dict):
-                if s['op'] == 'dot':
+                if s['op'] == 'dot' or s['op'] == 'transpose':
                     return False
                 elif s['op'] in OpCollection.reduction_ops:
                     reduction_axes[s['axis']] = True

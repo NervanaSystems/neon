@@ -68,34 +68,34 @@ def get_numerical_gradient(f, tensors, delta=1e-5):
     return gradients
 
 
-def func_basic_ops(be, x0, x1, x2, x3, x4):
-    return (x0 + x2) + x0 * x4 + x1 * x3
+class TestFuncs():
 
+    """
+    A collection of functions to be tested
+    """
+    @staticmethod
+    def func_basic_ops(be, x0, x1, x2, x3, x4):
+        return (x0 + x2) + x0 * x4 + x1 * x3
 
-def func_real(be, x0, x1, x2, x3, x4):
-    return x1 + be.absolute(x2 + x3) + x4 - (x1 + be.square(x2 + x3) + x4)
+    @staticmethod
+    def func_real(be, x0, x1, x2, x3, x4):
+        return x1 + be.absolute(x2 + x3) + x4 - (x1 + be.square(x2 + x3) + x4)
 
+    @staticmethod
+    def func_dot(be, x0, x1, x2, x3, x4):
+        return (x0 + x3) + be.dot(x1, x2) - (x1 - x2) - be.dot(x3, x4)
 
-def func_dot(be, x0, x1, x2, x3, x4):
-    return (x0 + x3) + be.dot(x1, x2) - (x1 - x2) - be.dot(x3, x4)
+    @staticmethod
+    def func_dot_reduction_mix(be, x0, x1, x2, x3, x4):
+        f1 = be.max(x0, axis=1, keepdims=True)
+        f2 = be.min(x1, axis=0, keepdims=True)
+        f3 = be.dot(1. / x3, x2 + x4)
+        f4 = be.min(x3, axis=0, keepdims=True)
+        return f1 + f2 + f3 + f4
 
-
-def func_dot_reduction_mix(be, x0, x1, x2, x3, x4):
-    f1 = be.std(be.var(x0, axis=0, keepdims=True), axis=1, keepdims=True)
-    f2 = (be.max(x1, axis=0, keepdims=True) +
-          be.min(x1, axis=0, keepdims=True))
-    f3 = be.std(x2, keepdims=True)
-    f4 = be.dot(1.0 / x3, x4 / x2)
-    f5 = be.dot(x3, x4 - x0)
-    f6 = be.dot(x2 / f4, f5 + x3)
-    return f1 + f2 + f3 + f4 + 1.0 / (be.dot(f5, f6))
-
-
-def func_scalar_broadcast(be, x0, x1, x2, x3, x4):
-    return (0.2 * x0 - x1 * x2 / 3 * 4 * x1 + x0 * x0 / x0 / x3
-            - x0 * x1 ** (x0 + x1 - 2) / (x3 - 0.5) / (x2 * 0.2)
-            + x2 / be.sqrt(x0 * x1 * x0 * 0.1 * 0.8 * 0.9) / x0
-            + 0.9 ** x0 + x0 ** 0.9)
+    @staticmethod
+    def func_scalar_broadcast(be, x0, x1, x2, x3, x4):
+        return (0.2 * x0 - x1 * x2 / 3 * 4 * x1 + x0 * x0 / x0 / x3 + x4)
 
 
 def pytest_generate_tests(metafunc):
@@ -104,9 +104,11 @@ def pytest_generate_tests(metafunc):
 
     # test params
     test_funcs = [
-        func_basic_ops,
-        func_real,
-        func_dot
+        TestFuncs.func_basic_ops,
+        TestFuncs.func_real,
+        TestFuncs.func_dot,
+        TestFuncs.func_dot_reduction_mix,
+        TestFuncs.func_scalar_broadcast,
     ]
     test_tensor_flags = ['pos_rand', 'neg_rand', 'rand']
     test_tensor_dims = [(2, 2)]
@@ -138,9 +140,9 @@ def test_gradients(custom_args):
 
     # TODO: stricter test to fix numerical issues
     assert_tensors_allclose(
-        numpy_func_val, backend_func_val, rtol=0., atol=1e-2)
-    assert_tensors_allclose(numerical_gradient, autodiff_gradient, rtol=1e-02,
-                            atol=1e-3)
+        numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)
+    assert_tensors_allclose(
+        numerical_gradient, autodiff_gradient, rtol=1e-02, atol=1e-3)
 
     if backend_type is NervanaGPU:
         be.ctx.detach()

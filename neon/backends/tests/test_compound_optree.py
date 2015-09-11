@@ -39,6 +39,17 @@ class TestFuncs():
         f6 = be.dot(x2 / f4, f5 + x3)
         return f1 + f2 + f3 + f4 + 1.0 / (be.dot(f5, f6))
 
+    @staticmethod
+    def func_dot_reduction_transpose_mix(be, x0, x1, x2, x3, x4):
+        f1 = be.std(be.var(x0, axis=0, keepdims=True), axis=1, keepdims=True)
+        f2 = (be.max(x1, axis=0, keepdims=True) +
+              be.min(x1, axis=0, keepdims=True))
+        f3 = be.std(x2, keepdims=True).T
+        f4 = be.dot(1.0 / x3, (x4 / x2).T).T
+        f5 = be.dot(x3, (x4 - x0).T)
+        f6 = be.dot(x2 / f4.T, f5 + x3).T
+        return f1 + f2 + f3 + f4 + 1.0 / (be.dot(f5, f6))
+
 
 def pytest_generate_tests(metafunc):
     """
@@ -50,6 +61,7 @@ def pytest_generate_tests(metafunc):
     # test params
     test_funcs = [
         TestFuncs.func_dot_reduction_mix,
+        TestFuncs.func_dot_reduction_transpose_mix,
     ]
     test_tensor_flags = ['pos_rand', 'neg_rand', 'rand']
     test_tensor_dims = [(2, 2)]
