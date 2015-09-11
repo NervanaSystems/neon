@@ -7,7 +7,7 @@ The adaptation includes
   - provide inputs for forward pass and errors for backward pass
   - initialize weights and biases into zeros, as the main test script will externally
     initialize the weights and biases
-  - being able to read out hashable values to compare with another LSTM
+  - being able to read out hashable values to compare with another GRU
     implementation
 """
 

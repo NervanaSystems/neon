@@ -31,12 +31,12 @@ class OpCollection(object):
     """
     zero_operand_ops = {"rand", "onehot"}
     unary_ops = {"finite", "neg", "abs", "sgn", "sqrt", "sqr", "exp", "log",
-                 "exp2", "log2", "sig", "sig2", "tanh", "tanh2"}
+                 "exp2", "log2", "sig", "sig2", "tanh", "tanh2", "transpose"}
     binary_ops = {"assign", "add", "sub", "mul", "div", "eq", "ne", "lt", "le",
                   "gt", "ge", "pow", "minimum", "maximum", "dot"}
     reduction_ops = {"sum", "max", "min", "argmax", "argmin"}
     float_ops = zero_operand_ops | unary_ops | binary_ops
-    ew_ops = float_ops - {'dot'}
+    ew_ops = float_ops - {'dot', 'transpose'}
 
 
 class Tensor(object):
@@ -1719,7 +1719,6 @@ class OpTreeNode(tuple):
         if len(b_shape) == 1:
             b_shape = b_shape + (1,)
 
-        # import ipdb; ipdb.set_trace()
         if op in OpCollection.ew_ops:
             for i in range(2):
                 out_shape[i] = max(a_shape[i], b_shape[i])
@@ -1735,6 +1734,9 @@ class OpTreeNode(tuple):
             assert (len(a_shape) == len(b_shape) and len(b_shape) == 2 and
                     a_shape[1] == b_shape[0])
             out_shape = (a_shape[0], b_shape[1])
+        elif op == "transpose":
+            assert b is None
+            out_shape = tuple(reversed(a_shape))
         else:
             raise TypeError("%s is not a valid operation" % op)
         out_shape = tuple(out_shape)
@@ -1795,6 +1797,18 @@ class OpTreeNode(tuple):
         stack.append(self[0])
 
         return stack
+
+    @property
+    def T(self):
+        return OpTreeNode.build("transpose", self, None)
+
+    def transpose(self, out=None):
+        """
+        Return a transposed view of the data.
+        """
+        if out:
+            return OpTreeNode.build("assign", out, self.T)
+        return self.T
 
     @staticmethod
     def optree_to_list(optree):

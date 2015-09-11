@@ -429,6 +429,7 @@ numpy_call_dict = {
     "sig2": lambda left: 1. / (1. + np.exp2(-left)),
     "tanh": lambda left: np.tanh(left),
     "tanh2": lambda left: (np.exp2(2. * left) - 1.) / (np.exp2(2. * left) + 1.),
+    "transpose": lambda left: np.transpose(left),
     # binary ops
     "add": lambda left, right: left + right,
     "sub": lambda left, right: left - right,
