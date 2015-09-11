@@ -18,8 +18,8 @@ Example that trains an LSTM or GRU based recurrent networks.
 The dataset uses Penn Treebank dataset parsing on character-level.
 
 Reference:
-    Generating sequences with recurrent neural networks `[Grave2014]`_
-.. _[Grave2014]: http://arxiv.org/pdf/1308.0850.pdf
+    Generating sequences with recurrent neural networks `[Graves2014]`_
+.. _[Graves2014]: http://arxiv.org/pdf/1308.0850.pdf
 """
 import os
 import numpy as np
