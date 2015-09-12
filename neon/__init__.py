@@ -26,6 +26,8 @@ except ImportError:
 import inspect
 import logging
 
+# setup a preliminary stream based logger
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger()
 
 def get_args(func):

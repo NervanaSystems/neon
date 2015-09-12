@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-'''
+"""
 Main NEON run script.
 
 This script will parse a YAML formated model configuration file,
@@ -41,7 +41,7 @@ Some of the commonly used arguments to this script are:
 
 For details of all the command line arguments run this script with
 the --help option.
-'''
+"""
 import sys
 import yaml
 

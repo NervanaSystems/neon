@@ -274,18 +274,19 @@ class ImgServer(ImgEndpoint):
     """
     This class interfaces with the clibrary that does the actual decoding
     """
-    libpath = os.path.dirname(os.path.realpath(__file__))
-    try:
-        _i1klib = ct.cdll.LoadLibrary(os.path.join(libpath, 'imageset_decoder.so'))
-    except:
-        logger.error("Unable to load imageset_decoder.so.  Ensure that "
-                     "this file has been compiled")
 
     def __init__(self, repo_dir, inner_size, do_transforms=True, rgb=True,
                  multiview=False, set_name='train', subset_pct=100, shared_objs=None):
         super(ImgServer, self).__init__(repo_dir, inner_size, do_transforms,
                                         rgb, multiview, set_name, subset_pct)
         assert(shared_objs is not None)
+        libpath = os.path.dirname(os.path.realpath(__file__))
+        try:
+            self._i1klib = ct.cdll.LoadLibrary(os.path.join(libpath,
+                                                            'imageset_decoder.so'))
+        except:
+            logger.error("Unable to load imageset_decoder.so.  Ensure that "
+                         "this file has been compiled")
         (self.request, self.response) = shared_objs
 
         self.worker = self._i1klib.create_data_worker(ct.c_int(self.img_size),
