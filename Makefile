@@ -15,6 +15,8 @@
 # ----------------------------------------------------------------------------
 # Top-level control of the building/installation/cleaning of various targets
 
+.SUFFIXES:  # set empty to prevent any implicit rules from firing.
+
 # where our installed python packages will live
 VIRTUALENV_DIR := .venv
 VIRTUALENV_EXE := virtualenv  # use pyvenv for python3 install
@@ -28,7 +30,9 @@ RELEASE := $(strip $(shell grep '^VERSION *=' setup.py | cut -f 2 -d '=' \
 HAS_GPU := $(shell nvcc --version > /dev/null 2>&1 && echo true)
 
 # lazily evaluated determination of CUDA GPU capabilities
-CUDA_COMPUTE_CAPABILITY = $(shell neon/backends/util/check_gpu.py)
+CUDA_CAPABILITY_CHECKER := neon/backends/util/cuda_capability
+CUDA_COMPUTE_CAPABILITY = $(shell $(CUDA_CAPABILITY_CHECKER) > /dev/null 2>&1 \
+													        || echo 0)
 COMPUTE_MAJOR = $(shell echo $(CUDA_COMPUTE_CAPABILITY) | cut -f1 -d.)
 MAXWELL_MAJOR := 5
 HAS_MAXWELL_GPU = $(shell [ $(COMPUTE_MAJOR) -ge $(MAXWELL_MAJOR) ] && echo true)
@@ -65,12 +69,12 @@ KERNEL_BUILDER_CLEAN_OPTS := --clean
 IMAGESET_DECODER := neon/data/imageset_decoder.so
 
 .PHONY: default env maxas kernels sysinstall sysuninstall clean_py clean_maxas \
-	      clean_so clean_kernels clean test coverage style lint check doc html \
-				release examples serialize_check
+	      clean_util clean_so clean_kernels clean test coverage style lint check \
+	      doc html release examples serialize_check
 
 default: env
 
-env: $(ACTIVATE) kernels $(IMAGESET_DECODER)
+env: $(ACTIVATE) $(CUDA_CAPABILITY_CHECKER) kernels $(IMAGESET_DECODER)
 
 $(ACTIVATE): requirements.txt gpu_requirements.txt vis_requirements.txt
 	@echo "Updating virtualenv dependencies in: $(VIRTUALENV_DIR)..."
@@ -93,6 +97,13 @@ endif
 	@echo "######################"
 	@touch $(ACTIVATE)
 	@echo
+
+$(CUDA_CAPABILITY_CHECKER): $(CUDA_CAPABILITY_CHECKER).c
+ifeq ($(HAS_GPU), true)
+	@echo "Building $(CUDA_CAPABILITY_CHECKER) ..."
+	nvcc -l cuda -o $(CUDA_CAPABILITY_CHECKER) $(CUDA_CAPABILITY_CHECKER).c
+	@echo
+endif
 
 maxas: $(ACTIVATE) $(MAXAS_DL_DIR)
 ifeq ($(HAS_MAXWELL_GPU), true)
@@ -166,6 +177,11 @@ clean_py:
 	@find . -name "*.py[co]" -type f -delete
 	@echo
 
+clean_util:
+	@echo "Cleaning compiled utilities..."
+	@rm -f $(CUDA_CAPABILITY_CHECKER)
+	@echo
+
 clean_so:
 	@echo "Cleaning compiled shared object files..."
 	@rm -f $(IMAGESET_DECODER)
@@ -185,7 +201,7 @@ ifeq ($(HAS_MAXWELL_GPU), true)
 	@echo
 endif
 
-clean: clean_py clean_so clean_maxas clean_kernels
+clean: clean_py clean_util clean_so clean_maxas clean_kernels
 	@echo "Removing virtual environment files..."
 	@rm -rf $(VIRTUALENV_DIR)
 	@echo

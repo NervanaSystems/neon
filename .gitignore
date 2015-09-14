@@ -22,3 +22,4 @@ generated
 *.html
 *.txt
 neon_help_output.txt
+neon/backends/util/cuda_capability
