@@ -208,6 +208,44 @@ class Model(NervanaObject):
         running_error /= nprocessed
         return running_error
 
+    def predict(self, dataset):
+        """
+        Generate predictions for the dataset
+
+        Arguments:
+            dataset (iterable): Dataset iterator to perform fit on
+
+        Returns:
+            Tensor: the output of the final layer for the entire Dataset
+        """
+        nprocessed = 0   # Keep track of how much of dataset we've seen
+        dataset.reset()  # Move "pointer" back to beginning of dataset
+
+        # Decide what the output size will be based on status of dataset
+        if hasattr(dataset, "ybuf"):
+            # This encompasses case where dataset is instance of dataiterator
+            if dataset.ybuf is None:
+                outsize = dataset.Xbuf[0].shape
+            else:
+                outsize = dataset.ybuf.shape[0]
+        else:
+            # Assume we're dealing with an instance of ImgMaster
+            if isinstance(dataset.nclass, dict):
+                outsize = dataset.nclass.size
+            else:
+                outsize = dataset.nclass
+
+        # Initialize a backend tensor to hold the predictions
+        Ypred = self.be.empty((dataset.ndata, outsize))
+
+        # Fprop one minibatch at a time to generate predictions
+        for x, t in dataset:
+            x = self.fprop(x, inference=True)
+            bsz = min(dataset.ndata - nprocessed, self.be.bsz)
+            Ypred[nprocessed:nprocessed+bsz] = x[:, :bsz].T
+            nprocessed += bsz
+        return Ypred
+
     def get_description(self):
         """
         Gets a description of the model required to reconstruct the model with
