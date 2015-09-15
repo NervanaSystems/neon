@@ -416,7 +416,7 @@ class ValidationCallback(Callback):
         self.valid_cost[:] = 0
         self.valid_set.reset()
         for batch_index, (x, t) in enumerate(self.valid_set, 1):
-            x = model.fprop(x)
+            x = model.fprop(x, inference=True)
             bsz = min(self.valid_set.ndata - nprocessed, self.be.bsz)
             model.cost.get_cost(x, t)
             costbuf = model.cost.outputs[:, :bsz]

@@ -704,7 +704,7 @@ class GeneralizedCostMask(GeneralizedCost):
             self.outputs = self.be.iobuf((1, self.nstep))
         masked_input = inputs * mask
         self.outputs[:] = self.costfunc(masked_input, targets)
-        self.cost[:] = self.be.mean(self.outputs, axis=1) * self.nstep
+        self.cost[:] = self.be.mean(self.outputs, axis=1)
         return self.cost
 
     def get_errors(self, inputs, targets_mask):
