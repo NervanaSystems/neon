@@ -125,7 +125,7 @@ for i in range(num_predict):
     text.append(train_set.index_to_token[int(pred)])
 
     x.fill(0)
-    x[pred, 0] = 1
+    x[int(pred), 0] = 1
     y = model.fprop(x)
 
 print ''.join(seed_tokens + text)
