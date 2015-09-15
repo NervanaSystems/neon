@@ -18,11 +18,8 @@ Example that trains an MLP using early stopping.
 Training will stop when the stopping condition is satisfied
 or when num_epochs has been reached, whichever is first.
 """
-import logging
-import numpy as np
 import os
 
-from neon import NervanaObject
 from neon.backends import gen_backend
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian
@@ -71,13 +68,13 @@ mlp = Model(layers=layers)
 # and returns as output a tuple (State', Bool),
 # which represents the new state and whether to stop
 
-def stopFunc(s,v):
-# Stop if validation error ever increases from epoch to epoch
 
+# Stop if validation error ever increases from epoch to epoch
+def stopFunc(s, v):
     if s is None:
         return (v, False)
 
-    return (min(v,s), v > s)
+    return (min(v, s), v > s)
 
 # fit and validate
 optimizer = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)

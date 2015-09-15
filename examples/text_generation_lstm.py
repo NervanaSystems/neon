@@ -21,16 +21,15 @@ Reference:
     Generating sequences with recurrent neural networks `[Graves2014]`_
 .. _[Graves2014]: http://arxiv.org/pdf/1308.0850.pdf
 """
-import os
 import numpy as np
 
 from neon.backends import gen_backend
 from neon.data import Text
 from neon.data import load_text
 from neon.initializers import Uniform
-from neon.layers import GeneralizedCost, LSTM, Affine, Recurrent, GRU
+from neon.layers import GeneralizedCost, LSTM, Affine
 from neon.models import Model
-from neon.optimizers import RMSProp, GradientDescentMomentum
+from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
@@ -88,6 +87,7 @@ callbacks.add_serialize_callback(1, args.save_path)
 
 # fit and validate
 model.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+
 
 def sample(prob):
     """

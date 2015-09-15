@@ -17,6 +17,7 @@ from neon import NervanaObject
 from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj
 from neon.layers import Merge, Activation
+import numpy as np
 
 
 class Model(NervanaObject):
@@ -194,7 +195,7 @@ class Model(NervanaObject):
             datasets (iterable): dataset to evaluate on.
             metric (Cost): what function to evaluate dataset on.
         """
-        running_error = 0.0
+        running_error = np.zeros((len(metric.metric_names)), dtype=np.float32)
         nprocessed = 0
         dataset.reset()
         for x, t in dataset:
@@ -203,7 +204,7 @@ class Model(NervanaObject):
             # This logic is for handling partial batch sizes at the end of the dataset
             bsz = min(dataset.ndata - nprocessed, self.be.bsz)
             metric(x, t)
-            running_error += metric.outputs.get()[:, :bsz].sum()
+            running_error += metric.outputs.get()[:, :bsz].sum(axis=1)
             nprocessed += bsz
         running_error /= nprocessed
         return running_error

@@ -26,10 +26,10 @@ from neon.backends import gen_backend
 from neon.data import Text
 from neon.data import load_text
 from neon.initializers import Uniform
-from neon.layers import GeneralizedCost, LSTM, Affine, Recurrent, GRU
+from neon.layers import GeneralizedCost, Affine, Recurrent
 from neon.models import Model
-from neon.optimizers import RMSProp, GradientDescentMomentum
-from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
+from neon.optimizers import RMSProp
+from neon.transforms import Tanh, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
 

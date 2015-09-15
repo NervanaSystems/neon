@@ -88,11 +88,7 @@ class Schedule(NervanaObject):
             self.steps = np.floor((epoch + 1) / self.step_config)
 
         elif isinstance(self.step_config, list):
-            if epoch in self.step_config:
-                self.steps += 1
-                # gets called every minibatch, only want to drop once
-                # per epoch.
-                del self.step_config[self.step_config.index(epoch)]
+            self.steps = np.sum(epoch >= np.array(self.step_config))
 
         return float(learning_rate * self.change ** self.steps)
 
@@ -145,14 +141,12 @@ class GradientDescentMomentum(Optimizer):
             epoch (int): the current epoch, needed for the Schedule object.
         """
         lrate = self.schedule.get_learning_rate(self.learning_rate, epoch)
-
         param_list = get_param_list(layer_list)
-
         for (param, grad), states in param_list:
             param.rounding = self.stochastic_round
             if len(states) == 0:
                 states.append(self.be.zeros_like(grad))
-
+            grad = grad / self.be.bsz
             velocity = states[0]
             velocity[:] = velocity * self.momentum_coef - lrate * (grad + self.wdecay * param)
             param[:] = param + velocity
@@ -207,7 +201,7 @@ class RMSProp(Optimizer):
 
             if self.clip_gradients:
                 grad = self.be.clip(grad, -self.gradient_limit, self.gradient_limit)
-
+            grad = grad / self.be.bsz
             # update state
             state = states[0]
             state[:] = decay * state + self.be.square(grad) * (1.0 - decay)
@@ -258,6 +252,7 @@ class Adadelta(Optimizer):
                 # E[Grad^2], E[Delt^2], updates
                 states.extend([self.be.zeros_like(grad) for i in range(3)])
 
+            grad = grad / self.be.bsz
             states[0][:] = states[0] * decay + (1. - decay) * grad * grad
             states[2][:] = self.be.sqrt((states[1] + epsilon) / (states[0] + epsilon)) * grad
             states[1][:] = states[1] * decay + (1. - decay) * states[2] * states[2]
@@ -311,6 +306,7 @@ class Adam(Optimizer):
                 # running_1st_mom, running_2nd_mom
                 states.extend([self.be.zeros_like(grad) for i in range(2)])
 
+            grad = grad / self.be.bsz
             m, v = states
             m[:] = m * self.beta_1 + (1. - self.beta_1) * grad
             v[:] = v * self.beta_2 + (1. - self.beta_2) * grad * grad

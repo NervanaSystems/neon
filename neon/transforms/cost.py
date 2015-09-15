@@ -117,7 +117,7 @@ class CrossEntropyBinary(Cost):
             OpTree: Returns the (mean) shortcut derivative of the binary entropy
                     cost function ``(y - t) / y.shape[1]``
         """
-        return self.scale * (y - t) / y.shape[1]
+        return self.scale * (y - t)
 
 
 class CrossEntropyMulti(Cost):
@@ -167,7 +167,7 @@ class CrossEntropyMulti(Cost):
             OpTree: Returns the (mean) shortcut derivative of the multiclass
             entropy cost function ``(y - t) / y.shape[1]``
         """
-        return self.scale * (y - t) / y.shape[1]
+        return self.scale * (y - t)
 
 
 class SumSquared(Cost):
@@ -180,7 +180,42 @@ class SumSquared(Cost):
         """
         self.func = lambda y, t: self.be.sum(
             self.be.square(y - t), axis=0) / 2.
-        self.funcgrad = lambda y, t: (y - t) / y.shape[1]
+        self.funcgrad = lambda y, t: (y - t)
+
+
+class TopKMisclassification(Metric):
+    """
+    Compute the misclassification error metric
+    """
+    def __init__(self, k):
+        self.outputs = self.be.iobuf(3)
+        self.correctProbs = self.outputs[0].reshape((1, self.be.bsz))
+        self.top1 = self.outputs[1].reshape((1, self.be.bsz))
+        self.topk = self.outputs[2].reshape((1, self.be.bsz))
+        self.k = k
+        self.metric_names = ['LogLoss', 'Top1Misclass', 'Top' + str(k) + 'Misclass']
+
+    def __call__(self, y, t):
+        """
+        Compute the misclassification error metric
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            float: Returns the metric
+        """
+        be = self.be
+        # import pdb; pdb.set_trace()
+        self.correctProbs[:] = be.sum(y * t, axis=0)
+        nSlots = self.k - be.sum((y > self.correctProbs), axis=0)
+        nEq = be.sum(y == self.correctProbs, axis=0)
+        self.topk[:] = 1. - (nSlots > 0) * ((nEq <= nSlots) * (1 - nSlots / nEq) + nSlots / nEq)
+        self.top1[:] = 1. - (be.max(y, axis=0) == self.correctProbs) / nEq
+        self.correctProbs[:] = -be.log(self.correctProbs)
+
+        return self.outputs.get().mean(axis=1)
 
 
 class Misclassification(Metric):
@@ -191,6 +226,7 @@ class Misclassification(Metric):
         self.preds = self.be.iobuf(1)
         self.hyps = self.be.iobuf(1)
         self.outputs = self.preds  # Contains per record metric
+        self.metric_names = ['Top1Misclass']
 
     def __call__(self, y, t):
         """

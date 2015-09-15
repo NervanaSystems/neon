@@ -670,13 +670,8 @@ class GeneralizedCost(NervanaObject):
             deltas.
         """
         if self.deltas is None:
-            self.nstep = 1  # Non-recurrent case
-            if inputs.shape[1] != self.be.bsz:
-                self.nstep = inputs.shape[1] / self.be.bsz
             self.deltas = self.be.empty_like(inputs)
-        # Cost function divides by (bsz * nsteps), so we multiply by nsteps here
-        # to get the average gradient over the batch (recurrent case only)
-        self.deltas[:] = self.costfunc.bprop(inputs, targets) * self.nstep
+        self.deltas[:] = self.costfunc.bprop(inputs, targets)
         return self.deltas
 
 
@@ -727,14 +722,8 @@ class GeneralizedCostMask(GeneralizedCost):
         """
         targets, mask = targets_mask
         if self.deltas is None:
-            self.nstep = 1  # Non-recurrent case
-            if inputs.shape[1] != self.be.bsz:
-                self.nstep = inputs.shape[1] / self.be.bsz
             self.deltas = self.be.empty_like(inputs)
-        # Cost function divides by (bsz * nsteps), so we multiply by nsteps here
-        # to get the average gradient over the batch (recurrent case only)
-        self.deltas[:] = self.costfunc.bprop(inputs, targets) * self.nstep * mask
-
+        self.deltas[:] = self.costfunc.bprop(inputs, targets) * mask
         return self.deltas
 
 
@@ -778,6 +767,9 @@ class BatchNorm(Layer):
             self.x = self.inputs.reshape(self.bn_shape)
             self.y = self.outputs.reshape(self.bn_shape)
 
+            self.xvar = self.be.zeros((self.nfm, 1))
+            self.xmean = self.be.zeros((self.nfm, 1))
+
     def init_params(self, dim0):
         self.beta = self.be.zeros((dim0, 1))
         self.gamma = self.be.ones((dim0, 1))
@@ -810,8 +802,8 @@ class BatchNorm(Layer):
             self.init_params(self.nfm)
 
         # These are cached op-trees
-        self.xvar = self.be.var(self.x, axis=1)
-        self.xmean = self.be.mean(self.x, axis=1)
+        self.xvar[:] = self.be.var(self.x, axis=1)
+        self.xmean[:] = self.be.mean(self.x, axis=1)
         self.xhat = (self.x - self.xmean) / self.be.sqrt(self.xvar + self.eps)
 
         self.gmean[:] = self.gmean * self.rho + (1.0 - self.rho) * self.xmean

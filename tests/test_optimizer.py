@@ -38,7 +38,7 @@ class DummyLayer(object):
 
 def compare_tensors(func, param_list, param2, tol=0., epoch=1):
     func.optimize([DummyLayer(param_list)], epoch=epoch)
-    (param, grap), states = param_list[0]
+    (param, grad), states = param_list[0]
     cond = np.sum(np.abs(param.get() - param2) <= tol)
     assert cond == np.prod(param2.shape)
 
@@ -56,9 +56,10 @@ def test_gdm(backend):
     param = np.random.rand(200, 128)
     param2 = copy.deepcopy(param)
     grad = 0.01 * np.random.rand(200, 128)
+    grad2 = grad / 128.
     states = [0.01 * np.random.rand(200, 128)]
     velocity = states[0]
-    param2[:] = param2 + velocity * mom - grad * lrate - wdecay * lrate * param
+    param2[:] = param2 + velocity * mom - grad2 * lrate - wdecay * lrate * param
     param_list = [((wrap(param), wrap(grad)), [wrap(states[0])])]
     compare_tensors(gdm, param_list, param2, tol=1e-7)
 
@@ -68,11 +69,12 @@ def test_rmsprop(backend):
     param = np.random.rand(200, 128)
     param2 = copy.deepcopy(param)
     grad = 0.01 * np.random.rand(200, 128)
+    grad2 = grad / 128.
     states = [0.01 * np.random.rand(200, 128)]
     state = states[0]
     decay = rms.decay_rate
-    denom = np.sqrt(decay * state + np.square(grad) * (1.0 - decay) + rms.epsilon) + rms.epsilon
-    param2[:] -= grad * rms.learning_rate / denom
+    denom = np.sqrt(decay * state + np.square(grad2) * (1.0 - decay) + rms.epsilon) + rms.epsilon
+    param2[:] -= grad2 * rms.learning_rate / denom
     param_list = [((wrap(param), wrap(grad)), [wrap(states[0])])]
     compare_tensors(rms, param_list, param2, tol=1e-7)
 
@@ -82,6 +84,7 @@ def test_adadelta(backend):
     param = np.random.rand(200, 128)
     param2 = copy.deepcopy(param)
     grad = 0.01 * np.random.rand(200, 128)
+    grad2 = grad / 128.
     states = [0.01 * np.random.rand(200, 128),
               0.01 * np.random.rand(200, 128),
               0.01 * np.random.rand(200, 128)]
@@ -89,9 +92,9 @@ def test_adadelta(backend):
                copy.deepcopy(states[1]),
                copy.deepcopy(states[2])]
     decay = ada.decay
-    states2[0][:] = states2[0] * decay + (1. - decay) * grad * grad
+    states2[0][:] = states2[0] * decay + (1. - decay) * grad2 * grad2
     states2[2][:] = np.sqrt(
-        (states2[1] + ada.epsilon) / (states2[0] + ada.epsilon)) * grad
+        (states2[1] + ada.epsilon) / (states2[0] + ada.epsilon)) * grad2
     states2[1][:] = states2[1] * decay + (1. - decay) * states2[2] * states2[2]
     param2[:] -= states2[2]
     param_list = [
@@ -104,6 +107,7 @@ def test_adam(backend):
     param = np.random.rand(200, 128)
     param2 = copy.deepcopy(param)
     grad = 0.01 * np.random.rand(200, 128)
+    grad2 = grad / 128.
     states = [0.01 * np.random.rand(200, 128),
               0.01 * np.random.rand(200, 128)]
     states2 = [copy.deepcopy(states[0]),
@@ -112,8 +116,8 @@ def test_adam(backend):
     t = epoch + 1
     l = adam.learning_rate * np.sqrt(1 - adam.beta_2 ** t) / (1 - adam.beta_1 ** t)
     m, v = states2
-    m[:] = m * adam.beta_1 + (1. - adam.beta_1) * grad
-    v[:] = v * adam.beta_2 + (1. - adam.beta_2) * grad * grad
+    m[:] = m * adam.beta_1 + (1. - adam.beta_1) * grad2
+    v[:] = v * adam.beta_2 + (1. - adam.beta_2) * grad2 * grad2
     param2[:] -= l * m / (np.sqrt(v) + adam.epsilon)
     param_list = [
         ((wrap(param), wrap(grad)), [wrap(states[0]), wrap(states[1])])]

@@ -23,7 +23,7 @@ from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
-from neon.transforms import *
+from neon.transforms import Misclassification, CrossEntropyBinary, Logistic, Rectlin
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
 

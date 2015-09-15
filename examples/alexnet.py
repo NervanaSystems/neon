@@ -23,15 +23,16 @@ from neon.backends import gen_backend
 from neon.initializers import Constant, Gaussian
 from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
-from neon.transforms import Rectlin, Softmax, CrossEntropyMulti
+from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
 from neon.data import ImgMaster
-from neon.callbacks.callbacks import Callbacks
+from neon.callbacks.callbacks import Callbacks, Callback
 
 # For running complete alexnet
 # alexnet.py -e 90 -val 1 -s <save-path> -w <path-to-saved-batches>
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
+parser.add_argument('--model_file', help='load model from pkl file')
 args = parser.parse_args()
 
 # hyperparameters
@@ -43,8 +44,8 @@ be = gen_backend(backend=args.backend, rng_seed=args.rng_seed, device_id=args.de
 
 try:
     train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train')
-    test  = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
-                      do_transforms=False)
+    test = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
+                     do_transforms=False)
 except (OSError, IOError, ValueError) as err:
     print err
     sys.exit(0)
@@ -85,11 +86,27 @@ opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 
 mlp = Model(layers=layers)
 
+if args.model_file:
+    import os
+    assert os.path.exists(args.model_file), '%s not found' % args.model_file
+    mlp.load_weights(args.model_file)
+
 # configure callbacks
 callbacks = Callbacks(mlp, train, output_file=args.output_file)
 
 if args.validation_freq:
-    callbacks.add_validation_callback(test, args.validation_freq)
+    class TopKMetrics(Callback):
+        def __init__(self, valid_set, epoch_freq=args.validation_freq):
+            super(TopKMetrics, self).__init__(epoch_freq=epoch_freq)
+            self.valid_set = valid_set
+
+        def on_epoch_end(self, epoch):
+            self.valid_set.reset()
+            allmetrics = TopKMisclassification(k=5)
+            stats = mlp.eval(self.valid_set, metric=allmetrics)
+            print ", ".join(allmetrics.metric_names) + ": " + ", ".join(map(str, stats.flatten()))
+
+    callbacks.add_callback(TopKMetrics(test))
 
 if args.save_path:
     checkpoint_schedule = range(1, args.epochs)

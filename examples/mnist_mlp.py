@@ -46,7 +46,7 @@ from neon.backends import gen_backend
 from neon.callbacks.callbacks import Callbacks
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian
-from neon.layers import GeneralizedCost, Affine, BatchNorm
+from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary, Misclassification

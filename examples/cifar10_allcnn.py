@@ -54,23 +54,22 @@ opt_gdm = GradientDescentMomentum(learning_rate=0.5,
                                   schedule=Schedule(step_config=[200, 250, 300],
                                                     change=0.1),
                                   momentum_coef=0.9, wdecay=.0001)
-
+relu = Rectlin()
 layers = []
-
 layers.append(Dropout(keep=.8))
-layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=Rectlin()))
-layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=Rectlin(), pad=1))
-layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=Rectlin(), pad=1, strides=2))
+layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=relu))
+layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=relu, pad=1))
+layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=relu, pad=1, strides=2))
 layers.append(Dropout(keep=.5))
 
-layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=Rectlin(), pad=1))
-layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=Rectlin(), pad=1))
-layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=Rectlin(), pad=1, strides=2))
+layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=relu, pad=1))
+layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=relu, pad=1))
+layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=relu, pad=1, strides=2))
 layers.append(Dropout(keep=.5))
 
-layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=Rectlin()))
-layers.append(Conv((1 ,1, 192), init=init_uni, batch_norm=True, activation=Rectlin()))
-layers.append(Conv((1,1,16), init=init_uni, activation=Rectlin()))
+layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=relu))
+layers.append(Conv((1, 1, 192), init=init_uni, batch_norm=True, activation=relu))
+layers.append(Conv((1, 1, 16), init=init_uni, activation=relu))
 
 layers.append(Pooling(6, op="avg"))
 layers.append(Activation(Softmax()))
