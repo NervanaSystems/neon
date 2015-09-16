@@ -231,6 +231,7 @@ class Model(NervanaObject):
                 outsize = dataset.ybuf.shape[0]
         else:
             # Assume we're dealing with an instance of ImgMaster
+            # or a sequential dataset, e.g. Text
             if isinstance(dataset.nclass, dict):
                 outsize = dataset.nclass.size
             else:
@@ -238,13 +239,31 @@ class Model(NervanaObject):
 
         # Initialize a backend tensor to hold the predictions
         Ypred = self.be.empty((dataset.ndata, outsize))
+        if hasattr(dataset, "seq_length"):
+            # for sequence dataset, the output of the network is different
+            # needs to consider what was the continuous sequence order
+            b = self.be.bsz
+            s = dataset.seq_length
+            f = dataset.nclass
+            n = dataset.nbatches
 
-        # Fprop one minibatch at a time to generate predictions
-        for x, t in dataset:
-            x = self.fprop(x, inference=True)
-            bsz = min(dataset.ndata - nprocessed, self.be.bsz)
-            Ypred[nprocessed:nprocessed+bsz] = x[:, :bsz].T
-            nprocessed += bsz
+            # import ipdb; ipdb.set_trace()
+            Ypred_v = Ypred.reshape(b, n, s, f)
+            Ypred_v_n = [Ypred_v[:, i] for i in range(n)]
+            xt = self.be.empty((b*s, f))
+            xt_v = xt.reshape(b, s, f)
+            for mb_idx, (x, t) in enumerate(dataset):
+                x = self.fprop(x, inference=True)
+                xt.copy(x.T)
+                for ib in range(b):
+                    Ypred_v_n[mb_idx][ib, :] = xt_v[ib, :]
+        else:
+            # Fprop one minibatch at a time to generate predictions
+            for x, t in dataset:
+                x = self.fprop(x, inference=True)
+                bsz = min(dataset.ndata - nprocessed, self.be.bsz)
+                Ypred[nprocessed:nprocessed+bsz] = x[:, :bsz].T
+                nprocessed += bsz
         return Ypred
 
     def get_description(self):

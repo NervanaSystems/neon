@@ -129,9 +129,11 @@ class Text(NervanaObject):
         if extra_tokens:
             tokens = tokens[:-extra_tokens]
         self.nbatches = len(tokens) / (self.be.bsz * time_steps)
-        self.ndata = self.nbatches * self.be.bsz  # no leftovers
+        # self.ndata = self.nbatches * self.be.bsz  # no leftovers
+        self.ndata = len(tokens)
 
         self.vocab = sorted(self.get_vocab(tokens, vocab))
+        self.nclass = len(self.vocab)
 
         # vocab dicts
         self.token_to_index = dict((t, i) for i, t in enumerate(self.vocab))

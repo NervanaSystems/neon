@@ -15,14 +15,36 @@
 
 import numpy as np
 import os
-
-from neon.data import DataIterator, load_mnist
+from neon.backends import gen_backend
+from neon.data import DataIterator, load_mnist, load_text, Text
 from neon.initializers import Gaussian, Constant
-from neon.layers import GeneralizedCost, Affine, BatchNorm, Dropout, Conv, Pooling, MergeConcat
+from neon.layers import GeneralizedCost, Affine, BatchNorm
+from neon.layers import Dropout, Conv, Pooling, MergeConcat, Recurrent
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 from neon.util.persist import save_obj
+
+
+def test_model_predict_rnn(backend):
+
+    data_path = load_text('ptb-valid')
+
+    data_set = Text(time_steps=50, path=data_path)
+
+    # weight initialization
+    init = Constant(0.08)
+
+    # model initialization
+    layers = [
+        Recurrent(150, init, Logistic()),
+        Affine(len(data_set.vocab), init, bias=init, activation=Rectlin())
+    ]
+
+    model = Model(layers=layers)
+    output = model.predict(data_set)
+
+    assert output.shape == (data_set.ndata, data_set.nclass)
 
 
 def test_model_serialize(backend):
@@ -100,3 +122,8 @@ def test_model_serialize(backend):
                 assert np.allclose(p, p_e)
 
     os.remove(tmp_save)
+
+if __name__ == '__main__':
+
+    be = gen_backend(backend='gpu', batch_size=50)
+    test_model_predict_rnn(be)
