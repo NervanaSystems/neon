@@ -141,8 +141,13 @@ endif
 sysinstall: env
 	@echo "Installing neon system wide..."
 	@pip install -U pip
+	@# cython added separately due to h5py dependency ordering bug.  See:
+	@# https://github.com/h5py/h5py/issues/535
+	@pip install cython==0.23.1
 	@pip install -r requirements.txt
+ifeq ($(VIS), true)
 	@pip install -r vis_requirements.txt
+endif
 ifeq ($(HAS_GPU), true)
 	@pip install -r gpu_requirements.txt
 endif

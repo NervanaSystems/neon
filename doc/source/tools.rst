@@ -34,6 +34,13 @@ visualizations embedded in html.
 
 .. _Bokeh: http://bokeh.pydata.org/en/latest/
 
+Note that Bokeh_ and ``nvis`` are not installed by default.  To enable these
+be sure to first install via ``make -e VIS=true`` (or edit the Makefile to set
+the ``VIS`` variable).  If you've already installed neon without enabling
+visualization dependencies you'll need to ``touch vis_requirements.txt`` prior
+to the ``make -e VIS=true`` call to ensure virtualenv python dependencies get
+triggered.
+
 Visualization of training and validation set cost on an epoch or minibatch
 axis is currently supported. Deconv, direct and histogram visualizations of
 layer parameters are planned for an upcoming release.
