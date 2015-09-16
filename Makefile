@@ -14,8 +14,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 # Top-level control of the building/installation/cleaning of various targets
-
-.SUFFIXES:  # set empty to prevent any implicit rules from firing.
+#
+# set empty to prevent any implicit rules from firing.
+.SUFFIXES:
 
 # where our installed python packages will live
 VIRTUALENV_DIR := .venv
@@ -27,15 +28,12 @@ RELEASE := $(strip $(shell grep '^VERSION *=' setup.py | cut -f 2 -d '=' \
 	                         | tr -d "\'"))
 
 # basic check to see if any CUDA compatible GPU is installed
+# set this to false to turn off GPU related functionality
 HAS_GPU := $(shell nvcc --version > /dev/null 2>&1 && echo true)
 
-# lazily evaluated determination of CUDA GPU capabilities
-CUDA_CAPABILITY_CHECKER := neon/backends/util/cuda_capability
-CUDA_COMPUTE_CAPABILITY = $(shell $(CUDA_CAPABILITY_CHECKER) > /dev/null 2>&1 \
-													        || echo 0)
-COMPUTE_MAJOR = $(shell echo $(CUDA_COMPUTE_CAPABILITY) | cut -f1 -d.)
-MAXWELL_MAJOR := 5
-HAS_MAXWELL_GPU = $(shell [ $(COMPUTE_MAJOR) -ge $(MAXWELL_MAJOR) ] && echo true)
+# set this to true to install visualization dependencies and functionality
+# (off by default)
+VIS :=
 
 # style checking related
 STYLE_CHECK_OPTS :=
@@ -69,19 +67,25 @@ KERNEL_BUILDER_CLEAN_OPTS := --clean
 IMAGESET_DECODER := neon/data/imageset_decoder.so
 
 .PHONY: default env maxas kernels sysinstall sysuninstall clean_py clean_maxas \
-	      clean_util clean_so clean_kernels clean test coverage style lint check \
+	      clean_so clean_kernels clean test coverage style lint check \
 	      doc html release examples serialize_check
 
 default: env
 
-env: $(ACTIVATE) $(CUDA_CAPABILITY_CHECKER) kernels $(IMAGESET_DECODER)
+env: $(ACTIVATE) kernels $(IMAGESET_DECODER)
 
 $(ACTIVATE): requirements.txt gpu_requirements.txt vis_requirements.txt
 	@echo "Updating virtualenv dependencies in: $(VIRTUALENV_DIR)..."
 	@test -d $(VIRTUALENV_DIR) || $(VIRTUALENV_EXE) $(VIRTUALENV_DIR)
 	@. $(ACTIVATE); pip install -U pip
+	@# cython added separately due to h5py dependency ordering bug.  See:
+	@# https://github.com/h5py/h5py/issues/535
+	@. $(ACTIVATE); pip install cython==0.23.1
 	@. $(ACTIVATE); pip install -r requirements.txt
+ifeq ($(VIS), true)
+	@echo "Updating visualization related dependecies in $(VIRTUALENV_DIR)..."
 	@. $(ACTIVATE); pip install -r vis_requirements.txt
+endif
 	@echo
 ifeq ($(HAS_GPU), true)
 	@echo "Updating GPU dependencies in $(VIRTUALENV_DIR)..."
@@ -98,15 +102,8 @@ endif
 	@touch $(ACTIVATE)
 	@echo
 
-$(CUDA_CAPABILITY_CHECKER): $(CUDA_CAPABILITY_CHECKER).c
-ifeq ($(HAS_GPU), true)
-	@echo "Building $(CUDA_CAPABILITY_CHECKER) ..."
-	nvcc -l cuda -o $(CUDA_CAPABILITY_CHECKER) $(CUDA_CAPABILITY_CHECKER).c
-	@echo
-endif
-
 maxas: $(ACTIVATE) $(MAXAS_DL_DIR)
-ifeq ($(HAS_MAXWELL_GPU), true)
+ifeq ($(HAS_GPU), true)
 	@cd $(MAXAS_DL_DIR) && git pull >/dev/null 2>&1
 	@test -f $(MAXAS) ||\
 		{ echo "Installing maxas..." &&\
@@ -128,7 +125,7 @@ ifeq ($(HAS_MAXWELL_GPU), true)
 endif
 
 $(MAXAS_DL_DIR):
-ifeq ($(HAS_MAXWELL_GPU), true)
+ifeq ($(HAS_GPU), true)
 	@test -d $(MAXAS_DL_DIR) ||\
 		{ echo "Cloning maxas repo..." ;\
 		  git clone $(MAXAS_SRC_URL) $(MAXAS_DL_DIR) ;\
@@ -137,7 +134,7 @@ ifeq ($(HAS_MAXWELL_GPU), true)
 endif
 
 kernels: $(ACTIVATE) maxas
-ifeq ($(HAS_MAXWELL_GPU), true)
+ifeq ($(HAS_GPU), true)
 	@. $(ACTIVATE); $(MAXAS_PLIB) $(KERNEL_BUILDER) $(KERNEL_BUILDER_BUILD_OPTS)
 	@echo
 endif
@@ -177,31 +174,26 @@ clean_py:
 	@find . -name "*.py[co]" -type f -delete
 	@echo
 
-clean_util:
-	@echo "Cleaning compiled utilities..."
-	@rm -f $(CUDA_CAPABILITY_CHECKER)
-	@echo
-
 clean_so:
 	@echo "Cleaning compiled shared object files..."
 	@rm -f $(IMAGESET_DECODER)
 	@echo
 
 clean_maxas:
-ifeq ($(HAS_MAXWELL_GPU), true)
+ifeq ($(HAS_GPU), true)
 	@echo "Cleaning maxas installation and repo files..."
 	@rm -rf $(MAXAS_DL_DIR)
 	@echo
 endif
 
 clean_kernels:
-ifeq ($(HAS_MAXWELL_GPU), true)
+ifeq ($(HAS_GPU), true)
 	@echo "Cleaning compiled gpu kernel files..."
 	@test -f $(ACTIVATE) && . $(ACTIVATE); $(KERNEL_BUILDER) $(KERNEL_BUILDER_CLEAN_OPTS)
 	@echo
 endif
 
-clean: clean_py clean_util clean_so clean_maxas clean_kernels
+clean: clean_py clean_so clean_maxas clean_kernels
 	@echo "Removing virtual environment files..."
 	@rm -rf $(VIRTUALENV_DIR)
 	@echo
