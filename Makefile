@@ -50,13 +50,10 @@ DOC_DIR := doc
 DOC_PUB_RELEASE_PATH := $(DOC_PUB_PATH)/$(RELEASE)
 
 # Maxwell assembler project related
-MAXAS_PLIB := PERL5LIB=$(VIRTUALENV_DIR)/share/perl/5.18.2
 MAXAS_SRC_URL := https://github.com/NervanaSystems/maxas.git
 MAXAS_DL_DIR := $(VIRTUALENV_DIR)/maxas
 MAXAS := $(VIRTUALENV_DIR)/bin/maxas.pl
-MAXAS_VER_FILE := $(VIRTUALENV_DIR)/maxas/lib/MaxAs/MaxAs.pm
-MAXAS_INSTALLED_VERSION = $(shell test -f $(ACTIVATE) && . $(ACTIVATE) && $(MAXAS_PLIB) $(MAXAS) --version)
-MAXAS_AVAIL_VERSION = $(shell test -f $(MAXAS_VER_FILE) && grep VERSION $(MAXAS_VER_FILE) | cut -f2 -d= | tr -d "'; ")
+MAXAS_PLIB := PERL5LIB=$(VIRTUALENV_DIR)/maxas/lib
 
 # GPU Kernel compilation related
 KERNEL_BUILDER := neon/backends/make_kernels.py
@@ -107,21 +104,9 @@ ifeq ($(HAS_GPU), true)
 	@cd $(MAXAS_DL_DIR) && git pull >/dev/null 2>&1
 	@test -f $(MAXAS) ||\
 		{ echo "Installing maxas..." &&\
-		  cd $(MAXAS_DL_DIR) &&\
-		  perl Makefile.PL PREFIX=.. &&\
-		  make install ;\
-		  if [ $$? != 0 ] ; then \
-			  echo "Problems installing maxas"; exit 1 ;\
-		  fi }
-  ifneq ($(MAXAS_INSTALLED_VERSION),$(MAXAS_AVAIL_VERSION))
-		@echo "Updating maxas installation from $(MAXAS_INSTALLED_VERSION) to $(MAXAS_AVAIL_VERSION) ..."
-		cd $(MAXAS_DL_DIR) &&\
-		perl Makefile.PL PREFIX=.. &&\
-		make install ;\
-		  if [ $$? != 0 ] ; then \
-			  echo "Problems updating maxas"; exit 1 ;\
-		  fi
-  endif
+		  ln -s ../maxas/bin/maxas.pl $(MAXAS) ;\
+		  echo "";\
+		}
 endif
 
 $(MAXAS_DL_DIR):
@@ -182,6 +167,7 @@ clean_so:
 clean_maxas:
 ifeq ($(HAS_GPU), true)
 	@echo "Cleaning maxas installation and repo files..."
+	@rm -f $(MAXAS)
 	@rm -rf $(MAXAS_DL_DIR)
 	@echo
 endif
