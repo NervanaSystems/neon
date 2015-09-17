@@ -141,6 +141,3 @@ def test_gradients(custom_args):
     assert_tensors_allclose(
         numerical_gradient, autodiff_gradient, rtol=1e-02, atol=1e-3)
 
-    if backend_type == "gpu":
-        be.ctx.detach()
-    del(be)

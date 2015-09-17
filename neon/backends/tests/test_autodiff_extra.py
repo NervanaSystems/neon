@@ -65,10 +65,6 @@ class TestAutodiff:
         self.test_epoch = 1
         self.delta = 1e-5  # for numerical gradient
 
-    def teardown(self):
-        self.be.ctx.pop()
-        del(self.be)
-
     def _rand_gen(self, *flags):
         '''
         flags: 'int', 'pos', 'scalar', 'row', 'col'

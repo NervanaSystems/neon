@@ -24,88 +24,70 @@ from neon.backends.tests.utils import assert_tensors_allclose
 import numpy as np
 
 
-class TestTensor(object):
+def init_helper(lib, inA, inB, dtype):
+    A = lib.array(inA, dtype=dtype)
+    B = lib.array(inB, dtype=dtype)
+    C = lib.empty(inB.shape, dtype=dtype)
+    return A, B, C
 
-    def setup(self):
+def math_helper(lib, op, inA, inB, dtype):
+    A, B, C = init_helper(lib, inA, inB, dtype)
 
-        self.gpu = gen_backend("gpu", stochastic_round=False)
-        self.cpu = gen_backend("cpu")
-        self.dims = (1024, 1024)
+    if op == '+':
+        C[:] = A + B
+    elif op == '-':
+        C[:] = A - B
+    elif op == '*':
+        C[:] = A * B
+    elif op == '/':
+        C[:] = A / B
+    elif op == '>':
+        C[:] = A > B
+    elif op == '>=':
+        C[:] = A >= B
+    elif op == '<':
+        C[:] = A < B
+    elif op == '<=':
+        C[:] = A <= B
+    return C
 
-    def teardown(self):
-        self.gpu.ctx.pop()
-        del(self.gpu)
+def compare_helper(op, inA, inB, dtype):
+    numpy_result = math_helper(np, op, inA, inB, dtype=np.float32)
 
-    def init_helper(self, lib, inA, inB, dtype):
+    if np.dtype(dtype).kind == 'i' or np.dtype(dtype).kind == 'u':
+        numpy_result = np.around(numpy_result)
+        numpy_result = numpy_result.clip( np.iinfo(dtype).min, np.iinfo(dtype).max)
+    numpy_result = numpy_result.astype(dtype)
 
-        A = lib.array(inA, dtype=dtype)
-        B = lib.array(inB, dtype=dtype)
-        C = lib.empty(inB.shape, dtype=dtype)
+    if dtype in (np.float32, np.float16):
+        gpu = gen_backend(backend='gpu', default_dtype=dtype)
+        nervanaGPU_result = math_helper(gpu, op, inA, inB, dtype=dtype)
+        nervanaGPU_result = nervanaGPU_result.get()
+        np.allclose(numpy_result, nervanaGPU_result, rtol=0, atol=1e-5)
 
-        return A, B, C
+    cpu = gen_backend(backend='cpu', default_dtype=dtype)
+    nervanaCPU_result = math_helper(cpu, op, inA, inB, dtype=dtype)
+    nervanaCPU_result = nervanaCPU_result.get()
+    np.allclose(numpy_result, nervanaCPU_result, rtol=0, atol=1e-5)
 
-    def math_helper(self, lib, op, inA, inB, dtype):
 
-        A, B, C = self.init_helper(lib, inA, inB, dtype)
+def rand_unif(dtype, dims):
+    if np.dtype(dtype).kind == 'f':
+        return np.random.uniform(-1, 1, dims).astype(dtype)
+    else:
+        iinfo = np.iinfo(dtype)
+        return np.around(np.random.uniform(iinfo.min, iinfo.max, dims)).clip(iinfo.min, iinfo.max)
 
-        if op == '+':
-            C[:] = A + B
-        elif op == '-':
-            C[:] = A - B
-        elif op == '*':
-            C[:] = A * B
-        elif op == '/':
-            C[:] = A / B
-        elif op == '>':
-            C[:] = A > B
-        elif op == '>=':
-            C[:] = A >= B
-        elif op == '<':
-            C[:] = A < B
-        elif op == '<=':
-            C[:] = A <= B
+def test_math():
+    dims = (1024, 1024)
+    for dtype in (np.float32, np.float16):
+        randA = rand_unif(dtype, dims)
+        randB = rand_unif(dtype, dims)
 
-        return C
-
-    def compare_helper(self, op, inA, inB, dtype):
-
-        numpy_result = self.math_helper(np, op, inA, inB, dtype=np.float32)
-
-        if np.dtype(dtype).kind == 'i' or np.dtype(dtype).kind == 'u':
-            numpy_result = np.around(numpy_result)
-            numpy_result = numpy_result.clip(
-                np.iinfo(dtype).min, np.iinfo(dtype).max)
-        numpy_result = numpy_result.astype(dtype)
-
-        nervanaGPU_result = self.math_helper(
-            self.gpu, op, inA, inB, dtype=dtype)
-        nervanaCPU_result = self.math_helper(
-            self.cpu, op, inA, inB, dtype=dtype)
-
-        assert_tensors_allclose(numpy_result, nervanaGPU_result, rtol=0, atol=1e-5)
-
-        if dtype in (np.float64, np.float32, np.float16):
-            assert_tensors_allclose(numpy_result, nervanaCPU_result, rtol=0, atol=1e-5)
-
-    def rand_unif(self, dtype, dims):
-        if np.dtype(dtype).kind == 'f':
-            return np.random.uniform(-1, 1, dims).astype(dtype)
-        else:
-            iinfo = np.iinfo(dtype)
-            return np.around(np.random.uniform(iinfo.min, iinfo.max, dims)) \
-                .clip(iinfo.min, iinfo.max)
-
-    def test_math(self):
-
-        for dtype in (np.float32, np.float16, np.int8, np.uint8):
-            randA = self.rand_unif(dtype, self.dims)
-            randB = self.rand_unif(dtype, self.dims)
-
-            self.compare_helper('+', randA, randB, dtype)
-            self.compare_helper('-', randA, randB, dtype)
-            self.compare_helper('*', randA, randB, dtype)
-            # self.compare_helper('/', randA, randB, dtype)
-            self.compare_helper('>', randA, randB, dtype)
-            self.compare_helper('>=', randA, randB, dtype)
-            self.compare_helper('<', randA, randB, dtype)
-            self.compare_helper('<=', randA, randB, dtype)
+        compare_helper('+', randA, randB, dtype)
+        compare_helper('-', randA, randB, dtype)
+        compare_helper('*', randA, randB, dtype)
+        compare_helper('>', randA, randB, dtype)
+        compare_helper('>=', randA, randB, dtype)
+        compare_helper('<', randA, randB, dtype)
+        compare_helper('<=', randA, randB, dtype)
