@@ -19,8 +19,7 @@ Test of basic math operations on the Tensors and compare with numpy results
 The Tensor types includes GPU and CPU Tensors
 """
 
-from neon.backends.nervanagpu import NervanaGPU
-from neon.backends.nervanacpu import NervanaCPU
+from neon.backends import gen_backend
 from neon.backends.tests.utils import assert_tensors_allclose
 import numpy as np
 
@@ -29,12 +28,12 @@ class TestTensor(object):
 
     def setup(self):
 
-        self.gpu = NervanaGPU(stochastic_round=False)
-        self.cpu = NervanaCPU()
+        self.gpu = gen_backend("gpu", stochastic_round=False)
+        self.cpu = gen_backend("cpu")
         self.dims = (1024, 1024)
 
     def teardown(self):
-        self.gpu.ctx.detach()
+        self.gpu.ctx.pop()
         del(self.gpu)
 
     def init_helper(self, lib, inA, inB, dtype):

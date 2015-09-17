@@ -16,9 +16,7 @@
 
 import itertools
 import numpy as np
-from neon.backends.nervanagpu import NervanaGPU
-from neon.backends.nervanacpu import NervanaCPU
-
+from neon.backends import gen_backend
 from neon.backends.tests.utils import call_func, gen_backend_tensors
 from neon.backends.tests.utils import assert_tensors_allclose
 
@@ -66,7 +64,7 @@ def pytest_generate_tests(metafunc):
     test_tensor_flags = ['pos_rand', 'neg_rand', 'rand']
     test_tensor_dims = [(2, 2)]
     test_dtypes = [np.float16, np.float32]
-    test_backends = [NervanaGPU, NervanaCPU]
+    test_backends = ["gpu", "cpu"]
 
     # generate params for testing
     if 'custom_args' in metafunc.fixturenames:
@@ -77,10 +75,10 @@ def pytest_generate_tests(metafunc):
 
 
 def test_vs_numpy(custom_args):
-    test_idx, f, flag, dim, dtype, backend = custom_args
+    test_idx, f, flag, dim, dtype, backend_type = custom_args
 
     # backend
-    be = backend(default_dtype=dtype)
+    be = gen_backend(backend_type, default_dtype=dtype)
 
     # tensors
     tensors = gen_backend_tensors(
@@ -89,10 +87,6 @@ def test_vs_numpy(custom_args):
     # compare function value and gradient
     numpy_func_val = call_func(f, np, tensors[0])
     backend_func_val = call_func(f, be, tensors[1])
-
-    if backend is NervanaGPU:
-        be.ctx.detach()
-    del(be)
 
     assert_tensors_allclose(
         numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)

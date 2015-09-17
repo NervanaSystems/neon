@@ -15,7 +15,7 @@
 # pylint: skip-file
 
 import numpy as np
-from neon.backends.nervanagpu import NervanaGPU
+from neon.backends import gen_backend
 from neon.backends.autodiff import Autodiff
 import pprint
 
@@ -61,12 +61,12 @@ class TestAutodiff:
         self.m = 2  # row
         self.n = 2  # column
         self.dtype = np.float32
-        self.be = NervanaGPU(stochastic_round=False, default_dtype=self.dtype)
+        self.be = gen_backend("gpu", stochastic_round=False, default_dtype=self.dtype)
         self.test_epoch = 1
         self.delta = 1e-5  # for numerical gradient
 
     def teardown(self):
-        self.be.ctx.detach()
+        self.be.ctx.pop()
         del(self.be)
 
     def _rand_gen(self, *flags):

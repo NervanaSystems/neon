@@ -17,7 +17,7 @@ import itertools as itt
 from neon.backends.nervanacpu import NervanaCPU
 from neon.backends.nervanagpu import NervanaGPU
 from neon.backends.tests.utils import assert_tensors_allclose
-
+from neon.backends.util import check_gpu
 
 def ref_hist(inp, nbins=64, offset=-48):
     """
@@ -44,6 +44,9 @@ def test_edge_cases():
 
     Also test backend dump_hist_data functionality.
     """
+    gpuflag = (check_gpu.get_compute_capability(0) >= 5.0)
+    if gpuflag is False:
+        raise RuntimeError("Device does not have CUDA compute capability 5.0 or greater")
     ng = NervanaGPU()
     nc = NervanaCPU()
     # edge case test
@@ -80,6 +83,10 @@ def test_hist(nbin_offset_dim_dtype_inp):
     """
 
     (nbins, offset), dim, dtype, (name, inp_gen) = nbin_offset_dim_dtype_inp
+
+    gpuflag = (check_gpu.get_compute_capability(0) >= 5.0)
+    if gpuflag is False:
+        raise RuntimeError("Device does not have CUDA compute capability 5.0 or greater")
 
     ng = NervanaGPU(hist_bins=nbins, hist_offset=offset)
     nc = NervanaCPU(hist_bins=nbins, hist_offset=offset)

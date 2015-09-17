@@ -40,7 +40,7 @@ def get_compute_capability(device_id=None, verbose=False):
             print("PyCUDA module not found")
         return 0
     try:
-        import pycuda.autoinit
+        drv.init()
     except pycuda._driver.RuntimeError as e:
         print("PyCUDA Runtime error: {0}".format(str(e)))
         return 0
@@ -50,6 +50,9 @@ def get_compute_capability(device_id=None, verbose=False):
     full_version = []
     if device_id is None:
         device_id = range(drv.Device.count())
+    elif isinstance(device_id, int):
+        device_id = [device_id]
+
     for i in device_id:
         major = drv.Device(i).get_attribute(major_string)
         minor = drv.Device(i).get_attribute(minor_string)
