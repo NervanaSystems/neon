@@ -199,9 +199,9 @@ class RMSProp(Optimizer):
             if len(states) == 0:
                 states.append(self.be.zeros_like(grad))
 
+            grad = grad / self.be.bsz
             if self.clip_gradients:
                 grad = self.be.clip(grad, -self.gradient_limit, self.gradient_limit)
-            grad = grad / self.be.bsz
             # update state
             state = states[0]
             state[:] = decay * state + self.be.square(grad) * (1.0 - decay)
