@@ -41,6 +41,14 @@ STYLE_CHECK_DIRS := neon bin tests
 
 # pytest options
 TEST_OPTS :=
+TEST_DIRS := tests/
+# turn off GPU tests if no GPU present
+# TODO: refactor neon/backends/tests to run under CPU
+ifneq ($(HAS_GPU), true)
+	TEST_DIRS := -k cpu $(TEST_DIRS)
+else
+	TEST_DIRS := $(TEST_DIRS) neon/backends/tests/
+endif
 
 # arguments to running examples
 EXAMPLE_ARGS := -e1
@@ -63,9 +71,10 @@ KERNEL_BUILDER_CLEAN_OPTS := --clean
 # neon compiled objects
 IMAGESET_DECODER := neon/data/imageset_decoder.so
 
-.PHONY: default env maxas kernels sysinstall sysuninstall clean_py clean_maxas \
-	      clean_so clean_kernels clean test coverage style lint check \
-	      doc html release examples serialize_check
+.PHONY: default env maxas kernels sysinstall sysinstall_nodeps neon_install \
+	      sysdeps sysuninstall clean_py clean_maxas clean_so clean_kernels \
+	      clean test coverage style lint check doc html release examples \
+	      serialize_check
 
 default: env
 
@@ -99,11 +108,12 @@ endif
 	@touch $(ACTIVATE)
 	@echo
 
-maxas: $(ACTIVATE) $(MAXAS_DL_DIR)
+maxas: $(MAXAS_DL_DIR)
 ifeq ($(HAS_GPU), true)
 	@cd $(MAXAS_DL_DIR) && git pull >/dev/null 2>&1
 	@test -f $(MAXAS) ||\
 		{ echo "Installing maxas..." &&\
+		  mkdir -p $(dir $(MAXAS)) &&\
 		  ln -s ../maxas/bin/maxas.pl $(MAXAS) ;\
 		  echo "";\
 		}
@@ -118,9 +128,10 @@ ifeq ($(HAS_GPU), true)
 		}
 endif
 
-kernels: $(ACTIVATE) maxas
+kernels: maxas
 ifeq ($(HAS_GPU), true)
-	@. $(ACTIVATE); $(MAXAS_PLIB) $(KERNEL_BUILDER) $(KERNEL_BUILDER_BUILD_OPTS)
+	@$(MAXAS_PLIB) PATH=$(dir $(MAXAS)):$$PATH \
+		$(KERNEL_BUILDER) $(KERNEL_BUILDER_BUILD_OPTS)
 	@echo
 endif
 
@@ -137,10 +148,16 @@ else
 	@echo
 endif
 
-# TODO: remove env dep and handle kernel/.so compilation via setup.py directly
-sysinstall: env
+# TODO: handle kernel/.so compilation via setup.py directly
+sysinstall_nodeps: kernels $(IMAGESET_DECODER) neon_install
+sysinstall: sysdeps kernels $(IMAGESET_DECODER) neon_install
+neon_install:
 	@echo "Installing neon system wide..."
-	@pip install -U pip
+	@pip install .
+	@echo
+
+sysdeps:
+	@echo "Installing neon dependencies system wide..."
 	@# cython added separately due to h5py dependency ordering bug.  See:
 	@# https://github.com/h5py/h5py/issues/535
 	@pip install cython==0.23.1
@@ -151,8 +168,6 @@ endif
 ifeq ($(HAS_GPU), true)
 	@pip install -r gpu_requirements.txt
 endif
-	@pip install .
-	@echo
 
 sysuninstall:
 	@echo "Uninstalling neon system wide..."
@@ -191,7 +206,7 @@ clean: clean_py clean_so clean_maxas clean_kernels
 
 test: env
 	@echo "Running unit tests..."
-	@. $(ACTIVATE); py.test $(TEST_OPTS) tests/ neon/backends/tests/
+	@. $(ACTIVATE); py.test $(TEST_OPTS) $(TEST_DIRS)
 	@echo
 
 examples: env
