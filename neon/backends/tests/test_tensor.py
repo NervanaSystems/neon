@@ -20,7 +20,6 @@ The Tensor types includes GPU and CPU Tensors
 """
 
 from neon.backends import gen_backend
-from neon.backends.tests.utils import assert_tensors_allclose
 import numpy as np
 
 
@@ -29,6 +28,7 @@ def init_helper(lib, inA, inB, dtype):
     B = lib.array(inB, dtype=dtype)
     C = lib.empty(inB.shape, dtype=dtype)
     return A, B, C
+
 
 def math_helper(lib, op, inA, inB, dtype):
     A, B, C = init_helper(lib, inA, inB, dtype)
@@ -51,12 +51,13 @@ def math_helper(lib, op, inA, inB, dtype):
         C[:] = A <= B
     return C
 
+
 def compare_helper(op, inA, inB, dtype):
     numpy_result = math_helper(np, op, inA, inB, dtype=np.float32)
 
     if np.dtype(dtype).kind == 'i' or np.dtype(dtype).kind == 'u':
         numpy_result = np.around(numpy_result)
-        numpy_result = numpy_result.clip( np.iinfo(dtype).min, np.iinfo(dtype).max)
+        numpy_result = numpy_result.clip(np.iinfo(dtype).min, np.iinfo(dtype).max)
     numpy_result = numpy_result.astype(dtype)
 
     if dtype in (np.float32, np.float16):
@@ -77,6 +78,7 @@ def rand_unif(dtype, dims):
     else:
         iinfo = np.iinfo(dtype)
         return np.around(np.random.uniform(iinfo.min, iinfo.max, dims)).clip(iinfo.min, iinfo.max)
+
 
 def test_math():
     dims = (1024, 1024)

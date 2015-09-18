@@ -1,6 +1,5 @@
 import numpy as np
 from neon.backends import gen_backend
-import neon.backends.nervanagpu as ng
 
 
 def test_sr():

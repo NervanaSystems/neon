@@ -19,6 +19,7 @@ from neon.backends.nervanagpu import NervanaGPU
 from neon.backends.tests.utils import assert_tensors_allclose
 from neon.backends.util import check_gpu
 
+
 def ref_hist(inp, nbins=64, offset=-48):
     """
     Implement a log2 histogram geared towards visualizing neural net parameters.

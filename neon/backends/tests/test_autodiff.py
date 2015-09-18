@@ -140,4 +140,3 @@ def test_gradients(custom_args):
         numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)
     assert_tensors_allclose(
         numerical_gradient, autodiff_gradient, rtol=1e-02, atol=1e-3)
-
