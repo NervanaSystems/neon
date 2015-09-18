@@ -169,6 +169,8 @@ class ImgMaster(ImgEndpoint):
 
         self.dev_X = self.be.iobuf(npix, dtype=dtype)
         self.dev_X_ms = self.dev_X.reshape((ishape[0], -1))  # view for mean subtract
+        self.dev_X.lshape = ishape
+
         self.dev_XT = self.be.empty(self.dev_X.shape[::-1], dtype=np.uint8)
         self.dev_lbls = self.be.iobuf(1, dtype=np.int32)
         self.dev_Y = self.be.iobuf(self.nclass, dtype=dtype)

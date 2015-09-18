@@ -70,6 +70,9 @@ class DataIterator(NervanaObject):
         if len(self.shape) == 1:
             self.shape = self.shape[0]
 
+            # store shape of the input data
+            self.lshape = lshape
+
         assert self.ndata > self.be.bsz
 
         self.ybuf = None

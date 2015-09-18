@@ -26,7 +26,7 @@ logger = logging.getLogger()
 
 
 def test_dataset(backend_default, data):
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
+    (X_train, y_train), (X_test, y_test), nclass, lshape = load_mnist(path=data)
 
     train_set = DataIterator(X_train, y_train, nclass=nclass)
     train_set.be = NervanaObject.be

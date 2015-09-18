@@ -37,8 +37,9 @@ import logging
 import sys
 import argparse
 from bokeh import plotting
-from neon.visualizations.figure import cost_fig, hist_fig
-from neon.visualizations.data import h5_cost_data, h5_hist_data
+from neon.visualizations.figure import cost_fig, hist_fig, deconv_fig
+from neon.visualizations.data import h5_cost_data, h5_hist_data, h5_deconv_data
+
 logging.basicConfig(level=20)
 logger = logging.getLogger()
 
@@ -65,11 +66,25 @@ def parse_args():
 
     return parser.parse_args()
 
+def deconv_plot_layers(deconv_data, plot_size=150):
+    """
+    Loop to plot and save the deconvolution visualization for every layer.
+
+    Arguments:
+        deconv_data ([tuple(string, ndarray)])  : deconvolution data read from h5 file
+    """
+    for layer, layer_data in deconv_data:
+        allfigs = deconv_fig(layer_data, plot_size, figs_per_row=8)
+        plotting.output_file(layer +".html")
+        plotting.save(allfigs)
 
 def static_plot(args, plot_height=400, plot_width=600):
     """
     Generate a static html plot with train and validation cost if present in file.
+    Deconvolution plots for each layer will also be generated if deconvolution data is present.
     """
+    filename = args.in_file
+
     epoch_axis = args.axis=='epoch'
     cost_data = h5_cost_data(args.in_file, epoch_axis)
     hist_data = h5_hist_data(args.in_file, epoch_axis)
@@ -83,6 +98,10 @@ def static_plot(args, plot_height=400, plot_width=600):
 
     plotting.output_file(args.out_file)
     plotting.show(plotting.vplot(*figs))
+
+    deconv_data = h5_deconv_data(filename)
+    if deconv_data != None:
+        deconv_plot_layers(deconv_data)
 
 if __name__ == "__main__":
     args = parse_args()

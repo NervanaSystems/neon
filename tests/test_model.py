@@ -70,7 +70,7 @@ def test_model_get_outputs(backend_default):
 
 
 def test_model_serialize(backend_default, data):
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
+    (X_train, y_train), (X_test, y_test), nclass, lshape = load_mnist(path=data)
 
     train_set = DataIterator(
         [X_train, X_train], y_train, nclass=nclass, lshape=(1, 28, 28))

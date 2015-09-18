@@ -35,14 +35,16 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 parser.add_argument("--learning_rate", default=0.05, help="initial learning rate")
 parser.add_argument("--weight_decay", default=0.001, help="weight decay")
+parser.add_argument('--deconv', action='store_true', help='save visualization data from deconvolution')
+parser.add_argument('--model_file', help='load model from pkl file')
 args = parser.parse_args()
 
 # hyperparameters
 num_epochs = args.epochs
 
-(X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir,
-                                                            normalize=True,
-                                                            whiten=True)
+(X_train, y_train), (X_test, y_test), nclass, lshape  = load_cifar10(path=args.data_dir,
+                                                                     normalize=True,
+                                                                     whiten=True)
 
 # really 10 classes, pad to nearest power of 2 to match conv output
 train_set = DataIterator(X_train, y_train, nclass=16, lshape=(3, 32, 32))
@@ -77,8 +79,20 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 
 mlp = Model(layers=layers)
 
+if args.model_file:
+    import os
+    assert os.path.exists(args.model_file), '%s not found' % args.model_file
+    mlp.load_weights(args.model_file)
+
 # configure callbacks
 callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
+
+if args.deconv:
+    callbacks.add_deconv_callback(train_set, valid_set, args.epochs)
+
+if args.save_path:
+    checkpoint_schedule = range(1, args.epochs)
+    callbacks.add_serialize_callback(checkpoint_schedule, args.save_path, history=2)
 
 mlp.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))

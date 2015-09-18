@@ -31,9 +31,9 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-(X_train, y_train), (X_test, y_test), nclass = load_mnist(args.data_dir)
-train_set = DataIterator(X_train, y_train, nclass=nclass)
-valid_set = DataIterator(X_test, y_test, nclass=nclass)
+(X_train, y_train), (X_test, y_test), nclass, lshape = load_mnist(args.data_dir)
+train_set = DataIterator(X_train, y_train, nclass=nclass, lshape=lshape)
+valid_set = DataIterator(X_test, y_test, nclass=nclass, lshape=lshape)
 
 # weight initialization
 init_norm = Gaussian(loc=0.0, scale=0.01)

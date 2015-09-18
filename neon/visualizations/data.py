@@ -113,4 +113,33 @@ def h5_hist_data(filename, epoch_axis=True):
                 dh = bins
                 ret.append((hname, hdata[...], dh, dw, bins, offset))
 
+
+def h5_deconv_data(filename):
+    """
+    Read deconv visualization data from hdf5 file.
+
+    Returns:
+        list of lists. Each inner list represents one layer, and consists of
+        tuples (fm, deconv_data)
+    """
+    ret = list()
+    with h5py.File(filename, "r") as f:
+        if 'deconv' not in f.keys():
+            return None
+        act_data = f['deconv/max_act_data']
+        img_data = f['deconv/img_data']
+
+        for layer in act_data.keys():
+            layer_data = list()
+            for fm in act_data[layer].iterkeys():
+                fm_data = act_data[layer][fm]
+                plot_deconv = fm_data['plot'][...]
+
+                batch_ind, img_ind = fm_data['img_ind'][...]
+                key = 'batch_' + str(batch_ind) + '_img_' + str(img_ind)
+                plot_img = img_data[key][...]
+
+                layer_data.append((fm, plot_deconv, plot_img))
+
+            ret.append((layer, layer_data))
     return ret

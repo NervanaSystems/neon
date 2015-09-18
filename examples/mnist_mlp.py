@@ -59,12 +59,12 @@ logger.setLevel(args.log_thresh)
 
 # load up the mnist data set
 # split into train and tests sets
-(X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
+(X_train, y_train), (X_test, y_test), nclass, lshape = load_mnist(path=args.data_dir)
 
 # setup a training set iterator
-train_set = DataIterator(X_train, y_train, nclass=nclass)
+train_set = DataIterator(X_train, y_train, nclass=nclass, lshape=lshape)
 # setup a validation data set iterator
-valid_set = DataIterator(X_test, y_test, nclass=nclass)
+valid_set = DataIterator(X_test, y_test, nclass=nclass, lshape=lshape)
 
 # setup weight initialization function
 init_norm = Gaussian(loc=0.0, scale=0.01)
