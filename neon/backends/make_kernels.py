@@ -30,6 +30,8 @@ p.add_option("-p", "--preprocess", action="store_true", dest="preprocess",
              help="preprocess sass files only (for devel and debug)")
 p.add_option("-d", "--dump", action="store_true", dest="dump",
              help="disassemble cubin files only (for devel and debug)")
+p.add_option("-j", "--max_concurrent", type="int", default=10,
+             help="Concurrently launch a maximum of this many processes.")
 opts, args = p.parse_args()
 
 base_dir = os.path.dirname(os.path.realpath(__file__))
@@ -129,25 +131,29 @@ for cu_name in sorted(os.listdir(cu_dir)):
                     break
 
 
-def run_commands(commands):
+def run_commands(commands, max_concurrent=25):
     if len(commands) > 0:
-        procs = []
-        for cmdlist in commands:
-            cmdline = " ".join(cmdlist)
-            proc = subprocess.Popen(cmdline, shell=True, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE)
-            procs.append((proc, cmdline))
+        i = 0
+        while i < len(commands):
+            command_batch = commands[i:i + max_concurrent]
+            procs = []
+            for cmdlist in command_batch:
+                cmdline = " ".join(cmdlist)
+                proc = subprocess.Popen(cmdline, shell=True, stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE)
+                procs.append((proc, cmdline))
 
-        for proc, cmdline in procs:
-            code = proc.wait()
-            print cmdline
-            if code:
-                print proc.stderr.read()
-            output = proc.stdout.read()
-            if output:
-                print output
+            for proc, cmdline in procs:
+                code = proc.wait()
+                print cmdline
+                if code:
+                    print proc.stderr.read()
+                output = proc.stdout.read()
+                if output:
+                    print output
+            i += max_concurrent
 
-run_commands(compile_cubins)
-run_commands(build_cubins)
-run_commands(build_pre)
-run_commands(dump_cubins)
+run_commands(compile_cubins, opts.max_concurrent)
+run_commands(build_cubins, opts.max_concurrent)
+run_commands(build_pre, opts.max_concurrent)
+run_commands(dump_cubins, opts.max_concurrent)
