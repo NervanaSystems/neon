@@ -24,11 +24,12 @@ from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 from neon.util.persist import save_obj
+from neon.util.argparser import NeonArgparser
 
 
-def test_model_get_outputs_rnn(backend):
+def test_model_get_outputs_rnn(backend, data):
 
-    data_path = load_text('ptb-valid')
+    data_path = load_text('ptb-valid', path=data)
 
     data_set = Text(time_steps=50, path=data_path)
 
@@ -67,8 +68,8 @@ def test_model_get_outputs(backend):
     assert np.allclose(output, ref_output)
 
 
-def test_model_serialize(backend):
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
+def test_model_serialize(backend, data):
+    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
     train_set = DataIterator([X_train, X_train], y_train, nclass=nclass, lshape=(1, 28, 28))
 
     init_norm = Gaussian(loc=0.0, scale=0.01)
@@ -146,4 +147,4 @@ def test_model_serialize(backend):
 if __name__ == '__main__':
 
     be = gen_backend(backend='gpu', batch_size=50)
-    test_model_get_outputs_rnn(be)
+    test_model_get_outputs_rnn(be, data='~/nervana/data')

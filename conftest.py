@@ -33,6 +33,10 @@ def pytest_addoption(parser):
                      help="run all tests")
     return
 
+@pytest.fixture(scope='session')
+def data():
+   path_to_data = '~/nervana/data/'
+   return path_to_data
 
 @pytest.fixture(scope='module', params=['gpu', 'cpu'])
 def backend(request):

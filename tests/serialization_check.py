@@ -111,7 +111,7 @@ def main():
     mlp = gen_model(args.backend)
 
     # setup data iterators
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
+    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
     if args.backend == 'nervanacpu' or args.backend == 'cpu':
         # limit data since cpu backend runs slower
         train = DataIterator(X_train[:1000], y_train[:1000], nclass=nclass, lshape=(1, 28, 28))

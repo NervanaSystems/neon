@@ -194,6 +194,7 @@ class GPUTensor(Tensor):
         index_axis = 0
         array_axis = 0
         while index_axis < len(index):
+            
             index_entry = index[index_axis]
 
             if array_axis > len(self.shape):
@@ -389,9 +390,16 @@ class GPUTensor(Tensor):
         Returns:
             numpy.ndarray: A host numpy array
         """
-        assert self.is_contiguous, "Array in get() must be contiguous"
-        ary = np.empty(self.shape, self.dtype)
-        drv.memcpy_dtoh_async(ary, self.gpudata, stream)
+
+        if self.is_contiguous:
+            ary = np.empty(self.shape, self.dtype)
+            drv.memcpy_dtoh_async(ary, self.gpudata, stream)
+        else:
+            # if it is not contiguous, need to copy it over to new device mem
+            ary_d = self.backend.empty(self.shape, self.dtype)
+            ary_d.copy(self)
+            ary = np.empty(self.shape, self.dtype)
+            drv.memcpy_dtoh_async(ary, ary_d.gpudata, stream)
         return ary
 
     def asnumpyarray(self):

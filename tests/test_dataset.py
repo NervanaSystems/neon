@@ -20,13 +20,14 @@ import os
 from neon import NervanaObject
 from neon.data import DataIterator, load_mnist
 from neon.data.text import Text
+from neon.util.argparser import NeonArgparser
 
 logging.basicConfig(level=20)
 logger = logging.getLogger()
 
 
-def test_dataset(backend):
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
+def test_dataset(backend, data):
+    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
     train_set = DataIterator(X_train, y_train, nclass=nclass)
     train_set.be = NervanaObject.be
 
