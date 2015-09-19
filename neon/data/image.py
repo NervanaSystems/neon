@@ -93,9 +93,10 @@ class ImgEndpoint(NervanaObject):
         try:
             cache_filepath = os.path.join(repo_dir, 'dataset_cache.pkl')
             dataset_cache = load_obj(cache_filepath)
-        except:
-            raise IOError("Cannot find dataset cache in %s.  Run batch_writer to preprocess the"
-                          "data and create batch files for imageset" % (repo_dir))
+        except IOError:
+            raise IOError("Cannot find '%s/dataset_cache.pkl'. Run batch_writer to "
+                          "preprocess the data and create batch files for imageset"
+                          % (repo_dir))
 
         # Should have following defined:
         req_attributes = ['global_mean', 'nclass', 'val_start', 'ntrain', 'label_names',
@@ -138,12 +139,13 @@ class ImgMaster(ImgEndpoint):
     This is just a client that starts its own server process
     """
     def __init__(self, repo_dir, inner_size, do_transforms=True, rgb=True,
-                 multiview=False, set_name='train', subset_pct=100):
+                 multiview=False, set_name='train', subset_pct=100, dtype=np.float32):
         super(ImgMaster, self).__init__(repo_dir, inner_size, do_transforms,
                                         rgb, multiview, set_name, subset_pct)
 
         # Create the communication buffers
         # We have two response buffers b/c we are double buffering
+
         npix = self.inner_size * self.inner_size * 3
         ishape = (3, self.inner_size, self.inner_size)
         origshape = (3, self.img_size, self.img_size)
@@ -162,18 +164,18 @@ class ImgMaster(ImgEndpoint):
         self.local_img = np.empty((mbsz, npix), dtype=np.uint8)
         self.local_lbl = np.empty((mbsz,), dtype=np.int32)
 
-        self.dev_X = self.be.iobuf(npix, dtype=np.float32)
+        self.dev_X = self.be.iobuf(npix, dtype=dtype)
         self.dev_X.lshape = ishape
         self.dev_XT = self.be.empty(self.dev_X.shape[::-1], dtype=np.uint8)
         self.dev_lbls = self.be.iobuf(1, dtype=np.int32)
-        self.dev_Y = self.be.iobuf(self.nclass, dtype=np.float32)
+        self.dev_Y = self.be.iobuf(self.nclass, dtype=dtype)
 
         # Crop the mean according to the inner_size
         crop_start = (self.img_size - self.inner_size) / 2
         crop_range = slice(crop_start, crop_start + self.inner_size)
         if self.global_mean is not None:
             self.mean_crop = self.global_mean.reshape(origshape)[:, crop_range, crop_range]
-            self.dev_mean = self.be.array(self.mean_crop.reshape(npix, 1), dtype=np.float32)
+            self.dev_mean = self.be.array(self.mean_crop.reshape(npix, 1), dtype=dtype)
         else:
             self.dev_mean = 127.  # Just center uint8 values if missing global mean
 

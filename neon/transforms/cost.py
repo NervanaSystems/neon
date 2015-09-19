@@ -103,7 +103,7 @@ class CrossEntropyBinary(Cost):
         """
         a = - self.be.log(y + self.epsilon) * t
         b = - self.be.log(1 - y + self.epsilon) * (1 - t)
-        return self.scale * self.be.sum(a + b, axis=0)
+        return self.be.sum(a + b, axis=0)
 
     def bprop(self, y, t):
         """
@@ -151,8 +151,7 @@ class CrossEntropyMulti(Cost):
         Returns:
             OpTree: Returns the multiclass cross entropy cost
         """
-        return (self.scale *
-                self.be.sum(-t * self.logfunc(self.be.clip(y, self.epsilon, 1.0)), axis=0))
+        return (self.be.sum(-t * self.logfunc(self.be.clip(y, self.epsilon, 1.0)), axis=0))
 
     def bprop(self, y, t):
         """

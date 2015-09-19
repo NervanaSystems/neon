@@ -46,7 +46,7 @@ class NeonArgparser(configargparse.ArgumentParser):
     """
     def __init__(self, *args, **kwargs):
         self._PARSED = False
-        self.work_dir = os.path.join('~', 'nervana')
+        self.work_dir = os.path.join(os.path.expanduser('~'), 'nervana')
         if 'default_config_files' not in kwargs:
             kwargs['default_config_files'] = [os.path.join(self.work_dir,
                                                            'neon.cfg')]
