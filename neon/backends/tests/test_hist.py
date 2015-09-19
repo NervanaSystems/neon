@@ -36,6 +36,8 @@ def ref_hist(inp, nbins=64, offset=-48):
     bins[0] = -float('Inf')
     np_inp_log_abs = np.rint(np.log2(np.abs(inp.astype(np.float32))))
     np_hist, edges = np.histogram(np_inp_log_abs, density=False, bins=bins)
+    if (np_hist.ndim < 2):
+        np_hist = np_hist.reshape(np_hist.size, 1)
     return np_hist
 
 
@@ -145,3 +147,4 @@ def pytest_generate_tests(metafunc):
     if 'nbin_offset_dim_dtype_inp' in metafunc.fixturenames:
         fargs = itt.product(bin_offs, dims, dtypes, inputs)
         metafunc.parametrize("nbin_offset_dim_dtype_inp", fargs)
+

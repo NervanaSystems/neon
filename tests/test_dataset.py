@@ -20,7 +20,6 @@ import os
 from neon import NervanaObject
 from neon.data import DataIterator, load_mnist
 from neon.data.text import Text
-from neon.util.argparser import NeonArgparser
 
 logging.basicConfig(level=20)
 logger = logging.getLogger()

@@ -74,6 +74,7 @@ class Tensor(object):
         self.dtype = dtype
         self.name = name
         self.persist_values = persist_values
+        self._min_dims = 2
 
     def __str__(self):
         """
@@ -391,6 +392,7 @@ class Backend(object):
 
         # batch size
         self.bsz = None
+        self._min_dims = 2
 
     def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True):
         """

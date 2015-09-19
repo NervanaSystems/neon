@@ -94,6 +94,9 @@ class GPUTensor(Tensor):
 
         dtype = np.dtype(dtype)
 
+        if isinstance(shape, (tuple, list)) and len(shape) < self._min_dims:
+            shape = shape + (1, )
+
         try:
             size = 1
             for dim in shape:
@@ -101,7 +104,7 @@ class GPUTensor(Tensor):
         except TypeError:
             assert isinstance(shape, (int, long, np.integer))
             size = shape
-            shape = (shape,)
+            shape = (shape, 1)
 
         if isinstance(size, np.integer):
             size = np.asscalar(size)
@@ -193,6 +196,7 @@ class GPUTensor(Tensor):
 
         index_axis = 0
         array_axis = 0
+
         while index_axis < len(index):
             
             index_entry = index[index_axis]
@@ -259,6 +263,10 @@ class GPUTensor(Tensor):
 
                 new_offset += self.strides[array_axis] * \
                     index_entry * self.dtype.itemsize
+                
+                if len(self.shape) < 3:
+                    new_shape.append(1)
+                    new_strides.append(self.strides[array_axis])
 
                 index_axis += 1
                 array_axis += 1
@@ -376,6 +384,8 @@ class GPUTensor(Tensor):
         assert self.is_contiguous, "Array in set() must be contiguous"
         if ary.dtype is not self.dtype:
             ary = ary.astype(self.dtype)
+        if ary.ndim < self._min_dims:
+            ary = ary.reshape(ary.size, 1)
         assert ary.strides == tuple(
             self.dtype.itemsize * s for s in self.strides)
 
@@ -446,6 +456,9 @@ class GPUTensor(Tensor):
         """
         if isinstance(shape[0], (tuple, list)):
             shape = tuple(shape[0])
+
+        if len(shape) < self._min_dims:
+            shape = shape + (1, )
 
         if shape == self.shape:
             return self
@@ -731,7 +744,7 @@ class NervanaGPU(Backend):
         else:
             # generate random pool from numpy
             rand_init = self.rng.random_integers(
-                0, 2 ** 32 - 1, (3 * 2048 * 32,)).astype(np.uint32)
+                0, 2 ** 32 - 1, (3 * 2048 * 32, 1)).astype(np.uint32)
             # copy to device
             if ctx in self.context_rand_state_map:
                 rand_state = self.context_rand_state_map[ctx]
@@ -989,6 +1002,8 @@ class NervanaGPU(Backend):
         converts a numpy array to a GPUTensor
         """
         dtype = self.default_dtype if dtype is None else dtype
+        if ary.ndim < self._min_dims:
+            ary = ary.reshape(ary.size, 1)        
         return GPUTensor(self, ary.shape, dtype=dtype, name=name,
                          persist_values=persist_values, allocator=allocator,
                          rounding=self.round_mode).set(ary)

@@ -238,6 +238,7 @@ class Model(NervanaObject):
 
         return Ypred[:dataset.ndata]
 
+
     def get_description(self):
         """
         Gets a description of the model required to reconstruct the model with

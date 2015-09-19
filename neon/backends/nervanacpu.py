@@ -76,8 +76,13 @@ class CPUTensor(Tensor):
             self._tensor = ary.astype(dtype)
         else:
             self._tensor = ary
-
-        self.shape = self._tensor.shape
+        while self._tensor.ndim < self._min_dims:
+            self._tensor = self._tensor.reshape(self._tensor.shape + (1, ))
+        
+        if shape is not None and len(shape) < self._min_dims:
+            self.shape = shape + (1, )
+        else:
+            self.shape = self._tensor.shape
 
         try:
             size = 1
@@ -226,14 +231,12 @@ class CPUTensor(Tensor):
         Returns:
             self
         """
-        if np.dtype(self.dtype).kind == 'i' or np.dtype(self.dtype).kind == 'u':
-            clipping_str = _overflow_clipping_ops[
-                "clipping"].format('value', 'self.dtype')
-            exec(clipping_str)
-
         if isinstance(value, np.ndarray):
             if value.dtype is not self.dtype:
                 value = value.astype(self.dtype)
+            assert value.size == self.size
+            if value.ndim < self._min_dims:
+                value = value.reshape(value.size, 1)
 
         self._tensor[:] = value
         return self
@@ -402,10 +405,6 @@ class CustomNumpy:
         new_shape[axis] = 1
         new_shape = tuple(new_shape)
         return np.argmin(x, axis=axis).reshape(new_shape)
-
-_overflow_clipping_ops = {
-    "clipping": '{0}=np.around({0}); {0}=np.clip({0}, np.iinfo({1}).min, np.iinfo({1}).max)',
-}
 
 
 def _assign_right_to_left(left, right):

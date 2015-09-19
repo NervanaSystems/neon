@@ -24,7 +24,6 @@ from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 from neon.util.persist import save_obj
-from neon.util.argparser import NeonArgparser
 
 
 def test_model_get_outputs_rnn(backend, data):
@@ -147,4 +146,5 @@ def test_model_serialize(backend, data):
 if __name__ == '__main__':
 
     be = gen_backend(backend='gpu', batch_size=50)
-    test_model_get_outputs_rnn(be, data='~/nervana/data')
+    test_model_get_outputs_rnn(be, '~/nervana/data')
+
