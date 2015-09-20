@@ -694,10 +694,7 @@ class NervanaGPU(Backend):
         return int(_get_scratch_data(self.scratch_size)) + offset * 4
 
     def __del__(self):
-        try:
-            self.ctx.detach()
-        except:
-            pass
+        self.ctx.detach()
 
     def rng_reset(self):
         """
