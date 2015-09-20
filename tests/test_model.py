@@ -26,7 +26,7 @@ from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 from neon.util.persist import save_obj
 
 
-def test_model_predict_rnn(backend):
+def test_model_get_outputs_rnn(backend):
 
     data_path = load_text('ptb-valid')
 
@@ -42,9 +42,9 @@ def test_model_predict_rnn(backend):
     ]
 
     model = Model(layers=layers)
-    output = model.predict(data_set)
+    output = model.get_outputs(data_set)
 
-    assert output.shape == (data_set.ndata, data_set.nclass)
+    assert output.shape == (data_set.ndata, data_set.seq_length, data_set.nclass)
 
 
 def test_model_serialize(backend):
@@ -126,4 +126,4 @@ def test_model_serialize(backend):
 if __name__ == '__main__':
 
     be = gen_backend(backend='gpu', batch_size=50)
-    test_model_predict_rnn(be)
+    test_model_get_outputs_rnn(be)
