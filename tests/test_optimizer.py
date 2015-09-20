@@ -50,7 +50,7 @@ def wrap(x):
     return be.array(dtypeu(x))
 
 
-def test_gdm(backend):
+def test_gdm(backend_default):
     lrate, mom, wdecay = 0.1, 0.9, 0.005
     gdm = GradientDescentMomentum(
         learning_rate=lrate, momentum_coef=mom, wdecay=wdecay)
@@ -65,7 +65,7 @@ def test_gdm(backend):
     compare_tensors(gdm, param_list, param2, tol=1e-7)
 
 
-def test_rmsprop(backend):
+def test_rmsprop(backend_default):
     rms = RMSProp()
     param = np.random.rand(200, 128)
     param2 = copy.deepcopy(param)
@@ -80,7 +80,7 @@ def test_rmsprop(backend):
     compare_tensors(rms, param_list, param2, tol=1e-7)
 
 
-def test_adadelta(backend):
+def test_adadelta(backend_default):
     ada = Adadelta()
     param = np.random.rand(200, 128)
     param2 = copy.deepcopy(param)
@@ -103,7 +103,7 @@ def test_adadelta(backend):
     compare_tensors(ada, param_list, param2, tol=1e-7)
 
 
-def test_adagrad(backend):
+def test_adagrad(backend_default):
     ada = Adagrad()
     param = np.random.rand(200, 128)
     param2 = copy.deepcopy(param)
@@ -119,7 +119,7 @@ def test_adagrad(backend):
     compare_tensors(ada, param_list, param2, tol=1e-7)
 
 
-def test_adam(backend):
+def test_adam(backend_default):
     adam = Adam()
     param = np.random.rand(200, 128)
     param2 = copy.deepcopy(param)
@@ -141,7 +141,7 @@ def test_adam(backend):
     compare_tensors(adam, param_list, param2, tol=1e-7, epoch=epoch)
 
 
-def test_multi_optimizer(backend):
+def test_multi_optimizer(backend_default):
     opt_gdm = GradientDescentMomentum(
         learning_rate=0.001, momentum_coef=0.9, wdecay=0.005)
     opt_ada = Adadelta()

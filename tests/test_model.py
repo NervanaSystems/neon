@@ -26,7 +26,7 @@ from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 from neon.util.persist import save_obj
 
 
-def test_model_get_outputs_rnn(backend, data):
+def test_model_get_outputs_rnn(backend_default, data):
 
     data_path = load_text('ptb-valid', path=data)
 
@@ -44,12 +44,13 @@ def test_model_get_outputs_rnn(backend, data):
     model = Model(layers=layers)
     output = model.get_outputs(data_set)
 
-    assert output.shape == (data_set.ndata, data_set.seq_length, data_set.nclass)
+    assert output.shape == (
+        data_set.ndata, data_set.seq_length, data_set.nclass)
 
 
-def test_model_get_outputs(backend):
+def test_model_get_outputs(backend_default):
     (X_train, y_train), (X_test, y_test), nclass = load_mnist()
-    train_set = DataIterator(X_train[:backend.bsz * 3])
+    train_set = DataIterator(X_train[:backend_default.bsz * 3])
 
     init_norm = Gaussian(loc=0.0, scale=0.1)
 
@@ -68,9 +69,11 @@ def test_model_get_outputs(backend):
     assert np.allclose(output, ref_output)
 
 
-def test_model_serialize(backend, data):
+def test_model_serialize(backend_default, data):
     (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
-    train_set = DataIterator([X_train, X_train], y_train, nclass=nclass, lshape=(1, 28, 28))
+
+    train_set = DataIterator(
+        [X_train, X_train], y_train, nclass=nclass, lshape=(1, 28, 28))
 
     init_norm = Gaussian(loc=0.0, scale=0.01)
 
@@ -81,13 +84,15 @@ def test_model_serialize(backend, data):
     path2 = [Dropout(keep=0.5),
              Affine(nout=20, init=init_norm, bias=init_norm, activation=Rectlin())]
     layers = [MergeConcat([path1, path2]),
-              Affine(nout=20, init=init_norm, bias=init_norm, activation=Rectlin()),
+              Affine(
+                  nout=20, init=init_norm, bias=init_norm, activation=Rectlin()),
               BatchNorm(),
               Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))]
 
     tmp_save = 'test_model_serialize_tmp_save.pickle'
     mlp = Model(layers=layers)
-    mlp.optimizer = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)
+    mlp.optimizer = GradientDescentMomentum(
+        learning_rate=0.1, momentum_coef=0.9)
     mlp.cost = GeneralizedCost(costfunc=CrossEntropyBinary())
     mlp.initialize(train_set)
     n_test = 3
@@ -145,6 +150,5 @@ def test_model_serialize(backend, data):
     os.remove(tmp_save)
 
 if __name__ == '__main__':
-
     be = gen_backend(backend='gpu', batch_size=50)
     test_model_get_outputs_rnn(be, '~/nervana/data')

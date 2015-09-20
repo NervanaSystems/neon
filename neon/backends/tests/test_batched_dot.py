@@ -100,5 +100,4 @@ def test_batched_dot():
     assert_tensors_allclose(npB, ncB, rtol=0, atol=1e-3)
     assert_tensors_allclose(npU, ncU, rtol=0, atol=1e-3)
 
-    ng.ctx.detach()
     del(ng)

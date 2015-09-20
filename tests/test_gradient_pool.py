@@ -63,15 +63,21 @@ def pytest_generate_tests(metafunc):
 
 
 # -- pooling tests --
-def test_pooling(cpu64_only, poolargs):
+def test_pooling(backend_cpu64, poolargs):
     nin, nifm, fshape, batch_size, op = poolargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
-    inp = np.random.randn(nin * nin * nifm, batch_size)
+    sz = nin * nin * nifm * batch_size
+    epsilon = 1.0e-5
+    # make sure perturnationc an never change the max element
+    inp = np.arange(sz)*2.5*epsilon
+    # shuffle
+    np.random.shuffle(inp)
+    inp = inp.reshape((nin * nin * nifm, batch_size))
+
     lshape = (nifm, nin, nin)
     layer = PoolingWithReset(fshape)
     layer.op = op
 
-    epsilon = 1.0e-5
     pert_frac = 0.1  # test 10% of the inputs
     # select pert_frac fraction of inps to perturb
     pert_cnt = int(np.ceil(inp.size*pert_frac))

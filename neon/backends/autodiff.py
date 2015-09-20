@@ -363,6 +363,18 @@ class Autodiff(object):
             self.grad_node.grad_op_tree = self.be.ones(self.op_tree.shape)
         self.grad_node.build_grad()
 
+    def __del__(self):
+        self.cleanup()
+
+    def cleanup(self):
+        if self.grad_node is not None:
+            self.grad_node.cleanup()
+        self.grad_node = None
+        self.dtype = None
+        self.next_error = None
+        self.op_tree = None
+        self.be = None
+
     def back_prop_grad(self, tensors, gradients):
         """
         Back-propagate the gradient of the `tensors` to `gradients`.
@@ -493,6 +505,22 @@ class GradNode(object):
                 else:
                     # build recursively
                     self.right = GradNode(op_tree[2], ad)
+
+    def __del__(self):
+        self.cleanup()
+
+    def cleanup(self):
+        self.op_tree = None
+        self.grad_op_tree = None
+        self.ad = None
+
+        if self.left is not None:
+            self.left.cleanup()
+        self.left = None
+
+        if self.right is not None:
+            self.right.cleanup()
+        self.right = None
 
     def build_grad(self):
         """

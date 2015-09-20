@@ -21,7 +21,7 @@ logging.basicConfig(level=20)
 logger = logging.getLogger()
 
 
-def test_dropout(backend):
+def test_dropout(backend_default):
     ng = NervanaObject.be
     ng.bsz = ng.batch_size = 15
 

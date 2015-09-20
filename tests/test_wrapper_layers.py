@@ -17,7 +17,7 @@ from neon.transforms.activation import Rectlin
 from neon.layers.layer import Linear, Convolution, Conv, Bias, Activation, Affine
 
 
-def test_conv_wrapper(backend):
+def test_conv_wrapper(backend_default):
     """
     Verify that the Conv wrapper constructs the right layer objects.
     """
@@ -46,7 +46,7 @@ def test_conv_wrapper(backend):
     assert len(conv) == 3
 
 
-def test_affine_wrapper(backend):
+def test_affine_wrapper(backend_default):
     """
     Verify that the Affine wrapper constructs the right layer objects.
     """

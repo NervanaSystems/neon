@@ -65,7 +65,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("bnargs", fargs)
 
 
-def test_batchnorm(cpu64_only, bnargs):
+def test_batchnorm(backend_cpu64, bnargs):
     n, batch_size = bnargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
 

@@ -25,8 +25,9 @@ logging.basicConfig(level=20)
 logger = logging.getLogger()
 
 
-def test_dataset(backend, data):
+def test_dataset(backend_default, data):
     (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
+
     train_set = DataIterator(X_train, y_train, nclass=nclass)
     train_set.be = NervanaObject.be
 
@@ -36,7 +37,7 @@ def test_dataset(backend, data):
         train_set.index = 0
 
 
-def test_text(backend):
+def test_text(backend_default):
     text_data = (
         'Lorem ipsum dolor sit amet, consectetur adipisicing elit, '
         'sed do eiusmod tempor incididunt ut labore et dolore magna '

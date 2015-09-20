@@ -64,7 +64,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("biasargs", fargs)
 
 
-def test_bias(cpu64_only, biasargs):
+def test_bias(backend_cpu64, biasargs):
     n, batch_size = biasargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     init = Gaussian()

@@ -16,10 +16,10 @@
 General functions for running the unit tests via pytest.
 '''
 
+import itertools
 import numpy as np
 import pytest
 
-from neon import NervanaObject
 from neon.backends import gen_backend
 
 
@@ -39,7 +39,7 @@ def data():
    return path_to_data
 
 @pytest.fixture(scope='module', params=['gpu', 'cpu'])
-def backend(request):
+def backend_default(request):
     '''
     Fixture to setup the backend before running a
     test.  Also registers the teardown function to clean
@@ -50,14 +50,15 @@ def backend(request):
     This fixture is parameterized to run both the cpu and
     gpu backends for every test
     '''
-    be = gen_backend(backend=request.param, rng_seed=0)
-    NervanaObject.be = be
-    be.bsz = 128  # hardwires here to 128
+    be = gen_backend(backend=request.param,
+                     default_dtype=np.float32,
+                     batch_size=128,
+                     rng_seed=0)
 
     # add a cleanup call - will run after all
     # test in module are done
     def cleanup():
-        be = request.getfuncargvalue('backend')
+        be = request.getfuncargvalue('backend_default')
         del be
     request.addfinalizer(cleanup)
 
@@ -68,20 +69,56 @@ def backend(request):
 
 
 @pytest.fixture(scope='module')
-def cpu64_only(request):
+def backend_cpu64(request):
     '''
     Fixture that returns a cpu backend using 64 bit dtype.
     For use in tests like gradient checking whihch need higher
     precision
     '''
-    be = gen_backend(backend='cpu', default_dtype=np.float64, rng_seed=0)
-    NervanaObject.be = be
-    be.bsz = 128  # hardwires here to 128
+    be = gen_backend(backend='cpu',
+                     default_dtype=np.float64,
+                     batch_size=128,
+                     rng_seed=0)
 
     # add a cleanup call - will run after all
     # test in module are done
     def cleanup():
-        be = request.getfuncargvalue('cpu64_only')
+        be = request.getfuncargvalue('backend_cpu64')
+        del be
+    request.addfinalizer(cleanup)
+
+    # tests using this fixture can
+    # access the backend object from
+    # backend or use the NervanaObject.be global
+    return be
+
+def idfunc(vals):
+    '''
+    Prnit out a human readable format for the
+    parameterized tests
+    '''
+    dtype = str(vals[1])
+    dtype = dtype.split("numpy.")[1].strip("'>")
+    return vals[0] + '_' + dtype
+
+gpu_cpu_32_16 = itertools.product(['gpu','cpu'], [np.float16, np.float32])
+@pytest.fixture(scope='module', params=list(gpu_cpu_32_16),
+               ids=idfunc)
+def backend_tests(request):
+    '''
+    Fixture that returns a cpu and gpu backes for 16, and 32 bit
+    For use in tests like gradient checking whihch need higher
+    precision
+    '''
+    be = gen_backend(backend=request.param[0],
+                     default_dtype=request.param[1],
+                     batch_size=128,
+                     rng_seed=0)
+
+    # add a cleanup call - will run after all
+    # test in module are done
+    def cleanup():
+        be = request.getfuncargvalue('backend_tests')
         del be
     request.addfinalizer(cleanup)
 

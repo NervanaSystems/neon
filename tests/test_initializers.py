@@ -31,7 +31,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('args', fargs)
 
 
-def test_constant(backend, args):
+def test_constant(backend_default, args):
     be = NervanaObject.be
     dim1, dim2 = args
     shape = (dim1, dim2)
@@ -47,7 +47,7 @@ def test_constant(backend, args):
     return
 
 
-def test_uniform(backend, args):
+def test_uniform(backend_default, args):
     be = NervanaObject.be
     dim1, dim2 = args
     shape = (dim1, dim2)
@@ -62,7 +62,7 @@ def test_uniform(backend, args):
     return
 
 
-def test_gaussian(backend, args):
+def test_gaussian(backend_default, args):
     be = NervanaObject.be
     dim1, dim2 = args
     shape = (dim1, dim2)
@@ -78,7 +78,7 @@ def test_gaussian(backend, args):
     return
 
 
-def test_glorot(backend, args):
+def test_glorot(backend_default, args):
     be = NervanaObject.be
     shape_1 = (1, 2)
     shape_2 = (1000, 10000)

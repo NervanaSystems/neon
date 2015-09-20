@@ -75,7 +75,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('rand_convargs', fargs)
 
 
-def test_dconv_zeros(backend, zeros_convargs):
+def test_dconv_zeros(backend_default, zeros_convargs):
     fshape, nofm, batch_size = zeros_convargs
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
 
@@ -107,7 +107,7 @@ def test_dconv_zeros(backend, zeros_convargs):
     return
 
 
-def test_dconv_ones(backend, ones_convargs):
+def test_dconv_ones(backend_default, ones_convargs):
     indim, nifm, fshape, nofm, batch_size = ones_convargs
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
     dtypeu = np.float32
@@ -158,7 +158,7 @@ def test_dconv_ones(backend, ones_convargs):
     return
 
 
-def test_dconv_rand(backend, rand_convargs):
+def test_dconv_rand(backend_default, rand_convargs):
     indim, nifm, fshape, nofm, batch_size, rngmax, w_rng = rand_convargs
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
     dtypeu = np.float32

@@ -66,7 +66,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("mlpargs", fargs)
 
 
-def test_mlp(cpu64_only, mlpargs):
+def test_mlp(backend_cpu64, mlpargs):
     nin, nout, batch_size = mlpargs
     # run the gradient check on an mlp
     batch_size = batch_size

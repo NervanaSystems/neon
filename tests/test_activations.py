@@ -36,13 +36,13 @@ def compare_tensors(func, inputs, outputs, deriv=False, tol=0.):
 """
 
 
-def test_identity(backend):
+def test_identity(backend_default):
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     outputs = np.array([0, 1, -2]).reshape((3, 1))
     compare_tensors(Identity(), inputs, outputs)
 
 
-def test_identity_derivative(backend):
+def test_identity_derivative(backend_default):
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     outputs = np.ones((1, 1))
     compare_tensors(Identity(), inputs, outputs, deriv=True)
@@ -51,37 +51,37 @@ def test_identity_derivative(backend):
 """
 
 
-def test_rectlin_positives(backend):
+def test_rectlin_positives(backend_default):
     inputs = np.array([1, 3, 2]).reshape((3, 1))
     outputs = np.array([1, 3, 2]).reshape((3, 1))
     compare_tensors(Rectlin(), inputs, outputs)
 
 
-def test_rectlin_negatives(backend):
+def test_rectlin_negatives(backend_default):
     inputs = np.array([[-1, -3], [-2, -4]])
     outputs = np.array([[0, 0], [0, 0]])
     compare_tensors(Rectlin(), inputs, outputs)
 
 
-def test_rectlin_mixed(backend):
+def test_rectlin_mixed(backend_default):
     inputs = np.array([[4, 0], [-2, 9]])
     outputs = np.array([[4, 0], [0, 9]])
     compare_tensors(Rectlin(), inputs, outputs)
 
 
-def test_rectlin_derivative_positives(backend):
+def test_rectlin_derivative_positives(backend_default):
     inputs = np.array([1, 3, 2]).reshape((3, 1))
     outputs = np.array([1, 1, 1]).reshape((3, 1))
     compare_tensors(Rectlin(), inputs, outputs, deriv=True)
 
 
-def test_rectlin_derivative_negatives(backend):
+def test_rectlin_derivative_negatives(backend_default):
     inputs = np.array([[-1, -3], [-2, -4]])
     outputs = np.array([[0, 0], [0, 0]])
     compare_tensors(Rectlin(), inputs, outputs, deriv=True)
 
 
-def test_rectlin_derivative_mixed(backend):
+def test_rectlin_derivative_mixed(backend_default):
     inputs = np.array([[4, 0], [-2, 9]])
     outputs = np.array([[1, 0], [0, 1]])
     compare_tensors(Rectlin(), inputs, outputs, deriv=True)
@@ -90,13 +90,13 @@ def test_rectlin_derivative_mixed(backend):
 """
 
 
-def test_softmax(backend):
+def test_softmax(backend_default):
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     outputs = np.exp(inputs - 1) / np.sum(np.exp(inputs - 1))
     compare_tensors(Softmax(), inputs, outputs, tol=1e-7)
 
 
-def test_softmax_derivative(backend):
+def test_softmax_derivative(backend_default):
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     outputs = np.ones((1, 1))  # shortcut only
     compare_tensors(Softmax(), inputs, outputs, deriv=True)
@@ -106,14 +106,14 @@ def test_softmax_derivative(backend):
 """
 
 
-def test_tanh(backend):
+def test_tanh(backend_default):
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     outputs = np.array(
         [true_tanh(0), true_tanh(1), true_tanh(-2)]).reshape((3, 1))
     compare_tensors(Tanh(), inputs, outputs, tol=1e-7)
 
 
-def test_tanh_derivative(backend):
+def test_tanh_derivative(backend_default):
     inputs = np.array(
         [true_tanh(0), true_tanh(1), true_tanh(-2)]).reshape((3, 1))
     # bprop is on the output
@@ -126,13 +126,13 @@ def test_tanh_derivative(backend):
 """
 
 
-def test_logistic(backend):
+def test_logistic(backend_default):
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     outputs = 1.0 / (1.0 + np.exp(-inputs))
     compare_tensors(Logistic(), inputs, outputs, tol=1e-7)
 
 
-def test_logistic_derivative(backend):
+def test_logistic_derivative(backend_default):
         # bprop is on the output
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     inputs = 1.0 / (1.0 + np.exp(-inputs))

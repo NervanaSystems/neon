@@ -53,7 +53,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('allrand_args', fargs)
 
 
-def test_linear_zeros(backend, basic_linargs):
+def test_linear_zeros(backend_default, basic_linargs):
     # basic sanity check with 0 weights random inputs
     nin, nout, batch_size = basic_linargs
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
@@ -79,7 +79,7 @@ def test_linear_zeros(backend, basic_linargs):
     return
 
 
-def test_linear_ones(backend, basic_linargs):
+def test_linear_ones(backend_default, basic_linargs):
     # basic sanity check with all ones on the inputs
     # and weights, check that each row in output
     # is the sum of the weights for that output
@@ -106,7 +106,7 @@ def test_linear_ones(backend, basic_linargs):
     return
 
 
-def test_all_rand(backend, allrand_args):
+def test_all_rand(backend_default, allrand_args):
     # test with random weights and random inputs
     dtypeu = np.float32
     w_rng, rngmax = allrand_args

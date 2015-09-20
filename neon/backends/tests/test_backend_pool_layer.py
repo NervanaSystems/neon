@@ -209,6 +209,4 @@ def test_pool_layer(poolargs):
         assert np.allclose(ngA.get(), ncA.get(), rtol=0, atol=1e-4)
         assert np.allclose(ncA.get(), cpuA, rtol=0, atol=1e-5)
 
-    ng.ctx.detach()
-
     del ng, nc

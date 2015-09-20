@@ -71,7 +71,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('gradgruargs', fargs)
 
 
-def test_ref_compare_ones(backend, refgruargs):
+def test_ref_compare_ones(backend_default, refgruargs):
     # run comparison with reference code
     # for all ones init
     seq_len, input_size, hidden_size, batch_size = refgruargs
@@ -81,7 +81,7 @@ def test_ref_compare_ones(backend, refgruargs):
               batch_size, Constant(val=1.0), [1.0, 0.0])
 
 
-def test_ref_compare_rand(backend, refgruargs):
+def test_ref_compare_rand(backend_default, refgruargs):
     # run comparison with reference code
     # for Gaussian random init
     seq_len, input_size, hidden_size, batch_size = refgruargs
@@ -190,7 +190,7 @@ def reset_rnn(rnn):
     return
 
 
-def test_gradient_neon_gru(backend, gradgruargs):
+def test_gradient_neon_gru(backend_default, gradgruargs):
     seq_len, input_size, hidden_size, batch_size = gradgruargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     gradient_check(seq_len, input_size, hidden_size, batch_size)

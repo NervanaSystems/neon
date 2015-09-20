@@ -15,9 +15,11 @@
 # pylint: skip-file
 
 import numpy as np
-from neon.backends import gen_backend
-from neon.backends.autodiff import Autodiff
 import pprint
+import pytest
+
+from neon import NervanaObject
+from neon.backends.autodiff import Autodiff
 
 
 class CustomFunc:
@@ -55,13 +57,14 @@ class CustomFunc:
         return np.argmin(x, axis=axis).reshape(new_shape)
 
 
+@pytest.mark.usefixtures("backend_default")
 class TestAutodiff:
 
     def setup(self):
         self.m = 2  # row
         self.n = 2  # column
-        self.dtype = np.float32
-        self.be = gen_backend("gpu", stochastic_round=False, default_dtype=self.dtype)
+        self.be = NervanaObject.be
+        self.dtype = self.be.default_dtype
         self.test_epoch = 1
         self.delta = 1e-5  # for numerical gradient
 

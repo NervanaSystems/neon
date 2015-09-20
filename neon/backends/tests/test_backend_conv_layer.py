@@ -98,7 +98,6 @@ def test_conv_layer():
     dtype = np.float32
 
     ng = NervanaGPU(stochastic_round=False, bench=True)
-    nc = NervanaCPU()
 
     N, C, K = 64, 64, 64
     D, H, W = 1, 5, 5
@@ -114,6 +113,7 @@ def test_conv_layer():
         padding_d, padding_h, padding_w,
         strides_d, strides_h, strides_w)
 
+    nc = NervanaCPU()
     conv_nc = nc.conv_layer(
         dtype,
         N, C, K,
@@ -194,5 +194,5 @@ def test_conv_layer():
         assert np.allclose(ngA.get(), cpuA, rtol=0, atol=1e-4)
         assert np.allclose(ncA.get(), cpuA, rtol=0, atol=1e-5)
 
-    ng.ctx.detach()
     del ng
+    del nc

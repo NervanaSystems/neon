@@ -17,7 +17,7 @@ import numpy as np
 from neon.optimizers import Schedule, ExpSchedule
 
 
-def test_step_schedule(backend):
+def test_step_schedule(backend_default):
     """
     Test constant rate, fixed step and various modes of programmable steps.
     """
@@ -52,7 +52,7 @@ def test_step_schedule(backend):
     assert np.allclose(.001, sch.get_learning_rate(learning_rate=.1, epoch=4))
 
 
-def test_exp_schedule(backend):
+def test_exp_schedule(backend_default):
     """
     Test exponential learning rate schedule
     """

@@ -74,6 +74,9 @@ def test_edge_cases():
             be_data = be_hist_data[be_hist_map[tag]]
             assert_tensors_allclose(np_ref[tag], be_data, err_msg=tag + str(be))
 
+    del(ng)
+    del(nc)
+
 
 def test_hist(nbin_offset_dim_dtype_inp):
     """
@@ -99,6 +102,8 @@ def test_hist(nbin_offset_dim_dtype_inp):
         be_inp = be.array(np_inp, dtype=dtype)
         be_hist = be_inp.hist(name)
         assert_tensors_allclose(np_hist, be_hist)
+    del(ng)
+    del(nc)
 
 
 def pytest_generate_tests(metafunc):

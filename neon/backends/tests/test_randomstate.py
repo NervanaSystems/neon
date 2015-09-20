@@ -53,6 +53,8 @@ def test_gpu_randomstate():
     for ctx in be.context_rand_state_alive:
         assert be.context_rand_state_alive[ctx] is True
 
+    del(be)
+
     # run 3, using a new backend
     be = gen_backend(backend='gpu', rng_seed=100)
     a = be.empty((3, 3))
@@ -68,6 +70,8 @@ def test_gpu_randomstate():
     # check equality
     assert_tensors_allclose([x0, x1, x2, x3], [y0, y1, y2, y3], rtol=0., atol=0.)
     assert_tensors_allclose([x0, x1, x2, x3], [z0, z1, z2, z3], rtol=0., atol=0.)
+
+    del(be)
 
 
 def test_cpu_randomstate():
@@ -87,6 +91,8 @@ def test_cpu_randomstate():
     be.make_binary_mask(a, keepthresh=be.rng.rand())
     y1 = a.get()
 
+    del(be)
+
     # run 3, using a new backend
     be = gen_backend(backend='cpu', rng_seed=100)
 
@@ -100,3 +106,4 @@ def test_cpu_randomstate():
     # import ipdb; ipdb.set_trace()
     assert_tensors_allclose([x0, x1], [y0, y1], rtol=0., atol=0.)
     assert_tensors_allclose([x0, x1], [z0, z1], rtol=0., atol=0.)
+    del(be)

@@ -16,9 +16,9 @@
 
 import itertools
 import numpy as np
-from neon.backends import gen_backend
-from neon.backends.autodiff import Autodiff
 
+from neon import NervanaObject
+from neon.backends.autodiff import Autodiff
 from neon.backends.tests.utils import call_func, gen_backend_tensors
 from neon.backends.tests.utils import assert_tensors_allclose
 
@@ -29,7 +29,7 @@ def get_audiff_gradient(f, be, tensors):
     """
     op_tree = f(be, *tensors)
     ad = Autodiff(op_tree, be)
-    return ad.get_grad_asnumpyarray(tensors)
+    return ad
 
 
 def get_numerical_gradient(f, tensors, delta=1e-5):
@@ -66,7 +66,7 @@ def get_numerical_gradient(f, tensors, delta=1e-5):
     return gradients
 
 
-class TestFuncs():
+class Funcs():
 
     """
     A collection of functions to be tested
@@ -102,41 +102,52 @@ def pytest_generate_tests(metafunc):
 
     # test params
     test_funcs = [
-        TestFuncs.func_basic_ops,
-        TestFuncs.func_real,
-        TestFuncs.func_dot,
-        TestFuncs.func_dot_reduction_mix,
-        TestFuncs.func_scalar_broadcast,
+        Funcs.func_basic_ops,
+        Funcs.func_real,
+        Funcs.func_dot,
+        Funcs.func_dot_reduction_mix,
+        Funcs.func_scalar_broadcast,
     ]
     test_tensor_flags = ['pos_rand', 'neg_rand', 'rand']
     test_tensor_dims = [(2, 2)]
-    test_dtypes = [np.float16, np.float32]
-    test_backends = ["gpu", "cpu"]
 
     # generate params for testing
     if 'custom_args' in metafunc.fixturenames:
-        fargs = itertools.product(test_indices, test_funcs, test_tensor_flags,
-                                  test_tensor_dims, test_dtypes, test_backends)
+        fargs = itertools.product(test_indices,
+                                  test_funcs,
+                                  test_tensor_flags,
+                                  test_tensor_dims)
         # parameterize test call
         metafunc.parametrize("custom_args", fargs)
 
 
-def test_gradients(custom_args):
-    test_idx, f, flag, dim, dtype, backend_type = custom_args
-    be = gen_backend(backend_type, default_dtype=dtype)
+def test_gradients(backend_tests, custom_args):
+    test_idx, f, flag, dim = custom_args
+
+    # backend_tests ficxture will parameterize over cpu and gpu
+    # backedns as well as float16 and float32
+    # pull the be and dtype from the actions of the fixture
+    be = NervanaObject.be
+    dtype = be.default_dtype
 
     # tensors
-    tensors = gen_backend_tensors(
-        [np, be], 5, [dim] * 5, [flag] * 5, dtype=dtype)
+    tensors = gen_backend_tensors([np, be], 5, [dim] * 5,
+                                  [flag] * 5, dtype=dtype)
 
     # compare function value and gradient
     numpy_func_val = call_func(f, np, tensors[0])
     backend_func_val = call_func(f, be, tensors[1])
     numerical_gradient = get_numerical_gradient(f, tensors[0])
-    autodiff_gradient = get_audiff_gradient(f, be, tensors[1])
+    ad = get_audiff_gradient(f, be, tensors[1])
+    autodiff_gradient = ad.get_grad_asnumpyarray(tensors[1])
 
     # TODO: stricter test to fix numerical issues
-    assert_tensors_allclose(
-        numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)
-    assert_tensors_allclose(
-        numerical_gradient, autodiff_gradient, rtol=1e-02, atol=1e-3)
+    assert_tensors_allclose(numpy_func_val,
+                            backend_func_val, rtol=1e-2, atol=1e-2)
+    assert_tensors_allclose(numerical_gradient,
+                            autodiff_gradient, rtol=1e-02, atol=1e-3)
+
+    # cleanup diff tree
+    ad.cleanup()
+    dtype = None
+    be = None

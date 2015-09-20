@@ -40,7 +40,7 @@ def compare_tensors(func, y, t, outputs, deriv=False, tol=0.):
 """
 
 
-def test_cross_entropy_binary(backend):
+def test_cross_entropy_binary(backend_default):
     outputs = np.array([0.5, 0.9, 0.1, 0.0001]).reshape((4, 1))
     targets = np.array([0.5, 0.99, 0.01, 0.2]).reshape((4, 1))
     eps = 2 ** -23
@@ -51,7 +51,7 @@ def test_cross_entropy_binary(backend):
                     outputs, targets, expected_result, tol=1e-6)
 
 
-def test_cross_entropy_binary_limits(backend):
+def test_cross_entropy_binary_limits(backend_default):
     outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
     eps = 2 ** -23
@@ -62,7 +62,7 @@ def test_cross_entropy_binary_limits(backend):
                     outputs, targets, expected_result, tol=1e-5)
 
 
-def test_cross_entropy_binary_derivative(backend):
+def test_cross_entropy_binary_derivative(backend_default):
     outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
     # bprop assumes shortcut
@@ -76,7 +76,7 @@ def test_cross_entropy_binary_derivative(backend):
 """
 
 
-def test_cross_entropy_multi(backend):
+def test_cross_entropy_multi(backend_default):
     outputs = np.array([0.5, 0.9, 0.1, 0.0001]).reshape((4, 1))
     targets = np.array([0.5, 0.99, 0.01, 0.2]).reshape((4, 1))
     eps = 2 ** -23
@@ -86,7 +86,7 @@ def test_cross_entropy_multi(backend):
                     outputs, targets, expected_result, tol=1e-6)
 
 
-def test_cross_entropy_multi_limits(backend):
+def test_cross_entropy_multi_limits(backend_default):
     outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
     eps = 2 ** -23
@@ -96,7 +96,7 @@ def test_cross_entropy_multi_limits(backend):
                     outputs, targets, expected_result, tol=1e-5)
 
 
-def test_cross_entropy_multi_derivative(backend):
+def test_cross_entropy_multi_derivative(backend_default):
     outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
     expected_result = ((outputs - targets) / outputs.shape[1])
@@ -108,21 +108,21 @@ def test_cross_entropy_multi_derivative(backend):
 """
 
 
-def test_sum_squared(backend):
+def test_sum_squared(backend_default):
     outputs = np.array([0.5, 0.9, 0.1, 0.0001]).reshape((4, 1))
     targets = np.array([0.5, 0.99, 0.01, 0.2]).reshape((4, 1))
     expected_result = np.sum((outputs - targets) ** 2, axis=0, keepdims=True) / 2.
     compare_tensors(SumSquared(), outputs, targets, expected_result, tol=1e-8)
 
 
-def test_sum_squared_limits(backend):
+def test_sum_squared_limits(backend_default):
     outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
     expected_result = np.sum((outputs - targets) ** 2, axis=0, keepdims=True) / 2.
     compare_tensors(SumSquared(), outputs, targets, expected_result, tol=1e-7)
 
 
-def test_sum_squared_derivative(backend):
+def test_sum_squared_derivative(backend_default):
     outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
     expected_result = (outputs - targets) / outputs.shape[1]
@@ -142,7 +142,7 @@ def compare_metric(func, y, t, outputs, deriv=False, tol=0.):
     assert cond == np.prod(outputs.shape)
 
 
-def test_misclassification(backend):
+def test_misclassification(backend_default):
     NervanaObject.be.bsz = 3
     outputs = np.array(
         [[0.25, 0.99, 0.33], [0.5, 0.005, 0.32], [0.25, 0.005, 0.34]])

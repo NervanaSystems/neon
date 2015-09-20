@@ -16,7 +16,8 @@
 
 import itertools
 import numpy as np
-from neon.backends import gen_backend
+
+from neon import NervanaObject
 from neon.backends.tests.utils import call_func, gen_backend_tensors
 from neon.backends.tests.utils import assert_tensors_allclose
 
@@ -63,22 +64,23 @@ def pytest_generate_tests(metafunc):
     ]
     test_tensor_flags = ['pos_rand', 'neg_rand', 'rand']
     test_tensor_dims = [(2, 2)]
-    test_dtypes = [np.float16, np.float32]
-    test_backends = ["gpu", "cpu"]
 
     # generate params for testing
     if 'custom_args' in metafunc.fixturenames:
-        fargs = itertools.product(test_indices, test_funcs, test_tensor_flags,
-                                  test_tensor_dims, test_dtypes, test_backends)
+        fargs = itertools.product(test_indices,
+                                  test_funcs,
+                                  test_tensor_flags,
+                                  test_tensor_dims)
         # parameterize test call
         metafunc.parametrize("custom_args", fargs)
 
 
-def test_vs_numpy(custom_args):
-    test_idx, f, flag, dim, dtype, backend_type = custom_args
+def test_vs_numpy(backend_tests, custom_args):
+    test_idx, f, flag, dim = custom_args
 
     # backend
-    be = gen_backend(backend_type, default_dtype=dtype)
+    be = NervanaObject.be
+    dtype = be.default_dtype
 
     # tensors
     tensors = gen_backend_tensors(

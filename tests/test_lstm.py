@@ -74,7 +74,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('gradlstmargs', fargs)
 
 
-def test_ref_compare_ones(backend, reflstmargs):
+def test_ref_compare_ones(backend_default, reflstmargs):
         # run comparison with reference code
         # for all ones init
         seq_len, input_size, hidden_size, batch_size = reflstmargs
@@ -84,7 +84,7 @@ def test_ref_compare_ones(backend, reflstmargs):
                    batch_size, Constant(val=1.0), [1.0, 0.0])
 
 
-def test_ref_compare_rand(backend, reflstmargs):
+def test_ref_compare_rand(backend_default, reflstmargs):
         # run comparison with reference code
         # for all ones init
         seq_len, input_size, hidden_size, batch_size = reflstmargs
@@ -217,13 +217,13 @@ def reset_lstm(lstm):
     return
 
 
-def test_gradient_ref_lstm(backend, gradlstmargs):
+def test_gradient_ref_lstm(backend_default, gradlstmargs):
     seq_len, input_size, hidden_size, batch_size = gradlstmargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     gradient_check_ref(seq_len, input_size, hidden_size, batch_size)
 
 
-def test_gradient_neon_lstm(backend, gradlstmargs):
+def test_gradient_neon_lstm(backend_default, gradlstmargs):
     seq_len, input_size, hidden_size, batch_size = gradlstmargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     gradient_check(seq_len, input_size, hidden_size, batch_size)

@@ -34,7 +34,7 @@ def pytest_generate_tests(metafunc):
     metafunc.parametrize('allrand_args', fargs)
 
 
-def test_concat_l1_l1(backend, allrand_args):
+def test_concat_l1_l1(backend_default, allrand_args):
     # test two linear layers that are merged with concat
     dtypeu = np.float32
     w_rng, rngmax = allrand_args
@@ -68,7 +68,7 @@ def test_concat_l1_l1(backend, allrand_args):
     return
 
 
-def test_concat_sequence_l1_l1(backend, allrand_args):
+def test_concat_sequence_l1_l1(backend_default, allrand_args):
     # test two linear layers that are merged with concat
     dtypeu = np.float32
     w_rng, rngmax = allrand_args
@@ -104,7 +104,7 @@ def test_concat_sequence_l1_l1(backend, allrand_args):
     return
 
 
-def test_sum_l1_l1(backend, allrand_args):
+def test_sum_l1_l1(backend_default, allrand_args):
     # test two linear layers that are merged with sum
     dtypeu = np.float32
     w_rng, rngmax = allrand_args
