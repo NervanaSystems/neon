@@ -16,8 +16,24 @@ import logging
 
 from neon import NervanaObject
 from neon.backends import Autodiff
+from neon.backends.backend import Tensor
+from operator import mul
 
 logger = logging.getLogger(__name__)
+
+
+def interpret_in_shape(xshape):
+    """
+    Helper function to interpret the tensor layout of preceding layer to handle non-recurrent,
+    recurrent, and local layers
+    """
+    if isinstance(xshape, int):
+        return (xshape, 1)
+    else:
+        if len(xshape) == 2:
+            return xshape
+        else:
+            return (reduce(mul, xshape), 1)
 
 
 class Layer(NervanaObject):
@@ -33,6 +49,7 @@ class Layer(NervanaObject):
         self.outputs = None
         self.deltas = None
         self.has_params = False
+        self.inputs = None
 
     def __str__(self):
         """
@@ -40,6 +57,30 @@ class Layer(NervanaObject):
         """
         ret = '{} {}'.format(self.__class__.__name__, self.name)
         return ret
+
+    def configure(self, in_obj):
+        """
+        sets shape based parameters of this layer given an input tuple or int
+        or input layer
+
+        Arguments:
+            in_shape (int, tuple(int, int)): shape of input data
+
+        Returns:
+            (tuple): shape of output data
+        """
+        if isinstance(in_obj, Layer):
+            self.prev_layer = in_obj
+            self.in_shape = in_obj.out_shape
+        else:
+            self.prev_layer = None
+            if isinstance(in_obj, tuple) or isinstance(in_obj, int):
+                self.in_shape = in_obj  # input is a shape tuple or int directly
+            elif isinstance(in_obj, Tensor):
+                self.in_shape = (in_obj.shape[0], in_obj.shape[1] / self.be.bsz)
+
+            else:
+                self.in_shape = in_obj.shape  # This is a dataset
 
     def fprop(self, inputs, inference=False):
         """
@@ -135,21 +176,25 @@ class Pooling(Layer):
             self.poolparams.update(d)
         self.nglayer = None
 
-    def init_buffers(self, inputs):
-        self.inputs = inputs
+    def configure(self, in_obj):
+        super(Pooling, self).configure(in_obj)
         if self.nglayer is None:
-            assert hasattr(self.inputs, 'lshape')
-            self.poolparams['C'] = self.inputs.lshape[0]
-            self.poolparams['H'] = self.inputs.lshape[1]
-            self.poolparams['W'] = self.inputs.lshape[2]
-            self.poolparams['N'] = self.be.bsz
+            assert isinstance(self.in_shape, tuple)
+            shapedict = {'C': self.in_shape[0],
+                         'H': self.in_shape[1],
+                         'W': self.in_shape[2],
+                         'N': self.be.bsz}
+            self.poolparams.update(shapedict)
             self.nglayer = self.be.pool_layer(self.be.default_dtype, **self.poolparams)
-            self.outputs = self.be.iobuf(self.nglayer.nOut, self.outputs)
-            self.outputs.lshape = (self.nglayer.K, self.nglayer.P, self.nglayer.Q)
-            self.deltas = self.be.iobuf(self.inputs.shape[0], self.deltas)
+            self.out_shape = (self.nglayer.K, self.nglayer.P, self.nglayer.Q)
+        return self
+
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        self.outputs = self.be.iobuf(self.out_shape) if shared_outputs is None else shared_outputs
+        self.deltas = self.be.iobuf(self.in_shape) if shared_deltas is None else shared_deltas
 
     def fprop(self, inputs, inference=False):
-        self.init_buffers(inputs)
+        self.inputs = inputs
         self.be.fprop_pool(self.nglayer, inputs, self.outputs)
         return self.outputs
 
@@ -177,8 +222,9 @@ class ParameterLayer(Layer):
         self.weight_shape = None
         self.states = []
 
-    def fprop(self, inputs, inference=False):
-        self.init_buffers(inputs)
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        self.outputs = self.be.iobuf(self.out_shape) if shared_outputs is None else shared_outputs
+        self.deltas = self.be.iobuf(self.in_shape) if shared_deltas is None else shared_deltas
         if self.W is None:
             self.init_params(self.weight_shape)
 
@@ -270,32 +316,23 @@ class Convolution(ParameterLayer):
         for d in [fshape, strides, padding]:
             self.convparams.update(d)
 
-    def init_buffers(self, inputs):
-        """
-        Helper for allocating output and delta buffers (but not initializing
-        them)
-
-        Arguments:
-            inputs (Tensor): tensor used for frop inputs, used to determine
-                shape of buffers being allocated.
-        """
-        self.inputs = inputs
-        if not self.nglayer:
-            assert hasattr(self.inputs, 'lshape')
-            self.convparams['C'] = self.inputs.lshape[0]
-            self.convparams['H'] = self.inputs.lshape[1]
-            self.convparams['W'] = self.inputs.lshape[2]
-            self.convparams['N'] = self.be.bsz
+    def configure(self, in_obj):
+        super(Convolution, self).configure(in_obj)
+        if self.nglayer is None:
+            assert isinstance(self.in_shape, tuple)
+            shapedict = {'C': self.in_shape[0],
+                         'H': self.in_shape[1],
+                         'W': self.in_shape[2],
+                         'N': self.be.bsz}
+            self.convparams.update(shapedict)
             self.nglayer = self.be.conv_layer(self.be.default_dtype, **self.convparams)
-            self.outputs = self.be.iobuf(self.nglayer.nOut, self.outputs)
-            self.outputs.lshape = (self.nglayer.K, self.nglayer.P, self.nglayer.Q)
-            self.deltas = self.be.iobuf(self.inputs.shape[0], self.deltas)
-
+            self.out_shape = (self.nglayer.K, self.nglayer.P, self.nglayer.Q)
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
+        return self
 
     def fprop(self, inputs, inference=False):
-        super(Convolution, self).fprop(inputs)
+        self.inputs = inputs
         self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs)
         return self.outputs
 
@@ -345,24 +382,20 @@ class Deconv(ParameterLayer):
         for d in [fshape, strides, padding]:
             self.deconvparams.update(d)
 
-    def init_buffers(self, inputs):
-        self.inputs = inputs
-        if not self.nglayer:
-            assert hasattr(self.inputs, 'lshape')
-            # We switch H, W and C with P, Q and K
-            # so that in the GPU, we can reverse calculate
-            # H and W
-            self.deconvparams['K'] = self.inputs.lshape[0]
-            self.deconvparams['P'] = self.inputs.lshape[1]
-            self.deconvparams['Q'] = self.inputs.lshape[2]
-            self.deconvparams['N'] = self.be.bsz
+    def configure(self, in_obj):
+        super(Deconv, self).configure(in_obj)
+        if self.nglayer is None:
+            assert isinstance(self.in_shape, tuple)
+            shapedict = {'K': self.in_shape[0],
+                         'P': self.in_shape[1],
+                         'Q': self.in_shape[2],
+                         'N': self.be.bsz}
+            self.deconvparams.update(shapedict)
             self.nglayer = self.be.deconv_layer(self.be.default_dtype, **self.deconvparams)
-            self.outputs = self.be.iobuf(self.nglayer.dimI2[0], self.outputs)
-            self.outputs.lshape = (self.nglayer.C, self.nglayer.H, self.nglayer.W)
-            self.deltas = self.be.iobuf(self.inputs.shape[0], self.deltas)
-
+            self.out_shape = (self.nglayer.C, self.nglayer.H, self.nglayer.W)
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
+        return self
 
     def fprop(self, inputs, inference=False):
         """
@@ -370,7 +403,7 @@ class Deconv(ParameterLayer):
         bprop_conv takes in error and deltas as "E" and "grad_I"
         for deconv, bprop_conv will take in input as "E" and output as "grad_I"
         """
-        super(Deconv, self).fprop(inputs)
+        self.inputs = inputs
         self.be.bprop_conv(layer=self.nglayer, F=self.W, E=inputs, grad_I=self.outputs)
         return self.outputs
 
@@ -400,26 +433,19 @@ class Linear(ParameterLayer):
     def __init__(self, nout, init, name="LinearLayer"):
         super(Linear, self).__init__(init, name)
         self.nout = nout
+        self.inputs = None
 
-    def init_buffers(self, inputs):
-        self.inputs = inputs
-        if self.outputs is None:
-            self.nin = inputs.shape[0]
-            # non recurrent case:
-            if inputs.shape[1] == self.be.bsz:
-                self.outputs = self.be.iobuf(self.nout)
-                self.deltas = self.be.iobuf(self.nin)
-            else:
-                self.nsteps = inputs.shape[1] / self.be.bsz
-                self.outputs = self.be.iobuf((self.nout, self.nsteps))
-                self.deltas = self.be.iobuf((self.nin, self.nsteps))
-
+    def configure(self, in_obj):
+        super(Linear, self).configure(in_obj)
+        (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
+        self.out_shape = (self.nout, self.nsteps)
         if self.weight_shape is None:
-            self.weight_shape = (self.nout, inputs.shape[0])
+            self.weight_shape = (self.nout, self.nin)
+        return self
 
     def fprop(self, inputs, inference=False):
-        super(Linear, self).fprop(inputs)
-        self.be.compound_dot(A=self.W, B=inputs, C=self.outputs)
+        self.inputs = inputs
+        self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs)
         return self.outputs
 
     def bprop(self, error, do_acts=True):
@@ -441,33 +467,33 @@ class Bias(ParameterLayer):
     """
     def __init__(self, init, name="BiasLayer"):
         super(Bias, self).__init__(init, name)
-        self.reshaped_outputs = None
+        self.y = None
 
-    def init_buffers(self, inputs):
-        self.inputs = inputs
-        self.outputs = inputs
-        if self.reshaped_outputs is None:
-            if hasattr(inputs, 'lshape'):
-                self.bsize = inputs.lshape[0]
-            else:
-                self.bsize = inputs.shape[0]
-            self.reshaped_outputs = self.outputs.reshape((self.bsize,
-                                                          self.outputs.size /
-                                                          self.bsize))
+    def configure(self, in_obj):
+        super(Bias, self).configure(in_obj)
+        self.out_shape = self.in_shape
+        (self.bias_size, _) = interpret_in_shape(self.in_shape)
         if self.weight_shape is None:
-            self.weight_shape = (self.bsize, 1)
+            self.weight_shape = (self.bias_size, 1)
+        return self
+
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        # Bias layers should share output with their associated weight layer
+        if self.prev_layer is not None:
+            self.outputs = self.prev_layer.outputs
+        if self.W is None:
+            self.init_params(self.weight_shape)
 
     def fprop(self, inputs, inference=False):
-        super(Bias, self).fprop(inputs)
-
-        # reshaped_outputs is a different view of outputs, which is
-        # the same as inputs (we call it outputs for naming reasons)
-        self.reshaped_outputs[:] = self.reshaped_outputs + self.W
+        self.outputs = self.inputs = inputs
+        if self.y is None or self.y.base is not self.outputs:
+            self.y = self.outputs.reshape((self.bias_size, -1))
+        self.y[:] = self.y + self.W
         return self.outputs
 
     def bprop(self, error):
         if not self.deltas:
-            self.deltas = error.reshape(self.reshaped_outputs.shape)
+            self.deltas = error.reshape(self.y.shape)
         self.be.sum(self.deltas, axis=1, out=self.dW)
         return error
 
@@ -488,18 +514,24 @@ class Activation(Layer):
         super(Activation, self).__init__(name)
         self.transform = transform
 
-    def init_buffers(self, inputs):
-        self.inputs = inputs
-        if self.outputs is None:
-            self.outputs = self.inputs
+    def configure(self, in_obj):
+        super(Activation, self).configure(in_obj)
+        self.out_shape = self.in_shape
+        (self.nout, _) = interpret_in_shape(self.in_shape)
+        return self
+
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        self.outputs = self.prev_layer.outputs
 
     def fprop(self, inputs, inference=False):
-        self.init_buffers(inputs)
+        self.outputs = self.inputs = inputs
         self.outputs[:] = self.transform(self.inputs)
         return self.outputs
 
     def bprop(self, error):
-        error[:] = self.transform.bprop(self.inputs) * error
+        if not self.deltas:
+            self.deltas = error
+        error[:] = self.transform.bprop(self.outputs) * self.deltas
         return error
 
 
@@ -590,17 +622,17 @@ class Dropout(Layer):
         self.keep = keep
         self.keep_mask = None
 
-    def init_buffers(self, inputs, inference):
-        self.inputs = inputs
-        if self.outputs is None:
-            self.outputs = self.be.zeros(inputs.shape)
-            if hasattr(self.inputs, 'lshape'):
-                self.outputs.lshape = self.inputs.lshape
-            if not inference:
-                self.keep_mask = self.be.zeros(inputs.shape)
+    def configure(self, in_obj):
+        super(Dropout, self).configure(in_obj)
+        self.out_shape = self.in_shape
+        (self.nout, _) = interpret_in_shape(self.in_shape)
+        return self
+
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        self.keep_mask = self.be.iobuf(self.out_shape)
 
     def fprop(self, inputs, inference=False):
-        self.init_buffers(inputs, inference)
+        self.outputs = self.inputs = inputs
         if inference:
             return self._fprop_inference(inputs)
         self.be.make_binary_mask(self.keep_mask, self.keep)
@@ -629,9 +661,16 @@ class GeneralizedCost(NervanaObject):
     def __init__(self, costfunc, name=None):
         super(GeneralizedCost, self).__init__(name)
         self.costfunc = costfunc
-        self.cost = self.be.empty((1, 1))
         self.outputs = None
         self.deltas = None
+
+    def initialize(self, in_obj):
+        assert isinstance(in_obj, Layer)
+        self.prev_layer = in_obj
+        (_, self.nstep) = interpret_in_shape(in_obj.out_shape)
+        self.outputs = self.be.iobuf((1, self.nstep))
+        self.deltas = self.be.iobuf(in_obj.out_shape)
+        self.cost = self.be.empty((1, 1))
 
     def get_cost(self, inputs, targets):
         """
@@ -645,13 +684,6 @@ class GeneralizedCost(NervanaObject):
         Returns:
             Tensor containing cost
         """
-        if self.outputs is None:
-            self.nstep = 1  # Non-recurrent case
-            if inputs.shape[1] != self.be.bsz:
-                self.nstep = inputs.shape[1] / self.be.bsz
-            # For non recurrent case, this is the same as be.iobuf(1)
-            self.outputs = self.be.iobuf((1, self.nstep))
-
         self.outputs[:] = self.costfunc(inputs, targets)
         self.cost[:] = self.be.mean(self.outputs, axis=1)
         return self.cost
@@ -696,12 +728,6 @@ class GeneralizedCostMask(GeneralizedCost):
             Tensor containing cost
         """
         targets, mask = targets_mask
-        if self.outputs is None:
-            self.nstep = 1  # Non-recurrent case
-            if inputs.shape[1] != self.be.bsz:
-                self.nstep = inputs.shape[1] / self.be.bsz
-            # For non recurrent case, this is the same as be.iobuf(1)
-            self.outputs = self.be.iobuf((1, self.nstep))
         masked_input = inputs * mask
         self.outputs[:] = self.costfunc(masked_input, targets)
         self.cost[:] = self.be.mean(self.outputs, axis=1)
@@ -749,26 +775,20 @@ class BatchNorm(Layer):
         self.eps = eps
         self.states = [[] for i in range(2)]
 
-    def set_bn_shape(self, inputs):
-        self.nfm = inputs.shape[0] if not hasattr(inputs, 'lshape') else inputs.lshape[0]
-        self.bn_shape = (self.nfm, inputs.size / self.nfm)
+    def configure(self, in_obj):
+        super(BatchNorm, self).configure(in_obj)
+        self.out_shape = self.in_shape
+        (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
+        self.nfm = self.in_shape[0] if isinstance(self.in_shape, tuple) else self.nin
+        return self
 
-    def init_buffers(self, inputs):
-        self.inputs = inputs
-        if self.x is None:
-            self.nout = self.inputs.shape[0]
-            self.outputs = self.be.iobuf(self.nout)
-
-            if hasattr(self.inputs, 'lshape'):
-                self.outputs.lshape = self.inputs.lshape
-            # This is for local layers -- the first dimension should be number of featuremaps
-            self.set_bn_shape(self.inputs)
-
-            self.x = self.inputs.reshape(self.bn_shape)
-            self.y = self.outputs.reshape(self.bn_shape)
-
-            self.xvar = self.be.zeros((self.nfm, 1))
-            self.xmean = self.be.zeros((self.nfm, 1))
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        self.outputs = self.be.iobuf(self.out_shape)
+        self.y = self.outputs.reshape((self.nfm, -1))
+        self.xvar = self.be.zeros((self.nfm, 1))
+        self.xmean = self.be.zeros((self.nfm, 1))
+        if self.allparams is None:
+            self.init_params(self.nfm)
 
     def init_params(self, dim0):
         self.beta = self.be.zeros((dim0, 1))
@@ -795,11 +815,11 @@ class BatchNorm(Layer):
 
         Accumulate partial results to global mean and variance buffers used for inference.
         """
+        self.inputs = inputs
+        if self.x is None or self.x.base is not self.inputs:
+            self.x = self.inputs.reshape((self.nfm, -1))
         if inference:
             return self._fprop_inference(inputs)
-        self.init_buffers(inputs)
-        if self.allparams is None:
-            self.init_params(self.nfm)
 
         # These are cached op-trees
         self.xvar[:] = self.be.var(self.x, axis=1)
@@ -815,7 +835,6 @@ class BatchNorm(Layer):
         """
         Apply one linear transformation that captures normalization, gamma scaling and beta shift.
         """
-        self.init_buffers(inputs)
         xhat = (self.x - self.gmean) / self.be.sqrt(self.gvar + self.eps)  # Op-tree only
         self.y[:] = xhat * self.gamma + self.beta
         return self.outputs
@@ -825,7 +844,7 @@ class BatchNorm(Layer):
         Compute gradients for learning gamma and beta as well as layer weights.
         """
         if not self.deltas:
-            self.deltas = error.reshape(self.bn_shape)
+            self.deltas = error.reshape((self.nfm, -1))
 
         self.grad_gamma[:] = self.be.sum(self.xhat * self.deltas, axis=1)
         self.grad_beta[:] = self.be.sum(self.deltas, axis=1)
@@ -902,7 +921,7 @@ class BatchNormAutodiff(BatchNorm):
         corresponding tensors.
         """
         if not self.deltas:
-            self.deltas = error.reshape(self.bn_shape)
+            self.deltas = error.reshape((self.nfm, -1))
 
         # autodiff will automatically cache and reuse the object
         # if we know the `error` buffer at init, we can also create the autodiff

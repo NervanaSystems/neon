@@ -63,6 +63,8 @@ def test_linear_zeros(backend, basic_linargs):
     init_unif = Uniform(low=0.0, high=0.0)
     layer = Linear(nout=nout, init=init_unif)
     inp = layer.be.array(dtypeu(np.random.random((nin, batch_size))))
+    layer.configure(nin)
+    layer.allocate()
     out = layer.fprop(inp).get()
 
     assert np.min(out) == 0.0 and np.max(out) == 0.0
@@ -91,6 +93,8 @@ def test_linear_ones(backend, basic_linargs):
     init_unif = Uniform(low=1.0, high=1.0)
     layer = Linear(nout=nout, init=init_unif)
     inp = layer.be.array(dtypeu(np.ones((nin, batch_size))))
+    layer.configure(nin)
+    layer.allocate()
     out = layer.fprop(inp).asnumpyarray()
     w = layer.W.asnumpyarray()
     sums = np.sum(w, 1).reshape((nout, 1))*np.ones((1, batch_size))
@@ -118,7 +122,8 @@ def test_all_rand(backend, allrand_args):
     inp *= inp_rng[1] - inp_rng[0]
     inp += inp_rng[0]
     inp = inp.astype(dtypeu)
-
+    layer.configure(nin)
+    layer.allocate()
     out = layer.fprop(layer.be.array(inp)).asnumpyarray()
     w = layer.W.asnumpyarray()
 

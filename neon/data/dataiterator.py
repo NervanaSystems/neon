@@ -61,9 +61,14 @@ class DataIterator(NervanaObject):
         self.Xdev = [self.be.array(x) for x in X]
         # mini-batch sized buffer
         self.Xbuf = [self.be.iobuf(x.shape[1]) for x in X]
+
         if lshape is not None:
-            for xbuf in self.Xbuf:
-                xbuf.lshape = lshape
+            self.shape = [lshape for x in X]
+        else:
+            self.shape = [x.shape[1] for x in X]
+
+        if len(self.shape) == 1:
+            self.shape = self.shape[0]
 
         assert self.ndata > self.be.bsz
 

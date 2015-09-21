@@ -95,6 +95,10 @@ class CPUTensor(Tensor):
 
         self.size = size
 
+    @property
+    def base(self):
+        return self._tensor.base
+
     def __str__(self):
         """
         Returns a string representation of this Tensor.

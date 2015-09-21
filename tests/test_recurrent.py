@@ -127,6 +127,8 @@ def check_rnn(seq_len, input_size, hidden_size,
 
     # ========= running models ==========
     # run neon fprop
+    rnn.configure((input_size, seq_len))
+    rnn.allocate()
     rnn.fprop(inpa)
 
     # weights are only initialized after doing fprop, so now
@@ -256,6 +258,8 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
     inpa = rnn.be.array(np.copy(inp_bl))
 
     # run fprop on the baseline input
+    rnn.configure((input_size, seq_len))
+    rnn.allocate()
     out_bl = rnn.fprop(inpa).get()
 
     # random scaling/hash to generate fake loss
@@ -276,10 +280,12 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
 
         inp_pert.flat[pert_ind] = save_val + epsilon
         reset_rnn(rnn)
+        rnn.allocate()
         out_pos = rnn.fprop(rnn.be.array(inp_pert)).get()
 
         inp_pert.flat[pert_ind] = save_val - epsilon
         reset_rnn(rnn)
+        rnn.allocate()
         out_neg = rnn.fprop(rnn.be.array(inp_pert)).get()
 
         # calculate the loss with perturbations

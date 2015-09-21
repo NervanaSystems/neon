@@ -88,7 +88,7 @@ def test_model_serialize(backend, data):
     mlp = Model(layers=layers)
     mlp.optimizer = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)
     mlp.cost = GeneralizedCost(costfunc=CrossEntropyBinary())
-
+    mlp.initialize(train_set)
     n_test = 3
     num_epochs = 3
     # Train model for num_epochs and n_test batches

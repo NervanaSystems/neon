@@ -150,7 +150,7 @@ class ImgMaster(ImgEndpoint):
         ishape = (3, self.inner_size, self.inner_size)
         origshape = (3, self.img_size, self.img_size)
         mbsz = self.be.bsz
-
+        self.shape = ishape
         self.response = [Msg(npix * mbsz + 4*mbsz) for i in range(2)]
         self.request = Msg(1)
         self.active_idx = 0

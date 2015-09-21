@@ -85,6 +85,5 @@ def test_mlp(cpu64_only, mlpargs):
     (max_abs, max_rel) = general_gradient_comp(layer,
                                                inp,
                                                epsilon=epsilon,
-                                               lshape=inp.shape,
                                                pert_inds=pert_inds)
     assert max_abs < 1.0e-7

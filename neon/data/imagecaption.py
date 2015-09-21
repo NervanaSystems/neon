@@ -62,6 +62,7 @@ class ImageCaption(NervanaObject):
         self.y_mask = np.zeros(self.dev_y_mask.shape,
                                dtype=np.uint8).reshape(self.vocab_size,
                                                        self.max_sentence_length + 1, -1)
+        self.y_mask_reshape = self.y_mask.reshape(self.dev_y_mask.shape)
 
         self.dev_lbl = self.be.iobuf(self.max_sentence_length, dtype=np.int32)
         self.dev_lblflat = self.dev_lbl.reshape((1, self.dev_lbl.size))
@@ -69,6 +70,7 @@ class ImageCaption(NervanaObject):
         self.dev_y_lbl = self.be.iobuf(self.max_sentence_length+1, dtype=np.int32)
         self.dev_y_lblflat = self.dev_y_lbl.reshape((1, self.dev_y_lbl.size))
 
+        self.shape = [self.image_size, (self.vocab_size, self.max_sentence_length)]
         print "Vocab size: %d, Max sentence length: %d" % (self.vocab_size,
                                                            self.max_sentence_length)
 
@@ -115,6 +117,7 @@ class ImageCaption(NervanaObject):
         self.images = np.vstack(trainImgs)
 
         self.sent_length = np.array([len(x)+1 for x in trainSents])
+        self.sent_ends = np.arange(self.max_sentence_length+1)[:, np.newaxis]
         for sent_idx, sent in enumerate(trainSents):
             self.X[sent_idx, :len(sent)] = [self.vocab_to_index[word] for word in sent]
         self.y[:, :-1] = self.X
@@ -130,32 +133,28 @@ class ImageCaption(NervanaObject):
                             zeros elsewhere after.
         """
 
-        shuffle_idx = self.be.rng.permutation(len(self.X))
-        self.X, self.y, self.images = (self.X[shuffle_idx, :], self.y[shuffle_idx, :],
-                                       self.images[shuffle_idx, :])
-        self.sent_length = self.sent_length[shuffle_idx]
+        shuf_idx = self.be.rng.permutation(len(self.X))
+        self.X, self.y, self.images = (self.X[shuf_idx], self.y[shuf_idx], self.images[shuf_idx])
+        self.sent_length = self.sent_length[shuf_idx]
 
         for batch_idx in xrange(self.nbatches):
 
             start = batch_idx*self.be.bsz
             end = (batch_idx+1)*self.be.bsz
 
-            image_batch = self.images[start:end, :].T.astype(np.float32, order='C')
-            X_batch = self.X[start:end, :].T.astype(np.float32, order='C')
-            y_batch = self.y[start:end, :].T.astype(np.float32, order='C')
-
-            sent_lens = self.sent_length[start:end]
-
+            image_batch = self.images[start:end].T.astype(np.float32, order='C')
             self.dev_image.set(image_batch)
 
+            X_batch = self.X[start:end].T.astype(np.float32, order='C')
             self.dev_lbl.set(X_batch)
             self.dev_X[:] = self.be.onehot(self.dev_lblflat, axis=0)
 
             self.y_mask[:] = 1
-            self.y_mask[:, np.arange(self.max_sentence_length+1)[:, np.newaxis]
-                        > sent_lens[np.newaxis, :]] = 0
-            self.dev_y_mask[:] = self.y_mask.reshape(self.dev_y_mask.shape)
+            sent_lens = self.sent_length[start:end]
+            self.y_mask[:, self.sent_ends > sent_lens[np.newaxis, :]] = 0
+            self.dev_y_mask[:] = self.y_mask_reshape
 
+            y_batch = self.y[start:end].T.astype(np.float32, order='C')
             self.dev_y_lbl.set(y_batch)
             self.dev_y[:] = self.be.onehot(self.dev_y_lblflat, axis=0)
             self.dev_y[:] = self.dev_y * self.dev_y_mask

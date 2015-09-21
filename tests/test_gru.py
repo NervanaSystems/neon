@@ -113,6 +113,8 @@ def check_gru(seq_len, input_size, hidden_size,
     deltas = np.random.randn(*output_shape)
 
     # run neon fprop
+    gru.configure((input_size, seq_len))
+    gru.allocate()
     gru.fprop(inpa)
 
     # reference numpy GRU
@@ -344,6 +346,8 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
     inpa = gru.be.array(np.copy(inp_bl))
 
     # run fprop on the baseline input
+    gru.configure((input_size, seq_len))
+    gru.allocate()
     out_bl = gru.fprop(inpa).get()
 
     # random scaling/hash to generate fake loss
@@ -364,10 +368,12 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
 
         inp_pert.flat[pert_ind] = save_val + epsilon
         reset_gru(gru)
+        gru.allocate()
         out_pos = gru.fprop(gru.be.array(inp_pert)).get()
 
         inp_pert.flat[pert_ind] = save_val - epsilon
         reset_gru(gru)
+        gru.allocate()
         out_neg = gru.fprop(gru.be.array(inp_pert)).get()
 
         # calculate the loss with perturbations

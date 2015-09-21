@@ -49,6 +49,8 @@ def test_concat_l1_l1(backend, allrand_args):
     inputs = [layers[0].be.array(dtypeu(np.random.random((nin, batch_size)))) for nin in nins]
     merge = MergeConcat(layers)
     assert(len(inputs) == len(layers))
+    merge.configure(inputs)
+    merge.allocate()
     out = merge.fprop(inputs).asnumpyarray()
 
     weights = [layer.W.asnumpyarray() for layer in layers]
@@ -83,6 +85,8 @@ def test_concat_sequence_l1_l1(backend, allrand_args):
               for step in steps]
     merge = MergeConcatSequence(layers)
     assert(len(inputs) == len(layers))
+    merge.configure(inputs)
+    merge.allocate()
     out = merge.fprop(inputs).asnumpyarray()
 
     weights = [layer.W.asnumpyarray() for layer in layers]
@@ -115,6 +119,8 @@ def test_sum_l1_l1(backend, allrand_args):
     inputs = [layers[0].be.array(dtypeu(np.random.random((nin, batch_size)))) for nin in nins]
     merge = MergeSum(layers)
     assert(len(inputs) == len(layers))
+    merge.configure(inputs)
+    merge.allocate()
     out = merge.fprop(inputs).asnumpyarray()
 
     weights = [layer.W.asnumpyarray() for layer in layers]

@@ -1,4 +1,7 @@
 from neon.layers.layer import Layer
+import itertools
+import numpy as np
+from operator import mul
 
 
 class Merge(Layer):
@@ -17,78 +20,75 @@ class Merge(Layer):
     def __init__(self, layer_container, name='merge'):
         assert len(layer_container) > 1
         super(Merge, self).__init__(name)
-        self.layer_container = []
         self.deltas = None
         self.layers_to_optimize = []
 
-        # Flatten out each list in layer_container
-        for obj in layer_container:
-            if isinstance(obj, list):
-                path_layers = []
-                for l in obj:
-                    if isinstance(l, list):
-                        path_layers.extend(l)
-                    else:
-                        path_layers.append(l)
-                self.layer_container.append(path_layers)
-            else:
-                self.layer_container.append(obj)
+        list_container = [obj if isinstance(obj, list) else [obj] for obj in layer_container]
 
-        for obj in self.layer_container:
-            if isinstance(obj, list):
-                for l in obj:
-                    if l.has_params:
-                        self.layers_to_optimize.append(l)
-            elif isinstance(obj, Layer):
-                if obj.has_params:
-                    self.layers_to_optimize.append(obj)
+        def flatten(layer_list):
+            ll = [x if isinstance(x, list) else [x] for x in layer_list]
+            return list(itertools.chain.from_iterable(ll))
+
+        # Flatten out each list in layer_container
+        self.layer_container = [flatten(layer_list) for layer_list in list_container]
+
+        for lobj in self.layer_container:
+            param_layers = [l for l in lobj if (l.has_params and isinstance(l, Layer))]
+            self.layers_to_optimize.extend(param_layers)
+
+    def configure(self, in_obj):
+        """
+        Must receive a list of shapes for configuration (one for each pathway)
+        the shapes correspond to the layer_container attribute
+
+        Arguments:
+            in_obj (list)
+        """
+        if not isinstance(in_obj, list):
+            assert hasattr(in_obj, 'shape') and isinstance(in_obj.shape, list)
+            in_obj = in_obj.shape
+        assert isinstance(in_obj, list), "Must provide a list of shapes to Merge configure"
+        self.in_shape = []
+        for inp, lobj in zip(in_obj, self.layer_container):
+            for l in lobj:
+                inp = l.configure(inp)
+            self.in_shape.append(inp.out_shape)
+        return self
+        # self.out_shape will be determined by merge type
 
     def _do_fprop(self, obj, inputs, inference=False):
         """
         Helper fprop function which calls fprop on a given input model.
 
         Arguments:
-            obj (list or Layer): input model to call fprop on.  Can be a list
-                                 of Layers or a Layer
+            obj (list): input model to call fprop on.  Must be a list of Layers
             inputs (Tensor): Input tensor data to fprop on.
             inference (bool): Flag if doing inference or not
 
         Returns:
             Tensor: output data
         """
-
-        if isinstance(obj, Layer):
-            return obj.fprop(inputs, inference)
-
-        elif isinstance(obj, list):
-            tmp_output = inputs
-            for layer in obj:
-                tmp_output = layer.fprop(tmp_output, inference)
-            return tmp_output
-        else:
-            raise Exception("Merge Layers only operate on Layers and lists of Layers.")
+        assert isinstance(obj, list), "Merge Layers only operate on lists of Layers."
+        tmp_output = inputs
+        for layer in obj:
+            tmp_output = layer.fprop(tmp_output, inference)
+        return tmp_output
 
     def _do_bprop(self, obj, error):
         """
         Helper bprop function which calls bprop on a given input model
 
         Arguments:
-            obj (list or Layer): input model to call fprop on. Can be a list
-                                 of Layers or a Layer
+            obj (list): input model to call bprop on. Must be a list of Layers
             error (tensor): Error tensor to bprop on
 
         """
 
-        if isinstance(obj, Layer):
-            return obj.bprop(error, do_acts=False)
-
-        elif isinstance(obj, list):
-            tmp_deltas = error
-            for layer in reversed(obj[1:]):
-                tmp_deltas = layer.bprop(tmp_deltas)
-            obj[0].bprop(tmp_deltas, do_acts=False)
-        else:
-            raise Exception("Merge Layers only operate on Layers and lists of Layers")
+        assert isinstance(obj, list), "Merge Layers only operate on lists of Layers."
+        tmp_deltas = error
+        for layer in reversed(obj[1:]):
+            tmp_deltas = layer.bprop(tmp_deltas)
+        obj[0].bprop(tmp_deltas, do_acts=False)
 
     def fprop(self, inputs, inference=False):
         """
@@ -107,6 +107,11 @@ class Merge(Layer):
         assert len(inputs) > 1
         assert len(inputs) == len(self.layer_container), "Input / Layer mismatch."
 
+        for lc, x in zip(self.layer_container, inputs):
+            self._do_fprop(lc, x, inference)
+
+        return self.outputs
+
     def bprop(self, error, do_acts=False):
         """
         Abstract bprop method.
@@ -114,18 +119,12 @@ class Merge(Layer):
         Arguments:
             error (Tensor): Single error tensor to bprop on.
         """
-
-        raise NotImplementedError
+        for lc, delta in zip(self.layer_container, self.deltas):
+            self._do_bprop(lc, delta)
 
     def get_description(self):
         desc = super(Merge, self).get_description()
-        layer_container_desc = []
-        for obj in self.layer_container:
-            if isinstance(obj, Layer):
-                layer_container_desc.append(obj.get_description())
-            elif isinstance(obj, list):
-                layer_container_desc.append([l.get_description() for l in obj])
-
+        layer_container_desc = [[l.get_description() for l in ll] for ll in self.layer_container]
         desc['layer_container'] = layer_container_desc
         return desc
 
@@ -135,27 +134,35 @@ class MergeSum(Merge):
     Merge layer that sums the outputs of each input model
     """
 
+    def configure(self, in_obj):
+        """
+        By default, retain local shape if one of the pathways is a local layer
+        """
+        super(MergeSum, self).configure(in_obj)
+        flatdims = [reduce(mul, xs) if isinstance(xs, tuple) else xs for xs in self.in_shape]
+        assert flatdims[1:] == flatdims[:-1], "MergeSum elements must have same number of outputs"
+        self.flatdim = flatdims[0]
+        self.out_shape = self.in_shape[0]
+        return self.out_shape
+
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        self.outputs = self.be.iobuf(self.flatdim)
+        self.optree_sum = 0
+        for lobj in self.layer_container:
+            for l in lobj:
+                l.allocate()
+            # cache the summation via optree to avoid multiple kernel calls
+            self.optree_sum = self.optree_sum + lobj[-1].outputs
+
     def fprop(self, inputs, inference=False):
-        # call fprop on the first element of the layer container to
-        # infer the size of our new sum buffer from the outputs.
-        # then create this buffer before calling fprop on the rest of the
-        # layer_container.
-
-        first_output = self._do_fprop(self.layer_container[0], inputs[0], inference)
-        if self.outputs is None:
-            self.outputs = self.be.empty_like(first_output)
-        self.outputs[:] = first_output
-
-        for i in range(1, len(self.layer_container)):
-            self.outputs[:] = (self.outputs +
-                               self._do_fprop(self.layer_container[i],
-                                              inputs[i], inference))
-
+        super(MergeSum, self).fprop(inputs, inference)
+        self.outputs[:] = self.optree_sum
         return self.outputs
 
     def bprop(self, error, do_acts=False):
-        for obj in self.layer_container:
-            self._do_bprop(obj, error)
+        if self.deltas is None:  # This is just to set up for using the parent bprop
+            self.deltas = [error for i in self.layer_container]
+        super(MergeSum, self).bprop(error, do_acts)
 
 
 class MergeConcat(Merge):
@@ -169,84 +176,63 @@ class MergeConcat(Merge):
         super(MergeConcat, self).__init__(layer_container, name=name)
         self.concat_deltas_shape = None
 
-    def fprop(self, inputs, inference=False):
-        outputs_list = [self._do_fprop(lc, x, inference)
-                        for lc, x in zip(self.layer_container, inputs)]
-        dims = [x.shape[1:] for x in outputs_list]
-        assert len(set(dims)) == 1, ("Elements of Merge Layer must have equal "
-                                     "not-first dimensions in order to "
-                                     "concatenate.")
-        # Always concat on first dimension
-        # create the output buffer and a flattened view
-        # that makes the concatenation easier
-        if self.outputs is None:
-            # compute the correct output shape
-            nout_shape = tuple([sum([x.shape[0] for x in outputs_list])] +
-                               [dim for dim in outputs_list[0].shape[1:]])
-            self.concat_deltas_attr = [(x.size, x.shape) for x in outputs_list]
-            self.outputs = self.be.zeros(nout_shape)
-            self.flat_outputs_view = self.outputs.reshape(self.outputs.size)
-        start = 0
-        for x in outputs_list:
-            self.flat_outputs_view[start:start+x.size][:] = x.reshape(x.size)
-            start += x.size
-        return self.outputs
+    def configure(self, in_obj):
+        super(MergeConcat, self).configure(in_obj)
+        flatdims = [xs if isinstance(xs, int) else reduce(mul, xs) for xs in self.in_shape]
+        self.out_shape = sum(flatdims)
+        end_idx = [idx for idx in np.cumsum(flatdims)]
+        start_idx = [0] + end_idx[:-1]
+        self.ranges = [slice(s, e) for s, e in zip(start_idx, end_idx)]
+        return self.out_shape
+
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        self.outputs = self.be.iobuf(self.out_shape)
+        for lobj, view in zip(self.layer_container, self.ranges):
+            for l in lobj[:-1]:
+                l.allocate()
+            lobj[-1].allocate(shared_outputs=self.outputs[view])
 
     def bprop(self, error, do_acts=False):
         if self.deltas is None:
-            # initialize as flattened using size
-            self.deltas = [self.be.zeros(x[0]) for x in self.concat_deltas_attr]
-        error = error.reshape(error.size)
-        start = 0
-        for delta in self.deltas:
-            delta[:] = error[start:start+delta.size]
-            start += delta.size
-        for (layer, delta, x) in zip(self.layer_container, self.deltas, self.concat_deltas_attr):
-            self._do_bprop(layer, delta.reshape(x[1]))
+            self.deltas = [error[view] for view in self.ranges]
+        super(MergeConcat, self).bprop(error, do_acts)
 
 
 class MergeConcatSequence(Merge):
     """
     Merge layer that concatenates (on the second dimension) the outputs of each input model.
-    For example if input1 is (f,n) and input2 is (f,m) then the result will be (f,n+m) where
-    f is the feature size, and n and m are steps * batch_size.
+    in_shape for sequence input are 2d (feature_size, nsteps)
+    so if we have input 1 that is (f, n) and input 2 that is (f, m), then the output will be
+    (f, n + m)
     """
 
+    def configure(self, in_obj):
+        super(MergeConcatSequence, self).configure(in_obj)
+        for xs in self.in_shape:
+            assert(isinstance(xs, tuple) and len(xs) == 2), "Not valid sequence input"
+        stepdims = [xs[1] for xs in self.in_shape]
+        self.out_shape = (self.in_shape[0][0], sum(stepdims))
+        end_idx = [idx * self.be.bsz for idx in np.cumsum(stepdims)]
+        start_idx = [0] + end_idx[:-1]
+        self.ranges = [slice(s, e) for s, e in zip(start_idx, end_idx)]
+        return self.out_shape
+
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        for lobj in self.layer_container:
+            for l in lobj:
+                l.allocate()
+        self.outputs = self.be.iobuf(self.out_shape)
+        self.deltas = None
+        self.output_views = [self.outputs[:, view] for view in self.ranges]
+        self.x_views = [lobj[-1].outputs for lobj in self.layer_container]
+
     def fprop(self, inputs, inference=False):
-        outputs_list = [self._do_fprop(lc, x, inference)
-                        for lc, x in zip(self.layer_container, inputs)]
-        assert len(outputs_list[0].shape) == 2, "Can only concat 2d inputs"
-
-        if self.outputs is None:
-            self.inputs_shape = [x.shape for x in outputs_list]
-            nout_shape = [self.inputs_shape[0][0]] + [sum(x[1] for x in self.inputs_shape)]
-            self.x_view = [x.T for x in outputs_list]
-
-            self.outputs = self.be.zeros(nout_shape)
-            self.outputs_view = []
-            start = 0
-            for x in outputs_list:
-                self.outputs_view.append(self.outputs[:, start:start+x.shape[1]].T)
-                start += x.shape[1]
-
-        for output, x in zip(self.outputs_view, self.x_view):
+        super(MergeConcatSequence, self).fprop(inputs, inference)
+        for output, x in zip(self.output_views, self.x_views):
             output[:] = x
-
         return self.outputs
 
     def bprop(self, error, do_acts=False):
         if self.deltas is None:
-            self.deltas = [self.be.zeros(x) for x in self.inputs_shape]
-            self.deltas_view = [x.T for x in self.deltas]
-
-            self.errors_view = []
-            start = 0
-            for x in self.deltas:
-                self.errors_view.append(error[:, start:start+x.shape[1]].T)
-                start += x.shape[1]
-
-        for delta, e in zip(self.deltas_view, self.errors_view):
-            delta[:] = e
-
-        for (layer, delta) in zip(self.layer_container, self.deltas):
-            self._do_bprop(layer, delta)
+            self.deltas = [error[:, view] for view in self.ranges]
+        super(MergeConcatSequence, self).bprop(error, do_acts)

@@ -25,6 +25,7 @@ from struct import unpack_from
 from pytools import memoize_method
 from functools import wraps
 from math import log
+from operator import mul
 
 from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
@@ -463,13 +464,17 @@ class GPUTensor(Tensor):
         if shape == self.shape:
             return self
 
-        size = reduce(lambda x, y: x * y, shape, 1)
+        if -1 in shape:
+            missing_dim = -self.size / reduce(mul, shape)
+            shape = tuple([missing_dim if x == -1 else x for x in shape])
+
+        size = reduce(mul, shape)
+
         if size != self.size:
             raise ValueError("total size of new array must be unchanged")
 
         if not self.is_contiguous:
-            raise TypeError("reshaping of non-contigous "
-                            "arrays is not yet supported")
+            raise TypeError("reshaping of non-contiguous arrays is not yet supported")
 
         return self.__class__(
             backend=self.backend,

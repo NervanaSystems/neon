@@ -32,7 +32,7 @@ from tests.grad_funcs import general_gradient_comp
 # some layers just need the function defined
 class BiasWithReset(Bias):
     def reset(self):
-        pass
+        self.y = None
 
 
 def pytest_generate_tests(metafunc):

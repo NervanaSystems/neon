@@ -110,8 +110,9 @@ def check_lstm(seq_len, input_size, hidden_size,
 
     inp = np.random.rand(*input_shape)*inp_moms[1] + inp_moms[0]
     inpa = lstm.be.array(inp)
-    # import pdb; pdb.set_trace()
     # run neon fprop
+    lstm.configure((input_size, seq_len))
+    lstm.allocate()
     lstm.fprop(inpa)
 
     # reference numpy LSTM
@@ -354,6 +355,8 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
     inpa = lstm.be.array(np.copy(inp_bl))
 
     # run fprop on the baseline input
+    lstm.configure((input_size, seq_len))
+    lstm.allocate()
     out_bl = lstm.fprop(inpa).get()
 
     # random scaling/hash to generate fake loss
@@ -374,10 +377,12 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
 
         inp_pert.flat[pert_ind] = save_val + epsilon
         reset_lstm(lstm)
+        lstm.allocate()
         out_pos = lstm.fprop(lstm.be.array(inp_pert)).get()
 
         inp_pert.flat[pert_ind] = save_val - epsilon
         reset_lstm(lstm)
+        lstm.allocate()
         out_neg = lstm.fprop(lstm.be.array(inp_pert)).get()
 
         # calculate the loss with perturbations

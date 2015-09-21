@@ -40,6 +40,7 @@ class Model(NervanaObject):
         self.states = None
         self.epoch_index = 0
         self.finished = False
+        self.initialized = False
 
         self.layers = []
         self.layers_to_optimize = []
@@ -89,6 +90,22 @@ class Model(NervanaObject):
             if 'states' in ps:
                 l.set_states(ps['states'])
 
+    def initialize(self, dataset, cost=None):
+        if self.initialized:
+            return
+        # Propagate shapes through the layers to configure
+        prev_input = dataset
+        for l in self.layers:
+            prev_input = l.configure(prev_input)
+
+        if cost is not None:
+            cost.initialize(prev_input)
+
+        # Now allocate space
+        for l in self.layers:
+            l.allocate()
+        self.initialized = True
+
     def fit(self, dataset, cost, optimizer, num_epochs, callbacks):
         """
         Trains the model parameters on a dataset by minimizing the cost function through
@@ -106,8 +123,8 @@ class Model(NervanaObject):
             optimizer (Optimizer): Defines the learning rule for updating the model parameters
             num_epochs: Number of times to iterate over the dataset.
         """
-
         self.cost = cost
+        self.initialize(dataset, cost)
         self.set_shortcut()  # infer if bprop shortcut can be used
         self.optimizer = optimizer
         self.total_cost = self.be.empty((1, 1))
@@ -195,6 +212,7 @@ class Model(NervanaObject):
             datasets (iterable): dataset to evaluate on.
             metric (Cost): what function to evaluate dataset on.
         """
+        self.initialize(dataset)
         running_error = np.zeros((len(metric.metric_names)), dtype=np.float32)
         nprocessed = 0
         dataset.reset()
@@ -219,16 +237,17 @@ class Model(NervanaObject):
         Returns:
             Host numpy array: the output of the final layer for the entire Dataset
         """
-        Ypred = None
+        self.initialize(dataset)
         dataset.reset()  # Move "pointer" back to beginning of dataset
         n = dataset.nbatches
+        x = self.layers[-1].outputs
+        (dim0, dim1) = x.shape
+        Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)
+        nsteps = dim1 / self.be.bsz
+        batch_ranges = [slice(i * dim1, (i + 1) * dim1) for i in range(n)]
 
-        for idx, (x, t) in enumerate(dataset):
+        for cur_batch, (x, t) in zip(batch_ranges, dataset):
             x = self.fprop(x, inference=True)
-            if Ypred is None:
-                Ypred = np.empty((n * x.shape[1], x.shape[0]), dtype=x.dtype)
-                nsteps = x.shape[1] / self.be.bsz
-            cur_batch = slice(idx * x.shape[1], (idx + 1) * x.shape[1])
             Ypred[cur_batch] = x.get().T
 
         # Handle the recurrent case

@@ -415,7 +415,10 @@ class Backend(object):
         if x is not None:
             return x
         if isinstance(dim0, tuple):
-            bufshape = (dim0[0], reduce(mul, dim0[1:]) * self.bsz)
+            if (len(dim0) == 2):
+                bufshape = (dim0[0], dim0[1] * self.bsz)
+            else:
+                bufshape = (reduce(mul, dim0), self.bsz)
         else:
             bufshape = (dim0, self.bsz)
         return self.zeros(bufshape, dtype=dtype, name=name,

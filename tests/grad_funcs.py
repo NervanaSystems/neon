@@ -29,9 +29,9 @@ def sweep_epsilon(layer, inp, pert_rng, out_shape=None, lshape=None,
         # if the output shape is not provided
         # get it by running fprop
         inpa = layer.be.array(inp.copy())
-        if lshape:
-            inpa.lshape = lshape
-        out_shape = layer.fprop(inpa).shape
+        in_shape = lshape if lshape is not None else inpa.shape[0]
+        layer.configure(in_shape)
+        out_shape = layer.out_shape
 
     # generate loss_scale outside so that the the
     # model/be state can be reset and the computation
@@ -77,8 +77,9 @@ def general_gradient_comp(layer,
     # run neon fprop
     layer.reset()
     inpa = layer.be.array(inp.copy())
-    if lshape:
-        inpa.lshape = lshape
+    in_shape = lshape if lshape is not None else inpa.shape[0]
+    layer.configure(in_shape)
+    layer.allocate()
     out = layer.fprop(inpa).get()
 
     out_shape = out.shape
@@ -105,16 +106,16 @@ def general_gradient_comp(layer,
         inp_pert.flat[pert_ind] = save_val + epsilon
         # and run fprop on perturbed input
         layer.reset()
+        layer.configure(in_shape)
+        layer.allocate()
         inpa = layer.be.array(inp_pert.copy())
-        if lshape:
-            inpa.lshape = lshape
         out_pos = layer.fprop(inpa).get().copy()
 
         inp_pert.flat[pert_ind] = save_val - epsilon
         inpa = layer.be.array(inp_pert.copy())
-        if lshape:
-            inpa.lshape = lshape
         layer.reset()
+        layer.configure(in_shape)
+        layer.allocate()
         out_neg = layer.fprop(inpa).get().copy()
 
         # calculate the loss on outputs

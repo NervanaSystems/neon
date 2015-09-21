@@ -15,14 +15,14 @@
 from neon.layers.layer import ParameterLayer
 
 
-def get_steps(x, bsz):
+def get_steps(x, shape):
     """
-    Convert a (vocab_size, batch_size * steps) array
+    Convert a (vocab_size, steps * batch_size) array
     into a [(vocab_size, batch_size)] * steps list of views
     """
-
-    steps = x.shape[1] / bsz
-    return [x[:, step*bsz:(step+1)*bsz] for step in range(steps)]
+    steps = shape[1]
+    xs = x.reshape(shape + (-1,))
+    return [xs[:, step, :] for step in range(steps)]
 
 
 class Recurrent(ParameterLayer):
@@ -54,6 +54,27 @@ class Recurrent(ParameterLayer):
         self.W_input = None
         self.ngates = 1
 
+    def configure(self, in_obj):
+        super(Recurrent, self).configure(in_obj)
+        (self.nin, self.nsteps) = self.in_shape
+        self.out_shape = (self.nout, self.nsteps)
+        self.gate_shape = (self.nout * self.ngates, self.nsteps)
+        if self.weight_shape is None:
+            self.weight_shape = (self.nout, self.nin)
+        return self
+
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        super(Recurrent, self).allocate(shared_outputs, shared_deltas)
+        self.h_buffer = self.outputs
+        self.out_deltas_buffer = self.deltas
+
+        self.h = get_steps(self.h_buffer, self.out_shape)
+        self.h_prev = self.h[-1:] + self.h[:-1]
+        self.out_delta = get_steps(self.out_deltas_buffer, self.in_shape)
+        # State deltas
+        self.h_delta = get_steps(self.be.iobuf(self.out_shape), self.out_shape)
+        self.bufs_to_reset = [self.h_buffer]
+
     def init_buffers(self, inputs):
         """
         Initialize buffers for recurrent internal units and outputs.
@@ -66,37 +87,12 @@ class Recurrent(ParameterLayer):
                              (input_size, sequence_length * batch_size)
 
         """
-        if self.x is None:
+        if self.x is None or self.x is not inputs:
+            if self.x is not None:
+                for buf in self.bufs_to_reset:
+                    buf[:] = 0
             self.x = inputs
-            self.xs = get_steps(inputs, self.be.bsz)
-        elif self.x is not inputs:
-            self.x = inputs
-            self.xs = get_steps(inputs, self.be.bsz)
-            self.h_buffer[:] = 0
-
-        if self.h_buffer is None:
-            self.init_hidden_buffers()
-
-    def init_hidden_buffers(self):
-        self.nin = self.x.shape[0]
-        self.steps = len(self.xs)
-        oshape = (self.nout, self.steps)
-        ishape = (self.nin, self.steps)
-
-        # States: hidden, previous hidden
-        self.h_buffer = self.be.iobuf(oshape)
-        self.h = get_steps(self.h_buffer, self.be.bsz)
-        self.h_prev = self.h[-1:] + self.h[:-1]
-
-        # Deltas to compute for next layer
-        self.out_deltas_buffer = self.be.iobuf(ishape)
-        self.out_delta = get_steps(self.out_deltas_buffer, self.be.bsz)
-
-        # State deltas
-        self.h_delta = get_steps(self.be.iobuf(oshape), self.be.bsz)
-
-        if self.weight_shape is None:
-            self.weight_shape = (self.nout, self.nin)
+            self.xs = get_steps(inputs, self.in_shape)
 
     def init_params(self, shape):
         """
@@ -159,9 +155,6 @@ class Recurrent(ParameterLayer):
         # recurrent layer needs a h_prev buffer for bprop
         self.h_prev_bprop = [0] + self.h[:-1]
 
-        if self.W_input is None:
-            self.init_params(self.weight_shape)
-
         for (h, h_prev, xs) in zip(self.h, self.h_prev, self.xs):
             self.be.compound_dot(self.W_input, xs, h)
             self.be.compound_dot(self.W_recur, h_prev, h, beta=1.0)
@@ -176,7 +169,7 @@ class Recurrent(ParameterLayer):
         Arguments:
             deltas (Tensor): tensors containing the errors for
                 each step of model unrolling.
-                shape: (output_size * steps, batch_size)
+                shape: (output_size, * steps, batch_size)
 
         Returns:
             Tensor: back propagated errors for each step of time unrolling
@@ -186,10 +179,8 @@ class Recurrent(ParameterLayer):
         self.dW[:] = 0
 
         if self.in_deltas is None:
-            self.in_deltas = get_steps(deltas, self.be.bsz)
+            self.in_deltas = get_steps(deltas, self.out_shape)
             self.prev_in_deltas = self.in_deltas[-1:] + self.in_deltas[:-1]
-            self.in_delta_last_steps = deltas[:, self.be.bsz:]
-            self.h_first_steps = self.h_buffer[:, :-self.be.bsz]
 
         params = (self.xs, self.h, self.h_prev_bprop, self.h_delta,
                   self.in_deltas, self.prev_in_deltas, self.out_delta)
@@ -239,57 +230,27 @@ class LSTM(Recurrent):
         self.ngates = 4  # Input, Output, Forget, Cell
         self.reset_cells = reset_cells
 
-    def init_buffers(self, inputs):
-        """
-        Initialize buffers for LSTM internal units and outputs.
-        Buffers are initialized as 3D tensors with first 2D related to the preset
-        sequence_length and layer size, and 3rd D is the batch size
-        A list of views are created on the buffer for easy manipulation of data
-        related to a certain time step
-
-        Arguments:
-            inputs (Tensor): input data as 2D tensor. The dimension is
-                             (input_size, sequence_length * batch_size)
-
-        """
-
-        if self.x is None:
-            self.x = inputs
-            self.xs = get_steps(inputs, self.be.bsz)
-        elif self.x is not inputs:
-            self.x = inputs
-            self.xs = get_steps(inputs, self.be.bsz)
-            self.h_buffer[:] = 0
-            self.c_buffer[:] = 0
-
-        if self.h_buffer is None:
-            self.init_hidden_buffers()
-
-    def init_hidden_buffers(self):
-        super(LSTM, self).init_hidden_buffers()
-        nout = self.nout
-        gshape = (nout * self.ngates, self.steps)
-        oshape = (nout, self.steps)
-
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        super(LSTM, self).allocate(shared_outputs, shared_deltas)
         # indices for slicing gate buffers
-        (ifo1, ifo2) = (0, nout * 3)
-        (i1, i2) = (0, nout)
-        (f1, f2) = (nout, nout * 2)
-        (o1, o2) = (nout * 2, nout * 3)
-        (g1, g2) = (nout * 3, nout * 4)
+        (ifo1, ifo2) = (0, self.nout * 3)
+        (i1, i2) = (0, self.nout)
+        (f1, f2) = (self.nout, self.nout * 2)
+        (o1, o2) = (self.nout * 2, self.nout * 3)
+        (g1, g2) = (self.nout * 3, self.nout * 4)
 
         # States: hidden, cell, previous hidden, previous cell
-        self.c_buffer = self.be.iobuf(oshape)
-        self.c = get_steps(self.c_buffer, self.be.bsz)
+        self.c_buffer = self.be.iobuf(self.out_shape)
+        self.c = get_steps(self.c_buffer, self.out_shape)
         self.c_prev = self.c[-1:] + self.c[:-1]
         self.c_prev_bprop = [0] + self.c[:-1]
 
-        self.c_act_buffer = self.be.iobuf(oshape)
-        self.c_act = get_steps(self.c_act_buffer, self.be.bsz)
+        self.c_act_buffer = self.be.iobuf(self.out_shape)
+        self.c_act = get_steps(self.c_act_buffer, self.out_shape)
 
         # Gates: input, forget, output, input modulation
-        self.ifog_buffer = self.be.iobuf(gshape)
-        self.ifog = get_steps(self.ifog_buffer, self.be.bsz)
+        self.ifog_buffer = self.be.iobuf(self.gate_shape)
+        self.ifog = get_steps(self.ifog_buffer, self.gate_shape)
         self.ifo = [gate[ifo1:ifo2] for gate in self.ifog]
         self.i = [gate[i1:i2] for gate in self.ifog]
         self.f = [gate[f1:f2] for gate in self.ifog]
@@ -297,17 +258,18 @@ class LSTM(Recurrent):
         self.g = [gate[g1:g2] for gate in self.ifog]
 
         # State deltas
-        self.c_delta_buffer = self.be.iobuf((oshape))
-        self.c_delta = get_steps(self.c_delta_buffer, self.be.bsz)
+        self.c_delta_buffer = self.be.iobuf((self.out_shape))
+        self.c_delta = get_steps(self.c_delta_buffer, self.out_shape)
         self.c_delta_prev = [None] + self.c_delta[:-1]
 
         # Pre activation gate deltas
-        self.ifog_delta_buffer = self.be.iobuf(gshape)
-        self.ifog_delta = get_steps(self.ifog_delta_buffer, self.be.bsz)
+        self.ifog_delta_buffer = self.be.iobuf(self.gate_shape)
+        self.ifog_delta = get_steps(self.ifog_delta_buffer, self.gate_shape)
         self.i_delta = [gate[i1:i2] for gate in self.ifog_delta]
         self.f_delta = [gate[f1:f2] for gate in self.ifog_delta]
         self.o_delta = [gate[o1:o2] for gate in self.ifog_delta]
         self.g_delta = [gate[g1:g2] for gate in self.ifog_delta]
+        self.bufs_to_reset.append(self.c_buffer)
 
     def fprop(self, inputs, inference=False):
         """
@@ -323,8 +285,6 @@ class LSTM(Recurrent):
             Tensor: LSTM output for each model time step
         """
         self.init_buffers(inputs)
-        if self.W_input is None:
-            self.init_params(self.weight_shape)
 
         if self.reset_cells:
             self.h[-1][:] = 0
@@ -371,7 +331,7 @@ class LSTM(Recurrent):
         self.dW[:] = 0
 
         if self.in_deltas is None:
-            self.in_deltas = get_steps(deltas, self.be.bsz)
+            self.in_deltas = get_steps(deltas, self.out_shape)
             self.prev_in_deltas = self.in_deltas[-1:] + self.in_deltas[:-1]
             self.ifog_delta_last_steps = self.ifog_delta_buffer[:, self.be.bsz:]
             self.h_first_steps = self.h_buffer[:, :-self.be.bsz]
@@ -461,68 +421,40 @@ class GRU(Recurrent):
         self.gate_activation = gate_activation
         self.ngates = 3  # r, z, hcandidate
 
-    def init_buffers(self, inputs):
-        """
-        Initialize buffers for GRU internal units and outputs.
-        Buffers are initialized as 3D tensors with first 2D related to the preset
-        sequence_length and layer size, and 3rd D is the batch size
-        A list of views are created on the buffer for easy manipulation of data
-        related to a certain time step
-
-        Arguments:
-            inputs (Tensor): input data as 3D tensor. The dimension is
-                             (sequence_length, input_size, batch_size)
-        """
-
-        if self.x is None:
-            self.x = inputs
-            self.xs = get_steps(inputs, self.be.bsz)
-        elif self.x is not inputs:
-            self.x = inputs
-            self.xs = get_steps(inputs, self.be.bsz)
-            self.h_buffer[:] = 0
-
-        if self.h_buffer is None:
-            self.init_hidden_buffers()
-
-    def init_hidden_buffers(self):
-        super(GRU, self).init_hidden_buffers()
-        nout = self.nout
-        gshape = (nout * self.ngates, self.steps)
-        oshape = (nout, self.steps)
-
+    def allocate(self, shared_outputs=None, shared_deltas=None):
+        super(GRU, self).allocate(shared_outputs, shared_deltas)
         self.h_prev_bprop = [0] + self.h[:-1]
 
         # indices for slicing gate buffers
-        (rz1, rz2) = (0, nout * 2)
-        (r1, r2) = (0, nout)
-        (z1, z2) = (nout, nout * 2)
-        (c1, c2) = (nout * 2, nout * 3)
+        (rz1, rz2) = (0, self.nout * 2)
+        (r1, r2) = (0, self.nout)
+        (z1, z2) = (self.nout, self.nout * 2)
+        (c1, c2) = (self.nout * 2, self.nout * 3)
 
         # buffers for:
         # rh_prev_buffer: previous hidden multiply with r;
         # wrc_T_dc: wc_recur.T dot with hcan_delta
-        self.rh_prev_buffer = self.be.iobuf(oshape)
-        self.rh_prev = get_steps(self.rh_prev_buffer, self.be.bsz)
-        self.wrc_T_dc = self.be.empty((self.nout, self.be.bsz))
+        self.rh_prev_buffer = self.be.iobuf(self.out_shape)
+        self.rh_prev = get_steps(self.rh_prev_buffer, self.out_shape)
+        self.wrc_T_dc = self.be.iobuf(self.nout)
 
         # Gates: reset: r; update: z; candidate h: hcan
-        self.rzhcan_buffer = self.be.iobuf(gshape)
-        self.rzhcan = get_steps(self.rzhcan_buffer, self.be.bsz)
+        self.rzhcan_buffer = self.be.iobuf(self.gate_shape)
+        self.rzhcan = get_steps(self.rzhcan_buffer, self.gate_shape)
         self.rz = [gate[rz1:rz2] for gate in self.rzhcan]
         self.r = [gate[r1:r2] for gate in self.rzhcan]
         self.z = [gate[z1:z2] for gate in self.rzhcan]
         self.hcan = [gate[c1:c2] for gate in self.rzhcan]
 
         # the buffer only deals with recurrent inputs to the gates
-        self.rzhcan_rec_buffer = self.be.iobuf(gshape)
-        self.rzhcan_rec = get_steps(self.rzhcan_rec_buffer, self.be.bsz)
+        self.rzhcan_rec_buffer = self.be.iobuf(self.gate_shape)
+        self.rzhcan_rec = get_steps(self.rzhcan_rec_buffer, self.gate_shape)
         self.rz_rec = [gate[rz1:rz2] for gate in self.rzhcan_rec]
         self.hcan_rec = [gate[c1:c2] for gate in self.rzhcan_rec]
 
         # Pre activation gate deltas
-        self.rzhcan_delta_buffer = self.be.iobuf(gshape)
-        self.rzhcan_delta = get_steps(self.rzhcan_delta_buffer, self.be.bsz)
+        self.rzhcan_delta_buffer = self.be.iobuf(self.gate_shape)
+        self.rzhcan_delta = get_steps(self.rzhcan_delta_buffer, self.gate_shape)
         self.rz_delta = [gate[rz1:rz2] for gate in self.rzhcan_delta]
         self.r_delta = [gate[r1:r2] for gate in self.rzhcan_delta]
         self.z_delta = [gate[z1:z2] for gate in self.rzhcan_delta]
@@ -570,8 +502,6 @@ class GRU(Recurrent):
             Tensor: GRU output for each model time step
         """
         self.init_buffers(inputs)
-        if self.W_input is None:
-            self.init_params(self.weight_shape)
 
         for (h, h_prev, rh_prev, xs, rz, r, z, hcan, rz_rec, hcan_rec, rzhcan) in zip(
                 self.h, self.h_prev, self.rh_prev, self.xs, self.rz, self.r,
@@ -613,7 +543,7 @@ class GRU(Recurrent):
         self.dW[:] = 0
 
         if self.in_deltas is None:
-            self.in_deltas = get_steps(deltas, self.be.bsz)
+            self.in_deltas = get_steps(deltas, self.out_shape)
             self.prev_in_deltas = self.in_deltas[-1:] + self.in_deltas[:-1]
 
         params = (self.r, self.z, self.hcan, self.rh_prev, self.h_prev_bprop,

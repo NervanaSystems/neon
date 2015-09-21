@@ -130,7 +130,6 @@ class Text(NervanaObject):
             tokens = tokens[:-extra_tokens]
         self.nbatches = len(tokens) / (self.be.bsz * time_steps)
         self.ndata = self.nbatches * self.be.bsz  # no leftovers
-        # self.ndata = len(tokens)
 
         self.vocab = sorted(self.get_vocab(tokens, vocab))
         self.nclass = len(self.vocab)
@@ -143,15 +142,17 @@ class Text(NervanaObject):
         X = np.asarray([self.token_to_index[t] for t in tokens], dtype=np.uint8)
         y = np.concatenate((X[1:], X[:1]))
 
-        # reshape to preserve setence continuity across batches
+        # reshape to preserve sentence continuity across batches
         self.X = X.reshape(self.be.bsz, self.nbatches, time_steps)
         self.y = y.reshape(self.be.bsz, self.nbatches, time_steps)
 
         # stuff below this comment needs to be cleaned up and commented
-        self.dev_X = self.be.iobuf((len(self.vocab), time_steps))
-        self.dev_y = self.be.iobuf((len(self.vocab), time_steps))
+        self.nout = len(self.vocab)
+        self.shape = (self.nout, time_steps)
+        self.dev_X = self.be.iobuf((self.nout, time_steps))
+        self.dev_y = self.be.iobuf((self.nout, time_steps))
         self.dev_lbl = self.be.iobuf(time_steps, dtype=np.int32)
-        self.dev_lblflat = self.dev_lbl.reshape((1, self.dev_lbl.size))
+        self.dev_lblflat = self.dev_lbl.reshape((1, -1))
 
     def __iter__(self):
         """
