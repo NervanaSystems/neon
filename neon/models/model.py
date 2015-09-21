@@ -209,62 +209,34 @@ class Model(NervanaObject):
         running_error /= nprocessed
         return running_error
 
-    def predict(self, dataset):
+    def get_outputs(self, dataset):
         """
-        Generate predictions for the dataset
+        Get the activation outputs of the final model layer for the dataset
 
         Arguments:
             dataset (iterable): Dataset iterator to perform fit on
 
         Returns:
-            Tensor: the output of the final layer for the entire Dataset
+            Host numpy array: the output of the final layer for the entire Dataset
         """
-        nprocessed = 0   # Keep track of how much of dataset we've seen
+        Ypred = None
         dataset.reset()  # Move "pointer" back to beginning of dataset
+        n = dataset.nbatches
 
-        # Decide what the output size will be based on status of dataset
-        if hasattr(dataset, "ybuf"):
-            # This encompasses case where dataset is instance of dataiterator
-            if dataset.ybuf is None:
-                outsize = dataset.Xbuf[0].shape
-            else:
-                outsize = dataset.ybuf.shape[0]
-        else:
-            # Assume we're dealing with an instance of ImgMaster
-            # or a sequential dataset, e.g. Text
-            if isinstance(dataset.nclass, dict):
-                outsize = dataset.nclass.size
-            else:
-                outsize = dataset.nclass
+        for idx, (x, t) in enumerate(dataset):
+            x = self.fprop(x, inference=True)
+            if Ypred is None:
+                Ypred = np.empty((n * x.shape[1], x.shape[0]), dtype=x.dtype)
+                nsteps = x.shape[1] / self.be.bsz
+            cur_batch = slice(idx * x.shape[1], (idx + 1) * x.shape[1])
+            Ypred[cur_batch] = x.get().T
 
-        # Initialize a backend tensor to hold the predictions
-        Ypred = self.be.empty((dataset.ndata, outsize))
-        if hasattr(dataset, "seq_length"):
-            # for sequence dataset, the output of the network is different
-            # needs to consider what was the continuous sequence order
-            b = self.be.bsz
-            s = dataset.seq_length
-            f = dataset.nclass
-            n = dataset.nbatches
+        # Handle the recurrent case
+        if nsteps != 1:
+            b, s = (self.be.bsz, nsteps)
+            Ypred = Ypred.reshape((n, b, s, -1)).transpose(1, 0, 2, 3).copy().reshape(n*b, s, -1)
 
-            # import ipdb; ipdb.set_trace()
-            Ypred_v = Ypred.reshape(b, n, s, f)
-            Ypred_v_n = [Ypred_v[:, i] for i in range(n)]
-            xt = self.be.empty((b*s, f))
-            xt_v = xt.reshape(b, s, f)
-            for mb_idx, (x, t) in enumerate(dataset):
-                x = self.fprop(x, inference=True)
-                xt.copy(x.T)
-                for ib in range(b):
-                    Ypred_v_n[mb_idx][ib, :] = xt_v[ib, :]
-        else:
-            # Fprop one minibatch at a time to generate predictions
-            for x, t in dataset:
-                x = self.fprop(x, inference=True)
-                bsz = min(dataset.ndata - nprocessed, self.be.bsz)
-                Ypred[nprocessed:nprocessed+bsz] = x[:, :bsz].T
-                nprocessed += bsz
-        return Ypred
+        return Ypred[:dataset.ndata]
 
     def get_description(self):
         """

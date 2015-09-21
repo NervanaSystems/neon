@@ -26,7 +26,7 @@ from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 from neon.util.persist import save_obj
 
 
-def test_model_predict_rnn(backend):
+def test_model_get_outputs_rnn(backend):
 
     data_path = load_text('ptb-valid')
 
@@ -42,9 +42,29 @@ def test_model_predict_rnn(backend):
     ]
 
     model = Model(layers=layers)
-    output = model.predict(data_set)
+    output = model.get_outputs(data_set)
 
-    assert output.shape == (data_set.ndata, data_set.nclass)
+    assert output.shape == (data_set.ndata, data_set.seq_length, data_set.nclass)
+
+
+def test_model_get_outputs(backend):
+    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
+    train_set = DataIterator(X_train[:backend.bsz * 3])
+
+    init_norm = Gaussian(loc=0.0, scale=0.1)
+
+    layers = [Affine(nout=20, init=init_norm, bias=init_norm, activation=Rectlin()),
+              Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))]
+    mlp = Model(layers=layers)
+    out_list = []
+    for x, t in train_set:
+        x = mlp.fprop(x)
+        out_list.append(x.get().T.copy())
+    ref_output = np.vstack(out_list)
+
+    train_set.reset()
+    output = mlp.get_outputs(train_set)
+    assert np.allclose(output, ref_output)
 
 
 def test_model_serialize(backend):
@@ -126,4 +146,4 @@ def test_model_serialize(backend):
 if __name__ == '__main__':
 
     be = gen_backend(backend='gpu', batch_size=50)
-    test_model_predict_rnn(be)
+    test_model_get_outputs_rnn(be)
