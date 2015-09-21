@@ -198,7 +198,7 @@ class GPUTensor(Tensor):
         array_axis = 0
 
         while index_axis < len(index):
-            
+
             index_entry = index[index_axis]
 
             if array_axis > len(self.shape):
@@ -263,7 +263,7 @@ class GPUTensor(Tensor):
 
                 new_offset += self.strides[array_axis] * \
                     index_entry * self.dtype.itemsize
-                
+
                 if len(self.shape) < 3:
                     new_shape.append(1)
                     new_strides.append(self.strides[array_axis])
@@ -790,7 +790,7 @@ class NervanaGPU(Backend):
         hist_buf = int(self.hist_base) + self.hist_idx * self.hist_bins * 4
         self.hist_map[tag] = (self.hist_idx)
         self.hist_idx += 1
-        return GPUTensor(self, shape=(self.hist_bins,), dtype=np.int32,
+        return GPUTensor(self, shape=(1, self.hist_bins), dtype=np.int32,
                          gpudata=hist_buf, name=tag)
 
     def dump_hist_data(self):
@@ -1003,7 +1003,7 @@ class NervanaGPU(Backend):
         """
         dtype = self.default_dtype if dtype is None else dtype
         if ary.ndim < self._min_dims:
-            ary = ary.reshape(ary.size, 1)        
+            ary = ary.reshape(ary.size, 1)
         return GPUTensor(self, ary.shape, dtype=dtype, name=name,
                          persist_values=persist_values, allocator=allocator,
                          rounding=self.round_mode).set(ary)

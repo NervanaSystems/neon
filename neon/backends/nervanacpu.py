@@ -78,7 +78,7 @@ class CPUTensor(Tensor):
             self._tensor = ary
         while self._tensor.ndim < self._min_dims:
             self._tensor = self._tensor.reshape(self._tensor.shape + (1, ))
-        
+
         if shape is not None and len(shape) < self._min_dims:
             self.shape = shape + (1, )
         else:
@@ -179,21 +179,20 @@ class CPUTensor(Tensor):
         # let a.shape = (3,4)
         # a[1,1] = 10 # cpu, gpu and numpy
         # type(a[1,1]) # for cpu and gpu type is Tensor; for numpy type is float
-        if type(self._tensor[key]) is not np.ndarray:
-            first_int_idx = None
-            is_all_int = True
-            for idx, k in enumerate(key):
-                if type(k) is int:
-                    if first_int_idx is None:
-                        first_int_idx = idx
-                else:
-                    is_all_int = False
-                    break
-            if is_all_int:
-                key_list = list(key)
-                idx = key_list[first_int_idx]
-                key_list[first_int_idx] = slice(idx, idx + 1, None)
-                key = tuple(key_list)
+        first_int_idx = None
+        is_all_int = True
+        for idx, k in enumerate(key):
+            if type(k) is int:
+                if first_int_idx is None:
+                    first_int_idx = idx
+            else:
+                is_all_int = False
+                break
+        if is_all_int:
+            key_list = list(key)
+            idx = key_list[first_int_idx]
+            key_list[first_int_idx] = slice(idx, idx + 1, None)
+            key = tuple(key_list)
 
         # return a view of the tensor
         return self.__class__(
@@ -236,7 +235,7 @@ class CPUTensor(Tensor):
                 value = value.astype(self.dtype)
             assert value.size == self.size
             if value.ndim < self._min_dims:
-                value = value.reshape(value.size, 1)
+                value = value.reshape(self.shape)
 
         self._tensor[:] = value
         return self

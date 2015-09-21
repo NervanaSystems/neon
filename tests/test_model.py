@@ -147,4 +147,3 @@ if __name__ == '__main__':
 
     be = gen_backend(backend='gpu', batch_size=50)
     test_model_get_outputs_rnn(be, '~/nervana/data')
-

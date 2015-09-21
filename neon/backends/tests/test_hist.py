@@ -37,7 +37,7 @@ def ref_hist(inp, nbins=64, offset=-48):
     np_inp_log_abs = np.rint(np.log2(np.abs(inp.astype(np.float32))))
     np_hist, edges = np.histogram(np_inp_log_abs, density=False, bins=bins)
     if (np_hist.ndim < 2):
-        np_hist = np_hist.reshape(np_hist.size, 1)
+        np_hist = np_hist.reshape(1, np_hist.size)
     return np_hist
 
 
@@ -70,7 +70,6 @@ def test_edge_cases():
     # dump_hist_data test
     for be in [ng, nc]:
         be_hist_data, be_hist_map = be.dump_hist_data()
-
         for tag, inp in inputs:
             be_data = be_hist_data[be_hist_map[tag]]
             assert_tensors_allclose(np_ref[tag], be_data, err_msg=tag + str(be))
@@ -147,4 +146,3 @@ def pytest_generate_tests(metafunc):
     if 'nbin_offset_dim_dtype_inp' in metafunc.fixturenames:
         fargs = itt.product(bin_offs, dims, dtypes, inputs)
         metafunc.parametrize("nbin_offset_dim_dtype_inp", fargs)
-
