@@ -176,6 +176,12 @@ class Pooling(Layer):
             self.poolparams.update(d)
         self.nglayer = None
 
+    def __str__(self):
+        return "Pooling Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) outputs" % (
+               self.name,
+               self.in_shape[0], self.in_shape[1], self.in_shape[2],
+               self.out_shape[0], self.out_shape[1], self.out_shape[2])
+
     def configure(self, in_obj):
         super(Pooling, self).configure(in_obj)
         if self.nglayer is None:
@@ -316,6 +322,14 @@ class Convolution(ParameterLayer):
         for d in [fshape, strides, padding]:
             self.convparams.update(d)
 
+    def __str__(self):
+        return ("Conv Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) "
+                "outputs, padding %d, stride %d" %
+                (self.name,
+                 self.in_shape[0], self.in_shape[1], self.in_shape[2],
+                 self.out_shape[0], self.out_shape[1], self.out_shape[2],
+                 self.convparams['pad_h'], self.convparams['str_h']))
+
     def configure(self, in_obj):
         super(Convolution, self).configure(in_obj)
         if self.nglayer is None:
@@ -382,6 +396,12 @@ class Deconv(ParameterLayer):
         for d in [fshape, strides, padding]:
             self.deconvparams.update(d)
 
+    def __str__(self):
+        return "Deconv Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) outputs" % (
+               self.name,
+               self.in_shape[0], self.in_shape[1], self.in_shape[2],
+               self.out_shape[0], self.out_shape[1], self.out_shape[2])
+
     def configure(self, in_obj):
         super(Deconv, self).configure(in_obj)
         if self.nglayer is None:
@@ -435,6 +455,10 @@ class Linear(ParameterLayer):
         self.nout = nout
         self.inputs = None
 
+    def __str__(self):
+        return "Linear Layer '%s': %d inputs, %d outputs" % (
+               self.name, self.nin, self.nout)
+
     def configure(self, in_obj):
         super(Linear, self).configure(in_obj)
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
@@ -468,6 +492,14 @@ class Bias(ParameterLayer):
     def __init__(self, init, name="BiasLayer"):
         super(Bias, self).__init__(init, name)
         self.y = None
+
+    def __str__(self):
+        if len(self.in_shape) == 3:
+            layer_string = "Bias Layer '%s': size %d x (%dx%d)" % (
+               self.name, self.in_shape[0], self.in_shape[1], self.in_shape[2])
+        else:
+            layer_string = "Bias Layer '%s': size %d" % (self.name, self.bias_size)
+        return layer_string
 
     def configure(self, in_obj):
         super(Bias, self).configure(in_obj)
@@ -513,6 +545,10 @@ class Activation(Layer):
     def __init__(self, transform, name="ActivationLayer"):
         super(Activation, self).__init__(name)
         self.transform = transform
+
+    def __str__(self):
+        return "Activation Layer '%s': %s" % (
+               self.name, self.transform.__class__.__name__)
 
     def configure(self, in_obj):
         super(Activation, self).configure(in_obj)
@@ -621,6 +657,10 @@ class Dropout(Layer):
         super(Dropout, self).__init__(name)
         self.keep = keep
         self.keep_mask = None
+
+    def __str__(self):
+        return "Linear Layer '%s': %d inputs and outputs, keep %d%%" % (
+               self.name, self.nout, 100*self.keep)
 
     def configure(self, in_obj):
         super(Dropout, self).configure(in_obj)
@@ -774,6 +814,10 @@ class BatchNorm(Layer):
         self.rho = rho
         self.eps = eps
         self.states = [[] for i in range(2)]
+
+    def __str__(self):
+        return "BatchNorm Layer '%s': %d inputs, %d steps, %d feature maps" % (
+               self.name, self.nin, self.nsteps, self.nfm)
 
     def configure(self, in_obj):
         super(BatchNorm, self).configure(in_obj)

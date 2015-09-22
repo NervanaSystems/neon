@@ -106,6 +106,16 @@ class Model(NervanaObject):
             l.allocate()
         self.initialized = True
 
+    def print_layers(self):
+        """
+        Print network layers
+        """
+        config_string = "Network Layers:"
+        for layer in self.layers:
+            config_string = config_string + "\n\t" + str(layer)
+        config_string = config_string + "\n"
+        print config_string
+
     def fit(self, dataset, cost, optimizer, num_epochs, callbacks):
         """
         Trains the model parameters on a dataset by minimizing the cost function through
@@ -125,6 +135,7 @@ class Model(NervanaObject):
         """
         self.cost = cost
         self.initialize(dataset, cost)
+        self.print_layers()
         self.set_shortcut()  # infer if bprop shortcut can be used
         self.optimizer = optimizer
         self.total_cost = self.be.empty((1, 1))
