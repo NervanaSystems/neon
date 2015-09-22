@@ -1104,8 +1104,8 @@ class NervanaCPU(Backend):
                    op, N, C,
                    D=1, H=1, W=1,
                    J=1, T=1, R=1, S=1,
-                   pad_j=0, pad_d=0, pad_h=0, pad_w=0,
-                   str_j=None, str_d=None, str_h=None, str_w=None):
+                   pad_c=0, pad_d=0, pad_h=0, pad_w=0,
+                   str_c=None, str_d=None, str_h=None, str_w=None):
         """
         Create a new PoolLayer parameter object.
         This then is passed as an argument to all pooling kernels.
@@ -1129,8 +1129,8 @@ class NervanaCPU(Backend):
         Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
         """
         # default to non-overlapping
-        if str_j is None:
-            str_j = J
+        if str_c is None:
+            str_c = J
         if str_d is None:
             str_d = T
         if str_h is None:
@@ -1139,7 +1139,7 @@ class NervanaCPU(Backend):
             str_w = S
 
         return PoolLayer(self, dtype, op, N, C, D, H, W, J, T, R, S,
-                         pad_j, pad_d, pad_h, pad_w, str_j, str_d, str_h, str_w)
+                         pad_c, pad_d, pad_h, pad_w, str_c, str_d, str_h, str_w)
 
     def fprop_pool(self, layer, I, O):
         """
@@ -1159,8 +1159,8 @@ class NervanaCPU(Backend):
         J, T, R, S = layer.JTRS
         C, D, H, W, N = layer.dimI
         K, M, P, Q, N = layer.dimO
-        pad_j, pad_d, pad_h, pad_w = layer.padding
-        str_j, str_d, str_h, str_w = layer.strides
+        pad_c, pad_d, pad_h, pad_w = layer.padding
+        str_c, str_d, str_h, str_w = layer.strides
         WH = W * H
         DWH = D * W * H
 
@@ -1168,7 +1168,7 @@ class NervanaCPU(Backend):
         array_O = O.get().reshape(layer.dimO)
 
         for k in range(K):
-            sliceC = layer.pool_slice(k, J, C, pad_j, str_j)
+            sliceC = layer.pool_slice(k, J, C, pad_c, str_c)
 
             for m in range(M):
                 sliceD = layer.pool_slice(m, T, D, pad_d, str_d)
@@ -1217,8 +1217,8 @@ class NervanaCPU(Backend):
         J, T, R, S = layer.JTRS
         C, D, H, W, N = layer.dimI
         K, M, P, Q, N = layer.dimO
-        pad_j, pad_d, pad_h, pad_w = layer.padding
-        str_j, str_d, str_h, str_w = layer.strides
+        pad_c, pad_d, pad_h, pad_w = layer.padding
+        str_c, str_d, str_h, str_w = layer.strides
         WH = W * H
         DWH = D * W * H
 
@@ -1228,7 +1228,7 @@ class NervanaCPU(Backend):
         array_delta.fill(0.)
 
         for k in range(K):
-            sliceC = layer.pool_slice(k, J, C, pad_j, str_j)
+            sliceC = layer.pool_slice(k, J, C, pad_c, str_c)
 
             for m in range(M):
                 sliceD = layer.pool_slice(m, T, D, pad_d, str_d)

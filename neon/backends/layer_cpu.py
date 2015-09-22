@@ -223,12 +223,12 @@ class PoolLayer(object):
                  op, N, C,
                  D=1, H=1, W=1,
                  J=1, T=1, R=1, S=1,
-                 pad_j=0, pad_d=0, pad_h=0, pad_w=0,
-                 str_j=None, str_d=None, str_h=None, str_w=None):
+                 pad_c=0, pad_d=0, pad_h=0, pad_w=0,
+                 str_c=None, str_d=None, str_h=None, str_w=None):
 
         # default to non-overlapping
-        if str_j is None:
-            str_j = J
+        if str_c is None:
+            str_c = J
         if str_d is None:
             str_d = T
         if str_h is None:
@@ -236,8 +236,8 @@ class PoolLayer(object):
         if str_w is None:
             str_w = S
 
-        if str_j < J or str_d < T or str_h < R or str_w < S:
-            self.overlap = (math.ceil(float(J) / str_j) *
+        if str_c < J or str_d < T or str_h < R or str_w < S:
+            self.overlap = (math.ceil(float(J) / str_c) *
                             math.ceil(float(T) / str_d) *
                             math.ceil(float(R) / str_h) *
                             math.ceil(float(S) / str_w))
@@ -245,7 +245,7 @@ class PoolLayer(object):
             self.overlap = 0.0
 
         # Compute the output dimensions
-        K = output_dim(C, J, pad_j, str_j)
+        K = output_dim(C, J, pad_c, str_c)
         M = output_dim(D, T, pad_d, str_d)
         P = output_dim(H, R, pad_h, str_h)
         Q = output_dim(W, S, pad_w, str_w)
@@ -260,8 +260,8 @@ class PoolLayer(object):
         self.JTRS = (J, T, R, S)
         self.DHW = (D, H, W)
         self.MPQ = (M, P, Q)
-        self.padding = (pad_j, pad_d, pad_h, pad_w)
-        self.strides = (str_j, str_d, str_h, str_w)
+        self.padding = (pad_c, pad_d, pad_h, pad_w)
+        self.strides = (str_c, str_d, str_h, str_w)
 
         self.dimI = (C, D, H, W, N)
         self.dimO = (K, M, P, Q, N)
