@@ -16,12 +16,12 @@
 
 
 <CONSTANT_MAPPING>
-    param_I[0]      : c[0x0][0x140]
-    param_I[1]      : c[0x0][0x144]
-    param_O[0]      : c[0x0][0x148]
-    param_O[1]      : c[0x0][0x14c]
-    param_B[0]      : c[0x0][0x150]
-    param_B[1]      : c[0x0][0x154]
+    param_O[0]      : c[0x0][0x140]
+    param_O[1]      : c[0x0][0x144]
+    param_B[0]      : c[0x0][0x148]
+    param_B[1]      : c[0x0][0x14c]
+    param_I[0]      : c[0x0][0x150]
+    param_I[1]      : c[0x0][0x154]
     param_mode      : c[0x0][0x158]
     param_N         : c[0x0][0x15c]
     param_W         : c[0x0][0x160]
@@ -338,6 +338,8 @@ BPROP_LOOP:
 
 --:-:-:-:5      BRA.U EXIT;
 
+// This code path is no longer used as it's too slow
+// Use the spool_bprop_avg kernel instead
 OVERLAP:
 
 10:-:-:-:1 @!P6 LOP32I.AND bprop, bprop, 0x0000ffff;

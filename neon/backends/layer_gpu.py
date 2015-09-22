@@ -20,6 +20,7 @@ TODO: remove any non-param caching code, neon layers should replace benchmark co
 """
 import numpy as np
 import pycuda.driver as drv
+from neon.backends import kernel_specs
 from pycuda.tools import context_dependent_memoize
 from operator import mul
 from math import ceil
@@ -36,25 +37,35 @@ class Layer(object):
     """
 
     def __init__(self, lib, dtype, N, dtypeU=None):
-        self.N = N
-        self.dtype = dtype
+
+        if hasattr(dtype,'type'):
+            self.dtype = dtype
+        else:
+            self.dtype = np.dtype(dtype)
+
+        self.N      = N
         self.dtypeU = dtype if dtypeU is None else dtypeU
-        self.lib = lib
-        self.flops = 0
-        self.sizeI = 0
-        self.sizeO = 0
-        self.sizeF = 0
-        self.weights = None
-        self.fprop_in = None
+        self.lib    = lib
+        self.flops  = 0
+        self.sizeI  = 0
+        self.sizeO  = 0
+        self.sizeF  = 0
+        self.weights   = None
+        self.fprop_in  = None
         self.fprop_out = None
+        self.bprop_in  = None
         self.bprop_out = None
+
         self.learning_rate = 0.0
 
-    def init_activations(self):
+    def init_activations(self, fprop_out=None):
 
-        self.fprop_out = self.lib.empty(self.dimO, dtype=self.dtype)
+        if fprop_out is not None:
+            self.fprop_out = fprop_out
+        else:
+            self.fprop_out = self.lib.empty(self.dimO, dtype=self.dtype)
 
-        self.act_stats = self.lib.empty((self.dimO2[0], 1), dtype=np.float32)
+        self.act_stats = self.lib.empty((self.dimO2[0],1), dtype=np.float32)
 
     def init_deltas(self, shared=None):
 
@@ -64,46 +75,46 @@ class Layer(object):
             self.bprop_out = shared[0].share(self.dimI)
             shared.reverse()
 
-        self.delta_stats = self.lib.empty((self.dimI2[0], 1), dtype=np.float32)
+        self.delta_stats = self.lib.empty((self.dimI2[0],1), dtype=np.float32)
 
     def init_weights(self, loc=0.0, scale=0.1, shared=None, zeros=False):
 
         if self.sizeF > 0:
             if zeros:
-                self.weights = self.lib.zeros(self.dimF, dtype=self.dtype)
+                self.weights  = self.lib.zeros(self.dimF, dtype=self.dtype)
             else:
-                weights = np.random.normal(loc, scale, self.dimF)
-                self.weights = self.lib.array(weights, dtype=self.dtype)
+                weights       = np.random.normal(loc, scale, self.dimF)
+                self.weights  = self.lib.array(weights, dtype=self.dtype)
 
             if shared is None:
                 self.updat_out = self.lib.empty(self.dimF, dtype=self.dtypeU)
             else:
                 self.updat_out = shared.share(self.dimF, dtype=self.dtypeU)
 
-            self.weight_stats = self.lib.empty((self.dimF2[0], 1), dtype=np.float32)
+            self.weight_stats = self.lib.empty((self.dimF2[0],1), dtype=np.float32)
 
     def scale_weights(self, scale):
 
         mean = self.get_activation_mean()
-        self.weights *= scale/mean
+        self.weights[:] *= scale/mean
 
     def fprop(self, fprop_in, scale_weights=0):
         if self.fprop_in is None and fprop_in:
             self.fprop_in = fprop_in.reshape(self.dimI)
         return self.fprop_in
 
-    def bprop(self, bprop_in):
+    def bprop(self, bprop_in, beta=0):
         return bprop_in
 
     # fprop relu happens inside of the conv and gemm kernels
     def bprop_relu(self, bprop_in):
 
-        bprop_in *= self.fprop_out > 0
+        bprop_in[:] = bprop_in * (self.fprop_out > 0)
         return bprop_in
 
     def grad_descent(self):
 
-        self.weights += self.updat_out * self.learning_rate
+        self.weights[:] += self.updat_out*self.learning_rate
 
     def get_activation_mean(self):
         return self._get_mean(self.fprop_out, self.act_stats, self.dimO2)
@@ -138,14 +149,18 @@ class Layer(object):
         return 0
 
     def _get_mean(self, ary, buf, shape):
-        return float(self.lib.mean(abs(ary.reshape(shape)),
-                                   partial=buf,
-                                   out=buf[0:1, 0:1]).get()[0, 0])
+
+        buf1    = buf[0:1,0:1]
+        buf[:]  = self.lib.sum(abs(ary.reshape(shape)), axis=1)
+        buf1[:] = self.lib.sum(buf, axis=0) * (1.0/ary.size)
+        return float(buf1.get()[0,0])
 
     def _get_max(self, ary, buf, shape):
-        return float(self.lib.max(abs(ary.reshape(shape)),
-                                  partial=buf,
-                                  out=buf[0:1, 0:1]).get()[0, 0])
+
+        buf1    = buf[0:1,0:1]
+        buf[:]  = self.lib.max(abs(ary.reshape(shape)), axis=1)
+        buf1[:] = self.lib.max(buf, axis=0)
+        return float(buf1.get()[0,0])
 
     def fprop_stats(self):
         print("fprop:%10.5f mean %11.5f max %s"
@@ -167,12 +182,11 @@ class Layer(object):
     @staticmethod
     def create(lib, conf, prev_layer, dtype):
 
-        config = dict(conf)
+        config     = dict(conf)
         layer_type = config.pop("layer")
 
         # merge dtype specific settings
         config["dtype"] = dtype
-        config.update(config.pop(dtype, {}))
 
         # merge shared params
         config.update(config.pop("common", {}))
@@ -185,13 +199,16 @@ class Layer(object):
                 config["nIn"] = prev_layer.nOut
             elif layer_type is PoolLayer and type(prev_layer) is FullLayer:
                 config["C"] = prev_layer.nOut
+            elif layer_type is BatchNorm and type(prev_layer) is FullLayer:
+                config["nIn"] = prev_layer.nOut
             else:
                 config["C"] = prev_layer.K
+                config["D"] = prev_layer.M
                 config["H"] = prev_layer.P
                 config["W"] = prev_layer.Q
 
                 if layer_type is Inception:
-                    partitions = config.pop("partitions")
+                    partitions  = config.pop("partitions")
                     config["K"] = 0
 
                     config["partitions"] = []
@@ -212,11 +229,6 @@ class Layer(object):
                             config["P"] = last.P
                             config["Q"] = last.Q
 
-        # remove unused dtype settings
-        for key in config.keys():
-            if type(key) is not str:
-                del config[key]
-
         # Instantiate the layer
         return layer_type(lib, **config)
 
@@ -236,13 +248,13 @@ class DataLayer(Layer):
         self.M = D
         self.P = H
         self.Q = W
-        self.DHW = (D, H, W)
-        self.dimI = (C, D, H, W, N)
-        self.dimO = (C, D, H, W, N)
-        self.dimI2 = (C * D * H * W, N)
-        self.dimO2 = (C * D * H * W, N)
-        self.sizeO = reduce(mul, self.dimO, 1)
-        self.sizeI = self.sizeO
+        self.DHW = (D,H,W)
+        self.dimI   = (C,D,H,W,N)
+        self.dimO   = (C,D,H,W,N)
+        self.dimI2  = (C*D*H*W,N)
+        self.dimO2  = (C*D*H*W,N)
+        self.sizeO  = reduce(mul, self.dimO, 1)
+        self.sizeI  = self.sizeO
 
     def init_data(self, ary=None):
         if ary is None:
@@ -269,27 +281,28 @@ class FullLayer(Layer):
     Fully connnected layer.
     """
 
-    def __init__(self, lib, dtype, N, nIn, nOut):
+    def __init__(self, lib, dtype, N, nIn, nOut, relu=False):
 
         super(FullLayer, self).__init__(lib, dtype, N)
 
-        self.nIn = nIn
-        self.nOut = nOut
-        self.flops = N * nIn * nOut * 2.0
-        self.dimI = (nIn, N)
-        self.dimI2 = (nIn, N)
-        self.dimO = (nOut, N)
-        self.dimO2 = (nOut, N)
-        self.dimF = (nOut, nIn)
-        self.dimF2 = (nOut, nIn)
-        self.sizeI = nIn * N
-        self.sizeO = nOut * N
-        self.sizeF = nIn * nOut
+        self.nIn    = nIn
+        self.nOut   = nOut
+        self.flops  = N * nIn * nOut * 2.0
+        self.dimI   = (nIn, N)
+        self.dimI2  = (nIn, N)
+        self.dimO   = (nOut, N)
+        self.dimO2  = (nOut, N)
+        self.dimF   = (nOut, nIn)
+        self.dimF2  = (nOut, nIn)
+        self.sizeI  = nIn  * N
+        self.sizeO  = nOut * N
+        self.sizeF  = nIn  * nOut
+        self.relu   = relu
 
     def fprop(self, fprop_in, scale_weights=0):
 
         fprop_in = super(FullLayer, self).fprop(fprop_in)
-        self.lib.compound_dot(self.weights, fprop_in, self.fprop_out, relu=True)
+        self.lib.compound_dot(self.weights, fprop_in, self.fprop_out, self.relu)
 
         if scale_weights:
             self.scale_weights(scale_weights)
@@ -297,9 +310,10 @@ class FullLayer(Layer):
 
         return self.fprop_out
 
-    def bprop(self, bprop_in):
+    def bprop(self, bprop_in, beta=0):
 
-        self.bprop_relu(bprop_in)
+        if self.relu:
+            self.bprop_relu(bprop_in)
         self.lib.compound_dot(self.weights.T, bprop_in, self.bprop_out)
 
         self.lib.compound_dot(bprop_in, self.fprop_in.T, self.updat_out)
@@ -339,224 +353,235 @@ class ConvLayer(Layer):
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
                  str_d=1, str_h=1, str_w=1,
-                 grid_P=0, grid_Q=0, update_size=None):
+                 relu=False, bsum=False,
+                 deterministic_update=False):
 
         super(ConvLayer, self).__init__(lib, dtype, N, np.float32)
 
-        assert N % 32 == 0, "N dim must be multiple of 32"
-        assert K % 8 == 0, "K dim must be multiple of 8"
+        vec_size = 4 if self.dtype.itemsize == 4 else 8
 
-        if hasattr(dtype, 'type'):
-            np_dtype = dtype
+        assert N % 32 == 0, "N dim must be multiple of 32"
+        assert K % vec_size == 0, "K dim must be multiple of %d" % vec_size
+
+        if self.dtype.type is np.float16:
+            clss = "hconv"
+        elif self.dtype.type is np.float32:
+            clss = "sconv"
         else:
-            np_dtype = np.dtype(dtype)
+            raise TypeError("Type not supported.")
 
         # Compute the output spatial dimensions
-        M = int(ceil(float(D - T + 1 + 2 * pad_d) / str_d))
-        # if not P:
-        P = int(ceil(float(H - R + 1 + 2 * pad_h) / str_h))
-        # if not Q:
-        Q = int(ceil(float(W - S + 1 + 2 * pad_w) / str_w))
+        M = int(ceil(float(D - T + 1 + 2*pad_d) / str_d))
+        P = int(ceil(float(H - R + 1 + 2*pad_h) / str_h))
+        Q = int(ceil(float(W - S + 1 + 2*pad_w) / str_w))
 
         self.C = C
         self.K = K
         self.M = M
         self.P = P
         self.Q = Q
-        self.NCK = (N, C, K)
-        self.TRS = (T, R, S)
-        self.DHW = (D, H, W)
-        self.MPQ = (M, P, Q)
+        self.NCK = (N,C,K)
+        self.TRS = (T,R,S)
+        self.DHW = (D,H,W)
+        self.MPQ = (M,P,Q)
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
+        self.relu = relu
+        self.bsum = bsum
 
-        self.dimI = (C, D, H, W, N)
-        self.dimF = (C, T, R, S, K)
-        self.dimFb = (K, T, R, S, C)
-        self.dimO = (K, M, P, Q, N)
-        self.dimI2 = (C * D * H * W, N)
-        self.dimF2 = (C * T * R * S, K)
-        self.dimF2t = (K, C * T * R * S)
-        self.dimO2 = (K * M * P * Q, N)
-        self.sizeI = reduce(mul, self.dimI, 1)
-        self.sizeF = reduce(mul, self.dimF, 1)
-        self.sizeO = reduce(mul, self.dimO, 1)
-        self.nOut = reduce(mul, self.MPQ, 1) * K
+        self.all_params = (N,C,K,D,H,W,T,R,S,pad_d,pad_h,pad_w,str_d,str_h,str_w)
+
+        self.dimI   = (C,D,H,W,N)
+        self.dimF   = (C,T,R,S,K)
+        self.dimFb  = (K,T,R,S,C)
+        self.dimO   = (K,M,P,Q,N)
+        self.dimI2  = (C*D*H*W,N)
+        self.dimF2  = (C*T*R*S,K)
+        self.dimF2t = (K,C*T*R*S)
+        self.dimO2  = (K*M*P*Q,N)
+        self.dimS   = (K,1)
+        self.sizeI  = reduce(mul, self.dimI, 1)
+        self.sizeF  = reduce(mul, self.dimF, 1)
+        self.sizeO  = reduce(mul, self.dimO, 1)
+        self.nOut   = reduce(mul, self.MPQ, 1) * K
 
         # precompute some multiplications for fast constant memory access
-        HW = H * W
-        DHW = D * HW
-        WN = W * N
-        HWN = H * WN
-        DHWN = D * HWN
-        RS = R * S
-        RST = T * RS
-        CRST = C * RST
-        KRST = K * RST
-        PQ = P * Q
-        PQM = M * PQ
-        QN = Q * N
-        PQN = P * QN
-        MPQN = M * PQN
+        HW   = H*W
+        DHW  = D*HW
+        WN   = W*N
+        HWN  = H*WN
+        DHWN = D*HWN
+        RS   = R*S
+        RST  = T*RS
+        CRST = C*RST
+        KRST = K*RST
+        PQ   = P*Q
+        PQM  = M*PQ
+        QN   = Q*N
+        PQN  = P*QN
+        MPQN = M*PQN
 
-        # I can easily get the kernels working with larger values here..
-        # But this is what version 1 is coded to support.
-        for dim in (CRST, KRST):
-            assert dim < 2**16, "Integer division is faster with 16bit numerators"
-
-        # precompute grid dimensions
-        grid_CRST32 = CRST // 32 + (CRST % 32 != 0)
-        grid_CRST128 = CRST // 128 + (CRST % 128 != 0)
-        grid_C64 = C // 64 + (C % 64 != 0)
-        grid_K64 = K // 64 + (K % 64 != 0)
-        grid_K128 = K // 128 + (K % 128 != 0)
-        grid_N64 = N // 64 + (N % 64 != 0)
-
-        self.fprop_grid = (PQM, grid_K64, grid_N64)
-        self.fprop_block = (64, 1, 1)
-        self.fprop_size = "K64_N64"
-
-        if (C & 7) == 0 and C > 32:
-            self.bprop_size = "C64_N64"
-            self.bprop_block = (64, 1, 1)
-            self.bprop_grid = (DHW, grid_C64, grid_N64)
-
-        else:
-            self.bprop_size = "C32_N64"
-            self.bprop_block = (32, 1, 1)
-            self.bprop_grid = (PQM, grid_CRST32, grid_N64)
-
-        # in float32 the smaller kernel is actually faster in the larger feature maps
-        if update_size is None and np_dtype.type is np.float32 and Q > 56:
-            update_size = "C128_K64"
-
-        # TODO: tune this further
-        if (update_size == "C128_K64") or \
-           (update_size is None and (K <= 64 or (K % 64 == 0 and K % 128 != 0))):
-
-            self.updat_size = "C128_K64"
-            updat_grid = [0, grid_CRST128, grid_K64]
-            updat_block = 128
-        else:
-            self.updat_size = "C128_K128"
-            updat_grid = [0, grid_CRST128, grid_K128]
-            updat_block = 256
-
-        # TODO: tune this further
-        if grid_P == 0 or grid_Q == 0:
-            grid_P = P
-            if Q > 112:
-                grid_Q = 4
-            elif Q > 56:
-                grid_Q = 2
-            else:
-                grid_Q = 1
-
-        grid_P = min(grid_P, P)
-        grid_Q = min(grid_Q, Q)
-
-        grid_PQ = grid_P * grid_Q
-        updat_grid[0] = grid_PQ * M
-
-        self.updat_grid = tuple(updat_grid)
-        self.updat_block = (updat_block, 1, 1)
+        assert CRST  < 2**16, "Integer division is faster with 16bit numerators"
 
         # precompute the magic numbers and shift amounts for integer division
-        magic_HW = _magic64(HW)
-        magic_W = _magic64(W)
-        magic_PQ = _magic64(PQ)
-        magic_Q = _magic64(Q)
-        magic_PQu = _magic64(grid_PQ)
-        magic_Qu = _magic64(grid_Q)
-        magic_RST = _magic32(CRST, RST)
-        magic_RS = _magic32(RST+32, RS)
-        magic_S = _magic32(RS+32, S)
-        magic_str_w = _magic32(W + S - pad_w - 2, str_w)
-        magic_str_h = _magic32(H + R - pad_h - 2, str_h)
-        magic_str_d = _magic32(D + T - pad_d - 2, str_d)
+        magic_HW    = _magic64(HW)
+        magic_W     = _magic64(W)
+        magic_PQ    = _magic64(PQ)
+        magic_Q     = _magic64(Q)
+        magic_RST   = _magic32(CRST, RST)
+        magic_RS    = _magic32(RST+32, RS)
+        magic_S     = _magic32(RS+32, S)
+        magic_str_w = _magic32(W + S, str_w)
+        magic_str_h = _magic32(H + R, str_h)
+        magic_str_d = _magic32(D + T, str_d)
 
         # flop count for benchmarking
         self.flops = PQM * K * N * CRST * 2.0
 
-        # shared lookup table size
-        self.fprop_lut_size = RST * 4 * 2
+        tile_N   = 128 if N > 64 else 64
+        grid_N   = _grid_dim(tile_N, N)
+        tiles_CK = (128,64,32) if tile_N == 128 else (128,64)
 
-        # generate the convolution kernel args for fprop and bprop
-        self.fprop_args = _flatten([
+        ####### FPROP ###########
+        self.fprop_kernels = kernel_specs.xprop_conv_kernels(
+            clss, "fprop", "K", tile_N, grid_N, K, tiles_CK, PQM, RST, _flatten([
             N, K, D, H, W, WN, HWN, DHWN,
             C, KRST, RST, RS, magic_RS, S, magic_S,
             pad_d, pad_h, pad_w, str_d, str_h, str_w,
-            Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ])
+            Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ]))
 
-        # update uses slightly different args
-        self.update_args = _flatten([
-            N, K, D, H, W, WN, HWN, DHWN,
-            C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
-            pad_d, pad_h, pad_w, str_d, str_h, str_w,
-            P, Q, PQ, QN, PQN, MPQN, magic_Qu, magic_PQu,
-            grid_P, grid_Q, grid_PQ])
+        # shared lookup table size
+        self.fprop_lut_size = RST * 4 * 2
 
-        # bprop kernel settings depend on tile size:
-        if self.bprop_size == "C64_N64":
+        ####### BPROP ###########
+        if C < 16 or C % vec_size != 0:
+            # special kernel for deconv into first layer
+            kernel_name = "%s_bprop_C1_N64" % clss
 
-            self.bprop_lut_size = RST * 4 * 2
+            grid  = (PQM, _grid_dim(32, CRST), _grid_dim(64, N))
+            block = (32, 1, 1)
 
-            self.bprop_args = _flatten([
-                N, C, M, P, Q, QN, PQN, MPQN,
-                K, CRST, RST, RS, magic_RS, S, magic_S,
-                pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                W, HW, WN, HWN, DHWN, magic_W, magic_HW,
-                R, T, magic_str_w, magic_str_h, magic_str_d])
-
-            # generate the kernel args for dim shuffling CRSTK => KRSTC
-            self.shuffle_args = _flatten([
-                RST * K, RS * K, S * K, K,
-                RST * C, RS * C, S * C, C,
-                RS, magic_RS, S, magic_S])
-            gridX = (K >> 5) + (K & 31 != 0)
-            gridY = (C >> 5) + (C & 31 != 0)
-            self.shuffle_grid = (gridX, gridY, RST)
-            self.shuffle_block = (32, 8, 1)
-            self.bprop_zero = 0
-        else:
-
-            self.bprop_lut_size = 0
-
-            self.bprop_args = _flatten([
+            self.bprop_kernels = [[kernel_name, grid, block, 0, _flatten([
                 N, K, D, H, W, WN, HWN, DHWN,
                 C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
                 pad_d, pad_h, pad_w, str_d, str_h, str_w,
                 Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ,
-                CRST * 8 * np_dtype.itemsize, MPQN * 8 * np_dtype.itemsize])
+                CRST*8*self.dtype.itemsize, MPQN*8*self.dtype.itemsize])]]
 
-            # generate the kernel args for transpose CRST, K => K, CRST
+            # generate the kernel args for transpose CRST,K => K,CRST
             self.shuffle_args = [CRST, K]
+            gridX   = (K    >> 5) + (K    & 31 != 0)
+            gridY   = (CRST >> 5) + (CRST & 31 != 0)
+            self.shuffle_grid   = (gridX,gridY,1)
+            self.shuffle_block  = (32,8,1)
+            self.bprop_zero     = self.sizeI * self.dtype.itemsize
+            self.bprop_lut_size = 0
+
+        else:
+
+            self.bprop_kernels = kernel_specs.xprop_conv_kernels(
+                clss, "bprop", "C", tile_N, grid_N, C, tiles_CK, DHW, RST, _flatten([
+                    N, C, M, P, Q, QN, PQN, MPQN,
+                    K, CRST, RST, RS, magic_RS, S, magic_S,
+                    pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                    W, HW, WN, HWN, DHWN, magic_W, magic_HW,
+                    R, T, magic_str_w, magic_str_h, magic_str_d]))
+
+            # generate the kernel args for dim shuffling CRSTK => KRSTC
+            self.shuffle_args = _flatten([
+                RST*K, RS*K, S*K, K,
+                RST*C, RS*C, S*C, C,
+                RS, magic_RS, S, magic_S])
             gridX = (K >> 5) + (K & 31 != 0)
-            gridY = (CRST >> 5) + (CRST & 31 != 0)
-            self.shuffle_grid = (gridX, gridY, 1)
-            self.shuffle_block = (32, 8, 1)
-            self.bprop_zero = self.sizeI * np_dtype.itemsize
+            gridY = (C >> 5) + (C & 31 != 0)
+            self.shuffle_grid   = (gridX,gridY,RST)
+            self.shuffle_block  = (32,8,1)
+            self.bprop_zero     = 0
+            self.bprop_lut_size = RST * 4 * 2
+
+        #import ipdb; ipdb.set_trace()
+
+        # for k in self.fprop_kernels: print k
+        # for k in self.bprop_kernels: print k
+        # exit()
+
+        ####### UPDATE ###########
+        # in float32 for big feature_map layers the smaller tile is actually faster
+        # so restrict tile selection to just that.
+        if self.dtype.type is np.float32 and PQ > 56*56:
+            K_tiles = (64,)
+        else:
+            K_tiles = (128,64)
+
+        grid_C   = _grid_dim(128, CRST)
+        sm_count = _get_sm_count()
+
+        self.updat_kernels = []
+        for tile_K, grid_K, offset_K in kernel_specs.K_partitions(K, K_tiles):
+
+            kernel_name = "%s_updat_C128_K%d" % (clss, tile_K)
+            base_blocks = M*grid_C*grid_K
+
+            grid_P, grid_Q, threads = kernel_specs.update_grid(kernel_name, base_blocks, P, Q, sm_count)
+
+            if deterministic_update:
+                grid_P, grid_Q = 1,1
+
+            #print grid_P, grid_Q
+
+            grid_PQ   = grid_P * grid_Q
+            magic_PQu = _magic64(grid_PQ)
+            magic_Qu  = _magic64(grid_Q)
+
+            block = (threads,1,1)
+            if RST > 1:
+                grid = (M*grid_PQ, grid_C, grid_K)
+            else:
+                grid = (grid_C, grid_K, M*grid_PQ)
+
+            self.updat_kernels.append([kernel_name, grid, block, offset_K, _flatten([
+                N, K, D, H, W, WN, HWN, DHWN,
+                C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
+                pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                P, Q, PQ, QN, PQN, MPQN, magic_Qu, magic_PQu,
+                grid_P, grid_Q, grid_PQ])])
+
+        # for k in self.updat_kernels: print k
+        # exit()
+
+    def init_activations(self, fprop_out=None):
+
+        super(ConvLayer, self).init_activations(fprop_out)
+
+        if self.bsum:
+            self.batch_sum = self.lib.empty(self.dimS, dtype=np.float32)
+        else:
+            self.batch_sum = None
 
     def fprop(self, fprop_in, scale_weights=0):
 
         fprop_in = super(ConvLayer, self).fprop(fprop_in)
-        self.lib.fprop_conv(self, fprop_in, self.weights, self.fprop_out, relu=True)
+        self.lib.fprop_conv(self, fprop_in, self.weights, self.fprop_out, bsum=self.batch_sum)
 
         if scale_weights:
             self.scale_weights(scale_weights)
             self.fprop(fprop_in)
 
+        if self.bsum:
+            return (self.fprop_out, self.batch_sum)
         return self.fprop_out
 
-    def bprop(self, bprop_in):
+    def bprop(self, bprop_in, beta=0):
+
+        if self.relu:
             self.bprop_relu(bprop_in)
-            if self.bprop_out is not None:
-                self.lib.bprop_conv(self, self.weights, bprop_in, self.bprop_out)
+        if self.bprop_out is not None:
+            self.lib.bprop_conv(self, self.weights, bprop_in, self.bprop_out, beta=beta)
 
-            self.lib.update_conv(self, self.fprop_in, bprop_in, self.updat_out)
-            self.grad_descent()
+        self.lib.update_conv(self, self.fprop_in, bprop_in, self.updat_out)
+        self.grad_descent()
 
-            return self.bprop_out
+        return self.bprop_out
 
     def __str__(self):
         return ("ConvLayer: NCK: (%d, %d, %d) DHW:%s TRS:%s MPQ:%s" %
@@ -595,7 +620,8 @@ class DeconvLayer(ConvLayer):
                  R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
                  str_d=1, str_h=1, str_w=1,
-                 grid_P=0, grid_Q=0, update_size=None):
+                 relu=False, bsum=False,
+                 deterministic_update=False):
 
         # Set T and D to be consts.
         D = T = 1
@@ -611,7 +637,7 @@ class DeconvLayer(ConvLayer):
             T, R, S,
             pad_d, pad_h, pad_w,
             str_d, str_h, str_w,
-            grid_P, grid_Q, update_size)
+            relu, bsum, deterministic_update)
 
         self.nOut = reduce(mul, self.DHW, 1) * C
         self.H = H
@@ -652,14 +678,21 @@ class PoolLayer(Layer):
                  op, N, C,
                  D=1, H=1, W=1,
                  J=1, T=1, R=1, S=1,
-                 pad_j=0, pad_d=0, pad_h=0, pad_w=0,
-                 str_j=None, str_d=None, str_h=None, str_w=None):
+                 pad_c=0, pad_d=0, pad_h=0, pad_w=0,
+                 str_c=None, str_d=None, str_h=None, str_w=None):
 
         super(PoolLayer, self).__init__(lib, dtype, N)
 
+        if   self.dtype.type is np.float16:
+            clss = "hpool"
+        elif self.dtype.type is np.float32:
+            clss = "spool"
+        else:
+            raise TypeError("Type not supported.")
+
         # default to non-overlapping
-        if str_j is None:
-            str_j = J
+        if str_c is None:
+            str_c = J
         if str_d is None:
             str_d = T
         if str_h is None:
@@ -667,8 +700,8 @@ class PoolLayer(Layer):
         if str_w is None:
             str_w = S
 
-        if str_j < J or str_d < T or str_h < R or str_w < S:
-            self.overlap = (ceil(float(J)/str_j) *
+        if str_c < J or str_d < T or str_h < R or str_w < S:
+            self.overlap = (ceil(float(J)/str_c) *
                             ceil(float(T)/str_d) *
                             ceil(float(R)/str_h) *
                             ceil(float(S)/str_w))
@@ -676,73 +709,98 @@ class PoolLayer(Layer):
             self.overlap = 0.0
 
         # TODO: detect other forms of gaps
-        if str_j > J or str_d > T or str_h > R or str_w > S:
+        if str_c > J or str_d > T or str_h > R or str_w > S:
             self.gaps = 1
         else:
             self.gaps = 0
 
+        bprop_zero = self.overlap or self.gaps
+
         # Compute the output dimensions
-        K = int(ceil(float(C - J + 1 + 2 * pad_j) / str_j))
-        M = int(ceil(float(D - T + 1 + 2 * pad_d) / str_d))
-        P = int(ceil(float(H - R + 1 + 2 * pad_h) / str_h))
-        Q = int(ceil(float(W - S + 1 + 2 * pad_w) / str_w))
+        K = int(ceil(float(C - J + 1 + 2*pad_c) / str_c))
+        M = int(ceil(float(D - T + 1 + 2*pad_d) / str_d))
+        P = int(ceil(float(H - R + 1 + 2*pad_h) / str_h))
+        Q = int(ceil(float(W - S + 1 + 2*pad_w) / str_w))
 
-        self.op = op
-        self.C = C
-        self.K = K
-        self.M = M
-        self.P = P
-        self.Q = Q
-        self.JTRS = (J, T, R, S)
-        self.DHW = (D, H, W)
-        self.MPQ = (M, P, Q)
-        self.padding = (pad_j, pad_d, pad_h, pad_w)
-        self.strides = (str_j, str_d, str_h, str_w)
+        self.op   = op
+        self.C    = C
+        self.K    = K
+        self.M    = M
+        self.P    = P
+        self.Q    = Q
+        self.JTRS = (J,T,R,S)
+        self.DHW  = (D,H,W)
+        self.MPQ  = (M,P,Q)
+        self.padding = (pad_c, pad_d, pad_h, pad_w)
+        self.strides = (str_c, str_d, str_h, str_w)
 
-        self.dimI = (C, D, H, W, N)
-        self.dimO = (K, M, P, Q, N)
-        self.dimF2 = None
-        self.dimI2 = (C * D * H * W, N)
-        self.dimO2 = (K * M * P * Q, N)
-        self.sizeI = reduce(mul, self.dimI, 1)
-        self.sizeO = reduce(mul, self.dimO, 1)
-        self.nOut = reduce(mul, self.MPQ, 1) * K
+        self.dimI   = (C,D,H,W,N)
+        self.dimO   = (K,M,P,Q,N)
+        self.dimF2  = None
+        self.dimI2  = (C*D*H*W,N)
+        self.dimO2  = (K*M*P*Q,N)
+        self.sizeI  = reduce(mul, self.dimI, 1)
+        self.sizeO  = reduce(mul, self.dimO, 1)
+        self.nOut   = reduce(mul, self.MPQ, 1) * K
 
         # precompute some multiplications for fast constant memory access
-        WN = W * N
-        HWN = H * WN
-        DHWN = D * HWN
-        RS = R * S
-        RST = T * RS
-        JRST = J * RST
-        QN = Q * N
-        PM = P * M
-        PQN = P * QN
-        MPQN = M * PQN
+        WN   = W*N
+        HWN  = H*WN
+        DHWN = D*HWN
+        DH   = D*H
+        RS   = R*S
+        RST  = T*RS
+        JRST = J*RST
+        QN   = Q*N
+        PM   = P*M
+        PQN  = P*QN
+        MPQN = M*PQN
 
         assert JRST <= N or N >= 32, "Edge case not currently implemented"
-        assert JRST + 32 < 2**16, "Integer division is faster with 16bit numerators"
+        assert JRST+32 < 2**16, "Integer division is faster with 16bit numerators"
 
         # precompute the magic numbers and shift amounts for integer division
-        magic_RST = _magic32(JRST + 32, RST)
-        magic_RS = _magic32(RST + 32, RS)
-        magic_S = _magic32(RS + 32, S)
-        magic_P = _magic32(PM, P)
+        magic_RST   = _magic32(JRST+32, RST)
+        magic_RS    = _magic32(RST+32, RS)
+        magic_S     = _magic32(RS+32, S)
+        magic_P     = _magic32(PM, P)
 
-        # generate the convolution kernel args for all three operations
-        self.kernel_args = _flatten([
+        fprop_name = clss + "_" + op
+
+        self.fprop_kernel = [ fprop_name, (Q, PM, K), (N, 1, 1), bprop_zero, _flatten([
             N, W, H, D, C, WN, HWN, DHWN,
             P, magic_P, QN, PQN, MPQN,
-            pad_j, pad_d, pad_h, pad_w,
-            str_j, str_d, str_h, str_w,
-            S, RS, RST, JRST, magic_S, magic_RS, magic_RST, self.overlap])
+            pad_c, pad_d, pad_h, pad_w,
+            str_c, str_d, str_h, str_w,
+            S, RS, RST, JRST, magic_S, magic_RS, magic_RST, self.overlap]) ]
 
-        # precompute grid dimensions
-        self.grid = (Q, PM, K)
-        self.block = (N, 1, 1)
+        self.fprop_lut_size = (JRST + 4) * 4
 
-        # shared lookup table size
-        self.lut_size = (JRST + 4) * 4
+        if op == "avg" and self.overlap > 0:
+
+            # we have a special kernel to handle the overlapping avg pooling
+            bprop_name  = clss + "_bprop_avg"
+
+            magic_H     = _magic32(DH, H)
+            magic_str_w = _magic32(W + S, str_w)
+            magic_str_h = _magic32(H + R, str_h)
+            magic_str_d = _magic32(D + T, str_d)
+            magic_str_c = _magic32(C + J, str_c)
+
+            self.bprop_kernel = [ bprop_name, (W, DH, C), (N, 1, 1), False, _flatten([
+                N, W, H, D, C, WN, HWN, DHWN, magic_H,
+                pad_w, pad_h, pad_d, pad_c,
+                str_w, str_h, str_d, str_c,
+                magic_str_w, magic_str_h, magic_str_d, magic_str_c,
+                S, R, T, J, RS, RST, JRST, magic_S, magic_RS, magic_RST,
+                Q, P, M, K, QN, PQN, MPQN ]) ]
+
+            self.bprop_lut_size = (JRST + 1) * 4 * 2
+
+        else:
+            self.bprop_kernel   = self.fprop_kernel
+            self.bprop_lut_size = self.fprop_lut_size
+
 
     def fprop(self, fprop_in, scale_weights=0):
 
@@ -750,7 +808,7 @@ class PoolLayer(Layer):
         self.lib.fprop_pool(self, fprop_in, self.fprop_out)
         return self.fprop_out
 
-    def bprop(self, bprop_in):
+    def bprop(self, bprop_in, beta=0):
         self.lib.bprop_pool(self, self.fprop_in, bprop_in, self.bprop_out)
         return self.bprop_out
 
@@ -780,24 +838,24 @@ class Inception(Layer):
         self.M = M
         self.P = P
         self.Q = Q
-        self.NCK = (N, C, K)
-        self.DHW = (D, H, W)
-        self.MPQ = (M, P, Q)
+        self.NCK = (N,C,K)
+        self.DHW = (D,H,W)
+        self.MPQ = (M,P,Q)
 
-        self.dimI = (C, D, H, W, N)
-        self.dimO = (K, M, P, Q, N)
-        self.dimI2 = (C * D * H * W, N)
-        self.dimO2 = (K * M * P * Q, N)
-        self.sizeI = reduce(mul, self.dimI, 1)
-        self.sizeO = reduce(mul, self.dimO, 1)
-        self.nOut = reduce(mul, self.MPQ, 1) * K
+        self.dimI   = (C,D,H,W,N)
+        self.dimO   = (K,M,P,Q,N)
+        self.dimI2  = (C*D*H*W,N)
+        self.dimO2  = (K*M*P*Q,N)
+        self.sizeI  = reduce(mul, self.dimI, 1)
+        self.sizeO  = reduce(mul, self.dimO, 1)
+        self.nOut   = reduce(mul, self.MPQ, 1) * K
 
         self.sizeF = 0
         self.flops = 0
         for part in partitions:
             for layer in part:
                 self.flops += layer.flops
-                self.sizeF = max(self.sizeF, layer.sizeF)
+                self.sizeF  = max(self.sizeF, layer.sizeF)
                 if self.sizeF == layer.sizeF:
                     self.dimF = layer.dimF
 
@@ -805,23 +863,20 @@ class Inception(Layer):
         out = "Inception: NCK: (%d, %d, %d) DHW:%s MPQ:%s\n" % (self.N, self.C, self.K,
                                                                 self.DHW, self.MPQ)
         for i, part in enumerate(self.partitions):
-            out += "  Part%d:\n" % (i + 1)
+            out += "  Part%d:\n" % (i+1)
             for layer in part:
                 out += "    %s\n" % layer
         return out.rstrip()
 
-    def init_activations(self):
+    def init_activations(self, fprop_out=None):
 
-        super(Inception, self).init_activations()
+        super(Inception, self).init_activations(fprop_out)
         K = 0
         for part in self.partitions:
             for layer in part:
                 if layer is part[-1]:
-                    layer.fprop_out = self.fprop_out[K:K+layer.K, ...]
+                    layer.init_activations(self.fprop_out[K:K+layer.K,...])
                     K += layer.K
-
-                    layer.act_stats = self.lib.empty((layer.dimO2[0], 1), dtype=np.float32)
-
                 else:
                     layer.init_activations()
 
@@ -834,7 +889,7 @@ class Inception(Layer):
         for part in self.partitions:
             for layer in part:
                 if layer is part[0]:
-                    layer.bprop_out = self.bprop_out
+                    layer.bprop_out   = self.bprop_out
                     layer.delta_stats = self.delta_stats
                 else:
                     layer.init_deltas(shared=shared_deltas)
@@ -860,11 +915,15 @@ class Inception(Layer):
 
         K = self.K
         for part in self.partitions[::-1]:
-            part_bprop_in = bprop_in[K - part[-1].K:K, ...]
+            part_bprop_in = bprop_in[K-part[-1].K:K,...]
             K -= part[-1].K
             for layer in part[::-1]:
-                # TODO: we need to accumulate the delta in the common output delta
-                part_bprop_in = layer.bprop(part_bprop_in)
+                if part is not self.partitions[-1] and layer is part[0]:
+                    beta = 1.0
+                else:
+                    beta = 0.0
+
+                part_bprop_in = layer.bprop(part_bprop_in, beta)
 
         return self.bprop_out
 
@@ -878,6 +937,120 @@ class Inception(Layer):
             for layer in part[::-1]:
                 layer.bprop_stats()
 
+
+class BatchNorm(Layer):
+
+    """
+    GPU Layer base class
+    """
+
+    def __init__(self, lib, dtype, N, C=None, D=1, H=1, W=1, nIn=None, rho=0.99, eps=1e-6, relu=False, bsum=False):
+
+        super(BatchNorm, self).__init__(lib, dtype, N)
+
+        self.rho  = rho
+        self.eps  = eps
+        self.relu = relu
+        self.bsum = bsum
+
+        if C is not None:
+
+            self.C     = C
+            self.K     = C
+            self.M     = D
+            self.P     = H
+            self.Q     = W
+            self.dimI  = (C,D,H,W,N)
+            self.dimO  = (C,D,H,W,N)
+            self.dimO2 = (C*D*H*W,N)
+            self.dim2  = (C,D*H*W*N)
+            self.nOut  = C*D*H*W
+
+        elif nIn is not None:
+
+            self.nOut  = nIn
+            self.K     = nIn
+            self.dimI  = (nIn, N)
+            self.dimO  = (nIn, N)
+            self.dimO2 = (nIn, N)
+            self.dim2  = (nIn, N)
+
+        else:
+            raise ValueError("missing C or nIn")
+
+        self.rcp_depth = 1.0/self.dim2[1]
+
+    def __str__(self):
+        return ("BatchNorm: (%d, %d)" % self.dim2)
+
+
+    def init_activations(self, fprop_out=None):
+
+        if fprop_out is not None:
+            self.fprop_out = fprop_out.reshape(self.dim2)
+        else:
+            self.fprop_out = self.lib.empty(self.dim2, dtype=self.dtype)
+
+        self.xvar = self.lib.empty((self.K, 1), dtype=self.dtype)
+        if not self.bsum:
+            self.xsum = self.lib.empty((self.K, 1), dtype=np.float32)
+
+    def init_deltas(self, shared=None): pass
+
+    def init_weights(self, loc=0.0, scale=0.1, shared=None, zeros=False):
+
+        lib = self.lib
+
+        self.beta  = lib.zeros((self.K, 1), dtype=self.dtype)
+        self.gamma = lib.ones((self.K, 1),  dtype=self.dtype)
+
+        self.gmean = lib.zeros((self.K, 1), dtype=self.dtype)
+        self.gvar  = lib.zeros((self.K, 1), dtype=self.dtype)
+
+        self.grad_beta  = lib.zeros((self.K, 1), dtype=self.dtype)
+        self.grad_gamma = lib.zeros((self.K, 1), dtype=self.dtype)
+
+    def fprop(self, fprop_in, scale_weights=0):
+
+        if type(fprop_in) is tuple:
+            fprop_in, bsum = fprop_in
+        else:
+            bsum = None
+
+        if self.fprop_in is None:
+            self.fprop_in = fprop_in.reshape(self.dim2)
+
+        if bsum is None:
+            self.xsum[:] = self.lib.sum(self.fprop_in, axis=1)
+        else:
+            self.xsum = bsum
+
+        self.lib.compound_fprop_bn(
+            self.fprop_in, self.xsum, self.xvar, self.gmean, self.gvar,
+            self.gamma, self.beta, self.fprop_out, self.eps, self.rho, self.relu)
+
+        return self.fprop_out
+
+    def bprop(self, bprop_in, beta=0):
+
+        if self.bprop_in is None:
+            self.bprop_in = bprop_in.reshape(self.dim2)
+
+        if self.relu:
+            self.bprop_relu(self.bprop_in)
+
+        self.lib.compound_bprop_bn(
+            self.bprop_in, self.grad_gamma, self.grad_beta, self.fprop_in,
+            self.xsum, self.xvar, self.gamma, self.eps)
+
+        return self.bprop_in
+
+    def fprop_stats(self): pass
+    def bprop_stats(self): pass
+
+
+def _grid_dim(tile_size, dim_size):
+    return dim_size // tile_size + (dim_size % tile_size != 0)
 
 # Magic numbers and shift amounts for integer division
 # Suitable for when nmax*magic fits in 32 bits
@@ -921,3 +1094,4 @@ def _flatten(lst):
 def _get_sm_count():
     attributes = drv.Context.get_device().get_attributes()
     return attributes[drv.device_attribute.MULTIPROCESSOR_COUNT]
+

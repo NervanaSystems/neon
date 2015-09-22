@@ -21,32 +21,30 @@
     gridDimA : c[0x0][0x14]
     gridDimB : c[0x0][0x18]
 
-    param_Rand[0]   : c[0x0][0x140]
-    param_Rand[1]   : c[0x0][0x144]
+    param_C[0]      : c[0x0][0x140]
+    param_C[1]      : c[0x0][0x144]
     param_A[0]      : c[0x0][0x148]
     param_A[1]      : c[0x0][0x14c]
     param_B[0]      : c[0x0][0x150]
     param_B[1]      : c[0x0][0x154]
-    param_C[0]      : c[0x0][0x158]
-    param_C[1]      : c[0x0][0x15c]
-    param_lda       : c[0x0][0x160]
-    param_ldb       : c[0x0][0x164]
-    param_ldc       : c[0x0][0x168]
-    param_m         : c[0x0][0x16c]
-    param_n         : c[0x0][0x170]
-    param_k         : c[0x0][0x174]
-    param_alpha     : c[0x0][0x178]
-    param_beta      : c[0x0][0x17c]
-    param_flags     : c[0x0][0x180]
-    param_ldaz      : c[0x0][0x184]
-    param_ldbz      : c[0x0][0x188]
-    param_ldcz      : c[0x0][0x18c]
-    param_loops     : c[0x0][0x190]
+    param_alpha     : c[0x0][0x158]
+    param_beta      : c[0x0][0x15c]
+    param_flags     : c[0x0][0x160]
+    param_lda       : c[0x0][0x164]
+    param_ldb       : c[0x0][0x168]
+    param_ldc       : c[0x0][0x16c]
+    param_m         : c[0x0][0x170]
+    param_n         : c[0x0][0x174]
+    param_k         : c[0x0][0x178]
+    param_ldaz      : c[0x0][0x17c]
+    param_ldbz      : c[0x0][0x180]
+    param_ldcz      : c[0x0][0x184]
+    param_loops     : c[0x0][0x188]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
 
-    64-95   ~ tidX, blk, lda, ldb, ldaz, ldbz, tid1, tid7, tid128, tid127, tbid, txa, txb, xmad_ta, xmad_tb, dimA, flag, k1, k2, k3
+    64-95   ~ tidX, blk, lda, ldb, ldaz, ldbz, tid1, tid7, tid128, tid127, txa, txb, xmad_ta, xmad_tb, k1, k2, k3
 
     0-63    : czero<00-63>
 
@@ -66,17 +64,14 @@
 
     108-111 : trackA<0-1>, trackB<0-1>
 
-    112-125 ~ writeS, k, tidY, ta, tb, loop
-    119-125 ~ readAs, readBs, tid, blkA, blkB, blkZ, seed
-    126-127 : Rand<0-1>
+    112-118 ~ writeS, k, tidY, ta, tb, loop
+    119-127 ~ readAs, readBs, tid, blkA, blkB, blkZ
 
-    64-75   ~ ldc, ldcz, ci, xmad_c, clk_shf1, clk_shf2, tid_31, tid_96, tid_128
+    64-75   ~ ldc, ldcz, ci, xmad_c, tid_31, tid_96, tid_128
 
     64-75   : c<0-7>, d3, d2, d1, d0
     76-85   : C00y<0-1>, C04y<0-1>, C08y<0-1>, C12y<0-1>
-    86-107  ~ lfsr<0-2>, ldc1, ldc4, ldc60, writeCs, readCs, cx<00|64>, cy<00|04|08|12>, alpha, beta
-
-    108-125 ~ exp<0-3>, rand<0-3>, lfsr<0-2>_1, lfsr<0-2>_2, flags
+    86-107  ~ ldc1, ldc4, ldc60, writeCs, readCs, cx<00|64>, cy<00|04|08|12>, alpha, beta, flags
 
 </REGISTER_MAPPING>
 
@@ -95,19 +90,6 @@
 <CODE>
         join('', map sprintf("--:-:-:-:1      LDS.U.128 czero%02d, [addr_zero];\n", $_ * 4), 0..15);
 </CODE>
-
-// Grab a seed for this thread
-// (blkB*gridDimA*256 + blkA*256 + tid) & (1024*256 - 1)
---:-:-:-:1      MOV flag, param_flags;
---:-:-:-:1      LOP.AND.NZ P4, RZ, flag, 0x1;
---:-:-:-:1      MOV dimA, gridDimA;
-03:-:-:-:1      ISCADD tbid, blkA, tid, 8;
-04:-:-:-:1      XMAD.U16.U16 dimA, blkB, dimA, RZ;
---:-:-:-:1      ISCADD tbid, dimA, tbid, 8;
---:-:-:-:1      LOP.AND seed, tbid, 1x<2048*32 - 1>;
---:-:-:-:1      LEA      Rand0.CC, seed, param_Rand[0],     0x2;
---:-:-:-:1      LEA.HI.X Rand1,    seed, param_Rand[1], RZ, 0x2;
---:-:-:-:1  @P4 LDG.E.CS seed, [Rand];
 
 --:-:-:-:1      MOV lda, param_lda;
 --:-:-:-:1      MOV ldb, param_ldb;

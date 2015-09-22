@@ -20,52 +20,56 @@
     szShareI  : (128*16 + 32)
     szShareE  : (64*16  + 32)
 
-    param_F[0]         : c[0x0][0x140]
-    param_F[1]         : c[0x0][0x144]
-    param_I[0]         : c[0x0][0x148]
-    param_I[1]         : c[0x0][0x14c]
-    param_E[0]         : c[0x0][0x150]
-    param_E[1]         : c[0x0][0x154]
-    param_alpha        : c[0x0][0x158]
-    param_flags        : c[0x0][0x15c]
-    param_N            : c[0x0][0x160]
-    param_K            : c[0x0][0x164]
-    param_D            : c[0x0][0x168]
-    param_H            : c[0x0][0x16c]
-    param_W            : c[0x0][0x170]
-    param_WN           : c[0x0][0x174]
-    param_HWN          : c[0x0][0x178]
-    param_DHWN         : c[0x0][0x17c]
-    param_C            : c[0x0][0x180]
-    param_CRST         : c[0x0][0x184]
-    param_RST          : c[0x0][0x188]
-    param_magic_RST    : c[0x0][0x18c]
-    param_shift_RST    : c[0x0][0x190]
-    param_RS           : c[0x0][0x194]
-    param_magic_RS     : c[0x0][0x198]
-    param_shift_RS     : c[0x0][0x19c]
-    param_S            : c[0x0][0x1a0]
-    param_magic_S      : c[0x0][0x1a4]
-    param_shift_S      : c[0x0][0x1a8]
-    param_pad_d        : c[0x0][0x1ac]
-    param_pad_h        : c[0x0][0x1b0]
-    param_pad_w        : c[0x0][0x1b4]
-    param_str_d        : c[0x0][0x1b8]
-    param_str_h        : c[0x0][0x1bc]
-    param_str_w        : c[0x0][0x1c0]
-    param_P            : c[0x0][0x1c4]
-    param_Q            : c[0x0][0x1c8]
-    param_PQ           : c[0x0][0x1cc]
-    param_QN           : c[0x0][0x1d0]
-    param_PQN          : c[0x0][0x1d4]
-    param_MPQN         : c[0x0][0x1d8]
-    param_magic_Q      : c[0x0][0x1dc]
-    param_shift_Q      : c[0x0][0x1e0]
-    param_magic_PQ     : c[0x0][0x1e4]
-    param_shift_PQ     : c[0x0][0x1e8]
-    param_grid_P       : c[0x0][0x1ec]
-    param_grid_Q       : c[0x0][0x1f0]
-    param_grid_PQ      : c[0x0][0x1f4]
+    param_Sum[0]       : c[0x0][0x140]
+    param_Sum[1]       : c[0x0][0x144]
+    param_F[0]         : c[0x0][0x148]
+    param_F[1]         : c[0x0][0x14c]
+    param_I[0]         : c[0x0][0x150]
+    param_I[1]         : c[0x0][0x154]
+    param_E[0]         : c[0x0][0x158]
+    param_E[1]         : c[0x0][0x15c]
+    param_alpha        : c[0x0][0x160]
+    param_beta         : c[0x0][0x164]
+    param_flags        : c[0x0][0x168]
+    param_offset_K     : c[0x0][0x16c]
+    param_N            : c[0x0][0x170]
+    param_K            : c[0x0][0x174]
+    param_D            : c[0x0][0x178]
+    param_H            : c[0x0][0x17c]
+    param_W            : c[0x0][0x180]
+    param_WN           : c[0x0][0x184]
+    param_HWN          : c[0x0][0x188]
+    param_DHWN         : c[0x0][0x18c]
+    param_C            : c[0x0][0x190]
+    param_CRST         : c[0x0][0x194]
+    param_RST          : c[0x0][0x198]
+    param_magic_RST    : c[0x0][0x19c]
+    param_shift_RST    : c[0x0][0x1a0]
+    param_RS           : c[0x0][0x1a4]
+    param_magic_RS     : c[0x0][0x1a8]
+    param_shift_RS     : c[0x0][0x1ac]
+    param_S            : c[0x0][0x1b0]
+    param_magic_S      : c[0x0][0x1b4]
+    param_shift_S      : c[0x0][0x1b8]
+    param_pad_d        : c[0x0][0x1bc]
+    param_pad_h        : c[0x0][0x1c0]
+    param_pad_w        : c[0x0][0x1c4]
+    param_str_d        : c[0x0][0x1c8]
+    param_str_h        : c[0x0][0x1cc]
+    param_str_w        : c[0x0][0x1d0]
+    param_P            : c[0x0][0x1d4]
+    param_Q            : c[0x0][0x1d8]
+    param_PQ           : c[0x0][0x1dc]
+    param_QN           : c[0x0][0x1e0]
+    param_PQN          : c[0x0][0x1e4]
+    param_MPQN         : c[0x0][0x1e8]
+    param_magic_Q      : c[0x0][0x1ec]
+    param_shift_Q      : c[0x0][0x1f0]
+    param_magic_PQ     : c[0x0][0x1f4]
+    param_shift_PQ     : c[0x0][0x1f8]
+    param_grid_P       : c[0x0][0x1fc]
+    param_grid_Q       : c[0x0][0x200]
+    param_grid_PQ      : c[0x0][0x204]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -81,7 +85,7 @@
     33,32,41,40,49,48,57,56 : cx<0-7>y6
     37,36,45,44,53,52,61,60 : cx<0-7>y7
 
-    64-67   ~ tid, blkI, blkE
+    64-67   ~ tid, blkI, blkE, one
     68-99   ~ blkMPQ, tidX, tid1, shiftX, magicPQ, magicQ, negQ, negPQ, pq, div1, div2, div3
 
     64-72   ~ c<0-1>, z<0-1>, y<0-1>, x<0-1>, Q
@@ -102,10 +106,19 @@
 
 </REGISTER_MAPPING>
 
---:-:1:-:1      S2R tid,    SR_TID.X;
+--:-:-:-:0      MOV one, 1;
+--:-:1:-:6      S2R tid, SR_TID.X;
+--:-:-:Y:d      ISETP.EQ.AND P0, PT, one, param_RST, PT;
+--:-:-:-:5  @P0 BRA.U CTAID1;
 --:-:2:-:1      S2R blkMPQ, SR_CTAID.X;
 --:-:3:-:1      S2R blkI,   SR_CTAID.Y;
 --:-:4:-:1      S2R blkE,   SR_CTAID.Z;
+--:-:-:-:5      BRA.U END_CTAID1;
+CTAID1:
+--:-:2:-:1      S2R blkMPQ, SR_CTAID.Z;
+--:-:3:-:1      S2R blkI,   SR_CTAID.X;
+--:-:4:-:1      S2R blkE,   SR_CTAID.Y;
+END_CTAID1:
 
 <SCHEDULE_BLOCK>
 // tidX   = tid >> 1
@@ -181,6 +194,7 @@
 
 // k = blockE*64 + tid
 08:-:-:-:1      ISCADD k, blkE, tidX, 6;
+--:-:-:-:1      IADD   k, k, param_offset_K;
 
 --:-:-:-:1      MOV loopN, RZ;
 
@@ -590,9 +604,17 @@ FIRST_LOAD:
 
 FINISH:
 
---:-:1:-:1      S2R tid,    SR_TID.X;
+--:-:-:-:0      MOV one, 1;
+--:-:1:-:6      S2R tid, SR_TID.X;
+--:-:-:Y:d      ISETP.EQ.AND P0, PT, one, param_RST, PT;
+--:-:-:-:5  @P0 BRA.U CTAID2;
 --:-:2:-:1      S2R blkI,   SR_CTAID.Y;
 --:-:3:-:1      S2R blkE,   SR_CTAID.Z;
+--:-:-:-:5      BRA.U END_CTAID2;
+CTAID2:
+--:-:2:-:1      S2R blkI,   SR_CTAID.X;
+--:-:3:-:1      S2R blkE,   SR_CTAID.Y;
+END_CTAID2:
 
 <SCHEDULE_BLOCK>
 
@@ -614,6 +636,8 @@ FINISH:
 
 // kk = blkE*64 + tid31;
 04:-:-:-:1      ISCADD kk, blkE, tid31, 6;
+--:-:-:-:1      IADD   kk, kk, param_offset_K;
+
 
 // crst = blkI*128 + (tid96 >> 1)
 --:-:-:-:1      SHR.U32 crst00, tid96,  1;

@@ -1,0 +1,389 @@
+# Kernel: hpool_bprop_avg
+
+# Copyright 2014 Nervana Systems Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+<CONSTANT_MAPPING>
+    param_E[0]        : c[0x0][0x140]
+    param_E[1]        : c[0x0][0x144]
+    param_B[0]        : c[0x0][0x148]
+    param_B[1]        : c[0x0][0x14c]
+    param_I[0]        : c[0x0][0x150]
+    param_I[1]        : c[0x0][0x154]
+    param_mode        : c[0x0][0x158]
+    param_N           : c[0x0][0x15c]
+    param_W           : c[0x0][0x160]
+    param_H           : c[0x0][0x164]
+    param_D           : c[0x0][0x168]
+    param_C           : c[0x0][0x16c]
+    param_WN          : c[0x0][0x170]
+    param_HWN         : c[0x0][0x174]
+    param_DHWN        : c[0x0][0x178]
+    param_magic_H     : c[0x0][0x17c]
+    param_shift_H     : c[0x0][0x180]
+    param_pad_w       : c[0x0][0x184]
+    param_pad_h       : c[0x0][0x188]
+    param_pad_d       : c[0x0][0x18c]
+    param_pad_c       : c[0x0][0x190]
+    param_str_w       : c[0x0][0x194]
+    param_str_h       : c[0x0][0x198]
+    param_str_d       : c[0x0][0x19c]
+    param_str_c       : c[0x0][0x1a0]
+    param_magic_str_w : c[0x0][0x1a4]
+    param_shift_str_w : c[0x0][0x1a8]
+    param_magic_str_h : c[0x0][0x1ac]
+    param_shift_str_h : c[0x0][0x1b0]
+    param_magic_str_d : c[0x0][0x1b4]
+    param_shift_str_d : c[0x0][0x1b8]
+    param_magic_str_c : c[0x0][0x1bc]
+    param_shift_str_c : c[0x0][0x1c0]
+    param_S           : c[0x0][0x1c4]
+    param_R           : c[0x0][0x1c8]
+    param_T           : c[0x0][0x1cc]
+    param_J           : c[0x0][0x1d0]
+    param_RS          : c[0x0][0x1d4]
+    param_RST         : c[0x0][0x1d8]
+    param_JRST        : c[0x0][0x1dc]
+    param_magic_S     : c[0x0][0x1e0]
+    param_shift_S     : c[0x0][0x1e4]
+    param_magic_RS    : c[0x0][0x1e8]
+    param_shift_RS    : c[0x0][0x1ec]
+    param_magic_RST   : c[0x0][0x1f0]
+    param_shift_RST   : c[0x0][0x1f4]
+    param_Q           : c[0x0][0x1f8]
+    param_P           : c[0x0][0x1fc]
+    param_M           : c[0x0][0x200]
+    param_K           : c[0x0][0x204]
+    param_QN          : c[0x0][0x208]
+    param_PQN         : c[0x0][0x20c]
+    param_MPQN        : c[0x0][0x210]
+</CONSTANT_MAPPING>
+
+<REGISTER_MAPPING>
+
+      0-3 : Out<0-1>, Err<0-1>
+
+     4-15 ~ tid, zy, x, y, z, c, W, H, iOut, one, mask_shr
+     4-15 ~ x_left, y_left, z_left, c_left, q_in_left, p_in_left, m_in_left, k_in_left, q_in_right, p_in_right, m_in_right, k_in_right
+
+    16-60 ~ warp_count, lutStore, lutStore2, jrst, RST, RS, S, pad_d, pad_h, pad_w, pad_c, str_d, str_h, str_w, str_c, qs, pr, mt, kj, j, t, r, s, rs, rst, q, p, m, k, q_prime, p_prime, m_prime, k_prime, ballot, warp_slices, dep_thd_mask, dep_thd_bits, dep_thd_cnt
+
+       61 : lutSize
+    62-63 : sliceEin<0-1>
+    62-63 : sliceE, rcp_in
+
+     4-11 : load0Err<0-1>, load1Err<0-1>, load2Err<0-1>, load3Err<0-1>
+
+    12-19 : pair0<0-1>, pair1<0-1>, pair2<0-1>, pair3<0-1>
+    12-19 : errOffset0, rcpInput0, errOffset1, rcpInput1, errOffset2, rcpInput2, errOffset3, rcpInput3
+
+    20-60 ~ jrst_<0-3>, load<0-3>, sum, lutOffset
+
+</REGISTER_MAPPING>
+
+--:-:1:-:1      S2R tid,  SR_TID.X; // tid==n
+--:-:2:-:1      S2R x,  SR_CTAID.X;
+--:-:3:-:1      S2R zy, SR_CTAID.Y;
+--:-:4:-:1      S2R c,  SR_CTAID.Z;
+
+<SCHEDULE_BLOCK>
+01:-:-:-:1      ISETP.GE.AND P6, PT, tid, 32, PT;
+
+// z = zy / H
+// y = zy % H
+--:-:-:-:1      MOV W, param_W;
+--:-:-:-:1      MOV H, param_H;
+04:-:-:-:1      XMAD.LO2C z, zy, param_magic_H, RZ;
+--:-:-:-:1      SHR.U32 z, z, param_shift_H;
+--:-:-:-:1      VMAD.U16.U16 y, -z, H, zy;
+
+--:-:-:-:1      LOP.AND.NZ P1, RZ, y, 1;
+--:-:-:-:1  @P1 IADD3 x, -x, -1, W;
+
+--:-:-:-:1      LEA      Err0.CC, tid, param_E[0],     1;
+--:-:-:-:1      LEA.HI.X Err1,    tid, param_E[1], RZ, 1;
+
+// iOut = c*DHWN + z*HWN + y*WN + x*N + n
+02:-:-:-:1      XMAD      iOut, x, param_N,    tid;
+--:-:-:-:1      XMAD.LO2C iOut, y, param_WN,   iOut;
+--:-:-:-:1      XMAD.LO2C iOut, z, param_HWN,  iOut;
+08:-:-:-:1      XMAD.LO2C iOut, c, param_DHWN, iOut;
+--:-:-:-:1      LEA       Out0.CC, iOut, param_B[0],     1;
+--:-:-:-:0      LEA.HI.X  Out1,    iOut, param_B[1], RZ, 1;
+
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5  @P6 BRA.U END_SETUP;
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      MOV one,        1;
+--:-:-:-:1      MOV warp_count, 32;
+--:-:-:-:1      MOV lutStore2,  RZ;
+--:-:-:-:1      MOV lutSize,    RZ;
+--:-:-:-:1      MOV jrst,       tid;
+--:-:-:-:1      MOV RST,        param_RST;
+--:-:-:-:1      MOV RS,         param_RS;
+--:-:-:-:1      MOV S,          param_S;
+
+--:-:-:-:1      MOV     dep_thd_mask, -1;
+--:-:-:-:1      IADD    mask_shr, -tid, 32;
+--:-:-:-:1      SHR.U32 dep_thd_mask, dep_thd_mask, mask_shr;
+
+--:-:-:-:1      MOV pad_d, param_pad_d;
+--:-:-:-:1      MOV pad_h, param_pad_h;
+--:-:-:-:1      MOV pad_w, param_pad_w;
+--:-:-:-:1      MOV pad_c, param_pad_c;
+
+--:-:-:-:1      MOV str_d, param_str_d;
+--:-:-:-:1      MOV str_h, param_str_h;
+--:-:-:-:1      MOV str_w, param_str_w;
+--:-:-:-:1      MOV str_c, param_str_c;
+
+// qs = x - S + pad_w + 1
+// pr = y - R + pad_h + 1
+// mt = z - T + pad_d + 1
+// kj = c - J + pad_c + 1
+--:-:-:-:1      IADD  qs, x, -param_S;
+--:-:-:-:1      IADD3 qs, qs, pad_w, one;
+--:-:-:-:1      IADD  pr, y, -param_R;
+--:-:-:-:1      IADD3 pr, pr, pad_h, one;
+--:-:-:-:1      IADD  mt, z, -param_T;
+--:-:-:-:1      IADD3 mt, mt, pad_d, one;
+--:-:-:-:1      IADD  kj, c, -param_J;
+--:-:-:-:1      IADD3 kj, kj, pad_c, one;
+</SCHEDULE_BLOCK>
+
+LUT_LOOP:
+
+<SCHEDULE_BLOCK>
+// warp synchronous loop while warp_count < JRST
+--:-:-:-:1      ISETP.LT.AND P4, PT, warp_count, param_JRST, PT;
+--:-:-:-:1      ISETP.LT.AND P3, PT, jrst, param_JRST, PT;
+--:-:-:-:1      IADD warp_count, warp_count, 32;
+// j   = jrst / RST
+// rst = jrst % RST
+--:-:-:-:1      XMAD.LO2C j, jrst, param_magic_RST, RZ;
+--:-:-:-:1      SHR.U32   j, j, param_shift_RST;
+--:-:-:-:1      VMAD.U16.U16 rst, -j, RST, jrst;
+// t =  rst / RS
+// rs = rst % RS
+--:-:-:-:1      XMAD.LO2C t, rst, param_magic_RS, RZ;
+--:-:-:-:1      SHR.U32   t, t, param_shift_RS;
+--:-:-:-:1      VMAD.U16.U16 rs, -t, RS, rst;
+// r = rs / S
+// s = rs % S
+--:-:-:-:1      XMAD.LO2C r, rs, param_magic_S, RZ;
+--:-:-:-:1      SHR.U32   r, r, param_shift_S;
+--:-:-:-:1      VMAD.U16.U16 s, -r, S, rs;
+// x = qs + s
+// y = pr + r
+// z = mt + t
+// k = kj + j
+--:-:-:-:1      IADD q, qs, s;
+--:-:-:-:1      IADD p, pr, r;
+--:-:-:-:1      IADD m, mt, t;
+--:-:-:-:1      IADD k, kj, j;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, q, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, p, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P2, PT, m, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P3, PT, k, RZ, P3;
+
+// q_prime = q / str_w
+// q       = q % str_w
+--:-:-:-:1      XMAD    q_prime, q, param_magic_str_w, RZ;
+--:-:-:-:1      SHR.U32 q_prime, q_prime, param_shift_str_w;
+--:-:-:-:1      VMAD.U16.U16 q, -q_prime, str_w, q;
+// p_prime = p / str_h
+// p       = p % str_h
+--:-:-:-:1      XMAD    p_prime, p, param_magic_str_h, RZ;
+--:-:-:-:1      SHR.U32 p_prime, p_prime, param_shift_str_h;
+--:-:-:-:1      VMAD.U16.U16 p, -p_prime, str_h, p;
+// m_prime = m / str_d
+// z       = m % str_d
+--:-:-:-:1      XMAD    m_prime, m, param_magic_str_d, RZ;
+--:-:-:-:1      SHR.U32 m_prime, m_prime, param_shift_str_d;
+--:-:-:-:1      VMAD.U16.U16 m, -m_prime, str_d, m;
+// k_prime = k / str_c
+// k       = k % str_c
+--:-:-:-:1      XMAD    k_prime, k, param_magic_str_c, RZ;
+--:-:-:-:1      SHR.U32 k_prime, k_prime, param_shift_str_c;
+--:-:-:-:1      VMAD.U16.U16 k, -k_prime, str_c, k;
+
+--:-:-:-:1      ISETP.EQ.AND  P0, PT, q, RZ, P0;
+--:-:-:-:1      ISETP.EQ.AND  P1, PT, p, RZ, P1;
+--:-:-:-:1      ISETP.EQ.AND  P2, PT, m, RZ, P2;
+--:-:-:-:1      ISETP.EQ.AND  P3, PT, k, RZ, P3;
+
+--:-:-:-:1      ISETP.LT.AND  P0, PT, q_prime, param_Q, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, p_prime, param_P, P1;
+--:-:-:-:1      ISETP.LT.AND  P2, PT, m_prime, param_M, P2;
+--:-:-:-:1      ISETP.LT.AND  P3, PT, k_prime, param_K, P3;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P1, PT;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P2, P3;
+
+// sliceE = k*MPQN + m*PQN + p*QN + q*N
+01:-:-:-:1      XMAD      sliceE, q_prime, param_N,    RZ;
+--:-:-:-:1      XMAD.LO2C sliceE, p_prime, param_QN,   sliceE;
+--:-:-:-:1      XMAD.LO2C sliceE, m_prime, param_PQN,  sliceE;
+--:-:-:-:1      XMAD.LO2C sliceE, k_prime, param_MPQN, sliceE;
+--:-:-:-:1      SHL sliceE, sliceE, 1;
+
+
+// x_left = q * strides - padding
+--:-:-:-:1      VMAD.U16.U16 x_left, q_prime, str_w, -pad_w;
+--:-:-:-:1      VMAD.U16.U16 y_left, p_prime, str_h, -pad_h;
+--:-:-:-:1      VMAD.U16.U16 z_left, m_prime, str_d, -pad_d;
+--:-:-:-:1      VMAD.U16.U16 c_left, k_prime, str_c, -pad_c;
+
+// q_in = min( min(S + x_left, S), min(X - x_left, S) )
+--:-:-:-:1      IADD q_in_left, x_left, param_S;
+--:-:-:-:1      IADD p_in_left, y_left, param_R;
+--:-:-:-:1      IADD m_in_left, z_left, param_T;
+--:-:-:-:1      IADD k_in_left, c_left, param_J;
+
+--:-:-:-:1      IADD q_in_right, -x_left, param_W;
+--:-:-:-:1      IADD p_in_right, -y_left, param_H;
+--:-:-:-:1      IADD m_in_right, -z_left, param_D;
+--:-:-:-:1      IADD k_in_right, -c_left, param_C;
+
+--:-:-:-:1      IMNMX q_in_left, q_in_left, param_S, PT;
+--:-:-:-:1      IMNMX p_in_left, p_in_left, param_R, PT;
+--:-:-:-:1      IMNMX m_in_left, m_in_left, param_T, PT;
+--:-:-:-:1      IMNMX k_in_left, k_in_left, param_J, PT;
+
+--:-:-:-:1      IMNMX q_in_right, q_in_right, param_S, PT;
+--:-:-:-:1      IMNMX p_in_right, p_in_right, param_R, PT;
+--:-:-:-:1      IMNMX m_in_right, m_in_right, param_T, PT;
+--:-:-:-:1      IMNMX k_in_right, k_in_right, param_J, PT;
+
+--:-:-:-:1      IMNMX q_in_left, q_in_left, q_in_right, PT;
+--:-:-:-:1      IMNMX p_in_left, p_in_left, p_in_right, PT;
+--:-:-:-:1      IMNMX m_in_left, m_in_left, m_in_right, PT;
+--:-:-:-:1      IMNMX k_in_left, k_in_left, k_in_right, PT;
+
+// total_in = q_in * p_in * m_in * k_in
+--:-:-:-:1      XMAD q_in_left, q_in_left, p_in_left, RZ;
+--:-:-:-:1      XMAD m_in_left, m_in_left, k_in_left, RZ;
+--:-:-:-:1      XMAD q_in_left, q_in_left, m_in_left, RZ;
+
+// rcpIn = 1 / total_in
+--:-:-:-:1      ISETP.NE.AND P6, PT, q_in_left, RZ, PT;
+--:-:6:-:1      I2F.F32.S32 rcp_in, q_in_left;
+20:-:6:-:1  @P6 MUFU.RCP rcp_in, rcp_in;
+
+<ORDERED>
+// Get a mask of all valid slices in the warp
+--:-:-:-:1      VOTE.ANY ballot, PT, P0;
+// Count the total valid slices
+--:-:2:-:1      POPC warp_slices, ballot;
+// Prepare lutStore for this and next loop
+--:-:-:-:1  @P0 MOV    lutStore, lutStore2;
+02:-:-:-:1      ISCADD lutStore2, warp_slices, lutStore2, 3;
+// Count all the valid slices below this threadid
+--:-:-:-:1  @P0 LOP.AND dep_thd_bits, dep_thd_mask, ballot;
+--:-:3:-:1  @P0 POPC dep_thd_cnt, dep_thd_bits;
+// use the rst increment to space the barrier sync
+--:-:-:-:1      IADD jrst, jrst, 32;
+// Update the lutStore address from this count
+04:-:-:-:1  @P0 ISCADD lutStore, dep_thd_cnt, lutStore, 3;
+// Store both slice offsets in the lut
+20:1:-:-:1  @P0 STS.64 [lutStore + 4x<2>], sliceEin;
+</ORDERED>
+// Keep track of the total size of the lut
+--:-:-:-:1      IADD lutSize, lutSize, warp_slices;
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5  @P4 BRA.U LUT_LOOP;
+
+// Share the lut size with the other warp
+--:1:-:-:2      STS [RZ], lutSize;
+
+END_SETUP:
+
+01:-:-:-:5      BAR.SYNC 0;
+
+--:-:1:-:1      LDS lutSize, [RZ];
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      MOV jrst_0, RZ;
+--:-:-:-:1      MOV jrst_1, 1;
+--:-:-:-:1      MOV jrst_2, 2;
+--:-:-:-:1      MOV jrst_3, 3;
+--:-:-:-:1      MOV sum, RZ;
+--:-:-:-:1      MOV lutOffset, 4x<2>;
+01:-:-:-:1      ISETP.LT.AND P0, PT, jrst_0, lutSize, PT;
+--:-:-:-:1      ISETP.LT.AND P1, PT, jrst_1, lutSize, PT;
+--:-:-:-:1      ISETP.LT.AND P2, PT, jrst_2, lutSize, PT;
+--:-:-:-:7      ISETP.LT.AND P3, PT, jrst_3, lutSize, PT;
+</SCHEDULE_BLOCK>
+
+LOOP:
+
+--:-:1:-:2  @P0 LDS.U.64 pair0, [lutOffset + 4x<0>];
+--:-:2:-:2  @P1 LDS.U.64 pair1, [lutOffset + 4x<2>];
+--:-:3:-:2  @P2 LDS.U.64 pair2, [lutOffset + 4x<4>];
+--:-:4:-:1  @P3 LDS.U.64 pair3, [lutOffset + 4x<6>];
+
+01:-:-:-:6  @P0 IADD   load0Err0.CC, Err0, errOffset0;
+--:-:-:-:2  @P0 IADD.X load0Err1,    Err1, RZ;
+--:-:1:-:1  @P0 LDG.E.CI.U16 load0, [load0Err];
+
+02:-:-:-:6  @P1 IADD   load1Err0.CC, Err0, errOffset1;
+--:-:-:-:2  @P1 IADD.X load1Err1,    Err1, RZ;
+--:-:2:-:1  @P1 LDG.E.CI.U16 load1, [load1Err];
+
+04:-:-:-:6  @P2 IADD   load2Err0.CC, Err0, errOffset2;
+--:-:-:-:2  @P2 IADD.X load2Err1,    Err1, RZ;
+--:-:3:-:1  @P2 LDG.E.CI.U16 load2, [load2Err];
+
+08:-:-:-:6  @P3 IADD   load3Err0.CC, Err0, errOffset3;
+--:-:-:-:2  @P3 IADD.X load3Err1,    Err1, RZ;
+--:-:4:-:1  @P3 LDG.E.CI.U16 load3, [load3Err];
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      IADD jrst_0, jrst_0, 4;
+--:-:-:-:1      IADD jrst_1, jrst_1, 4;
+--:-:-:-:1      IADD jrst_2, jrst_2, 4;
+--:-:-:-:1      IADD jrst_3, jrst_3, 4;
+--:-:-:-:1      IADD lutOffset, lutOffset, 4x<8>;
+01:-:1:-:1  @P0 F2F.F32.F16 load0, load0;
+02:-:2:-:1  @P1 F2F.F32.F16 load1, load1;
+04:-:3:-:1  @P2 F2F.F32.F16 load2, load2;
+08:-:4:-:1  @P3 F2F.F32.F16 load3, load3;
+</SCHEDULE_BLOCK>
+
+01:-:-:-:6  @P0 FMUL load0, load0, rcpInput0;
+--:-:-:-:1  @P0 FADD sum, sum, load0;
+--:-:-:-:1      ISETP.LT.AND P0, PT, jrst_0, lutSize, PT;
+
+02:-:-:-:6  @P1 FMUL load1, load1, rcpInput1;
+--:-:-:-:1  @P1 FADD sum, sum, load1;
+--:-:-:-:1      ISETP.LT.AND P1, PT, jrst_1, lutSize, PT;
+
+04:-:-:-:6  @P2 FMUL load2, load2, rcpInput2;
+--:-:-:-:1  @P2 FADD sum, sum, load2;
+--:-:-:-:1      ISETP.LT.AND P2, PT, jrst_2, lutSize, PT;
+
+08:-:-:-:6  @P3 FMUL load3, load3, rcpInput3;
+--:-:-:-:1  @P3 FADD sum, sum, load3;
+--:-:-:-:2      ISETP.LT.AND P3, PT, jrst_3, lutSize, PT;
+
+--:-:-:-:5  @P0 BRA.U LOOP;
+
+--:-:1:-:2      F2F.F16.F32 sum, sum;
+
+01:-:-:-:1      STG.E.CG.U16 [Out], sum;
+
+--:-:-:-:5      EXIT;

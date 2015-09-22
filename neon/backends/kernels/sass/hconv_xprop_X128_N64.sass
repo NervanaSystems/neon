@@ -1,0 +1,281 @@
+
+# Copyright 2014 Nervana Systems Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+[-
+    our $prefix = 'h';
+    our $shareI = 64;
+    our $shareF = 128;
+    our $stepI  = 32;
+    our $stepF  = 64;
+    our $remapF = 1;
+-]
+
+<INCLUDE file="xconv_xprop_common.sass"/>
+
+<CONSTANT_MAPPING>
+    addr_zero : 4x<64*8*2 + 128*8*2 + 0>
+    szShareF  : (128*8)
+    szShareI  : (64*8)
+
+    addr_zero  : 4x<64*8*2 + 128*8*2 + 0>
+    addr_m     : 4x<64*8*2 + 128*8*2 + 4>
+    addr_p     : 4x<64*8*2 + 128*8*2 + 5>
+    addr_q     : 4x<64*8*2 + 128*8*2 + 6>
+    addr_szLut : 4x<64*8*2 + 128*8*2 + 7>
+    addr_lut   : 4x<64*8*2 + 128*8*2 + 8>
+
+[+ params() +]
+
+</CONSTANT_MAPPING>
+
+<REGISTER_MAPPING>
+
+     3, 2,11,10,19,18,27,26 : cx<0-7>y0
+     7, 6,15,14,23,22,31,30 : cx<0-7>y1
+     1, 0, 9, 8,17,16,25,24 : cx<0-7>y2
+     5, 4,13,12,21,20,29,28 : cx<0-7>y3
+    35,34,43,42,51,50,59,58 : cx<0-7>y4
+    39,38,47,46,55,54,63,62 : cx<0-7>y5
+    33,32,41,40,49,48,57,56 : cx<0-7>y6
+    37,36,45,44,53,52,61,60 : cx<0-7>y7
+
+       0-63 : czero<00-63>
+
+      64-67 : mpq<0-3>
+      64-70 : m, p, q, tidY, blkMPQ, one, tid
+
+     71-73  ~ blkF, blkI
+     74-109 ~ tid1, tid15, tidFX, tidIX
+     71-109 ~ mask_shr, rst, lutStore, lutStore2, warp_count, mt, pr, qs, dep_thd_mask, dep_thd_bits, dep_thd_cnt, t, r, s, rs, x, y, z, ballot, warp_slices, partial, endCRST, magicPQ, magicQ, negQ, negPQ, div1, div2, div3, str_d, str_h, str_w, rst_prime, x_prime, y_prime, z_prime
+
+      64-79 : j0Ix<0-7>, j0Fy<0-7>
+      80-95 : j1Ix<0-7>, j1Fy<0-7>
+
+      96-99 : trackI<0-1>, trackF<0-1>
+
+    100-103 : loadF<0-3>
+    100-103 : storeF<0-3>
+    104-107 : storeF<4-7>
+
+    108-109 : loadI<0-1>
+    104-107 : storeI<0-3>
+
+    104-107 ~ offsetF
+
+    110-111 : sliceI, sliceF
+    110-111 : sliceIF<0-1>
+
+    112-124 ~ writeFs, writeIs, offsetIn, offsetFk, posCRST, posCRSTf, channel, lutSize, lutSizeRcp, lutOffset, offsetI, offsetIc, offsetFc
+    125-127 ~ readFs, readIs, swapBuf
+
+    74-75   : Out<0-1>
+    76-95   : cs<0-7>, b<0-7>, c<0-3>
+    96-97   : Sum<0-1>
+    98-124  ~ writeCs, readCs, alpha, beta, flags, tidOX, tidOY, to, k, n, MPQN, MPQN1, sum<0-3>
+
+</REGISTER_MAPPING>
+
+// 1 tid
+// 2 blkF
+// 3 blkI
+// 4 blkMPQ
+[+ load_ids() +]
+
+<SCHEDULE_BLOCK>
+01:-:-:-:1      ISETP.GE.AND P0, PT, tid, 32, PT;
+
+[+ load_zeros() +]
+
+// tidFX = (tid & 15) << 3
+// tidIX = (tid & 15) << 2
+// tidY = tid >> 4
+--:-:-:-:1      LOP.AND tid15, tid,  15;
+--:-:-:-:1      SHL     tidFX, tid15, 3;
+--:-:-:-:1      SHL     tidIX, tid15, 2;
+--:-:-:-:1      SHR.U32 tidY,  tid,   4;
+
+// trackF += blkF*128 + tidFX + offset_K
+02:-:-:-:1      ISCADD  offsetFk, blkF, tidFX, 7;
+--:-:-:-:1      IADD    offsetFk, offsetFk, param_offset_K;
+
+// trackI += blkI*64 + tidIX
+0c:-:-:-:1      ISCADD  offsetIn, blkI, tidIX, 6;
+
+// Remap the FX dim to avoid bank conflicts when storing to shared
+
+// writeFs = (128*tidY + tidIX) * 4
+--:-:-:-:1      ISCADD  writeFs, tidY, tidIX, 7;
+--:-:-:-:1      SHL     writeFs, writeFs, 2;
+
+// writeIs = (64*tidY + tidIX) * 4
+--:-:-:-:1      ISCADD  writeIs, tidY, tidIX, 6;
+--:-:-:-:1      ISCADD  writeIs, writeIs, 4x<szShareF>, 2;
+
+--:-:-:-:1      MOV32I swapBuf, 4x<szShareF + szShareI>;
+
+// readFs = ((tid & -16) >> 3) | (tid & 1)
+--:-:-:-:1      LOP.AND tid1,   tid,    1;
+--:-:-:-:1      LOP.AND readFs, tid,   -16;
+--:-:-:-:1      SHR.U32 readFs, readFs, 3;
+--:-:-:-:1      LOP.OR  readFs, readFs, tid1;
+--:-:-:-:1      SHL     readFs, readFs, 4;
+
+// readIs = (tid >> 1) & 7
+--:-:-:-:1      BFE.U32 readIs, tid,    0x301; // 3 bits at position 1
+--:-:-:-:0      ISCADD  readIs, readIs, 4x<szShareF>, 4;
+</SCHEDULE_BLOCK>
+
+[+ load_lut() +]
+
+--:-:2:-:1  @P1 LDG.E.CI.128 loadF, [trackF];
+--:-:5:-:1 @!P1 LDS.U.128    loadF, [addr_zero];
+
+--:-:3:-:1  @P1 LDG.E.64 loadI, [trackI];
+--:-:6:-:1 @!P1 LDS.U.64 loadI, [addr_zero];
+
+12:-:-:-:1      F2F.F32.F16 storeF7, loadF3.H1;
+--:-:-:-:1      F2F.F32.F16 storeF6, loadF3.H0;
+--:-:-:-:1      F2F.F32.F16 storeF5, loadF2.H1;
+--:-:1:-:1      F2F.F32.F16 storeF4, loadF2.H0;
+--:-:-:-:1      F2F.F32.F16 storeF3, loadF1.H1;
+--:-:-:-:1      F2F.F32.F16 storeF2, loadF1.H0;
+--:-:-:-:1      F2F.F32.F16 storeF1, loadF0.H1;
+--:-:2:-:1      F2F.F32.F16 storeF0, loadF0.H0;
+
+01:-:-:-:1      STS.128 [writeFs + 4x<64>], storeF4;
+02:1:-:-:2      STS.128 [writeFs + 4x<00>], storeF0;
+
+25:-:-:-:1      F2F.F32.F16 storeI3, loadI1.H1;
+--:-:-:-:1      F2F.F32.F16 storeI2, loadI1.H0;
+--:-:-:-:1      F2F.F32.F16 storeI1, loadI0.H1;
+--:-:3:-:2      F2F.F32.F16 storeI0, loadI0.H0;
+
+04:1:-:-:1      STS.128 [writeIs], storeI0;
+
+[+ loop_setup() +]
+
+--:-:2:-:2  @P1 LDG.E.CI.128 loadF, [trackF];
+--:-:3:-:1  @P1 LDG.E.64     loadI, [trackI];
+
+[-
+    our %insert =
+    (
+        j0c1  => "--:-:-:-:1      ISETP.GE.AND P1, PT, posCRST,  RZ, PT;\n",
+        j0c3  => "--:-:-:-:1      ISETP.GE.AND P0, PT, posCRST, -8, PT;\n",
+
+        j0c13 => "--:-:6:-:1  \@P1 I2F.F32.S32 posCRSTf, posCRST;\n",
+
+        j0c39 => "20:-:-:-:1  \@P1 FMUL channel, posCRSTf, lutSizeRcp;\n",
+        j0c44 => "--:-:-:-:1  \@P1 FFMA channel, channel, 5.9604644775390625e-08, channel;\n",
+        j0c46 => "--:-:6:-:1  \@P1 F2I.S32.F32.TRUNC channel, channel;\n",
+
+        j1c8  => "20:-:-:-:1  \@P1 VMAD.U16.U16 lutOffset, -channel, lutSize, posCRST;\n",
+        j1c13 => "--:-:-:-:1  \@P1 SHL lutOffset, lutOffset, 3;\n",
+
+        j1c17 => "--:-:6:-:1  \@P1 LDS.U.64 sliceIF, [lutOffset + addr_lut];\n",
+
+        j1c29 => "02:-:-:-:1  \@P0 F2F.F32.F16 storeF7, loadF3.H1;\n",
+        j1c33 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeF6, loadF3.H0;\n",
+        j1c37 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeF5, loadF2.H1;\n",
+        j1c41 => "--:-:5:-:1  \@P0 F2F.F32.F16 storeF4, loadF2.H0;\n",
+        j1c45 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeF3, loadF1.H1;\n",
+        j1c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeF2, loadF1.H0;\n",
+        j1c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeF1, loadF0.H1;\n",
+        j1c57 => "--:-:2:-:1  \@P0 F2F.F32.F16 storeF0, loadF0.H0;\n",
+
+        j1c59 => "10:5:-:-:1  \@P0 STS.128 [writeFs + 4x<64>], storeF4;\n",
+        j2c8  => "02:2:-:-:1  \@P0 STS.128 [writeFs + 4x<00>], storeF0;\n",
+
+        j2c10 => "--:-:-:-:1  \@P1 XMAD     offsetFc, channel, param_KRST, RZ;\n",
+        j2c15 => "--:-:-:-:1  \@P1 XMAD     offsetIc, channel, param_DHWN,    RZ;\n",
+        j2c20 => "--:-:-:-:1  \@P1 XMAD.PSL offsetIc, channel, param_DHWN.H1, offsetIc;\n",
+        j2c22 => "--:-:-:-:1      IADD posCRST, posCRST, -8;\n",
+
+        j2c29 => "30:-:-:-:1  \@P1 IADD3    offsetF, offsetFk, offsetFc, sliceF;\n",
+        j2c34 => "--:-:-:-:1  \@P1 LEA      trackF0.CC, offsetF, param_F[0],     1;\n",
+        j2c36 => "--:-:-:-:1  \@P1 IADD3    offsetI, offsetIn, offsetIc, sliceI;\n",
+        j2c38 => "--:-:-:-:1  \@P1 LEA.HI.X trackF1,    offsetF, param_F[1], RZ, 1;\n",
+
+        j2c40 => "02:-:2:-:1  \@P1 LDG.E.CI.128 loadF, [trackF];\n",
+
+        j5c45 => "04:-:-:-:1  \@P0 F2F.F32.F16 storeI3, loadI1.H1;\n",
+        j5c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeI2, loadI1.H0;\n",
+        j5c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeI1, loadI0.H1;\n",
+        j5c57 => "--:-:3:-:1  \@P0 F2F.F32.F16 storeI0, loadI0.H0;\n",
+
+        j6c8  => "04:3:-:-:1  \@P0 STS.128 [writeIs], storeI0;\n",
+
+        j6c55 => "--:-:-:-:1  \@P1 LEA      trackI0.CC, offsetI, param_I[0],     1;\n",
+        j6c60 => "--:-:-:-:1  \@P1 LEA.HI.X trackI1,    offsetI, param_I[1], RZ, 1;\n",
+
+        j6c62 => "04:-:3:-:1  \@P1 LDG.E.64 loadI, [trackI];\n",
+
+        j6c63   => "--:-:-:-:5  \@P0 BAR.SYNC 0;\n" .
+                   "--:-:-:-:1  \@P0 IADD readIs,  readIs, -swapBuf;\n" .
+                   "--:-:-:-:1  \@P0 IADD readFs,  readFs, -swapBuf;\n" .
+                   "--:-:-:-:1  \@P0 IADD writeIs, writeIs, swapBuf;\n" .
+                   "--:-:-:-:1  \@P0 IADD writeFs, writeFs, swapBuf;\n" .
+                   "--:-:-:-:1  \@P0 IADD swapBuf, RZ,     -swapBuf;\n",
+
+        j7c63 => "--:-:-:Y:5  \@P0 BRA.U LOOP;\n",
+    );
+-]
+
+LOOP:
+
+[+ main_loop() +]
+
+// 1 mpq
+// 2 tid
+// 3 blkF
+// 4 blkI
+[+ reload_ids() +]
+
+<SCHEDULE_BLOCK>
+
+// tidOX = (tid & 7) << 3
+// tidOY = tid >> 3
+02:-:-:-:1      LOP.AND tidOX,  tid,   7;
+--:-:-:-:1      SHL     tidOX,  tidOX, 3;
+--:-:-:-:1      SHR.U32 tidOY,  tid,   3;
+
+--:-:-:-:1      ISETP.GT.AND P2, PT, swapBuf, RZ, PT;
+--:-:-:-:1      IADD readIs,  readIs, -4x<szShareF>;
+--:-:-:-:1  @P2 IADD readFs,  readFs, -swapBuf;
+--:-:-:-:1  @P2 IADD readIs,  readIs, -swapBuf;
+
+// Div by 4 here collapses k stride
+// writeCs = (readFs / 4) * 64 + readIs;
+--:-:-:-:1      ISCADD  writeCs, readFs, readIs, 4;
+
+// readCs  = 4 * (tidOX + (tidOY * 64))
+--:-:-:-:1      ISCADD readCs, tidOY, tidOX, 6;
+--:-:-:-:1      SHL    readCs, readCs, 2;
+
+// n = blkI*64 + tidOX;
+08:-:-:-:1      ISCADD n, blkI, tidOX, 6;
+
+// Mul by 4 here expands k stride back out
+// Mul by 2 again to undo the bank conflict avoiding stride
+// k = blkF*128 + tidOY * 8
+--:-:-:-:1      SHL    tidOY,   tidOY, 3;
+04:-:-:-:1      ISCADD k, blkF, tidOY, 7;
+--:-:-:-:1      IADD   k, k, param_offset_K;
+
+[+ output_setup() +]
+
+</SCHEDULE_BLOCK>
+
+[+ output() +]

@@ -5,9 +5,9 @@
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 #    http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -40,7 +40,7 @@ LOOP:
     }
 
     my $out = join '', @top;
-    
+
     foreach my $j (0 .. 7)
     {
         my $odd      = $j & 1;
@@ -120,17 +120,13 @@ LOOP:
 --:-:-:-:1      ISCADD ldc60, ldc, -ldc4, 8;
 </SCHEDULE_BLOCK>
 
---:-:-:-:4      IADD   C04y0.CC, C00y0, ldc4;
---:-:-:-:1      MOV d0, RZ;
+--:-:-:-:5      IADD   C04y0.CC, C00y0, ldc4;
 --:-:-:-:1      IADD   cy04, cy00,  4;
 --:-:-:-:1      IADD.X C04y1,    C00y1, RZ;
---:-:-:-:4      IADD   C08y0.CC, C04y0, ldc4;
---:-:-:-:1      MOV d1, RZ;
+--:-:-:-:5      IADD   C08y0.CC, C04y0, ldc4;
 --:-:-:-:1      IADD   cy08, cy00,  8;
 --:-:-:-:1      IADD.X C08y1,    C04y1, RZ;
---:-:-:-:3      IADD   C12y0.CC, C08y0, ldc4;
---:-:-:-:1      MOV d2, RZ;
---:-:-:-:1      MOV d3, RZ;
+--:-:-:-:5      IADD   C12y0.CC, C08y0, ldc4;
 --:-:-:-:1      IADD   cy12, cy00,  12;
 --:-:-:-:0      IADD.X C12y1,    C08y1, RZ;
 
@@ -190,6 +186,10 @@ STORE_C:
 --:-:2:-:1  @P1 LDG.E d1, [C00y0 + 4x<32>];
 --:-:3:-:1  @P2 LDG.E d2, [C04y0 + 4x<00>];
 --:-:4:-:1  @P3 LDG.E d3, [C04y0 + 4x<32>];
+--:-:-:-:1 @!P0 MOV d0, RZ;
+--:-:-:-:1 @!P1 MOV d1, RZ;
+--:-:-:-:1 @!P2 MOV d2, RZ;
+--:-:-:-:1 @!P3 MOV d3, RZ;
 
 --:-:-:-:1      ISETP.LT.AND P4, PT, cx00, param_n, PT;
 --:-:-:-:1      ISETP.LT.AND P5, PT, cx32, param_n, PT;
@@ -210,7 +210,7 @@ STORE_C:
 --:-:-:-:1  @P6 FMNMX c6, c6, RZ, !PT;
 --:-:-:-:1  @P6 FMNMX c7, c7, RZ, !PT;
 
---:-:-:-:1      ISETP.NE.AND P6, PT, beta, RZ, PT;
+--:-:-:-:7      ISETP.NE.AND P6, PT, beta, RZ, PT;
 </SCHEDULE_BLOCK>
 
 --:-:-:-:1      STS.128 [writeCs+4x<00>], c0;
@@ -221,10 +221,10 @@ STORE_C:
 --:-:-:-:1      LDS c2, [readCs + 4x<1*64 + 00>];
 --:-:6:-:1      LDS c3, [readCs + 4x<1*64 + 32>];
 
-11:-:-:-:1      FFMA c0, d0, beta, c0;
-02:-:-:-:1      FFMA c1, d1, beta, c1;
-24:-:-:-:1      FFMA c2, d2, beta, c2;
-08:-:-:-:1      FFMA c3, d3, beta, c3;
+11:-:-:-:1  @P6 FFMA c0, d0, beta, c0;
+02:-:-:-:1  @P6 FFMA c1, d1, beta, c1;
+24:-:-:-:1  @P6 FFMA c2, d2, beta, c2;
+08:-:-:-:1  @P6 FFMA c3, d3, beta, c3;
 
 <SCHEDULE_BLOCK>
 --:-:-:-:1  @P0 STG.E.CS [C00y0 + 4x<00>], c0;
@@ -244,6 +244,10 @@ STORE_C:
 --:-:2:-:1  @P1 LDG.E d1, [C08y0 + 4x<32>];
 --:-:3:-:1  @P2 LDG.E d2, [C12y0 + 4x<00>];
 --:-:4:-:1  @P3 LDG.E d3, [C12y0 + 4x<32>];
+--:-:-:-:1 @!P0 MOV d0, RZ;
+--:-:-:-:1 @!P1 MOV d1, RZ;
+--:-:-:-:1 @!P2 MOV d2, RZ;
+--:-:-:-:1 @!P3 MOV d3, RZ;
 
 --:-:-:-:1      ISETP.LT.AND P4, PT, cx00, param_n, PT;
 --:-:-:-:1      ISETP.LT.AND P5, PT, cx32, param_n, PT;
@@ -268,10 +272,10 @@ STORE_C:
 --:-:-:-:1      LDS c2, [readCs + 4x<3*64 + 00>];
 --:-:6:-:1      LDS c3, [readCs + 4x<3*64 + 32>];
 
-11:-:-:-:1      FFMA c0, d0, beta, c0;
-02:-:-:-:1      FFMA c1, d1, beta, c1;
-24:-:-:-:1      FFMA c2, d2, beta, c2;
-08:-:-:-:1      FFMA c3, d3, beta, c3;
+11:-:-:-:1  @P6 FFMA c0, d0, beta, c0;
+02:-:-:-:1  @P6 FFMA c1, d1, beta, c1;
+24:-:-:-:1  @P6 FFMA c2, d2, beta, c2;
+08:-:-:-:1  @P6 FFMA c3, d3, beta, c3;
 
 --:-:-:-:1  @P0 STG.E.CS [C08y0 + 4x<00>], c0;
 --:5:-:-:1  @P1 STG.E.CS [C08y0 + 4x<32>], c1;

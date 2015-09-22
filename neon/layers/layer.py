@@ -113,8 +113,8 @@ class Pooling(Layer):
     def __init__(self, fshape, op="max", strides={}, padding={},
                  name="PoolingLayer"):
         super(Pooling, self).__init__(name)
-        self.poolparams = {'str_h': None, 'str_w': None, 'str_d': None, 'str_j': None,
-                           'pad_h': 0, 'pad_w': 0, 'pad_d': 0, 'pad_j': 0,
+        self.poolparams = {'str_h': None, 'str_w': None, 'str_d': None, 'str_c': None,
+                           'pad_h': 0, 'pad_w': 0, 'pad_d': 0, 'pad_c': 0,
                            'J': 1, 'T': 1, 'D': 1, 'op': op}  # 3D paramaters
 
         # keep args around in __dict__ for get_description

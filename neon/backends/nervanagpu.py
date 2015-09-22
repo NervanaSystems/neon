@@ -25,7 +25,9 @@ from pycuda.tools import context_dependent_memoize
 from struct import unpack_from
 from pytools import memoize_method
 from functools import wraps
+from math import log
 
+from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
 
@@ -625,7 +627,6 @@ class NervanaGPU(Backend):
                  scratch_size=9 * 1024 * 1024,
                  device_id=0,
                  bench=False,
-                 cubin_path=os.path.join("kernels", "cubin"),
                  hist_bins=64,
                  hist_offset=-48):
 
@@ -664,7 +665,6 @@ class NervanaGPU(Backend):
         # attributes
         self.scratch_size = scratch_size
         self.round_mode = stochastic_round
-        self.cubin_path = os.path.join(os.path.dirname(__file__), cubin_path)
         self.bench = bench
         self.stream = None
         self.buf = {}
@@ -1142,17 +1142,15 @@ class NervanaGPU(Backend):
             raise TypeError("Only floating point dot currently supported.")
 
         flags = 0
-        if C.rounding:
-            flags |= 1 | (C.rounding << 16)
         if relu:
             flags |= 2
 
-        kernel = _get_gemm_kernel(self.cubin_path, clss, op, size)
+        kernel = kernel_specs.get_kernel("_".join((clss, op, size)))
         params = [
-            (1, gridA, gridB), (threads, 1, 1), self.stream, self._get_rand_state(),
-            A.gpudata, B.gpudata, C.gpudata,
+            (1, gridA, gridB), (threads, 1, 1), self.stream,
+            C.gpudata, A.gpudata, B.gpudata, alpha, beta, flags,
             lda, ldb, ldc, m, n, k,
-            alpha, beta, flags, 0, 0, 0, 0]
+            0, 0, 0, 0]
 
         # Warmup
         if repeat > 1:
@@ -1182,8 +1180,6 @@ class NervanaGPU(Backend):
         assert A.dtype.type == B.dtype.type == C.dtype.type
 
         flags = 0
-        if C.rounding:
-            flags |= 1 | (C.rounding << 16)
         if relu:
             flags |= 2
 
@@ -1286,13 +1282,11 @@ class NervanaGPU(Backend):
         else:
             raise TypeError("Only floating point dot currently supported.")
 
-        kernel = _get_gemm_kernel(self.cubin_path, clss, op, size)
+        kernel = kernel_specs.get_kernel("_".join((clss, op, size)))
         params = [
-            (batch_grid, gridA, gridB), (threads,
-                                         1, 1), self.stream, self._get_rand_state(),
-            A.gpudata, B.gpudata, C.gpudata,
+            (batch_grid, gridA, gridB), (threads, 1, 1), self.stream,
+            C.gpudata, A.gpudata, B.gpudata, alpha, beta, flags,
             lda, ldb, ldc, m, n, k,
-            alpha, beta, flags,
             ldaz, ldbz, ldcz, batch_loops]
 
         # Warmup
@@ -1387,7 +1381,8 @@ class NervanaGPU(Backend):
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
                    str_d=1, str_h=1, str_w=1,
-                   grid_P=0, grid_Q=0, update_size=None):
+                   relu=False, bsum=False,
+                   deterministic_update=False):
         """
         Create a new ConvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -1407,49 +1402,37 @@ class NervanaGPU(Backend):
         padding: amount of zero-padding around the given edge
         strides: factor to step the filters by in a given direction
 
-        grid_P, grid_Q: For the update operation define the size of the grid
-        to distribute the work accross SMs.  The smaller the grid, the deeper the
-        MM and hence more accumulation is done in fp32.  The bigger the grid,
-        the more the work can be evenly spanned accross the SMs, at the cost of
-        needing more fp16 accumuation operations and increased error.
-
-        Set to 1,1 for full fp32 accuracy
-        Set to P,Q for maximal distribution of work acrross SMs
-        Set to 0,0 for automactially calculated optimal balance (recommened).
-
-        Tweaking these params can have a large impact on performance as the
-        L2 cache utilization is greatly effected by them.
-
-        update_size: override kernel size selection for update.
-            "C128_K64"
-            "C128_K128"
-
         dtype: need to know dtype to setup proper kernels and params.
 
-        Maximum utilization is achieved when N, K and C*R*S*T is
-        a multiple of 64
+        relu: apply a relu to the output for fprop or bprop
+
+        bsum: calculate the sum along the batchnorm axis for fprop or bprop
+              outputs an fp32 tensor of size Kx1
+
+        deterministic_update: eleminate atom adds in the update operation
+                              can slow the kernel down
+
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
-                         pad_d, pad_h, pad_w, str_d, str_h, str_w, grid_P, grid_Q, update_size)
+                         pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                         relu, bsum, deterministic_update)
 
-    def fprop_conv(self, layer, I, F, O, alpha=1.0, relu=False, repeat=1):
+    def fprop_conv(self, layer, I, F, O, alpha=1.0, beta=0.0, bsum=None, repeat=1):
         assert layer.sizeI == I.size
         assert layer.sizeF == F.size
         assert layer.sizeO == O.size
 
         return self._execute_conv(
-            layer, "fprop", layer.fprop_size,
-            layer.fprop_grid, layer.fprop_block, layer.fprop_args, layer.fprop_lut_size,
-            I, F, O, alpha, 0.0, relu, 0, repeat)
+            layer, "fprop", layer.fprop_kernels, layer.fprop_lut_size,
+            I, F, O, alpha, beta, bsum, 0, repeat)
 
-    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, beta=0.0, repeat=1):
+    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, beta=0.0, bsum=None, repeat=1):
         assert layer.sizeF == F.size
         assert layer.sizeO == E.size
         assert layer.sizeI == grad_I.size
         return self._execute_conv(
-            layer, "bprop", layer.bprop_size,
-            layer.bprop_grid, layer.bprop_block, layer.bprop_args, layer.bprop_lut_size,
-            E, F, grad_I, alpha, beta, False, layer.bprop_zero, repeat)
+            layer, "bprop", layer.bprop_kernels, layer.bprop_lut_size,
+            E, F, grad_I, alpha, beta, bsum, layer.bprop_zero, repeat)
 
     def update_conv(self, layer, I, E, grad_F, alpha=1.0, repeat=1):
         assert layer.sizeI == I.size
@@ -1457,25 +1440,28 @@ class NervanaGPU(Backend):
         assert layer.sizeF == grad_F.size
 
         return self._execute_conv(
-            layer, "updat", layer.updat_size,
-            layer.updat_grid, layer.updat_block, layer.update_args, 0,
-            I, E, grad_F, alpha, 0.0, False, layer.sizeF * 4, repeat)
+            layer, "updat", layer.updat_kernels, 0,
+            I, E, grad_F, alpha, 0.0, None, layer.sizeF*4, repeat)
 
-    def _execute_conv(self, layer, op, size, grid, block, args, shared,
-                      A, B, C, alpha, beta, relu, zero, repeat):
+    def _execute_conv(self, layer, op, kernel_list, shared,
+                      A, B, C, alpha, beta, bsum, zero, repeat):
 
         assert A.dtype == B.dtype
 
         flags = 0
-        if relu:
+        if layer.relu:
             flags |= 2
-        elif beta:
-            flags = beta
+        if layer.bsum and bsum is not None:
+            flags |= 4
+            batch_sum_data = bsum.gpudata
+        else:
+            batch_sum_data = 0
 
-        B_gpudata = B.gpudata
-        C_gpudata = C.gpudata
+        A_gpudata      = A.gpudata
+        B_gpudata      = B.gpudata
+        C_gpudata      = C.gpudata
         shuffle_kernel = None
-        convert_type = False
+        convert_type   = False
 
         from neon.backends.float_ew import _get_transpose_kernel, _get_shuffle_kernel, _fp_convert
 
@@ -1485,31 +1471,26 @@ class NervanaGPU(Backend):
                 shuffle_kernel = _get_transpose_kernel(B.dtype.str[1:])
                 if beta:
                     raise ValueError("beta not yet supported in this bprop kernel variant.")
-
             else:
                 shuffle_kernel = _get_shuffle_kernel(B.dtype.str[1:])
             shuffle_args = [layer.shuffle_grid, layer.shuffle_block, self.stream,
                             B_gpudata, B.gpudata] + layer.shuffle_args
 
         elif op == "updat" and C.dtype.type is not np.float32:
-            C_gpudata = self.scratch_buffer(C.size)
+            C_gpudata    = self.scratch_buffer(C.size)
             convert_type = "f4"
 
-        params = [grid, block, self.stream, C_gpudata, A.gpudata, B_gpudata, alpha, flags] + args
-
-        if A.dtype.type is np.float16:
-            clss = "hconv"
-        elif A.dtype.type is np.float32:
-            clss = "sconv"
-        else:
-            raise TypeError("Type not supported.")
-
-        kernel = _get_conv_kernel(self.cubin_path, clss, op, size)
+        kernels = []
+        for kernel in kernel_list:
+            kernels.append([
+                kernel_specs.get_kernel(kernel[0]), kernel[1], kernel[2], self.stream,
+                batch_sum_data, C_gpudata, A_gpudata, B_gpudata, alpha, beta, flags, kernel[3]] + kernel[4])
 
         # Warmup
         if repeat > 1:
             for r in range(max(repeat // 10, 1)):
-                kernel.prepared_async_call(*params, shared_size=shared)
+                for kernel in kernels:
+                    kernel[0].prepared_async_call(*kernel[1:], shared_size=shared)
 
         if self.bench or repeat > 1:
             start, end = _get_events()
@@ -1519,10 +1500,14 @@ class NervanaGPU(Backend):
             if zero:
                 drv.memset_d8_async(C_gpudata, 0, zero, self.stream)
 
+            if batch_sum_data:
+                drv.memset_d32_async(batch_sum_data, 0, bsum.size, self.stream)
+
             if shuffle_kernel:
                 shuffle_kernel.prepared_async_call(*shuffle_args)
 
-            kernel.prepared_async_call(*params, shared_size=shared)
+            for kernel in kernels:
+                kernel[0].prepared_async_call(*kernel[1:], shared_size=shared)
 
             if convert_type:
                 _fp_convert(C_gpudata, convert_type, C)
@@ -1530,12 +1515,12 @@ class NervanaGPU(Backend):
         if self.bench or repeat > 1:
             end.record(stream=self.stream)
             end.synchronize()
-            msecs = end.time_since(start) / repeat
+            msecs  = end.time_since(start) / repeat
             gflops = layer.flops / (msecs * 1000000.0)
-            print("%7.3f msecs %8.3f gflops %6.0f (%s: %s) size:%s grid:%s" %
-                  (msecs, gflops, layer.flops / 1000000.0, op, layer, size, grid))
+            print("%7.3f msecs %4.0f gflops %6.0f (%s: %s)" %
+                  (msecs, gflops, layer.flops/1000000.0, op, layer))
             return msecs, gflops
-        return 0, 0
+        return 0,0
 
     def deconv_layer(self, dtype,
                      N, C, K,
@@ -1543,7 +1528,8 @@ class NervanaGPU(Backend):
                      R=1, S=1,
                      pad_d=0, pad_h=0, pad_w=0,
                      str_d=1, str_h=1, str_w=1,
-                     grid_P=0, grid_Q=0, update_size=None):
+                     relu=False, bsum=False,
+                     deterministic_update=False):
         """
         Create a new DeconvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -1566,37 +1552,26 @@ class NervanaGPU(Backend):
         padding: amount of zero-padding around the given edge
         strides: factor to step the filters by in a given direction
 
-        grid_P, grid_Q: For the update operation define the size of the grid
-        to distribute the work accross SMs.  The smaller the grid, the deeper the
-        MM and hence more accumulation is done in fp32.  The bigger the grid,
-        the more the work can be evenly spanned accross the SMs, at the cost of
-        needing more fp16 accumuation operations and increased error.
-
-        Set to 1,1 for full fp32 accuracy
-        Set to P,Q for maximal distribution of work acrross SMs
-        Set to 0,0 for automactially calculated optimal balance (recommened).
-
-        Tweaking these params can have a large impact on performance as the
-        L2 cache utilization is greatly effected by them.
-
-        update_size: override kernel size selection for update.
-            "C128_K64"
-            "C128_K128"
-
         dtype: need to know dtype to setup proper kernels and params.
 
-        Maximum utilization is achieved when N, K and C*R*S*T is
-        a multiple of 64
+        relu: apply a relu to the output for fprop or bprop
+
+        bsum: calculate the sum along the batchnorm axis for fprop or bprop
+              outputs an fp32 tensor of size Kx1
+
+        deterministic_update: eleminate atom adds in the update operation
+                              can slow the kernel down
         """
         return DeconvLayer(self, dtype, N, C, K, P, Q, R, S,
-                           pad_d, pad_h, pad_w, str_d, str_h, str_w, grid_P, grid_Q, update_size)
+                           pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                           relu, bsum, deterministic_update)
 
     def pool_layer(self, dtype,
                    op, N, C,
                    D=1, H=1, W=1,
                    J=1, T=1, R=1, S=1,
-                   pad_j=0, pad_d=0, pad_h=0, pad_w=0,
-                   str_j=None, str_d=None, str_h=None, str_w=None):
+                   pad_c=0, pad_d=0, pad_h=0, pad_w=0,
+                   str_c=None, str_d=None, str_h=None, str_w=None):
         """
         Create a new PoolLayer parameter object.
         This then is passed as an argument to all pooling kernels.
@@ -1620,8 +1595,8 @@ class NervanaGPU(Backend):
         Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
         """
         # default to non-overlapping
-        if str_j is None:
-            str_j = J
+        if str_c is None:
+            str_c = J
         if str_d is None:
             str_d = T
         if str_h is None:
@@ -1630,14 +1605,14 @@ class NervanaGPU(Backend):
             str_w = S
 
         return PoolLayer(self, dtype, op, N, C, D, H, W, J, T, R, S,
-                         pad_j, pad_d, pad_h, pad_w, str_j, str_d, str_h, str_w)
+                         pad_c, pad_d, pad_h, pad_w, str_c, str_d, str_h, str_w)
 
     def fprop_pool(self, layer, I, O, repeat=1):
 
         assert layer.sizeI == I.size
         assert layer.sizeO == O.size
 
-        return self._execute_pool(layer, I, O, None, 0, repeat)
+        return self._execute_pool(layer, I, O, None, layer.fprop_kernel, layer.fprop_lut_size, 0, repeat)
 
     def bprop_pool(self, layer, I, E, grad_I, repeat=1):
 
@@ -1646,46 +1621,108 @@ class NervanaGPU(Backend):
         assert layer.sizeI == grad_I.size
         assert I.dtype == grad_I.dtype
 
-        return self._execute_pool(layer, I, E, grad_I, 1, repeat)
+        return self._execute_pool(layer, I, E, grad_I, layer.bprop_kernel, layer.bprop_lut_size, 1, repeat)
 
-    def _execute_pool(self, layer, I, O, B, b_mode, repeat):
+    def _execute_pool(self, layer, I, O, B, kernel_args, shared, b_mode, repeat):
 
         assert I.dtype == O.dtype
 
-        if I.dtype.type is np.float16:
-            clss = "hpool"
-        elif I.dtype.type is np.float32:
-            clss = "spool"
-        else:
-            raise TypeError("Type not supported.")
-
         B_data = B.gpudata if b_mode else 0
-        kernel = _get_pool_kernel(self.cubin_path, clss, layer.op)
-        params = [layer.grid, layer.block, self.stream,
-                  I.gpudata, O.gpudata, B_data, b_mode]
+        kernel = kernel_specs.get_kernel(kernel_args[0])
+        params = [kernel_args[1], kernel_args[2], self.stream,
+                  O.gpudata, B_data, I.gpudata, b_mode]
 
-        params.extend(layer.kernel_args)
+        params.extend(kernel_args[4])
 
         # Warmup
         if repeat > 1:
             for r in range(max(repeat // 10, 1)):
-                kernel.prepared_async_call(*params, shared_size=layer.lut_size)
+                kernel.prepared_async_call(*params, shared_size=shared)
 
         if self.bench or repeat > 1:
             start, end = _get_events()
             start.record(self.stream)
 
         for r in range(repeat):
-            if b_mode and (layer.overlap or layer.gaps):
+            if b_mode and kernel_args[3]:
                 drv.memset_d8_async(B_data, 0, B.nbytes, self.stream)
-            # call the kernel
-            kernel.prepared_async_call(*params, shared_size=layer.lut_size)
+
+            kernel.prepared_async_call(*params, shared_size=shared)
 
         if self.bench or repeat > 1:
             end.record(self.stream)
             end.synchronize()
             msecs = end.time_since(start) / repeat
-            print("%7.3f msecs (%s) grid:%s" % (msecs, layer, layer.grid))
+            print("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
+
+    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho, relu=False, repeat=1):
+
+        assert xsum.dtype.type is np.float32
+
+        K = x.shape[0]
+        N = x.shape[1]
+
+        if N <= 8192:
+            threads = 1 << max(5, int(round(log(N,2))) - 3)
+        else:
+            threads = 1024
+
+        params= [ (K,1,1), (threads,1,1), x.backend.stream,
+                  y.gpudata, xvar.gpudata, gmean.gpudata, gvar.gpudata,
+                  x.gpudata, xsum.gpudata, gmean.gpudata, gvar.gpudata,
+                  gamma.gpudata, beta.gpudata, eps, rho, N, relu ]
+
+        from neon.backends.float_ew import _get_bn_fprop_kernel
+
+        kernel = _get_bn_fprop_kernel(x.dtype.str[1:], threads)
+
+        self._execute_bn(kernel, params, repeat, x.nbytes*2)
+
+    def compound_bprop_bn(self, delta, grad_gamma, grad_beta, x, xsum, xvar, gamma, eps, repeat=1):
+
+        assert xsum.dtype.type is np.float32
+
+        K = x.shape[0]
+        N = x.shape[1]
+
+        if N <= 8192:
+            threads = 1 << max(5, int(round(log(N,2))) - 3)
+        else:
+            # bprop loads 2 tensors at a time in the main loops and needs fewer threads
+            # to saturate the bandwidth
+            threads = 128
+
+        params = [ (K,1,1), (threads,1,1), x.backend.stream,
+                   delta.gpudata, grad_gamma.gpudata, grad_beta.gpudata, delta.gpudata,
+                   x.gpudata, xsum.gpudata, xvar.gpudata, gamma.gpudata, eps, N ]
+
+        from neon.backends.float_ew import _get_bn_bprop_kernel
+
+        kernel = _get_bn_bprop_kernel(x.dtype.str[1:], threads)
+
+        self._execute_bn(kernel, params, repeat, x.nbytes*4)
+
+    def _execute_bn(self, kernel, params, repeat, size):
+
+        # Warmup
+        if repeat > 1:
+            for r in range(max(repeat // 10, 1)):
+                kernel.prepared_async_call(*params)
+
+        if self.bench > 1 or repeat > 1:
+            start, end = _get_events()
+            start.record(self.stream)
+
+        for r in range(repeat):
+            kernel.prepared_async_call(*params)
+
+        if self.bench > 1 or repeat > 1:
+            end.record(self.stream)
+            end.synchronize()
+            msecs = end.time_since(start) / repeat
+            bandwidth = size / (msecs * 1024 * 1024)
+            print("%7.3f msecs %4.0f GBps %s(%d,%d,%d)" %
+                (msecs, bandwidth, kernel.name, params[0][0], params[-2], params[1][0]))
 
 
 # Note the strides computed here do not include the dtype.itemsize
@@ -1698,7 +1735,6 @@ def _contiguous_strides(shape):
     else:
         return ()
 
-
 @context_dependent_memoize
 def _get_scratch_data(scratch_size):
     return drv.mem_alloc(scratch_size * 4)
@@ -1707,77 +1743,6 @@ def _get_scratch_data(scratch_size):
 @context_dependent_memoize
 def _get_events():
     return (drv.Event(), drv.Event())
-
-
-@context_dependent_memoize
-def _get_module(path, clss, op, size=None):
-    """
-    Returns a pycuda driver module from the type of operations
-    """
-    size = "" if size is None else "_" + size
-    cubin = "{0}_{1}{2}.cubin".format(clss, op, size)
-    return drv.module_from_file(os.path.join(path, cubin))
-
-
-@context_dependent_memoize
-def _get_gemm_kernel(path, clss, op, size):
-    """
-    Returns the specified cu gemm function
-    """
-    module = _get_module(path, clss, op, size)
-    kernel = "{0}_{1}_{2}".format(clss, op, size)
-    func = module.get_function(kernel)
-    func.prepare("PPPPIIIIIIffIIIII")
-    # print("Loaded: ", kernel)
-    return func
-
-_conv_sig = {
-    "sconv_fprop_K64_N64": "PPPfIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-    "hconv_fprop_K64_N64": "PPPfIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-
-    "sconv_bprop_C64_N64": "PPPffIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-    "hconv_bprop_C64_N64": "PPPffIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-
-    "sconv_bprop_C32_N64": "PPPfIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-    "hconv_bprop_C32_N64": "PPPfIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-
-    "sconv_updat_C128_K64": "PPPfIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-    "hconv_updat_C128_K64": "PPPfIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-
-    "sconv_updat_C128_K128": "PPPfIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-    "hconv_updat_C128_K128": "PPPfIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII",
-}
-
-
-@context_dependent_memoize
-def _get_conv_kernel(path, clss, op, size):
-    module = _get_module(path, clss, op, size)
-    kernel = "{0}_{1}_{2}".format(clss, op, size)
-    func = module.get_function(kernel)
-    func.prepare(_conv_sig[kernel])
-    # print("Loaded: ", kernel)
-    return func
-
-_pool_sig = {
-    "spool_max": "PPPIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIf",
-    "hpool_max": "PPPIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIf",
-
-    "spool_avg": "PPPIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIf",
-    "hpool_avg": "PPPIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIf",
-}
-
-
-@context_dependent_memoize
-def _get_pool_kernel(path, clss, op):
-    """
-    Returns the specified cu pooling function
-    """
-    module = _get_module(path, clss, op)
-    kernel = "{0}_{1}".format(clss, op)
-    func = module.get_function(kernel)
-    func.prepare(_pool_sig[kernel])
-    # print("Loaded: ", kernel)
-    return func
 
 # debugging tool
 # import re

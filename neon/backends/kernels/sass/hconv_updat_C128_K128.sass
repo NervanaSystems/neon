@@ -16,56 +16,61 @@
 
 
 <CONSTANT_MAPPING>
-    addr_zero : 4x<(128*16 + 32)*4>
-    addr_q    : 4x<(128*16 + 32)*4 + 4>
-    szBuf     : (128*16 + 32)
+    addr_zero  : 4x<(128*16 + 32)*4>
+    addr_blkIE : 4x<(128*16 + 32)*4 + 4>
+    addr_q     : 4x<(128*16 + 32)*4 + 6>
+    szBuf      : (128*16 + 32)
 
-    param_F[0]         : c[0x0][0x140]
-    param_F[1]         : c[0x0][0x144]
-    param_I[0]         : c[0x0][0x148]
-    param_I[1]         : c[0x0][0x14c]
-    param_E[0]         : c[0x0][0x150]
-    param_E[1]         : c[0x0][0x154]
-    param_alpha        : c[0x0][0x158]
-    param_flags        : c[0x0][0x15c]
-    param_N            : c[0x0][0x160]
-    param_K            : c[0x0][0x164]
-    param_D            : c[0x0][0x168]
-    param_H            : c[0x0][0x16c]
-    param_W            : c[0x0][0x170]
-    param_WN           : c[0x0][0x174]
-    param_HWN          : c[0x0][0x178]
-    param_DHWN         : c[0x0][0x17c]
-    param_C            : c[0x0][0x180]
-    param_CRST         : c[0x0][0x184]
-    param_RST          : c[0x0][0x188]
-    param_magic_RST    : c[0x0][0x18c]
-    param_shift_RST    : c[0x0][0x190]
-    param_RS           : c[0x0][0x194]
-    param_magic_RS     : c[0x0][0x198]
-    param_shift_RS     : c[0x0][0x19c]
-    param_S            : c[0x0][0x1a0]
-    param_magic_S      : c[0x0][0x1a4]
-    param_shift_S      : c[0x0][0x1a8]
-    param_pad_d        : c[0x0][0x1ac]
-    param_pad_h        : c[0x0][0x1b0]
-    param_pad_w        : c[0x0][0x1b4]
-    param_str_d        : c[0x0][0x1b8]
-    param_str_h        : c[0x0][0x1bc]
-    param_str_w        : c[0x0][0x1c0]
-    param_P            : c[0x0][0x1c4]
-    param_Q            : c[0x0][0x1c8]
-    param_PQ           : c[0x0][0x1cc]
-    param_QN           : c[0x0][0x1d0]
-    param_PQN          : c[0x0][0x1d4]
-    param_MPQN         : c[0x0][0x1d8]
-    param_magic_Q      : c[0x0][0x1dc]
-    param_shift_Q      : c[0x0][0x1e0]
-    param_magic_PQ     : c[0x0][0x1e4]
-    param_shift_PQ     : c[0x0][0x1e8]
-    param_grid_P       : c[0x0][0x1ec]
-    param_grid_Q       : c[0x0][0x1f0]
-    param_grid_PQ      : c[0x0][0x1f4]
+    param_Sum[0]       : c[0x0][0x140]
+    param_Sum[1]       : c[0x0][0x144]
+    param_F[0]         : c[0x0][0x148]
+    param_F[1]         : c[0x0][0x14c]
+    param_I[0]         : c[0x0][0x150]
+    param_I[1]         : c[0x0][0x154]
+    param_E[0]         : c[0x0][0x158]
+    param_E[1]         : c[0x0][0x15c]
+    param_alpha        : c[0x0][0x160]
+    param_beta         : c[0x0][0x164]
+    param_flags        : c[0x0][0x168]
+    param_offset_K     : c[0x0][0x16c]
+    param_N            : c[0x0][0x170]
+    param_K            : c[0x0][0x174]
+    param_D            : c[0x0][0x178]
+    param_H            : c[0x0][0x17c]
+    param_W            : c[0x0][0x180]
+    param_WN           : c[0x0][0x184]
+    param_HWN          : c[0x0][0x188]
+    param_DHWN         : c[0x0][0x18c]
+    param_C            : c[0x0][0x190]
+    param_CRST         : c[0x0][0x194]
+    param_RST          : c[0x0][0x198]
+    param_magic_RST    : c[0x0][0x19c]
+    param_shift_RST    : c[0x0][0x1a0]
+    param_RS           : c[0x0][0x1a4]
+    param_magic_RS     : c[0x0][0x1a8]
+    param_shift_RS     : c[0x0][0x1ac]
+    param_S            : c[0x0][0x1b0]
+    param_magic_S      : c[0x0][0x1b4]
+    param_shift_S      : c[0x0][0x1b8]
+    param_pad_d        : c[0x0][0x1bc]
+    param_pad_h        : c[0x0][0x1c0]
+    param_pad_w        : c[0x0][0x1c4]
+    param_str_d        : c[0x0][0x1c8]
+    param_str_h        : c[0x0][0x1cc]
+    param_str_w        : c[0x0][0x1d0]
+    param_P            : c[0x0][0x1d4]
+    param_Q            : c[0x0][0x1d8]
+    param_PQ           : c[0x0][0x1dc]
+    param_QN           : c[0x0][0x1e0]
+    param_PQN          : c[0x0][0x1e4]
+    param_MPQN         : c[0x0][0x1e8]
+    param_magic_Q      : c[0x0][0x1ec]
+    param_shift_Q      : c[0x0][0x1f0]
+    param_magic_PQ     : c[0x0][0x1f4]
+    param_shift_PQ     : c[0x0][0x1f8]
+    param_grid_P       : c[0x0][0x1fc]
+    param_grid_Q       : c[0x0][0x200]
+    param_grid_PQ      : c[0x0][0x204]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -81,7 +86,9 @@
     33,32,41,40,49,48,57,56 : cx<0-7>y6
     37,36,45,44,53,52,61,60 : cx<0-7>y7
 
-    64-68   ~ tid, blkI, blkE, tidX, tidY
+    64-65   : one
+    64-65   : blkIE<0-1>
+    64-68   : blkI, blkE, tid, tidX, tidY
     69-95   ~ blkMPQ, tid1, tid7, tid128, shiftX, magicPQ, magicQ, negQ, negPQ, pq, div1, div2, div3
 
     69-95   ~ c, z, y, x, k, te, mt, pr, qs, r, s, t, rs, rst, crst, ti, xw, xW, yh, yH, zd, zD, cC, nextP, nextQ, Q
@@ -110,8 +117,19 @@
 
 </REGISTER_MAPPING>
 
---:-:1:-:1      S2R tid,    SR_TID.X;
+--:-:-:-:0      MOV one, 1;
+--:-:1:-:6      S2R tid, SR_TID.X;
+--:-:-:Y:d      ISETP.EQ.AND P0, PT, one, param_RST, PT;
+--:-:-:-:5  @P0 BRA.U CTAID1;
 --:-:2:-:1      S2R blkMPQ, SR_CTAID.X;
+--:-:3:-:1      S2R blkI,   SR_CTAID.Y;
+--:-:4:-:1      S2R blkE,   SR_CTAID.Z;
+--:-:-:-:5      BRA.U END_CTAID1;
+CTAID1:
+--:-:2:-:1      S2R blkMPQ, SR_CTAID.Z;
+--:-:3:-:1      S2R blkI,   SR_CTAID.X;
+--:-:4:-:1      S2R blkE,   SR_CTAID.Y;
+END_CTAID1:
 
 <SCHEDULE_BLOCK>
 // tidX   = tid >> 1
@@ -121,6 +139,8 @@
 --:-:-:-:1      SHR.U32 tidX,   tid,  1;
 --:-:-:-:1      SHL     tidY,   tid1, 3;
 --:-:-:-:1      SHL     shiftX, tid1, 4;
+
+0c:-:-:-:1      STS.64 [addr_blkIE], blkIE;
 
 --:-:-:-:1      STS.128 [addr_zero], RZ;
 <CODE>
@@ -185,13 +205,14 @@
 
 // Flag for first load branch
 --:-:-:-:1      PSETP.AND.AND P0, PT, PT, PT, PT;
+
 </SCHEDULE_BLOCK>
 
 NEXT_PQ:
 
---:-:2:-:1      S2R tid,  SR_TID.X;
---:-:3:-:1      S2R blkI, SR_CTAID.Y;
---:-:4:-:1      S2R blkE, SR_CTAID.Z;
+--:-:2:-:1      S2R tid, SR_TID.X;
+--:-:3:-:1      LDS.U.64 blkIE, [addr_blkIE];
+
 <SCHEDULE_BLOCK>
 // Zigzag q but only if grid_P < P
 --:-:-:-:1      LOP.AND.NZ P1, RZ, p, 1;
@@ -208,7 +229,9 @@ NEXT_PQ:
 // crst = blockI*128 + tid
 04:-:-:-:1      ISCADD crst, blkI, tidX, 7;
 // k = blockE*128 + tid
-08:-:-:-:1      ISCADD k, blkE, tidX, 7;
+04:-:-:-:1      ISCADD k, blkE, tidX, 7;
+--:-:-:-:1      IADD   k, k, param_offset_K;
+
 // c   = crst / RST
 // rst = crst % RST
 --:-:-:-:1      XMAD.LO2C c, crst, param_magic_RST, RZ;
@@ -527,9 +550,17 @@ FIRST_LOAD:
 
 FINISH:
 
---:-:1:-:1      S2R tid,    SR_TID.X;
+--:-:-:-:0      MOV one, 1;
+--:-:1:-:6      S2R tid, SR_TID.X;
+--:-:-:Y:d      ISETP.EQ.AND P0, PT, one, param_RST, PT;
+--:-:-:-:5  @P0 BRA.U CTAID2;
 --:-:2:-:1      S2R blkI,   SR_CTAID.Y;
 --:-:3:-:1      S2R blkE,   SR_CTAID.Z;
+--:-:-:-:5      BRA.U END_CTAID2;
+CTAID2:
+--:-:2:-:1      S2R blkI,   SR_CTAID.X;
+--:-:3:-:1      S2R blkE,   SR_CTAID.Y;
+END_CTAID2:
 
 <SCHEDULE_BLOCK>
 
@@ -542,8 +573,8 @@ FINISH:
 --:-:-:-:1      ISCADD  writeCs, readIs, readEs, 5;
 
 --:-:-:-:1      LOP.AND tid31,  tid,  31;
-01:-:-:-:1      LOP.AND tid96,  tid,  96;
---:-:-:-:1      LOP.AND t128,   tid, 128;
+--:-:-:-:1      LOP.AND tid96,  tid,  96;
+01:-:-:-:1      LOP.AND t128,   tid, 128;
 
 // kk = tid31 | (t128 >> 2);
 --:-:-:-:1      SHR.U32  kk, t128, 2;
@@ -555,7 +586,8 @@ FINISH:
 --:-:-:-:1      SHL      readCs, readCs, 2;
 
 // kk += blkE*128;
-04:-:-:-:1      ISCADD  kk, blkE, kk, 7;
+04:-:-:-:1      ISCADD kk, blkE, kk, 7;
+--:-:-:-:1      IADD   kk, kk, param_offset_K;
 
 // crst = blkI*128 + (tid96 >> 1)
 --:-:-:-:1      SHR.U32 crst00, tid96, 1;
