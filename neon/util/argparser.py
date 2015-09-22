@@ -86,6 +86,10 @@ class NeonArgparser(configargparse.ArgumentParser):
                             help='number of complete passes over the dataset to run')
         rt_grp.add_argument('-s', '--save_path', type=str,
                             help='file path to save model snapshots')
+        rt_grp.add_argument('--serialize', nargs='?', type=int,
+                            default=0, const=1, metavar='N',
+                            help='serialize model every N epochs')
+        rt_grp.add_argument('--model_file', help='load model from pkl file')
         rt_grp.add_argument('-l', '--log', dest='logfile', nargs='?',
                             const=os.path.join(self.work_dir, 'neon_log.txt'),
                             help='log file')
@@ -215,6 +219,18 @@ class NeonArgparser(configargparse.ArgumentParser):
                 # if file exists check that it can be overwritten
                 if not os.access(args.save_path, os.R_OK | os.W_OK):
                     raise IOError('Can not write to save_path file %s' % args.save_path)
+
+        if args.serialize > 0:
+            if args.save_path is None:
+                logger.warn('No path given for model serialization,'
+                            'using default "neon_model.pkl"')
+                args.save_path = "neon_model.pkl"
+
+        if args.model_file:
+            if not os.path.exists(args.model_file):
+                raise IOError('Model file %s not present' % args.model_file)
+            if not os.access(args.model_file, os.R_OK):
+                raise IOError('Not read access for model file %s' % args.model_file)
 
         # display what command line / config options were set (and from where)
         logger.info(self.format_values())

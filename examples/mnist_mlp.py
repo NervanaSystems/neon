@@ -56,10 +56,6 @@ logger = logging.getLogger()
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument('--serialize', nargs='?', type=int,
-                    default=0, const=1, metavar='N',
-                    help='serialize model every N epochs')
-parser.add_argument('--model_file', help='load model from pkl file')
 
 args = parser.parse_args()
 

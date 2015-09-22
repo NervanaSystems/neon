@@ -163,10 +163,21 @@ if __name__ == "__main__":
     """
     root_yaml, args, be_name, num_epochs, batch_size = parse_args()
     model, cost, optim = create_objects()
+    if args.model_file:
+        model.load_weights(args.model_file)
     train, test = load_data(data_dir=args.data_dir)
     # configure callbacks
     callbacks = Callbacks(model, train, output_file=args.output_file,
                           valid_set=test, valid_freq=args.validation_freq,
                           progress_bar=args.progress_bar)
+
+    if args.save_path:
+        # serialize the model and save to args.save_path
+        if args.serialize == 0:
+            # if no serialization schedule given
+            # just save final state
+            args.serialize = args.epochs
+        callbacks.add_serialize_callback(args.serialize, args.save_path, history=args.history)
+
     model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost,
               callbacks=callbacks)

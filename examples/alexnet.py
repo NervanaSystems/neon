@@ -32,7 +32,6 @@ from neon.callbacks.callbacks import Callbacks, Callback
 # alexnet.py -e 90 -val 1 -s <save-path> -w <path-to-saved-batches>
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument('--model_file', help='load model from pkl file')
 args = parser.parse_args()
 
 # hyperparameters
