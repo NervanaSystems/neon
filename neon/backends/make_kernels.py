@@ -89,8 +89,8 @@ for kernel_name, kernel_spec in kernels.items():
 
     if "args" in kernel_spec:
         for pair in kernel_spec["args"].items():
-            maxas_i.append( "-D%s %s" % pair )
-            maxas_p.append( "-D%s %s" % pair )
+            maxas_i.append("-D%s %s" % pair)
+            maxas_p.append("-D%s %s" % pair)
 
     if opts.clean:
         for f in (cu_file, cubin_file, pre_file, dump_file):
@@ -132,11 +132,10 @@ def run_commands(commands):
         procs = []
         for cmdlist in commands[0:opts.max_concurrent]:
             cmdline = " ".join(cmdlist)
-            proc = subprocess.Popen(
-                        cmdline,
-                        shell=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE)
+            proc = subprocess.Popen(cmdline,
+                                    shell=True,
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE)
             procs.append((proc, cmdline))
 
         commands[0:opts.max_concurrent] = ()

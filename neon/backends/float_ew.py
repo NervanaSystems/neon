@@ -1755,7 +1755,6 @@ def _compute_hist(tensor, hist, nbins=64, offset=-48):
 @context_dependent_memoize
 def _get_bn_fprop_kernel(dtype, threads):
 
-
     if threads > 32:
         shr_code = "__shared__ float sPartials[THREADS];"
         red_code = r"""
@@ -1790,7 +1789,7 @@ def _get_bn_fprop_kernel(dtype, threads):
     xvar *= rcpN;
 """
 
-    code =  r"""
+    code = r"""
 #define THREADS %(threads)s
 
 %(common)s
@@ -1938,7 +1937,7 @@ def _get_bn_bprop_kernel(dtype, threads):
     }
 """
 
-    code =  r"""
+    code = r"""
 #define THREADS %(threads)s
 
 %(common)s

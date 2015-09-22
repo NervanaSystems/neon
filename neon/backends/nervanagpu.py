@@ -16,7 +16,6 @@
 Our GPU based backend interface and tensor data structure.
 """
 
-import os
 import sys
 import numpy as np
 import pycuda.driver as drv
@@ -1484,7 +1483,8 @@ class NervanaGPU(Backend):
         for kernel in kernel_list:
             kernels.append([
                 kernel_specs.get_kernel(kernel[0]), kernel[1], kernel[2], self.stream,
-                batch_sum_data, C_gpudata, A_gpudata, B_gpudata, alpha, beta, flags, kernel[3]] + kernel[4])
+                batch_sum_data, C_gpudata, A_gpudata, B_gpudata, alpha, beta, flags,
+                kernel[3]] + kernel[4])
 
         # Warmup
         if repeat > 1:
@@ -1520,7 +1520,7 @@ class NervanaGPU(Backend):
             print("%7.3f msecs %4.0f gflops %6.0f (%s: %s)" %
                   (msecs, gflops, layer.flops/1000000.0, op, layer))
             return msecs, gflops
-        return 0,0
+        return 0, 0
 
     def deconv_layer(self, dtype,
                      N, C, K,
@@ -1612,7 +1612,8 @@ class NervanaGPU(Backend):
         assert layer.sizeI == I.size
         assert layer.sizeO == O.size
 
-        return self._execute_pool(layer, I, O, None, layer.fprop_kernel, layer.fprop_lut_size, 0, repeat)
+        return self._execute_pool(layer, I, O, None, layer.fprop_kernel, layer.fprop_lut_size,
+                                  0, repeat)
 
     def bprop_pool(self, layer, I, E, grad_I, repeat=1):
 
@@ -1621,7 +1622,8 @@ class NervanaGPU(Backend):
         assert layer.sizeI == grad_I.size
         assert I.dtype == grad_I.dtype
 
-        return self._execute_pool(layer, I, E, grad_I, layer.bprop_kernel, layer.bprop_lut_size, 1, repeat)
+        return self._execute_pool(layer, I, E, grad_I, layer.bprop_kernel, layer.bprop_lut_size,
+                                  1, repeat)
 
     def _execute_pool(self, layer, I, O, B, kernel_args, shared, b_mode, repeat):
 
@@ -1655,7 +1657,8 @@ class NervanaGPU(Backend):
             msecs = end.time_since(start) / repeat
             print("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
 
-    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho, relu=False, repeat=1):
+    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
+                          relu=False, repeat=1):
 
         assert xsum.dtype.type is np.float32
 
@@ -1663,14 +1666,14 @@ class NervanaGPU(Backend):
         N = x.shape[1]
 
         if N <= 8192:
-            threads = 1 << max(5, int(round(log(N,2))) - 3)
+            threads = 1 << max(5, int(round(log(N, 2))) - 3)
         else:
             threads = 1024
 
-        params= [ (K,1,1), (threads,1,1), x.backend.stream,
+        params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
                   y.gpudata, xvar.gpudata, gmean.gpudata, gvar.gpudata,
                   x.gpudata, xsum.gpudata, gmean.gpudata, gvar.gpudata,
-                  gamma.gpudata, beta.gpudata, eps, rho, N, relu ]
+                  gamma.gpudata, beta.gpudata, eps, rho, N, relu]
 
         from neon.backends.float_ew import _get_bn_fprop_kernel
 
@@ -1686,15 +1689,15 @@ class NervanaGPU(Backend):
         N = x.shape[1]
 
         if N <= 8192:
-            threads = 1 << max(5, int(round(log(N,2))) - 3)
+            threads = 1 << max(5, int(round(log(N, 2))) - 3)
         else:
             # bprop loads 2 tensors at a time in the main loops and needs fewer threads
             # to saturate the bandwidth
             threads = 128
 
-        params = [ (K,1,1), (threads,1,1), x.backend.stream,
-                   delta.gpudata, grad_gamma.gpudata, grad_beta.gpudata, delta.gpudata,
-                   x.gpudata, xsum.gpudata, xvar.gpudata, gamma.gpudata, eps, N ]
+        params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
+                  delta.gpudata, grad_gamma.gpudata, grad_beta.gpudata, delta.gpudata,
+                  x.gpudata, xsum.gpudata, xvar.gpudata, gamma.gpudata, eps, N]
 
         from neon.backends.float_ew import _get_bn_bprop_kernel
 
@@ -1722,7 +1725,7 @@ class NervanaGPU(Backend):
             msecs = end.time_since(start) / repeat
             bandwidth = size / (msecs * 1024 * 1024)
             print("%7.3f msecs %4.0f GBps %s(%d,%d,%d)" %
-                (msecs, bandwidth, kernel.name, params[0][0], params[-2], params[1][0]))
+                  (msecs, bandwidth, kernel.name, params[0][0], params[-2], params[1][0]))
 
 
 # Note the strides computed here do not include the dtype.itemsize
@@ -1734,6 +1737,7 @@ def _contiguous_strides(shape):
         return tuple(strides[::-1])
     else:
         return ()
+
 
 @context_dependent_memoize
 def _get_scratch_data(scratch_size):
