@@ -78,7 +78,7 @@
     70-71   : Out<0-1>
     72-91   : cs<0-7>, b<0-7>, c<0-3>
     92-93   : Sum<0-1>
-    94-125  ~ writeCs, readCs, alpha, beta, flags, tidOX, tidOX2, tidOY, to, k, n, MPQN, MPQN1, MPQN4, MPQN60, sum<0-3>
+    94-125  ~ writeCs, readCs, alpha, beta, flags, tidOX, tidOX2, tidOX63, tidOY, to, k, n, MPQN, MPQN1, MPQN4, MPQN60, sum<0-3>
 
 </REGISTER_MAPPING>
 
@@ -248,7 +248,7 @@ LOOP:
 --:-:-:-:1      ISCADD k, blkF, tidOY, 7;
 --:-:-:-:1      IADD   k, k, param_offset_K;
 
-[+ output_setup() +]
+[+ output_setup(63) +]
 
 </SCHEDULE_BLOCK>
 

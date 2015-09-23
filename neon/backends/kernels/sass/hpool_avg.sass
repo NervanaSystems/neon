@@ -32,30 +32,31 @@
     param_HWN       : c[0x0][0x174]
     param_DHWN      : c[0x0][0x178]
     param_P         : c[0x0][0x17c]
-    param_magic_P   : c[0x0][0x180]
-    param_shift_P   : c[0x0][0x184]
-    param_QN        : c[0x0][0x188]
-    param_PQN       : c[0x0][0x18c]
-    param_MPQN      : c[0x0][0x190]
-    param_pad_j     : c[0x0][0x194]
-    param_pad_d     : c[0x0][0x198]
-    param_pad_h     : c[0x0][0x19c]
-    param_pad_w     : c[0x0][0x1a0]
-    param_str_j     : c[0x0][0x1a4]
-    param_str_d     : c[0x0][0x1a8]
-    param_str_h     : c[0x0][0x1ac]
-    param_str_w     : c[0x0][0x1b0]
-    param_S         : c[0x0][0x1b4]
-    param_RS        : c[0x0][0x1b8]
-    param_RST       : c[0x0][0x1bc]
-    param_JRST      : c[0x0][0x1c0]
-    param_magic_S   : c[0x0][0x1c4]
-    param_shift_S   : c[0x0][0x1c8]
-    param_magic_RS  : c[0x0][0x1cc]
-    param_shift_RS  : c[0x0][0x1d0]
-    param_magic_RST : c[0x0][0x1d4]
-    param_shift_RST : c[0x0][0x1d8]
-    param_overlap   : c[0x0][0x1dc]
+    param_Q         : c[0x0][0x180]
+    param_magic_P   : c[0x0][0x184]
+    param_shift_P   : c[0x0][0x188]
+    param_QN        : c[0x0][0x18c]
+    param_PQN       : c[0x0][0x190]
+    param_MPQN      : c[0x0][0x194]
+    param_pad_j     : c[0x0][0x198]
+    param_pad_d     : c[0x0][0x19c]
+    param_pad_h     : c[0x0][0x1a0]
+    param_pad_w     : c[0x0][0x1a4]
+    param_str_j     : c[0x0][0x1a8]
+    param_str_d     : c[0x0][0x1ac]
+    param_str_h     : c[0x0][0x1b0]
+    param_str_w     : c[0x0][0x1b4]
+    param_S         : c[0x0][0x1b8]
+    param_RS        : c[0x0][0x1bc]
+    param_RST       : c[0x0][0x1c0]
+    param_JRST      : c[0x0][0x1c4]
+    param_magic_S   : c[0x0][0x1c8]
+    param_shift_S   : c[0x0][0x1cc]
+    param_magic_RS  : c[0x0][0x1d0]
+    param_shift_RS  : c[0x0][0x1d4]
+    param_magic_RST : c[0x0][0x1d8]
+    param_shift_RST : c[0x0][0x1dc]
+    param_overlap   : c[0x0][0x1e0]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -70,7 +71,7 @@
 
      8-13 ~ m, p, q, k
 
-    14-46 ~ mp, P, iOut
+    14-46 ~ mp, P, Q, iOut
 
     14-46 ~ j, t, r, s, kj, mt, pr, qs, x, y, z, c, sliceI, lutStore, lutStore2, mask_shr, dep_thd_mask, dep_thd_bits, dep_thd_cnt, jrst, rst, rs, warp_count, RST, RS, S, ballot, warp_slices
 
@@ -93,6 +94,10 @@
 04:-:-:-:1      XMAD.LO2C m, mp, param_magic_P, RZ;
 --:-:-:-:1      SHR.U32 m, m, param_shift_P;
 --:-:-:-:1      VMAD.U16.U16 p, -m, P, mp;
+
+--:-:-:-:1      MOV Q, param_Q;
+--:-:-:-:1      LOP.AND.NZ P1, RZ, p, 1;
+--:-:-:-:1  @P1 IADD3 q, -q, -1, Q;
 
 // I += n
 --:-:-:-:1      LEA      In0.CC,   tid, param_I[0],     1;

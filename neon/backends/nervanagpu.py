@@ -1682,17 +1682,22 @@ class NervanaGPU(Backend):
             print("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
-                          relu=False, repeat=1):
+                          relu=False, threads=None, repeat=1):
 
         assert xsum.dtype.type is np.float32
 
         K = x.shape[0]
         N = x.shape[1]
 
-        if N <= 8192:
-            threads = 1 << max(5, int(round(log(N, 2))) - 3)
-        else:
-            threads = 1024
+        if threads is None:
+            if N <= 8192:
+                threads = 1 << max(5, int(round(log(N, 2))) - 3)
+            else:
+                occup = K / (128.0 * _get_sm_count())
+                for t in (32,64,128,256,512,1024):
+                    if occup * t > 5.0:
+                        threads = t
+                        break
 
         params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
                   y.gpudata, xvar.gpudata, gmean.gpudata, gvar.gpudata,
@@ -1703,21 +1708,20 @@ class NervanaGPU(Backend):
 
         kernel = _get_bn_fprop_kernel(x.dtype.str[1:], threads)
 
-        self._execute_bn(kernel, params, repeat, x.nbytes*2)
+        self._execute_bn(kernel, params, repeat, x.nbytes*2, N)
 
-    def compound_bprop_bn(self, delta, grad_gamma, grad_beta, x, xsum, xvar, gamma, eps, repeat=1):
+    def compound_bprop_bn(self, delta, grad_gamma, grad_beta, x, xsum, xvar, gamma, eps, threads=None, repeat=1):
 
         assert xsum.dtype.type is np.float32
 
         K = x.shape[0]
         N = x.shape[1]
 
-        if N <= 8192:
-            threads = 1 << max(5, int(round(log(N, 2))) - 3)
-        else:
-            # bprop loads 2 tensors at a time in the main loops and needs fewer threads
-            # to saturate the bandwidth
-            threads = 128
+        if threads is None:
+            if N <= 8192:
+                threads = 1 << max(5, int(round(log(N, 2))) - 3)
+            else:
+                threads = 128 if K < 192 else 64
 
         params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
                   delta.gpudata, grad_gamma.gpudata, grad_beta.gpudata, delta.gpudata,
@@ -1727,9 +1731,9 @@ class NervanaGPU(Backend):
 
         kernel = _get_bn_bprop_kernel(x.dtype.str[1:], threads)
 
-        self._execute_bn(kernel, params, repeat, x.nbytes*4)
+        self._execute_bn(kernel, params, repeat, x.nbytes*4, N)
 
-    def _execute_bn(self, kernel, params, repeat, size):
+    def _execute_bn(self, kernel, params, repeat, size, N):
 
         # Warmup
         if repeat > 1:
@@ -1748,8 +1752,11 @@ class NervanaGPU(Backend):
             end.synchronize()
             msecs = end.time_since(start) / repeat
             bandwidth = size / (msecs * 1024 * 1024)
-            print("%7.3f msecs %4.0f GBps %s(%d,%d,%d)" %
-                  (msecs, bandwidth, kernel.name, params[0][0], params[-2], params[1][0]))
+            blocks  = params[0][0]
+            threads = params[1][0]
+            occup = blocks * threads / (128.0 * _get_sm_count())
+            print("%7.3f msecs %4.0f GBps %s(%d,%d,%d) %.1f" %
+                  (msecs, bandwidth, kernel.name, blocks, N, threads, occup))
 
 
 # Note the strides computed here do not include the dtype.itemsize

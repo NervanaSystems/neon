@@ -248,6 +248,7 @@ _params = {
         "int param_HWN",
         "int param_DHWN",
         "int param_P",
+        "int param_Q",
         "int param_magic_P",
         "int param_shift_P",
         "int param_QN",

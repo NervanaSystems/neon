@@ -273,6 +273,8 @@ LUT_LOOP:
 <SCHEDULE_BLOCK>
 // warp synchronous loop while warp_count < RST
 --:-:-:-:1      ISETP.LT.AND P0, PT, warp_count, param_RST, PT;
+--:-:-:-:1      ISETP.LT.AND P6, PT, rst, param_RST, PT;
+
 --:-:-:-:1      IADD warp_count, warp_count, 32;
 // t =  rst / RS
 // rs = rst % RS
@@ -294,7 +296,7 @@ LUT_LOOP:
 --:-:-:-:1      IADD z, mt, t;
 --:-:-:-:1      ISETP.GE.AND  P4, PT, x, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND  P5, PT, y, RZ, PT;
---:-:-:-:1      ISETP.GE.AND  P6, PT, z, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P6, PT, z, RZ, P6;
 --:-:-:-:1      ISETP.LT.AND  P4, PT, x, param_W, P4;
 --:-:-:-:1      ISETP.LT.AND  P5, PT, y, param_H, P5;
 --:-:-:-:1      ISETP.LT.AND  P6, PT, z, param_D, P6;
@@ -510,18 +512,23 @@ EOF
 
     sub output_offset
     {
-        return sprintf <<'EOF', $addr_shift;
+        my $tidOX = shift;
+
+        return sprintf <<'EOF', $tidOX, $addr_shift;
 // sum = S + k
 --:-:-:-:1      LEA      Sum0.CC, k, param_Sum[0],     2;
 --:-:-:-:1      LEA.HI.X Sum1,    k, param_Sum[1], RZ, 2;
+
+--:-:-:-:1      LOP.AND tidOX63, tidOX, %1$s;
+
 
 // o = k*MPQN + m*PQN + p*QN + q*N + n
 01:-:-:-:1      XMAD      to, q, param_N,    n;
 --:-:-:-:1      XMAD.LO2C to, p, param_QN,   to;
 --:-:-:-:1      XMAD.LO2C to, m, param_PQN,  to;
 --:-:-:-:1      XMAD.LO2C to, k, param_MPQN, to;
---:-:-:-:1      LEA      Out0.CC, to, param_O[0],     %1$s;
---:-:-:-:0      LEA.HI.X Out1,    to, param_O[1], RZ, %1$s;
+--:-:-:-:1      LEA      Out0.CC, to, param_O[0],     %2$s;
+--:-:-:-:0      LEA.HI.X Out1,    to, param_O[1], RZ, %2$s;
 EOF
     }
 
@@ -662,15 +669,19 @@ STORE_C:
 --:-:-:-:2  @P2 STG.E.CG.128 [Out + 4x<00>], cs0;
 --:1:-:-:1  @P3 STG.E.CG.128 [Out + 4x<%1$s>], cs4;
 
---:-:-:-:1      FADD sum0, cs0, cs4;
---:-:-:-:1      FADD sum1, cs1, cs5;
---:-:-:-:1      FADD sum2, cs2, cs6;
---:-:-:-:4      FADD sum3, cs3, cs7;
---:-:-:-:2      FADD sum0, sum0, sum1;
---:-:-:-:6      FADD sum1, sum2, sum3;
---:-:-:-:4      FADD sum0, sum0, sum1;
+<SCHEDULE_BLOCK>
+--:-:-:-:1 @!P2 MOV  sum0, RZ;
+--:-:-:-:1 @!P3 MOV  sum2, RZ;
+--:-:-:-:1  @P2 FADD sum0, cs0, cs1;
+--:-:-:-:1  @P2 FADD sum1, cs2, cs3;
+--:-:-:-:1  @P3 FADD sum2, cs4, cs5;
+--:-:-:-:1  @P3 FADD sum3, cs6, cs7;
+--:-:-:-:1  @P2 FADD sum0, sum0, sum1;
+--:-:-:-:1  @P3 FADD sum2, sum2, sum3;
+--:-:-:-:4      FADD sum0, sum0, sum2;
+</SCHEDULE_BLOCK>
 
---:-:-:-:0      ISETP.EQ.AND P3, PT, tidOX, RZ, P4;
+--:-:-:-:0      ISETP.EQ.AND P3, PT, tidOX63, RZ, P4;
 
 --:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 1,  0x1f;
 02:-:-:-:4  @P4 FADD sum0, sum1, sum0;
@@ -764,13 +775,14 @@ STORE_C:
 08:-:-:-:1  @P3 FFMA cs1, b1, beta, cs1;
 --:-:-:-:1  @P3 FFMA cs0, b0, beta, cs0;
 
---:-:-:-:1  @P6 FADD sum0, cs7, cs6;
---:-:-:-:1  @P6 FADD sum1, cs5, cs4;
---:-:-:-:1  @P6 FADD sum2, cs3, cs2;
---:-:-:-:1  @P6 FADD sum3, cs1, cs0;
---:-:-:-:1  @P6 FADD sum0, sum0, sum1;
---:-:-:-:1  @P6 FADD sum1, sum2, sum3;
---:-:-:-:1  @P6 FADD sum0, sum0, sum1;
+--:-:-:-:1  @P5 FADD sum0, cs7, cs6;
+--:-:-:-:1  @P5 FADD sum1, cs5, cs4;
+--:-:-:-:1  @P5 FADD sum2, cs3, cs2;
+--:-:-:-:1  @P5 FADD sum3, cs1, cs0;
+--:-:-:-:1  @P5 FADD sum0, sum0, sum1;
+--:-:-:-:1  @P5 FADD sum1, sum2, sum3;
+--:-:-:-:1  @P5 FADD sum0, sum0, sum1;
+--:-:-:-:1 @!P5 MOV  sum0, RZ;
 
 --:-:-:-:1      F2F.F16.F32 cs7, cs7;
 --:-:1:-:1      F2F.F16.F32 cs6, cs6;
@@ -793,7 +805,7 @@ STORE_C:
 // Store results back to global
 01:1:-:-:1  @P5 STG.E.CG.128 [Out], c0;
 
---:-:-:-:0      ISETP.EQ.AND P5, PT, tidOX, RZ, P6;
+--:-:-:-:0      ISETP.EQ.AND P5, PT, tidOX63, RZ, P6;
 
 --:-:2:-:2  @P6 SHFL.BFLY PT, sum1, sum0, 1,  0x1f;
 02:-:-:-:4  @P6 FADD sum0, sum1, sum0;
@@ -817,8 +829,10 @@ EOF
 
     sub output_setup
     {
-        return output_offset() . output_step() . output_preds_fp16() if $prefix eq 'h';
-        return output_offset() . output_step() . output_preds_fp32() if $prefix eq 's';
+        my $tidOX = shift;
+
+        return output_offset($tidOX) . output_step() . output_preds_fp16() if $prefix eq 'h';
+        return output_offset($tidOX) . output_step() . output_preds_fp32() if $prefix eq 's';
     }
 
     sub output

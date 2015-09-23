@@ -550,8 +550,7 @@ def _build_tree(type_args):
     rebuild a mutable tree from the stack
     flag each op node with whether it is scalar or not
     also include a count of reductions under this node:
-    node: [ arg(op, tensor or const), is_scalar, red_count, left_child,
-    right_child ]
+    node: [ arg(op, tensor or const), is_scalar, red_count, left_child, right_child ]
     """
 
     stack = list()
@@ -572,7 +571,8 @@ def _build_tree(type_args):
                         node[1] = False
                 # if child is an input tensor (an output tensor has id=0) then
                 # this node is not scalar
-                elif operand[0] is ng.GPUTensor and operand[1] > 0:
+                # if it's an output tensor check the shape[axis]==1 flag
+                elif operand[0] is ng.GPUTensor and (operand[1] > 0 or not operand[4]):
                     node[1] = False
                 # children start at position 3 and are added in reverse order
                 node.insert(3, operand)
@@ -1088,8 +1088,8 @@ def _get_compound_kernel(type_args):
 
     # debugging:
     # print "Compiling %s" % template_vals["name"]
-    # f = open("%s.cu" % template_vals["name"], "w")
     # f = open("kernel.cu", "w")
+    # f = open("%s.cu" % template_vals["name"], "w")
     # print >>f, code
     # f.close()
 
@@ -1257,7 +1257,7 @@ def call_compound_kernel(rand_state, *args):
                 take_axis = 0
 
             type_args.append(
-                (ng.GPUTensor, indx, arg.dtype.str[1:], take_axis))
+                (ng.GPUTensor, indx, arg.dtype.str[1:], take_axis, shape[axis]==1))
 
             shape_stack.append(shape)
 
@@ -1804,9 +1804,9 @@ __global__ void batchnorm_fprop (
 
     const int tid  = threadIdx.x;
     const int bid  = blockIdx.x;
-    const int offset = bid * N + tid;
+    int offset = bid * N;
 
-    const %(type)s* x_in0 = x_in + offset;
+    const %(type)s* x_in0 = x_in + offset + tid;
 
     const float rcpN = 1.0f/(float)N;
 
@@ -1843,24 +1843,47 @@ __global__ void batchnorm_fprop (
 
     float xvar_rcp_sqrt = 1.0f / sqrtf(xvar + eps);
 
-    const %(type)s* x_in1 = x_in + offset;
-    y_out += offset;
+    int start = N - (THREADS*4 - tid);
+    offset += start;
+    x_in   += offset;
+    y_out  += offset;
 
-    for (int i = tid; i < N; i += THREADS)
+    for (int i = start; i >= -THREADS*3; i -= THREADS*4)
     {
-        float x = %(cvt)s(__ldg(x_in1));
-        x_in1 += THREADS;
+        float x0 = i >= -THREADS*0 ? %(cvt)s(__ldg(x_in + THREADS*0)) : 0.0f;
+        float x1 = i >= -THREADS*1 ? %(cvt)s(__ldg(x_in + THREADS*1)) : 0.0f;
+        float x2 = i >= -THREADS*2 ? %(cvt)s(__ldg(x_in + THREADS*2)) : 0.0f;
+        float x3 =                   %(cvt)s(__ldg(x_in + THREADS*3));
 
-        float xhat = (x - xmean) * xvar_rcp_sqrt;
+        x_in -= THREADS*4;
 
-        float y = xhat * gamma + beta;
+        float xhat0 = (x0 - xmean) * xvar_rcp_sqrt;
+        float xhat1 = (x1 - xmean) * xvar_rcp_sqrt;
+        float xhat2 = (x2 - xmean) * xvar_rcp_sqrt;
+        float xhat3 = (x3 - xmean) * xvar_rcp_sqrt;
+
+        float y0 = xhat0 * gamma + beta;
+        float y1 = xhat1 * gamma + beta;
+        float y2 = xhat2 * gamma + beta;
+        float y3 = xhat3 * gamma + beta;
 
         if (relu)
-            y = fmaxf(y, 0.0f);
+        {
+            y0 = fmaxf(y0, 0.0f);
+            y1 = fmaxf(y1, 0.0f);
+            y2 = fmaxf(y2, 0.0f);
+            y3 = fmaxf(y3, 0.0f);
+        }
 
-        %(y_out)s
-        *y_out = y_val;
-        y_out += THREADS;
+        %(y0_out)s
+        %(y1_out)s
+        %(y2_out)s
+        %(y3_out)s
+        if (i >= -THREADS*0) *(y_out + THREADS*0) = y0_val;
+        if (i >= -THREADS*1) *(y_out + THREADS*1) = y1_val;
+        if (i >= -THREADS*2) *(y_out + THREADS*2) = y2_val;
+                             *(y_out + THREADS*3) = y3_val;
+        y_out -= THREADS*4;
     }
 }
 """
@@ -1879,7 +1902,10 @@ __global__ void batchnorm_fprop (
         "xvar_out"  : out_code.format("xvar_val",  "xvar"),
         "gmean_out" : out_code.format("gmean_val", "gmean"),
         "gvar_out"  : out_code.format("gvar_val",  "gvar"),
-        "y_out"     : out_code.format("y_val",     "y"),
+        "y0_out"    : out_code.format("y0_val",     "y0"),
+        "y1_out"    : out_code.format("y1_val",     "y1"),
+        "y2_out"    : out_code.format("y2_val",     "y2"),
+        "y3_out"    : out_code.format("y3_val",     "y3"),
     }
     module = SourceModule(code, options=["--use_fast_math"])
     kernel = module.get_function("batchnorm_fprop")
@@ -1952,11 +1978,11 @@ __global__ void batchnorm_bprop (
 
     const int tid  = threadIdx.x;
     const int bid  = blockIdx.x;
-    const int offset = bid * N + tid;
     const float rcpN = 1.0f/(float)N;
+    int offset = bid * N;
 
-    const %(type)s* x_in0 = x_in     + offset;
-    const %(type)s* d_in0 = delta_in + offset;
+    const %(type)s* x_in0 = x_in     + offset + tid;
+    const %(type)s* d_in0 = delta_in + offset + tid;
 
     float xmean = __ldg(xsum_in  + bid) * rcpN;
     float xvar  = %(cvt)s(__ldg(xvar_in  + bid));
@@ -1988,26 +2014,51 @@ __global__ void batchnorm_bprop (
         *(grad_beta_out  + bid) = grad_beta_val;
     }
 
+    int start = N - (THREADS*4 - tid);
+    offset += start;
     const %(type)s* x_in1 = x_in     + offset;
     const %(type)s* d_in1 = delta_in + offset;
     delta_out += offset;
 
-    for (int i = tid; i < N; i += THREADS)
+    for (int i = start; i >= -THREADS*3; i -= THREADS*4)
     {
-        float x = %(cvt)s(__ldg(x_in1));
-        x_in1 += THREADS;
-        float d = %(cvt)s(__ldg(d_in1));
-        d_in1 += THREADS;
+        float x0 = i >= -THREADS*0 ? %(cvt)s(__ldg(x_in1 + THREADS*0)) : 0.0f;
+        float x1 = i >= -THREADS*1 ? %(cvt)s(__ldg(x_in1 + THREADS*1)) : 0.0f;
+        float x2 = i >= -THREADS*2 ? %(cvt)s(__ldg(x_in1 + THREADS*2)) : 0.0f;
+        float x3 =                   %(cvt)s(__ldg(x_in1 + THREADS*3));
 
-        float xhat = (x - xmean) * xvar_rcp_sqrt;
+        float d0 = i >= -THREADS*0 ? %(cvt)s(__ldg(d_in1 + THREADS*0)) : 0.0f;
+        float d1 = i >= -THREADS*1 ? %(cvt)s(__ldg(d_in1 + THREADS*1)) : 0.0f;
+        float d2 = i >= -THREADS*2 ? %(cvt)s(__ldg(d_in1 + THREADS*2)) : 0.0f;
+        float d3 =                   %(cvt)s(__ldg(d_in1 + THREADS*3));
 
-        float xtmp = (xhat * grad_gamma + grad_beta) * rcpN;
+        x_in1 -= THREADS*4;
+        d_in1 -= THREADS*4;
 
-        float delta = gamma * (d - xtmp) * xvar_rcp_sqrt;
+        float xhat0 = (x0 - xmean) * xvar_rcp_sqrt;
+        float xhat1 = (x1 - xmean) * xvar_rcp_sqrt;
+        float xhat2 = (x2 - xmean) * xvar_rcp_sqrt;
+        float xhat3 = (x3 - xmean) * xvar_rcp_sqrt;
 
-        %(delta_out)s
-        *delta_out = delta_val;
-        delta_out += THREADS;
+        float xtmp0 = (xhat0 * grad_gamma + grad_beta) * rcpN;
+        float xtmp1 = (xhat1 * grad_gamma + grad_beta) * rcpN;
+        float xtmp2 = (xhat2 * grad_gamma + grad_beta) * rcpN;
+        float xtmp3 = (xhat3 * grad_gamma + grad_beta) * rcpN;
+
+        float delta0 = gamma * (d0 - xtmp0) * xvar_rcp_sqrt;
+        float delta1 = gamma * (d1 - xtmp1) * xvar_rcp_sqrt;
+        float delta2 = gamma * (d2 - xtmp2) * xvar_rcp_sqrt;
+        float delta3 = gamma * (d3 - xtmp3) * xvar_rcp_sqrt;
+
+        %(delta0_out)s
+        %(delta1_out)s
+        %(delta2_out)s
+        %(delta3_out)s
+        if (i >= -THREADS*0) *(delta_out + THREADS*0) = delta0_val;
+        if (i >= -THREADS*1) *(delta_out + THREADS*1) = delta1_val;
+        if (i >= -THREADS*2) *(delta_out + THREADS*2) = delta2_val;
+                             *(delta_out + THREADS*3) = delta3_val;
+        delta_out -= THREADS*4;
     }
 }
 """
@@ -2025,10 +2076,14 @@ __global__ void batchnorm_bprop (
         "cvt"            : _ew_types[dtype]["cvt"],
         "grad_gamma_out" : out_code.format("grad_gamma_val", "grad_gamma"),
         "grad_beta_out"  : out_code.format("grad_beta_val",  "grad_beta"),
-        "delta_out"      : out_code.format("delta_val",      "delta"),
+        "delta0_out"     : out_code.format("delta0_val",     "delta0"),
+        "delta1_out"     : out_code.format("delta1_val",     "delta1"),
+        "delta2_out"     : out_code.format("delta2_val",     "delta2"),
+        "delta3_out"     : out_code.format("delta3_val",     "delta3"),
     }
     module = SourceModule(code, options=["--use_fast_math"])
     kernel = module.get_function("batchnorm_bprop")
     kernel.prepare("PPPPPPPPfI")
     kernel.name = "batchnorm_bprop"
     return kernel
+

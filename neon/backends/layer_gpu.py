@@ -768,7 +768,7 @@ class PoolLayer(Layer):
 
         self.fprop_kernel = [fprop_name, (Q, PM, K), (N, 1, 1), bprop_zero, _flatten([
             N, W, H, D, C, WN, HWN, DHWN,
-            P, magic_P, QN, PQN, MPQN,
+            P, Q, magic_P, QN, PQN, MPQN,
             pad_c, pad_d, pad_h, pad_w,
             str_c, str_d, str_h, str_w,
             S, RS, RST, JRST, magic_S, magic_RS, magic_RST, self.overlap])]
