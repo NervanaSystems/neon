@@ -25,7 +25,7 @@ External Dependencies
 To install neon on a Linux or Mac OSX machine, please ensure you have recent
 versions of the following system software (Ubuntu package names shown):
 
-* ``python`` - We currently support python 2.7
+* ``python``, ``python-dev`` - We currently support python 2.7
 * ``python-pip`` - Needed to install python dependencies.
 * ``python-virtualenv`` - Needed to configure an isolated environment
 * ``libhdf5-dev`` - (h5py) for callback hdf5 datasets
