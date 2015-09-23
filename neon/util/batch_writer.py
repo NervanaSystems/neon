@@ -43,7 +43,7 @@ parser.add_argument('--file_pattern', default='*.jpg', help='Image extension to 
                     'directory crawl')
 args = parser.parse_args()
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 
 # NOTE: We have to leave this helper function out of the class to use multiprocess pool.map

@@ -28,7 +28,7 @@ import logging
 
 # setup a preliminary stream based logger
 logging.basicConfig(level=logging.ERROR)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 def get_args(func):
     """

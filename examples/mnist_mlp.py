@@ -52,12 +52,14 @@ from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary, Misclassification
 from neon.util.argparser import NeonArgparser
 
-logger = logging.getLogger()
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 
 args = parser.parse_args()
+
+logger = logging.getLogger()
+logger.setLevel(args.log_thresh)
 
 # hyperparameters
 batch_size = 128

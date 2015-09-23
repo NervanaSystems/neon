@@ -181,23 +181,36 @@ class NeonArgparser(configargparse.ArgumentParser):
             # if defaults are not set or not -v given
             # for latter will get type error
             log_thresh = 40
+        args.log_thresh = log_thresh
 
         # logging formater
         fmtr = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-        # copy to stderr
+        # get the parent logger for neon
+        main_logger = logging.getLogger('neon')
+        main_logger.setLevel(log_thresh)
+
+        # setup a console stderr log handler
         stderrlog = logging.StreamHandler()
         stderrlog.setFormatter(fmtr)
-        logger.addHandler(stderrlog)
 
         if args.logfile:
             # add log to file as well
             filelog = RotatingFileHandler(filename=args.logfile, mode='w',
                                           maxBytes=10000000, backupCount=5)
             filelog.setFormatter(fmtr)
-            logger.addHandler(filelog)
+            filelog.setLevel(log_thresh)
+            main_logger.addHandler(filelog)
 
-        logger.setLevel(log_thresh)
+            # if a log file is specified the
+            # stderr is set ot default verbosity
+            stderrlog.setLevel(logging.ERROR)
+        else:
+            stderrlog.setLevel(log_thresh)
+
+        # add this handler instead
+        main_logger.propagate = False
+        main_logger.addHandler(stderrlog)
 
         # need to write out float otherwise numpy
         # generates type in bytes not bits (f16 == 128 bits)
