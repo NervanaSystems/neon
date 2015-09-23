@@ -17,7 +17,7 @@ import logging
 from neon import NervanaObject
 from neon.backends import Autodiff
 from neon.backends.backend import Tensor
-from operator import mul
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ def interpret_in_shape(xshape):
         if len(xshape) == 2:
             return xshape
         else:
-            return (reduce(mul, xshape), 1)
+            return (np.prod(xshape), 1)
 
 
 class Layer(NervanaObject):
@@ -64,7 +64,8 @@ class Layer(NervanaObject):
         or input layer
 
         Arguments:
-            in_shape (int, tuple(int, int)): shape of input data
+            in_obj (int, tuple, Layer or Tensor or dataset): object that provides shape
+                                                             information for layer
 
         Returns:
             (tuple): shape of output data
@@ -496,7 +497,7 @@ class Bias(ParameterLayer):
     def __str__(self):
         if len(self.in_shape) == 3:
             layer_string = "Bias Layer '%s': size %d x (%dx%d)" % (
-               self.name, self.in_shape[0], self.in_shape[1], self.in_shape[2])
+                self.name, self.in_shape[0], self.in_shape[1], self.in_shape[2])
         else:
             layer_string = "Bias Layer '%s': size %d" % (self.name, self.bias_size)
         return layer_string

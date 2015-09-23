@@ -97,6 +97,9 @@ class CPUTensor(Tensor):
 
     @property
     def base(self):
+        """The base of a tensor is none if it's an original tensor, or a reference to the parent
+           tensor if it's a slice or view.
+        """
         return self._tensor.base
 
     def __str__(self):

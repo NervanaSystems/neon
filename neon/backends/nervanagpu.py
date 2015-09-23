@@ -25,14 +25,10 @@ from struct import unpack_from
 from pytools import memoize_method
 from functools import wraps
 from math import log
-from operator import mul
 
 from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
-
-if sys.version_info >= (3, 0):
-    from functools import reduce
 
 _none_slice = slice(None, None, None)
 
@@ -465,10 +461,10 @@ class GPUTensor(Tensor):
             return self
 
         if -1 in shape:
-            missing_dim = -self.size / reduce(mul, shape)
+            missing_dim = -self.size / np.prod(shape)
             shape = tuple([missing_dim if x == -1 else x for x in shape])
 
-        size = reduce(mul, shape)
+        size = np.prod(shape)
 
         if size != self.size:
             raise ValueError("total size of new array must be unchanged")
@@ -529,7 +525,7 @@ class GPUTensor(Tensor):
         return a view: ary, where ary.size <= self.size
         Allows easy sharing of temporary memory
         """
-        size = reduce(lambda x, y: x * y, shape, 1)
+        size = np.prod(shape)
         if size > self.size:
             raise ValueError("total size of new array must <= size of parent")
 

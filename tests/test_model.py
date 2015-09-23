@@ -57,6 +57,7 @@ def test_model_get_outputs(backend):
               Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))]
     mlp = Model(layers=layers)
     out_list = []
+    mlp.initialize(train_set)
     for x, t in train_set:
         x = mlp.fprop(x)
         out_list.append(x.get().T.copy())

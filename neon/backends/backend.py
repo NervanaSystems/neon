@@ -18,7 +18,6 @@ Defines Tensor and Backend class
 
 import numpy as np
 import logging
-from operator import mul
 
 
 logger = logging.getLogger(__name__)
@@ -418,7 +417,7 @@ class Backend(object):
             if (len(dim0) == 2):
                 bufshape = (dim0[0], dim0[1] * self.bsz)
             else:
-                bufshape = (reduce(mul, dim0), self.bsz)
+                bufshape = (np.prod(dim0), self.bsz)
         else:
             bufshape = (dim0, self.bsz)
         return self.zeros(bufshape, dtype=dtype, name=name,

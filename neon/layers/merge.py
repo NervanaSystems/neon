@@ -1,7 +1,6 @@
 from neon.layers.layer import Layer
 import itertools
 import numpy as np
-from operator import mul
 
 
 class Merge(Layer):
@@ -139,7 +138,7 @@ class MergeSum(Merge):
         By default, retain local shape if one of the pathways is a local layer
         """
         super(MergeSum, self).configure(in_obj)
-        flatdims = [reduce(mul, xs) if isinstance(xs, tuple) else xs for xs in self.in_shape]
+        flatdims = [np.prod(xs) if isinstance(xs, tuple) else xs for xs in self.in_shape]
         assert flatdims[1:] == flatdims[:-1], "MergeSum elements must have same number of outputs"
         self.flatdim = flatdims[0]
         self.out_shape = self.in_shape[0]
@@ -178,7 +177,7 @@ class MergeConcat(Merge):
 
     def configure(self, in_obj):
         super(MergeConcat, self).configure(in_obj)
-        flatdims = [xs if isinstance(xs, int) else reduce(mul, xs) for xs in self.in_shape]
+        flatdims = [xs if isinstance(xs, int) else np.prod(xs) for xs in self.in_shape]
         self.out_shape = sum(flatdims)
         end_idx = [idx for idx in np.cumsum(flatdims)]
         start_idx = [0] + end_idx[:-1]

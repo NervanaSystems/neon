@@ -255,10 +255,10 @@ class Model(NervanaObject):
         (dim0, dim1) = x.shape
         Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)
         nsteps = dim1 / self.be.bsz
-        batch_ranges = [slice(i * dim1, (i + 1) * dim1) for i in range(n)]
 
-        for cur_batch, (x, t) in zip(batch_ranges, dataset):
+        for idx, (x, t) in enumerate(dataset):
             x = self.fprop(x, inference=True)
+            cur_batch = slice(idx * dim1, (idx + 1) * dim1)
             Ypred[cur_batch] = x.get().T
 
         # Handle the recurrent case
