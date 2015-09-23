@@ -12,6 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from neon.optimizers.optimizer import (GradientDescentMomentum, RMSProp,
+from neon.optimizers.optimizer import (GradientDescentMomentum, RMSProp, Adagrad,
                                        Adadelta, Adam, Schedule, ExpSchedule,
                                        MultiOptimizer)

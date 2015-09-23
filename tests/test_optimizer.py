@@ -21,7 +21,8 @@ import numpy as np
 import copy
 
 from neon import NervanaObject
-from neon.optimizers import GradientDescentMomentum, RMSProp, Adadelta, Adam, MultiOptimizer
+from neon.optimizers import GradientDescentMomentum, RMSProp, Adadelta, Adam, Adagrad
+from neon.optimizers import MultiOptimizer
 from neon.layers import Conv, Affine, LSTM, GRU
 from neon.initializers import Gaussian, Constant
 from neon.transforms import Rectlin, Logistic, Tanh
@@ -99,6 +100,22 @@ def test_adadelta(backend):
     param2[:] -= states2[2]
     param_list = [
         ((wrap(param), wrap(grad)), [wrap(states[0]), wrap(states[1]), wrap(states[2])])]
+    compare_tensors(ada, param_list, param2, tol=1e-7)
+
+
+def test_adagrad(backend):
+    ada = Adagrad()
+    param = np.random.rand(200, 128)
+    param2 = copy.deepcopy(param)
+    grad = 0.01 * np.random.rand(200, 128)
+    grad2 = grad / 128.
+    states = [0.01 * np.random.rand(200, 128)]
+    states2 = [copy.deepcopy(states[0])]
+    states2[0][:] = states2[0] + np.square(grad2)
+    denom = np.sqrt(states2[0] + ada.epsilon)
+    param2[:] -= grad2 * ada.learning_rate / denom
+    param_list = [
+        ((wrap(param), wrap(grad)), [wrap(states[0])])]
     compare_tensors(ada, param_list, param2, tol=1e-7)
 
 

@@ -210,6 +210,60 @@ class RMSProp(Optimizer):
             param[:] = param - grad * lrate / (self.be.sqrt(state + epsilon) + epsilon)
 
 
+class Adagrad(Optimizer):
+
+    """
+     AdaGrad learning rule updates (leaving out schedule out for now)
+     See J.Duchi2011 for instance
+    """
+
+    def __init__(self, stochastic_round=False, learning_rate=0.01, epsilon=1e-6,
+                 clip_gradients=False, gradient_limit=5, name="adagrad"):
+        """
+        Arguments:
+            stochastic_round (bool): Set this to True for stochastic rounding.
+                                     If False rounding will be to nearest.
+                                     If True will perform stochastic rounding using default width.
+                                     Only affects the gpu backend.
+            learning_rate (float): the multiplication coefficent of updates
+            epsilon (float): smoothing epsilon to avoid divide by zeros
+            clip_gradients (bool): whether to truncate the gradients.
+            gradient_limit (float): positive value to clip gradients between.
+        """
+        self.state_list = None
+        self.epsilon = epsilon
+        self.learning_rate = learning_rate
+        self.clip_gradients = clip_gradients
+        self.gradient_limit = gradient_limit
+        self.stochastic_round = stochastic_round
+
+    def optimize(self, layer_list, epoch):
+        """
+        Apply the learning rule to all the layers and update the states.
+
+        Arguments:
+            layer_list (list): a list of Layer objects to optimize.
+            epoch (int): the current epoch, needed for the Schedule object.
+        """
+        lrate, epsilon = (self.learning_rate, self.epsilon)
+        param_list = get_param_list(layer_list)
+
+        for (param, grad), states in param_list:
+
+            param.rounding = self.stochastic_round
+            if len(states) == 0:
+                states.append(self.be.zeros_like(grad))
+
+            grad = grad / self.be.bsz
+            # clip gradients
+            if self.clip_gradients:
+                grad = self.be.clip(grad, -self.gradient_limit, self.gradient_limit)
+            # update state
+            state = states[0]
+            state[:] = state + self.be.square(grad)
+            param[:] = param - grad * lrate / (self.be.sqrt(state + epsilon))
+
+
 class Adadelta(Optimizer):
 
     """
