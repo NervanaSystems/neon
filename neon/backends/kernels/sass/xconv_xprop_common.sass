@@ -681,10 +681,13 @@ STORE_C:
 --:-:-:-:4      FADD sum0, sum0, sum2;
 </SCHEDULE_BLOCK>
 
---:-:-:-:0      ISETP.EQ.AND P3, PT, tidOX63, RZ, P4;
+--:-:-:-:0      PSETP.OR.AND P2, PT, P2, P3, P4;
 
 --:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 1,  0x1f;
 02:-:-:-:4  @P4 FADD sum0, sum1, sum0;
+
+--:-:-:-:0      ISETP.EQ.AND P2, PT, tidOX63, RZ, P2;
+
 --:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 2,  0x1f;
 02:-:-:-:4  @P4 FADD sum0, sum1, sum0;
 --:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 4,  0x1f;
@@ -692,7 +695,7 @@ STORE_C:
 
 01:-:-:-:0      IADD   Out0.CC, Out0, MPQN1;
 
---:2:-:-:1  @P3 RED.E.ADD.F32.FTZ.RN [Sum], sum0;
+--:2:-:-:1  @P2 RED.E.ADD.F32.FTZ.RN [Sum], sum0;
 
 --:-:-:-:1      LOP.AND.NZ P3, RZ, flags, 2;
 --:-:-:-:4      ISETP.NE.AND P4, PT, beta, RZ, PT;
@@ -746,7 +749,7 @@ STORE_C:
 --:-:1:-:1  @P6 LDG.E.128 b0, [Out];
 
 --:-:-:-:1      LOP.AND.NZ P6, RZ, flags, 4;
-
+--:-:-:-:1      ISETP.EQ.AND P2, PT, tidOX63, RZ, PT;
 
 // Undo the stride in the X dim (items spaced by 32 are actually spaced 4)
 --:-:-:-:1      STS.128 [writeCs + 4x<0>], cs0;
@@ -805,7 +808,7 @@ STORE_C:
 // Store results back to global
 01:1:-:-:1  @P5 STG.E.CG.128 [Out], c0;
 
---:-:-:-:0      ISETP.EQ.AND P5, PT, tidOX63, RZ, P6;
+--:-:-:-:0      PSETP.AND.AND P5, PT, P5, P6, P2;
 
 --:-:2:-:2  @P6 SHFL.BFLY PT, sum1, sum0, 1,  0x1f;
 02:-:-:-:4  @P6 FADD sum0, sum1, sum0;
@@ -816,7 +819,9 @@ STORE_C:
 
 01:-:-:-:0      IADD   Out0.CC, Out0, MPQN1;
 
---:2:-:-:6  @P5 RED.E.ADD.F32.FTZ.RN [Sum], sum0;
+--:2:-:-:5  @P5 RED.E.ADD.F32.FTZ.RN [Sum], sum0;
+
+--:-:-:-:1      LOP.AND.NZ P2, RZ, flags, 2; // relu
 
 --:-:-:-:1      IADD.X Out1,    Out1, RZ;
 
