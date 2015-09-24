@@ -56,6 +56,7 @@ from neon.util.argparser import NeonArgparser
 from neon.util.persist import initialize_layer, initialize_obj
 from neon.callbacks.callbacks import Callbacks
 
+
 def parse_args():
     """
     Parse command line arguments
@@ -130,6 +131,8 @@ def create_objects():
         for ltype in yaml_opt:
             opt = yaml_opt[ltype]
             if isinstance(opt, dict):
+                if 'schedule' in opt:
+                    opt['schedule'] = optimizer.Schedule(opt['schedule'])
                 yaml_opt[ltype] = initialize_obj(opt, optimizer)
         optim = optimizer.MultiOptimizer(yaml_opt)
     else:
@@ -148,12 +151,27 @@ def load_data(data_dir="."):
     Returns:
         tuple: Contains data iterator objects for training and test datasets.
     """
-    if 'dataset' not in root_yaml:
-        raise ValueError('dataset not specified in configuration file')
-    (X_train, y_train), (X_test, y_test), nclass = load_dataset(path=data_dir,
-                                                                **root_yaml['dataset'])
-    train = DataIterator(X_train, y_train, nclass=nclass)
-    test = DataIterator(X_test, y_test, nclass=nclass)
+
+    if root_yaml['dataset']['name'] == 'i1k':
+        # we are using an ImgMaster type dataset:
+        from neon.data import ImgMaster
+        try:
+            train = ImgMaster(repo_dir=data_dir, inner_size=224, set_name='train')
+            test = ImgMaster(repo_dir=data_dir, inner_size=224, set_name='validation',
+                             do_transforms=False)
+        except (OSError, IOError, ValueError) as err:
+            print err
+            sys.exit(0)
+
+        train.init_batch_provider()
+        test.init_batch_provider()
+    else:
+        if 'dataset' not in root_yaml:
+            raise ValueError('dataset not specified in configuration file')
+        (X_train, y_train), (X_test, y_test), nclass = load_dataset(path=data_dir,
+                                                                    **root_yaml['dataset'])
+        train = DataIterator(X_train, y_train, nclass=nclass)
+        test = DataIterator(X_test, y_test, nclass=nclass)
     return train, test
 
 
@@ -181,3 +199,7 @@ if __name__ == "__main__":
 
     model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost,
               callbacks=callbacks)
+
+    if root_yaml['dataset']['name'] == 'i1k':
+        test.exit_batch_provider()
+        train.exit_batch_provider()

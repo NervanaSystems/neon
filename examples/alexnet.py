@@ -44,7 +44,7 @@ be = gen_backend(backend=args.backend, rng_seed=args.rng_seed, device_id=args.de
 try:
     train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train')
     test = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
-                      do_transforms=False)
+                     do_transforms=False)
 except (OSError, IOError, ValueError) as err:
     print err
     sys.exit(0)
