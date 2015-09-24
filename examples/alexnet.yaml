@@ -1,0 +1,151 @@
+# ----------------------------------------------------------------------------
+# Copyright 2015 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
+backend: gpu
+cost: CrossEntropyMulti
+epochs: 10
+batchsize: 128
+
+
+wt_init: &wt_init1
+    type: Gaussian
+    scale: 0.01
+
+wt_init: &wt_init2
+    type: Gaussian
+    scale: 0.03
+
+
+b_init: &b_init0
+    type: Constant
+    val: 0
+
+b_init: &b_init1
+    type: Constant
+    val: 1
+
+b_init: &b_init7
+    type: Constant
+    val: -7
+
+
+layers:
+-
+    type: Conv # Convolution + Bias + BN + Activation
+    fshape: [11, 11, 64]
+    strides: 4
+    pad: 3
+    init: *wt_init1
+    bias: *b_init0
+    activation: Rectlin
+-
+    type: Pooling
+    fshape: 3
+    strides: 2
+-
+    type: Conv
+    fshape: [5, 5, 192]
+    pad: 2
+    init: *wt_init1
+    bias: *b_init1
+    activation: Rectlin
+-
+    type: Pooling
+    fshape: 3
+    strides: 2
+-
+    type: Conv
+    fshape: [3, 3, 384]
+    pad: 1
+    init: *wt_init2
+    bias: *b_init0
+    activation: Rectlin
+-
+    type: Conv
+    fshape: [3, 3, 256]
+    pad: 1
+    init: *wt_init2
+    bias: *b_init1
+    activation: Rectlin
+-
+    type: Conv
+    fshape: [3, 3, 256]
+    pad: 1
+    init: *wt_init2
+    bias: *b_init1
+    activation: Rectlin
+-
+    type: Pooling
+    fshape: 3
+    strides: 2
+-
+    type: Affine
+    nout: 4096
+    init: *wt_init1
+    bias: *b_init1
+    activation: Rectlin
+-
+    type: Dropout
+    keep: 0.5
+-
+    type: Affine
+    nout: 4096
+    init: *wt_init1
+    bias: *b_init1
+    activation: Rectlin
+-
+    type: Dropout
+    keep: 0.5
+-
+    type: Affine
+    nout: 1000
+    init: *wt_init1
+    bias: *b_init7
+    activation: Softmax
+
+
+schedule: &sched1
+    type: Schedule
+    step_config: [22, 44, 65]
+    change: 0.15874
+
+schedule: &sched2
+    type: Schedule
+    step_config: 44
+    change: 0.1
+
+
+opt_gdm: &opt_gdm
+    type: GradientDescentMomentum
+    learning_rate: 0.01
+    momentum_coef: 0.9
+    wdecay: 0.0005
+    schedule: *sched1
+
+opt_biases: &opt_biases
+    type: GradientDescentMomentum
+    learning_rate: 0.02
+    momentum_coef: 0.9
+    schedule: *sched2
+
+
+optimizer:
+    type: MultiOptimizer
+    default: *opt_gdm
+    Bias: *opt_biases
+
+
+dataset:
+    name: i1k
