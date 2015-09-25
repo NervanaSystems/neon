@@ -505,7 +505,7 @@ class Bias(ParameterLayer):
     def configure(self, in_obj):
         super(Bias, self).configure(in_obj)
         self.out_shape = self.in_shape
-        (self.bias_size, _) = interpret_in_shape(self.in_shape)
+        self.bias_size = self.in_shape[0]
         if self.weight_shape is None:
             self.weight_shape = (self.bias_size, 1)
         return self
