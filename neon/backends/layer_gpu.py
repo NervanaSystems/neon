@@ -558,7 +558,19 @@ class ConvLayer(Layer):
             self.batch_sum = None
 
     def fprop(self, fprop_in, scale_weights=0):
+        """
+        Conv Layer forward propagation.
 
+        Arguments:
+            fprop_in (Tensor): Inputs
+            scale_weights (float): Scale weights by scale/mean if nonzero
+
+        Returns:
+            fprop_out (Tensor): Output activations
+        or
+            (self.fprop_out, self.batch_sum) (tuple): Tuple with batch_sum
+                added as the second entry.
+        """
         fprop_in = super(ConvLayer, self).fprop(fprop_in)
         self.lib.fprop_conv(self, fprop_in, self.weights, self.fprop_out, bsum=self.batch_sum)
 
@@ -840,13 +852,13 @@ class Inception(Layer):
         self.DHW = (D, H, W)
         self.MPQ = (M, P, Q)
 
-        self.dimI   = (C, D, H, W, N)
-        self.dimO   = (K, M, P, Q, N)
-        self.dimI2  = (C*D*H*W, N)
-        self.dimO2  = (K*M*P*Q, N)
-        self.sizeI  = reduce(mul, self.dimI, 1)
-        self.sizeO  = reduce(mul, self.dimO, 1)
-        self.nOut   = reduce(mul, self.MPQ, 1) * K
+        self.dimI  = (C, D, H, W, N)
+        self.dimO  = (K, M, P, Q, N)
+        self.dimI2 = (C*D*H*W, N)
+        self.dimO2 = (K*M*P*Q, N)
+        self.sizeI = reduce(mul, self.dimI, 1)
+        self.sizeO = reduce(mul, self.dimO, 1)
+        self.nOut  = reduce(mul, self.MPQ, 1) * K
 
         self.sizeF = 0
         self.flops = 0
@@ -939,12 +951,28 @@ class Inception(Layer):
 class BatchNorm(Layer):
 
     """
-    GPU Layer base class
+    Batch Normalization Layer
     """
 
     def __init__(self, lib, dtype, N, C=None, D=1, H=1, W=1, nIn=None, rho=0.99, eps=1e-6,
                  relu=False, bsum=False):
+        """
+        Batch Normalization layer
 
+        Arguments:
+            lib (Class): NervanaGPU instance
+            dtype (Dtype): Data type
+            N (int): batch size
+            C (int): Number of input feature maps
+            D (int): Depth  of input feature maps
+            H (int): Height of input feature maps
+            W (int): Width  of input feature maps
+            nIn (int): Number on inputs for fully connected layer
+            rho (float): Exponential window averaging factor
+            eps (float): Constant added for numerical stability
+            relu (bool): Flag for rectified linear activation function
+            bsum (bool): PQN sum precomputed in conv kernel
+        """
         super(BatchNorm, self).__init__(lib, dtype, N)
 
         self.rho  = rho
@@ -1010,7 +1038,9 @@ class BatchNorm(Layer):
         self.grad_gamma = lib.zeros((self.K, 1), dtype=self.dtype)
 
     def fprop(self, fprop_in, scale_weights=0):
-
+        """
+        Batch normalization forward pass. Uses a compound kernel call.
+        """
         if type(fprop_in) is tuple:
             fprop_in, bsum = fprop_in
         else:

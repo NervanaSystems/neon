@@ -1444,7 +1444,6 @@ class NervanaGPU(Backend):
         assert layer.sizeI == I.size
         assert layer.sizeF == F.size
         assert layer.sizeO == O.size
-
         return self._execute_conv(
             layer, "fprop", layer.fprop_kernels, layer.fprop_lut_size,
             I, F, O, alpha, beta, bsum, 0, repeat)
@@ -1683,7 +1682,25 @@ class NervanaGPU(Backend):
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
                           relu=False, threads=None, repeat=1):
+        """
+        Function to perform compound kernel call for batch normalization
+        forward pass.
 
+        Arguments:
+            x (Tensor): Input from previous layer
+            xsum (Tensor): Precomputed batch sum over PQN dimension
+            xvar (Tensor): Buffer for variance (computed in kernel)
+            gmean (Tensor): global mean ()
+            gvar (Tensor): global variance
+            gamma (Tensor): scale parameter
+            beta (Tensor): location paramter
+            y (Tensor): normalized output
+            eps (float): constant for numerical stability
+            rho (float): exponential window averaging constant
+            relu (bool): Compuound ReLU activation in kernel
+            threads (int): Number of GPU threads
+            repeat (int): Repeats for benchmarking
+        """
         assert xsum.dtype.type is np.float32
 
         K = x.shape[0]
@@ -1694,7 +1711,7 @@ class NervanaGPU(Backend):
                 threads = 1 << max(5, int(round(log(N, 2))) - 3)
             else:
                 occup = K / (128.0 * _get_sm_count())
-                for t in (32,64,128,256,512,1024):
+                for t in (32, 64, 128, 256, 512, 1024):
                     if occup * t > 5.0:
                         threads = t
                         break
@@ -1710,9 +1727,21 @@ class NervanaGPU(Backend):
 
         self._execute_bn(kernel, params, repeat, x.nbytes*2, N)
 
-    def compound_bprop_bn(self, delta, grad_gamma, grad_beta, x, xsum, xvar, gamma, eps, threads=None, repeat=1):
-
-        assert xsum.dtype.type is np.float32
+    def compound_bprop_bn(self, delta, grad_gamma, grad_beta, x, xsum, xvar,
+                          gamma, eps, threads=None, repeat=1):
+        """
+        delta (Tensor): Delta buffer
+        grad_gamma (Tensor): Gradient w.r.t. gamma
+        grad_beta (Tensor): Gradient w.r.t. beta
+        x (Tensor): feedforward input
+        xsum (Tensor): Batch sum over PQN dimension
+        xvar (Tensor): Batch variance
+        gamma (Tensor): scale parameter
+        eps (float): constant for numerical stability
+        threads (int): Number of GPU threads
+        repeat (int): Repeats for benchmarking
+        """
+        assert xsum.dtype.type is np.float32, "xsum should be fp32"
 
         K = x.shape[0]
         N = x.shape[1]
@@ -1752,7 +1781,7 @@ class NervanaGPU(Backend):
             end.synchronize()
             msecs = end.time_since(start) / repeat
             bandwidth = size / (msecs * 1024 * 1024)
-            blocks  = params[0][0]
+            blocks = params[0][0]
             threads = params[1][0]
             occup = blocks * threads / (128.0 * _get_sm_count())
             print("%7.3f msecs %4.0f GBps %s(%d,%d,%d) %.1f" %

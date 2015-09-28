@@ -31,10 +31,7 @@ from tests.grad_funcs import general_gradient_comp
 # some layers just need the function defined
 class BatchNormWithReset(BatchNorm):
     def reset(self):
-        self.allparams = None
-        self.x = None
-        self.deltas = None
-
+        self.__init__(rho=self.rho, eps=self.eps, name=self.name)
 
 def pytest_generate_tests(metafunc):
     # main test generator

@@ -66,7 +66,8 @@ class ConvLayer(object):
                  D=1, H=1, W=1,
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1):
+                 str_d=1, str_h=1, str_w=1,
+                 bsum=False):
 
         # Compute the output spatial dimensions
         M = output_dim(D, T, pad_d, str_d)
@@ -84,6 +85,7 @@ class ConvLayer(object):
         self.MPQ = (M, P, Q)
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
+        self.bsum = bsum
 
         self.dimI = (C, D, H, W, N)
         self.dimF = (C, T, R, S, K)

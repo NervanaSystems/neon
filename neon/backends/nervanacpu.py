@@ -871,7 +871,8 @@ class NervanaCPU(Backend):
                    D=1, H=1, W=1,
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
-                   str_d=1, str_h=1, str_w=1):
+                   str_d=1, str_h=1, str_w=1,
+                   bsum=False):
         """
         Create a new ConvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -892,11 +893,14 @@ class NervanaCPU(Backend):
         strides: factor to step the filters by in a given direction
 
         dtype: need to know dtype to setup proper kernels and params.
+
+        bsum: calculate the sum along the batchnorm axis for fprop or bprop
+              outputs an fp32 tensor of size Kx1
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
                          pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-    def fprop_conv(self, layer, I, F, O, alpha=1.0, relu=False):
+    def fprop_conv(self, layer, I, F, O, alpha=1.0, relu=False, bsum=None):
         """
         Forward propagate the inputs of a convolutional network layer to
         produce output
@@ -954,8 +958,10 @@ class NervanaCPU(Backend):
 
                     array_O[:, m, p, q, :] = alpha * \
                         np.dot(slicedF.T,  slicedI)
+        if bsum is not None:
+            bsum[:] = array_O.sum((1, 2, 3, 4))
 
-    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, relu=False):
+    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, relu=False, bsum=None):
         """
         Backward propagate the error through a convolutional network layer.
 
@@ -1264,6 +1270,55 @@ class NervanaCPU(Backend):
                                 sliceCDHW, :] += array_E[k, m, p, q, :] * (1.0 / sliceCDHW.size)
                         else:
                             raise NotImplementedError
+
+    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho, relu):
+        """
+        Function to perform batch normalization forward pass. Included
+        for API compatibility with GPU compound kernel call.
+
+        Arguments:
+            x (Tensor): Input from previous layer
+            xsum (Tensor): Precomputed batch sum over PQN dimension
+            xvar (Tensor): Buffer for variance (computed in kernel)
+            gmean (Tensor): global mean ()
+            gvar (Tensor): global variance
+            gamma (Tensor): scale parameter
+            beta (Tensor): location paramter
+            y (Tensor): normalized output
+            eps (float): constant for numerical stability
+            rho (float): exponential window averaging constant
+        """
+        xvar[:] = self.var(x, axis=1)
+        xsum[:] = xsum / x.shape[1]  # reuse xsum instead of computing xmean
+        xhat = (x - xsum) / self.sqrt(xvar + eps)
+
+        gmean[:] = gmean * rho + (1.0 - rho) * xsum
+        gvar[:] = gvar * rho + (1.0 - rho) * xvar
+
+        outputs = y.reshape(xhat.shape)
+        outputs[:] = xhat * gamma + beta
+
+    def compound_bprop_bn(self, delta, grad_gamma, grad_beta, x, xsum, xvar,
+                          gamma, eps):
+        """
+        Function to perform batch normalization backward pass. Included
+        for API compatibility with GPU compound kernel call.
+
+        Arguments:
+            delta (Tensor): Delta buffer
+            grad_gamma (Tensor): Gradient w.r.t. gamma
+            grad_beta (Tensor): Gradient w.r.t. beta
+            x (Tensor): feedforward input
+            xsum (Tensor): Batch sum over PQN dimension
+            xvar (Tensor): Batch variance
+            gamma (Tensor): scale parameter
+            eps (float): constant for numerical stability
+        """
+        xhat = (x - xsum) / self.sqrt(xvar + eps)
+        grad_gamma[:] = self.sum(xhat * delta, axis=1)
+        grad_beta[:] = self.sum(delta, axis=1)
+        xtmp = (xhat * grad_gamma + grad_beta) / float(x.shape[1])
+        delta[:] = gamma * (delta - xtmp) / self.sqrt(xvar + eps)
 
     def _hist_tensor(self, tag):
         """

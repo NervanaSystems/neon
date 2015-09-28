@@ -63,11 +63,11 @@ elif args.datatype in [np.float16]:
                                       stochastic_round=args.rounding)
 
 layers = []
-layers.append(Conv((5, 5, 16), init=init_uni, activation=Rectlin()))
+layers.append(Conv((5, 5, 16), init=init_uni, activation=Rectlin(), batch_norm=True))
 layers.append(Pooling((2, 2)))
-layers.append(Conv((5, 5, 32), init=init_uni, activation=Rectlin()))
+layers.append(Conv((5, 5, 32), init=init_uni, activation=Rectlin(), batch_norm=True))
 layers.append(Pooling((2, 2)))
-layers.append(Affine(nout=500, init=init_uni, activation=Rectlin()))
+layers.append(Affine(nout=500, init=init_uni, activation=Rectlin(), batch_norm=True))
 layers.append(Affine(nout=10, init=init_uni, activation=Softmax()))
 if args.datatype in [np.float32, np.float64]:
     cost = GeneralizedCost(costfunc=CrossEntropyMulti())
