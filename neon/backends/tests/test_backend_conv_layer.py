@@ -20,6 +20,7 @@ The numpy implementation is different from what is done underneath NervanaCPU to
 be a valid checking. It requires externally pad the input, while NervanaCPU does
 not require so
 """
+import itertools as itt
 import numpy as np
 from operator import mul
 
@@ -93,15 +94,41 @@ def run_backend_conv(lib, layer, I, F, E, dtype):
     return beO, beB, beU
 
 
-def test_conv_layer():
+def pytest_generate_tests(metafunc):
+    """
+    Build a list of test arguments.
+
+    """
+    N_C_K = [
+        (64, 64, 64),
+        (128, 64, 64),
+        (32, 128, 128),
+    ]
+
+    D_H_W = [
+        (3, 7, 7),
+        (3, 5, 5),
+    ]
+
+    T_R_S = [
+        (3, 3, 3),
+    ]
+
+    if 'fargs_tests' in metafunc.fixturenames:
+        fargs = itt.product(N_C_K, D_H_W, T_R_S)
+        metafunc.parametrize("fargs_tests", fargs)
+
+
+def test_conv_layer(fargs_tests):
 
     dtype = np.float32
 
     ng = NervanaGPU(stochastic_round=False, bench=True)
 
-    N, C, K = 64, 64, 64
-    D, H, W = 1, 5, 5
-    T, R, S = 1, 3, 3
+    N, C, K = fargs_tests[0]
+    D, H, W = fargs_tests[1]
+    T, R, S = fargs_tests[2]
+
     padding_d, padding_h, padding_w = 0, 1, 1
     strides_d, strides_h, strides_w = 1, 1, 1
 
@@ -152,8 +179,8 @@ def test_conv_layer():
     ncO, ncB, ncU = run_backend_conv(nc, conv_nc, beI, beF, beE, dtype)
     end_cpu = default_timer()
 
-    print ("gputime: %s, cputime %s" %
-           (end_gpu - start_gpu, end_cpu - start_cpu))
+    print("gputime: %s, cputime %s" %
+          (end_gpu - start_gpu, end_cpu - start_cpu))
 
     # ======numpy===========
     # cpu output arrays
@@ -196,3 +223,6 @@ def test_conv_layer():
 
     del ng
     del nc
+
+if __name__ == '__main__':
+    test_conv_layer()

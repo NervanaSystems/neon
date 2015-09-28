@@ -21,6 +21,7 @@ The Tensor types includes GPU and CPU Tensors
 
 from neon.backends import gen_backend
 import numpy as np
+import itertools as itt
 
 
 def init_helper(lib, inA, inB, dtype):
@@ -57,7 +58,8 @@ def compare_helper(op, inA, inB, dtype):
 
     if np.dtype(dtype).kind == 'i' or np.dtype(dtype).kind == 'u':
         numpy_result = np.around(numpy_result)
-        numpy_result = numpy_result.clip(np.iinfo(dtype).min, np.iinfo(dtype).max)
+        numpy_result = numpy_result.clip(
+            np.iinfo(dtype).min, np.iinfo(dtype).max)
     numpy_result = numpy_result.astype(dtype)
 
     if dtype in (np.float32, np.float16):
@@ -80,16 +82,34 @@ def rand_unif(dtype, dims):
         return np.around(np.random.uniform(iinfo.min, iinfo.max, dims)).clip(iinfo.min, iinfo.max)
 
 
-def test_math():
-    dims = (1024, 1024)
-    for dtype in (np.float32, np.float16):
-        randA = rand_unif(dtype, dims)
-        randB = rand_unif(dtype, dims)
+def pytest_generate_tests(metafunc):
+    """
+    Build a list of test arguments.
 
-        compare_helper('+', randA, randB, dtype)
-        compare_helper('-', randA, randB, dtype)
-        compare_helper('*', randA, randB, dtype)
-        compare_helper('>', randA, randB, dtype)
-        compare_helper('>=', randA, randB, dtype)
-        compare_helper('<', randA, randB, dtype)
-        compare_helper('<=', randA, randB, dtype)
+    """
+    dims = [(64, 327),
+            (64, 1),
+            (1, 1023),
+            (4, 3),
+            ]
+    dtypes = [np.float32, np.float16]
+
+    if 'fargs_tests' in metafunc.fixturenames:
+        fargs = itt.product(dims, dtypes)
+        metafunc.parametrize("fargs_tests", fargs)
+
+
+def test_math(fargs_tests):
+
+    dims, dtype = fargs_tests
+
+    randA = rand_unif(dtype, dims)
+    randB = rand_unif(dtype, dims)
+
+    compare_helper('+', randA, randB, dtype)
+    compare_helper('-', randA, randB, dtype)
+    compare_helper('*', randA, randB, dtype)
+    compare_helper('>', randA, randB, dtype)
+    compare_helper('>=', randA, randB, dtype)
+    compare_helper('<', randA, randB, dtype)
+    compare_helper('<=', randA, randB, dtype)

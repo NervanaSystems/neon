@@ -1014,7 +1014,7 @@ class NervanaCPU(Backend):
                     slicedE = array_E.reshape(
                         (K, -1, N))[:, sliceMPQ, :].reshape((-1, N))
 
-                    array_grad_I[:, m, h, w, :] = alpha * \
+                    array_grad_I[:, d, h, w, :] = alpha * \
                         np.dot(slicedF.T, slicedE)
 
     def update_conv(self, layer, I, E, U, alpha=1.0):
