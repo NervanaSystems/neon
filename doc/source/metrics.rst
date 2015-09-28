@@ -15,10 +15,14 @@
 
 Metrics
 =======
+These classes represent various performance evaluation functions that can be
+employed to determine how accurate the learned model is against a given
+dataset.
 
 Misclassification
 -----------------
 .. autosummary::
    neon.transforms.cost.Misclassification
+   neon.transforms.cost.TopKMisclassification
 
 Computes the fraction of data samples that have been misclassified. Multiply by 100 to obtain misclassification percentage.

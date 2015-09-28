@@ -20,17 +20,20 @@ Frequently Asked Questions
 How do I generate or change the backend configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-NEON can use either the CPU or a supported GPU as the backend for training and running inference
-with models.  Currently only GPUs with the Maxwell architecture are supported.  There
-is a utility function called :py:func:`neon.backends.gen_backend` which is used to configure the backend.
-This function allows users to select the CPU or GPU backend as well as configure various settings
-such as the size of the data mini-batches, default data precision (e.g. 32 bit float), random number
-generator seed, and the GPU device to use for systems that have more than one GPU installed.
+neon can use either the CPU or a supported GPU as the backend for training
+and running inference with models.  Currently only GPUs with the Maxwell
+architecture are supported.  There is a utility function called
+:py:func:`neon.backends.gen_backend` which is used to configure the backend.
+
+This function allows users to select the CPU or GPU backend as well as
+configure various settings such as the size of the data mini-batches,
+default data precision (e.g. 32 bit float), random number generator seed,
+and the GPU device to use for systems that have more than one GPU installed.
 The size of the data batches must be set when generating the backend.
 
-Furthermore, this function will handle the house keeping tasks necessary when switching
-backends dynamically.  This function will also handle clean up tasks that are needed such
-as deleting the GPU context.
+Furthermore, this function will handle the housekeeping tasks necessary when
+switching backends dynamically.  This function will also handle clean up
+tasks that are needed such as deleting the GPU context.
 
 Example usage of the gen_backend function:
 
@@ -51,19 +54,22 @@ Example usage of the gen_backend function:
 Why does the number of batches per epoch change sometimes?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When running model training the progress bar output will show the number of data batches
-processed every epoch. Sometimes this number will vary from epoch to epoch because the
-data is being handled in mini-batches and if the size of the data set is not an integer
-multiple of the mini-batch size there will be some differences from epoch to epoch in the
-data used in training. For example, during the first epoch of training, if the end of the
-data set is reached and there is not enough data for a full mini-batch, extra data will be
-pulled from the beginning of the data set to fill up a complete mini-batch. On the next epoch,
-the data used will start from where the last epoch left off, not from the beginning of the data
-set. This process will continue for each epoch of training and, since the next epoch may not
-start from the beginning of the data set, it is possible that for some of the epochs the
-last item of data will fall at the end of the mini-batch.  For such a case, no data will need
-to be append to the epoch and the mini-batch count for that epoch may be smaller than the
-other epochs.
+When running model training the progress bar output will show the number of
+data batches processed every epoch. Sometimes this number will vary from
+epoch to epoch because the data is being handled in mini-batches and if the
+size of the data set is not an integer multiple of the mini-batch size there
+will be some differences from epoch to epoch in the data used in training.
+
+For example, during the first epoch of training, if the end of the data set
+is reached and there is not enough data for a full mini-batch, extra data
+will be pulled from the beginning of the data set to fill up a
+complete mini-batch. On the next epoch, the data used will start from where
+the last epoch left off, not from the beginning of the data set. This process 
+will continue for each epoch of training and, since the next epoch may not
+start from the beginning of the data set, it is possible that for some of the
+epochs the last item of data will fall at the end of the mini-batch.  For such
+a case, no data will need to be appended to the epoch and the mini-batch
+count for that epoch may be smaller than the other epochs.
 
 
 How is padding implemented?

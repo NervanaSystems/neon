@@ -1598,7 +1598,7 @@ class OpTreeNode(tuple):
     """
     An OpTreeNode is a tuple of length 3. The first element is a dict
     specifying the operation, and the second and third elements specify the
-    operands. From an op-tree's tree perspective, think about the the 3
+    operands. From an op-tree's tree perspective, think about the 3
     elements as 3 nodes. The second and third element are the left and right
     child of the first element.
     """

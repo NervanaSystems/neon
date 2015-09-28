@@ -15,6 +15,8 @@
 
 Costs
 =====
+These classes define the error metric we seek to optimize over during
+training.
 
 Binary Cross Entropy
 --------------------

@@ -15,6 +15,8 @@
 
 Initializers
 =============
+These classes define how the initial value of each weight in each layer is
+assigned.
 
 Constant
 ---------

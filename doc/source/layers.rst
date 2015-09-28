@@ -19,6 +19,7 @@ Layers
 Neural network models are typically composed of a data source, several weight
 layers and a cost layer.  In addition to standard weight layers, there
 is a variety of model specific weight, pooling and normalization layers.
+Each layer represents a grouping of nodes (artificial neurons).
 
 
 Pooling Layers
@@ -73,6 +74,13 @@ Batch Norm Layer
 ----------------
 .. autosummary::
    neon.layers.layer.BatchNorm
+
+Merge Layers
+------------
+.. autosummary::
+   neon.layers.merge.MergeSum
+   neon.layers.merge.MergeConcat
+   neon.layers.merge.MergeConcatSequence
 
 Gated Recurrent Unit Layer
 --------------------------

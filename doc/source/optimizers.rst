@@ -15,6 +15,8 @@
 
 Optimizers
 ===========
+These classes define how the learning proceeds, that is, how updates are
+applied to the parameters of the network.
 
 Gradient Descent with Momentum
 ------------------------------

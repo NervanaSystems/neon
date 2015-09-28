@@ -16,6 +16,10 @@
 
 """
 AllCNN style convnet on CIFAR10 data.
+
+Reference:
+    Striving for Simplicity: the All Convolutional Net `[Springenberg2015]`_
+..  _[Springenber2015]: http://arxiv.org/pdf/1412.6806.pdf
 """
 
 from neon.backends import gen_backend

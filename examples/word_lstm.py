@@ -18,10 +18,10 @@ Example that trains an LSTM or GRU based recurrent networks.
 The dataset uses Penn Treebank dataset parsing on word-level.
 
 Reference:
-    Recurrent Neural Network Regularization `[Zaremba 2015]`_
-    Generating sequences with recurrent neural networks `[Grave2014]`_
-.. _[Zaremba 2015]: http://arxiv.org/pdf/1409.2329v5.pdf
-.. _[Grave2014]: http://arxiv.org/pdf/1308.0850.pdf
+    Recurrent Neural Network Regularization `[Zaremba2015]`_
+    Generating sequences with recurrent neural networks `[Graves2014]`_
+.. _[Zaremba2015]: http://arxiv.org/pdf/1409.2329v5.pdf
+.. _[Graves2014]: http://arxiv.org/pdf/1308.0850.pdf
 """
 
 from neon.backends import gen_backend

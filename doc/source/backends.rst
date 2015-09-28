@@ -21,19 +21,22 @@ Nervana GPU
 .. autosummary::
    neon.backends.nervanagpu.NervanaGPU
 
-The NervanaGPU backend (also available in a separate GitHub repository_) consists
-of kernels written in MaxAs_ assembler and Python wrappers. It includes
-precompiled kernels for matrix operations such as GEMM and CONV. Kernels for
-element-wise operations are templated and build on the fly so multiple
-operations can be compounded into a single kernel, which avoids memory bandwidth
-bottlenecks. The backend follows the API defined by the MOP layer. Sequences of
-operations are performed using a lazy evaluation scheme where operations are
-pushed onto an OpTree and only evaluated when an explicit assignment is made
-using :doc:`optree` [:] syntax, or when a GEMM or CONV operation is performed.
-OpTrees can also be passed to :py:class:`Autodiff<neon.backends.autodiff.Autodiff>`
-for automatic differentiation.
+The NervanaGPU backend consists of kernels written in MaxAs_ assembler and 
+Python wrappers. It includes pre-compiled kernels for matrix operations such
+as GEMM and CONV. Kernels for element-wise operations are templated and build
+on the fly so multiple operations can be compounded into a single kernel,
+which avoids memory bandwidth bottlenecks. The backend follows the API 
+defined by the MOP layer.
 
-.. _repository: https://github.com/NervanaSystems/nervanagpu
+Sequences of operations are performed using a lazy evaluation scheme where
+operations are pushed onto an OpTree and only evaluated when an explicit
+assignment is made using :doc:`optree` syntax (``optree[:]``), or when a
+GEMM or CONV operation is performed.
+
+OpTrees can also be passed to
+:py:class:`Autodiff<neon.backends.autodiff.Autodiff>` for automatic
+differentiation.
+
 .. _MaxAs: https://github.com/NervanaSystems/maxas
 
 Nervana CPU
@@ -41,6 +44,6 @@ Nervana CPU
 .. autosummary::
    neon.backends.nervanacpu.NervanaCPU
 
-The NervanaCPU backend is build on top of NumPy linear algebra functions for ND
-arrays and supports automatic differentiation through the use of OpTrees via
-:py:class:`Autodiff<neon.backends.autodiff.Autodiff>`.
+The NervanaCPU backend is built on top of NumPy linear algebra functions for
+NDarrays and supports automatic differentiation through the use of OpTrees
+via :py:class:`Autodiff<neon.backends.autodiff.Autodiff>`.

@@ -22,8 +22,10 @@ neon
 .. autosummary::
    neon.util.argparser.NeonArgparser
 
-The following includes a description of the command line arguments that can be
-passed to neon python scripts or to the ``neon`` executable.
+``neon`` is our main command line interface executable.  A description of the
+command line arguments that can be passed to it are outlined below (note that
+these same arguments can also be used in your own python scripts by
+incorporating :py:class:`NeonArgparser<neon.util.argparser.NeonArgparser>`).
 
 .. literalinclude:: neon_help_output.txt
 

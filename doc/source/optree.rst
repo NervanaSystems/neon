@@ -31,7 +31,7 @@ operations. We are going to start by looking at a minimal example:
     f_val[:] = f              # execution
 
     print(f)                  # print the op-tree tuple
-    print(f_val.get())        # get the device tenser
+    print(f_val.get())        # get the device tensor
 
 this gives:
 
@@ -42,7 +42,7 @@ this gives:
      [ 2.  2.]]
 
 The tuple ``({'shape': (2, 2), 'op': 'add'}, x0, x1)`` is the op-tree.
-There are two different type of nodes in an op-tree. The dict {'shape':
+There are two different types of nodes in an op-tree. The dict {'shape':
 (2, 2), 'op': 'add'} is the "op", containing the operations, properties
 of the operation (such as axis) and the shape of the output. The other
 two nodes are the "numeric node", containing Tensor or constant (float,
@@ -54,7 +54,7 @@ Relation between OpTreeNode and op-tree
 -  OpTreeNode is the class inherited from tuple. An OpTreeNode is a
    tuple of length 3. The first element is a dict specifying the
    operation, and the second and third elements specify the operands.
--  From an op-tree's tree perspective, think about the the 3 elements as
+-  From an op-tree's tree perspective, think about the 3 elements as
    3 nodes. The second and third element are the left and right child of
    the first element (the dict).
 
@@ -62,7 +62,7 @@ Relation between OpTreeNode and op-tree
 Op-Tree Creation
 ----------------
 
-1. **Operator overload.** Most of the common numerical operators between Tensor 
+1. **Operator overload.** Most of the common numerical operators betweenTensor 
 and OpTreeNode are overloaded. Operations between a Tensor and an OpTreeNode 
 will produce an OpTreeNode. For example, we can do:
 
@@ -81,7 +81,7 @@ using syntax similar to numpy, for example:
     f = ng.mean(x) # f is an optree
 
 3. **`OpTreeNode.build()`.** The `OpTreeNode.build()` is called internally by 
-the first two cases. The build function do the type checking and append the shape 
+the first two cases. The build function does the type checking and appends the shape 
 to the op_dict. When the first op is 'assign', the op-tree will be executed automatically.
 
 .. code:: python

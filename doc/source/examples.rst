@@ -21,13 +21,16 @@ Convolutional Neural Nets (CNN)
 
 Example 1 - All CNN on CIFAR10
 ------------------------------
+This is an implementation of the All-CNN style convolutional network
+(convolution layers with large strides are used in place of alternating max
+pooling layers usually employed).  See: http://arxiv.org/pdf/1412.6806.pdf
+
 cifar10_allcnn.py_
 
 .. _cifar10_allcnn.py: https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_allcnn.py
 
 Example 2 - Small CNN on CIFAR10
 --------------------------------
-
 cifar10_conv.py_
 
 .. _cifar10_conv.py: https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_conv.py

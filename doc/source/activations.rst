@@ -15,6 +15,8 @@
 
 Activations
 ===========
+These classes apply a transformation to the outputs from each node in a
+layer.  These transformations are often non-linear in nature.
 
 Identity
 --------

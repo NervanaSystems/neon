@@ -18,8 +18,9 @@ Datasets
 
 MNIST
 -----
-MNIST is a dataset of handwritten digits, consisting of 60000 training samples and 10000 test
-samples. Each image is 28x28.
+`MNIST <http://yann.lecun.com/exdb/mnist/>`_, is a dataset of handwritten
+digits, consisting of 60,000 training samples and 10,000 test
+samples. Each image is 28x28 greyscale pixels.
 
 MNIST can be fetched in the following manner:
 
@@ -30,8 +31,9 @@ MNIST can be fetched in the following manner:
 
 CIFAR10
 -------
-CIFAR10 is a dataset consisting of 50000 training samples and 10000 test samples. There are 10
-categories and each sample is a 32x32 color image.
+`CIFAR10  <http://www.cs.toronto.edu/~kriz/cifar.html>`_, is a dataset
+consisting of 50,000 training samples and 10,000 test samples. There are 10
+categories and each sample is a 32x32 RGB color image.
 
 CIFAR10 can be fetched in the following manner:
 
@@ -42,12 +44,16 @@ CIFAR10 can be fetched in the following manner:
 
 ImageCaption
 ------------
-This dataset uses precomputed CNN image features and caption sentences. It works
-with the flickr8k, flickr30k, and COCO datasets and uses the VGG image features and
-sentences from http://cs.stanford.edu/people/karpathy/deepimagesent/ which have been
-converted to pkl format. These datasets have 5 reference sentences per image. For
-each sentence, the dataset converts each word to its 1-hot representation so that each
-input batch of sentences is of dimension (vocab_size, max_sentence_length * batch_size).
+This dataset uses precomputed CNN image features and caption sentences. It
+works with the
+`flickr8k <http://nlp.cs.illinois.edu/HockenmaierGroup/8k-pictures.html>`_,
+`flickr30k <http://shannon.cs.illinois.edu/DenotationGraph/>`_, and 
+`COCO <http://mscoco.org/>`_ datasets and uses the VGG image features and
+sentences from http://cs.stanford.edu/people/karpathy/deepimagesent/ which
+have been converted to python .pkl format. These datasets have 5 reference
+sentences per image. For each sentence, the dataset converts each word to its
+1-hot representation so that each input batch of sentences is of dimension
+``(vocab_size, max_sentence_length * batch_size)``.
 
 The image caption data can be fetched in the following manner:
 
@@ -61,13 +67,16 @@ The image caption data can be fetched in the following manner:
 
 Text
 -----
-For existing datasets, for example, Penn Treebank, Hutter Prize, and Shakespeare,
-we have metadata built-in to retrieve from online sources and save the file locally.
-And then, a text dataset object can be created from a local path. It allows users
-to use their own local text files easily.
-A text dataset can take a tokenizer to parse the file. Otherwise, the file will be parsed
-on a character level. It also takes an vocabulary mapping as an input, so the same mapping
-can be used for all training, testing and validation sets.
+For existing datasets, for example,
+`Penn Treebank <https://www.cis.upenn.edu/~treebank/>`_,
+`Hutter Prize <http://mattmahoney.net/dc/textdata>`_, and
+`Shakespeare <http://cs.stanford.edu/people/karpathy/char-rnn>`_, we have
+metadata built-in to retrieve from online sources and save the file locally.
+Then, a text dataset object can be created from a local path. It allows users
+to use their own local text files easily.  A text dataset can take a
+tokenizer to parse the file. Otherwise, the file will be parsed on a
+character level. It also takes a vocabulary mapping as an input, so the same
+mapping can be used for all training, testing and validation sets.
 
 .. code-block:: python
 
@@ -81,9 +90,10 @@ can be used for all training, testing and validation sets.
 
 ImageNet
 --------
-The raw images need to be downloaded from ILSVRC as a tar file. A neon script can convert the raw
-images into binaries. data_dir is where the processed batches will be stored, and image_dir is 
-where the original tar files are saved.
+The raw images need to be downloaded from ILSVRC as a tar file. The
+``neon.util.batch_writer.py`` script can convert the raw images into binaries.
+``data_dir`` is where the processed batches will be stored, and ``image_dir``
+is where the original tar files are saved.
 
 .. code-block:: bash
 
@@ -92,7 +102,8 @@ where the original tar files are saved.
                                       --set_type=i1k
 
 
-Then an ImgMaster will start a image server and client to feed images to the model.
+Then an :py:class:`ImgMaster<neon.data.image.ImgMaster>` will start an image
+server and client to feed images to the model.
 
 .. code-block:: python
 
@@ -102,8 +113,9 @@ Then an ImgMaster will start a image server and client to feed images to the mod
 Add a new dataset
 ------------------
 
-You can also add your own dataset, where the input and the labels are n-dimensional arrays. Here is
-an example of what adding image data would look like (with random pixel and label values).
+You can also add your own dataset, where the input and the labels are
+n-dimensional arrays. Here is an example of what adding image data would look 
+like (with random pixel and label values).
 
 .. code-block:: python
 
@@ -111,11 +123,11 @@ an example of what adding image data would look like (with random pixel and labe
 
     """
     X is the input features and y is the labels.
-    Here, we show how to load in 10000 images that each have height and width
+    Here, we show how to load in 10,000 images that each have height and width
     of 32, and 3 channels (R,G,B)
     The data in X has to be laid out as follows: (# examples, feature size)
-    The labels y have the same dimensions as the number of examples (in the case
-    of an autoencoder, we do not specify y).
+    The labels y have the same first dimension as the number of examples
+    (in the case of an autoencoder, we do not specify y).
     """
 
     X = np.random.rand(10000,3072)
@@ -129,6 +141,7 @@ an example of what adding image data would look like (with random pixel and labe
 
     train = DataIterator(X=X, y=y, nclass=10, lshape=(3,32,32))
 
-Note: You can pass in any data, as long as it is specified as above. Image data must specify an
-lshape - (number of input channels, input height, input width). The tensor layout is (M, N), where
-M is the flattened lshape, and N is the batch size.
+Note: You can pass in any data, as long as it is specified as above. Image
+data must specify an lshape - (number of input channels, input height, input
+width). The tensor layout is (M, N), where M is the flattened lshape, and N
+is the batch size.

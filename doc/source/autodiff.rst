@@ -1,12 +1,13 @@
 Automatic differentiation
 =========================
 
-Automatic differentiation can be achieved given an op-tree (see :doc:`optree`). In the 
-following examples, we will explain how to get differentiation from a compound operation 
-or from a layer that does batch normalization.
+Automatic differentiation can be achieved given an op-tree
+(see :doc:`optree`). In the following examples, we will explain how to get
+differentiation from a compound operation or from a layer that does batch
+normalization.
 
 Example: use autodiff based on an op-tree
----------------------------------------------
+-----------------------------------------
 
 Construct an op-tree from a compound operation.
 
@@ -48,8 +49,8 @@ The gradient with respect to certain variables can be called from an autodiff ob
 .. code:: python
 
     [x0_grad_op_tree, x1_grad_op_tree] = ad.get_grad_op_tree([x0, x1])
-    print(OpTreeNode.pp())
-    print(OpTreeNode.pp())
+    print(OpTreeNode.pp(x0_grad_op_tree))
+    print(OpTreeNode.pp(x1_grad_op_tree))
 
 Autodiff provides a few other functions:
 

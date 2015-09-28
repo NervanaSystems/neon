@@ -184,7 +184,7 @@ class SumSquared(Cost):
 
 class TopKMisclassification(Metric):
     """
-    Compute the misclassification error metric
+    Compute logloss, top1, and topk misclassification error metric
     """
     def __init__(self, k):
         self.outputs = self.be.iobuf(3)
@@ -206,7 +206,6 @@ class TopKMisclassification(Metric):
             float: Returns the metric
         """
         be = self.be
-        # import pdb; pdb.set_trace()
         self.correctProbs[:] = be.sum(y * t, axis=0)
         nSlots = self.k - be.sum((y > self.correctProbs), axis=0)
         nEq = be.sum(y == self.correctProbs, axis=0)

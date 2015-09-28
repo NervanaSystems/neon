@@ -17,14 +17,23 @@ Callbacks
 =========
 Neon provides a callback api for operations performed during model fit.
 
-Callbacks are classes that derive from :py:class:`Callback<neon.callbacks.callbacks.Callback>` and implement one or more of the provided on_[train, minibatch, epoch]_[begin, end] functions.
+Callbacks are classes that derive from
+:py:class:`Callback<neon.callbacks.callbacks.Callback>` and implement one or
+more of the provided on_[train, minibatch, epoch]_[begin, end] functions.
 
-A :py:class:`Callbacks<neon.callbacks.callbacks.Callbacks>` object is created once in the experiment definition and provided to model.fit(), which calls each of the callback functions at the appropriate times.
+A :py:class:`Callbacks<neon.callbacks.callbacks.Callbacks>` object is created
+once in the experiment definition and provided to model.fit(), which calls
+each of the callback functions at the appropriate times.
 
-Callback implementations are provided for computing cost, displaying runtime state, and saving state or interrupting training based on performance. For a complete list of provided callback implementations see :py:class:`neon.callbacks`
+Callback implementations are provided for computing cost, displaying runtime
+state, and saving state or interrupting training based on performance. For a
+complete list of provided callback implementations see the
+:py:class:`neon.callbacks` directory.
 
-In the following example the Callbacks __init__ method takes a reference to the model and train_set object, which are needed by most callbacks.  It also takes optional arguments that control creation of other utility callbacks for
-computing validation cost and displaying a progress bar.
+In the following example the Callbacks ``__init__`` method takes a reference
+to the model and ``train_set`` object, which are needed by most callbacks.  It
+also takes optional arguments that control creation of other utility
+callbacks for computing validation cost and displaying a progress bar.
 
 .. code-block:: python
 
@@ -42,13 +51,29 @@ computing validation cost and displaying a progress bar.
     model.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs,
             cost=cost, callbacks=callbacks)
 
-:py:class:`Callbacks<neon.callbacks.callbacks.Callbacks>` provides a shared data mechanism that allows callbacks to decouple computation of metrics from further processing or consumption of those metrics.  For example the :py:class:`ValidationCallback<neon.callbacks.callbacks.ValidationCallback>` produces the validation cross entropy metric at some configurable epoch frequency.  This metric is used by the :py:class:`ProgressBarCallback<neon.callbacks.callbacks.ProgressBarCallback>` for display purposes, and by the :py:class:`SaveBestStateCallback<neon.callbacks.callbacks.SaveBestStateCallback>` to decide when to save state.  Such decoupling prevents having to recompute the validation cost in several callbacks.
+:py:class:`Callbacks<neon.callbacks.callbacks.Callbacks>` provides a shared
+data mechanism that allows callbacks to decouple computation of metrics from
+further processing or consumption of those metrics.  For example the
+:py:class:`ValidationCallback<neon.callbacks.callbacks.ValidationCallback>`
+produces the validation cross entropy metric at some configurable epoch
+frequency.  This metric is used by the
+:py:class:`ProgressBarCallback<neon.callbacks.callbacks.ProgressBarCallback>` 
+for display purposes, and by the
+:py:class:`SaveBestStateCallback<neon.callbacks.callbacks.SaveBestStateCallback>`
+to decide when to save state.  Such decoupling prevents having to recompute
+the validation cost in several callbacks.
 
-Callback shared data can be optionally saved to a file for archival or visualization with the nvis tool. To enable saving the callback data, provide the optional output_file arg to the Callbacks __init__ function.
+Callback shared data can be optionally saved to a file for archival or
+visualization with the ``nvis`` tool. To enable saving the callback data,
+provide the optional output_file arg to the Callbacks ``__init__`` function.
 
 .. code-block:: python
 
     # save callback data to disk
     callbacks = Callbacks(model, train_set, output_file="./data.h5")
 
-Users can create their own callbacks by subclassing :py:class:`Callback<neon.callbacks.callbacks.Callback>` and providing a helper function in :py:class:`Callbacks <neon.callbacks.callbacks.Callbacks>` to register it and provide it with a reference to the shared callback data object.
+Users can create their own callbacks by subclassing
+:py:class:`Callback<neon.callbacks.callbacks.Callback>` and providing a
+helper function in :py:class:`Callbacks <neon.callbacks.callbacks.Callbacks>`
+to register it and provide it with a reference to the shared callback data
+object.

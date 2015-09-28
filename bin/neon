@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Main NEON run script.
+Main neon run script.
 
 This script will parse a YAML formated model configuration file,
 instantiate the model, and run a fit.
@@ -38,6 +38,12 @@ Some of the commonly used arguments to this script are:
                              then log messages will only go to the screen
 
     -v[vv] | --verbose : verbosity level
+
+Args that start with '--' (eg. --data_dir) can also be set in a config file
+(~/nervana/neon.cfg or specified via -c) by using .ini or .yaml-
+style syntax (eg. data_dir=value). If an arg is specified in more than one
+place, then command-line values override config file values which override
+defaults.
 
 For details of all the command line arguments run this script with
 the --help option.

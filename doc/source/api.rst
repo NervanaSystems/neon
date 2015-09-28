@@ -164,6 +164,7 @@ API
    neon.transforms.cost.CrossEntropyMulti
    neon.transforms.cost.SumSquared
    neon.transforms.cost.Misclassification
+   neon.transforms.cost.TopKMisclassification
 
 
 ``neon.util``

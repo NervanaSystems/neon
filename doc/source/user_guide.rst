@@ -72,12 +72,13 @@ When you have finished working on neon, you can deactivate the virtualenv via:
 
     deactivate
 
+
 System-wide Install
 '''''''''''''''''''
 
 The virtualenv based install is recommended to ensure an isolated
 environment. As an alternative, it is possible to install neon into
-your sytem python path.  The process for doing so is:
+your system python path.  The process for doing so is:
 
 .. code-block:: bash
 
@@ -104,7 +105,7 @@ From the neon repository directory, type
 
     neon examples/mnist_mlp.yaml
 
-On the first run, neon will download the MNIST dataset. It will crate
+On the first run, neon will download the MNIST dataset. It will create
 a ``~/nervana`` directory where the raw datasets are kept, and store
 processed batches in the neon repository directory. Once that is done,
 it will train a simple MLP model on the dataset and report
@@ -113,7 +114,7 @@ cross-entropy error after each epoch.
 Python script example
 '''''''''''''''''''''
 
-The same model is avaiable as a python script that can be called
+The same model is available in a python script format that can be called
 directly without using a YAML specification to create the model. To
 run the script, type
 
@@ -140,7 +141,7 @@ often to run cross-validation, where to save the model, etc. It also
 controls backend settings, such as running on GPU or CPU, which
 datatype to use, and how rounding is performed. For a full list of
 arguments, run ``neon --help`` and see :py:obj:`examples/mnist_mlp.py`
-for an example of how custom arguments can easily be added.
+for an example of how to work with the parser.
 
 .. code-block:: python
 
@@ -154,12 +155,14 @@ for an example of how custom arguments can easily be added.
 
 Backend Setup
 '''''''''''''
-The backend is controlled via the ``-b`` command line argument, which can be
-``gpu`` to select :py:class:`NervanaGPU<neon.backends.nervanagpu.NervanaGPU>`
+The backend is controlled via the ``-b`` command line argument, which takes a
+single parameter.  This parameter value can be ``gpu`` to select our
+:py:class:`NervanaGPU<neon.backends.nervanagpu.NervanaGPU>` based backend
 or ``cpu`` to select :py:class:`NervanaCPU<neon.backends.nervanacpu.NervanaCPU>`
-as the backend. By default, the GPU backend is used. On machines where no
-compatible GPU is found, it will automatically fail back to CPU. The following
-block of code sets up the backend.
+as the backend. By default, the GPU backend is used on machines with a Maxwell
+capable GPU. On machines where no compatible GPU is found, neon will
+automatically fail back to using the CPU. The following block of code sets up
+the backend.
 
 .. code-block:: python
 
@@ -173,17 +176,17 @@ block of code sets up the backend.
 
 
 The :py:func:`gen_backend` function will handle generating and
-switch backends. When called repeatedly, it will clean up an
+switching backends. When called repeatedly, it will clean up an
 existing backend and generate a new one. If a GPU backend was
 generated previously, then :py:func:`gen_backend` will destroy the
 existing context and delete the backend object. See :doc:`backends`
-for a list of all options that can be set when generating a backend.
+for detail on all the options that can be set when generating a backend.
 
-The minibatch size for training is hard-coded to 128 images and
+The minibatch size for training defaults to 128 input items and
 stochastic rounding (mainly useful for estimating models in 16 bit
-precision) is disabled. The rng_seed argument can be used to specify a
-fixed random seed, device_id controls which GPU to run on if multiple
-GPUs are available, and the default_dtype can be used to specify a 32
+precision) is disabled. The ``rng_seed`` argument can be used to specify a
+fixed random seed, ``device_id`` controls which GPU to run on if multiple
+GPUs are available, and the ``default_dtype`` can be used to specify a 32
 or 16 bit data type.
 
 
@@ -203,11 +206,12 @@ device memory.
     (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
     # setup training set iterator
     train_set = DataIterator(X_train, y_train, nclass=nclass)
-    # setup validation set iterator
-    valid_set = DataIterator(X_test, y_test, nclass=nclass)
+    # setup test set iterator
+    test_set = DataIterator(X_test, y_test, nclass=nclass)
 
 
 See :doc:`datasets`  to learn how to load the other datasets or add your own.
+
 
 Weight Initialization
 '''''''''''''''''''''
@@ -247,7 +251,10 @@ by a layer type and an activation function. This example uses affine
 (i.e. fully-connected) layers with a rectified linear activation on
 the hidden layer and a logistic activation on the output layer. We set
 our final layer to have 10 units in order to match the number of
-labels in the MNIST dataset.
+labels in the MNIST dataset.  The ``shortcut`` parameter in the logistic
+activation allows one to forego computing and returning the actual derivative
+during backpropagation, but can only be used with an appropriately paired cost
+function like cross entropy.
 
 .. code-block:: python
 
@@ -262,8 +269,8 @@ labels in the MNIST dataset.
 
 Other layer types that are not used in this example include
 convolution and pooling layers. They are described in :doc:`layers`. Weight
-layers take an initializer for the weights, which we have defined
-above.
+layers take an initializer for the weights, which we have defined in
+``init_norm`` above.
 
 
 Costs
@@ -272,7 +279,7 @@ Costs
 The cost function is wrapped into a ``GeneralizedCost`` layer, which handles
 the comparison of the cost function outputs with the labels provided with the
 data set. The cost function passed into the cost layer is the cross-entropy
-transform.
+transform in this example.
 
 .. code-block:: python
 
@@ -289,8 +296,8 @@ set of standard callbacks to display a progress bar during training,
 and to save the model to a file, if one is specified in the command
 line arguments. We then train the model on the dataset set up as
 ``train_set``, using the optimizer and cost functions defined
-above. The number of epochs to train for is also passed in through the
-arguments.
+above. The number of epochs (complete passes over the entire training set)
+to train for is also passed in through the arguments.
 
 .. code-block:: python
 
@@ -311,13 +318,13 @@ arguments.
 Evaluation Metric
 '''''''''''''''''
 
-Finally, we can evaluate the performance of our model by examining its
-misclassification rate on the test set.
+Finally, we can evaluate the performance of our now trained model by examining
+its misclassification rate on the held out test set.
 
 .. code-block:: python
 
     from neon.transforms import  Misclassification
     print('Misclassification error = %.1f%%'
-          % (mlp.eval(valid_set, metric=Misclassification())*100))
+          % (mlp.eval(test_set, metric=Misclassification())*100))
 
 

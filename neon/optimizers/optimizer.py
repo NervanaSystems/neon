@@ -119,12 +119,18 @@ class GradientDescentMomentum(Optimizer):
         Arguments:
             learning_rate (float): the multiplicative coefficient of updates
             momentum_coef (float): the coefficient of momentum
-            stochastic_round (bool): Set this to True for stochastic rounding.
-                                     If False rounding will be to nearest.
-                                     If True will perform stochastic rounding using default width.
-                                     Only affects the gpu backend
-            wdecay (float): the weight decay
-            name (str): the optimizer's layer's pretty-print name.
+            stochastic_round (bool, optional): Set this to True for stochastic
+                                               rounding.  If False (default)
+                                               rounding will be to nearest.  If
+                                               True use default width
+                                               stochastic rounding.  Note that
+                                               this only affects the GPU
+                                               backend.
+            wdecay (float, optional): Amount of weight decay.  Defaults to 0
+            name (str, optional): the optimizer's layer's pretty-print name.
+                                  Defaults to "gdm".
+            schedule (neon.optimizers.optimizer.Schedule, optional): Learning
+                rate schedule.  Defaults to a constant learning rate.
         """
         super(GradientDescentMomentum, self).__init__(name=name)
         self.learning_rate, self.momentum_coef = (learning_rate, momentum_coef)
@@ -155,7 +161,7 @@ class GradientDescentMomentum(Optimizer):
 class RMSProp(Optimizer):
 
     """
-    Root Mean Square propagation (leaving out schedule for now).
+    Root Mean Square propagation.
     """
 
     def __init__(self, stochastic_round=False, decay_rate=0.95, learning_rate=2e-3, epsilon=1e-6,
@@ -171,6 +177,9 @@ class RMSProp(Optimizer):
             epsilon (float): smoothing epsilon to avoid divide by zeros
             clip_gradients (bool): whether to truncate the gradients.
             gradient_limit (float): positive value to clip gradients between.
+
+        Notes:
+            Only constant learning rate is supported currently.
         """
         self.state_list = None
 
@@ -213,8 +222,7 @@ class RMSProp(Optimizer):
 class Adagrad(Optimizer):
 
     """
-     AdaGrad learning rule updates (leaving out schedule out for now)
-     See J.Duchi2011 for instance
+     AdaGrad learning rule updates.  See Duchi2011 for instance
     """
 
     def __init__(self, stochastic_round=False, learning_rate=0.01, epsilon=1e-6,
@@ -229,6 +237,9 @@ class Adagrad(Optimizer):
             epsilon (float): smoothing epsilon to avoid divide by zeros
             clip_gradients (bool): whether to truncate the gradients.
             gradient_limit (float): positive value to clip gradients between.
+
+        Notes:
+            Only constant learning rate is supported currently.
         """
         self.state_list = None
         self.epsilon = epsilon

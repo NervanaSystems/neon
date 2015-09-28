@@ -15,6 +15,9 @@
 
 Models
 ======
+These represent the network architecture as a whole and are composed of other
+classes like layers, a cost, an optimizer and so forth.  The model's ``fit``
+function is what allows us to train the network against a set of data.
 
 .. autosummary::
    neon.models.model.Model

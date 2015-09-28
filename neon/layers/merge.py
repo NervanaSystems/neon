@@ -91,14 +91,14 @@ class Merge(Layer):
 
     def fprop(self, inputs, inference=False):
         """
-        Called by fprop of sublcasses of Merge. Checks that we're merging more than
-        one model and that the length of inputs and layer_container are equal.
-        Calls fprop on each input model on inputs.  Assumes inputs list is
-        aligned with layer_container list.
+        Called by fprop of sublcasses of Merge. Checks that we are merging
+        more than one model and that the length of inputs and
+        layer_container are equal.  Calls fprop on each input model on
+        inputs.  Assumes inputs list is aligned with layer_container list.
 
         Arguments:
             inputs (list): list of input Tensors
-            inference: (bool): flag if doing inference or not
+            inference (bool): flag if doing inference or not
 
         Returns:
             Tensor: output data

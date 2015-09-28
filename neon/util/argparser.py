@@ -50,6 +50,10 @@ class NeonArgparser(configargparse.ArgumentParser):
         if 'default_config_files' not in kwargs:
             kwargs['default_config_files'] = [os.path.join(self.work_dir,
                                                            'neon.cfg')]
+        if 'add_config_file_help' not in kwargs:
+            # turn off the auto-generated config help for config files since it
+            # referenced unsettable config options like --version
+            kwargs['add_config_file_help'] = False
         super(NeonArgparser, self).__init__(*args, **kwargs)
 
         # ensure that default values are display via --help
