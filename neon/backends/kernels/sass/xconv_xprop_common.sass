@@ -335,6 +335,7 @@ LUT_LOOP:
 <SCHEDULE_BLOCK>
 // warp synchronous loop while warp_count < RST
 --:-:-:-:1      ISETP.LT.AND P0, PT, warp_count, param_RST, PT;
+--:-:-:-:1      ISETP.LT.AND P6, PT, rst, param_RST, PT;
 --:-:-:-:1      IADD warp_count, warp_count, 32;
 // t =  rst / RS
 // rs = rst % RS
@@ -356,7 +357,7 @@ LUT_LOOP:
 --:-:-:-:1      IADD z, mt, t;
 --:-:-:-:1      ISETP.GE.AND  P4, PT, x, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND  P5, PT, y, RZ, PT;
---:-:-:-:1      ISETP.GE.AND  P6, PT, z, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P6, PT, z, RZ, P6;
 // s = S - s - 1
 // r = R - r - 1
 // t = T - t - 1
