@@ -1425,8 +1425,8 @@ def _fp_convert(src_data, src_type, dest_tensor):
                    shape[1]]
 
     kernel = _get_compound_kernel((
-        (ng.GPUTensor, 0, dest_tensor.dtype.str[1:], 0),
-        (ng.GPUTensor, 1, src_type, 0),
+        (ng.GPUTensor, 0, dest_tensor.dtype.str[1:], 0, False),
+        (ng.GPUTensor, 1, src_type, 0, False),
         ('assign', 0, False, 32)))
     kernel.prepared_async_call((shape[0], 1, 1),
                                (32, 1, 1),
