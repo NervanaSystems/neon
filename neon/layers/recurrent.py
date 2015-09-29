@@ -75,6 +75,9 @@ class Recurrent(ParameterLayer):
         self.h_delta = get_steps(self.be.iobuf(self.out_shape), self.out_shape)
         self.bufs_to_reset = [self.h_buffer]
 
+        if self.W_input is None:
+            self.init_params(self.weight_shape)
+
     def init_buffers(self, inputs):
         """
         Initialize buffers for recurrent internal units and outputs.

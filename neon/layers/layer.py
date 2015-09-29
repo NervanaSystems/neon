@@ -232,6 +232,7 @@ class ParameterLayer(Layer):
     def allocate(self, shared_outputs=None, shared_deltas=None):
         self.outputs = self.be.iobuf(self.out_shape) if shared_outputs is None else shared_outputs
         self.deltas = self.be.iobuf(self.in_shape) if shared_deltas is None else shared_deltas
+
         if self.W is None:
             self.init_params(self.weight_shape)
 

@@ -81,8 +81,9 @@ optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.roundin
 
 # configure callbacks
 callbacks = Callbacks(model, train_set, output_file=args.output_file,
+                      progress_bar=args.progress_bar,
                       valid_set=valid_set, valid_freq=1,
-                      progress_bar=args.progress_bar)
+                      )
 callbacks.add_serialize_callback(1, args.save_path)
 
 # fit and validate
@@ -105,8 +106,9 @@ layers = [
     LSTM(hidden_size, init, Logistic(), Tanh()),
     Affine(len(train_set.vocab), init, bias=init, activation=Softmax())
 ]
-model = Model(layers=layers)
-model.load_weights(args.save_path)
+model_new = Model(layers=layers)
+model_new.load_weights(args.save_path)
+model_new.initialize(dataset=(train_set.shape[0], time_steps))
 
 # Generate text
 text = []
@@ -117,7 +119,7 @@ x = be.zeros((len(train_set.vocab), time_steps))
 for s in seed_tokens:
     x.fill(0)
     x[train_set.token_to_index[s], 0] = 1
-    y = model.fprop(x)
+    y = model_new.fprop(x)
 
 for i in range(num_predict):
     # Take last prediction and feed into next fprop
@@ -126,6 +128,6 @@ for i in range(num_predict):
 
     x.fill(0)
     x[int(pred), 0] = 1
-    y = model.fprop(x)
+    y = model_new.fprop(x)
 
 print ''.join(seed_tokens + text)
