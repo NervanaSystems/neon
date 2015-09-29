@@ -632,13 +632,14 @@ class Conv(list):
                  activation=None, conv_name='ConvolutionLayer',
                  bias_name='BiasLayer', act_name='ActivationLayer'):
         list.__init__(self)
-        self.append(Convolution(fshape=fshape, strides=strides, padding=pad, init=init))
+        self.append(Convolution(fshape=fshape, strides=strides, padding=pad,
+                                init=init, name=conv_name))
         if bias is not None:
-            self.append(Bias(init=bias))
+            self.append(Bias(init=bias, name=bias_name))
         if batch_norm:
             self.append(BatchNorm())
         if activation is not None:
-            self.append(Activation(transform=activation))
+            self.append(Activation(transform=activation, name=act_name))
 
 
 class Dropout(Layer):

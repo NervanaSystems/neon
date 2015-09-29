@@ -108,7 +108,7 @@ if args.validation_freq:
     callbacks.add_callback(TopKMetrics(test))
 
 if args.save_path:
-    checkpoint_schedule = range(1, args.epochs)
+    checkpoint_schedule = range(args.epochs)
     callbacks.add_serialize_callback(checkpoint_schedule, args.save_path, history=2)
 
 mlp.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

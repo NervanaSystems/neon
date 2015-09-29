@@ -97,6 +97,9 @@ class Callbacks(NervanaObject):
                                                          save_path,
                                                          epoch_freq=serialize_schedule,
                                                          history=history))
+        else:
+            raise ValueError('Cannot add serialization callback without both'
+                             '"save_path" and "serialize_schedule" specified')
 
     def add_save_best_state_callback(self, path):
         """
