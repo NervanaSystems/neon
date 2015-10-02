@@ -742,7 +742,7 @@ class NervanaCPU(Backend):
             name=name,
             persist_values=persist_values)
 
-    def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False):
+    def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False, bsum=None):
         """
         Doing following operations (* is dot product)
         C = alpha * A * B   + beta * C
@@ -793,6 +793,9 @@ class NervanaCPU(Backend):
             if relu:
                 self.Relu(tmp, tmp)
             np.add(C._tensor, tmp, C._tensor)
+        if bsum is not None:
+            bsum[:] = self.sum(C, 1)
+
         return C
 
     def batched_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False):
@@ -1022,6 +1025,9 @@ class NervanaCPU(Backend):
 
                     array_grad_I[:, d, h, w, :] = alpha * \
                         np.dot(slicedF.T, slicedE)
+        # If this is the forward pass for deconv, compute bsum here
+        if bsum is not None:
+            bsum[:] = self.sum(grad_I.reshape(C, -1), 1)
 
     def update_conv(self, layer, I, E, U, alpha=1.0):
         """
@@ -1084,7 +1090,8 @@ class NervanaCPU(Backend):
                      P, Q,
                      R=1, S=1,
                      pad_d=0, pad_h=0, pad_w=0,
-                     str_d=1, str_h=1, str_w=1):
+                     str_d=1, str_h=1, str_w=1,
+                     bsum=False):
         """
         Create a new PoolLayer parameter object.
         This then is passed as an argument to all pooling kernels.

@@ -384,11 +384,13 @@ class Deconv(ParameterLayer):
             initializing layer weights
         name (str, optional): layer name. Defaults to "DeconvolutionLayer"
     """
-    def __init__(self, fshape, strides={}, padding={}, init=None, name="DeconvolutionLayer"):
+    def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
+                 name="DeconvolutionLayer"):
         super(Deconv, self).__init__(init, name)
         self.nglayer = None
         self.deconvparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
-                             'pad_h': 0, 'pad_w': 0, 'pad_d': 0}
+                             'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
+                             'bsum': bsum}
 
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
@@ -424,6 +426,11 @@ class Deconv(ParameterLayer):
             self.out_shape = (self.nglayer.C, self.nglayer.H, self.nglayer.W)
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
+        if self.deconvparams['bsum']:
+            self.batch_sum = self.be.zeros((self.nglayer.K, 1), dtype=np.float32)
+        else:
+            self.batch_sum = None
+
         return self
 
     def fprop(self, inputs, inference=False):
@@ -433,8 +440,12 @@ class Deconv(ParameterLayer):
         for deconv, bprop_conv will take in input as "E" and output as "grad_I"
         """
         self.inputs = inputs
-        self.be.bprop_conv(layer=self.nglayer, F=self.W, E=inputs, grad_I=self.outputs)
-        return self.outputs
+        self.be.bprop_conv(layer=self.nglayer, F=self.W, E=inputs, grad_I=self.outputs,
+                           bsum=self.batch_sum)
+        if self.deconvparams['bsum']:
+            return (self.outputs, self.batch_sum)
+        else:
+            return self.outputs
 
     def bprop(self, error, do_acts=True):
         """
@@ -463,7 +474,7 @@ class Linear(ParameterLayer):
         super(Linear, self).__init__(init, name)
         self.nout = nout
         self.inputs = None
-        self.bsum = False  # TODO: bsum for linear is not implemented
+        self.bsum = bsum
 
     def __str__(self):
         return "Linear Layer '%s': %d inputs, %d outputs" % (
@@ -476,11 +487,16 @@ class Linear(ParameterLayer):
         if self.weight_shape is None:
             self.weight_shape = (self.nout, self.nin)
         # TODO: Set up self.batch_sum if self.bsum
+        if self.bsum:
+            self.batch_sum = self.be.zeros((self.nout, 1), dtype=np.float32)
+        else:
+            self.batch_sum = None
+
         return self
 
     def fprop(self, inputs, inference=False):
         self.inputs = inputs
-        self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs)  # , bsum=self.batch_sum
+        self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs, bsum=self.batch_sum)
         if self.bsum:
             return (self.outputs, self.batch_sum)
         else:
@@ -614,6 +630,9 @@ class Affine(list):
         if activation is not None:
             self.append(Activation(transform=activation, name=act_name))
 
+        if batch_norm and (bias is not None):
+            raise AttributeError('Batchnorm and bias cannot be combined')
+
 
 class Conv(list):
     """
@@ -652,6 +671,9 @@ class Conv(list):
             self.append(BatchNorm())
         if activation is not None:
             self.append(Activation(transform=activation, name=act_name))
+
+        if batch_norm and (bias is not None):
+            raise AttributeError('Batchnorm and bias cannot be combined')
 
 
 class Dropout(Layer):
@@ -812,8 +834,13 @@ class BatchNorm(Layer):
     """
     A batch normalization layer as described in [Ioffe]_
 
-    Normalizes a batch worth of inputs by subtracting batch mean and dividing by
-    batch variance.  Then scales by learned factor gamma and shifts by learned bias beta.
+    Normalizes a batch worth of inputs by subtracting batch mean and
+    dividing by batch variance.  Then scales by learned factor gamma and
+    shifts by learned bias beta.
+
+    Uses the inputs to fprop to infer if a precomputed batch-sum is
+    supplied from previous layer (input is tuple), or if the sum still
+    needs to be computed.
 
     Notes:
 
@@ -830,7 +857,6 @@ class BatchNorm(Layer):
         self.eps = eps
         self.states = [[] for i in range(2)]
         self.relu = False
-        self.bn_compound = True if hasattr(self.be, 'compound_bprop_bn') else False
 
     def __str__(self):
         return "BatchNorm Layer '%s': %d inputs, %d steps, %d feature maps" % (
@@ -850,10 +876,7 @@ class BatchNorm(Layer):
         self.xvar = self.be.zeros((self.nfm, 1))
         if self.allparams is None:
             self.init_params(self.nfm)
-        if self.bn_compound:
-            self.xsum = self.be.zeros((self.nfm, 1))
-        else:
-            self.xmean = self.be.zeros((self.nfm, 1))
+        self.xsum = self.be.zeros((self.nfm, 1))
 
     def init_params(self, dim0):
         self.beta = self.be.zeros((dim0, 1))
@@ -889,33 +912,18 @@ class BatchNorm(Layer):
                 self.x = self.inputs.reshape((self.nfm, -1))
             return self._fprop_inference(inputs)
 
-        if self.bn_compound:
-            # custom batch norm kernel
-            if self.inputs is None:
-                self.inputs = inputs.reshape((self.nfm, -1))
+        if self.inputs is None:
+            self.inputs = inputs.reshape((self.nfm, -1))
 
-            if bsum is None:
-                self.xsum[:] = self.be.sum(self.inputs, axis=1)
-            else:
-                self.xsum = bsum
-
-            self.be.compound_fprop_bn(
-                self.inputs, self.xsum, self.xvar, self.gmean, self.gvar,
-                self.gamma, self.beta, self.outputs, self.eps, self.rho, self.relu)
-
+        if bsum is None:
+            self.xsum[:] = self.be.sum(self.inputs, axis=1)
         else:
-            self.inputs = inputs
-            if self.x is None or self.x.base is not self.inputs:
-                self.x = self.inputs.reshape((self.nfm, -1))
+            self.xsum = bsum
 
-            # These are cached op-trees
-            self.xvar[:] = self.be.var(self.x, axis=1)
-            self.xmean[:] = self.be.mean(self.x, axis=1)
-            self.xhat = (self.x - self.xmean) / self.be.sqrt(self.xvar + self.eps)
+        self.be.compound_fprop_bn(
+            self.inputs, self.xsum, self.xvar, self.gmean, self.gvar,
+            self.gamma, self.beta, self.outputs, self.eps, self.rho, self.relu)
 
-            self.gmean[:] = self.gmean * self.rho + (1.0 - self.rho) * self.xmean
-            self.gvar[:] = self.gvar * self.rho + (1.0 - self.rho) * self.xvar
-            self.y[:] = self.xhat * self.gamma + self.beta
         return self.outputs
 
     def _fprop_inference(self, inputs):
@@ -933,16 +941,10 @@ class BatchNorm(Layer):
         if not self.deltas:
             self.deltas = error.reshape((self.nfm, -1))
 
-        if self.bn_compound:
-            # custom batch norm kernel
-            self.be.compound_bprop_bn(
-                self.deltas, self.grad_gamma, self.grad_beta, self.inputs,
-                self.xsum, self.xvar, self.gamma, self.eps)
-        else:
-            self.grad_gamma[:] = self.be.sum(self.xhat * self.deltas, axis=1)
-            self.grad_beta[:] = self.be.sum(self.deltas, axis=1)
-            xtmp = (self.xhat * self.grad_gamma + self.grad_beta) / float(self.x.shape[1])
-            self.deltas[:] = self.gamma * (self.deltas - xtmp) / self.be.sqrt(self.xvar + self.eps)
+        self.be.compound_bprop_bn(
+            self.deltas, self.grad_gamma, self.grad_beta, self.inputs,
+            self.xsum, self.xvar, self.gamma, self.eps)
+
         return error
 
     def get_params(self):

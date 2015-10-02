@@ -973,7 +973,7 @@ class NervanaGPU(Backend):
         if self._is_simple_stack(stack):
             return call_compound_kernel(self._get_rand_state(), *stack)
 
-        # create stages and evaluate`
+        # create stages and evaluate
         stacks = self._split_to_stacks(optree)
 
         for stack in stacks:
@@ -991,7 +991,6 @@ class NervanaGPU(Backend):
         """
         Allocate the space for a GPUTensor
         """
-        # print "empty called"
         dtype = self.default_dtype if dtype is None else dtype
         return GPUTensor(self, shape, dtype=dtype, name=name,
                          persist_values=persist_values, allocator=allocator,
@@ -1046,7 +1045,7 @@ class NervanaGPU(Backend):
                          allocator=other_ary.allocator,
                          rounding=self.round_mode)._assign(0)
 
-    def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False, repeat=1, size=None):
+    def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False, bsum=None, repeat=1, size=None):
         """
         C = alpha * A * B   + beta * C
         C = alpha * A.T * B + beta * C
@@ -1196,7 +1195,8 @@ class NervanaGPU(Backend):
                   (msecs, gflops, clss, op, m, n, k, size, gridA, gridB))
             if repeat > 1:
                 return gflops
-
+        if bsum is not None:
+            bsum[:] = self.sum(C, 1)
         return C
 
     def batched_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False, repeat=1, size=None):
@@ -1452,6 +1452,8 @@ class NervanaGPU(Backend):
         assert layer.sizeF == F.size
         assert layer.sizeO == E.size
         assert layer.sizeI == grad_I.size
+        if bsum is not None:
+            bsum[:] = self.sum(grad_I.reshape(layer.C, -1), 1)
         return self._execute_conv(
             layer, "bprop", layer.bprop_kernels, layer.bprop_lut_size,
             E, F, grad_I, alpha, beta, bsum, layer.bprop_zero, repeat)
