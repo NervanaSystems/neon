@@ -22,7 +22,7 @@ import numpy as np
 from neon.backends import gen_backend
 from neon.data import DataIterator, load_cifar10
 from neon.initializers import Uniform
-from neon.layers import Affine, Conv, Pooling, GeneralizedCost, Deconv, Activation, BatchNorm
+from neon.layers import Affine, Conv, Pooling, GeneralizedCost, Deconv
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Misclassification, Rectlin, Softmax, CrossEntropyMulti
@@ -67,9 +67,7 @@ layers.append(Conv((5, 5, 16), init=init_uni, activation=Rectlin(), batch_norm=T
 layers.append(Pooling((2, 2)))
 layers.append(Conv((5, 5, 32), init=init_uni, activation=Rectlin(), batch_norm=True))
 # layers.append(Pooling((2, 2)))
-layers.append(Deconv((5, 5, 32), init=init_uni, bsum=True))
-layers.append(BatchNorm())
-layers.append(Activation(transform=Rectlin()))
+layers.append(Deconv((5, 5, 32), init=init_uni, activation=Rectlin(), batch_norm=True))
 layers.append(Affine(nout=500, init=init_uni, activation=Rectlin(), batch_norm=True))
 layers.append(Affine(nout=10, init=init_uni, activation=Softmax()))
 if args.datatype in [np.float32, np.float64]:

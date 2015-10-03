@@ -46,7 +46,7 @@ layers:
     type: Conv # Convolution + Bias + BN + Activation
     fshape: [11, 11, 64]
     strides: 4
-    pad: 3
+    padding: 3
     init: *wt_init1
     bias: *b_init0
     activation: Rectlin
@@ -57,7 +57,7 @@ layers:
 -
     type: Conv
     fshape: [5, 5, 192]
-    pad: 2
+    padding: 2
     init: *wt_init1
     bias: *b_init1
     activation: Rectlin
@@ -68,21 +68,21 @@ layers:
 -
     type: Conv
     fshape: [3, 3, 384]
-    pad: 1
+    padding: 1
     init: *wt_init2
     bias: *b_init0
     activation: Rectlin
 -
     type: Conv
     fshape: [3, 3, 256]
-    pad: 1
+    padding: 1
     init: *wt_init2
     bias: *b_init1
     activation: Rectlin
 -
     type: Conv
     fshape: [3, 3, 256]
-    pad: 1
+    padding: 1
     init: *wt_init2
     bias: *b_init1
     activation: Rectlin

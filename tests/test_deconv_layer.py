@@ -17,7 +17,7 @@ import itertools as itt
 import numpy as np
 
 from neon import NervanaObject
-from neon.layers import Deconv
+from neon.layers import Deconvolution
 from neon.initializers import Uniform
 
 
@@ -83,10 +83,10 @@ def test_dconv_zeros(backend_default, zeros_convargs):
     init_unif = Uniform(low=0.0, high=0.0)
     inshape = (64, 28, 28)
     insize = np.prod(inshape)
-    neon_layer = Deconv(fshape=(fshape, fshape, nofm),
-                        strides=1,
-                        padding=0,
-                        init=init_unif)
+    neon_layer = Deconvolution(fshape=(fshape, fshape, nofm),
+                               strides=1,
+                               padding=0,
+                               init=init_unif)
     inp_arr_shape = (insize, batch_size)
     inp = np.random.random(inp_arr_shape).astype(dtypeu)
     inp = neon_layer.be.array(inp)
@@ -118,8 +118,8 @@ def test_dconv_ones(backend_default, ones_convargs):
     inshape = (nifm, indim, indim)
     insize = np.prod(inshape)
 
-    neon_layer = Deconv(fshape=(fshape, fshape, nofm), strides=1,
-                        padding=0, init=init_unif)
+    neon_layer = Deconvolution(fshape=(fshape, fshape, nofm), strides=1,
+                               padding=0, init=init_unif)
     inp = neon_layer.be.array(np.ones((insize, batch_size)).astype(dtypeu))
     inp.lshape = inshape
     # run fprop
@@ -170,8 +170,8 @@ def test_dconv_rand(backend_default, rand_convargs):
 
     # generate neon deconv layer
     # need to switch to nofm here...
-    neon_layer = Deconv(fshape=(fshape, fshape, nofm), strides=1,
-                        padding=0, init=init_unif)
+    neon_layer = Deconvolution(fshape=(fshape, fshape, nofm), strides=1,
+                               padding=0, init=init_unif)
     insize = np.prod(inshape)
 
     # generate reference deconv layer

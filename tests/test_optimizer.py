@@ -151,7 +151,7 @@ def test_multi_optimizer(backend_default):
     opt_rms_1 = RMSProp(clip_gradients=True)
     init_one = Gaussian(scale=0.01)
 
-    l1 = Conv((11, 11, 64), strides=4, pad=3,
+    l1 = Conv((11, 11, 64), strides=4, padding=3,
               init=init_one, bias=Constant(0), activation=Rectlin())
     l2 = Affine(nout=4096, init=init_one,
                 bias=Constant(1), activation=Rectlin())

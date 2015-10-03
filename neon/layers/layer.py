@@ -168,7 +168,8 @@ class Pooling(Layer):
         if isinstance(fshape, int):
             fshape = {'R': fshape, 'S': fshape}
         elif isinstance(fshape, tuple):
-            fshape = {'R': fshape[0], 'S': fshape[1]}
+            fkeys = ('R', 'S') if len(fshape) == 2 else ('T', 'R', 'S')
+            fshape = {k: x for k, x in zip(fkeys, fshape)}
         if isinstance(strides, int):
             strides = {'str_h': strides, 'str_w': strides}
         if isinstance(padding, int):
@@ -187,13 +188,13 @@ class Pooling(Layer):
         super(Pooling, self).configure(in_obj)
         if self.nglayer is None:
             assert isinstance(self.in_shape, tuple)
-            shapedict = {'C': self.in_shape[0],
-                         'H': self.in_shape[1],
-                         'W': self.in_shape[2],
-                         'N': self.be.bsz}
+            ikeys = ('C', 'H', 'W') if len(self.in_shape) == 3 else ('C', 'D', 'H', 'W')
+            shapedict = {k: x for k, x in zip(ikeys, self.in_shape)}
+            shapedict['N'] = self.be.bsz
             self.poolparams.update(shapedict)
             self.nglayer = self.be.pool_layer(self.be.default_dtype, **self.poolparams)
-            self.out_shape = (self.nglayer.K, self.nglayer.P, self.nglayer.Q)
+            (K, M, P, Q, N) = self.nglayer.dimO
+            self.out_shape = (K, M, P, Q) if len(self.in_shape) == 4 else (K, P, Q)
         return self
 
     def allocate(self, shared_outputs=None, shared_deltas=None):
@@ -227,6 +228,8 @@ class ParameterLayer(Layer):
         self.init = init
         self.W = None
         self.weight_shape = None
+        self.batch_sum = None
+        self.batch_sum_shape = None
         self.states = []
 
     def allocate(self, shared_outputs=None, shared_deltas=None):
@@ -235,6 +238,8 @@ class ParameterLayer(Layer):
 
         if self.W is None:
             self.init_params(self.weight_shape)
+        if self.batch_sum_shape is not None:
+            self.batch_sum = self.be.empty(self.batch_sum_shape, dtype=np.float32)
 
     def init_params(self, shape):
         """
@@ -316,7 +321,8 @@ class Convolution(ParameterLayer):
         self.padding = padding
 
         if isinstance(fshape, tuple):
-            fshape = {'R': fshape[0], 'S': fshape[1], 'K': fshape[2]}
+            fkeys = ('R', 'S', 'K') if len(fshape) == 3 else ('T', 'R', 'S', 'K')
+            fshape = {k: x for k, x in zip(fkeys, fshape)}
         if isinstance(strides, int):
             strides = {'str_h': strides, 'str_w': strides}
         if isinstance(padding, int):
@@ -325,7 +331,7 @@ class Convolution(ParameterLayer):
             self.convparams.update(d)
 
     def __str__(self):
-        return ("Conv Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) "
+        return ("Convolution Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) "
                 "outputs, padding %d, stride %d" %
                 (self.name,
                  self.in_shape[0], self.in_shape[1], self.in_shape[2],
@@ -336,28 +342,23 @@ class Convolution(ParameterLayer):
         super(Convolution, self).configure(in_obj)
         if self.nglayer is None:
             assert isinstance(self.in_shape, tuple)
-            shapedict = {'C': self.in_shape[0],
-                         'H': self.in_shape[1],
-                         'W': self.in_shape[2],
-                         'N': self.be.bsz}
+            ikeys = ('C', 'H', 'W') if len(self.in_shape) == 3 else ('C', 'D', 'H', 'W')
+            shapedict = {k: x for k, x in zip(ikeys, self.in_shape)}
+            shapedict['N'] = self.be.bsz
             self.convparams.update(shapedict)
             self.nglayer = self.be.conv_layer(self.be.default_dtype, **self.convparams)
-            self.out_shape = (self.nglayer.K, self.nglayer.P, self.nglayer.Q)
+            (K, M, P, Q, N) = self.nglayer.dimO
+            self.out_shape = (K, P, Q) if M == 1 else (K, M, P, Q)
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
         if self.convparams['bsum']:
-            self.batch_sum = self.be.zeros((self.nglayer.K, 1), dtype=np.float32)
-        else:
-            self.batch_sum = None
+            self.batch_sum_shape = (self.nglayer.K, 1)
         return self
 
     def fprop(self, inputs, inference=False):
         self.inputs = inputs
         self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, bsum=self.batch_sum)
-        if self.convparams['bsum']:
-            return (self.outputs, self.batch_sum)
-        else:
-            return self.outputs
+        return self.outputs
 
     def bprop(self, error, do_acts=True):
         if do_acts:
@@ -366,7 +367,7 @@ class Convolution(ParameterLayer):
         return self.deltas
 
 
-class Deconv(ParameterLayer):
+class Deconvolution(ParameterLayer):
     """
     Deconvolutional layer implementation.
 
@@ -386,7 +387,7 @@ class Deconv(ParameterLayer):
     """
     def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
                  name="DeconvolutionLayer"):
-        super(Deconv, self).__init__(init, name)
+        super(Deconvolution, self).__init__(init, name)
         self.nglayer = None
         self.deconvparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                              'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
@@ -408,13 +409,13 @@ class Deconv(ParameterLayer):
             self.deconvparams.update(d)
 
     def __str__(self):
-        return "Deconv Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) outputs" % (
+        return "Deconvolution Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) outputs" % (
                self.name,
                self.in_shape[0], self.in_shape[1], self.in_shape[2],
                self.out_shape[0], self.out_shape[1], self.out_shape[2])
 
     def configure(self, in_obj):
-        super(Deconv, self).configure(in_obj)
+        super(Deconvolution, self).configure(in_obj)
         if self.nglayer is None:
             assert isinstance(self.in_shape, tuple)
             shapedict = {'K': self.in_shape[0],
@@ -427,10 +428,7 @@ class Deconv(ParameterLayer):
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
         if self.deconvparams['bsum']:
-            self.batch_sum = self.be.zeros((self.nglayer.K, 1), dtype=np.float32)
-        else:
-            self.batch_sum = None
-
+            self.batch_sum_shape = (self.nglayer.C, 1)
         return self
 
     def fprop(self, inputs, inference=False):
@@ -442,10 +440,7 @@ class Deconv(ParameterLayer):
         self.inputs = inputs
         self.be.bprop_conv(layer=self.nglayer, F=self.W, E=inputs, grad_I=self.outputs,
                            bsum=self.batch_sum)
-        if self.deconvparams['bsum']:
-            return (self.outputs, self.batch_sum)
-        else:
-            return self.outputs
+        return self.outputs
 
     def bprop(self, error, do_acts=True):
         """
@@ -486,21 +481,14 @@ class Linear(ParameterLayer):
         self.out_shape = (self.nout, self.nsteps)
         if self.weight_shape is None:
             self.weight_shape = (self.nout, self.nin)
-        # TODO: Set up self.batch_sum if self.bsum
         if self.bsum:
-            self.batch_sum = self.be.zeros((self.nout, 1), dtype=np.float32)
-        else:
-            self.batch_sum = None
-
+            self.batch_sum_shape = (self.nout, 1)
         return self
 
     def fprop(self, inputs, inference=False):
         self.inputs = inputs
         self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs, bsum=self.batch_sum)
-        if self.bsum:
-            return (self.outputs, self.batch_sum)
-        else:
-            return self.outputs
+        return self.outputs
 
     def bprop(self, error, do_acts=True):
         if do_acts:
@@ -604,7 +592,7 @@ class Activation(Layer):
 class Affine(list):
     """
     A linear layer with a learned bias and activation, implemented as a list
-    composing separate linear, bias and activation layers.
+    composing separate linear, bias/batchnorm and activation layers.
 
     Arguments:
         nout (int, tuple): Desired size or shape of layer output
@@ -623,6 +611,12 @@ class Affine(list):
                  act_name='ActivationLayer'):
         list.__init__(self)
         self.append(Linear(nout, init, bsum=batch_norm, name=linear_name))
+        self.add_postfilter_layers(bias, batch_norm, activation, bias_name, act_name)
+
+    def add_postfilter_layers(self, bias=None, batch_norm=False, activation=None,
+                              bias_name='BiasLayer', act_name='ActivationLayer'):
+        if batch_norm and (bias is not None):
+            raise AttributeError('Batchnorm and bias cannot be combined')
         if bias is not None:
             self.append(Bias(init=bias, name=bias_name))
         if batch_norm:
@@ -630,11 +624,8 @@ class Affine(list):
         if activation is not None:
             self.append(Activation(transform=activation, name=act_name))
 
-        if batch_norm and (bias is not None):
-            raise AttributeError('Batchnorm and bias cannot be combined')
 
-
-class Conv(list):
+class Conv(Affine):
     """
     A convolutional layer with a learned bias and activation, implemented as a
     list composing separate Convolution, Bias and Activation layers.
@@ -659,21 +650,26 @@ class Conv(list):
         act_name (str): the name to call the Activation layer. Defaults to ActivationLayer.
 
     """
-    def __init__(self, fshape, init, strides={}, pad={}, bias=None, batch_norm=False,
+    def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
                  activation=None, conv_name='ConvolutionLayer',
                  bias_name='BiasLayer', act_name='ActivationLayer'):
         list.__init__(self)
-        self.append(Convolution(fshape=fshape, strides=strides, padding=pad,
+        self.append(Convolution(fshape=fshape, strides=strides, padding=padding,
                                 init=init, bsum=batch_norm, name=conv_name))
-        if bias is not None:
-            self.append(Bias(init=bias, name=bias_name))
-        if batch_norm:
-            self.append(BatchNorm())
-        if activation is not None:
-            self.append(Activation(transform=activation, name=act_name))
+        self.add_postfilter_layers(bias, batch_norm, activation, bias_name, act_name)
 
-        if batch_norm and (bias is not None):
-            raise AttributeError('Batchnorm and bias cannot be combined')
+
+class Deconv(Affine):
+    """
+    Same as Conv layer, but implements a composite deconvolution layer
+    """
+    def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
+                 activation=None, conv_name='DeconvolutionLayer',
+                 bias_name='BiasLayer', act_name='ActivationLayer'):
+        list.__init__(self)
+        self.append(Deconvolution(fshape=fshape, strides=strides, padding=padding,
+                                  init=init, bsum=batch_norm))
+        self.add_postfilter_layers(bias, batch_norm, activation, bias_name, act_name)
 
 
 class Dropout(Layer):
@@ -867,7 +863,6 @@ class BatchNorm(Layer):
         self.out_shape = self.in_shape
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
         self.nfm = self.in_shape[0] if isinstance(self.in_shape, tuple) else self.nin
-
         return self
 
     def allocate(self, shared_outputs=None, shared_deltas=None):
@@ -876,7 +871,12 @@ class BatchNorm(Layer):
         self.xvar = self.be.zeros((self.nfm, 1))
         if self.allparams is None:
             self.init_params(self.nfm)
-        self.xsum = self.be.zeros((self.nfm, 1))
+        if self.prev_layer is None or self.prev_layer.batch_sum is None:
+            self.xsum = self.be.zeros((self.nfm, 1))
+            self.compute_batch_sum = True
+        else:
+            self.xsum = self.prev_layer.batch_sum
+            self.compute_batch_sum = False
 
     def init_params(self, dim0):
         self.beta = self.be.zeros((dim0, 1))
@@ -902,11 +902,6 @@ class BatchNorm(Layer):
 
         Accumulate partial results to global mean and variance buffers used for inference.
         """
-        if type(inputs) is tuple:
-            inputs, bsum = inputs
-        else:
-            bsum = None
-
         if inference:
             if self.x is None or self.x.base is not self.inputs:
                 self.x = self.inputs.reshape((self.nfm, -1))
@@ -915,10 +910,8 @@ class BatchNorm(Layer):
         if self.inputs is None:
             self.inputs = inputs.reshape((self.nfm, -1))
 
-        if bsum is None:
+        if self.compute_batch_sum:
             self.xsum[:] = self.be.sum(self.inputs, axis=1)
-        else:
-            self.xsum = bsum
 
         self.be.compound_fprop_bn(
             self.inputs, self.xsum, self.xvar, self.gmean, self.gvar,

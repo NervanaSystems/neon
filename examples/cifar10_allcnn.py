@@ -60,19 +60,23 @@ opt_gdm = GradientDescentMomentum(learning_rate=0.5,
                                   momentum_coef=0.9, wdecay=.0001)
 relu = Rectlin()
 layers = []
+conv = dict(init=init_uni, batch_norm=True, activation=relu)
+convp1 = dict(init=init_uni, batch_norm=True, activation=relu, padding=1)
+convp1s2 = dict(init=init_uni, batch_norm=True, activation=relu, padding=1, strides=2)
+
 layers.append(Dropout(keep=.8))
-layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=relu))
-layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=relu, pad=1))
-layers.append(Conv((3, 3, 96), init=init_uni, batch_norm=True, activation=relu, pad=1, strides=2))
+layers.append(Conv((3, 3, 96), **conv))
+layers.append(Conv((3, 3, 96), **convp1))
+layers.append(Conv((3, 3, 96), **convp1s2))
 layers.append(Dropout(keep=.5))
 
-layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=relu, pad=1))
-layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=relu, pad=1))
-layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=relu, pad=1, strides=2))
+layers.append(Conv((3, 3, 192), **convp1))
+layers.append(Conv((3, 3, 192), **convp1))
+layers.append(Conv((3, 3, 192), **convp1s2))
 layers.append(Dropout(keep=.5))
 
-layers.append(Conv((3, 3, 192), init=init_uni, batch_norm=True, activation=relu))
-layers.append(Conv((1, 1, 192), init=init_uni, batch_norm=True, activation=relu))
+layers.append(Conv((3, 3, 192), **conv))
+layers.append(Conv((1, 1, 192), **conv))
 layers.append(Conv((1, 1, 16), init=init_uni, activation=relu))
 
 layers.append(Pooling(6, op="avg"))

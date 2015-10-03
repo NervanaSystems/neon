@@ -18,7 +18,7 @@ import os
 from neon.backends import gen_backend
 from neon.data import DataIterator, load_mnist, load_text, Text
 from neon.initializers import Gaussian, Constant
-from neon.layers import GeneralizedCost, Affine, BatchNorm
+from neon.layers import GeneralizedCost, Affine
 from neon.layers import Dropout, Conv, Pooling, MergeConcat, Recurrent
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
@@ -85,8 +85,7 @@ def test_model_serialize(backend_default, data):
              Affine(nout=20, init=init_norm, bias=init_norm, activation=Rectlin())]
     layers = [MergeConcat([path1, path2]),
               Affine(
-                  nout=20, init=init_norm, bias=init_norm, activation=Rectlin()),
-              BatchNorm(),
+                  nout=20, init=init_norm, batch_norm=True, activation=Rectlin()),
               Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))]
 
     tmp_save = 'test_model_serialize_tmp_save.pickle'

@@ -33,6 +33,7 @@ class BatchNormWithReset(BatchNorm):
     def reset(self):
         self.__init__(rho=self.rho, eps=self.eps, name=self.name)
 
+
 def pytest_generate_tests(metafunc):
     # main test generator
     # generates the parameter combos for
@@ -71,8 +72,7 @@ def test_batchnorm(backend_cpu64, bnargs):
     inp_size = n
     if isinstance(n, tuple):
         inp_shape = n
-        from operator import mul
-        inp_size = reduce(mul, n)
+        inp_size = np.prod(n)
     inp = np.random.randn(inp_size, batch_size)
 
     epsilon = 1.0e-5
