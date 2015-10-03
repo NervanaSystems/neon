@@ -97,3 +97,13 @@ model.fit(train_set,
           num_epochs=num_epochs,
           cost=cost,
           callbacks=callbacks)
+
+# get predictions
+ypred = model.get_outputs(valid_set)
+prediction = ypred.argmax(2).reshape((valid_set.y.shape[1],
+                                      valid_set.y.shape[0],
+                                      valid_set.y.shape[2])).transpose(1, 0, 2)
+fraction_correct = (prediction == valid_set.y).mean()
+print 'Misclassification error = %.1f%%' % ((1-fraction_correct)*100)
+
+

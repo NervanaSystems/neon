@@ -261,10 +261,10 @@ class Model(NervanaObject):
             cur_batch = slice(idx * dim1, (idx + 1) * dim1)
             Ypred[cur_batch] = x.get().T
 
-        # Handle the recurrent case
+        # Handle the recurrent case.
         if nsteps != 1:
             b, s = (self.be.bsz, nsteps)
-            Ypred = Ypred.reshape((n, b, s, -1)).transpose(1, 0, 2, 3).copy().reshape(n*b, s, -1)
+            Ypred = Ypred.reshape((n, s, b, -1)).transpose(0, 2, 1, 3).copy().reshape(n*b, s, -1)
 
         return Ypred[:dataset.ndata]
 

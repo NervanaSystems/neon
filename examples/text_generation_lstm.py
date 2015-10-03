@@ -14,8 +14,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains an LSTM or GRU based recurrent networks.
-The dataset uses Penn Treebank dataset parsing on character-level.
+Example that trains an LSTM based recurrent network and draws samples
+from the network. It is trained on the Shakespeare dataset using
+character-level parsing.
 
 Reference:
     Generating sequences with recurrent neural networks `[Graves2014]`_
