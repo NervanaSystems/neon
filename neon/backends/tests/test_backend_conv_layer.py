@@ -220,7 +220,7 @@ def test_conv_layer(fargs_tests):
 
         print op
         assert np.allclose(ngA.get(), cpuA, rtol=0, atol=1e-4)
-        assert np.allclose(ncA.get(), cpuA, rtol=0, atol=1e-5)
+        assert np.allclose(ncA.get(), cpuA, rtol=0, atol=1e-4)
 
     del ng
     del nc

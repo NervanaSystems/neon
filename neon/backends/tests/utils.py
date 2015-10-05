@@ -56,7 +56,7 @@ def assert_tensors_allclose(a_tensors, b_tensors, rtol=0, atol=1e-7,
     Raises:
         AssertionError: If the tensors of fs is not all close
     """
-    # deal with indevidual tensor
+    # deal with individual tensor
     if type(a_tensors) is not list:
         if isinstance(a_tensors, Tensor):
             a_tensors = a_tensors.asnumpyarray()
@@ -70,8 +70,8 @@ def assert_tensors_allclose(a_tensors, b_tensors, rtol=0, atol=1e-7,
                 a_tensor = a_tensor.asnumpyarray()
             if isinstance(b_tensor, Tensor):
                 b_tensor = b_tensor.asnumpyarray()
-            np.testing.assert_allclose(a_tensor,  b_tensor, rtol=rtol, atol=atol,
-                                       err_msg=err_msg)
+            np.testing.assert_allclose(a_tensor.astype(b_tensor.dtype),  b_tensor,
+                                       rtol=rtol, atol=atol, err_msg=err_msg)
 
 
 def assert_funcs_allclose(f, backends, backend_tensors, rtol=0, atol=1e-7,

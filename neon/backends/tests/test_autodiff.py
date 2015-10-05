@@ -124,8 +124,8 @@ def pytest_generate_tests(metafunc):
 def test_gradients(backend_tests, custom_args):
     test_idx, f, flag, dim = custom_args
 
-    # backend_tests ficxture will parameterize over cpu and gpu
-    # backedns as well as float16 and float32
+    # backend_tests fixture will parameterize over cpu and gpu
+    # backends as well as float16 and float32
     # pull the be and dtype from the actions of the fixture
     be = NervanaObject.be
     dtype = be.default_dtype

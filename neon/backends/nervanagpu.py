@@ -1452,8 +1452,6 @@ class NervanaGPU(Backend):
         assert layer.sizeF == F.size
         assert layer.sizeO == E.size
         assert layer.sizeI == grad_I.size
-        if bsum is not None:
-            bsum[:] = self.sum(grad_I.reshape(layer.C, -1), 1)
         return self._execute_conv(
             layer, "bprop", layer.bprop_kernels, layer.bprop_lut_size,
             E, F, grad_I, alpha, beta, bsum, layer.bprop_zero, repeat)
