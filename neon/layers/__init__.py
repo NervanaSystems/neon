@@ -16,4 +16,4 @@ from neon.layers.layer import (Linear, Bias, Affine, Conv, Convolution, Generali
                                Pooling, Activation, BatchNorm, BatchNormAutodiff,
                                Deconv, GeneralizedCostMask)
 from neon.layers.merge import Merge, MergeSum, MergeConcat, MergeConcatSequence
-from neon.layers.recurrent import Recurrent, LSTM, GRU
+from neon.layers.recurrent import Recurrent, LSTM, GRU, RecurrentSum, RecurrentMean, RecurrentLast

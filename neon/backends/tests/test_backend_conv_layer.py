@@ -112,6 +112,7 @@ def pytest_generate_tests(metafunc):
 
     T_R_S = [
         (3, 3, 3),
+        (1, 3, 3),
     ]
 
     if 'fargs_tests' in metafunc.fixturenames:
@@ -225,4 +226,10 @@ def test_conv_layer(fargs_tests):
     del nc
 
 if __name__ == '__main__':
-    test_conv_layer()
+
+    fargs = [
+            (64, 64, 64),
+            (3, 5, 5),
+            (1, 3, 3)]
+
+    test_conv_layer(fargs)
