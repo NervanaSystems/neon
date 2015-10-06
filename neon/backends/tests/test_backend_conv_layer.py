@@ -227,9 +227,8 @@ def test_conv_layer(fargs_tests):
 
 if __name__ == '__main__':
 
-    fargs = [
-            (64, 64, 64),
-            (3, 5, 5),
-            (1, 3, 3)]
+    fargs = [(64, 64, 64),
+             (3, 5, 5),
+             (1, 3, 3)]
 
     test_conv_layer(fargs)
