@@ -21,6 +21,7 @@ import numpy as np
 import copy
 
 from neon import NervanaObject
+from neon.backends import gen_backend
 from neon.optimizers import GradientDescentMomentum, RMSProp, Adadelta, Adam, Adagrad
 from neon.optimizers import MultiOptimizer
 from neon.layers import Conv, Affine, LSTM, GRU
@@ -168,8 +169,9 @@ def test_multi_optimizer(backend_default):
                           'Bias': opt_ada,
                           'Convolution': opt_adam,
                           'Linear': opt_rms,
-                          'LstmLayer': opt_rms_1,
-                          'GruLayer': opt_rms_1})
+                          'LSTM': opt_rms_1,
+                          'GRU': opt_rms_1})
+    
     map_list = opt.map_optimizers(layer_list)
     assert map_list[opt_adam][0].__class__.__name__ == 'Convolution'
     assert map_list[opt_ada][0].__class__.__name__ == 'Bias'
@@ -177,3 +179,7 @@ def test_multi_optimizer(backend_default):
     assert map_list[opt_gdm][0].__class__.__name__ == 'Activation'
     assert map_list[opt_rms_1][0].__class__.__name__ == 'LSTM'
     assert map_list[opt_rms_1][1].__class__.__name__ == 'GRU'
+
+if __name__ == '__main__':
+    be = gen_backend(backend='gpu', batch_size=50)
+    test_multi_optimizer(be)
