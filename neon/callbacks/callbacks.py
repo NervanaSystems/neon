@@ -419,9 +419,10 @@ class ValidationCallback(Callback):
             x = model.fprop(x, inference=True)
             bsz = min(self.valid_set.ndata - nprocessed, self.be.bsz)
             model.cost.get_cost(x, t)
-            costbuf = model.cost.outputs[:, :bsz]
+            nsteps = x.shape[1] / self.be.bsz
+            costbuf = model.cost.outputs[:, :bsz*nsteps]
             nprocessed += bsz
-            self.valid_cost[:] = self.valid_cost + self.be.sum(costbuf, axis=1)
+            self.valid_cost[:] = self.valid_cost + self.be.sum(costbuf, axis=1)/nsteps
             mean_cost = float(self.valid_cost.get() / nprocessed)
 
         end_validation = default_timer()
