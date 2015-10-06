@@ -1,5 +1,5 @@
 import numpy as np
-from neon.layers.layer import Layer, BranchNode, Dropout
+from neon.layers.layer import Layer, BranchNode, Dropout, LayerParallelism
 from neon import NervanaObject
 from operator import add
 
@@ -64,8 +64,12 @@ class Sequential(LayerContainer):
         config_layers = self.layers if in_obj else self._layers
         in_obj = in_obj if in_obj else self.layers[0]
         super(Sequential, self).configure(in_obj)
+        prev_layer = None
         for l in config_layers:
             in_obj = l.configure(in_obj)
+            if prev_layer is not None:
+                prev_layer.set_next(l)
+            prev_layer = l
         self.out_shape = in_obj.out_shape
         return self
 
@@ -82,7 +86,8 @@ class Sequential(LayerContainer):
             ndelta_bufs = 4 if [l for l in self.layers if type(l) is MergeBroadcast] else 2
             in_sizes = [np.prod(l.in_shape) for l in self.layers[1:]]
             if in_sizes:
-                self.global_deltas = [self.be.iobuf(max(in_sizes)) for _ in range(ndelta_bufs)]
+                self.global_deltas = [self.be.iobuf(
+                    max(in_sizes), parallelism=LayerParallelism.Data) for _ in range(ndelta_bufs)]
             else:
                 self.global_deltas = None
         else:

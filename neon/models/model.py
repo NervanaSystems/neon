@@ -135,7 +135,6 @@ class Model(NervanaObject):
         self.total_cost[:] = 0
         # iterate through minibatches of the dataset
         for mb_idx, (x, t) in enumerate(dataset):
-
             callbacks.on_minibatch_begin(epoch, mb_idx)
 
             x = self.fprop(x)
@@ -145,6 +144,7 @@ class Model(NervanaObject):
             # deltas back propagate through layers
             # for every layer in reverse except the 0th one
             delta = self.cost.get_errors(x, t)
+
             self.bprop(delta)
             self.optimizer.optimize(self.layers_to_optimize, epoch=epoch)
 

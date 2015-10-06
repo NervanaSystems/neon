@@ -27,7 +27,8 @@ from neon.backends.autodiff import Autodiff
 
 
 def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
-                batch_size=0, stochastic_round=False, device_id=0):
+                batch_size=0, stochastic_round=False, device_id=0,
+                max_devices=4):
     """
     Construct and return a backend instance of the appropriate type based on
     the arguments given. With no parameters, a single CPU core, float32
@@ -50,6 +51,9 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                                                Only affects the gpu backend.
         device_id (numeric, optional): Set this to a numeric value which can be used to select
                                        device on which to run the process
+        max_devices (int, optional): For use with multi-GPU backend only.
+                                      Controls the maximum number of GPUs to run
+                                      on.
 
     Returns:
         Backend: newly constructed backend instance of the specifed type.
@@ -71,7 +75,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
     if backend == 'cpu' or backend is None:
         from neon.backends.nervanacpu import NervanaCPU
         be = NervanaCPU(rng_seed=rng_seed, default_dtype=datatype)
-    elif backend == 'gpu':
+    elif backend == 'gpu' or backend == 'mgpu':
         gpuflag = False
         # check nvcc
         from neon.backends.util import check_gpu
@@ -79,12 +83,24 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
         if gpuflag is False:
             raise RuntimeError("Device " + str(device_id) + " does not have CUDA compute " +
                                "capability 5.0 or greater")
-        from neon.backends.nervanagpu import NervanaGPU
-        # init gpu
-        be = NervanaGPU(rng_seed=rng_seed, default_dtype=datatype,
-                        stochastic_round=stochastic_round, device_id=device_id)
-    elif backend == 'mgpu':
-        raise NotImplementedError("mgpu will be ready soon")
+        if backend == 'gpu':
+            from neon.backends.nervanagpu import NervanaGPU
+            # init gpu
+            be = NervanaGPU(rng_seed=rng_seed, default_dtype=datatype,
+                            stochastic_round=stochastic_round, device_id=device_id)
+        else:
+            try:
+                from neon.backends.nervanamgpu import NervanaMGPU
+                # init multiple GPU
+                be = NervanaMGPU(rng_seed=rng_seed,
+                                 default_dtype=datatype,
+                                 stochastic_round=stochastic_round,
+                                 max_devices=max_devices)
+            except ImportError:
+                logger.error("Multi-GPU support is a premium feature "
+                             "available exclusively through the Nervana cloud."
+                             " Please contact info@nervanasys.com for details.")
+                raise
     else:
         raise ValueError("backend must be one of ('cpu', 'gpu', 'mgpu')")
 
@@ -102,10 +118,16 @@ def cleanup_backend():
     from neon.backends.nervanacpu import NervanaCPU
     if type(be) is not NervanaCPU:
         from neon.backends.nervanagpu import NervanaGPU
-        assert type(be) is NervanaGPU
+        from neon.backends.nervanamgpu import NervanaMGPU
+        assert type(be) is NervanaGPU or type(be) is NervanaMGPU
         try:
-            be.ctx.pop()
-            be.ctx.detach()
+            if type(be) is NervanaGPU:
+                be.ctx.pop()
+                be.ctx.detach()
+            else:
+                for ctx in be.ctxs:
+                    ctx.pop()
+                    ctx.detach()
         except:
             pass
     del(be)

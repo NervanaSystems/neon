@@ -991,7 +991,7 @@ class NervanaGPU(Backend):
         return stacks[-1][0]  # TODO: to be removed, used in partial
 
     def empty(self, shape, dtype=None, name=None, persist_values=True,
-              allocator=drv.mem_alloc):
+              parallel=False, distributed=False, allocator=drv.mem_alloc):
         """
         Allocate the space for a GPUTensor
         """
@@ -1001,7 +1001,7 @@ class NervanaGPU(Backend):
                          rounding=self.round_mode)
 
     def array(self, ary, dtype=None, name=None, persist_values=True,
-              allocator=drv.mem_alloc):
+              parallel=False, distributed=False, allocator=drv.mem_alloc):
         """
         converts a numpy array to a GPUTensor
         """
@@ -1013,7 +1013,7 @@ class NervanaGPU(Backend):
                          rounding=self.round_mode).set(ary)
 
     def zeros(self, shape, dtype=None, name=None, persist_values=True,
-              allocator=drv.mem_alloc):
+              parallel=False, distributed=False, allocator=drv.mem_alloc):
         """
         Returns an array of the given shape and dtype filled with 0's.
         """
@@ -1023,7 +1023,7 @@ class NervanaGPU(Backend):
                          rounding=self.round_mode)._assign(0)
 
     def ones(self, shape, dtype=None, name=None, persist_values=True,
-             allocator=drv.mem_alloc):
+             parallel=False, distributed=False, allocator=drv.mem_alloc):
         """
         Returns an array of the given shape and dtype filled with 1's.
         """

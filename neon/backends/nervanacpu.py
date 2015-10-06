@@ -589,7 +589,8 @@ class NervanaCPU(Backend):
         assert len(compute_stack) == 1
         return postfix_stack[0]
 
-    def empty(self, shape, dtype=None, name=None, persist_values=True):
+    def empty(self, shape, dtype=None, name=None, persist_values=True,
+              parallel=False, distributed=False):
         """
         Instantiate a new instance of the CPUTensor class without initializing
         individual element values.
@@ -619,7 +620,8 @@ class NervanaCPU(Backend):
             name=name,
             persist_values=persist_values)
 
-    def array(self, ary, dtype=None, name=None, persist_values=True):
+    def array(self, ary, dtype=None, name=None, persist_values=True,
+              parallel=False, distributed=False):
         """
         Instantiate a new instance of the CPUTensor class setting each element
         value to what is specified in ary.
@@ -651,7 +653,8 @@ class NervanaCPU(Backend):
             name=name,
             persist_values=persist_values)
 
-    def zeros(self, shape, dtype=None, name=None, persist_values=True):
+    def zeros(self, shape, dtype=None, name=None, persist_values=True,
+              parallel=False, distributed=False):
         """
         Instantiate a new instance of the CPUTensor class setting each element
         value to 0.
@@ -680,7 +683,8 @@ class NervanaCPU(Backend):
             name=name,
             persist_values=persist_values)
 
-    def ones(self, shape, dtype=None, name=None, persist_values=True):
+    def ones(self, shape, dtype=None, name=None, persist_values=True,
+             parallel=False, distributed=False):
         """
         Instantiate a new instance of the CPUTensor class setting each element
         value to 1.

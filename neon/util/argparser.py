@@ -125,12 +125,17 @@ class NeonArgparser(configargparse.ArgumentParser):
                             help='number of checkpoint files to retain')
 
         be_grp = self.add_argument_group('backend')
-        be_grp.add_argument('-b', '--backend', choices=['cpu', 'gpu'],
+        be_grp.add_argument('-b', '--backend', choices=['cpu', 'gpu', 'mgpu'],
                             default='gpu' if get_compute_capability() >= 5.0
                                     else 'cpu',
-                            help='backend type')
+                            help='backend type. Multi-GPU support is a premium '
+                                 'feature available exclusively through the '
+                                 'Nervana cloud. Please contact '
+                                 'info@nervanasys.com for details.')
         be_grp.add_argument('-i', '--device_id', type=int, default=0,
                             help='gpu device id (only used with GPU backend)')
+        be_grp.add_argument('-m', '--max_devices', type=int, default=4,
+                            help='max number of GPUs (only used with mgpu backend')
 
         be_grp.add_argument('-r', '--rng_seed', type=int,
                             default=None, metavar='SEED',
@@ -298,7 +303,8 @@ class NeonArgparser(configargparse.ArgumentParser):
                         device_id=args.device_id,
                         batch_size=args.batch_size,
                         datatype=args.datatype,
-                        stochastic_round=args.rounding)
+                        stochastic_round=args.rounding,
+                        max_devices=args.max_devices)
 
         # display what command line / config options were set (and from where)
         logger.info(self.format_values())

@@ -394,7 +394,8 @@ class Backend(object):
         self.bsz = None
         self._min_dims = 2
 
-    def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True, shared=None):
+    def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True,
+              shared=None, parallelism=0):
         """
         Allocate input and output buffer for layer based on batch size. This
         is used because the layer does not know about the batch size.
@@ -489,7 +490,8 @@ class Backend(object):
         """
         pass
 
-    def empty(self, shape, dtype=None, name=None, persist_values=True):
+    def empty(self, shape, dtype=None, name=None, persist_values=True,
+              parallel=False, distributed=False):
         """
         Instantiate a new instance of this backend's Tensor class, without
         initializing element values.  This is slightly faster than
@@ -523,7 +525,8 @@ class Backend(object):
         """
         raise NotImplementedError()
 
-    def array(self, ary, dtype=None, name=None, persist_values=True):
+    def array(self, ary, dtype=None, name=None, persist_values=True,
+              parallel=False, distributed=False):
         """
         Instantiate a new instance of this backend's Tensor class, populating
         elements based on obj values.
@@ -555,7 +558,8 @@ class Backend(object):
         """
         raise NotImplementedError()
 
-    def zeros(self, shape, dtype=None, name=None, persist_values=True):
+    def zeros(self, shape, dtype=None, name=None, persist_values=True,
+              parallel=False, distributed=False):
         """
         Instantiate a new instance of this backend's Tensor class, populating
         Each element with a value of 0.
@@ -585,7 +589,8 @@ class Backend(object):
         """
         raise NotImplementedError()
 
-    def ones(self, shape, dtype=None, name=None, persist_values=True):
+    def ones(self, shape, dtype=None, name=None, persist_values=True,
+             parallel=False, distributed=False):
         """
         Instantiate a new instance of this backend's Tensor class, populating
         Each element with a value of 1.
