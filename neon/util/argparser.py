@@ -237,11 +237,14 @@ class NeonArgparser(configargparse.ArgumentParser):
                 if not os.access(args.save_path, os.R_OK | os.W_OK):
                     raise IOError('Can not write to save_path file %s' % args.save_path)
 
-        if args.serialize > 0:
-            if args.save_path is None:
-                logger.warn('No path given for model serialization,'
-                            'using default "neon_model.pkl"')
-                args.save_path = "neon_model.pkl"
+        if (args.serialize > 0) and (args.save_path is None):
+            logger.warn('No path given for model serialization,'
+                        'using default "neon_model.pkl"')
+            args.save_path = "neon_model.pkl"
+        if (args.save_path is not None) and (args.serialize == 0):
+            logger.warn('No schedule given for model serialization,'
+                        'using default 1')
+            args.serialize = 1
 
         if args.model_file:
             if not os.path.exists(args.model_file):
