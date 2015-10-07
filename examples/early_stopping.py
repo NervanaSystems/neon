@@ -55,8 +55,7 @@ init_norm = Gaussian(loc=0.0, scale=0.01)
 
 # initialize model
 layers = []
-layers.append(Affine(nout=100, init=init_norm, activation=Rectlin()))
-layers.append(BatchNorm())
+layers.append(Affine(nout=100, init=init_norm, batch_norm=True, activation=Rectlin()))
 layers.append(Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True)))
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 mlp = Model(layers=layers)
