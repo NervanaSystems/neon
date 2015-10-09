@@ -20,7 +20,7 @@ neon
 :Release: |version|
 :Date: |today|
 
-|neo|_ is Nervana_'s Python-based deep learning library. It provides
+|neo|_ is Nervana_ ’s Python-based deep learning library. It provides
 ease of use while delivering the highest performance.
 
 Features include:
