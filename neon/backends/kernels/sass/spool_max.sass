@@ -22,41 +22,43 @@
     param_B[1]      : c[0x0][0x14c]
     param_I[0]      : c[0x0][0x150]
     param_I[1]      : c[0x0][0x154]
-    param_mode      : c[0x0][0x158]
-    param_N         : c[0x0][0x15c]
-    param_W         : c[0x0][0x160]
-    param_H         : c[0x0][0x164]
-    param_D         : c[0x0][0x168]
-    param_C         : c[0x0][0x16c]
-    param_WN        : c[0x0][0x170]
-    param_HWN       : c[0x0][0x174]
-    param_DHWN      : c[0x0][0x178]
-    param_P         : c[0x0][0x17c]
-    param_Q         : c[0x0][0x180]
-    param_magic_P   : c[0x0][0x184]
-    param_shift_P   : c[0x0][0x188]
-    param_QN        : c[0x0][0x18c]
-    param_PQN       : c[0x0][0x190]
-    param_MPQN      : c[0x0][0x194]
-    param_pad_j     : c[0x0][0x198]
-    param_pad_d     : c[0x0][0x19c]
-    param_pad_h     : c[0x0][0x1a0]
-    param_pad_w     : c[0x0][0x1a4]
-    param_str_j     : c[0x0][0x1a8]
-    param_str_d     : c[0x0][0x1ac]
-    param_str_h     : c[0x0][0x1b0]
-    param_str_w     : c[0x0][0x1b4]
-    param_S         : c[0x0][0x1b8]
-    param_RS        : c[0x0][0x1bc]
-    param_RST       : c[0x0][0x1c0]
-    param_JRST      : c[0x0][0x1c4]
-    param_magic_S   : c[0x0][0x1c8]
-    param_shift_S   : c[0x0][0x1cc]
-    param_magic_RS  : c[0x0][0x1d0]
-    param_shift_RS  : c[0x0][0x1d4]
-    param_magic_RST : c[0x0][0x1d8]
-    param_shift_RST : c[0x0][0x1dc]
-    param_overlap   : c[0x0][0x1e0]
+    param_alpha     : c[0x0][0x158]
+    param_beta      : c[0x0][0x15c]
+    param_mode      : c[0x0][0x160]
+    param_N         : c[0x0][0x164]
+    param_W         : c[0x0][0x168]
+    param_H         : c[0x0][0x16c]
+    param_D         : c[0x0][0x170]
+    param_C         : c[0x0][0x174]
+    param_WN        : c[0x0][0x178]
+    param_HWN       : c[0x0][0x17c]
+    param_DHWN      : c[0x0][0x180]
+    param_P         : c[0x0][0x184]
+    param_Q         : c[0x0][0x188]
+    param_magic_P   : c[0x0][0x18c]
+    param_shift_P   : c[0x0][0x190]
+    param_QN        : c[0x0][0x194]
+    param_PQN       : c[0x0][0x198]
+    param_MPQN      : c[0x0][0x19c]
+    param_pad_j     : c[0x0][0x1a0]
+    param_pad_d     : c[0x0][0x1a4]
+    param_pad_h     : c[0x0][0x1a8]
+    param_pad_w     : c[0x0][0x1ac]
+    param_str_j     : c[0x0][0x1b0]
+    param_str_d     : c[0x0][0x1b4]
+    param_str_h     : c[0x0][0x1b8]
+    param_str_w     : c[0x0][0x1bc]
+    param_S         : c[0x0][0x1c0]
+    param_RS        : c[0x0][0x1c4]
+    param_RST       : c[0x0][0x1c8]
+    param_JRST      : c[0x0][0x1cc]
+    param_magic_S   : c[0x0][0x1d0]
+    param_shift_S   : c[0x0][0x1d4]
+    param_magic_RS  : c[0x0][0x1d8]
+    param_shift_RS  : c[0x0][0x1dc]
+    param_magic_RST : c[0x0][0x1e0]
+    param_shift_RST : c[0x0][0x1e4]
+    param_overlap   : c[0x0][0x1e8]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -293,11 +295,13 @@ FPROP_LOOP:
 
 --:-:-:-:5  @P5 BRA.U BPROP;
 
+--:-:-:-:2      FMUL max, max, param_alpha;
 --:-:-:-:1      STG.E.CG [Out], max;
 --:-:-:-:5      BRA.U EXIT;
 
 BPROP:
 
+--:-:-:-:0      FMUL bprop, bprop, param_alpha;
 --:-:-:-:5  @P4 BRA.U OVERLAP;
 
 <SCHEDULE_BLOCK>
