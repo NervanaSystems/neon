@@ -31,7 +31,6 @@ information.
 ### Installation
 
 * [Local install and dependencies](http://neon.nervanasys.com/docs/latest/user_guide.html#installation)
-* Cloud-based access ([email us](mailto:demo@nervanasys.com) for an account)
 
 ### Quick Install
 
@@ -67,18 +66,26 @@ The complete documentation for neon is available
 * [Developing for neon](http://neon.nervanasys.com/docs/latest/developer_guide.html)
 
 
-### Issues
+### Support
 
 For any bugs or feature requests please:
 
 1. Search the open and closed
    [issues list](https://github.com/NervanaSystems/neon/issues) to see if we're
    already working on what you have uncovered.
-2. Check that your issue/request has already been addressed in our
+2. Check that your issue/request hasn't already been addressed in our
    [Frequently Asked Questions (FAQ)](http://neon.nervanasys.com/docs/latest/faq.html)
+   or [neon-users](https://groups.google.com/forum/#!forum/neon-users) Google
+   group.
 3. File a new [issue](https://github.com/NervanaSystems/neon/issues) or submit
    a new [pull request](https://github.com/NervanaSystems/neon/pulls) if you
    have some code you'd like to contribute
+
+For other questions and discussions please:
+
+1. Post a message to the
+   [neon-users](https://groups.google.com/forum/?hl=en#!forum/neon-users)
+   Google group
 
 ## Machine learning OPerations (MOP) Layer
 

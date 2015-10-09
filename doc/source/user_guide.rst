@@ -87,6 +87,26 @@ your system python path.  The process for doing so is:
     make sysinstall
 
 
+Support
+-------
+For any bugs or feature requests please:
+
+1. Search the open and closed
+   `issues list <https://github.com/NervanaSystems/neon/issues>`_ to see if we're
+   already working on what you have uncovered.
+2. Check that your issue/request hasn't already been addressed in our
+   `Frequently Asked Questions (FAQ) <http://neon.nervanasys.com/docs/latest/faq.html>`_
+   or `neon-users`_ Google group.
+3. File a new `issue <https://github.com/NervanaSystems/neon/issues>`_ or submit
+   a new `pull request <https://github.com/NervanaSystems/neon/pulls>`_ if you
+   have some code you'd like to contribute
+
+For other questions and discussions please:
+
+1. Post a message to the `neon-users`_ Google group
+
+.. _neon-users: https://groups.google.com/forum/#!forum/neon-users
+
 How to run a model
 ------------------
 With the virtual environment activated, there are two ways to run
