@@ -182,7 +182,23 @@ class SumSquared(Cost):
         self.funcgrad = lambda y, t: (y - t)
 
 
+class MeanSquared(Cost):
+
+    """
+    Applies the mean squared error cost function
+    """
+
+    def __init__(self):
+        """
+        Initialize the squared error cost functions
+        """
+        self.func = lambda y, t: self.be.mean(
+            self.be.square(y - t), axis=0) / 2.
+        self.funcgrad = lambda y, t: (y - t)/y.shape[0]
+
+
 class TopKMisclassification(Metric):
+
     """
     Compute logloss, top1, and topk misclassification error metric
     """

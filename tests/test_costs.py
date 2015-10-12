@@ -18,7 +18,7 @@ Test of the cost functions
 import numpy as np
 from neon import NervanaObject
 from neon.transforms import (CrossEntropyBinary, CrossEntropyMulti, SumSquared,
-                             Misclassification)
+                             MeanSquared, Misclassification)
 
 
 def compare_tensors(func, y, t, outputs, deriv=False, tol=0.):
@@ -127,6 +127,32 @@ def test_sum_squared_derivative(backend_default):
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
     expected_result = (outputs - targets) / outputs.shape[1]
     compare_tensors(SumSquared(), outputs,
+                    targets, expected_result, deriv=True, tol=1e-8)
+
+"""
+    MeanSquared
+"""
+
+
+def test_mean_squared(backend_default):
+    outputs = np.array([0.5, 0.9, 0.1, 0.0001]).reshape((4, 1))
+    targets = np.array([0.5, 0.99, 0.01, 0.2]).reshape((4, 1))
+    expected_result = np.mean((outputs - targets) ** 2, axis=0, keepdims=True) / 2.
+    compare_tensors(MeanSquared(), outputs, targets, expected_result, tol=1e-8)
+
+
+def test_mean_squared_limits(backend_default):
+    outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
+    targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
+    expected_result = np.mean((outputs - targets) ** 2, axis=0, keepdims=True) / 2.
+    compare_tensors(MeanSquared(), outputs, targets, expected_result, tol=1e-7)
+
+
+def test_mean_squared_derivative(backend_default):
+    outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
+    targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
+    expected_result = (outputs - targets) / outputs.shape[1] / outputs.shape[0]
+    compare_tensors(MeanSquared(), outputs,
                     targets, expected_result, deriv=True, tol=1e-8)
 
 """
