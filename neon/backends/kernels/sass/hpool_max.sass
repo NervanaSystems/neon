@@ -309,7 +309,12 @@ FPROP_LOOP:
 
 BPROP:
 
---:-:-:-:0      FMUL bprop, bprop, param_alpha;
+10:-:5:-:2      F2F.F32.F16 bprop, bprop;
+
+10:-:-:-:2      FMUL bprop, bprop, param_alpha;
+
+--:-:6:-:1      F2F.F16.F32 bprop, bprop;
+
 --:-:-:-:5  @P4 BRA.U OVERLAP;
 
 <SCHEDULE_BLOCK>
@@ -332,7 +337,7 @@ BPROP_LOOP:
 02:-:-:-:1  @P0 IADD   load0In0.CC, Back0, inOffset0;
 --:-:-:-:5  @P0 IADD   jrst_0, jrst_0, 4;
 --:-:-:-:1  @P0 IADD.X load0In1,    Back1, RZ;
---:-:-:-:2  @P0 SEL load0, bprop, RZ, P4;
+20:-:-:-:2  @P0 SEL load0, bprop, RZ, P4;
 --:2:-:-:1  @P0 STG.E.CG.U16 [load0In], load0;
 --:-:-:-:1      ISETP.LT.AND P0, PT, jrst_0, lutSize, PT;
 
@@ -369,7 +374,7 @@ BPROP_LOOP:
 OVERLAP:
 
 --:-:-:-:1  @P6 LOP32I.AND Back0, Back0, 0xfffffffc;
---:-:-:-:1 @!P6 LOP32I.AND bprop, bprop, 0x0000ffff;
+20:-:-:-:1 @!P6 LOP32I.AND bprop, bprop, 0x0000ffff;
 --:-:-:-:4  @P6 SHL        bprop, bprop, 16;
 
 --:-:-:-:6      IADD   Back0.CC, Back0, maxIdx;
