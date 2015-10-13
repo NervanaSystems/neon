@@ -18,6 +18,7 @@ from neon import NervanaObject
 from neon.backends import Autodiff
 from neon.backends.backend import Tensor
 import numpy as np
+# from neon.layers import Branch, Sequential
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +50,11 @@ class Layer(NervanaObject):
     def __init__(self, name="layer"):
         super(Layer, self).__init__(name)
         self.outputs = None
-        self.deltas = None
         self.has_params = False
         self.inputs = None
+        self.owns_output = True
+        self.owns_delta = False
+        self.deltas = None
 
     def __str__(self):
         """
@@ -59,6 +62,9 @@ class Layer(NervanaObject):
         """
         ret = '{} {}'.format(self.__class__.__name__, self.name)
         return ret
+
+    def nested_str(self, level=0):
+        return "  "*level + str(self)
 
     def configure(self, in_obj):
         """
@@ -81,9 +87,28 @@ class Layer(NervanaObject):
                 self.in_shape = in_obj  # input is a shape tuple or int directly
             elif isinstance(in_obj, Tensor):
                 self.in_shape = (in_obj.shape[0], in_obj.shape[1] / self.be.bsz)
-
             else:
                 self.in_shape = in_obj.shape  # This is a dataset
+
+    def allocate(self, shared_outputs=None):
+        if self.outputs:
+            return
+        if self.owns_output:
+            self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
+
+    def set_deltas(self, delta_buffers):
+        if self.owns_delta and self.prev_layer:
+            if type(self.prev_layer) is BranchNode:
+                self.deltas = self.prev_layer.deltas
+            else:
+                self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
+                delta_buffers.reverse()
+        else:
+            self.deltas = None
+
+    @property
+    def classnm(self):
+        return self.__class__.__name__
 
     def fprop(self, inputs, inference=False):
         """
@@ -125,6 +150,9 @@ class Layer(NervanaObject):
         """
         raise NotImplementedError
 
+    def get_terminal(self):
+        return self
+
     def serialize(self):
         """
         Get state parameters for this layer
@@ -134,6 +162,49 @@ class Layer(NervanaObject):
         """
         if self.has_params:
             return self.get_params()
+
+
+class BranchNode(Layer):
+    def __init__(self, name='branch'):
+        super(BranchNode, self).__init__(name)
+        self.owns_output = False
+
+    def __str__(self):
+        return "Branch Node Layer"
+
+    def fprop(self, inputs=None, inference=False):
+        if self.outputs is None and inputs is not None:
+            self.outputs = inputs
+        return self.outputs
+
+    def configure(self, in_obj):
+        """
+        sets shape based parameters of this layer given an input tuple or int
+        or input layer
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor or dataset): object that provides shape
+                                                             information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
+        if hasattr(self, 'in_shape') and in_obj is None:
+            return self  # previously configured, so just return
+        super(BranchNode, self).configure(in_obj)
+        self.out_shape = self.in_shape
+        return self
+
+    def set_deltas(self, delta_buffers):
+        if self.deltas is None:
+            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
+            delta_buffers.reverse()
+
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Branch nodes should be skipped in bprop, since their deltas are shared
+        """
+        pass
 
 
 class Pooling(Layer):
@@ -168,7 +239,7 @@ class Pooling(Layer):
         self.fshape = fshape
         self.strides = strides
         self.padding = padding
-
+        self.owns_delta = True
         if isinstance(fshape, int):
             fshape = {'R': fshape, 'S': fshape}
         elif isinstance(fshape, tuple):
@@ -201,17 +272,21 @@ class Pooling(Layer):
             self.out_shape = (K, M, P, Q) if len(self.in_shape) == 4 else (K, P, Q)
         return self
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        self.outputs = self.be.iobuf(self.out_shape) if shared_outputs is None else shared_outputs
-        self.deltas = self.be.iobuf(self.in_shape) if shared_deltas is None else shared_deltas
-
     def fprop(self, inputs, inference=False):
         self.inputs = inputs
         self.be.fprop_pool(self.nglayer, inputs, self.outputs)
         return self.outputs
 
-    def bprop(self, error):
-        self.be.bprop_pool(self.nglayer, self.inputs, error, self.deltas)
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        # TODO: incorporate the alpha beta integration from backend ops
+        if self.deltas:
+            if beta != 0:
+                if not hasattr(self, 'tmpdeltas') or self.tmpdeltas is None:
+                    self.tmpdeltas = self.be.empty_like(self.deltas)
+                self.be.bprop_pool(self.nglayer, self.inputs, error, self.tmpdeltas)
+                self.deltas[:] = beta * self.deltas + alpha * self.tmpdeltas
+            else:
+                self.be.bprop_pool(self.nglayer, self.inputs, error, self.deltas)
         return self.deltas
 
 
@@ -237,11 +312,10 @@ class ParameterLayer(Layer):
         self.batch_sum = None
         self.batch_sum_shape = None
         self.states = []
+        self.owns_delta = True
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        self.outputs = self.be.iobuf(self.out_shape) if shared_outputs is None else shared_outputs
-        self.deltas = self.be.iobuf(self.in_shape) if shared_deltas is None else shared_deltas
-
+    def allocate(self, shared_outputs=None):
+        super(ParameterLayer, self).allocate(shared_outputs)
         if self.W is None:
             self.init_params(self.weight_shape)
         if self.batch_sum_shape is not None:
@@ -253,7 +327,7 @@ class ParameterLayer(Layer):
             supplied initializer.
 
         Arguments:
-            shape (int, tuple): shape to allocate for layer paremeter
+            shape (int, tuple): shape to allocate for layer parameter
                 buffers.
         """
         self.W = self.be.empty(shape)
@@ -333,6 +407,7 @@ class Convolution(ParameterLayer):
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                            'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
                            'T': 1, 'D': 1, 'bsum': bsum}  # 3D paramaters
+
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
         self.strides = strides
@@ -378,9 +453,9 @@ class Convolution(ParameterLayer):
         self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, bsum=self.batch_sum)
         return self.outputs
 
-    def bprop(self, error, do_acts=True):
-        if do_acts:
-            self.be.bprop_conv(self.nglayer, self.W, error, self.deltas)
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        if self.deltas:
+            self.be.bprop_conv(self.nglayer, self.W, error, self.deltas, alpha=alpha, beta=beta)
         self.be.update_conv(self.nglayer, self.inputs, error, self.dW)
         return self.deltas
 
@@ -462,13 +537,14 @@ class Deconvolution(ParameterLayer):
                            bsum=self.batch_sum)
         return self.outputs
 
-    def bprop(self, error, do_acts=True):
+    def bprop(self, error, beta=0.0):
         """
         bprop for deconv is equivalent to fprop for conv.
         fprop_conv takes input and output as "I" and "O".
         for deconv, fprop_conv will take error as input and delta as output
         """
-        if do_acts:
+        assert beta == 0., "beta parameter not supported for deconvolution yet"
+        if self.deltas:
             self.be.fprop_conv(self.nglayer, error, self.W, self.deltas)
         self.be.update_conv(self.nglayer, error, self.inputs, self.dW)
         return self.deltas
@@ -512,9 +588,9 @@ class Linear(ParameterLayer):
         self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs, bsum=self.batch_sum)
         return self.outputs
 
-    def bprop(self, error, do_acts=True):
-        if do_acts:
-            self.be.compound_dot(A=self.W.T, B=error, C=self.deltas)
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        if self.deltas:
+            self.be.compound_dot(A=self.W.T, B=error, C=self.deltas, alpha=alpha, beta=beta)
         self.be.compound_dot(A=error, B=self.inputs.T, C=self.dW)
         return self.deltas
 
@@ -534,6 +610,8 @@ class Bias(ParameterLayer):
     def __init__(self, init, name="BiasLayer"):
         super(Bias, self).__init__(init, name)
         self.y = None
+        self.owns_output = False
+        self.owns_delta = False
 
     def __str__(self):
         if len(self.in_shape) == 3:
@@ -551,13 +629,6 @@ class Bias(ParameterLayer):
             self.weight_shape = (self.bias_size, 1)
         return self
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        # Bias layers should share output with their associated weight layer
-        if self.prev_layer is not None:
-            self.outputs = self.prev_layer.outputs
-        if self.W is None:
-            self.init_params(self.weight_shape)
-
     def fprop(self, inputs, inference=False):
         self.outputs = self.inputs = inputs
         if self.y is None or self.y.base is not self.outputs:
@@ -566,7 +637,7 @@ class Bias(ParameterLayer):
         return self.outputs
 
     def bprop(self, error):
-        if not self.deltas:
+        if self.deltas is None:
             self.deltas = error.reshape(self.y.shape)
         self.be.sum(self.deltas, axis=1, out=self.dW)
         return error
@@ -589,6 +660,7 @@ class Activation(Layer):
     def __init__(self, transform, name="ActivationLayer"):
         super(Activation, self).__init__(name)
         self.transform = transform
+        self.owns_output = False
 
     def __str__(self):
         return "Activation Layer '%s': %s" % (
@@ -600,9 +672,6 @@ class Activation(Layer):
         (self.nout, _) = interpret_in_shape(self.in_shape)
         return self
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        self.outputs = self.prev_layer.outputs
-
     def fprop(self, inputs, inference=False):
         self.outputs = self.inputs = inputs
         self.outputs[:] = self.transform(self.inputs)
@@ -611,7 +680,7 @@ class Activation(Layer):
     def bprop(self, error):
         if not self.deltas:
             self.deltas = error
-        error[:] = self.transform.bprop(self.outputs) * self.deltas
+        error[:] = self.transform.bprop(self.outputs) * error
         return error
 
 
@@ -725,6 +794,7 @@ class Dropout(Layer):
         self.keep = keep
         self.keep_mask = None
         self._train_scaling = 1.0/keep  # scaling factor during training
+        self.owns_output = False
 
     def __str__(self):
         return "Dropout Layer '%s': %d inputs and outputs, keep %d%%" % (
@@ -736,7 +806,8 @@ class Dropout(Layer):
         (self.nout, _) = interpret_in_shape(self.in_shape)
         return self
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
+    def allocate(self, shared_outputs=None):
+        super(Dropout, self).allocate(shared_outputs)
         self.keep_mask = self.be.iobuf(self.out_shape)
 
     def fprop(self, inputs, inference=False):
@@ -750,10 +821,10 @@ class Dropout(Layer):
     def _fprop_inference(self, inputs):
         return self.outputs
 
-    def bprop(self, error, do_acts=False):
-        if self.deltas is None:
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        if not self.deltas:
             self.deltas = error
-        self.deltas[:] = self.keep_mask * error * self._train_scaling
+        self.deltas[:] = self.keep_mask * error * alpha * self._train_scaling + beta * error
         return self.deltas
 
 
@@ -877,8 +948,6 @@ class GeneralizedCost(NervanaObject):
             Tensor of same shape as the inputs containing their respective
             deltas.
         """
-        if self.deltas is None:
-            self.deltas = self.be.empty_like(inputs)
         self.deltas[:] = self.costfunc.bprop(inputs, targets)
         return self.deltas
 
@@ -925,8 +994,6 @@ class GeneralizedCostMask(GeneralizedCost):
             deltas.
         """
         targets, mask = targets_mask
-        if self.deltas is None:
-            self.deltas = self.be.empty_like(inputs)
         self.deltas[:] = self.costfunc.bprop(inputs, targets) * mask
         return self.deltas
 
@@ -955,7 +1022,6 @@ class BatchNorm(Layer):
         self.x = None  # used to point to reshaped view of inputs
         self.xhat = None
         self.has_params = True
-        self.outputs = None
         self.rho = rho
         self.eps = eps
         self.states = [[] for i in range(2)]
@@ -972,8 +1038,8 @@ class BatchNorm(Layer):
         self.nfm = self.in_shape[0] if isinstance(self.in_shape, tuple) else self.nin
         return self
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        self.outputs = self.be.iobuf(self.out_shape)
+    def allocate(self, shared_outputs=None):
+        super(BatchNorm, self).allocate(shared_outputs)
         self.y = self.outputs.reshape((self.nfm, -1))
         self.xvar = self.be.zeros((self.nfm, 1))
         if self.allparams is None:

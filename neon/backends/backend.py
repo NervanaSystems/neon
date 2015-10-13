@@ -393,11 +393,10 @@ class Backend(object):
         self.bsz = None
         self._min_dims = 2
 
-    def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True):
+    def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True, shared=None):
         """
         Allocate input and output buffer for layer based on batch size. This
         is used because the layer does not know about the batch size.
-        TODO: support partial batches.
 
         Arguments:
             dim0 (tuple or int): I/O buffer dimension for layer (without the
@@ -407,7 +406,8 @@ class Backend(object):
                                      the buffer has already been allocated.
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
-
+            shared (buffer, optional): If present will attempt to reuse the memory in shared to
+                                       allocate the I/O buffer
         Returns:
             Tensor: array object
         """
@@ -420,8 +420,15 @@ class Backend(object):
                 bufshape = (np.prod(dim0), self.bsz)
         else:
             bufshape = (dim0, self.bsz)
-        return self.zeros(bufshape, dtype=dtype, name=name,
-                          persist_values=persist_values)
+
+        if shared is not None:
+            if shared.shape == bufshape:
+                return shared
+            else:
+                return shared.share(bufshape)
+        else:
+            return self.zeros(bufshape, dtype=dtype, name=name,
+                              persist_values=persist_values)
 
     def rng_reset(self):
         """

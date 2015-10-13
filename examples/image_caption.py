@@ -28,7 +28,7 @@ https://github.com/karpathy/neuraltalk
 from neon.backends import gen_backend
 from neon.data import load_flickr8k, ImageCaption, ImageCaptionTest
 from neon.initializers import Uniform, Constant
-from neon.layers import GeneralizedCostMask, LSTM, MergeConcatSequence, Affine, Dropout
+from neon.layers import GeneralizedCostMask, LSTM, Affine, Dropout, Sequential, MergeMultistream
 from neon.models import Model
 from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
@@ -62,10 +62,11 @@ init = Uniform(low=-0.08, high=0.08)
 init2 = Constant(val=train_set.be.array(train_set.bias_init))
 
 # model initialization
-image_path = Affine(hidden_size, init, bias=Constant(val=0.0))
-sent_path = Affine(hidden_size, init, linear_name='sent')
+image_path = Sequential([Affine(hidden_size, init, bias=Constant(val=0.0))])
+sent_path = Sequential([Affine(hidden_size, init, linear_name='sent')])
+
 layers = [
-    MergeConcatSequence([image_path, sent_path]),
+    MergeMultistream(layers=[image_path, sent_path], merge="recurrent"),
     Dropout(keep=0.5),
     LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=True),
     Affine(train_set.vocab_size, init, bias=init2, activation=Softmax())

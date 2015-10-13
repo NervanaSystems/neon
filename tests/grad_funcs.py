@@ -79,7 +79,10 @@ def general_gradient_comp(layer,
     inpa = layer.be.array(inp.copy())
     in_shape = lshape if lshape is not None else inpa.shape[0]
     layer.configure(in_shape)
+    if layer.owns_delta:
+        layer.prev_layer = True
     layer.allocate()
+    layer.set_deltas([layer.be.iobuf(in_shape)])
     out = layer.fprop(inpa).get()
 
     out_shape = out.shape

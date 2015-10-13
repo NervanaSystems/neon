@@ -21,6 +21,8 @@ def get_steps(x, shape):
     into a [(vocab_size, batch_size)] * steps list of views
     """
     steps = shape[1]
+    if x is None:
+        return [None for step in range(steps)]
     xs = x.reshape(shape + (-1,))
     return [xs[:, step, :] for step in range(steps)]
 
@@ -65,20 +67,22 @@ class Recurrent(ParameterLayer):
             self.weight_shape = (self.nout, self.nin)
         return self
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        super(Recurrent, self).allocate(shared_outputs, shared_deltas)
+    def allocate(self, shared_outputs=None):
+        super(Recurrent, self).allocate(shared_outputs)
         self.h_buffer = self.outputs
-        self.out_deltas_buffer = self.deltas
-
         self.h = get_steps(self.h_buffer, self.out_shape)
         self.h_prev = self.h[-1:] + self.h[:-1]
-        self.out_delta = get_steps(self.out_deltas_buffer, self.in_shape)
         # State deltas
         self.h_delta = get_steps(self.be.iobuf(self.out_shape), self.out_shape)
         self.bufs_to_reset = [self.h_buffer]
 
         if self.W_input is None:
             self.init_params(self.weight_shape)
+
+    def set_deltas(self, delta_buffers):
+        super(Recurrent, self).set_deltas(delta_buffers)
+        self.out_deltas_buffer = self.deltas
+        self.out_delta = get_steps(self.out_deltas_buffer, self.in_shape)
 
     def init_buffers(self, inputs):
         """
@@ -170,7 +174,7 @@ class Recurrent(ParameterLayer):
 
         return self.h_buffer
 
-    def bprop(self, deltas, do_acts=True):
+    def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
         Backward propagation of errors through recurrent layer.
 
@@ -204,8 +208,8 @@ class Recurrent(ParameterLayer):
             self.be.compound_dot(in_deltas, xs.T, self.dW_input, beta=1.0)
             self.db[:] = self.db + self.be.sum(in_deltas, axis=1)
             # save a bit of computation if not bpropping activation gradients
-            if do_acts:
-                self.be.compound_dot(self.W_input.T, in_deltas, out_delta)
+            if out_delta:
+                self.be.compound_dot(self.W_input.T, in_deltas, out_delta, alpha=alpha, beta=beta)
 
         return self.out_deltas_buffer
 
@@ -233,13 +237,12 @@ class LSTM(Recurrent):
     """
     def __init__(self, output_size, init, activation, gate_activation,
                  reset_cells=False, name="LstmLayer"):
-        super(LSTM, self).__init__(output_size, init, activation, name)
+        super(LSTM, self).__init__(output_size, init, activation, reset_cells, name)
         self.gate_activation = gate_activation
         self.ngates = 4  # Input, Output, Forget, Cell
-        self.reset_cells = reset_cells
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        super(LSTM, self).allocate(shared_outputs, shared_deltas)
+    def allocate(self, shared_outputs=None):
+        super(LSTM, self).allocate(shared_outputs)
         # indices for slicing gate buffers
         (ifo1, ifo2) = (0, self.nout * 3)
         (i1, i2) = (0, self.nout)
@@ -315,7 +318,7 @@ class LSTM(Recurrent):
 
         return self.h_buffer
 
-    def bprop(self, deltas, do_acts=True):
+    def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
         Backpropagation of errors, output delta for previous layer, and
         calculate the update on model parmas
@@ -376,8 +379,9 @@ class LSTM(Recurrent):
         self.db[:] = self.be.sum(self.ifog_delta_buffer, axis=1)
 
         # out deltas
-        if do_acts:  # save a bit of computation
-            self.be.compound_dot(self.W_input.T, self.ifog_delta_buffer, self.out_deltas_buffer)
+        if self.out_deltas_buffer:  # save a bit of computation
+            self.be.compound_dot(self.W_input.T, self.ifog_delta_buffer, self.out_deltas_buffer,
+                                 alpha=alpha, beta=beta)
 
         return self.out_deltas_buffer
 
@@ -424,13 +428,14 @@ class GRU(Recurrent):
     .. _[Chung2014]: http://arxiv.org/pdf/1412.3555v1.pdf
     """
 
-    def __init__(self, output_size, init, activation, gate_activation, name="GruLayer"):
-        super(GRU, self).__init__(output_size, init, activation, name)
+    def __init__(self, output_size, init, activation, gate_activation,
+                 reset_cells=False, name="GruLayer"):
+        super(GRU, self).__init__(output_size, init, activation, reset_cells, name)
         self.gate_activation = gate_activation
         self.ngates = 3  # r, z, hcandidate
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        super(GRU, self).allocate(shared_outputs, shared_deltas)
+    def allocate(self, shared_outputs=None):
+        super(GRU, self).allocate(shared_outputs)
         self.h_prev_bprop = [0] + self.h[:-1]
 
         # indices for slicing gate buffers
@@ -529,7 +534,7 @@ class GRU(Recurrent):
 
         return self.h_buffer
 
-    def bprop(self, deltas, do_acts=True):
+    def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
         Backpropogation of errors, output delta for previous layer, and
         calculate the update on model parmas
@@ -586,8 +591,9 @@ class GRU(Recurrent):
         self.db[:] = self.be.sum(self.rzhcan_delta_buffer, axis=1)
 
         # out deltas
-        if do_acts:  # save a bit of computation
-            self.be.compound_dot(self.W_input.T, self.rzhcan_delta_buffer, self.out_deltas_buffer)
+        if self.out_deltas_buffer:  # save a bit of computation
+            self.be.compound_dot(self.W_input.T, self.rzhcan_delta_buffer, self.out_deltas_buffer,
+                                 alpha=alpha, beta=beta)
 
         return self.out_deltas_buffer
 

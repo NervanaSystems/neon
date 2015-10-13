@@ -361,6 +361,23 @@ class CPUTensor(Tensor):
             return OpTreeNode.build("assign", out, self.T)
         return self.T
 
+    def share(self, shape, dtype=None, name=None):
+        """
+        return a view: ary, where ary.size <= self.size
+        Allows easy sharing of temporary memory
+        This is mostly provided for compatibility, -- dtype is ignored
+        """
+        size = np.prod(shape)
+        if size > self.size:
+            raise ValueError("total size of new array must <= size of parent")
+
+        ary = self._tensor.ravel()[:size].reshape(shape)
+
+        return self.__class__(
+            backend=self.backend,
+            ary=ary,
+            dtype=self._tensor.dtype)
+
     def hist(self, tag):
         """
         Compute a histogram of the current tensor values.
@@ -903,7 +920,7 @@ class NervanaCPU(Backend):
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
                          pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-    def fprop_conv(self, layer, I, F, O, alpha=1.0, relu=False, bsum=None):
+    def fprop_conv(self, layer, I, F, O, alpha=1.0, relu=False, bsum=None, beta=0.0):
         """
         Forward propagate the inputs of a convolutional network layer to
         produce output
@@ -916,6 +933,7 @@ class NervanaCPU(Backend):
             alpha (float): linear scaling
             relu (boolean): apply ReLu or not before output
                             (currently not implemented)
+            beta (float): accumulation value into O
         """
         assert layer.sizeI == I.size
         assert layer.sizeF == F.size
@@ -959,12 +977,12 @@ class NervanaCPU(Backend):
                     slicedI = array_I.reshape(
                         (C, -1, N))[:, sliceDHW, :].reshape((-1, N))
 
-                    array_O[:, m, p, q, :] = alpha * \
+                    array_O[:, m, p, q, :] = beta * array_O[:, m, p, q, :] + alpha * \
                         np.dot(slicedF.T,  slicedI)
         if bsum is not None:
             bsum[:] = array_O.sum((1, 2, 3, 4))
 
-    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, relu=False, bsum=None):
+    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, relu=False, bsum=None, beta=0.0):
         """
         Backward propagate the error through a convolutional network layer.
 
@@ -974,6 +992,7 @@ class NervanaCPU(Backend):
             E (CPUTensor): errors
             grad_I (CPUTensor): gradient to inputs (output delta)
             alpha (float): linear scaling
+            beta (float): accumulation value into grad_I
             relu (boolean): apply ReLu or not before output
                             (currently not implemented)
         """
@@ -993,7 +1012,8 @@ class NervanaCPU(Backend):
         array_F = F.get().reshape(layer.dimF)
         array_E = E.get().reshape(layer.dimO)
         array_grad_I = grad_I.get().reshape(layer.dimI)
-        array_grad_I.fill(0.)
+
+        # array_grad_I = array_grad_I.fill(0.)
 
         array_F = np.transpose(array_F, (4, 1, 2, 3, 0)).copy()
 
@@ -1023,7 +1043,7 @@ class NervanaCPU(Backend):
                     slicedE = array_E.reshape(
                         (K, -1, N))[:, sliceMPQ, :].reshape((-1, N))
 
-                    array_grad_I[:, d, h, w, :] = alpha * \
+                    array_grad_I[:, d, h, w, :] = beta * array_grad_I[:, d, h, w, :] + alpha * \
                         np.dot(slicedF.T, slicedE)
         # If this is the forward pass for deconv, compute bsum here
         if bsum is not None:
@@ -1215,7 +1235,7 @@ class NervanaCPU(Backend):
                             array_O[k, m, p, q, :] = np.sqrt(np.sum(
                                 np.square(sliceI[sliceCDHW, :]), axis=0))
 
-    def bprop_pool(self, layer, I, E, delta):
+    def bprop_pool(self, layer, I, E, delta, alpha=1.0, beta=0.0):
         """
         Backward propagate pooling layer.
 
@@ -1225,6 +1245,8 @@ class NervanaCPU(Backend):
             I (Tensor): Input tensor.
             E (Tensor): Error tensor.
             delta (Tensor): Gradient tensor (delta)
+            alpha (float): linear scaling (does not work for l2 pooling)
+            beta (float): accumulation value into grad_I
         """
 
         assert layer.sizeI == I.size
@@ -1242,8 +1264,9 @@ class NervanaCPU(Backend):
 
         array_I = I.get().reshape(layer.dimI)
         array_E = E.get().reshape(layer.dimO)
+        array_E[:] = array_E * alpha
         array_delta = delta.get().reshape(layer.dimI)
-        array_delta.fill(0.)
+        array_delta[:] = array_delta * beta
 
         for k in range(K):
             sliceC = layer.pool_slice(k, J, C, pad_c, str_c)

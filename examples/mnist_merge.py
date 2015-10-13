@@ -19,7 +19,7 @@ MNIST example demonstrating the use of merge layers.
 
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian
-from neon.layers import GeneralizedCost, Affine, MergeSum
+from neon.layers import GeneralizedCost, Affine, Sequential, MergeMultistream
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
@@ -41,16 +41,14 @@ valid_set = DataIterator([X_test, X_test], y_test, nclass=nclass)
 init_norm = Gaussian(loc=0.0, scale=0.01)
 
 # initialize model
-path1 = Model(layers=[Affine(nout=100, init=init_norm, activation=Rectlin()),
+path1 = Sequential(layers=[Affine(nout=100, init=init_norm, activation=Rectlin()),
                       Affine(nout=100, init=init_norm, activation=Rectlin())])
 
-path2 = Model(layers=[Affine(nout=100, init=init_norm, activation=Rectlin()),
+path2 = Sequential(layers=[Affine(nout=100, init=init_norm, activation=Rectlin()),
                       Affine(nout=100, init=init_norm, activation=Rectlin())])
 
-layers = [
-    MergeSum([path1.layers, path2.layers]),
-    Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))
-]
+layers = [MergeMultistream(layers=[path1, path2], merge="stack"),
+          Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))]
 
 model = Model(layers=layers)
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())

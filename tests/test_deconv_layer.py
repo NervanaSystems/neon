@@ -92,7 +92,9 @@ def test_dconv_zeros(backend_default, zeros_convargs):
     inp = neon_layer.be.array(inp)
     inp.lshape = inshape
     neon_layer.configure(inshape)
+    neon_layer.prev_layer = True
     neon_layer.allocate()
+    neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
 
     outa = neon_layer.fprop(inp)
     out = outa.asnumpyarray()
@@ -124,7 +126,9 @@ def test_dconv_ones(backend_default, ones_convargs):
     inp.lshape = inshape
     # run fprop
     neon_layer.configure(inshape)
+    neon_layer.prev_layer = True
     neon_layer.allocate()
+    neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
     out = neon_layer.fprop(inp).asnumpyarray()
     out_exp_min = nifm
     out_exp_max = fshape * fshape * nifm
@@ -188,7 +192,9 @@ def test_dconv_rand(backend_default, rand_convargs):
 
     # run fprop on neon
     neon_layer.configure(inshape)
+    neon_layer.prev_layer = True
     neon_layer.allocate()
+    neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
     neon_out = neon_layer.fprop(inp).asnumpyarray()
     # pull neon weights into ref layer weights
     ref_layer.weights = neon_layer.W.asnumpyarray().T

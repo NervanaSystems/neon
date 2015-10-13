@@ -20,8 +20,7 @@ import numpy as np
 
 from neon import NervanaObject
 from neon.initializers.initializer import Uniform
-from neon.layers.layer import Linear
-from neon.layers.merge import MergeConcat, MergeSum, MergeConcatSequence
+from neon.layers import Affine, MergeMultistream, Sequential
 
 
 def pytest_generate_tests(metafunc):
@@ -43,27 +42,30 @@ def test_concat_l1_l1(backend_default, allrand_args):
     nouts = [64, 2048]
     batch_size = 16
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    be = NervanaObject.be
 
     init_unif = Uniform(low=w_rng[0], high=w_rng[1])
-    layers = [Linear(nout=nout, init=init_unif) for nout in nouts]
-    inputs = [layers[0].be.array(dtypeu(np.random.random((nin, batch_size)))) for nin in nins]
-    merge = MergeConcat(layers)
+    layers = [Sequential(Affine(nout=nout, init=init_unif)) for nout in nouts]
+    inputs = [be.array(dtypeu(np.random.random((nin, batch_size)))) for nin in nins]
+    merge = MergeMultistream(layers, merge="stack")
     assert(len(inputs) == len(layers))
     merge.configure(inputs)
     merge.allocate()
+    merge.set_deltas(None)
     out = merge.fprop(inputs).asnumpyarray()
 
-    weights = [layer.W.asnumpyarray() for layer in layers]
+    sublayers = [s.layers[0] for s in layers]
+    weights = [layer.W.asnumpyarray() for layer in sublayers]
     out_exp = np.concatenate([np.dot(w, inp.get()) for (w, inp) in zip(weights, inputs)])
 
     assert np.allclose(out, out_exp, atol=1e-3)
 
     err_lst = [dtypeu(np.random.random((nout, batch_size))) for nout in nouts]
     err_concat = np.concatenate(err_lst)
-    merge.bprop(layers[0].be.array(err_concat))
+    merge.bprop(be.array(err_concat))
     dW_exp_lst = [np.dot(err, inp.asnumpyarray().T) for (err, inp) in zip(err_lst, inputs)]
 
-    for layer, dW_exp in zip(layers, dW_exp_lst):
+    for layer, dW_exp in zip(sublayers, dW_exp_lst):
         assert np.allclose(layer.dW.asnumpyarray(), dW_exp)
     return
 
@@ -78,60 +80,30 @@ def test_concat_sequence_l1_l1(backend_default, allrand_args):
     nout = 256
     batch_size = 16
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    be = NervanaObject.be
 
     init_unif = Uniform(low=w_rng[0], high=w_rng[1])
-    layers = [Linear(nout=nout, init=init_unif) for _ in range(2)]
-    inputs = [layers[0].be.array(dtypeu(np.random.random((nin, batch_size*step))))
+    layers = [Sequential(Affine(nout=nout, init=init_unif)) for _ in range(2)]
+    inputs = [be.array(dtypeu(np.random.random((nin, batch_size*step))))
               for step in steps]
-    merge = MergeConcatSequence(layers)
+    merge = MergeMultistream(layers, merge="recurrent")
     assert(len(inputs) == len(layers))
     merge.configure(inputs)
     merge.allocate()
+    merge.set_deltas(None)
     out = merge.fprop(inputs).asnumpyarray()
 
-    weights = [layer.W.asnumpyarray() for layer in layers]
+    sublayers = [s.layers[0] for s in layers]
+    weights = [layer.W.asnumpyarray() for layer in sublayers]
     out_exp = np.concatenate([np.dot(w, inp.get()) for (w, inp) in zip(weights, inputs)], axis=1)
 
     assert np.allclose(out, out_exp, atol=1e-3)
 
     err_lst = [dtypeu(np.random.random((nout, batch_size*step))) for step in steps]
-    err_concat = layers[0].be.array(np.concatenate(err_lst, axis=1))
+    err_concat = be.array(np.concatenate(err_lst, axis=1))
     merge.bprop(err_concat)
     dW_exp_lst = [np.dot(err, inp.asnumpyarray().T) for (err, inp) in zip(err_lst, inputs)]
 
-    for layer, dW_exp in zip(layers, dW_exp_lst):
-        assert np.allclose(layer.dW.asnumpyarray(), dW_exp)
-    return
-
-
-def test_sum_l1_l1(backend_default, allrand_args):
-    # test two linear layers that are merged with sum
-    dtypeu = np.float32
-    w_rng, rngmax = allrand_args
-    # Diff size inputs and outputs
-    nins = [128, 1024]
-    nouts = [64, 64]
-    batch_size = 16
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
-
-    init_unif = Uniform(low=w_rng[0], high=w_rng[1])
-    layers = [Linear(nout=nout, init=init_unif) for nout in nouts]
-    inputs = [layers[0].be.array(dtypeu(np.random.random((nin, batch_size)))) for nin in nins]
-    merge = MergeSum(layers)
-    assert(len(inputs) == len(layers))
-    merge.configure(inputs)
-    merge.allocate()
-    out = merge.fprop(inputs).asnumpyarray()
-
-    weights = [layer.W.asnumpyarray() for layer in layers]
-    out_exp = sum([np.dot(w, inp.get()) for (w, inp) in zip(weights, inputs)])
-
-    assert np.allclose(out, out_exp, atol=1e-3)
-
-    err = dtypeu(np.random.random((nouts[0], batch_size)))
-    merge.bprop(layers[0].be.array(err))
-    dW_exp_lst = [np.dot(err, inp.asnumpyarray().T) for inp in inputs]
-
-    for layer, dW_exp in zip(layers, dW_exp_lst):
+    for layer, dW_exp in zip(sublayers, dW_exp_lst):
         assert np.allclose(layer.dW.asnumpyarray(), dW_exp)
     return

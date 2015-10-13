@@ -42,14 +42,15 @@ Examples:
 import logging
 import os
 
+from neon.backends import gen_backend
 from neon.callbacks.callbacks import Callbacks
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian
-from neon.layers import GeneralizedCost, Affine
+from neon.layers import GeneralizedCost, Affine, Sequential, BranchNode, Multicost, Tree
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
-from neon.transforms import Rectlin, Logistic, CrossEntropyBinary, Misclassification
-from neon.transforms import Softmax, CrossEntropyMulti
+from neon.transforms import Rectlin, Logistic, Misclassification, Softmax
+from neon.transforms import CrossEntropyBinary, CrossEntropyMulti
 from neon.util.argparser import NeonArgparser
 
 
@@ -62,7 +63,17 @@ logger = logging.getLogger()
 logger.setLevel(args.log_thresh)
 
 # hyperparameters
+batch_size = 128
 num_epochs = args.epochs
+
+# setup backend
+be = gen_backend(backend=args.backend,
+                 batch_size=batch_size,
+                 rng_seed=args.rng_seed,
+                 device_id=args.device_id,
+                 default_dtype=args.datatype,
+                 stochastic_round=False)
+
 
 # load up the mnist data set
 # split into train and tests sets
@@ -76,23 +87,43 @@ valid_set = DataIterator(X_test, y_test, nclass=nclass)
 # setup weight initialization function
 init_norm = Gaussian(loc=0.0, scale=0.01)
 
+normrelu = dict(init=init_norm, activation=Rectlin())
+normsigm = dict(init=init_norm, activation=Logistic(shortcut=True))
+normsoft = dict(init=init_norm, activation=Softmax())
+
 # setup model layers
-layers = []
-layers.append(Affine(nout=100, init=init_norm, activation=Rectlin()))
-layers.append(Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True)))
-# layers = [Affine(nout=100, init=init_norm, activation=Rectlin()),
-#       Affine(nout=32, init=init_norm, activation=Rectlin()),
-#       Affine(nout=16, init=init_norm, activation=Rectlin()),
-#       Affine(nout=10, init=init_norm, activation=Softmax())]
+b1 = BranchNode(name="b1")
+b2 = BranchNode(name="b2")
+
+
+p1 = [Affine(nout=100, linear_name="m_l1", **normrelu),
+      b1,
+      Affine(nout=32, linear_name="m_l2", **normrelu),
+      Affine(nout=16, linear_name="m_l3", **normrelu),
+      b2,
+      Affine(nout=10, linear_name="m_l4", **normsoft)]
+
+p2 = [b1,
+      Affine(nout=16, linear_name="b1_l1", **normrelu),
+      Affine(nout=10, linear_name="b1_l2", **normsigm)]
+
+p3 = [b2,
+      Affine(nout=16, linear_name="b2_l1", **normrelu),
+      Affine(nout=10, linear_name="b2_l2", **normsigm)]
+
+alphas = [1, 0.25, 0.25]
+
 # setup cost function as CrossEntropy
-cost = GeneralizedCost(costfunc=CrossEntropyBinary())
-# cost = GeneralizedCost(costfunc=CrossEntropyMulti())
+cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),
+                        GeneralizedCost(costfunc=CrossEntropyBinary()),
+                        GeneralizedCost(costfunc=CrossEntropyBinary())],
+                 weights=alphas)
 
 # setup optimizer
 optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=args.rounding)
 
 # initialize model object
-mlp = Model(layers=layers)
+mlp = Model(layers=Tree([p1, p2, p3], alphas=alphas))
 
 if args.model_file:
     assert os.path.exists(args.model_file), '%s not found' % args.model_file
@@ -102,8 +133,6 @@ if args.model_file:
 # setup standard fit callbacks
 callbacks = Callbacks(mlp, train_set, output_file=args.output_file,
                       progress_bar=args.progress_bar)
-
-# add a callback ot calculate
 
 if args.validation_freq:
     # setup validation trial callbacks

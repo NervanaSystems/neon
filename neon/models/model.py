@@ -16,7 +16,7 @@
 from neon import NervanaObject
 from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj
-from neon.layers import Merge, Activation
+from neon.layers import Sequential, Activation, Tree
 import numpy as np
 
 
@@ -27,13 +27,13 @@ class Model(NervanaObject):
     Additional functionality can be added to fit through callback functions.
 
     Arguments:
-        layers (list): List of layers that compose a model.
+        layers: layer container
         name (str): Model name.  Defaults to "model"
         optimizer (Optimizer): Optimizer object which defines the learning rule
                                for updating model parameters (ie DescentMomentum, AdaDelta)
     """
 
-    def __init__(self, layers=[], name="model", optimizer=None):
+    def __init__(self, layers, name="model", optimizer=None):
         super(Model, self).__init__(name)
         self.optimizer = optimizer
         self.params = None
@@ -42,21 +42,9 @@ class Model(NervanaObject):
         self.finished = False
         self.initialized = False
 
-        self.layers = []
-        self.layers_to_optimize = []
-
-        for layer in layers:
-            if isinstance(layer, list):
-                self.layers.extend(layer)
-            else:
-                self.layers.append(layer)
-
-        for layer in self.layers:
-            if layer.has_params:
-                self.layers_to_optimize.append(layer)
-
-            elif isinstance(layer, Merge):
-                self.layers_to_optimize += layer.layers_to_optimize
+        # Wrap the list of layers in a Sequential container
+        self.layers = layers if type(layers) in (Sequential, Tree) else Sequential(layers)
+        self.layers_to_optimize = self.layers.layers_to_optimize
 
     def set_shortcut(self):
         # infer whether bprop shortcut can be used on final activation
@@ -77,15 +65,14 @@ class Model(NervanaObject):
             return
         # Propagate shapes through the layers to configure
         prev_input = dataset
-        for l in self.layers:
-            prev_input = l.configure(prev_input)
+        prev_input = self.layers.configure(prev_input)
 
         if cost is not None:
             cost.initialize(prev_input)
 
         # Now allocate space
-        for l in self.layers:
-            l.allocate()
+        self.layers.allocate()
+        self.layers.allocate_deltas()
         self.initialized = True
 
     def print_layers(self):
@@ -93,9 +80,7 @@ class Model(NervanaObject):
         Print network layers
         """
         config_string = "Network Layers:"
-        for layer in self.layers:
-            config_string = config_string + "\n\t" + str(layer)
-        config_string = config_string + "\n"
+        config_string = config_string + "\n" + self.layers.nested_str()
         print config_string
 
     def fit(self, dataset, cost, optimizer, num_epochs, callbacks):
@@ -118,7 +103,7 @@ class Model(NervanaObject):
         self.cost = cost
         self.initialize(dataset, cost)
         self.print_layers()
-        self.set_shortcut()  # infer if bprop shortcut can be used
+        # self.set_shortcut()  # infer if bprop shortcut can be used
         self.optimizer = optimizer
         self.total_cost = self.be.empty((1, 1))
 
@@ -158,7 +143,6 @@ class Model(NervanaObject):
             # for every layer in reverse except the 0th one
             delta = self.cost.get_errors(x, t)
             self.bprop(delta)
-
             self.optimizer.optimize(self.layers_to_optimize, epoch=epoch)
 
             callbacks.on_minibatch_end(epoch, mb_idx)
@@ -180,22 +164,16 @@ class Model(NervanaObject):
         Returns:
             Tensor: the output of the final layer in the model
         """
-        for l in self.layers:
-            x = l.fprop(x, inference)
-        return x
+        return self.layers.fprop(x, inference)
 
-    def bprop(self, delta, do_acts=True):
+    def bprop(self, delta):
         """
         Back propagates the error of a minibatch through the model.
 
         Arguments:
             delta (Tensor): Derivative of cost with respect to the last layer's output
-            do_acts (bool): Whether to compute the output deltas of layer. The first layer
-                does not need to compute output deltas and so do_acts is set to False.
         """
-        for l in reversed(self.layers[1:]):
-            delta = l.bprop(delta)
-        return self.layers[0].bprop(delta, do_acts=False)
+        return self.layers.bprop(delta)
 
     def eval(self, dataset, metric):
         """
@@ -233,13 +211,15 @@ class Model(NervanaObject):
         self.initialize(dataset)
         dataset.reset()  # Move "pointer" back to beginning of dataset
         n = dataset.nbatches
-        x = self.layers[-1].outputs
-        (dim0, dim1) = x.shape
-        Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)
-        nsteps = dim1 / self.be.bsz
-
+        x = self.layers.layers[-1].outputs
+        assert not isinstance(x, list), "Can not get_outputs with Branch terminal"
+        Ypred = None
         for idx, (x, t) in enumerate(dataset):
             x = self.fprop(x, inference=True)
+            if Ypred is None:
+                (dim0, dim1) = x.shape
+                Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)
+                nsteps = dim1 / self.be.bsz
             cur_batch = slice(idx * dim1, (idx + 1) * dim1)
             Ypred[cur_batch] = x.get().T
 

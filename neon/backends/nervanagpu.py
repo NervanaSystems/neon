@@ -457,12 +457,12 @@ class GPUTensor(Tensor):
         if len(shape) < self._min_dims:
             shape = shape + (1, )
 
-        if shape == self.shape:
-            return self
-
         if -1 in shape:
             missing_dim = -self.size / np.prod(shape)
             shape = tuple([missing_dim if x == -1 else x for x in shape])
+
+        if shape == self.shape:
+            return self
 
         size = np.prod(shape)
 
@@ -538,12 +538,14 @@ class GPUTensor(Tensor):
         else:
             dtype = np.dtype(dtype)
 
+        new_base = self if self.base is None else self.base
+
         return self.__class__(
             backend=self.backend,
             shape=shape,
             dtype=dtype,
             allocator=self.allocator,
-            base=self,
+            base=new_base,
             gpudata=self.gpudata,
             strides=_contiguous_strides(shape),
             name=name,

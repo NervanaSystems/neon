@@ -67,7 +67,7 @@ callbacks = Callbacks(mlp, train, output_file=args.output_file,
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=1, cost=cost, callbacks=callbacks)
 
-print mlp.layers[-1]
+print mlp.layers.layers[-1]
 # Plot the reconstructed digits
 try:
     from matplotlib import pyplot, cm
@@ -77,7 +77,7 @@ try:
     test = np.zeros((28*nrows, 28*ncols))
     idxs = [(row, col) for row in range(nrows) for col in range(ncols)]
     for row, col in idxs:
-        im = mlp.layers[-1].outputs.get()[:, fi].reshape((28, 28))
+        im = mlp.layers.layers[-1].outputs.get()[:, fi].reshape((28, 28))
         test[28*row:28*(row+1):, 28*col:28*(col+1)] = im
         fi = fi + 1
     pyplot.matshow(test, cmap=cm.gray)

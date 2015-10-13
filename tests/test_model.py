@@ -19,7 +19,7 @@ from neon.backends import gen_backend
 from neon.data import DataIterator, load_mnist, load_text, Text
 from neon.initializers import Gaussian, Constant
 from neon.layers import GeneralizedCost, Affine
-from neon.layers import Dropout, Conv, Pooling, MergeConcat, Recurrent
+from neon.layers import Dropout, Conv, Pooling, Sequential, MergeMultistream, Recurrent
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
@@ -78,22 +78,21 @@ def test_model_serialize(backend_default, data):
     init_norm = Gaussian(loc=0.0, scale=0.01)
 
     # initialize model
-    path1 = [Conv((5, 5, 16), init=init_norm, bias=Constant(0), activation=Rectlin()),
-             Pooling(2),
-             Affine(nout=20, init=init_norm, bias=init_norm, activation=Rectlin())]
-    path2 = [Dropout(keep=0.5),
-             Affine(nout=20, init=init_norm, bias=init_norm, activation=Rectlin())]
-    layers = [MergeConcat([path1, path2]),
-              Affine(
-                  nout=20, init=init_norm, batch_norm=True, activation=Rectlin()),
+    path1 = Sequential([Conv((5, 5, 16), init=init_norm, bias=Constant(0), activation=Rectlin()),
+                        Pooling(2),
+                        Affine(nout=20, init=init_norm, bias=init_norm, activation=Rectlin())])
+    path2 = Sequential([Affine(nout=100, init=init_norm, bias=Constant(0), activation=Rectlin()),
+                        Dropout(keep=0.5),
+                        Affine(nout=20, init=init_norm, bias=init_norm, activation=Rectlin())])
+    layers = [MergeMultistream(layers=[path1, path2], merge="stack"),
+              Affine(nout=20, init=init_norm, batch_norm=True, activation=Rectlin()),
               Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))]
 
     tmp_save = 'test_model_serialize_tmp_save.pickle'
     mlp = Model(layers=layers)
-    mlp.optimizer = GradientDescentMomentum(
-        learning_rate=0.1, momentum_coef=0.9)
+    mlp.optimizer = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)
     mlp.cost = GeneralizedCost(costfunc=CrossEntropyBinary())
-    mlp.initialize(train_set)
+    mlp.initialize(train_set, cost=mlp.cost)
     n_test = 3
     num_epochs = 3
     # Train model for num_epochs and n_test batches

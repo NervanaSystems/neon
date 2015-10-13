@@ -50,6 +50,10 @@ opt_gdm = GradientDescentMomentum(learning_rate=0.5,
                                                     change=0.1),
                                   momentum_coef=0.9, wdecay=.0001)
 relu = Rectlin()
+common     = dict(activation=relu, init=init_uni, batch_norm=True)
+commonp1   = dict(activation=relu, init=init_uni, batch_norm=True, padding=1)
+commonp1s2 = dict(activation=relu, init=init_uni, batch_norm=True, padding=1, strides=2)
+
 layers = []
 conv = dict(init=init_uni, batch_norm=True, activation=relu)
 convp1 = dict(init=init_uni, batch_norm=True, activation=relu, padding=1)
