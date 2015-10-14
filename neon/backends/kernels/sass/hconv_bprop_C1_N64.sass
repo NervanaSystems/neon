@@ -309,12 +309,12 @@
 --:-:-:-:1  @P1 LDG.E.CI.U16 load0F2, [track0F + 2x<2>];
 --:-:2:-:1  @P1 LDG.E.CI.U16 load0F3, [track0F + 2x<3>];
 
---:-:-:-:0      ISETP.GT.AND P1, PT, K, RZ, P1;
-
 --:-:-:-:1  @P1 LDG.E.CI.U16 load4F0, [track4F + 2x<0>];
 --:-:-:-:1  @P1 LDG.E.CI.U16 load4F1, [track4F + 2x<1>];
 --:-:-:-:1  @P1 LDG.E.CI.U16 load4F2, [track4F + 2x<2>];
 --:-:3:-:1  @P1 LDG.E.CI.U16 load4F3, [track4F + 2x<3>];
+
+--:-:-:-:0      ISETP.GT.AND P1, PT, K, RZ, P1;
 
 --:-:4:-:1  @P2 LDG.E.128 load0E0, [track0E];
 --:-:5:-:1  @P2 LDG.E.128 load4E0, [track4E];
