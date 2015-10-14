@@ -19,9 +19,11 @@ Defines text datatset handling.
 import numpy as np
 
 from neon import NervanaObject
+import cPickle
 
 
 class Text(NervanaObject):
+
     """
     This class defines methods for loading and iterating over text datasets.
     """
@@ -97,6 +99,63 @@ class Text(NervanaObject):
             vocab = set(vocab)
             assert vocab >= set(tokens), "the predefined vocab must contain all the tokens"
             return vocab
+
+    @staticmethod
+    def pad_sentences(sentences, sentence_length=None, dtype=np.int32, pad_val=0.):
+        lengths = [len(sent) for sent in sentences]
+
+        nsamples = len(sentences)
+        if sentence_length is None:
+            sentence_length = np.max(lengths)
+
+        X = (np.ones((nsamples, sentence_length)) * pad_val).astype(dtype=np.int32)
+        for i, sent in enumerate(sentences):
+            trunc = sent[-sentence_length:]
+            X[i, -len(trunc):] = trunc
+        return X
+
+    @staticmethod
+    def pad_data(path, vocab_size=20000, sentence_length=100, oov=2,
+                 start=1, index_from=3, seed=113, test_split=0.2):
+
+        f = open(path, 'rb')
+        X, y = cPickle.load(f)
+        f.close()
+
+        np.random.seed(seed)
+        np.random.shuffle(X)
+        np.random.seed(seed)
+        np.random.shuffle(y)
+
+        if start is not None:
+            X = [[start] + [w + index_from for w in x] for x in X]
+        else:
+            X = [[w + index_from for w in x] for x in X]
+
+        if not vocab_size:
+            vocab_size = max([max(x) for x in X])
+
+        # by convention, use 2 as OOV word
+        # reserve 'index_from' (=3 by default) characters: 0 (padding), 1
+        # (start), 2 (OOV)
+        if oov is not None:
+            X = [[oov if w >= vocab_size else w for w in x] for x in X]
+
+        X_train = X[:int(len(X)*(1-test_split))]
+        y_train = y[:int(len(X)*(1-test_split))]
+
+        X_test = X[int(len(X)*(1-test_split)):]
+        y_test = y[int(len(X)*(1-test_split)):]
+
+        X_train = Text.pad_sentences(X_train, sentence_length=sentence_length)
+        y_train = np.array(y_train).reshape((len(y_train), 1))
+
+        X_test = Text.pad_sentences(X_test, sentence_length=sentence_length)
+        y_test = np.array(y_test).reshape((len(y_test), 1))
+
+        nclass = 1 + max(np.max(y_train), np.max(y_test))
+
+        return (X_train, y_train), (X_test, y_test), nclass
 
     def reset(self):
         """

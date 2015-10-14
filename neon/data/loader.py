@@ -237,6 +237,10 @@ def load_i1kmeta(path):
     return load_text('i1kmeta', path)
 
 
+def load_imdb(path):
+    return load_text('imdb', path)
+
+
 dataset_meta = {
     'mnist': {
         'size': 15296311,
@@ -303,6 +307,12 @@ dataset_meta = {
         'file': 'neon_ILSVRC2012_devmeta.zip',
         'url': 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/imagenet',
         'func': load_i1kmeta
+    },
+    'imdb': {
+        'size': 33213513,
+        'file': 'imdb.pkl',
+        'url': ' https://s3.amazonaws.com/text-datasets',
+        'func': load_imdb,
     }
 }
 
