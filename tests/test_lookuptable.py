@@ -1,0 +1,159 @@
+# ----------------------------------------------------------------------------
+# Copyright 2015 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+'''
+Test of the mlp/linear layer
+'''
+import itertools as itt
+import numpy as np
+
+from neon import NervanaObject
+from neon.initializers.initializer import GlorotUniform
+from neon.layers.layer import LookupTable
+
+
+def pytest_generate_tests(metafunc):
+    if metafunc.config.option.all:
+        bsz_rng = [16, 32, 64]
+    else:
+        bsz_rng = [128]
+
+    if 'basic_linargs' in metafunc.fixturenames:
+        fargs = []
+        if metafunc.config.option.all:
+            nin_rng = [1, 2, 64, 128]
+            nout_rng = [1, 4, 128, 64]
+            vocab_size = [1, 4, 1000, 2000]
+        else:
+            nin_rng = [4, 32]
+            nout_rng = [3, 33]
+            vocab_size = [10, 34]
+        fargs = itt.product(nin_rng, nout_rng, vocab_size, bsz_rng)
+        print fargs
+        metafunc.parametrize('basic_linargs', fargs)
+
+    if 'allrand_args' in metafunc.fixturenames:
+        fargs = []
+        eps = np.finfo(np.float32).eps
+        # weight ranges
+        w_rng = [[0.0, 1.0], [-1.0, 0.0], [-1.0, 1.0]]
+        if metafunc.config.option.all:
+            rng_max = [eps, eps*10, 1.0, 2048.0, 1.0e6, 1.0e10]
+        else:
+            rng_max = [eps, 1.0, 1.0e10]
+        fargs = itt.product(w_rng, rng_max)
+        metafunc.parametrize('allrand_args', fargs)
+
+
+def test_lookuptable_zeros_error(backend_default, basic_linargs):
+    # basic sanity check with 0 weights random inputs
+    nin, nout, batch_size, vocab_size = basic_linargs
+    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+
+    dtypeu = np.float32
+
+    init_glorot = GlorotUniform()
+    layer = LookupTable(
+        vocab_size=vocab_size, embedding_dim=nout, init=init_glorot)
+
+    inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
+    layer.configure(nin)
+    layer.allocate()
+
+    inputs = layer.be.array(inp.reshape((nin, batch_size)))
+    out = layer.fprop(inputs).get()
+    W = layer.W.get()
+    for i in range(nin*batch_size):
+        assert np.all(W[:, inp[i]] == out[:, i])
+
+    err = dtypeu(np.zeros((nout, nin * batch_size)))
+    layer.bprop(layer.be.array(err)).asnumpyarray()
+
+    dw = layer.dW.asnumpyarray()
+    assert np.min(dw) == 0.0 and np.max(dw) == 0.0
+
+    return
+
+
+def test_lookuptable_ones_error(backend_default, basic_linargs):
+    nin, nout, batch_size, vocab_size = basic_linargs
+    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+
+    dtypeu = np.float32
+
+    init_glorot = GlorotUniform()
+    layer = LookupTable(
+        vocab_size=vocab_size, embedding_dim=nout, init=init_glorot)
+
+    inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
+    layer.configure(nin)
+    layer.allocate()
+
+    inputs = layer.be.array(inp.reshape((nin, batch_size)))
+    out = layer.fprop(inputs).get()
+    W = layer.W.get()
+    for i in range(nin*batch_size):
+        assert np.all(W[:, inp[i]] == out[:, i])
+
+    err = dtypeu(np.ones((nout, nin * batch_size)))
+    layer.bprop(layer.be.array(err)).asnumpyarray()
+
+    dw = layer.dW.asnumpyarray()
+    unqidx, count = np.unique(inp, return_counts=True)
+    dw_exp = np.zeros((1, nout))
+    for wrd_id, cnt in zip(unqidx, count):
+        dw_exp = err[:, 0] * cnt
+        assert np.all(dw_exp == dw[:, wrd_id])
+
+    return
+
+
+def test_lookuptable_rand_error(backend_default, basic_linargs):
+    nin, nout, batch_size, vocab_size = basic_linargs
+    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+
+    dtypeu = np.float32
+
+    init_glorot = GlorotUniform()
+    layer = LookupTable(
+        vocab_size=vocab_size, embedding_dim=nout, init=init_glorot)
+
+    inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
+    layer.configure(nin)
+    layer.allocate()
+
+    inputs = layer.be.array(inp.reshape((nin, batch_size)))
+    out = layer.fprop(inputs).get()
+    W = layer.W.get()
+    for i in range(nin*batch_size):
+        assert np.all(W[:, inp[i]] == out[:, i])
+
+    err = dtypeu(np.random.random((nout, nin * batch_size)))
+    layer.bprop(layer.be.array(err)).asnumpyarray()
+
+    dw = layer.dW.asnumpyarray()
+    unqidx, count = np.unique(inp, return_counts=True)
+    dw_exp = np.zeros((1, nout))
+    for wrd_id, cnt in zip(unqidx, count):
+        dw_exp[:] = 0
+        cnt_exp = 0
+        for i, w_id in enumerate(inp):
+            if w_id == wrd_id:
+                dw_exp[:] = dw_exp[:] + err[:, i]
+                cnt_exp += 1
+        assert np.allclose(dw[:, wrd_id], dw_exp, atol=1e-2, rtol=0)
+        assert np.allclose(dw_exp, dw[:, wrd_id], atol=1e-2, rtol=0)
+        assert cnt == cnt_exp
+
+    return

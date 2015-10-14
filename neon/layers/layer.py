@@ -37,6 +37,7 @@ def interpret_in_shape(xshape):
 
 
 class Layer(NervanaObject):
+
     """
     Top level generic neural network layer class from which all other layer
     types inherit.
@@ -44,6 +45,7 @@ class Layer(NervanaObject):
     Arguments:
         name (string): Name identifying this layer (in logs, etc.)
     """
+
     def __init__(self, name="layer"):
         super(Layer, self).__init__(name)
         self.outputs = None
@@ -135,6 +137,7 @@ class Layer(NervanaObject):
 
 
 class Pooling(Layer):
+
     """
     Pooling layer implementation.
 
@@ -152,6 +155,7 @@ class Pooling(Layer):
             to pad_w = pad_h = None
         name (str, optional): layer name. Defaults to "PoolingLayer"
     """
+
     def __init__(self, fshape, op="max", strides={}, padding={},
                  name="PoolingLayer"):
         super(Pooling, self).__init__(name)
@@ -212,6 +216,7 @@ class Pooling(Layer):
 
 
 class ParameterLayer(Layer):
+
     """
     Intermediate class used for common functionality for any layer with weights.
 
@@ -222,6 +227,7 @@ class ParameterLayer(Layer):
             initializing layer weights
         name (str, optional): layer name. Defaults to "ParameterLayer"
     """
+
     def __init__(self, init=None, name="ParameterLayer"):
         super(ParameterLayer, self).__init__(name)
         self.has_params = True
@@ -290,6 +296,7 @@ class ParameterLayer(Layer):
 
 
 class Convolution(ParameterLayer):
+
     """
     Convolutional layer implementation.
 
@@ -368,6 +375,7 @@ class Convolution(ParameterLayer):
 
 
 class Deconvolution(ParameterLayer):
+
     """
     Deconvolutional layer implementation.
 
@@ -385,6 +393,7 @@ class Deconvolution(ParameterLayer):
             initializing layer weights
         name (str, optional): layer name. Defaults to "DeconvolutionLayer"
     """
+
     def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
                  name="DeconvolutionLayer"):
         super(Deconvolution, self).__init__(init, name)
@@ -455,6 +464,7 @@ class Deconvolution(ParameterLayer):
 
 
 class Linear(ParameterLayer):
+
     """
     A fully connected layer implemented as the dot product of inputs and
     weights.
@@ -465,6 +475,7 @@ class Linear(ParameterLayer):
             initializing layer weights
         name (str, optional): Layer name. Defaults to "LinearLayer"
     """
+
     def __init__(self, nout, init, bsum=False, name="LinearLayer"):
         super(Linear, self).__init__(init, name)
         self.nout = nout
@@ -498,6 +509,7 @@ class Linear(ParameterLayer):
 
 
 class Bias(ParameterLayer):
+
     """
     A bias layer implemented that adds a learned bias to inputs and produces
     outputs of the same shape.
@@ -507,6 +519,7 @@ class Bias(ParameterLayer):
             initializing layer bias
         name (str, optional): Layer name. Defaults to "BiasLayer"
     """
+
     def __init__(self, init, name="BiasLayer"):
         super(Bias, self).__init__(init, name)
         self.y = None
@@ -549,6 +562,7 @@ class Bias(ParameterLayer):
 
 
 class Activation(Layer):
+
     """
     A layer that applies a specified transform to the inputs and
     produces outputs of the same shape.
@@ -560,6 +574,7 @@ class Activation(Layer):
             functions to apply
         name (str, optional): Layer name. Defaults to "ActivationLayer"
     """
+
     def __init__(self, transform, name="ActivationLayer"):
         super(Activation, self).__init__(name)
         self.transform = transform
@@ -590,6 +605,7 @@ class Activation(Layer):
 
 
 class Affine(list):
+
     """
     A linear layer with a learned bias and activation, implemented as a list
     composing separate linear, bias/batchnorm and activation layers.
@@ -606,6 +622,7 @@ class Affine(list):
         act_name (str): the name to call the Activation layer. Defaults to 'ActivationLayer'.
 
     """
+
     def __init__(self, nout, init, bias=None, batch_norm=False, activation=None,
                  linear_name='LinearLayer', bias_name='BiasLayer',
                  act_name='ActivationLayer'):
@@ -626,6 +643,7 @@ class Affine(list):
 
 
 class Conv(Affine):
+
     """
     A convolutional layer with a learned bias and activation, implemented as a
     list composing separate Convolution, Bias and Activation layers.
@@ -650,6 +668,7 @@ class Conv(Affine):
         act_name (str): the name to call the Activation layer. Defaults to ActivationLayer.
 
     """
+
     def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
                  activation=None, conv_name='ConvolutionLayer',
                  bias_name='BiasLayer', act_name='ActivationLayer'):
@@ -660,9 +679,11 @@ class Conv(Affine):
 
 
 class Deconv(Affine):
+
     """
     Same as Conv layer, but implements a composite deconvolution layer
     """
+
     def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
                  activation=None, conv_name='DeconvolutionLayer',
                  bias_name='BiasLayer', act_name='ActivationLayer'):
@@ -673,6 +694,7 @@ class Deconv(Affine):
 
 
 class Dropout(Layer):
+
     """
     A dropout layer.
 
@@ -686,6 +708,7 @@ class Dropout(Layer):
     Arguments:
        keep (float): fraction of the inputs that should be stochastically kept.
     """
+
     def __init__(self, keep=0.5, name="droplayer"):
         super(Dropout, self).__init__(name)
         self.keep = keep
@@ -723,7 +746,54 @@ class Dropout(Layer):
         return self.deltas
 
 
+class LookupTable(ParameterLayer):
+
+    def __init__(self, vocab_size, embedding_dim, init, name="LookupTableLayer"):
+        super(LookupTable, self).__init__(init, name)
+        self.embedding_dim = embedding_dim
+        self.vocab_size = vocab_size
+
+    def __str__(self):
+        return "LookupTable Layer : %d inputs, (%d, %d) outputs size" % (
+            self.nin, self.embedding_dim, self.nin)
+
+    def configure(self, in_obj):
+        super(LookupTable, self).configure(in_obj)
+        (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
+        self.out_shape = (self.embedding_dim, self.nin)
+        if self.weight_shape is None:
+            self.weight_shape = (self.embedding_dim, self.vocab_size)
+        return self
+
+    def allocate(self):
+        super(LookupTable, self).allocate()
+        if self.inputs is None:
+            self.inputs = self.be.zeros(
+                (1, self.nin * self.be.bsz), dtype=np.int32)  # inputs is np.float32
+
+    def fprop(self, inputs, inference=False):
+        self.inputs[:] = inputs.reshape(self.inputs.shape)
+        self.outputs[:] = self.W.take(self.inputs, axis=1)
+        return self.outputs
+
+    def bprop(self, error, do_acts=False):
+        self.dW[:] = 0
+        wrd_ids = self.inputs.get()[0]
+        unqidx, inv = np.unique(wrd_ids, return_inverse=True)
+        groups = [np.where(inv == i) for i in range(len(unqidx))]
+        for (wrd_id, group) in zip(unqidx, groups):
+            self.dW[:, wrd_id] = self.be.sum(error.take(group[0], axis=1), axis=1)
+        """
+        alternative bprop
+        for (j, wrd_id) in enumerate(wrd_ids):
+            self.dW[:, wrd_id] = self.dW[:, wrd_id] + error[:, j]
+        """
+
+        return self.deltas
+
+
 class GeneralizedCost(NervanaObject):
+
     """
     A cost layer that applies the provided cost function and computes errors
     with respect to inputs and targets.
@@ -731,6 +801,7 @@ class GeneralizedCost(NervanaObject):
     Arguments:
        costfunc (Cost): class with costfunc that computes errors
     """
+
     def __init__(self, costfunc, name=None):
         super(GeneralizedCost, self).__init__(name)
         self.costfunc = costfunc
@@ -781,6 +852,7 @@ class GeneralizedCost(NervanaObject):
 
 
 class GeneralizedCostMask(GeneralizedCost):
+
     """
     A cost layer that applies the provided cost function and computes errors
     with respect to inputs and targets. Applies mask to deltas.
@@ -788,6 +860,7 @@ class GeneralizedCostMask(GeneralizedCost):
     Arguments:
        costfunc (Cost): class with costfunc that computes errors
     """
+
     def get_cost(self, inputs, targets_mask):
         """
         Compute the cost function over the inputs and targets.
@@ -827,6 +900,7 @@ class GeneralizedCostMask(GeneralizedCost):
 
 
 class BatchNorm(Layer):
+
     """
     A batch normalization layer as described in [Ioffe]_
 
@@ -842,6 +916,7 @@ class BatchNorm(Layer):
 
     .. [Ioffe] arXiv:1502.03167
     """
+
     def __init__(self, rho=0.99, eps=1e-6, name="BatchNormLayer"):
         super(BatchNorm, self).__init__(name)
         self.allparams = None
