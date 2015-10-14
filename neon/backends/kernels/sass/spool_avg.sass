@@ -89,8 +89,9 @@
 <SCHEDULE_BLOCK>
 01:-:-:-:1      ISETP.GE.AND P6, PT, tid, 32, PT;
 
-// P5 = bprop mode
+// P5 = bprop or beta mode
 --:-:-:-:1      ISETP.NE.AND P5, PT, RZ, param_mode, PT;
+--:-:-:-:1      ISETP.NE.OR  P5, PT, RZ, param_beta, P5;
 
 // m = mp / P
 // p = mp % P
@@ -119,6 +120,7 @@
 --:-:-:-:1      LEA.HI.X Out1,    iOut, param_O[1], RZ, 2;
 
 --:-:5:-:1  @P5 LDG.E.CI bprop, [Out];
+--:-:-:-:0      ISETP.NE.AND P5, PT, RZ, param_mode, PT;
 </SCHEDULE_BLOCK>
 
 --:-:-:-:5  @P6 BRA.U END_SETUP;
@@ -239,11 +241,11 @@ END_SETUP:
 --:-:-:-:1      MOV sum, RZ;
 --:-:-:-:1      MOV lutOffset, 16;
 01:-:6:-:1      MUFU.RCP lutSizeRcp, lutSizeRcp;
+--:-:-:-:1      ISETP.NE.AND P6, PT, RZ, param_beta, PT;
 --:-:-:-:1      ISETP.LT.AND P0, PT, jrst_0, lutSize, PT;
 --:-:-:-:1      ISETP.LT.AND P1, PT, jrst_1, lutSize, PT;
 --:-:-:-:1      ISETP.LT.AND P2, PT, jrst_2, lutSize, PT;
 --:-:-:-:0      ISETP.LT.AND P3, PT, jrst_3, lutSize, PT;
-
 </SCHEDULE_BLOCK>
 
 --:-:-:-:5  @P5 BRA.U BPROP;
@@ -289,7 +291,9 @@ FPROP_LOOP:
 --:-:-:-:5  @P0 BRA.U FPROP_LOOP;
 
 20:-:-:-:6      FMUL sum, sum, lutSizeRcp;
---:-:-:-:2      FMUL sum, sum, param_alpha;
+--:-:-:-:6      FMUL sum, sum, param_alpha;
+10:-:-:-:2  @P6 FFMA sum, bprop, param_beta, sum;
+
 --:-:-:-:1      STG.E.CG [Out], sum;
 --:-:-:-:5      BRA.U EXIT;
 
@@ -297,6 +301,8 @@ BPROP:
 
 30:-:-:-:6      FMUL bprop, bprop, lutSizeRcp;
 --:-:-:-:0      FMUL bprop, bprop, param_alpha;
+
+--:-:-:-:5  @P6 BRA.U BPROP_BETA;
 
 BPROP_LOOP:
 
@@ -329,6 +335,53 @@ BPROP_LOOP:
 --:-:-:-:0      IADD lutOffset, lutOffset, 16;
 
 --:-:-:-:5  @P0 BRA.U BPROP_LOOP;
+
+--:-:-:-:5      BRA.U EXIT;
+
+BPROP_BETA:
+
+--:-:1:-:2      LDS.U.128 inOffset, [lutOffset];
+
+03:-:-:-:1  @P0 IADD   load0In0.CC, Back0, inOffset0;
+--:-:-:-:5  @P0 IADD   jrst_0, jrst_0, 4;
+--:-:-:-:2  @P0 IADD.X load0In1,    Back1, RZ;
+--:-:2:-:1  @P0 LDG.E.CI load0, [load0In];
+
+04:-:-:-:1  @P1 IADD   load1In0.CC, Back0, inOffset1;
+--:-:-:-:5  @P1 IADD   jrst_1, jrst_1, 4;
+--:-:-:-:2  @P1 IADD.X load1In1,    Back1, RZ;
+--:-:3:-:1  @P1 LDG.E.CI load1, [load1In];
+
+08:-:-:-:1  @P2 IADD   load2In0.CC, Back0, inOffset2;
+--:-:-:-:5  @P2 IADD   jrst_2, jrst_2, 4;
+--:-:-:-:2  @P2 IADD.X load2In1,    Back1, RZ;
+--:-:4:-:1  @P2 LDG.E.CI load2, [load2In];
+
+10:-:-:-:1  @P3 IADD   load3In0.CC, Back0, inOffset3;
+--:-:-:-:5  @P3 IADD   jrst_3, jrst_3, 4;
+--:-:-:-:2  @P3 IADD.X load3In1,    Back1, RZ;
+--:-:5:-:1  @P3 LDG.E.CI load3, [load3In];
+
+
+02:-:-:-:2  @P0 FFMA load0, load0, param_beta, bprop;
+--:2:-:-:1  @P0 STG.E.CG [load0In], load0;
+--:-:-:-:1      ISETP.LT.AND P0, PT, jrst_0, lutSize, PT;
+
+04:-:-:-:2  @P1 FFMA load1, load1, param_beta, bprop;
+--:3:-:-:1  @P1 STG.E.CG [load1In], load1;
+--:-:-:-:1      ISETP.LT.AND P1, PT, jrst_1, lutSize, PT;
+
+08:-:-:-:2  @P2 FFMA load2, load2, param_beta, bprop;
+--:4:-:-:1  @P2 STG.E.CG [load2In], load2;
+--:-:-:-:1      ISETP.LT.AND P2, PT, jrst_2, lutSize, PT;
+
+10:-:-:-:2  @P3 FFMA load3, load3, param_beta, bprop;
+--:5:-:-:1  @P3 STG.E.CG [load3In], load3;
+--:-:-:-:1      ISETP.LT.AND P3, PT, jrst_3, lutSize, PT;
+
+--:-:-:-:0      IADD lutOffset, lutOffset, 16;
+
+--:-:-:-:5  @P0 BRA.U BPROP_BETA;
 
 EXIT:
 

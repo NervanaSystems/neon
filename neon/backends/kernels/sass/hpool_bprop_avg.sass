@@ -79,8 +79,9 @@
      4-15 ~ tid, zy, x, y, z, c, W, H, iOut, one, mask_shr
      4-15 ~ x_left, y_left, z_left, c_left, q_in_left, p_in_left, m_in_left, k_in_left, q_in_right, p_in_right, m_in_right, k_in_right
 
-    16-60 ~ warp_count, lutStore, lutStore2, jrst, RST, RS, S, pad_d, pad_h, pad_w, pad_c, str_d, str_h, str_w, str_c, qs, pr, mt, kj, j, t, r, s, rs, rst, q, p, m, k, q_prime, p_prime, m_prime, k_prime, ballot, warp_slices, dep_thd_mask, dep_thd_bits, dep_thd_cnt
+    16-59 ~ warp_count, lutStore, lutStore2, jrst, RST, RS, S, pad_d, pad_h, pad_w, pad_c, str_d, str_h, str_w, str_c, qs, pr, mt, kj, j, t, r, s, rs, rst, q, p, m, k, q_prime, p_prime, m_prime, k_prime, ballot, warp_slices, dep_thd_mask, dep_thd_bits, dep_thd_cnt
 
+       60 : beta_load
        61 : lutSize
     62-63 : sliceEin<0-1>
     62-63 : sliceE, rcp_in
@@ -90,7 +91,7 @@
     12-19 : pair0<0-1>, pair1<0-1>, pair2<0-1>, pair3<0-1>
     12-19 : errOffset0, rcpInput0, errOffset1, rcpInput1, errOffset2, rcpInput2, errOffset3, rcpInput3
 
-    20-60 ~ jrst_<0-3>, load<0-3>, sum, lutOffset
+    20-59 ~ jrst_<0-3>, load<0-3>, sum, lutOffset
 
 </REGISTER_MAPPING>
 
@@ -101,6 +102,7 @@
 
 <SCHEDULE_BLOCK>
 01:-:-:-:1      ISETP.GE.AND P6, PT, tid, 32, PT;
+--:-:-:-:1      ISETP.NE.AND P5, PT, RZ, param_beta, PT;
 
 // z = zy / H
 // y = zy % H
@@ -124,6 +126,7 @@
 --:-:-:-:1      LEA       Out0.CC, iOut, param_B[0],     1;
 --:-:-:-:0      LEA.HI.X  Out1,    iOut, param_B[1], RZ, 1;
 
+--:-:5:-:1  @P5 LDG.E.CI.U16 beta_load, [Out];
 </SCHEDULE_BLOCK>
 
 --:-:-:-:5  @P6 BRA.U END_SETUP;
@@ -384,7 +387,11 @@ LOOP:
 
 --:-:-:-:5  @P0 BRA.U LOOP;
 
---:-:-:-:2      FMUL sum, sum, param_alpha;
+10:-:5:-:1  @P5 F2F.F32.F16 beta_load, beta_load;
+
+--:-:-:-:6      FMUL sum, sum, param_alpha;
+10:-:-:-:2  @P5 FFMA sum, beta_load, param_beta, sum;
+
 --:-:1:-:2      F2F.F16.F32 sum, sum;
 
 01:-:-:-:1      STG.E.CG.U16 [Out], sum;

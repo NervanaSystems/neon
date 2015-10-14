@@ -1630,32 +1630,32 @@ class NervanaGPU(Backend):
         return PoolLayer(self, dtype, op, N, C, D, H, W, J, T, R, S,
                          pad_c, pad_d, pad_h, pad_w, str_c, str_d, str_h, str_w)
 
-    def fprop_pool(self, layer, I, O, alpha=1.0, repeat=1):
+    def fprop_pool(self, layer, I, O, alpha=1.0, beta=0.0, repeat=1):
 
         assert layer.sizeI == I.size
         assert layer.sizeO == O.size
 
-        return self._execute_pool(layer, I, O, None, alpha, layer.fprop_kernel,
+        return self._execute_pool(layer, I, O, None, alpha, beta, layer.fprop_kernel,
                                   layer.fprop_lut_size, 0, repeat)
 
-    def bprop_pool(self, layer, I, E, grad_I, alpha=1.0, repeat=1):
+    def bprop_pool(self, layer, I, E, grad_I, alpha=1.0, beta=0.0, repeat=1):
 
         assert layer.sizeI == I.size
         assert layer.sizeO == E.size
         assert layer.sizeI == grad_I.size
         assert I.dtype == grad_I.dtype
 
-        return self._execute_pool(layer, I, E, grad_I, alpha, layer.bprop_kernel,
+        return self._execute_pool(layer, I, E, grad_I, alpha, beta, layer.bprop_kernel,
                                   layer.bprop_lut_size, 1, repeat)
 
-    def _execute_pool(self, layer, I, O, B, alpha, kernel_args, shared, b_mode, repeat):
+    def _execute_pool(self, layer, I, O, B, alpha, beta, kernel_args, shared, b_mode, repeat):
 
         assert I.dtype == O.dtype
 
         B_data = B.gpudata if b_mode else 0
         kernel = kernel_specs.get_kernel(kernel_args[0])
         params = [kernel_args[1], kernel_args[2], self.stream,
-                  O.gpudata, B_data, I.gpudata, alpha, 0.0, b_mode]  # TODO: beta
+                  O.gpudata, B_data, I.gpudata, alpha, beta, b_mode]
 
         params.extend(kernel_args[4])
 
@@ -1669,8 +1669,11 @@ class NervanaGPU(Backend):
             start.record(self.stream)
 
         for r in range(repeat):
-            if b_mode and kernel_args[3]:
-                drv.memset_d8_async(B_data, 0, B.nbytes, self.stream)
+            if b_mode and kernel_args[3]: # atomic adds?
+                if not beta:
+                    drv.memset_d8_async(B_data, 0, B.nbytes, self.stream)
+                elif beta != 1.0:
+                    B[:] = B * beta
 
             kernel.prepared_async_call(*params, shared_size=shared)
 
