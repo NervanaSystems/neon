@@ -36,7 +36,7 @@ def output_dim(X, S, padding, strides):
         padding (int): padding on each side
         strides (int): striding
     """
-    return ceil_div(X - S + 1 + 2 * padding, strides)
+    return int(round(float(X - S + 2 * padding)/strides)) + 1
 
 
 class ConvLayer(object):

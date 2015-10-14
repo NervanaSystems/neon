@@ -20,6 +20,8 @@ class Transform(NervanaObject):
     """
     Base class for activation or cost functions and their derivatives
     """
+    def __init__(self, name='transform'):
+        super(Transform, self).__init__(name)
 
     def __call__(self, x):
         """

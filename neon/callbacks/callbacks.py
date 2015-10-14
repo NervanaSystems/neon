@@ -474,6 +474,7 @@ class ProgressBarCallback(Callback):
         self.dataset = dataset
         self.callback_data = callback_data
         self.update_thresh_s = update_thresh_s
+        self._last_strlen = 0
 
     def on_epoch_begin(self, epoch):
         self.start_epoch = self.last_update = default_timer()
@@ -493,8 +494,11 @@ class ProgressBarCallback(Callback):
             progress_string = get_progress_string("Train", epoch, mb_complete,
                                                   self.nbatches, train_cost,
                                                   now - self.start_epoch)
-            sys.stdout.write('\r')
+            # clear the last line
+            sys.stdout.write('\r' + ' '*self.last_strlen)
+            # print the new line
             sys.stdout.write(progress_string.encode('utf-8'))
+            self._last_strlen = len(progress_string)
             sys.stdout.flush()
 
     def on_epoch_end(self, epoch):

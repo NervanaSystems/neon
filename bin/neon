@@ -60,6 +60,7 @@ from neon.optimizers import optimizer
 import neon.transforms as transforms
 from neon.util.argparser import NeonArgparser
 from neon.util.persist import initialize_layer, initialize_obj
+from neon.util.yaml_parse import create_objects
 from neon.callbacks.callbacks import Callbacks
 
 
@@ -97,53 +98,6 @@ def parse_args():
     else:
         num_epochs = root_yaml['epochs'] if 'epochs' in root_yaml else 1
     return root_yaml, args, be_name, num_epochs, batch_size
-
-
-def create_objects():
-    """
-    Instantiate objects as per the given specifications.
-
-    Returns:
-        tuple: Contains model, cost and optimizer objects.
-    """
-    # setup backend
-    be = gen_backend(backend=be_name,
-                     batch_size=batch_size,
-                     rng_seed=args.rng_seed,
-                     device_id=args.device_id,
-                     default_dtype=args.datatype,
-                     stochastic_round=args.rounding)
-
-    # cost (before layers for shortcut derivs)
-    cost_name = root_yaml['cost']
-    cost = GeneralizedCost(costfunc=getattr(transforms, cost_name)())
-
-    # initialize layers
-    yaml_layers = root_yaml['layers']
-    layers = []
-    for i in range(len(yaml_layers)):
-        ld = yaml_layers[i]
-        l = initialize_layer(ld)
-        layers.append(l)
-
-    # initialize model
-    model = Model(layers=layers)
-
-    # create optimizer
-    optim = None
-    yaml_opt = root_yaml['optimizer']
-    if yaml_opt['type'] == 'MultiOptimizer':
-        # multioptimizer init
-        for ltype in yaml_opt:
-            opt = yaml_opt[ltype]
-            if isinstance(opt, dict):
-                if 'schedule' in opt:
-                    opt['schedule'] = optimizer.Schedule(opt['schedule'])
-                yaml_opt[ltype] = initialize_obj(opt, optimizer)
-        optim = optimizer.MultiOptimizer(yaml_opt)
-    else:
-        optim = initialize_obj(yaml_opt, optimizer)
-    return model, cost, optim
 
 
 def load_data(data_dir="."):
@@ -186,7 +140,14 @@ if __name__ == "__main__":
     Train and test the specified model.
     """
     root_yaml, args, be_name, num_epochs, batch_size = parse_args()
-    model, cost, optim = create_objects()
+    model, cost, optim = create_objects(root_yaml,
+                                        be_type=be_name,
+                                        batch_size=batch_size,
+                                        rng_seed=args.rng_seed,
+                                        device_id=args.device_id,
+                                        default_dtype=args.datatype,
+                                        stochastic_rounding=args.rounding)
+
     if args.model_file:
         model.load_weights(args.model_file)
     train, test = load_data(data_dir=args.data_dir)

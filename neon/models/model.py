@@ -72,24 +72,6 @@ class Model(NervanaObject):
             # is thrown leave transform.shortcut as is (do nothing)
             pass
 
-    def load_weights(self, weight_path):
-        """
-        Loads the layer weights saved in weight_path from serialize().
-
-        Arguments:
-            weight_path (str): File containing serialized python dict with layer
-                               weights and states.
-        """
-        pdict = load_obj(weight_path)
-        self.epoch_index = pdict['epoch_index']
-
-        param_layers = [l for l in self.layers_to_optimize]
-        param_dict_list = pdict['layer_params_states']
-        for l, ps in zip(param_layers, param_dict_list):
-            l.set_params(ps['params'])
-            if 'states' in ps:
-                l.set_states(ps['states'])
-
     def initialize(self, dataset, cost=None):
         if self.initialized:
             return
@@ -284,12 +266,29 @@ class Model(NervanaObject):
             pdict['optimizer'] = self.optimizer.get_description()
         return pdict
 
+    def load_weights(self, weight_path):
+        """
+        Loads the layer weights saved in weight_path from serialize().
+
+        Arguments:
+            weight_path (str): File containing serialized python dict with layer
+                               weights and states.
+        """
+        pdict = load_obj(weight_path)
+        self.epoch_index = pdict['epoch_index']
+
+        param_layers = [l for l in self.layers_to_optimize]
+        param_dict_list = pdict['layer_params_states']
+        for l, ps in zip(param_layers, param_dict_list):
+            l.set_params(ps['params'])
+            if 'states' in ps:
+                l.set_states(ps['states'])
+
     # serialize tells how to write out the parameters we've learned so
     # far and associate them with layers. it can ignore layers with no
     # learned parameters. the model stores states to pass to the
     # optimizers.  if we're saving the model out for inference, we
     # don't need to remember states.
-
     def serialize(self, keep_states=True):
         """
         Creates a dictionary storing the layer parameters and epochs complete.

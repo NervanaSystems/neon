@@ -275,20 +275,31 @@ class ParameterLayer(Layer):
             keep_states (bool): Control whether all parameters are returned
                 or just weights for serialization. Defaults to True.
         """
-        serial_dict = {'params': self.W.asnumpyarray()}
+        serial_dict = {'params': {'W': self.W.asnumpyarray(),
+                                  'name': self.name}}
         if keep_states:
             serial_dict['states'] = [s.asnumpyarray() for s in self.states]
         return serial_dict
 
-    def set_params(self, W):
+    def set_params(self, pdict):
         """
         Set layer parameters (weights). Allocate space for other parameters but
             do not initialize them.
 
         Arguments:
-            W (Tensor): Tensor containing weights to use.
+            pdict (dict, ndarray): dictionary or ndarray with layer parameters
+                                   [support for ndarray is DEPRECATED and will
+                                    be removed]
         """
-        self.W = self.be.array(W)
+        if type(pdict) is dict:
+            for key in pdict:
+                setattr(self, key, pdict[key])
+        else:
+            # for backward compatibility will be deprecated
+            logger.warn('Using old serialization file type, will be deprecated.'
+                        '  Save model into new format')
+            self.W = pdict
+        self.W = self.be.array(self.W)
         self.dW = self.be.empty_like(self.W)
 
     def set_states(self, states):
@@ -713,9 +724,10 @@ class Dropout(Layer):
         super(Dropout, self).__init__(name)
         self.keep = keep
         self.keep_mask = None
+        self._train_scaling = 1.0/keep  # scaling factor during training
 
     def __str__(self):
-        return "Linear Layer '%s': %d inputs and outputs, keep %d%%" % (
+        return "Dropout Layer '%s': %d inputs and outputs, keep %d%%" % (
                self.name, self.nout, 100*self.keep)
 
     def configure(self, in_obj):
@@ -732,17 +744,16 @@ class Dropout(Layer):
         if inference:
             return self._fprop_inference(inputs)
         self.be.make_binary_mask(self.keep_mask, self.keep)
-        self.outputs[:] = self.keep_mask * inputs
+        self.outputs[:] = self.keep_mask * inputs * self._train_scaling
         return self.outputs
 
     def _fprop_inference(self, inputs):
-        self.outputs[:] = inputs * self.keep
         return self.outputs
 
     def bprop(self, error, do_acts=False):
         if self.deltas is None:
             self.deltas = error
-        self.deltas[:] = self.keep_mask * error
+        self.deltas[:] = self.keep_mask * error * self._train_scaling
         return self.deltas
 
 

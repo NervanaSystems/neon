@@ -16,6 +16,9 @@ from neon.transforms.transform import Transform
 
 
 class Identity(Transform):
+    def __init__(self, name='identity'):
+        super(Identity, self).__init__(name)
+
     def __call__(self, x):
         return x
 
@@ -28,6 +31,9 @@ class Rectlin(Transform):
     ReLu activation function (Nair and  Hinton, ICML 2010)
     Computes the function f(x) = max(0, x)
     """
+    def __init__(self, name='relu'):
+        super(Rectlin, self).__init__(name)
+
     def __call__(self, x):
         return self.be.maximum(x, 0)
 
@@ -40,7 +46,8 @@ class Softmax(Transform):
     SoftMax activation function.
     Computes the function f(x_k) = exp(x_k) / sum_i(exp(x_i))
     """
-    def __init__(self, epsilon=2**-23):
+    def __init__(self, name='softmax', epsilon=2**-23):
+        super(Softmax, self).__init__(name)
         self.epsilon = epsilon
 
     def __call__(self, x):
@@ -57,6 +64,9 @@ class Tanh(Transform):
     Hyperbolic tangent activation function.
     Computes the function f(x) = (1 - exp(-2x))  / (1 + exp(-2x))
     """
+    def __init__(self, name='tanh'):
+        super(Tanh, self).__init__(name)
+
     def __call__(self, x):
         return self.be.tanh(x)
 
@@ -77,7 +87,7 @@ class Logistic(Transform):
                              if False, actual derivative is returned in bprop
 
         """
-        super(Logistic, self).__init__()
+        super(Logistic, self).__init__(name='logistic')
 
         self.set_shortcut(shortcut)
 

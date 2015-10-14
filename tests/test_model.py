@@ -140,11 +140,14 @@ def test_model_serialize(backend_default, data):
             else:
                 assert np.allclose(s, s_e)
         for p, p_e in zip(pd['params'], pd_exp['params']):
+            assert type(p) == type(p_e)
             if isinstance(p, list):  # this is the batch norm case
                 for _p, _p_e in zip(p, p_e):
                     assert np.allclose(_p, _p_e)
-            else:
+            elif isinstance(p, np.ndarray):
                 assert np.allclose(p, p_e)
+            else:
+                assert p == p_e
 
     os.remove(tmp_save)
 
