@@ -16,9 +16,11 @@ from neon import NervanaObject
 
 
 class Cost(NervanaObject):
+
     """
     Base class for the cost functions
     """
+
     def __call__(self, y, t):
         """
         Applies the cost function
@@ -47,11 +49,13 @@ class Cost(NervanaObject):
 
 
 class Metric(Cost):
+
     """
     Base class for Metric
 
     Meant for non-smooth costs that we just want to check on validation.
     """
+
     def __call__(self, y, t):
         """
         To implement in derived classes
@@ -73,12 +77,14 @@ class Metric(Cost):
 
 
 class CrossEntropyBinary(Cost):
+
     """
     Applies the binary cross entropy function
 
     Note:
         bprop assumes that shortcut is used to calculate derivative
     """
+
     def __init__(self, epsilon=2 ** -23, scale=1):
         """
         Initialize the binary cross entropy function
@@ -121,12 +127,14 @@ class CrossEntropyBinary(Cost):
 
 
 class CrossEntropyMulti(Cost):
+
     """
     Applies the multiclass cross entropy function
 
     Note:
         bprop assumes that shortcut is used to calculate derivative
     """
+
     def __init__(self, epsilon=2 ** -23, scale=1, usebits=False):
         """
         Initialize the multiclass cross entropy function
@@ -170,9 +178,11 @@ class CrossEntropyMulti(Cost):
 
 
 class SumSquared(Cost):
+
     """
     Applies the squared error cost function
     """
+
     def __init__(self):
         """
         Initialize the squared error cost functions
@@ -202,6 +212,7 @@ class TopKMisclassification(Metric):
     """
     Compute logloss, top1, and topk misclassification error metric
     """
+
     def __init__(self, k):
         self.outputs = self.be.iobuf(3)
         self.correctProbs = self.outputs[0].reshape((1, self.be.bsz))
@@ -233,9 +244,11 @@ class TopKMisclassification(Metric):
 
 
 class Misclassification(Metric):
+
     """
     Compute the misclassification error metric
     """
+
     def __init__(self):
         self.preds = self.be.iobuf(1)
         self.hyps = self.be.iobuf(1)
@@ -257,5 +270,36 @@ class Misclassification(Metric):
         self.preds[:] = self.be.argmax(y, axis=0)
         self.hyps[:] = self.be.argmax(t, axis=0)
         self.outputs[:] = self.be.not_equal(self.preds, self.hyps)
+
+        return self.outputs.get().mean()
+
+
+class Accuracy(Metric):
+
+    """
+    Compute the accuracy metric
+    """
+
+    def __init__(self):
+        self.preds = self.be.iobuf(1)
+        self.hyps = self.be.iobuf(1)
+        self.outputs = self.preds  # Contains per record metric
+        self.metric_names = ['Accuracy']
+
+    def __call__(self, y, t):
+        """
+        Compute the accuracy metric
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            float: Returns the metric
+        """
+        # convert back from onehot and compare
+        self.preds[:] = self.be.argmax(y, axis=0)
+        self.hyps[:] = self.be.argmax(t, axis=0)
+        self.outputs[:] = self.be.equal(self.preds, self.hyps)
 
         return self.outputs.get().mean()
