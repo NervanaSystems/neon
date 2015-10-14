@@ -14,29 +14,26 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains a small multi-layer perceptron with fully connected layers
-on MNIST.
+Example that trains a small multi-layer perceptron with multiple branches
 
-This example has some command line arguments that enable different neon features.
+Branch nodes are used to indicate points at which different layer sequences diverge
 
-Examples:
+The topology of the network is:
 
-    python mnist_mlp.py -b gpu -e 10
-        Run the example for 10 epochs of mnist data using the nervana gpu
-        backend
+ cost1      cost3
+  |          /
+ m_l4      b2_l2
+  |        /
+  | ___b2_l1
+  |/
+ m_l3       cost2
+  |          /
+ m_l2      b1_l2
+  |        /
+  | ___b1_l1
+  |/
+ data
 
-    python mnist_mlp.py --validation_freq 1
-        After each training epoch the validation/test data set will be
-        processed through the model and the cost will be displayed.
-
-    python mnist_mlp.py --serialize 1 -s checkpoint.pkl
-        After every iteration of training the model will be dumped to a pickle
-        file names "checkpoint.pkl".  Increase the serialize parameter to
-        change the frequency at which the model is saved.
-
-    python mnist_mlp.py --model_file checkpoint.pkl
-        Before starting to train the model, the model state is set to the
-        values stored in the checkpoint file named checkpoint.pkl.
 """
 
 import logging
@@ -46,7 +43,7 @@ from neon.backends import gen_backend
 from neon.callbacks.callbacks import Callbacks
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian
-from neon.layers import GeneralizedCost, Affine, Sequential, BranchNode, Multicost, Tree
+from neon.layers import GeneralizedCost, Affine, BranchNode, Multicost, Tree
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, Misclassification, Softmax
@@ -111,18 +108,18 @@ p3 = [b2,
       Affine(nout=16, linear_name="b2_l1", **normrelu),
       Affine(nout=10, linear_name="b2_l2", **normsigm)]
 
-alphas = [1, 0.25, 0.25]
 
 # setup cost function as CrossEntropy
 cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),
                         GeneralizedCost(costfunc=CrossEntropyBinary()),
                         GeneralizedCost(costfunc=CrossEntropyBinary())],
-                 weights=alphas)
+                 weights=[1, 0., 0.])
 
 # setup optimizer
 optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=args.rounding)
 
 # initialize model object
+alphas = [1, 0.25, 0.25]
 mlp = Model(layers=Tree([p1, p2, p3], alphas=alphas))
 
 if args.model_file:

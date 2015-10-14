@@ -278,15 +278,8 @@ class Pooling(Layer):
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
-        # TODO: incorporate the alpha beta integration from backend ops
         if self.deltas:
-            if beta != 0:
-                if not hasattr(self, 'tmpdeltas') or self.tmpdeltas is None:
-                    self.tmpdeltas = self.be.empty_like(self.deltas)
-                self.be.bprop_pool(self.nglayer, self.inputs, error, self.tmpdeltas)
-                self.deltas[:] = beta * self.deltas + alpha * self.tmpdeltas
-            else:
-                self.be.bprop_pool(self.nglayer, self.inputs, error, self.deltas)
+            self.be.bprop_pool(self.nglayer, self.inputs, error, self.deltas, alpha, beta)
         return self.deltas
 
 
@@ -880,7 +873,7 @@ class LookupTable(ParameterLayer):
         self.outputs[:] = self.W.take(self.inputs, axis=1)
         return self.outputs
 
-    def bprop(self, error, do_acts=False):
+    def bprop(self, error, alpha=1.0, beta=0):
         self.dW[:] = 0
         wrd_ids = self.inputs.get()[0]
         unqidx, inv = np.unique(wrd_ids, return_inverse=True)

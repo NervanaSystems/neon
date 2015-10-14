@@ -104,7 +104,16 @@ class ExpSchedule(Schedule):
         self.decay = decay
 
     def get_learning_rate(self, learning_rate, epoch):
-        return learning_rate / (1. + self.decay * epoch)
+        return float(learning_rate / (1. + self.decay * epoch))
+
+
+class PolySchedule(Schedule):
+    def __init__(self, total_epochs, power):
+        self.total_epochs = np.float32(total_epochs)
+        self.power = power
+
+    def get_learning_rate(self, learning_rate, epoch):
+        return float(learning_rate * (1. - (epoch / self.total_epochs)) ** self.power)
 
 
 class GradientDescentMomentum(Optimizer):

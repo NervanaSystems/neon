@@ -21,7 +21,7 @@ scaling with the fp16 data format.
 import numpy as np
 from neon.data import DataIterator, load_cifar10
 from neon.initializers import Uniform
-from neon.layers import Affine, Conv, Pooling, GeneralizedCost, Deconv
+from neon.layers import Affine, Conv, Pooling, GeneralizedCost
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Misclassification, Rectlin, Softmax, CrossEntropyMulti

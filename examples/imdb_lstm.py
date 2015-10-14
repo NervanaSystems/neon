@@ -19,7 +19,7 @@ Example that trains an LSTM or GRU networks for sentiment analysis
 Reference:
    See J.Li et al, EMNLP2015 - http://arxiv.org/pdf/1503.00185v5.pdf
 
-$ python examples/imdb_lstm.py -b gpu -e 2 -val 1 -r 0 
+$ python examples/imdb_lstm.py -b gpu -e 2 -val 1 -r 0
 
 
 """
@@ -27,13 +27,12 @@ $ python examples/imdb_lstm.py -b gpu -e 2 -val 1 -r 0
 from neon.backends import gen_backend
 from neon.data import DataIterator, Text, load_text
 from neon.initializers import Uniform, GlorotUniform
-from neon.layers import GeneralizedCost, LSTM, GRU, Affine, Dropout, Recurrent, LookupTable, RecurrentSum, RecurrentMean, RecurrentLast
+from neon.layers import GeneralizedCost, LSTM, Affine, Dropout, LookupTable, RecurrentSum
 from neon.models import Model
-from neon.optimizers import RMSProp, GradientDescentMomentum, Adadelta, Adam, Adagrad
-from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti, CrossEntropyBinary, Misclassification, Accuracy
+from neon.optimizers import Adagrad
+from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti, Accuracy
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
-from neon.callbacks.callbacks import Callbacks, Callback
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -69,7 +68,6 @@ print "Sentence Length - ", sentence_length
 print "# of train sentences", X_train.shape[0]
 print "# of test sentence", X_test.shape[0]
 
-import numpy as np
 train_set = DataIterator(X_train, y_train, nclass=2)
 test_set = DataIterator(X_test, y_test, nclass=2)
 

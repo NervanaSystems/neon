@@ -610,8 +610,15 @@ class RecurrentOutput(Layer):
 
     """
 
-    def __init__(self, name="RecurrentOutputLayer"):
+    def __init__(self, name=None):
+        name = name if name else self.classnm
         super(RecurrentOutput, self).__init__(name)
+        self.owns_output = self.owns_delta = True
+        self.x = None
+
+    def __str__(self):
+        return "RecurrentOutput choice %s : (%d, %d) inputs, %d outputs" % (
+            self.name, self.nin, self.nsteps, self.nin)
 
     def configure(self, in_obj):
         super(RecurrentOutput, self).configure(in_obj)  # gives self.in_shape
@@ -619,13 +626,29 @@ class RecurrentOutput(Layer):
         self.out_shape = (self.nin, 1)
         return self
 
-    def allocate(self, shared_outputs=None, shared_deltas=None):
-        self.outputs = self.be.iobuf(self.out_shape)
-        self.deltas_buffer = self.be.iobuf(self.in_shape)
-        self.bsz = self.be.bsz
-        self.deltas = [self.deltas_buffer[
-            :, step*self.bsz:(step+1)*self.bsz] for step in range(self.nsteps)]
-        self.deltas_last = self.deltas_buffer[:, -self.be.bsz:]
+    def set_deltas(self, delta_buffers):
+        super(RecurrentOutput, self).set_deltas(delta_buffers)
+        self.deltas_buffer = self.deltas
+        if self.deltas:
+            self.deltas = get_steps(self.deltas_buffer, self.in_shape)
+        else:
+            self.deltas = []  # for simplifying bprop notation
+
+    def init_buffers(self, inputs):
+        """
+        Initialize buffers for recurrent internal units and outputs.
+        Buffers are initialized as 2D tensors with second dimension being steps * batch_size
+        A list of views are created on the buffer for easy manipulation of data
+        related to a certain time step
+
+        Arguments:
+            inputs (Tensor): input data as 2D tensor. The dimension is
+                             (input_size, sequence_length * batch_size)
+
+        """
+        if self.x is None or self.x is not inputs:
+            self.x = inputs
+            self.xs = get_steps(inputs, self.in_shape)
 
 
 class RecurrentSum(RecurrentOutput):
@@ -633,54 +656,33 @@ class RecurrentSum(RecurrentOutput):
     """
     A layer that sums over the recurrent layer outputs over time
     """
-
-    def __init__(self, name="RecurrentSumLayer"):
-        super(RecurrentSum, self).__init__(name)
-
-    def __str__(self):
-        return "RecurrentOutput choice %s : (%d, %d) inputs, %d outputs" % (
-            self.name, self.nin, self.nsteps, self.nin)
+    def configure(self, in_obj):
+        super(RecurrentSum, self).configure(in_obj)  # gives self.in_shape
+        self.sumscale = 1.
+        return self
 
     def fprop(self, inputs, inference=False):
+        self.init_buffers(inputs)
         self.outputs.fill(0)
-        for step in range(self.nsteps):
-            self.outputs[:] = self.outputs + \
-                inputs[:, step*self.bsz:(step+1)*self.bsz]
+        for x in self.xs:
+            self.outputs[:] = self.outputs + self.sumscale * x
         return self.outputs
 
-    def bprop(self, error, do_acts=True):
-        if do_acts:
-            for delta_step in self.deltas:
-                delta_step[:] = error
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        for delta in self.deltas:
+            delta[:] = alpha * self.sumscale * error + delta * beta
         return self.deltas_buffer
 
 
-class RecurrentMean(RecurrentOutput):
+class RecurrentMean(RecurrentSum):
 
     """
     A layer that gets the averaged recurrent layer outputs over time
     """
-
-    def __init__(self, name="RecurrentMeanLayer"):
-        super(RecurrentMean, self).__init__(name)
-
-    def __str__(self):
-        return "RecurrentOutput choice %s : (%d, %d) inputs, %d outputs" % (
-            self.name, self.nin, self.nsteps, self.nin)
-
-    def fprop(self, inputs, inference=False):
-        self.outputs.fill(0)
-        for step in range(self.nsteps):
-            self.outputs[:] = self.outputs + \
-                inputs[:, step*self.bsz:(step+1)*self.bsz]
-        self.outputs[:] = 1. / self.nsteps * self.outputs
-        return self.outputs
-
-    def bprop(self, error, do_acts=True):
-        if do_acts:
-            for delta_step in self.deltas:
-                delta_step[:] = 1. / self.nsteps * error
-        return self.deltas_buffer
+    def configure(self, in_obj):
+        super(RecurrentMean, self).configure(in_obj)  # gives self.in_shape
+        self.sumscale = 1. / self.nsteps
+        return self
 
 
 class RecurrentLast(RecurrentOutput):
@@ -689,21 +691,15 @@ class RecurrentLast(RecurrentOutput):
     A layer that only keeps the recurrent layer output at the last time step
     """
 
-    def __init__(self, name="RecurrentLastLayer"):
-        super(RecurrentLast, self).__init__(name)
-
-    def __str__(self):
-        return "RecurrentOutput choice %s : (%d, %d) inputs, %d outputs" % (
-            self.name, self.nin, self.nsteps, self.nin)
-
     def fprop(self, inputs, inference=False):
-        self.outputs[:] = inputs[:, -self.bsz:]
+        self.init_buffers(inputs)
+        self.outputs[:] = self.xs[-1]
         return self.outputs
 
-    def bprop(self, error, do_acts=True):
-        if do_acts:
-            # RNN/LSTM layers doesnot allocate new hidden units delta buffers and they overwrite it
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        if self.deltas:
+            # RNN/LSTM layers don't allocate new hidden units delta buffers and they overwrite it
             # while doing bprop. So, init with zeros here.
             self.deltas_buffer.fill(0)
-            self.deltas_last[:] = error
+            self.deltas[-1][:] = alpha * error
         return self.deltas_buffer

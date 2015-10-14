@@ -92,3 +92,14 @@ class GlorotUniform(Initializer):
     def fill(self, param):
         k = np.sqrt(6.0 / (param.shape[0] + param.shape[1]))
         param[:] = self.be.rng.uniform(-k, k, param.shape)
+
+
+class Xavier(Initializer):
+    def __init__(self, local=True, name="xavier"):
+        super(Xavier, self).__init__(name=name)
+        self.local = local
+
+    def fill(self, param):
+        fan_in = param.shape[0 if self.local else 1]
+        scale = np.sqrt(3./fan_in)
+        param[:] = self.be.rng.uniform(-scale, scale, param.shape)

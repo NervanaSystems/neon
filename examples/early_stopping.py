@@ -22,7 +22,7 @@ import os
 
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian
-from neon.layers import GeneralizedCost, Affine, BatchNorm
+from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
@@ -59,7 +59,7 @@ mlp = Model(layers=layers)
 
 
 # Stop if validation error ever increases from epoch to epoch
-def stopFunc(s, v):
+def stop_func(s, v):
     if s is None:
         return (v, False)
 
@@ -75,7 +75,7 @@ if args.validation_freq is None:
 callbacks = Callbacks(mlp, train_set, output_file=args.output_file,
                       valid_set=valid_set, valid_freq=args.validation_freq,
                       progress_bar=args.progress_bar)
-callbacks.add_early_stop_callback(stopFunc)
+callbacks.add_early_stop_callback(stop_func)
 callbacks.add_save_best_state_callback(os.path.join(args.data_dir, "early_stop-best_state.pkl"))
 mlp.fit(train_set,
         optimizer=optimizer,

@@ -42,10 +42,10 @@ init_norm = Gaussian(loc=0.0, scale=0.01)
 
 # initialize model
 path1 = Sequential(layers=[Affine(nout=100, init=init_norm, activation=Rectlin()),
-                      Affine(nout=100, init=init_norm, activation=Rectlin())])
+                           Affine(nout=100, init=init_norm, activation=Rectlin())])
 
 path2 = Sequential(layers=[Affine(nout=100, init=init_norm, activation=Rectlin()),
-                      Affine(nout=100, init=init_norm, activation=Rectlin())])
+                           Affine(nout=100, init=init_norm, activation=Rectlin())])
 
 layers = [MergeMultistream(layers=[path1, path2], merge="stack"),
           Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))]

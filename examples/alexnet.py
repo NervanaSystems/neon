@@ -35,9 +35,10 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 try:
-    train = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='train', dtype=args.datatype)
-    test = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='validation',dtype=args.datatype,
-                     do_transforms=False)
+    train = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='train',
+                      dtype=args.datatype)
+    test = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='validation',
+                     dtype=args.datatype, do_transforms=False)
 except (OSError, IOError, ValueError) as err:
     print err
     sys.exit(0)

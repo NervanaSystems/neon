@@ -435,8 +435,7 @@ class ConvLayer(Layer):
         MPQN = M*PQN
 
         if CRST > 2**16:
-            import pdb; pdb.set_trace()
-        assert CRST  < 2**16, "Integer division is faster with 16bit numerators"
+            assert CRST  < 2**16, "Integer division is faster with 16bit numerators"
 
         # precompute the magic numbers and shift amounts for integer division
         magic_HW    = _magic64(HW)

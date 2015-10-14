@@ -360,22 +360,28 @@ class TrainCostCallback(Callback):
         model (Model): model object
 
     """
-    def __init__(self, callback_data, model):
+    def __init__(self, callback_data, model, wsz=10):
         super(TrainCostCallback, self).__init__(epoch_freq=1)
         self.model = model
         self.callback_data = callback_data
+        self.wsz = wsz
 
     def on_train_begin(self, epochs):
         # preallocate space for the number of minibatches in the whole run
         points = self.callback_data['config'].attrs['total_minibatches']
         self.callback_data.create_dataset("cost/train", (points,))
 
+        # make sure our window size is less than or equal to total number of minibatches
+        self.wsz = min(points, self.wsz)
+        self.cost_history = deque([], maxlen=self.wsz)
+
         # clue in the data reader to use the 'minibatch' time_markers
         self.callback_data['cost/train'].attrs['time_markers'] = 'minibatch'
 
     def on_minibatch_end(self, epoch, minibatch):
-        mb_complete = minibatch + 1
-        mean_cost = float(self.model.total_cost.get() / mb_complete)
+        self.cost_history.append(self.model.cost.cost.get())
+        mean_cost = sum(self.cost_history) / len(self.cost_history)
+
         prev_epoch_minibatches = 0
         if epoch > 0:
             prev_epoch_minibatches = self.callback_data['time_markers/minibatch'][epoch-1]

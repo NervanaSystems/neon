@@ -70,6 +70,8 @@ def test_lookuptable_zeros_error(backend_default, basic_linargs):
     inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
     layer.configure(nin)
     layer.allocate()
+    layer.prev_layer = True  # Hack to force delta buffer allocation
+    layer.set_deltas([layer.be.iobuf(nin)])
 
     inputs = layer.be.array(inp.reshape((nin, batch_size)))
     out = layer.fprop(inputs).get()
@@ -99,6 +101,8 @@ def test_lookuptable_ones_error(backend_default, basic_linargs):
     inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
     layer.configure(nin)
     layer.allocate()
+    layer.prev_layer = True  # Hack to force delta buffer allocation
+    layer.set_deltas([layer.be.iobuf(nin)])
 
     inputs = layer.be.array(inp.reshape((nin, batch_size)))
     out = layer.fprop(inputs).get()
@@ -132,6 +136,8 @@ def test_lookuptable_rand_error(backend_default, basic_linargs):
     inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
     layer.configure(nin)
     layer.allocate()
+    layer.prev_layer = True  # Hack to force delta buffer allocation
+    layer.set_deltas([layer.be.iobuf(nin)])
 
     inputs = layer.be.array(inp.reshape((nin, batch_size)))
     out = layer.fprop(inputs).get()

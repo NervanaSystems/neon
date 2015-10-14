@@ -258,8 +258,13 @@ class MergeBroadcast(LayerContainer):
         for l in self.layers:
             l.allocate_deltas(delta_buffers[1:3])
             l.layers[0].set_deltas(delta_buffers[0:1])
-        self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
-        delta_buffers.reverse()
+
+        # Special case if originating from a branch node
+        if type(self.prev_layer) is BranchNode:
+            self.deltas = self.be.iobuf(self.in_shape, shared=self.prev_layer.deltas)
+        else:
+            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
+            delta_buffers.reverse()
 
     def _configure_merge(self):
         in_shapes = [l.out_shape for l in self.layers]
@@ -352,6 +357,10 @@ class Multicost(NervanaObject):
         terminals = in_obj.get_terminal()
         for c, ll in zip(self.costs, terminals):
             c.initialize(ll)
+
+    @property
+    def cost(self):
+        return self.costs[0].cost
 
     def get_cost(self, inputs, targets):
         """

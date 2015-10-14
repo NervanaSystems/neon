@@ -14,29 +14,27 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains a small multi-layer perceptron with fully connected layers
-on MNIST.
+Example that trains a small multi-layer perceptron with fully connected layers on MNIST.
 
 This example has some command line arguments that enable different neon features.
 
 Examples:
 
     python mnist_mlp.py -b gpu -e 10
-        Run the example for 10 epochs of mnist data using the nervana gpu
-        backend
+        Run the example for 10 epochs of mnist data using the nervana gpu backend
 
     python mnist_mlp.py --validation_freq 1
-        After each training epoch the validation/test data set will be
-        processed through the model and the cost will be displayed.
+        After each training epoch the validation/test data set will be processed through the model
+        and the cost will be displayed.
 
     python mnist_mlp.py --serialize 1 -s checkpoint.pkl
-        After every iteration of training the model will be dumped to a pickle
-        file names "checkpoint.pkl".  Increase the serialize parameter to
-        change the frequency at which the model is saved.
+        After every iteration of training the model will be dumped to a pickle file named
+        "checkpoint.pkl".  Changing the serialize parameter changes the frequency at which the
+        model is saved.
 
     python mnist_mlp.py --model_file checkpoint.pkl
-        Before starting to train the model, the model state is set to the
-        values stored in the checkpoint file named checkpoint.pkl.
+        Before starting to train the model, the model state is set to the values stored in the
+        checkpoint file named checkpoint.pkl.
 """
 
 import logging
@@ -49,7 +47,6 @@ from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary, Misclassification
-from neon.transforms import Softmax, CrossEntropyMulti
 from neon.util.argparser import NeonArgparser
 
 
@@ -77,16 +74,11 @@ valid_set = DataIterator(X_test, y_test, nclass=nclass)
 init_norm = Gaussian(loc=0.0, scale=0.01)
 
 # setup model layers
-layers = []
-layers.append(Affine(nout=100, init=init_norm, activation=Rectlin()))
-layers.append(Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True)))
-# layers = [Affine(nout=100, init=init_norm, activation=Rectlin()),
-#       Affine(nout=32, init=init_norm, activation=Rectlin()),
-#       Affine(nout=16, init=init_norm, activation=Rectlin()),
-#       Affine(nout=10, init=init_norm, activation=Softmax())]
+layers = [Affine(nout=100, init=init_norm, activation=Rectlin()),
+          Affine(nout=10, init=init_norm, activation=Logistic(shortcut=True))]
+
 # setup cost function as CrossEntropy
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
-# cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 
 # setup optimizer
 optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=args.rounding)
@@ -102,8 +94,6 @@ if args.model_file:
 # setup standard fit callbacks
 callbacks = Callbacks(mlp, train_set, output_file=args.output_file,
                       progress_bar=args.progress_bar)
-
-# add a callback ot calculate
 
 if args.validation_freq:
     # setup validation trial callbacks

@@ -37,7 +37,7 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args(gen_be=False)
 
-batch_size = 64 #50
+batch_size = 64  # 50
 num_epochs = args.epochs
 
 # Set the type of layer to use {lstm|gru}
@@ -104,5 +104,3 @@ prediction = ypred.argmax(2).reshape((valid_set.nbatches,
                                       time_steps)).transpose(1, 0, 2)
 fraction_correct = (prediction == valid_set.y).mean()
 print 'Misclassification error = %.1f%%' % ((1-fraction_correct)*100)
-
-

@@ -50,32 +50,24 @@ opt_gdm = GradientDescentMomentum(learning_rate=0.5,
                                                     change=0.1),
                                   momentum_coef=0.9, wdecay=.0001)
 relu = Rectlin()
-common     = dict(activation=relu, init=init_uni, batch_norm=True)
-commonp1   = dict(activation=relu, init=init_uni, batch_norm=True, padding=1)
-commonp1s2 = dict(activation=relu, init=init_uni, batch_norm=True, padding=1, strides=2)
-
-layers = []
 conv = dict(init=init_uni, batch_norm=True, activation=relu)
 convp1 = dict(init=init_uni, batch_norm=True, activation=relu, padding=1)
 convp1s2 = dict(init=init_uni, batch_norm=True, activation=relu, padding=1, strides=2)
 
-layers.append(Dropout(keep=.8))
-layers.append(Conv((3, 3, 96), **conv))
-layers.append(Conv((3, 3, 96), **convp1))
-layers.append(Conv((3, 3, 96), **convp1s2))
-layers.append(Dropout(keep=.5))
-
-layers.append(Conv((3, 3, 192), **convp1))
-layers.append(Conv((3, 3, 192), **convp1))
-layers.append(Conv((3, 3, 192), **convp1s2))
-layers.append(Dropout(keep=.5))
-
-layers.append(Conv((3, 3, 192), **conv))
-layers.append(Conv((1, 1, 192), **conv))
-layers.append(Conv((1, 1, 16), init=init_uni, activation=relu))
-
-layers.append(Pooling(6, op="avg"))
-layers.append(Activation(Softmax()))
+layers = [Dropout(keep=.8),
+          Conv((3, 3, 96), **conv),
+          Conv((3, 3, 96), **convp1),
+          Conv((3, 3, 96), **convp1s2),
+          Dropout(keep=.5),
+          Conv((3, 3, 192), **convp1),
+          Conv((3, 3, 192), **convp1),
+          Conv((3, 3, 192), **convp1s2),
+          Dropout(keep=.5),
+          Conv((3, 3, 192), **conv),
+          Conv((1, 1, 192), **conv),
+          Conv((1, 1, 16), init=init_uni, activation=relu),
+          Pooling(6, op="avg"),
+          Activation(Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 

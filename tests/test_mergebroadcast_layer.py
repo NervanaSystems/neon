@@ -184,5 +184,143 @@ def test_branch_model():
     assert np.max(np.abs(difference)) < 1e-8
 
 
+def test_branch_model_fork():
+    from neon.layers import BranchNode, Tree
+
+    NervanaObject.be = gen_backend("gpu", batch_size=64)
+    be = NervanaObject.be
+    bnode = BranchNode()
+    i1 = inception([(32,), (32, 32), ('max', 16)])
+    top1 = top_branch()
+    top2 = top_branch()
+    p1 = Sequential(main_branch() + [bnode, i1] + top1)
+    p2 = [bnode] + top2
+
+    alpha2 = 0.3
+    neon_layer = Tree([p1, p2], alphas=[1.0, alpha2])
+
+    inshape = (3, 224, 224)
+    insize = np.prod(inshape)
+    inpa = np.random.random((insize, batch_size))
+    neon_layer.configure(inshape)
+    inp = neon_layer.be.array(inpa)
+
+    neon_layer.allocate()
+    print neon_layer.nested_str()
+    neon_layer.layers[0].layers[0].prev_layer = True
+    neon_layer.allocate_deltas()
+    neon_layer.layers[0].layers[0].set_deltas([be.iobuf(inshape)])
+    neon_out_dev = neon_layer.fprop(inp)
+    neon_out = [d.get() for d in neon_out_dev]
+
+    # Now make the reference pathways:
+    main_trunk2 = Sequential(main_branch())
+    main_trunk2.configure(inshape)
+    main2 = main_trunk2.layers
+    main2[0].prev_layer = True
+    main2[0].set_deltas([be.iobuf(inshape)])
+
+    branch2 = Sequential(top_branch())
+    lbranch2 = branch2.layers
+    (b1, b2, b3) = inception_bare(i1, [(32,), (32, 32), ('max', 16)])
+
+    for bb in (b1, b2, b3, lbranch2):
+        oshape = inshape
+        for ll in main2 + bb:
+            oshape = ll.configure(oshape)
+
+    main1_trunk = neon_layer.layers[0].layers[:8]
+    for ll, lo in zip(main2, main1_trunk):
+        if ll.has_params:
+            ll.set_params(lo.W.get())
+        ll.allocate()
+        ll.set_deltas([be.iobuf(ll.in_shape)])
+
+    for ll, lo in zip(lbranch2, neon_layer.layers[1].layers[1:]):
+        if ll.has_params:
+            ll.set_params(lo.W.get())
+
+    for bb in (b1, b2, b3, lbranch2):
+        for ll in bb:
+            ll.allocate()
+            ll.set_deltas([be.iobuf(ll.in_shape)])
+
+    # Create the combined output buffer
+    merge_output = be.empty_like(neon_layer.layers[0].layers[9].outputs)
+
+    x = inp
+    for ll in main2:
+        x = ll.fprop(x)
+    main2_out = x
+
+    start = 0
+    for bb in (b1, b2, b3):
+        xb = main2_out
+        for ll in bb:
+            xb = ll.fprop(xb)
+        end = start + xb.shape[0]
+        merge_output[start:end] = xb
+        start = end
+
+    x = merge_output
+
+    top_trunk = Sequential(top1).layers
+    for ll in top_trunk:
+        x = ll.fprop(x)
+
+    neon_out_ref = x.get()
+    difference = neon_out_ref - neon_out[0]
+    assert np.max(np.abs(difference)) < 1e-7
+    print np.max(np.abs(difference))
+
+    # Now do second branch
+    neon_out_ref2 = branch2.fprop(main2_out).get()
+    difference = neon_out_ref2 - neon_out[1]
+    assert np.max(np.abs(difference)) < 1e-7
+    print np.max(np.abs(difference))
+
+    print "Beginning Back prop"
+    erra = [np.random.random(d.shape) for d in neon_out]
+    err = [be.array(d) for d in erra]
+    neon_layer.layers[0].layers[0].deltas = be.iobuf(inshape)
+    neon_layer.bprop(err)
+
+    bottom_neon_deltas = neon_layer.layers[0].layers[1].deltas.get()
+    middle_neon_deltas = neon_layer.layers[1].layers[1].deltas.get()
+
+    err0 = err[0]
+    for ll in reversed(top_trunk):
+        err0 = ll.bprop(err0)
+
+    err1 = err[1]
+    for ll in reversed(lbranch2):
+        err1 = ll.bprop(err1)
+
+    for bb, errb in zip((b1, b2, b3), neon_layer.layers[0].layers[-5].error_views):
+        for ll in reversed(bb):
+            errb = ll.bprop(errb)
+
+    # Now sum up the deltas at the root of the branch layer and compare
+    ref_deltas = be.zeros_like(b1[0].deltas)
+    ref_deltas[:] = b1[0].deltas + b2[0].deltas + b3[0].deltas + alpha2 * lbranch2[0].deltas
+
+    neon_ref_deltas = ref_deltas.get()
+    difference = middle_neon_deltas - neon_ref_deltas
+
+    print np.max(np.abs(difference))
+    assert np.max(np.abs(difference)) < 1e-8
+
+    x = ref_deltas
+    main2[0].deltas = be.iobuf(inshape)
+
+    for ll in reversed(main2):
+        x = ll.bprop(x)
+
+    bottom_neon_ref_deltas = main2[1].deltas.get()
+    difference = bottom_neon_deltas - bottom_neon_ref_deltas
+    print np.max(np.abs(difference))
+    assert np.max(np.abs(difference)) < 1e-8
+
+
 if __name__ == '__main__':
-    test_branch_model()
+    test_branch_model_fork()

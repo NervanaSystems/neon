@@ -24,7 +24,7 @@ import sys
 from neon.util.argparser import NeonArgparser
 from neon.backends import gen_backend
 from neon.initializers import Constant, GlorotUniform
-from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine, BatchNorm
+from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti
 from neon.models import Model
@@ -99,7 +99,7 @@ conv_params_nobn = {'strides': 1,
 layers = []
 
 # set up 3x3 conv stacks with different feature map sizes
-VGG = 'D'
+VGG = 'B'
 
 if VGG == 'B':
     for nofm in [64, 128, 256, 512, 512]:
