@@ -594,6 +594,16 @@ class GRU(Recurrent):
 
 class RecurrentOutput(Layer):
 
+    """
+    A layer to combine the recurrent layer outputs over time steps. It will
+    collapse the time dimension in several ways. These layers do not have
+    parameters and do not optimize during training.
+
+    Options derived from this include:
+        RecurrentSum, RecurrentMean, RecurrentLast
+
+    """
+
     def __init__(self, name="RecurrentOutputLayer"):
         super(RecurrentOutput, self).__init__(name)
 
@@ -613,6 +623,10 @@ class RecurrentOutput(Layer):
 
 
 class RecurrentSum(RecurrentOutput):
+
+    """
+    A layer that sums over the recurrent layer outputs over time
+    """
 
     def __init__(self, name="RecurrentSumLayer"):
         super(RecurrentSum, self).__init__(name)
@@ -637,6 +651,10 @@ class RecurrentSum(RecurrentOutput):
 
 class RecurrentMean(RecurrentOutput):
 
+    """
+    A layer that gets the averaged recurrent layer outputs over time
+    """
+
     def __init__(self, name="RecurrentMeanLayer"):
         super(RecurrentMean, self).__init__(name)
 
@@ -660,6 +678,10 @@ class RecurrentMean(RecurrentOutput):
 
 
 class RecurrentLast(RecurrentOutput):
+
+    """
+    A layer that only keeps the recurrent layer output at the last time step
+    """
 
     def __init__(self, name="RecurrentLastLayer"):
         super(RecurrentLast, self).__init__(name)

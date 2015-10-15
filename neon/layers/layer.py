@@ -749,9 +749,13 @@ class Dropout(Layer):
 class LookupTable(ParameterLayer):
 
     """
-    When given a sentence, which is a vector of integers, a matrix
-    of vectors/embeddings for each word in the sentence is returned. LookupTable
-    of dimensions embedding_dim X vocab_size is learnt.
+    A lookup table layer or a word embedding layer
+
+    The layer converts a word into a dense representation. When given a sentence,
+    which is a vector of words (as integers), a matrix of vectors/embeddings for
+    each word in the sentence is returned.
+
+    LookupTable of dimensions embedding_dim by vocab_size is learnt.
 
     input shape - (nin, batch_size)
 

@@ -122,6 +122,10 @@ API
    neon.layers.recurrent.Recurrent
    neon.layers.recurrent.LSTM
    neon.layers.recurrent.GRU
+   neon.layers.recurrent.RecurrentSum
+   neon.layers.recurrent.RecurrentMean
+   neon.layers.recurrent.RecurrentLast
+
    
 ``neon.models``
 ---------------

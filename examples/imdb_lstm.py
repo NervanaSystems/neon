@@ -43,7 +43,7 @@ num_epochs = args.epochs
 
 
 # hyperparameters from the reference
-batch_size = 32
+batch_size = 128
 clip_gradients = True
 gradient_limit = 15
 vocab_size = 20000
@@ -80,8 +80,8 @@ init_glorot = GlorotUniform()
 layers = [
     LookupTable(vocab_size=vocab_size, embedding_dim=embedding_dim, init=init_emb),
     LSTM(hidden_size, init_glorot, activation=Tanh(),
-         gate_activation=Logistic(), reset_cells=True),  # Try a RNN
-    RecurrentSum(),  # try RecurrentLast()
+         gate_activation=Logistic(), reset_cells=True),
+    RecurrentSum(),
     Dropout(keep=0.5),
     Affine(2, init_glorot, bias=init_glorot, activation=Softmax())
 ]
