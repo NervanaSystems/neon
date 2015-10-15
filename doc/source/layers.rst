@@ -64,6 +64,11 @@ Dropout Layer
 .. autosummary::
    neon.layers.layer.Dropout
 
+LookupTable Layer
+-----------------
+.. autosummary::
+   neon.layers.layer.LookupTable
+
 Cost Layer
 ----------
 .. autosummary::
@@ -96,3 +101,4 @@ Recurrent Layer
 ----------------
 .. autosummary::
    neon.layers.recurrent.Recurrent
+  

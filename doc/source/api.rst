@@ -112,6 +112,7 @@ API
    neon.layers.layer.Affine
    neon.layers.layer.Conv
    neon.layers.layer.Dropout
+   neon.layers.layer.LookupTable
    neon.layers.layer.GeneralizedCost
    neon.layers.layer.GeneralizedCostMask
    neon.layers.layer.BatchNorm
@@ -121,7 +122,7 @@ API
    neon.layers.recurrent.Recurrent
    neon.layers.recurrent.LSTM
    neon.layers.recurrent.GRU
-
+   
 ``neon.models``
 ---------------
 
@@ -140,6 +141,7 @@ API
    :nosignatures:
 
    neon.optimizers.optimizer.Adadelta
+   neon.optimizers.optimizer.Adagrad
    neon.optimizers.optimizer.Adam
    neon.optimizers.optimizer.GradientDescentMomentum
    neon.optimizers.optimizer.RMSProp
@@ -147,7 +149,7 @@ API
    neon.optimizers.optimizer.ExpSchedule
    neon.optimizers.optimizer.MultiOptimizer
 
-``neon.transforms``
+``neon.activations``
 -------------------
 
 .. autosummary::
@@ -160,11 +162,28 @@ API
    neon.transforms.activation.Tanh
    neon.transforms.activation.Logistic
 
+``neon.costs``
+--------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
    neon.transforms.cost.CrossEntropyBinary
    neon.transforms.cost.CrossEntropyMulti
    neon.transforms.cost.SumSquared
+   neon.transforms.cost.MeanSquared
+
+``neon.metrics``
+------------------
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
    neon.transforms.cost.Misclassification
    neon.transforms.cost.TopKMisclassification
+   neon.transforms.cost.Accuracy
 
 
 ``neon.util``

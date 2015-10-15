@@ -748,6 +748,24 @@ class Dropout(Layer):
 
 class LookupTable(ParameterLayer):
 
+    """
+    When given a sentence, which is a vector of integers, a matrix
+    of vectors/embeddings for each word in the sentence is returned. LookupTable
+    of dimensions embedding_dim X vocab_size is learnt.
+
+    input shape - (nin, batch_size)
+
+    output shape - (embedding_dim, nin * batch_size)
+
+    weight shape - (embedding_dim, vocab_size)
+
+    Arguments:
+        vocab_size (int) : Number of words in the vocabulary
+        embedding_dim (int) : Desired size of the word embedding
+        init (Initializer): Initializer object to use for initializing layer weights
+        name (str, optional): Layer name. Defaults to "LookupTableLayer"
+    """
+
     def __init__(self, vocab_size, embedding_dim, init, name="LookupTableLayer"):
         super(LookupTable, self).__init__(init, name)
         self.embedding_dim = embedding_dim
@@ -788,7 +806,6 @@ class LookupTable(ParameterLayer):
         for (j, wrd_id) in enumerate(wrd_ids):
             self.dW[:, wrd_id] = self.dW[:, wrd_id] + error[:, j]
         """
-
         return self.deltas
 
 

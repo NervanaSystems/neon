@@ -28,6 +28,12 @@ RMSProp
 .. autosummary::
    neon.optimizers.optimizer.RMSProp
 
+
+Adagrad
+--------
+.. autosummary::
+   neon.optimizers.optimizer.Adagrad
+
 Adadelta
 --------
 .. autosummary::

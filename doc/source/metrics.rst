@@ -26,3 +26,11 @@ Misclassification
    neon.transforms.cost.TopKMisclassification
 
 Computes the fraction of data samples that have been misclassified. Multiply by 100 to obtain misclassification percentage.
+
+
+Accuracy
+-----------------
+.. autosummary::
+   neon.transforms.cost.Accuracy
+
+Computes the fraction of data samples that have been correctly classified. Multiply by 100 to obtain accuracy percentage.

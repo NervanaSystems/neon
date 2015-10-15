@@ -32,3 +32,8 @@ Sum Squared Error
 -----------------
 .. autosummary::
    neon.transforms.cost.SumSquared
+
+Mean Squared Error
+-------------------
+.. autosummary::
+   neon.transforms.cost.MeanSquared
