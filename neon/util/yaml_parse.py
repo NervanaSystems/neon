@@ -18,19 +18,13 @@ generating NEON model objects from the definition.
 '''
 
 import numpy as np
-import sys
-import yaml
 
 from neon.backends import gen_backend
-from neon.data.dataiterator import DataIterator
-from neon.data.loader import load_dataset
 from neon.layers import GeneralizedCost
 from neon.models import Model
 from neon.optimizers import optimizer
 import neon.transforms as transforms
-from neon.util.argparser import NeonArgparser
 from neon.util.persist import initialize_layer, initialize_obj
-from neon.callbacks.callbacks import Callbacks
 
 
 def create_objects(root_yaml,
