@@ -18,7 +18,6 @@ Example highlighting the ability to mix different optimizers in different
 layers, or different components of the same layer.
 """
 
-from neon.backends import gen_backend
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian, Constant
 from neon.layers import GeneralizedCost, Affine
@@ -33,15 +32,7 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 # hyperparameters
-batch_size = 128
 num_epochs = args.epochs
-
-# setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype)
 
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(args.data_dir)
 train_set = DataIterator(X_train, y_train, nclass=nclass)

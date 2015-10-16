@@ -22,7 +22,6 @@ Reference:
 ..  _[Springenber2015]: http://arxiv.org/pdf/1412.6806.pdf
 """
 
-from neon.backends import gen_backend
 from neon.initializers import GlorotUniform
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost
@@ -37,15 +36,7 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 # hyperparameters
-batch_size = 128
 num_epochs = args.epochs
-
-# setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype)
 
 (X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
 

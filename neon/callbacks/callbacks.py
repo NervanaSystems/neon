@@ -495,7 +495,7 @@ class ProgressBarCallback(Callback):
                                                   self.nbatches, train_cost,
                                                   now - self.start_epoch)
             # clear the last line
-            sys.stdout.write('\r' + ' '*self.last_strlen)
+            sys.stdout.write('\r' + ' '*self._last_strlen + '\r')
             # print the new line
             sys.stdout.write(progress_string.encode('utf-8'))
             self._last_strlen = len(progress_string)

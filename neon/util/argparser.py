@@ -29,6 +29,7 @@ import numpy as np
 import os
 
 from neon import __version__ as neon_version
+from neon.backends import gen_backend
 from neon.backends.util.check_gpu import get_compute_capability
 
 logger = logging.getLogger(__name__)
@@ -130,6 +131,9 @@ class NeonArgparser(configargparse.ArgumentParser):
                             help='default floating point '
                             'precision for backend [f64 for cpu only]')
 
+        be_grp.add_argument('-z', '--batch_size', type=int, default=128,
+                            help='batch size')
+
         return
 
     def add_yaml_arg(self):
@@ -167,10 +171,14 @@ class NeonArgparser(configargparse.ArgumentParser):
     def add_arg(self):
         pass
 
-    def parse_args(self):
+    def parse_args(self, gen_be=True):
         '''
         Parse the command line arguments and setup neon
         runtime environment accordingly
+
+        Arguments:
+            gen_be (bool): if False, the arg parser will not
+                           generate the backend
 
         Returns:
             namespace: contains the parsed arguments as attributes
@@ -251,6 +259,16 @@ class NeonArgparser(configargparse.ArgumentParser):
                 raise IOError('Model file %s not present' % args.model_file)
             if not os.access(args.model_file, os.R_OK):
                 raise IOError('Not read access for model file %s' % args.model_file)
+
+        # extended parsers may need to generate backend after argparsing
+        if gen_be:
+            # generate the backend
+            gen_backend(backend=args.backend,
+                        rng_seed=args.rng_seed,
+                        device_id=args.device_id,
+                        batch_size=args.batch_size,
+                        default_dtype=args.datatype,
+                        stochastic_round=args.rounding)
 
         # display what command line / config options were set (and from where)
         logger.info(self.format_values())

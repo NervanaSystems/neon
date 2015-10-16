@@ -19,7 +19,6 @@ scaling with the fp16 data format.
 """
 
 import numpy as np
-from neon.backends import gen_backend
 from neon.data import DataIterator, load_cifar10
 from neon.initializers import Uniform
 from neon.layers import Affine, Conv, Pooling, GeneralizedCost, Deconv
@@ -34,18 +33,9 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 # hyperparameters
-batch_size = 128
 if args.datatype in [np.float16]:
     cost_scale = 10.
 num_epochs = args.epochs
-
-# setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype,
-                 stochastic_round=False)
 
 (X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
 

@@ -42,7 +42,6 @@ Examples:
 import logging
 import os
 
-from neon.backends import gen_backend
 from neon.callbacks.callbacks import Callbacks
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian
@@ -62,17 +61,7 @@ logger = logging.getLogger()
 logger.setLevel(args.log_thresh)
 
 # hyperparameters
-batch_size = 128
 num_epochs = args.epochs
-
-# setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype,
-                 stochastic_round=False)
-
 
 # load up the mnist data set
 # split into train and tests sets

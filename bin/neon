@@ -77,13 +77,13 @@ def parse_args():
     parser.add_yaml_arg()
 
     # parse the cmd line args
-    args = parser.parse_args()
+    args = parser.parse_args(gen_be=False)
 
     # load yaml
     yaml_str = args.yaml_file.read()
     root_yaml = yaml.safe_load(yaml_str)
 
-    batch_size = root_yaml['batchsize'] if 'batchsize' in root_yaml else 128
+    batch_size = root_yaml['batchsize'] if 'batchsize' in root_yaml else args.batch_size
 
     if any("--backend" in ag or "-b" in ag for ag in sys.argv):
         # command line overrides yaml setting
@@ -97,6 +97,14 @@ def parse_args():
         num_epochs = args.epochs
     else:
         num_epochs = root_yaml['epochs'] if 'epochs' in root_yaml else 1
+
+    gen_backend(backend=be_name,
+                rng_seed=args.rng_seed,
+                device_id=args.device_id,
+                batch_size=batch_size,
+                default_dtype=args.datatype,
+                stochastic_round=args.rounding)
+
     return root_yaml, args, be_name, num_epochs, batch_size
 
 

@@ -19,7 +19,6 @@ Runs one epoch of Alexnet on imagenet data.
 
 import sys
 from neon.util.argparser import NeonArgparser
-from neon.backends import gen_backend
 from neon.initializers import Constant, Gaussian
 from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
@@ -33,13 +32,6 @@ from neon.callbacks.callbacks import Callbacks, Callback
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
-
-# hyperparameters
-batch_size = 128
-
-# setup backend
-be = gen_backend(backend=args.backend, rng_seed=args.rng_seed, device_id=args.device_id,
-                 batch_size=batch_size, default_dtype=args.datatype)
 
 try:
     train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train')

@@ -30,19 +30,6 @@ if sys.version_info >= (3, 0):
     from functools import reduce
 
 
-def output_dim(X, S, padding, strides):
-    """
-    compute along 1 dimension, with these sizes, what will be the output dimension
-
-    Arguments:
-        X (int): input data dimension
-        S (int): filter dimension
-        padding (int): padding on each side
-        strides (int): striding
-    """
-    return int(round(float(X - S + 2 * padding)/strides)) + 1
-
-
 class Layer(object):
 
     """
@@ -384,9 +371,9 @@ class ConvLayer(Layer):
             raise TypeError("Type not supported.")
 
         # Compute the output spatial dimensions
-        M = output_dim(D, T, pad_d, str_d)
-        P = output_dim(H, R, pad_h, str_h)
-        Q = output_dim(W, S, pad_w, str_w)
+        M = int(round(float(D - T + 2 * pad_d) / str_d)) + 1
+        P = int(round(float(H - R + 2 * pad_h) / str_h)) + 1
+        Q = int(round(float(W - S + 2 * pad_w) / str_w)) + 1
 
         self.C = C
         self.K = K
@@ -741,10 +728,10 @@ class PoolLayer(Layer):
         bprop_zero = self.overlap or self.gaps
 
         # Compute the output dimensions
-        K = output_dim(C, J, pad_c, str_c)
-        M = output_dim(D, T, pad_d, str_d)
-        P = output_dim(H, R, pad_h, str_h)
-        Q = output_dim(W, S, pad_w, str_w)
+        K = int(round(float(C - J + 2*pad_c) / str_c)) + 1
+        M = int(round(float(D - T + 2*pad_d) / str_d)) + 1
+        P = int(round(float(H - R + 2*pad_h) / str_h)) + 1
+        Q = int(round(float(W - S + 2*pad_w) / str_w)) + 1
 
         self.op   = op
         self.C    = C

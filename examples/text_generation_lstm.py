@@ -37,7 +37,7 @@ from neon.util.argparser import NeonArgparser
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-args = parser.parse_args()
+args = parser.parse_args(gen_be=False)
 
 batch_size = 64
 num_epochs = args.epochs

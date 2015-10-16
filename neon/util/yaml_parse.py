@@ -18,8 +18,9 @@ generating NEON model objects from the definition.
 '''
 
 import numpy as np
+import yaml
 
-from neon.backends import gen_backend
+from neon import NervanaObject
 from neon.layers import GeneralizedCost
 from neon.models import Model
 from neon.optimizers import optimizer
@@ -54,13 +55,13 @@ def create_objects(root_yaml,
     Returns:
         tuple: Contains model, cost and optimizer objects.
     """
-    # setup backend
-    be = gen_backend(backend=be_type,
-                     batch_size=batch_size,
-                     rng_seed=rng_seed,
-                     device_id=device_id,
-                     default_dtype=default_dtype,
-                     stochastic_round=stochastic_rounding)
+
+    assert NervanaObject.be is not None, 'Must generate a backend before running this function'
+
+    # can give filename or parse dictionary
+    if type(root_yaml) is str:
+        with open(root_yaml, 'r') as fid:
+            root_yaml = yaml.safe_load(fid.read())
 
     # cost (before layers for shortcut derivs)
     cost_name = root_yaml['cost']

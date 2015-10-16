@@ -20,7 +20,6 @@ Convolutional autoencoder example network for MNIST data set
 
 import numpy as np
 
-from neon.backends import gen_backend
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Uniform
 from neon.layers import Conv, Pooling, GeneralizedCost, Deconv
@@ -34,15 +33,7 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-batch_size = 128
 num_epochs = args.epochs
-
-# setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype)
 
 # Load dataset
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
@@ -63,6 +54,7 @@ layers.append(Pooling(2))
 layers.append(Deconv(fshape=(4, 4, 8), init=init_uni))
 layers.append(Deconv(fshape=(2, 2, 8), init=init_uni, strides=2))
 layers.append(Deconv(fshape=(2, 2, 1), init=init_uni, strides=2))
+import ipdb;ipdb.set_trace()
 
 # Define the cost
 cost = GeneralizedCost(costfunc=SumSquared())
