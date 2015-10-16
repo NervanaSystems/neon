@@ -56,5 +56,4 @@ callbacks = Callbacks(mlp, train, output_file=args.output_file,
                       progress_bar=args.progress_bar)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
-
-print mlp.eval(test, metric=Misclassification())
+print('Misclassification error = %.1f%%' % (mlp.eval(test, metric=Misclassification())*100))

@@ -1009,13 +1009,11 @@ class BatchNorm(Layer):
 
         Accumulate partial results to global mean and variance buffers used for inference.
         """
-        if inference:
-            if self.x is None or self.x.base is not self.inputs:
-                self.x = self.inputs.reshape((self.nfm, -1))
-            return self._fprop_inference(inputs)
-
-        if self.inputs is None:
+        if self.inputs is None or self.inputs.base is not inputs:
             self.inputs = inputs.reshape((self.nfm, -1))
+
+        if inference:
+            return self._fprop_inference(self.inputs)
 
         if self.compute_batch_sum:
             self.xsum[:] = self.be.sum(self.inputs, axis=1)
@@ -1030,7 +1028,7 @@ class BatchNorm(Layer):
         """
         Apply one linear transformation that captures normalization, gamma scaling and beta shift.
         """
-        xhat = (self.x - self.gmean) / self.be.sqrt(self.gvar + self.eps)  # Op-tree only
+        xhat = (inputs - self.gmean) / self.be.sqrt(self.gvar + self.eps)  # Op-tree only
         self.y[:] = xhat * self.gamma + self.beta
         return self.outputs
 

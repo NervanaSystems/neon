@@ -54,7 +54,6 @@ layers.append(Pooling(2))
 layers.append(Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=1))
 layers.append(Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=2))
 layers.append(Deconv(fshape=(2, 2, 1), init=init_uni, strides=2, padding=1))
-# import ipdb;ipdb.set_trace()
 
 # Define the cost
 cost = GeneralizedCost(costfunc=SumSquared())
