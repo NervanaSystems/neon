@@ -1492,7 +1492,9 @@ class NervanaGPU(Backend):
             if zero:
                 shuffle_kernel = _get_transpose_kernel(B.dtype.str[1:])
                 if beta:
-                    raise ValueError("beta not yet supported in this bprop kernel variant.")
+                    zero = False # let atomic adds accumulate on top
+                    if beta != 1.0:
+                        C[:] = C * beta # pre-apply beta
             else:
                 shuffle_kernel = _get_shuffle_kernel(B.dtype.str[1:])
             shuffle_args = [layer.shuffle_grid, layer.shuffle_block, self.stream,
