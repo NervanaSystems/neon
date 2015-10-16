@@ -17,6 +17,7 @@
 Runs one epoch of Alexnet on imagenet data.
 """
 
+import os
 import sys
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Constant, Gaussian
@@ -76,15 +77,14 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 
 opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 
-mlp = Model(layers=layers)
+model = Model(layers=layers)
 
 if args.model_file:
-    import os
     assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    mlp.load_weights(args.model_file)
+    model.load_weights(args.model_file)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, output_file=args.output_file)
+callbacks = Callbacks(model, train, output_file=args.output_file, progress_bar=args.progress_bar)
 
 if args.validation_freq:
     class TopKMetrics(Callback):
@@ -95,7 +95,7 @@ if args.validation_freq:
         def on_epoch_end(self, epoch):
             self.valid_set.reset()
             allmetrics = TopKMisclassification(k=5)
-            stats = mlp.eval(self.valid_set, metric=allmetrics)
+            stats = model.eval(self.valid_set, metric=allmetrics)
             print ", ".join(allmetrics.metric_names) + ": " + ", ".join(map(str, stats.flatten()))
 
     callbacks.add_callback(TopKMetrics(test))
@@ -104,7 +104,7 @@ if args.save_path:
     checkpoint_schedule = range(args.epochs)
     callbacks.add_serialize_callback(checkpoint_schedule, args.save_path, history=2)
 
-mlp.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 test.exit_batch_provider()
 train.exit_batch_provider()
