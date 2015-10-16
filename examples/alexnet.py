@@ -35,8 +35,8 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 try:
-    train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train')
-    test = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
+    train = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='train')
+    test = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='validation',
                      do_transforms=False)
 except (OSError, IOError, ValueError) as err:
     print err
@@ -46,7 +46,7 @@ train.init_batch_provider()
 test.init_batch_provider()
 
 init1 = Gaussian(scale=0.01)
-init2 = Gaussian(scale=0.03)
+init2 = Gaussian(scale=0.005)
 relu = Rectlin()
 
 # drop LR by 1/250**(1/3) at beginning of epochs 23, 45, 66
@@ -57,21 +57,19 @@ opt_gdm = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sche
 opt_biases = GradientDescentMomentum(0.02, 0.9, schedule=Schedule([44], 0.1))
 
 # Set up the model layers
-layers = []
-layers.append(Conv((11, 11, 64), strides=4, padding=3, init=init1, bias=Constant(0),
-              activation=relu))
-layers.append(Pooling(3, strides=2))
-layers.append(Conv((5, 5, 192), padding=2, init=init1, bias=Constant(1), activation=relu))
-layers.append(Pooling(3, strides=2))
-layers.append(Conv((3, 3, 384), padding=1, init=init2, bias=Constant(0), activation=relu))
-layers.append(Conv((3, 3, 256), padding=1, init=init2, bias=Constant(1), activation=relu))
-layers.append(Conv((3, 3, 256), padding=1, init=init2, bias=Constant(1), activation=relu))
-layers.append(Pooling(3, strides=2))
-layers.append(Affine(nout=4096, init=init1, bias=Constant(1), activation=relu))
-layers.append(Dropout(keep=0.5))
-layers.append(Affine(nout=4096, init=init1, bias=Constant(1), activation=relu))
-layers.append(Dropout(keep=0.5))
-layers.append(Affine(nout=1000, init=init1, bias=Constant(-7), activation=Softmax()))
+layers = [Conv((11, 11, 64), strides=4, init=init1, bias=Constant(0), activation=relu),
+          Pooling(3, strides=2),
+          Conv((5, 5, 192), padding=2, init=init1, bias=Constant(.1), activation=relu),
+          Pooling(3, strides=2),
+          Conv((3, 3, 384), padding=1, init=init1, bias=Constant(0), activation=relu),
+          Conv((3, 3, 256), padding=1, init=init1, bias=Constant(.1), activation=relu),
+          Conv((3, 3, 256), padding=1, init=init1, bias=Constant(.1), activation=relu),
+          Pooling(3, strides=2),
+          Affine(nout=4096, init=init2, bias=Constant(.1), activation=relu),
+          Dropout(keep=0.5),
+          Affine(nout=4096, init=init2, bias=Constant(.1), activation=relu),
+          Dropout(keep=0.5),
+          Affine(nout=1000, init=init1, bias=Constant(0), activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 
