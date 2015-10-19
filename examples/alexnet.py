@@ -35,8 +35,8 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 try:
-    train = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='train')
-    test = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='validation',
+    train = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='train', dtype=args.datatype)
+    test = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='validation',dtype=args.datatype,
                      do_transforms=False)
 except (OSError, IOError, ValueError) as err:
     print err
@@ -102,7 +102,8 @@ if args.save_path:
     checkpoint_schedule = range(args.epochs)
     callbacks.add_serialize_callback(checkpoint_schedule, args.save_path, history=2)
 
-model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
-
-test.exit_batch_provider()
-train.exit_batch_provider()
+try:
+    model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+finally:
+    test.exit_batch_provider()
+    train.exit_batch_provider()
