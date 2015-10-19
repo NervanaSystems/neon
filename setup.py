@@ -32,14 +32,6 @@ try:
 except:
     pass
 
-gpuflag = os.system("nvcc --version > /dev/null 2>&1") == 0
-if gpuflag:
-    package_data = {'neon': ['backends/kernels/sass/*.sass',
-                             'backends/kernels/cubin/*.cubin',
-                             'data/*.so']}
-else:
-    package_data = {'neon': []}
-
 if write_version:
     txt = "# " + ("-" * 77) + "\n"
     txt += "# Copyright 2015 Nervana Systems Inc.\n"
@@ -80,7 +72,9 @@ setup(name='neon',
       license='License :: OSI Approved :: Apache Software License',
       scripts=['bin/neon', 'bin/nvis'],
       packages=find_packages(exclude=["tests"]),
-      package_data=package_data,
+      package_data={'neon': ['backends/kernels/sass/*.sass',
+                             'backends/kernels/cubin/*.cubin',
+                             'data/*.so']},
       classifiers=['Development Status :: 3 - Alpha',
                    'Environment :: Console',
                    'Environment :: Console :: Curses',
