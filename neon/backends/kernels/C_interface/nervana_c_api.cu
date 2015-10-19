@@ -274,8 +274,9 @@ extern "C" bool nervana_sgemm(float *A, float *B, float *C,
         ldb *= (8 * sizeof(float));
 
     int zero = 0;
-    void *args[17] = {&rand_state, &A, &B, &C, &lda, &ldb, &ldc, &m, &n, &k, &alpha, &beta, &flags,
-                      &zero, &zero, &zero, &zero};
+    int one  = 1;
+    void *args[16] = {&C, &A, &B, &alpha, &beta, &flags, &lda, &ldb, &ldc, &m, &n, &k,
+                      &zero, &zero, &zero, &one};
 
     res = cuLaunchKernel(nervana_kernels_[name],
                          1, gridA, gridB,
@@ -364,8 +365,9 @@ extern "C" bool nervana_hgemm(short *A, short *B, short *C,
         ldb *= (8 * sizeof(short));
 
     int zero = 0;
-    void *args[17] = {&rand_state, &A, &B, &C, &lda, &ldb, &ldc, &m, &n, &k, &alpha, &beta, &flags,
-                      &zero, &zero, &zero, &zero};
+    int one  = 1;
+    void *args[16] = {&C, &A, &B, &alpha, &beta, &flags, &lda, &ldb, &ldc, &m, &n, &k,
+                      &zero, &zero, &zero, &one};
 
     res = cuLaunchKernel(nervana_kernels_[name],
                          1, gridA, gridB,
