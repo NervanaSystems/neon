@@ -17,7 +17,6 @@
 Googlenet V1 implementation
 """
 
-import sys
 from neon.util.argparser import NeonArgparser
 from neon.layers import Conv, Pooling, MergeBroadcast, BranchNode, Affine, Tree, Dropout
 from neon.layers import GeneralizedCost, Multicost
@@ -39,13 +38,9 @@ batch_size = 128
 be = gen_backend(backend=args.backend, rng_seed=args.rng_seed, device_id=args.device_id,
                  batch_size=batch_size, default_dtype=args.datatype)
 
-try:
-    train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train')
-    test = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
-                     do_transforms=False)
-except (OSError, IOError, ValueError) as err:
-    print err
-    sys.exit(0)
+train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train')
+test = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
+                 do_transforms=False)
 
 train.init_batch_provider()
 test.init_batch_provider()

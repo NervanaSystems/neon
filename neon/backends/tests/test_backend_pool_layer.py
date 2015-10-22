@@ -42,7 +42,6 @@ def pixel_indices(pool, kj, mt, pr, qs):
     D, H, W = pool.DHW
     HW = H * W
     DHW = D * H * W
-    imax = C * D * H * W
     idx = []
 
     for j in range(J):

@@ -20,7 +20,6 @@ Simplified version of VGG model B:
  - removes convolutional inference
 """
 
-import sys
 from neon.util.argparser import NeonArgparser
 from neon.backends import gen_backend
 from neon.initializers import Constant, GlorotUniform
@@ -31,8 +30,6 @@ from neon.models import Model
 from neon.data import ImgMaster
 from neon.callbacks.callbacks import Callbacks
 
-# For running complete alexnet
-# alexnet.py -e 90 -val 1 -s <save-path> -w <path-to-saved-batches>
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
@@ -48,21 +45,17 @@ be = gen_backend(backend=args.backend,
                  batch_size=batch_size,
                  default_dtype=args.datatype)
 
-try:
-    train = ImgMaster(repo_dir=args.data_dir,
-                      inner_size=224,
-                      set_name='train',
-                      subset_pct=1,
-                      dtype=args.datatype)
-    test = ImgMaster(repo_dir=args.data_dir,
-                     inner_size=224,
-                     set_name='validation',
-                     subset_pct=50,
-                     dtype=args.datatype,
-                     do_transforms=False)
-except (OSError, IOError, ValueError) as err:
-    print err
-    sys.exit(0)
+train = ImgMaster(repo_dir=args.data_dir,
+                  inner_size=224,
+                  set_name='train',
+                  subset_pct=1,
+                  dtype=args.datatype)
+test = ImgMaster(repo_dir=args.data_dir,
+                 inner_size=224,
+                 set_name='validation',
+                 subset_pct=50,
+                 dtype=args.datatype,
+                 do_transforms=False)
 
 train.init_batch_provider()
 test.init_batch_provider()

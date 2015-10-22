@@ -18,7 +18,6 @@ Runs one epoch of Alexnet on imagenet data.
 """
 
 import os
-import sys
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Constant, Gaussian
 from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
@@ -34,14 +33,10 @@ from neon.callbacks.callbacks import Callbacks, Callback
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-try:
-    train = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='train',
-                      dtype=args.datatype)
-    test = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='validation',
-                     dtype=args.datatype, do_transforms=False)
-except (OSError, IOError, ValueError) as err:
-    print err
-    sys.exit(0)
+train = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='train',
+                  dtype=args.datatype)
+test = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='validation',
+                 dtype=args.datatype, do_transforms=False)
 
 train.init_batch_provider()
 test.init_batch_provider()
