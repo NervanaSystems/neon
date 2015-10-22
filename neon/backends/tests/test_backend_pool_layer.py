@@ -64,10 +64,7 @@ def pixel_indices(pool, kj, mt, pr, qs):
                     x = qs + s
                     if yb and x >= 0 and x < W:
                         xi = yi + x
-                    else:
-                        xi = imax  # out of bounds
-
-                    idx.append(xi)
+                        idx.append(xi)
     return idx
 
 
@@ -152,7 +149,7 @@ def test_pool_layer(poolargs):
     nc = NervanaCPU()
 
     N, C = 32, 32
-    D, H, W = 1, 33, 33
+    D, H, W = 1, 32, 32
     J, T, R, S = 2, 1, 3, 3
     padding_j, padding_d, padding_h, padding_w = 0, 0, 0, 0
     strides_j, strides_d, strides_h, strides_w = 2, 1, 2, 2
