@@ -81,11 +81,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.rounding)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, output_file=args.output_file,
-                      progress_bar=args.progress_bar,
-                      valid_set=valid_set, valid_freq=1,
-                      )
-callbacks.add_serialize_callback(1, args.save_path)
+callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
 
 # fit and validate
 model.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

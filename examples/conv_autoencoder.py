@@ -62,8 +62,7 @@ mlp = Model(layers=layers)
 # Fit the model
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, output_file=args.output_file,
-                      progress_bar=args.progress_bar)
+callbacks = Callbacks(mlp, train, args)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=1, cost=cost, callbacks=callbacks)
 

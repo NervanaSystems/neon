@@ -37,14 +37,14 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args(gen_be=False)
 
-batch_size = 64  # 50
+batch_size = 64  # note Karpathy's char-rnn uses 50
 num_epochs = args.epochs
 
 # Set the type of layer to use {lstm|gru}
 rlayer_type = "lstm"
 
 # hyperparameters
-time_steps = 50
+time_steps = 40  # note Karpathy's char-rnn uses 50
 hidden_size = 1000
 clip_gradients = False
 
@@ -59,7 +59,6 @@ be = gen_backend(backend=args.backend,
 train_path = load_text('ptb-train', path=args.data_dir)
 valid_path = load_text('ptb-valid', path=args.data_dir)
 
-# load data and parse on character-level
 train_set = Text(time_steps, train_path)
 valid_set = Text(time_steps, valid_path, vocab=train_set.vocab)
 
@@ -86,9 +85,7 @@ model = Model(layers=layers)
 optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.rounding)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, output_file=args.output_file,
-                      valid_set=valid_set, valid_freq=args.validation_freq,
-                      progress_bar=args.progress_bar)
+callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
 
 # train model
 model.fit(train_set,

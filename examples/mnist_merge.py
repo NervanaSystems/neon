@@ -57,8 +57,6 @@ cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 optimizer = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, output_file=args.output_file,
-                      valid_set=valid_set, valid_freq=args.validation_freq,
-                      progress_bar=args.progress_bar)
+callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
 
 model.fit(train_set, cost=cost, optimizer=optimizer, num_epochs=num_epochs, callbacks=callbacks)

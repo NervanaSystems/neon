@@ -91,20 +91,8 @@ if args.model_file:
     logger.info('loading initial model state from %s' % args.model_file)
     mlp.load_weights(args.model_file)
 
-# setup standard fit callbacks
-callbacks = Callbacks(mlp, train_set, output_file=args.output_file,
-                      progress_bar=args.progress_bar)
-
-if args.validation_freq:
-    # setup validation trial callbacks
-    callbacks.add_validation_callback(valid_set, args.validation_freq)
-
-if args.serialize > 0:
-    # add callback for saving checkpoint file
-    # every args.serialize epchs
-    checkpoint_schedule = args.serialize
-    checkpoint_model_path = args.save_path
-    callbacks.add_serialize_callback(checkpoint_schedule, checkpoint_model_path)
+# configure callbacks
+callbacks = Callbacks(mlp, train_set, args, valid_set=valid_set)
 
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

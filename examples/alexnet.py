@@ -78,7 +78,7 @@ if args.model_file:
     model.load_weights(args.model_file)
 
 # configure callbacks
-callbacks = Callbacks(model, train, output_file=args.output_file, progress_bar=args.progress_bar)
+callbacks = Callbacks(model, train, args, valid_set=test)
 
 if args.validation_freq:
     class TopKMetrics(Callback):
@@ -93,10 +93,6 @@ if args.validation_freq:
             print ", ".join(allmetrics.metric_names) + ": " + ", ".join(map(str, stats.flatten()))
 
     callbacks.add_callback(TopKMetrics(test))
-
-if args.save_path:
-    checkpoint_schedule = range(args.epochs)
-    callbacks.add_serialize_callback(checkpoint_schedule, args.save_path, history=2)
 
 try:
     model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

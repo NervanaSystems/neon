@@ -33,20 +33,32 @@ class Callbacks(NervanaObject):
         callbacks (list): Ordered set of Callback objects to be run.
     """
 
-    def __init__(self, model, train_set, output_file=None, valid_set=None,
-                 valid_freq=None, progress_bar=True):
+    def __init__(self, model, train_set, parsed_args, valid_set=None):
         """
         Create a callbacks container with the default callbacks.
 
         Arguments:
             model (Model): the model object
             train_set (DataIterator): the training dataset
-            output_file (string, optional): path to save callback data to
-            valid_set (DataIterator, optional): the validation dataset to use
-            valid_freq (int, optional): how often (in epochs) to run validation
-            progress_bar (bool): control whether a progress bar callback is created.
-                                 Defaults to True.
-        """
+            parsed_args (dict): Dictionary of command line args, as follows:
+                output_file (string, optional): path to save callback data to
+                valid_freq (int, optional): how often (in epochs) to run validation
+                progress_bar (bool): control whether a progress bar callback is created.
+                                     Defaults to True.
+                save_path (string):
+                serialize (int):
+                history (int):
+             valid_set (DataIterator, optional): the validation dataset to use
+       """
+
+        output_file = parsed_args.output_file
+        valid_freq = parsed_args.validation_freq
+        progress_bar = parsed_args.progress_bar
+        epochs = parsed_args.epochs
+        save_path = parsed_args.save_path
+        serialize = parsed_args.serialize
+        history = parsed_args.history
+
         self.callbacks = list()
         self.epoch_marker = 0
         if output_file is None:
@@ -61,11 +73,26 @@ class Callbacks(NervanaObject):
 
         self.callbacks.append(TrainCostCallback(self.callback_data, self.model))
 
-        if valid_set and valid_freq:
-            self.callbacks.append(ValidationCallback(self.callback_data, self.model,
-                                                     valid_set, valid_freq))
+        if valid_freq:
+            if valid_set:
+                self.callbacks.append(ValidationCallback(self.callback_data, self.model,
+                                                         valid_set, valid_freq))
+            else:
+                raise ValueError('Valid_freq specified but no validation set given!')
         if progress_bar:
             self.callbacks.append(ProgressBarCallback(self.callback_data, model, train_set))
+
+        if save_path:
+            if serialize <= 1:
+                checkpoint_schedule = range(epochs)
+            else:
+                checkpoint_schedule = range(0, epochs, serialize)
+            if checkpoint_schedule == []:
+                raise ValueError('With the requested number of epochs and '
+                                 'serialization schedule, model will never'
+                                 'be serialized')
+            self.add_serialize_callback(checkpoint_schedule, save_path, history=history)
+
         self.callbacks.append(TrainLoggerCallback(self.callback_data, model,
                                                   epoch_freq=1, minibatch_freq=None))
 

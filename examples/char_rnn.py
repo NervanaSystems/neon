@@ -76,9 +76,7 @@ model = Model(layers=layers)
 optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.rounding)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, output_file=args.output_file,
-                      valid_set=valid_set, valid_freq=args.validation_freq,
-                      progress_bar=args.progress_bar)
+callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
 
 # train model
 model.fit(train_set,

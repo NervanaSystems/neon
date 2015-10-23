@@ -78,9 +78,7 @@ checkpoint_schedule = range(num_epochs)
 
 model = Model(layers=layers)
 
-callbacks = Callbacks(model, train_set, output_file=args.output_file,
-                      progress_bar=args.progress_bar)
-callbacks.add_serialize_callback(checkpoint_schedule, checkpoint_model_path)
+callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
 
 opt = RMSProp(decay_rate=0.997, learning_rate=0.0005, epsilon=1e-8, clip_gradients=True,
               gradient_limit=1.0)
