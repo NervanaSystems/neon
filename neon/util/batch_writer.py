@@ -234,6 +234,7 @@ class BatchWriterImagenet(BatchWriter):
         meta_file = os.path.join(meta_dir, 'neon_ILSVRC2012_devmeta.pkl')
         self.meta = load_obj(meta_file)
         self.__dict__.update(self.meta)  # get label_dict, label_names, global_mean from meta
+        self.global_mean = np.mean(self.global_mean.reshape(3, -1), axis=1).reshape(3, 1)[::-1]
 
         np.random.seed(0)
         with tarfile.open(train_tar) as tf:

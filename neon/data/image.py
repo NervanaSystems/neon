@@ -108,8 +108,8 @@ class ImgEndpoint(NervanaObject):
                 raise ValueError("Dataset cache missing required attribute %s" % (r))
 
         if dataset_cache['global_mean'].shape != (3, 1):
-            raise ValueError('Dataset cache global mean is not in the proper format. '
-                             'Run bin/update_dataset_cache.py utility on %s.' % cache_filepath)
+            raise ValueError('Dataset cache global mean is not in the proper format. Run '
+                             'neon/util/update_dataset_cache.py utility on %s.' % cache_filepath)
 
         self.__dict__.update(dataset_cache)
         self.filename = os.path.join(repo_dir, self.batch_prefix)
@@ -168,8 +168,7 @@ class ImgMaster(ImgEndpoint):
         self.local_lbl = np.empty((mbsz,), dtype=np.int32)
 
         self.dev_X = self.be.iobuf(npix, dtype=dtype)
-        self.dev_X.lshape = ishape
-        self.dev_X_ms = self.dev_X.reshape(ishape[0], -1)  # view for mean subtract
+        self.dev_X_ms = self.dev_X.reshape((ishape[0], -1))  # view for mean subtract
         self.dev_XT = self.be.empty(self.dev_X.shape[::-1], dtype=np.uint8)
         self.dev_lbls = self.be.iobuf(1, dtype=np.int32)
         self.dev_Y = self.be.iobuf(self.nclass, dtype=dtype)
@@ -177,7 +176,7 @@ class ImgMaster(ImgEndpoint):
         # Crop the mean according to the inner_size
         if self.global_mean is not None:
             # switch to BGR order
-            self.dev_mean = self.be.array(self.global_mean[::-1], dtype=dtype)
+            self.dev_mean = self.be.array(self.global_mean, dtype=dtype)
         else:
             self.dev_mean = 127.  # Just center uint8 values if missing global mean
 

@@ -14,21 +14,22 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Script to convert old batch_write data set cache global means to new format.
+Script to convert old batch_writer dataset cache global means to new format.
 Old format is a full image mean while the new format has a single mean value
-for each channel of the input image.  This sciprt will overwrite the existing
+for each channel of the input image.  This script will overwrite the existing
 data cache pickle file.
 
 Arguments:
     data cache file: path to the data cache file, this path will be printed
-                     in the exception rasied by neon if it detected that the
+                     in the exception raised by neon if it detects that the
                      data cache global mean is of the old format
 """
 
 import argparse
 import os
 import numpy as np
-import pickle
+from neon.util.persist import load_obj, save_obj
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -42,8 +43,7 @@ if __name__ == '__main__':
     if not os.access(os.path.abspath(cache_file), os.R_OK | os.W_OK):
         raise IOError('Need to add read and/or write permissions on file %s' % cache_file)
 
-    with open(cache_file, 'r') as fid:
-        dc = pickle.load(fid)
+    dc = load_obj(cache_file)
 
     if 'global_mean' not in dc or 'img_size' not in dc:
         raise ValueError('data cache file missing global_mean key')
@@ -54,9 +54,9 @@ if __name__ == '__main__':
     if len(gm.shape) != 2 or (gm.shape[0] != sz*sz*3 or gm.shape[1] != 1):
         raise ValueError('global mean shape %s does not match format expected' % str(gm.shape))
 
-    dc['global_mean'] = np.mean(gm.reshape(3, -1), axis=1).reshape(3, 1)
+    # Collapse the full tensor mean into channel means and correct the order (RGB <-> BGR)
+    dc['global_mean'] = np.mean(gm.reshape(3, -1), axis=1).reshape(3, 1)[::-1]
 
-    with open(cache_file, 'w') as fid:
-        pickle.dump(dc, fid)
+    save_obj(dc, cache_file)
 
     print '%s updated to new format' % cache_file
