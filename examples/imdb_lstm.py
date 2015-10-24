@@ -69,7 +69,7 @@ print "# of train sentences", X_train.shape[0]
 print "# of test sentence", X_test.shape[0]
 
 train_set = DataIterator(X_train, y_train, nclass=2)
-test_set = DataIterator(X_test, y_test, nclass=2)
+valid_set = DataIterator(X_test, y_test, nclass=2)
 
 # weight initialization
 init_emb = Uniform(low=-0.1/embedding_dim, high=0.1/embedding_dim)
@@ -104,5 +104,5 @@ model.fit(train_set,
 
 
 # eval model
-print "Test  Accuracy - ", 100 * model.eval(test_set, metric=metric)
+print "Test  Accuracy - ", 100 * model.eval(valid_set, metric=metric)
 print "Train Accuracy - ", 100 * model.eval(train_set, metric=metric)
