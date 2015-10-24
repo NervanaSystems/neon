@@ -107,6 +107,10 @@ class ImgEndpoint(NervanaObject):
             if r not in dataset_cache:
                 raise ValueError("Dataset cache missing required attribute %s" % (r))
 
+        if dataset_cache['global_mean'].shape != (3, 1):
+            raise ValueError('Dataset cache global mean is not in the proper format. '
+                             'Run bin/update_dataset_cache.py utility on %s.' % cache_filepath)
+
         self.__dict__.update(dataset_cache)
         self.filename = os.path.join(repo_dir, self.batch_prefix)
 
@@ -148,7 +152,6 @@ class ImgMaster(ImgEndpoint):
 
         npix = self.inner_size * self.inner_size * 3
         ishape = (3, self.inner_size, self.inner_size)
-        origshape = (3, self.img_size, self.img_size)
         mbsz = self.be.bsz
         self.shape = ishape
         self.response = [Msg(npix * mbsz + 4*mbsz) for i in range(2)]
@@ -166,16 +169,15 @@ class ImgMaster(ImgEndpoint):
 
         self.dev_X = self.be.iobuf(npix, dtype=dtype)
         self.dev_X.lshape = ishape
+        self.dev_X_ms = self.dev_X.reshape(ishape[0], -1)  # view for mean subtract
         self.dev_XT = self.be.empty(self.dev_X.shape[::-1], dtype=np.uint8)
         self.dev_lbls = self.be.iobuf(1, dtype=np.int32)
         self.dev_Y = self.be.iobuf(self.nclass, dtype=dtype)
 
         # Crop the mean according to the inner_size
-        crop_start = (self.img_size - self.inner_size) / 2
-        crop_range = slice(crop_start, crop_start + self.inner_size)
         if self.global_mean is not None:
-            self.mean_crop = self.global_mean.reshape(origshape)[:, crop_range, crop_range]
-            self.dev_mean = self.be.array(self.mean_crop.reshape(npix, 1), dtype=dtype)
+            # switch to BGR order
+            self.dev_mean = self.be.array(self.global_mean[::-1], dtype=dtype)
         else:
             self.dev_mean = 127.  # Just center uint8 values if missing global mean
 
@@ -264,7 +266,7 @@ class ImgMaster(ImgEndpoint):
 
             # Separating these steps to avoid possible casting error
             self.dev_X[:] = self.dev_XT.transpose()
-            self.dev_X[:] = self.dev_X - self.dev_mean
+            self.dev_X_ms[:] = self.dev_X_ms - self.dev_mean
 
             # Expanding out the labels on device
             self.dev_Y[:] = self.be.onehot(self.dev_lbls, axis=0)
