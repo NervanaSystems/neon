@@ -51,8 +51,8 @@ init2 = Xavier(local=False)
 bias = Constant(val=0.)
 relu = Rectlin()
 
-# drop LR by 4% every 2 epochs
-weight_sched = Schedule(range(args.epochs)[2::2], 0.96)
+# drop LR by 24% every 8 epochs
+weight_sched = Schedule(range(args.epochs)[8::8], 0.76)
 opt_gdm = GradientDescentMomentum(learning_rate=0.015, momentum_coef=0.9, wdecay=0.00004,
                                   schedule=weight_sched)
 
