@@ -87,17 +87,17 @@ different from the cuda-convnet2 style of padding in that padding is added to
 both ends of the dimension instead of just one end.
 
 
-I'm getting weird errors loading a serialized model
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+I'm getting an error loading a serialized model
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Starting with release 1.0.0rc2 there was a major change to the way that the
+Starting with release 1.0.0rc2 there was a change to the way that the
 output sizes of convolution and pooling layers are calculated.  This change
 could make this new version incompatible with models saved using previous
 versions of neon.  With release 1.0.0rc2, the calculation of the output size
-of convolution and pooling layers with strides greater than 1, extends out to
-process all the input data. This was not necessarily the case with older neon
-releases where the operations would not extend a kernel past the edges of the
-input data (padding included).
+of convolution and pooling layers stops before the kernel runs over the edge
+of the input data plus the padding.  The formula for this is:
+
+output_size = floor(input_size + 2*pad - kernel_size)/stride + 1
 
 This change in output sizes will alter the topology of some networks and cause
 errors when trying to load weights saved with a previous version of neon.  For
@@ -108,8 +108,8 @@ trying to initialize a neon model using weights saved with an older version of
 neon.
 
 
-I'm getting a weird message when I try to use ImgMaster
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+I'm getting an error when I try to use ImgMaster
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In release 1.0.0rc2, the format of the mean image saved in the
 `dataset_cache.pkl` file has changed.  Previous versions of neon were storing

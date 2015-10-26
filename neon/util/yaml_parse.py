@@ -80,16 +80,17 @@ def create_objects(root_yaml,
 
     # create optimizer
     optim = None
-    yaml_opt = root_yaml['optimizer']
-    if yaml_opt['type'] == 'MultiOptimizer':
-        # multioptimizer init
-        for ltype in yaml_opt:
-            opt = yaml_opt[ltype]
-            if isinstance(opt, dict):
-                if 'schedule' in opt:
-                    opt['schedule'] = optimizer.Schedule(opt['schedule'])
-                yaml_opt[ltype] = initialize_obj(opt, optimizer)
-        optim = optimizer.MultiOptimizer(yaml_opt)
-    else:
-        optim = initialize_obj(yaml_opt, optimizer)
+    if 'optimizer' in root_yaml:
+        yaml_opt = root_yaml['optimizer']
+        if yaml_opt['type'] == 'MultiOptimizer':
+            # multioptimizer init
+            for ltype in yaml_opt:
+                opt = yaml_opt[ltype]
+                if isinstance(opt, dict):
+                    if 'schedule' in opt:
+                        opt['schedule'] = optimizer.Schedule(opt['schedule'])
+                    yaml_opt[ltype] = initialize_obj(opt, optimizer)
+            optim = optimizer.MultiOptimizer(yaml_opt)
+        else:
+            optim = initialize_obj(yaml_opt, optimizer)
     return model, cost, optim

@@ -44,6 +44,9 @@ b_init: &b_init7
 layers:
 -
     type: Conv # Convolution + Bias + BN + Activation
+    conv_name: conv1
+    act_name: relu1
+    bias_name: conv1b
     fshape: [11, 11, 64]
     strides: 4
     padding: 3
@@ -52,10 +55,14 @@ layers:
     activation: Rectlin
 -
     type: Pooling
+    name: pool1
     fshape: 3
     strides: 2
 -
     type: Conv
+    conv_name: conv2
+    act_name: relu2
+    bias_name: conv2b
     fshape: [5, 5, 192]
     padding: 2
     init: *wt_init1
@@ -63,10 +70,14 @@ layers:
     activation: Rectlin
 -
     type: Pooling
+    name: pool2
     fshape: 3
     strides: 2
 -
     type: Conv
+    conv_name: conv3
+    act_name: relu3
+    bias_name: conv3b
     fshape: [3, 3, 384]
     padding: 1
     init: *wt_init2
@@ -74,6 +85,9 @@ layers:
     activation: Rectlin
 -
     type: Conv
+    conv_name: conv4
+    act_name: relu4
+    bias_name: conv4b
     fshape: [3, 3, 256]
     padding: 1
     init: *wt_init2
@@ -81,6 +95,9 @@ layers:
     activation: Rectlin
 -
     type: Conv
+    conv_name: conv5
+    act_name: relu5
+    bias_name: conv5b
     fshape: [3, 3, 256]
     padding: 1
     init: *wt_init2
@@ -88,28 +105,40 @@ layers:
     activation: Rectlin
 -
     type: Pooling
+    name: pool5
     fshape: 3
     strides: 2
 -
     type: Affine
+    linear_name: fc6
+    act_name: relu6
+    bias_name: fc6b
     nout: 4096
     init: *wt_init1
     bias: *b_init1
     activation: Rectlin
 -
     type: Dropout
+    name: drop6
     keep: 0.5
 -
     type: Affine
+    linear_name: fc7
+    act_name: relu7
+    bias_name: fc7b
     nout: 4096
     init: *wt_init1
     bias: *b_init1
     activation: Rectlin
 -
     type: Dropout
+    name: drop7
     keep: 0.5
 -
     type: Affine
+    linear_name: fc8
+    act_name: prob
+    bias_name: fc8b
     nout: 1000
     init: *wt_init1
     bias: *b_init7
