@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from bokeh.plotting import figure
-from bokeh.palettes import brewer
 
 
 def x_label(epoch_axis):
@@ -27,6 +25,9 @@ def cost_fig(cost_data, plot_height, plot_width, epoch_axis=True):
     """
     Generate a figure with lines for each element in cost_data.
     """
+    from bokeh.plotting import figure
+    from bokeh.palettes import brewer
+
     fig = figure(plot_height=plot_height,
                  plot_width=plot_width,
                  title="Cost",
