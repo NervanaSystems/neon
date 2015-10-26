@@ -8,7 +8,6 @@
 neon/version.py
 *@eaDir
 .pkgs
-*.png
 *.egg-info
 .venv
 .coverage

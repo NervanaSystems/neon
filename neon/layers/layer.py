@@ -64,7 +64,14 @@ class Layer(NervanaObject):
         return ret
 
     def nested_str(self, level=0):
-        return "  "*level + str(self)
+        """
+        Utility function for displaying layer info with a given indentation level
+
+        Arguments:
+            level (int, optional): indentation level
+        """
+
+        return "  " * level + str(self)
 
     def configure(self, in_obj):
         """
@@ -91,12 +98,34 @@ class Layer(NervanaObject):
                 self.in_shape = in_obj.shape  # This is a dataset
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocates output buffer to store activations from fprop.
+        Don't reallocate if it already exists.
+        Only allocate space if layer owns its own output (i.e. bias, activation work in-place,
+        so do not own their output).
+        outputs can be allocated from a pre-allocated pool if shared_outputs is provided
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+
+        """
         if self.outputs:
             return
         if self.owns_output:
             self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
 
     def set_deltas(self, delta_buffers):
+        """
+        Use pre-allocated (by layer containers) list of buffers for backpropagated error.
+        Only set deltas for layers that own their own deltas
+        Only allocate space if layer owns its own deltas (i.e. bias, activation work in-place,
+        so do not own their deltas).
+
+        Arguments:
+            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+
+        """
         if self.owns_delta and self.prev_layer:
             if type(self.prev_layer) is BranchNode:
                 self.deltas = self.prev_layer.deltas
@@ -108,6 +137,9 @@ class Layer(NervanaObject):
 
     @property
     def classnm(self):
+        """
+        Convenience method for getting the class name
+        """
         return self.__class__.__name__
 
     def fprop(self, inputs, inference=False):
@@ -151,6 +183,9 @@ class Layer(NervanaObject):
         raise NotImplementedError
 
     def get_terminal(self):
+        """
+        Used for recursively getting final nodes from layer containers
+        """
         return self
 
     def serialize(self):
@@ -165,14 +200,21 @@ class Layer(NervanaObject):
 
 
 class BranchNode(Layer):
+
+    """
+    Layer that allows branching.  Used to send outputs to multiple layer pathways.
+    Each pathway will get the entire output of the layer preceding the branch node.
+    """
+
     def __init__(self, name='branch'):
         super(BranchNode, self).__init__(name)
         self.owns_output = False
 
-    def __str__(self):
-        return "Branch Node Layer"
-
     def fprop(self, inputs=None, inference=False):
+
+        """
+        Passes output from preceding layer on without modification
+        """
         if self.outputs is None and inputs is not None:
             self.outputs = inputs
         return self.outputs
@@ -183,8 +225,8 @@ class BranchNode(Layer):
         or input layer
 
         Arguments:
-            in_obj (int, tuple, Layer or Tensor or dataset): object that provides shape
-                                                             information for layer
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
 
         Returns:
             (tuple): shape of output data
@@ -350,13 +392,12 @@ class ParameterLayer(Layer):
 
     def set_params(self, pdict):
         """
-        Set layer parameters (weights). Allocate space for other parameters but
-            do not initialize them.
+        Set layer parameters (weights). Allocate space for other parameters but do not initialize
+        them.
 
         Arguments:
             pdict (dict, ndarray): dictionary or ndarray with layer parameters
-                                   [support for ndarray is DEPRECATED and will
-                                    be removed]
+                                   [support for ndarray is DEPRECATED and will be removed]
         """
         if type(pdict) is dict:
             for key in pdict:
@@ -905,6 +946,13 @@ class GeneralizedCost(NervanaObject):
         self.deltas = None
 
     def initialize(self, in_obj):
+        """
+        Determine dimensions of cost and error buffers and allocate space from the input layer
+
+        Arguments:
+            in_obj (Layer): input layer from which to calculate costs
+        """
+
         assert isinstance(in_obj, Layer)
         self.prev_layer = in_obj
         (_, self.nstep) = interpret_in_shape(in_obj.out_shape)

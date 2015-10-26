@@ -37,3 +37,8 @@ GlorotUniform
 -------------
 .. autosummary::
    neon.initializers.initializer.GlorotUniform
+
+Xavier
+-------------
+.. autosummary::
+   neon.initializers.initializer.Xavier

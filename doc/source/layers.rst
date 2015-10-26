@@ -36,7 +36,7 @@ Convolutional Layers
 --------------------
 .. autosummary::
    neon.layers.layer.Convolution
-   neon.layers.layer.Deconv
+   neon.layers.layer.Deconvolution
 
 Linear Layer
 ------------
@@ -58,6 +58,7 @@ Composite Layers
 .. autosummary::
    neon.layers.layer.Affine
    neon.layers.layer.Conv
+   neon.layers.layer.Deconv
 
 Dropout Layer
 -------------
@@ -69,23 +70,18 @@ LookupTable Layer
 .. autosummary::
    neon.layers.layer.LookupTable
 
-Cost Layer
-----------
+Cost
+----
 .. autosummary::
    neon.layers.layer.GeneralizedCost
    neon.layers.layer.GeneralizedCostMask
+   neon.layers.container.Multicost
 
 Batch Norm Layer
 ----------------
 .. autosummary::
    neon.layers.layer.BatchNorm
-
-Merge Layers
-------------
-.. autosummary::
-   neon.layers.merge.MergeSum
-   neon.layers.merge.MergeConcat
-   neon.layers.merge.MergeConcatSequence
+   neon.layers.layer.BatchNormAutodiff
 
 Gated Recurrent Unit Layer
 --------------------------
@@ -101,4 +97,7 @@ Recurrent Layer
 ----------------
 .. autosummary::
    neon.layers.recurrent.Recurrent
-  
+   neon.layers.recurrent.RecurrentOutput
+   neon.layers.recurrent.RecurrentSum
+   neon.layers.recurrent.RecurrentMean
+   neon.layers.recurrent.RecurrentLast

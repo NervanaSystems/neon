@@ -15,6 +15,11 @@ def flatten(item):
 
 class LayerContainer(Layer):
 
+    """
+    Layer containers are a generic class that are used to encapsulate groups of layers and
+    provide methods for propagating through the constituent layers, allocating memory
+    """
+
     @property
     def layers_to_optimize(self):
         lto = []
@@ -34,16 +39,11 @@ class LayerContainer(Layer):
 
 class Sequential(LayerContainer):
     """
-    Merge layer which merges the outputs of multiple input models where each
-    input model is a list of Layers or a Layer
+    Layer container that encapsulates a simple linear pathway of layers.
 
-    Attributes:
-        layer_container (list): List of objects which can be either a list of
-                                layers or a layer.  Each element in
-                                layer_container is a separate model which runs
-                                on its own input.
-        deltas (list): Used by MergeConcat. List of deltas (Tensors) to pass
-                       to each input model during bprop.
+    Arguments:
+        layers (list): List of objects which can be either a list of layers (including layer
+                       containers).
     """
     def __init__(self, layers, name='sequential'):
         super(Sequential, self).__init__(name)
@@ -115,6 +115,18 @@ class Sequential(LayerContainer):
 
 
 class Tree(LayerContainer):
+    """
+    Layer container that encapsulates a simple linear pathway of layers.
+
+    Arguments:
+        layers (list): List of Sequential containers corresponding to the branches of the Tree.
+                       The branches must be provided with main trunk first, and then the auxiliary
+                       branches in the order the branch nodes are encountered
+        name (string, optional): Name for the container
+        alphas (list(float), optional): list of weighting factors to apply to each branch for
+                                        backpropagating error.
+    """
+
     def __init__(self, layers, name='tree', alphas=None):
         self.layers = []
         for l in layers:
@@ -183,10 +195,23 @@ class Tree(LayerContainer):
 
 class MergeBroadcast(LayerContainer):
     """
-    Branches a single incoming layer or object into multiple output layers.
-    Each of the output layers will have same input size as the output of the incoming layer
+    Branches a single incoming layer or object (broadcast) into multiple output paths that are
+    then combined again (merged)
+
+    Arguments:
+        layers (list(list(Layer), LayerContainer): list of either layer lists,
+                                                   or layer containers.  Elements that are
+                                                   lists will be wrapped in Sequential
+                                                   containers
+        alphas (list(float), optional):  list of alpha values by which to weight the
+                                         backpropagated errors
+        name (str): Container name.  Defaults to "MergeBroadcast"
     """
-    def __init__(self, layers, merge, alphas=None, name='branch'):
+    def __init__(self, layers, merge, alphas=None, name='MergeBroadcast'):
+        """
+
+
+        """
         super(MergeBroadcast, self).__init__(name)
 
         # Input list of layers converts:
@@ -267,6 +292,9 @@ class MergeBroadcast(LayerContainer):
             delta_buffers.reverse()
 
     def _configure_merge(self):
+        """
+        Helper function for configuring shapes depending on the merge concatenation type
+        """
         in_shapes = [l.out_shape for l in self.layers]
         # Figure out how to merge
         if self.merge == "recurrent":
@@ -305,7 +333,8 @@ class MergeBroadcast(LayerContainer):
 
 class MergeMultistream(MergeBroadcast):
     """
-    Merging multiple sources via concatenation
+    Merging multiple input sources via concatenation.  This container is similar to MergeBroadcast
+    except that it receives different streams of input directly from a dataset.
     """
     def __init__(self, layers, merge, name='multistream'):
         super(MergeMultistream, self).__init__(layers, merge=merge, name=name)
@@ -316,7 +345,7 @@ class MergeMultistream(MergeBroadcast):
         the shapes correspond to the layer_container attribute
 
         Arguments:
-            in_obj (list)
+            in_obj (list(Tensor)): list of Data tensors provided to each sequential container
         """
         self.prev_layer = None
         if not isinstance(in_obj, list):
@@ -345,6 +374,17 @@ class MergeMultistream(MergeBroadcast):
 
 
 class Multicost(NervanaObject):
+    """
+    Class used to compute cost from a Tree container with multiple outputs.
+    The number of costs must match the number of outputs.  Costs will be applied to the outputs
+    in the same order that they occur in the Tree.
+
+    The targets used for the cost can either be provided from the dataset as a list or tuple,
+    one for each cost, or, if only a single target is provided, the same target is used for all
+    costs.  This is useful for providing multiple cost branches computing the same error at
+    different stages of the network as in GoogLeNet.
+    """
+
     def __init__(self, costs, weights=None, name=None):
         super(Multicost, self).__init__(name)
         self.costs = costs
@@ -364,12 +404,14 @@ class Multicost(NervanaObject):
 
     def get_cost(self, inputs, targets):
         """
-        Compute the cost function over the inputs and targets.
+        Compute the cost function over a list of inputs and targets.
 
         Arguments:
-            inputs (Tensor): Tensor containing input values to be compared to
-                targets
-            targets (Tensor): Tensor containing target values.
+            inputs (list(Tensor)): list of Tensors containing input values to be compared to
+                                   targets
+            targets (Tensor, list(Tensor)): either a list of Tensors containing target values, or
+                                            a single target Tensor that will be mapped to each
+                                            input
 
         Returns:
             Tensor containing cost
@@ -381,6 +423,20 @@ class Multicost(NervanaObject):
         return costvals[0]
 
     def get_errors(self, inputs, targets):
+        """
+        Get a list of errors for backpropagating to a Tree container that has multiple output
+        nodes.
+
+        Arguments:
+            inputs (list(Tensor)): list of Tensors containing input values to be compared to
+                                   targets
+            targets (Tensor, list(Tensor)): either a list of Tensors containing target values, or
+                                            a single target Tensor that will be mapped to each
+                                            input
+        Returns:
+            list of Tensors containing errors for each input
+        """
+
         l_targets = targets if type(targets) in (tuple, list) else [targets for c in self.costs]
         if self.errors is None:
             self.errors = [c.deltas for c in self.costs]

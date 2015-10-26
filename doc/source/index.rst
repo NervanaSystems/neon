@@ -79,6 +79,7 @@ roles. Apply here_!
    optimizers.rst
    activations.rst
    layers.rst
+   layer_containers.rst
    costs.rst
    models.rst
    metrics.rst

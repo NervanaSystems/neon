@@ -95,6 +95,14 @@ class GlorotUniform(Initializer):
 
 
 class Xavier(Initializer):
+    """
+    Alternate form of Glorot where only input nodes are used for scaling range.
+
+    Args:
+        local   (bool, optional): Whether the layer type is local (Convolutional) or not.
+                                  default is True.
+    """
+
     def __init__(self, local=True, name="xavier"):
         super(Xavier, self).__init__(name=name)
         self.local = local

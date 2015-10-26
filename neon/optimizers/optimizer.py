@@ -108,6 +108,14 @@ class ExpSchedule(Schedule):
 
 
 class PolySchedule(Schedule):
+    """
+    Polynomial learning rate schedule.
+
+    Arguments:
+        total_epochs (int): total number of epochs over which to calculate interpolated decay
+        power (float): total decay parameter
+    """
+
     def __init__(self, total_epochs, power):
         self.total_epochs = np.float32(total_epochs)
         self.power = power

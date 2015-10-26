@@ -41,14 +41,14 @@ class Callbacks(NervanaObject):
             model (Model): the model object
             train_set (DataIterator): the training dataset
             parsed_args (dict): Dictionary of command line args, as follows:
-                output_file (string, optional): path to save callback data to
-                valid_freq (int, optional): how often (in epochs) to run validation
-                progress_bar (bool): control whether a progress bar callback is created.
-                                     Defaults to True.
-                save_path (string):
-                serialize (int):
-                history (int):
-             valid_set (DataIterator, optional): the validation dataset to use
+                                output_file (string, optional): path to save callback data to
+            valid_freq (int, optional): how often (in epochs) to run validation
+            progress_bar (bool): control whether a progress bar callback is created.
+                                 Defaults to True.
+            save_path (string):
+            serialize (int):
+            history (int):
+            valid_set (DataIterator, optional): the validation dataset to use
        """
 
         output_file = parsed_args.output_file

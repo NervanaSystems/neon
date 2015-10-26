@@ -126,7 +126,7 @@ API
    neon.layers.recurrent.RecurrentMean
    neon.layers.recurrent.RecurrentLast
 
-   
+
 ``neon.models``
 ---------------
 
@@ -154,7 +154,7 @@ API
    neon.optimizers.optimizer.MultiOptimizer
 
 ``neon.activations``
--------------------
+--------------------
 
 .. autosummary::
    :toctree: generated/
@@ -212,5 +212,5 @@ API
    neon.visualizations.data.create_minibatch_x
    neon.visualizations.data.create_epoch_x
    neon.visualizations.data.h5_cost_data
-   neon.visualizations.figure.x_label
-   neon.visualizations.figure.cost_fig
+..   neon.visualizations.figure.x_label
+..   neon.visualizations.figure.cost_fig

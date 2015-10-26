@@ -45,9 +45,7 @@ Layer buffer allocations
 * Data buffers
 
   * A layer infers input shape from previous layers and initializes buffers accordingly.
-  * Buffer initialization for the weights, outputs, and deltas occurs during the
-    first fprop call which calls ``init_buffers`` and ``init_params``.
-  * Pre-allocating these buffers allows buffer reuse and reduces memory usage.
+  * Pre-allocating activation buffers allows buffer reuse and reduces memory usage.
   * Buffers will be reinitalized during the next fprop if the layer is reinstantiated.
 
 * Parameter layers (``Linear``, ``Bias``, ``Convolution``, and ``BatchNorm``) maintain

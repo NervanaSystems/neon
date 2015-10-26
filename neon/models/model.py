@@ -27,7 +27,7 @@ class Model(NervanaObject):
     Additional functionality can be added to fit through callback functions.
 
     Arguments:
-        layers: layer container
+        layers: layer container, or a list of layers (that will be containerized)
         name (str): Model name.  Defaults to "model"
         optimizer (Optimizer): Optimizer object which defines the learning rule
                                for updating model parameters (ie DescentMomentum, AdaDelta)
@@ -42,7 +42,7 @@ class Model(NervanaObject):
         self.finished = False
         self.initialized = False
 
-        # Wrap the list of layers in a Sequential container
+        # Wrap the list of layers in a Sequential container if a raw list of layers
         self.layers = layers if type(layers) in (Sequential, Tree) else Sequential(layers)
         self.layers_to_optimize = self.layers.layers_to_optimize
 
