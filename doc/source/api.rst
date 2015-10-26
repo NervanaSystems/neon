@@ -125,6 +125,12 @@ API
    neon.layers.recurrent.RecurrentSum
    neon.layers.recurrent.RecurrentMean
    neon.layers.recurrent.RecurrentLast
+   neon.layers.container.LayerContainer
+   neon.layers.container.Sequential
+   neon.layers.container.Tree
+   neon.layers.container.MergeBroadcast
+   neon.layers.container.MergeMultistream
+   neon.layers.container.Multicost
 
 
 ``neon.models``
@@ -212,5 +218,5 @@ API
    neon.visualizations.data.create_minibatch_x
    neon.visualizations.data.create_epoch_x
    neon.visualizations.data.h5_cost_data
-..   neon.visualizations.figure.x_label
-..   neon.visualizations.figure.cost_fig
+   neon.visualizations.figure.x_label
+   neon.visualizations.figure.cost_fig

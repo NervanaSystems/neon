@@ -70,7 +70,7 @@ The following are equivalent:
    t = Tree(layers=layer_list, alphas=[1., 1.])
 
 
-The layer pathways must be specified in the order of precendence from the root of the tree.  So the
+The layer pathways must be specified in the order of precedence from the root of the tree.  So the
 "trunk" of the tree must be provided first, then the subsequent pathways in the order which they
 occur up the tree.  All non-trunk pathways must start with an instantiated ``BranchNode`` layer
 that also occurs in the trunk at the point of branching.
@@ -101,20 +101,22 @@ During inference, only the trunk branch (first ``Sequential``) is evaluated.
 
 MergeBroadcast
 --------------
+
 ``MergeBroadcast`` containers consist of multiple ``Sequential`` pathways that receive input from a
 single input layer (the broadcast), and then combine their outputs via concatenation (the merge). A
 ``MergeBroadcast`` container's ``layers`` attribute consists of multiple ``Sequential`` containers,
 each representing one of the pathways receiving the broadcasted input.  The output of the
 ``MergeBroadcast`` is the merged output of the ``Sequential`` members of ``layers``.  The method of
 concatenation is specified by the ``merge`` argument, which indicates the axis along which to
-concatenate.  As in ``Tree``, the provided layers list can consiste of either ``Sequential``s or
-lists of layers which will be converted to Sequentials during construction.
+concatenate.  As in ``Tree``, the provided layers list can consist of either ``Sequential``
+objects or lists of layers which will be converted to Sequential objects during construction.
 
 .. autosummary::
    neon.layers.container.MergeBroadcast
 
 MergeMultistream
 ----------------
+
 ``MergeMultistream`` containers are special cases of the ``MergeBroadcast`` container, except that
 they originate from the input provided to the model, by ``DataIterator``, for example.  Instead of
 broadcasting from an input layer to their internal ``Sequential`` pathways, each pathway gets its
