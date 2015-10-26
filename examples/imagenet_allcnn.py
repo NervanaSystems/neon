@@ -16,56 +16,57 @@
 
 """
 AllCNN style convnet on imagenet data.
+
+Reference:
+    Striving for Simplicity: the All Convolutional Net `[Springenberg2014]`_
+..  _[Springenberg2014]: http://arxiv.org/pdf/1412.6806.pdf
 """
 
-import sys
 from neon.util.argparser import NeonArgparser
 from neon.backends import gen_backend
 from neon.initializers import GlorotUniform
 from neon.optimizers import GradientDescentMomentum, Schedule
-from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost
-from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
+from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost, DataTransform
+from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Normalizer
 from neon.models import Model
 from neon.callbacks.callbacks import Callbacks
-from neon.data import ImgMaster
+from neon.data import ImgMaster, ImageLoader
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument('--deconv', action='store_true', help='save visualization data from deconvolution')
-parser.add_argument('--model_file', help='load model from pkl file')
+parser.add_argument('--deconv', action='store_true',
+                    help='save visualization data from deconvolution')
+parser.add_argument('--loader_version', default='old', choices=['old', 'new'],
+                    help='whether to use old dataloader (ImgMaster) or new (ImageLoader)')
 args = parser.parse_args()
 
 
-# they used 64 samples batch
 # hyperparameters
 batch_size = 64
-
-#450 000 iterations, 1.2 mil / 64 batchsize
-num_epochs = 25
 
 # setup backend
 be = gen_backend(backend=args.backend,
                  batch_size=batch_size,
                  rng_seed=args.rng_seed,
                  device_id=args.device_id,
-                 default_dtype=args.datatype)
+                 datatype=args.datatype)
 
-try:
-    train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train')
-    valid_set = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
-                    do_transforms=False)
-except (OSError, IOError, ValueError) as err:
-    print err
-    sys.exit(0)
-
+# setup data provider
+img_provider = ImgMaster if args.loader_version == 'old' else ImageLoader
+img_set_options = dict(repo_dir=args.data_dir,
+                       inner_size=224,
+                       dtype=args.datatype,
+                       subset_pct=100)
+train = img_provider(set_name='train', **img_set_options)
+test = img_provider(set_name='validation', do_transforms=False, **img_set_options)
 train.init_batch_provider()
-valid_set.init_batch_provider()
+test.init_batch_provider()
 
 relu = Rectlin()
 
 init_uni = GlorotUniform()
 
-# These parameters below are straight out of the paper
+# The parameters below are straight out of [Springenberg2014]
 opt_gdm = GradientDescentMomentum(learning_rate=0.01,
                                   schedule=Schedule(step_config=[10],
                                                     change=0.1),
@@ -74,19 +75,24 @@ opt_gdm = GradientDescentMomentum(learning_rate=0.01,
 
 # set up model layers
 layers = []
-layers.append(Conv((11,11,96), init=init_uni, activation=relu, strides=4, pad=5))
-layers.append(Conv((1,1,96), init=init_uni, activation=relu, strides=1))
-layers.append(Conv((3,3,96), init=init_uni, activation=relu, strides=2, pad=1))
-layers.append(Conv((5,5,256), init=init_uni, activation=relu, strides=1))
-layers.append(Conv((1,1,256), init=init_uni, activation=relu, strides=1))
-layers.append(Conv((3,3,256), init=init_uni, activation=relu, strides=2, pad=1))
-layers.append(Conv((3,3,384), init=init_uni, activation=relu, strides=1, pad=1))
-layers.append(Conv((1,1,384), init=init_uni, activation=relu, strides=1))
-layers.append(Conv((3,3,384), init=init_uni, activation=relu, strides=2, pad=1))
+layers.append(DataTransform(transform=Normalizer(divisor=128.)))
+
+layers.append(Conv((11, 11, 96), init=init_uni, activation=relu, strides=4, padding=1))
+layers.append(Conv((1, 1, 96),   init=init_uni, activation=relu, strides=1))
+layers.append(Conv((3, 3, 96),   init=init_uni, activation=relu, strides=2,  padding=1))  # 54->27
+
+layers.append(Conv((5, 5, 256),  init=init_uni, activation=relu, strides=1))              # 27->23
+layers.append(Conv((1, 1, 256),  init=init_uni, activation=relu, strides=1))
+layers.append(Conv((3, 3, 256),  init=init_uni, activation=relu, strides=2,  padding=1))  # 23->12
+
+layers.append(Conv((3, 3, 384),  init=init_uni, activation=relu, strides=1,  padding=1))
+layers.append(Conv((1, 1, 384),  init=init_uni, activation=relu, strides=1))
+layers.append(Conv((3, 3, 384),  init=init_uni, activation=relu, strides=2,  padding=1))  # 12->6
+
 layers.append(Dropout(keep=0.5))
-layers.append(Conv((3,3,1024), init=init_uni, activation=relu, strides=1, pad=1))
-layers.append(Conv((1,1,1024), init=init_uni, activation=relu, strides=1))
-layers.append(Conv((1,1,1000), init=init_uni, activation=relu, strides=1))
+layers.append(Conv((3, 3, 1024), init=init_uni, activation=relu, strides=1, padding=1))
+layers.append(Conv((1, 1, 1024), init=init_uni, activation=relu, strides=1))
+layers.append(Conv((1, 1, 1000), init=init_uni, activation=relu, strides=1))
 layers.append(Pooling(6, op='avg'))
 
 layers.append(Activation(Softmax()))
@@ -101,19 +107,11 @@ if args.model_file:
     mlp.load_weights(args.model_file)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, output_file=args.output_file)
-
+callbacks = Callbacks(mlp, train, eval_set=test, **args.callback_args)
 if args.deconv:
-    callbacks.add_deconv_callback(train, valid_set, args.epochs)
-
-if args.save_path:
-    checkpoint_schedule = range(1, args.epochs)
-    callbacks.add_serialize_callback(checkpoint_schedule, args.save_path, history=25)
-
-callbacks.add_serialize_callback(1, './IMAGENET_cnn.pkl', history=35)
-callbacks.add_guided_callback(train, valid_set, 1)
+    callbacks.add_deconv_callback(train, test)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
-valid_set.exit_batch_provider()
+test.exit_batch_provider()
 train.exit_batch_provider()

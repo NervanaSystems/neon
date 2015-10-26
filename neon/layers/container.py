@@ -1,5 +1,5 @@
 import numpy as np
-from neon.layers.layer import Layer, BranchNode, Dropout
+from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform
 from neon import NervanaObject
 from operator import add
 
@@ -51,7 +51,8 @@ class Sequential(LayerContainer):
         self.layers = [l for l in flatten(layers)]
         self._layers = filter(lambda x: type(x) not in (BranchNode,), self.layers)
         root = self._layers[0]
-        assert root.owns_output or type(root) is Dropout, "Sequential root must own outputs"
+        assert (root.owns_output or
+                type(root) in [Dropout, DataTransform]), "Sequential root must own outputs"
 
     def configure(self, in_obj):
         """

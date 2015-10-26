@@ -755,6 +755,42 @@ class Activation(Layer):
         return error
 
 
+class DataTransform(Layer):
+
+    """
+    A layer that applies a specified transform to input data in fprop only.
+
+    Only supported as the first layer in the network.
+
+    Arguments:
+        transform (Transform): a transform object with fprop function to apply
+        name (str, optional): Layer name. Defaults to "DataTransformLayer"
+    """
+
+    def __init__(self, transform, name="DataTransformLayer"):
+        super(DataTransform, self).__init__(name)
+        self.transform = transform
+        self.owns_output = False
+
+    def __str__(self):
+        return "DataTransform Layer '%s': %s" % (
+               self.name, self.transform.__class__.__name__)
+
+    def configure(self, in_obj):
+        super(DataTransform, self).configure(in_obj)
+        self.out_shape = self.in_shape
+        (self.nout, _) = interpret_in_shape(self.in_shape)
+        return self
+
+    def fprop(self, inputs, inference=False):
+        self.outputs = self.inputs = inputs
+        self.outputs[:] = self.transform(self.inputs)
+        return self.outputs
+
+    def bprop(self, *args):
+        return None
+
+
 class Affine(list):
 
     """
@@ -1104,7 +1140,7 @@ class GeneralizedCostMask(GeneralizedCost):
 class BatchNorm(Layer):
 
     """
-    A batch normalization layer as described in [Ioffe]_
+    A batch normalization layer as described in [Ioffe2015]_
 
     Normalizes a batch worth of inputs by subtracting batch mean and
     dividing by batch variance.  Then scales by learned factor gamma and
@@ -1116,7 +1152,7 @@ class BatchNorm(Layer):
 
     Notes:
 
-    .. [Ioffe] arXiv:1502.03167
+    .. [Ioffe2015] http://arxiv.org/abs/1502.03167
     """
 
     def __init__(self, rho=0.99, eps=1e-6, name="BatchNormLayer"):

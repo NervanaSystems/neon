@@ -30,10 +30,10 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-(X_train, y_train), (X_test, y_test), nclass, lshape = load_cifar10(path=args.data_dir)
+(X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
 
-train = DataIterator(X_train, y_train, nclass=nclass, lshape=lshape)
-test = DataIterator(X_test, y_test, nclass=nclass, lshape=lshape)
+train = DataIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
+test = DataIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
 
 init_uni = Uniform(low=-0.1, high=0.1)
 opt_gdm = GradientDescentMomentum(learning_rate=0.01, momentum_coef=0.9)

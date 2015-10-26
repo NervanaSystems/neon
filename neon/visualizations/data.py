@@ -80,7 +80,6 @@ def h5_cost_data(filename, epoch_axis=True):
 
         for name, ydata in cost.iteritems():
             y = ydata[...]
-
             if ydata.attrs['time_markers'] == 'epoch_freq':
                 y_epoch_freq = ydata.attrs['epoch_freq']
                 assert len(y) == total_epochs / y_epoch_freq
@@ -114,6 +113,39 @@ def h5_hist_data(filename, epoch_axis=True):
                 ret.append((hname, hdata[...], dh, dw, bins, offset))
 
 
+def convert_rgb_to_bokehrgba(img_data, downsample=1):
+    """
+    Convert RGB image to two-dimensional array of RGBA values (encoded as 32-bit integers)
+    (required by Bokeh). The functionality is currently not available in Bokeh.
+    An issue was raised here: https://github.com/bokeh/bokeh/issues/1699 and this function is a
+    modified version of the suggested solution.
+
+    Arguments:
+        img_data: img (ndarray, shape: [N, M, 3], dtype: uint8): image data
+        dh: height of image
+        dw: width of image
+
+    Returns:
+        img (ndarray): 2D image array of RGBA values
+    """
+    if img_data.dtype != np.uint8:
+        raise NotImplementedError
+
+    if img_data.ndim != 3:
+        raise NotImplementedError
+
+    # downsample for render performance, v-flip since plot origin is bottom left
+    # img_data = np.transpose(img_data, (1,2,0))
+    img_data = img_data[::-downsample, ::downsample, :]
+    img_h, img_w, C = img_data.shape
+
+    # add an alpha channel to the image and recast from pixels of u8u8u8u8 to u32
+    bokeh_img = np.dstack([img_data, 255 * np.ones((img_h, img_w), np.uint8)])
+    final_image = bokeh_img.reshape(img_h, img_w * (C+1)).view(np.uint32)
+
+    return final_image
+
+
 def h5_deconv_data(filename):
     """
     Read deconv visualization data from hdf5 file.
@@ -126,18 +158,21 @@ def h5_deconv_data(filename):
     with h5py.File(filename, "r") as f:
         if 'deconv' not in f.keys():
             return None
-        act_data = f['deconv/max_act_data']
-        img_data = f['deconv/img_data']
+        act_data = f['deconv/max_act']
+        img_data = f['deconv/img']
 
         for layer in act_data.keys():
             layer_data = list()
-            for fm in act_data[layer].iterkeys():
-                fm_data = act_data[layer][fm]
-                plot_deconv = fm_data['plot'][...]
+            for fm in range(act_data[layer]['vis'].shape[0]):
 
-                batch_ind, img_ind = fm_data['img_ind'][...]
-                key = 'batch_' + str(batch_ind) + '_img_' + str(img_ind)
-                plot_img = img_data[key][...]
+                # to avoid storing entire dataset, imgs are cached as needed, have to look up
+                batch_ind, img_ind = act_data[layer]['batch_img'][fm]
+                img_store = img_data['batch_{}'.format(batch_ind)]
+                img_cache_ofs = img_store.attrs[str(img_ind)]
+
+                # have to convert from rgb to rgba and cast as uint32 dtype for bokeh
+                plot_img = convert_rgb_to_bokehrgba(img_store['HWC_uint8'][:, :, :, img_cache_ofs])
+                plot_deconv = convert_rgb_to_bokehrgba(act_data[layer]['vis'][fm])
 
                 layer_data.append((fm, plot_deconv, plot_img))
 

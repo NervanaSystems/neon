@@ -2,6 +2,7 @@
 *.sublime-workspace
 *.pyc
 *.pkl
+*.prm
 *.so
 *.swp
 .DS_Store
@@ -20,6 +21,7 @@ generated
 *.h5
 *.html
 *.txt
+*.log
 neon_help_output.txt
 neon/backends/util/cuda_capability
 neon/backends/kernels/cu

@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from neon.layers.layer import (Linear, Bias, Affine, Conv, Convolution, GeneralizedCost, Dropout,
-                               Pooling, Activation, BatchNorm, BatchNormAutodiff,
+                               Pooling, Activation, DataTransform, BatchNorm, BatchNormAutodiff,
                                Deconv, Deconvolution, GeneralizedCostMask, LookupTable,
                                DropoutBinary, BranchNode)
 from neon.layers.recurrent import Recurrent, LSTM, GRU, RecurrentSum, RecurrentMean, RecurrentLast

@@ -17,11 +17,11 @@
 try:
     from bokeh.plotting import figure
     from bokeh.palettes import brewer
-    from bokeh.io import vplot, hplot
+    from bokeh.models import Range1d
+    from bokeh.embed import components
+    from jinja2 import Template
 except ImportError:
     pass
-
-import numpy as np
 
 
 def x_label(epoch_axis):
@@ -45,7 +45,7 @@ def cost_fig(cost_data, plot_height, plot_width, epoch_axis=True):
     # Spectral palette supports 3 - 11 distinct colors
     num_colors_required = len(cost_data)
     assert num_colors_required <= 11, "Insufficient colors in predefined palette."
-    colors = brewer["Spectral"][max(3, len(cost_data))]
+    colors = list(brewer["Spectral"][max(3, len(cost_data))])
     if num_colors_required < 3:
         # manually adjust pallette for better contrast
         colors[0] = brewer["Spectral"][6][0]
@@ -75,117 +75,99 @@ def hist_fig(hist_data, plot_height, plot_width, x_range=None, epoch_axis=True):
     return fig
 
 
-def scale_to_rgb(img):
-    """
-    Convert float data to valid RGB values in the range [0, 255]
-
-    Arguments:
-        img (ndarray): the image data
-
-    Returns:
-        img (ndarray): image array with valid RGB values
-    """
-    absMax = np.max((abs(img)))
-    minVal = - absMax
-    img -= minVal
-    maxImg = np.max(img)
-    maxVal = max(absMax - minVal, maxImg)
-    if maxVal == 0:
-        maxVal = 1
-    img = img / maxVal * 255
-    return img
+def image_fig(data, h, w, x_range, y_range, plot_size):
+    fig = figure(x_range=x_range, y_range=y_range,
+                 plot_width=plot_size, plot_height=plot_size,
+                 toolbar_location=None)
+    fig.image_rgba([data], x=[0], y=[0], dw=[w], dh=[h])
+    fig.axis.visible = None
+    fig.min_border = 0
+    return fig
 
 
-def convert_rgb_to_bokehrgba(img_data, dh, dw):
-    """
-    Convert RGB image to two-dimensional array of RGBA values (encoded as 32-bit integers)
-    (required by Bokeh). The functionality is currently not available in Bokeh.
-    An issue was raised here: https://github.com/bokeh/bokeh/issues/1699 and this function is a
-    modified version of the suggested solution.
-
-    Arguments:
-        img_data: img (ndarray, shape: [N, M, 3], dtype: uint8): image data
-        dh: height of image
-        dw: width of image
-
-    Returns:
-        img (ndarray): 2D image array of RGBA values
-    """
-    if img_data.dtype != np.uint8:
-        raise NotImplementedError
-
-    if img_data.ndim != 3:
-        raise NotImplementedError
-
-    bokeh_img = np.dstack([img_data, 255 * np.ones(img_data.shape[:2], np.uint8)])
-    # This step is necessary, because we transposed the data before passing it into this function
-    # and somehow, that messed with some shape attribute.
-    final_image = bokeh_img.reshape(dh * dw * 4).view(np.uint32)
-    final_image = final_image.reshape((dh, dw))
-
-    return final_image
-
-
-def deconv_fig(layer_data, plot_size, figs_per_row=10):
-    """
-    Generate a figure for each projection of feature map activations back to pixel space.
-
-    Arguments:
-        img_data (tuple): feature map name, array with image rgb values
-        plot_size (int): height and width of plot
-        figs_per_row (int, optional): the number of images to plot in a row
-    """
-    rows = list()
-    rowfigs = list()
-    img_h, img_w = layer_data[0][1].shape[1], layer_data[0][1].shape[2]
+def deconv_figs(layer_name, layer_data, fm_max=8, plot_size=120):
+    vis_keys = dict()
+    img_keys = dict()
+    fig_dict = dict()
 
     for fm_num, (fm_name, deconv_data, img_data) in enumerate(layer_data):
-        if fm_num > 30:
+
+        if fm_num >= fm_max:
             break
-        img_data = img_data.reshape((3, img_h, img_w))
-        img_data = np.transpose(img_data, (1, 2, 0))
-        deconv_data = np.transpose(deconv_data, (1, 2, 0))
 
-        deconv_rgb = scale_to_rgb(deconv_data)
-        deconv_rgb = deconv_rgb.astype(np.uint8)
-        img_rgb = scale_to_rgb(img_data)
-        img_rgb = img_rgb.astype(np.uint8)
+        img_h, img_w = img_data.shape
+        x_range = Range1d(start=0, end=img_w)
+        y_range = Range1d(start=0, end=img_h)
+        img_fig = image_fig(img_data, img_h, img_w, x_range, y_range, plot_size)
+        deconv_fig = image_fig(deconv_data, img_h, img_w, x_range, y_range, plot_size)
 
-        deconv_final = convert_rgb_to_bokehrgba(deconv_rgb, img_h, img_w)
-        deconv_final = deconv_final.flatten()
-        deconv_final = deconv_final[::-1]
-        deconv_final = deconv_final.reshape((img_h, img_w))
-        img_final = convert_rgb_to_bokehrgba(img_rgb, img_h, img_w)
-        img_final = img_final.flatten()
-        img_final = img_final[::-1]
-        img_final = img_final.reshape((img_h, img_w))
+        title = "{}_fmap_{:04d}".format(layer_name, fm_num)
+        vis_keys[fm_num] = "vis_"+title
+        img_keys[fm_num] = "img_"+title
 
-        deconv_fig = figure(title=str(fm_num+1), title_text_font_size='6pt',
-                            x_range=[0, img_w], y_range=[0, img_h],
-                            plot_width=plot_size-15, plot_height=plot_size,
-                            toolbar_location=None)
-        deconv_fig.axis.visible = None
-        deconv_fig.image_rgba([deconv_final][::-1], x=[0], y=[0], dw=[img_w], dh=[img_h])
-        deconv_fig.min_border = 0
+        fig_dict[vis_keys[fm_num]] = deconv_fig
+        fig_dict[img_keys[fm_num]] = img_fig
 
-        img_fig = figure(title=str(fm_num+1), title_text_font_size='6pt',
-                         x_range=[0, img_w], y_range=[0, img_h],
-                         plot_width=plot_size-15, plot_height=plot_size,
-                         toolbar_location=None)
-        img_fig.axis.visible = None
-        img_fig.image_rgba([img_final][::-1], x=[0], y=[0], dw=[img_w], dh=[img_h])
-        img_fig.min_border = 0
+    return vis_keys, img_keys, fig_dict
 
-        if len(rowfigs) < figs_per_row:
-            rowfigs.append(deconv_fig)
-            rowfigs.append(img_fig)
-        else:
-            rows.append(hplot(*rowfigs))
-            rowfigs = list()
 
-    if len(rowfigs):
-        rows.append(hplot(*rowfigs))
+def deconv_summary_page(filename, cost_data, deconv_data):
+    fig_dict = dict()
 
-    allfigs = vplot(*rows)
+    cost_key = "cost_plot"
+    fig_dict[cost_key] = cost_fig(cost_data, 300, 533, epoch_axis=True)
 
-    return allfigs
+    vis_keys = dict()
+    img_keys = dict()
+    for layer, layer_data in deconv_data:
+        lyr_vis_keys, lyr_img_keys, lyr_fig_dict = deconv_figs(layer, layer_data, fm_max=4)
+        vis_keys[layer] = lyr_vis_keys
+        img_keys[layer] = lyr_img_keys
+        fig_dict.update(lyr_fig_dict)
+
+    script, div = components(fig_dict)
+
+    template = Template('''
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <title>{{page_title}}</title>
+        <style> div{float: left;} </style>
+        <link rel="stylesheet"
+              href="http://cdn.pydata.org/bokeh/release/bokeh-0.9.0.min.css"
+              type="text/css" />
+        <script type="text/javascript"
+                src="http://cdn.pydata.org/bokeh/release/bokeh-0.9.0.min.js"></script>
+        {{ script }}
+    </head>
+    <body>
+    <div id=cost_plot style="width:100%; padding:10px">
+      {{ div[cost_key]}}
+    </div>
+
+    {% for layer in sorted_layers %}
+        <div id=Outer{{layer}} style="padding:20px">
+        <div id={{layer}} style="background-color: #C6FFF1; padding:10px">
+        Layer {{layer}}<br>
+        {% for fm in vis_keys[layer].keys() %}
+            <div id={{fm}} style="padding:10px">
+            Feature Map {{fm}}<br>
+            {{ div[vis_keys[layer][fm]] }}
+            {{ div[img_keys[layer][fm]] }}
+            </div>
+        {% endfor %}
+        </div>
+        </div>
+
+        <br><br>
+    {% endfor %}
+    </body>
+</html>
+''')
+
+    with open(filename, 'w') as htmlfile:
+        htmlfile.write(template.render(page_title="Deconv Visualization", script=script,
+                                       div=div, cost_key=cost_key, vis_keys=vis_keys,
+                                       img_keys=img_keys,
+                                       sorted_layers=sorted(vis_keys)))

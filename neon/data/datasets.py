@@ -121,9 +121,7 @@ def load_mnist(path=".", normalize=True):
             X_train = X_train / 255.
             X_test = X_test / 255.
 
-    lshape = (1, 28, 28)
-
-    return (X_train, y_train), (X_test, y_test), 10, lshape
+    return (X_train, y_train), (X_test, y_test), 10
 
 
 def _compute_zca_transform(imgs, filter_bias=0.1):
@@ -232,8 +230,7 @@ def load_cifar10(path=".", normalize=True, whiten=False):
         zca_cache = os.path.join(workdir, 'cifar-10-zca-cache.pkl')
         X_train, X_test = zca_whiten(X_train, X_test, cache=zca_cache)
 
-    lshape = (3, 32, 32)
-    return (X_train, y_train), (X_test, y_test), 10, lshape
+    return (X_train, y_train), (X_test, y_test), 10
 
 
 def load_babi(path=".", task='qa1_single-supporting-fact', subset='en'):

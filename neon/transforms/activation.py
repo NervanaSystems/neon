@@ -41,6 +41,21 @@ class Rectlin(Transform):
         return self.be.greater(x, 0)
 
 
+class Normalizer(Transform):
+    """
+    Normalize inputs by a fixed divisor
+    """
+    def __init__(self, name='normalizer', divisor=128.):
+        super(Normalizer, self).__init__(name)
+        self.divisor = divisor
+
+    def __call__(self, x):
+        return x / self.divisor
+
+    def bprop(self, x):
+        return x
+
+
 class Softmax(Transform):
     """
     SoftMax activation function.
