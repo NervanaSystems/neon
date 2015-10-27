@@ -540,6 +540,57 @@ class MetricCallback(Callback):
                 self.callback_data["metrics/%s" % met][epoch/self.epoch_freq] = stats[ind]
 
 
+class MultiLabelStatsCallback(Callback):
+
+    """
+    Callback for calculating statistics on multi-label classification tasks.
+
+    Can be used with PrecisionRecallMetric to calculate precision and recall values of the classification task
+
+    Arguments:
+        model (Model): model object
+        eval_set (DataIterator): dataset to evaluate
+        labels (list): the list of classifications (order must be the same as
+        epoch_freq (int, optional): how often (in epochs) to log info.
+                                    Defaults to every 1 epoch.
+    """
+
+    def __init__(self, model, eval_set, labels, metric, epoch_freq=1):
+        super(MultiLabelStatsCallback, self).__init__(epoch_freq=epoch_freq)
+        self.model = model
+        self.eval_set = eval_set
+        self.metric = metric
+        self.labels = labels
+        self.metric_desc = ", ".join(self.metric.metric_names)
+
+    def on_epoch_end(self, epoch):
+        if (epoch + 1) % self.epoch_freq == 0:
+            self.eval_set.reset()
+
+            running_stats = np.zeros_like(self.metric.outputs.get(), dtype=np.float32)
+            nprocessed = 0
+
+            # Calculate the precision and recall values
+            nbatch = 0
+            for x, t in self.eval_set:
+                x = self.model.fprop(x, inference=True)
+
+                self.metric(x, t)
+                running_stats += self.metric.outputs.get()
+                nbatch += 1
+
+            running_stats /= nbatch
+
+            # Generate the statistics for all the labels ignoring the first label (which is teh UNKNOWN category)
+            for i, label in enumerate(self.labels):
+                metric_text = "["
+                for k, metric in enumerate(self.metric.metric_names):
+                    metric_text += "%s: %d%% " % (metric, running_stats[k][i+1]*100.0)
+
+                metric_text += " ] -> %s\n" % label
+                sys.stdout.write(metric_text.encode('utf-8'))
+                sys.stdout.flush()
+
 class HistCallback(Callback):
     """
     Collect histograms of weights of all layers. Configurable to computed

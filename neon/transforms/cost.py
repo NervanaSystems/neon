@@ -325,3 +325,63 @@ class Accuracy(Metric):
         self.outputs[:] = self.be.equal(self.preds, self.hyps)
 
         return self.outputs.get()[:, calcrange].mean()
+
+class PrecisionRecallMetric(Metric):
+
+    '''
+    Compute precision and recall metrics
+    '''
+
+    def __init__(self, labels, time_steps, has_mask=False):
+
+        """
+        Create a precision and recall metric
+        :param labels: (Array of Strings) the label names (in order)
+        :param time_steps: number of time steps in the output layer
+        :param has_mask: (boolean) this needs to be set to true
+        :return:
+        """
+
+        self.outputs = self.be.zeros((2, len(labels)+1))
+        self.token_stats = self.be.zeros((3, len(labels)+1))
+        self.metric_names = ['Precision', 'Recall']
+        self.yclass = self.be.iobuf(time_steps, dtype=np.int32).reshape((1, -1))
+        self.time_steps = time_steps
+        self.has_mask = has_mask
+
+    def __call__(self, y, t):
+
+        """
+        Compute the precision and recall of a multi-class classification model
+
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            float: Returns the precision and recall values
+        """
+
+        self.yclass[:] = self.be.argmax(y, axis=0)
+        y[:] = self.be.onehot(self.yclass, axis=0)
+
+        if self.has_mask:
+            t = t[0]
+
+        # True positives
+        self.token_stats[0, :] = self.be.sum(y*t, axis=1).T
+
+        # Prediction
+        self.token_stats[1, :] = self.be.sum(y, axis=1).T
+
+        # Targets
+        self.token_stats[2, :] = self.be.sum(t, axis=1).T
+
+        # Precision
+        self.outputs[0, :] = self.token_stats[0, :] / (self.token_stats[1, :]+0.0000001)
+
+        # Recall
+        self.outputs[1, :] = self.token_stats[0, :] / (self.token_stats[2, :]+0.0000001)
+
+        # reshape here so there is no summing across the label predictions
+        return self.outputs
