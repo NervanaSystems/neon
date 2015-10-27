@@ -25,6 +25,8 @@ def cost_fig(cost_data, plot_height, plot_width, epoch_axis=True):
     """
     Generate a figure with lines for each element in cost_data.
     """
+    # NOTE: imports moved inside this function to make them a non-requirement
+    # for building documentation
     from bokeh.plotting import figure
     from bokeh.palettes import brewer
 

@@ -75,13 +75,13 @@ The layer pathways must be specified in the order of precedence from the root of
 occur up the tree.  All non-trunk pathways must start with an instantiated ``BranchNode`` layer
 that also occurs in the trunk at the point of branching.
 
-.. figure:: tree_structure.png
+.. figure:: assets/tree_structure.png
    :scale: 100 %
    :alt: branching model
 
    A schematic of a branching model with three output nodes
 
-.. figure:: tree_container.png
+.. figure:: assets/tree_container.png
    :scale: 80 %
    :alt: branching model as specified via containers
 
