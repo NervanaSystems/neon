@@ -25,7 +25,7 @@ from neon.backends import gen_backend
 from neon.initializers import Constant, GlorotUniform
 from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
-from neon.transforms import Rectlin, Softmax, CrossEntropyMulti
+from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
 from neon.data import ImgMaster
 from neon.callbacks.callbacks import Callbacks
@@ -125,14 +125,7 @@ opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, output_file=args.output_file)
-
-if args.validation_freq:
-    callbacks.add_validation_callback(test, args.validation_freq)
-
-if args.save_path:
-    checkpoint_schedule = range(1, args.epochs)
-    callbacks.add_serialize_callback(checkpoint_schedule, args.save_path, history=2)
+callbacks = Callbacks(mlp, train, args, eval_set=test, metric=TopKMisclassification(k=5))
 
 mlp.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 

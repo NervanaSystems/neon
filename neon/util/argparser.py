@@ -102,8 +102,8 @@ class NeonArgparser(configargparse.ArgumentParser):
                             help='hdf5 data file for metrics computed during '
                                  'the run, optional.  Can be used by nvis for '
                                  'visualization.')
-        rt_grp.add_argument('-val', '--validation_freq', type=int, default=None,
-                            help='frequency (in epochs) to test the validation set.')
+        rt_grp.add_argument('-eval', '--evaluation_freq', type=int, default=None,
+                            help='frequency (in epochs) to test the eval set.')
         rt_grp.add_argument('-H', '--history', type=int, default=1,
                             help='number of checkpoint files to retain')
 
@@ -184,6 +184,7 @@ class NeonArgparser(configargparse.ArgumentParser):
             namespace: contains the parsed arguments as attributes
         '''
         args = super(NeonArgparser, self).parse_args()
+        err_msg = None  # used for relaying exception to logger
 
         # set up the logging
         # max thresh is 50 (critical only), min is 10 (debug or higher)
@@ -233,32 +234,41 @@ class NeonArgparser(configargparse.ArgumentParser):
         args.progress_bar = not args.no_progress_bar
 
         if args.backend == 'cpu' and args.rounding > 0:
-            raise NotImplementedError('CPU backend does not support stochastic roudning')
+            err_msg = 'CPU backend does not support stochastic rounding'
+            logger.exception(err_msg)
+            raise NotImplementedError(err_msg)
 
         # done up front to avoid losing data due to incorrect path
         if args.save_path:
-            if not os.access(os.path.dirname(os.path.abspath(args.save_path)),
-                             os.R_OK | os.W_OK):
-                raise ValueError('Can not write to save_path dir %s' % args.save_path)
+            savedir = os.path.dirname(os.path.abspath(args.save_path))
+            if not os.access(savedir, os.R_OK | os.W_OK):
+                err_msg = 'Can not write to save_path dir %s' % savedir
             if os.path.exists(args.save_path):
-                # if file exists check that it can be overwritten
+                logger.warning('save file %s exists, attempting to overwrite' % args.save_path)
                 if not os.access(args.save_path, os.R_OK | os.W_OK):
-                    raise IOError('Can not write to save_path file %s' % args.save_path)
+                    err_msg = 'Can not write to save_path file %s' % args.save_path
+            if err_msg:
+                logger.exception(err_msg)
+                raise IOError(err_msg)
 
         if (args.serialize > 0) and (args.save_path is None):
-            logger.warn('No path given for model serialization,'
-                        'using default "neon_model.pkl"')
             args.save_path = "neon_model.pkl"
+            logger.warn('No path given for model serialization, using default "%s"',
+                        args.save_path)
         if (args.save_path is not None) and (args.serialize == 0):
-            logger.warn('No schedule given for model serialization,'
-                        'using default 1')
             args.serialize = 1
+            logger.warn('No schedule given for model serialization, using default %d',
+                        args.serialize)
 
         if args.model_file:
+            err_msg = None
             if not os.path.exists(args.model_file):
-                raise IOError('Model file %s not present' % args.model_file)
+                err_msg = 'Model file %s not present' % args.model_file
             if not os.access(args.model_file, os.R_OK):
-                raise IOError('Not read access for model file %s' % args.model_file)
+                err_msg = 'No read access for model file %s' % args.model_file
+            if err_msg:
+                logger.exception(err_msg)
+                raise IOError(err_msg)
 
         # extended parsers may need to generate backend after argparsing
         if gen_be:

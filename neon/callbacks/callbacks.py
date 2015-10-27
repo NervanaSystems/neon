@@ -33,7 +33,7 @@ class Callbacks(NervanaObject):
         callbacks (list): Ordered set of Callback objects to be run.
     """
 
-    def __init__(self, model, train_set, parsed_args, valid_set=None):
+    def __init__(self, model, train_set, parsed_args, eval_set=None, metric=None):
         """
         Create a callbacks container with the default callbacks.
 
@@ -41,23 +41,25 @@ class Callbacks(NervanaObject):
             model (Model): the model object
             train_set (DataIterator): the training dataset
             parsed_args (dict): Dictionary of command line args, as follows:
-                                output_file (string, optional): path to save callback data to
-            valid_freq (int, optional): how often (in epochs) to run validation
-            progress_bar (bool): control whether a progress bar callback is created.
-                                 Defaults to True.
-            save_path (string):
-            serialize (int):
-            history (int):
-            valid_set (DataIterator, optional): the validation dataset to use
+                output_file (string, optional): path to save callback data to
+                eval_freq (int, optional): how often (in epochs) to run evaluation
+                progress_bar (bool): control whether a progress bar callback is created.
+                                     Defaults to True.
+                save_path (string):
+                serialize (int):
+                history (int):
+            eval_set (DataIterator, optional): the dataset upon which to evaluate loss or metric
+            metric (Metric, optional):  metric to evaluate
        """
 
         output_file = parsed_args.output_file
-        valid_freq = parsed_args.validation_freq
+        eval_freq = parsed_args.evaluation_freq
         progress_bar = parsed_args.progress_bar
         epochs = parsed_args.epochs
         save_path = parsed_args.save_path
         serialize = parsed_args.serialize
         history = parsed_args.history
+        model_file = parsed_args.model_file
 
         self.callbacks = list()
         self.epoch_marker = 0
@@ -68,65 +70,40 @@ class Callbacks(NervanaObject):
                 logger.warn("Overwriting output file %s", output_file)
                 os.remove(output_file)
             self.callback_data = h5py.File(output_file, "w")
+
+        if model_file:
+            model.load_weights(model_file)
+
         self.model = model
         self.train_set = train_set
 
-        self.callbacks.append(TrainCostCallback(self.callback_data, self.model))
+        self.add_callback(TrainCostCallback(self.callback_data, self.model))
 
-        if valid_freq:
-            if valid_set:
-                self.callbacks.append(ValidationCallback(self.callback_data, self.model,
-                                                         valid_set, valid_freq))
-            else:
-                raise ValueError('Valid_freq specified but no validation set given!')
         if progress_bar:
-            self.callbacks.append(ProgressBarCallback(self.callback_data, model, train_set))
+            self.add_callback(ProgressBarCallback(self.callback_data, model, train_set))
+
+        if eval_freq:
+            if not eval_set:
+                err_msg = 'Evaluation frequency specified but no eval set given!'
+                logger.exception(err_msg)
+                raise ValueError(err_msg)
+            if metric:
+                self.add_callback(MetricCallback(model, eval_set, metric, eval_freq))
+            else:
+                self.add_callback(LossCallback(self.callback_data, model, eval_set, eval_freq),
+                                  insert_pos=0)
 
         if save_path:
-            if serialize <= 1:
-                checkpoint_schedule = range(epochs)
-            else:
-                checkpoint_schedule = range(0, epochs, serialize)
-            if checkpoint_schedule == []:
-                raise ValueError('With the requested number of epochs and '
-                                 'serialization schedule, model will never'
-                                 'be serialized')
-            self.add_serialize_callback(checkpoint_schedule, save_path, history=history)
+            serialize_interval = serialize if serialize > 1 else 1
+            checkpoint_schedule = range(0, epochs, serialize_interval)
+            if not checkpoint_schedule:
+                err_msg = "For %d epochs and schedule %d, model will not be serialized"
+                raise ValueError('With the requested number of epochs and serialization schedule,'
+                                 'model will never be serialized')
+            scb = SerializeModelCallback(model, save_path, checkpoint_schedule, history)
+            self.add_callback(scb)
 
-        self.callbacks.append(TrainLoggerCallback(self.callback_data, model,
-                                                  epoch_freq=1, minibatch_freq=None))
-
-    def add_validation_callback(self, valid_set, epoch_freq):
-        """
-        Convenience function to create and add a Validation callback.
-
-        Arguments:
-            valid_set (DataIterator): the validation dataset to use
-            epoch_freq (int): how often (in epochs) to run validation
-        """
-        # Insert before other callbacks since some depend on validation cost
-        self.add_callback(ValidationCallback(self.callback_data, self.model,
-                                             valid_set, epoch_freq),
-                          insert_pos=0)
-
-    def add_serialize_callback(self, serialize_schedule, save_path, history=1):
-        """
-        Convenience function to create and add a model serialization callback.
-
-        Arguments:
-            serialize_schedule (Schedule): the serialization schedule to follow
-            save_path (string): where to save the serialized data
-            history (int): number of previous checkpoint files to retain
-        """
-        if save_path and serialize_schedule:
-            # TODO can serialize be handled by regular data callback or should it be separate?
-            self.callbacks.append(SerializeModelCallback(self.model,
-                                                         save_path,
-                                                         epoch_freq=serialize_schedule,
-                                                         history=history))
-        else:
-            raise ValueError('Cannot add serialization callback without both'
-                             '"save_path" and "serialize_schedule" specified')
+        self.add_callback(TrainLoggerCallback(self.callback_data, model))
 
     def add_save_best_state_callback(self, path):
         """
@@ -135,7 +112,8 @@ class Callbacks(NervanaObject):
         Arguments:
             path (string): where to save the best model state.
         """
-        self.callbacks.append(SaveBestStateCallback(self.callback_data, self.model, path))
+        cb = SaveBestStateCallback(self.callback_data, self.model, path)
+        self.add_callback(cb)
 
     def add_early_stop_callback(self, stop_func):
         """
@@ -144,7 +122,8 @@ class Callbacks(NervanaObject):
         Arguments:
             stop_func (function): function to determine when to stop.
         """
-        self.callbacks.append(EarlyStopCallback(self.callback_data, self.model, stop_func))
+        cb = EarlyStopCallback(self.callback_data, self.model, stop_func)
+        self.add_callback(cb)
 
     def add_callback(self, callback, insert_pos=None):
         """
@@ -158,8 +137,9 @@ class Callbacks(NervanaObject):
                                         Defaults to None, meaning append
         """
         if insert_pos is None:
-            insert_pos = len(self.callbacks)
-        self.callbacks.insert(insert_pos, callback)
+            self.callbacks.append(callback)
+        else:
+            self.callbacks.insert(insert_pos, callback)
 
     def on_train_begin(self, epochs):
         """
@@ -326,6 +306,16 @@ class Callback(NervanaObject):
             fire = True
         return fire
 
+    def _epoch_interval_loss(self, epoch, label):
+        cost_key = 'cost/' + label
+        time_key = 'time/' + label
+        if cost_key not in self.callback_data:
+            return None
+        eval_freq = self.callback_data[cost_key].attrs['epoch_freq']
+        if (epoch + 1) % eval_freq == 0:
+            return dict(cost=self.callback_data[cost_key][epoch/eval_freq],
+                        time=self.callback_data[time_key][epoch/eval_freq])
+
 
 class SerializeModelCallback(Callback):
 
@@ -408,63 +398,67 @@ class TrainCostCallback(Callback):
     def on_minibatch_end(self, epoch, minibatch):
         self.cost_history.append(self.model.cost.cost.get())
         mean_cost = sum(self.cost_history) / len(self.cost_history)
-
-        prev_epoch_minibatches = 0
-        if epoch > 0:
-            prev_epoch_minibatches = self.callback_data['time_markers/minibatch'][epoch-1]
-
-        self.callback_data['cost/train'][prev_epoch_minibatches + minibatch] = mean_cost
+        mbstart = self.callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+        self.callback_data['cost/train'][mbstart + minibatch] = mean_cost
 
 
-class ValidationCallback(Callback):
+class LossCallback(Callback):
 
     """
-    Callback for processing the validation dataset periodically during training.
+    Callback for calculating the loss on a given dataset periodically during training.
 
     Arguments:
         callback_data (HDF5 dataset): shared data between callbacks
         model (Model): model object
-        valid_set (DataIterator): Validation dataset to process
-        epoch_freq (int, optional): how often (in epochs) to log training info.
+        eval_set (DataIterator): dataset to evaluate
+        epoch_freq (int, optional): how often (in epochs) to log info.
                                     Defaults to every 1 epoch.
-        minibatch_freq (int, optional): how often (in minibatches) to log
-                                        training info, or None to log only on
-                                        epoch boundaries.  Defaults to None.
     """
 
-    def __init__(self, callback_data, model, valid_set, epoch_freq=1):
-        super(ValidationCallback, self).__init__(epoch_freq=epoch_freq)
+    def __init__(self, callback_data, model, eval_set, epoch_freq=1):
+        super(LossCallback, self).__init__(epoch_freq=epoch_freq)
         self.model = model
-        self.valid_set = valid_set
-        self.valid_cost = self.be.zeros((1, 1))
+        self.eval_set = eval_set
+        self.loss = self.be.zeros((1, 1))
         self.callback_data = callback_data
 
     def on_train_begin(self, epochs):
-        vdata = self.callback_data.create_dataset("cost/validation", (epochs/self.epoch_freq,))
-        vdata.attrs['time_markers'] = 'epoch_freq'
-        vdata.attrs['epoch_freq'] = self.epoch_freq
-        self.callback_data.create_dataset("time/validation", (epochs/self.epoch_freq,))
+        self.callback_data.create_dataset("cost/loss", (epochs/self.epoch_freq,))
+        self.callback_data.create_dataset("time/loss", (epochs/self.epoch_freq,))
+        self.callback_data["cost/loss"].attrs['time_markers'] = 'epoch_freq'
+        self.callback_data["cost/loss"].attrs['epoch_freq'] = self.epoch_freq
 
     def on_epoch_end(self, epoch):
-        model = self.model
-        start_validation = default_timer()
+        start_loss = default_timer()
         nprocessed = 0
-        self.valid_cost[:] = 0
-        self.valid_set.reset()
-        for batch_index, (x, t) in enumerate(self.valid_set, 1):
-            x = model.fprop(x, inference=True)
-            bsz = min(self.valid_set.ndata - nprocessed, self.be.bsz)
-            model.cost.get_cost(x, t)
+        self.loss[:] = 0
+        self.eval_set.reset()
+        for x, t in self.eval_set:
+            x = self.model.fprop(x, inference=True)
+            bsz = min(self.eval_set.ndata - nprocessed, self.be.bsz)
+            self.model.cost.get_cost(x, t)
             nsteps = x.shape[1] / self.be.bsz
-            costbuf = model.cost.outputs[:, :bsz*nsteps]
+            costbuf = self.model.cost.outputs[:, :bsz*nsteps]
             nprocessed += bsz
-            self.valid_cost[:] = self.valid_cost + self.be.sum(costbuf, axis=1)/nsteps
-            mean_cost = float(self.valid_cost.get() / nprocessed)
+            self.loss[:] = self.loss + self.be.sum(costbuf, axis=1)/nsteps
+            mean_cost = float(self.loss.get() / nprocessed)
+        self.callback_data["time/loss"][epoch/self.epoch_freq] = (default_timer() - start_loss)
+        self.callback_data["cost/loss"][epoch/self.epoch_freq] = mean_cost
 
-        end_validation = default_timer()
-        self.callback_data["cost/validation"][epoch/self.epoch_freq] = mean_cost
-        self.callback_data["time/validation"][epoch/self.epoch_freq] = (end_validation
-                                                                        - start_validation)
+
+class MetricCallback(Callback):
+    def __init__(self, model, eval_set, metric, epoch_freq=1):
+        super(MetricCallback, self).__init__(epoch_freq=epoch_freq)
+        self.model = model
+        self.eval_set = eval_set
+        self.metric = metric
+        self.metric_desc = ", ".join(self.metric.metric_names)
+
+    def on_epoch_end(self, epoch):
+        if (epoch + 1) % self.epoch_freq == 0:
+            self.eval_set.reset()
+            stats = self.model.eval(self.eval_set, metric=self.metric)
+            logger.info('%s: %s', self.metric_desc, ", ".join(map(str, stats.flatten())))
 
 
 def get_progress_string(tag, epoch, minibatch, nbatches, cost, time,
@@ -516,17 +510,13 @@ class ProgressBarCallback(Callback):
     def on_minibatch_end(self, epoch, minibatch):
         now = default_timer()
         mb_complete = minibatch + 1
-        if (now - self.last_update > self.update_thresh_s or
-                mb_complete == self.nbatches):
+        if (now - self.last_update > self.update_thresh_s or mb_complete == self.nbatches):
             self.last_update = now
-            prev_epoch_minibatches = 0
-            if epoch > 0:
-                prev_epoch_minibatches = self.callback_data['time_markers/minibatch'][epoch-1]
+            mbstart = self.callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+            train_cost = self.callback_data['cost/train'][mbstart + minibatch]
 
-            train_cost = self.callback_data['cost/train'][prev_epoch_minibatches + minibatch]
-            progress_string = get_progress_string("Train", epoch, mb_complete,
-                                                  self.nbatches, train_cost,
-                                                  now - self.start_epoch)
+            progress_string = get_progress_string("Train", epoch, mb_complete, self.nbatches,
+                                                  train_cost, now - self.start_epoch)
             # clear the last line
             sys.stdout.write('\r' + ' '*self._last_strlen + '\r')
             # print the new line
@@ -535,17 +525,11 @@ class ProgressBarCallback(Callback):
             sys.stdout.flush()
 
     def on_epoch_end(self, epoch):
-
-        if 'cost/validation' in self.callback_data:
-            val_freq = self.callback_data['cost/validation'].attrs['epoch_freq']
-            if (epoch + 1) % val_freq == 0:
-                validation_cost = self.callback_data['cost/validation'][epoch/val_freq]
-                validation_time = self.callback_data['time/validation'][epoch/val_freq]
-                progress_string = "[Validation %.2f cost, %.2fs]" % (validation_cost,
-                                                                     validation_time)
-                sys.stdout.write(progress_string.encode('utf-8'))
-                sys.stdout.flush()
-
+        eloss = self._epoch_interval_loss(epoch, 'loss')
+        if eloss:
+            progress_string = "[loss %.2f cost, %.2fs]" % (eloss['cost'], eloss['time'])
+            sys.stdout.write(progress_string.encode('utf-8'))
+            sys.stdout.flush()
         sys.stdout.write('\n')
 
 
@@ -572,22 +556,19 @@ class TrainLoggerCallback(Callback):
         self.epoch_freq = epoch_freq
         self.minibatch_freq = minibatch_freq
 
+    def on_train_begin(self, epochs):
+        logger.info("Model:\n%s", self.model)
+
     def on_minibatch_end(self, epoch, minibatch):
-        prev_epoch_minibatches = 0
-        if epoch > 0:
-            prev_epoch_minibatches = self.callback_data['time_markers/minibatch'][epoch-1]
-        train_cost = self.callback_data['cost/train'][prev_epoch_minibatches + minibatch]
+        mbstart = self.callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+        train_cost = self.callback_data['cost/train'][mbstart + minibatch]
         logger.info("Epoch %d Minibatch %d complete. Train cost: %f", epoch, minibatch, train_cost)
 
     def on_epoch_end(self, epoch):
-        log_str = "Epoch %d complete. Train Cost %f" % (epoch,
-                                                        self.model.total_cost.get())
-        if 'cost/validation' in self.callback_data:
-            val_freq = self.callback_data['cost/validation'].attrs['epoch_freq']
-            if (epoch + 1) % val_freq == 0:
-                validation_cost = self.callback_data['cost/validation'][epoch/val_freq]
-                log_str += ", Validation Cost %f" % (validation_cost)
-
+        log_str = "Epoch %d complete. Train Cost %f" % (epoch, self.model.total_cost.get())
+        eloss = self._epoch_interval_loss(epoch, 'loss')
+        if eloss:
+            log_str += ", Eval Cost %f" % eloss['cost']
         logger.info(log_str)
 
 
@@ -611,15 +592,11 @@ class SaveBestStateCallback(Callback):
         self.best_cost = None
 
     def on_epoch_end(self, epoch):
-
-        if 'cost/validation' in self.callback_data:
-            val_freq = self.callback_data['cost/validation'].attrs['epoch_freq']
-            if (epoch + 1) % val_freq == 0:
-                validation_cost = self.callback_data['cost/validation'][epoch/val_freq]
-
-                if validation_cost < self.best_cost or self.best_cost is None:
-                    save_obj(self.model.serialize(keep_states=True), self.best_path)
-                    self.best_cost = validation_cost
+        eloss = self._epoch_interval_loss(epoch, 'loss')
+        if eloss:
+            if eloss['cost'] < self.best_cost or self.best_cost is None:
+                save_obj(self.model.serialize(keep_states=True), self.best_path)
+                self.best_cost = eloss['cost']
 
 
 class EarlyStopCallback(Callback):
@@ -644,15 +621,10 @@ class EarlyStopCallback(Callback):
         self.stop_state = None  # state needed for the stop func
 
     def on_epoch_end(self, epoch):
-        if 'cost/validation' in self.callback_data:
-            val_freq = self.callback_data['cost/validation'].attrs['epoch_freq']
-            if (epoch + 1) % val_freq == 0:
-                validation_cost = self.callback_data['cost/validation'][epoch/val_freq]
-
-                self.stop_state, finished = self.stop_func(self.stop_state, validation_cost)
-
-                if finished:
-                    # should this just exit instead?
-                    self.model.finished = True
-                    logger.warn('Early stopping function has been triggered with mean_cost %f.'
-                                % (validation_cost))
+        eloss = self._epoch_interval_loss(epoch, 'loss')
+        if eloss:
+            self.stop_state, finished = self.stop_func(self.stop_state, eloss['cost'])
+            if finished:
+                # should this just exit instead?
+                self.model.finished = True
+                logger.warn('Early stopping function triggered: mean_cost %f.' % (eloss['cost']))

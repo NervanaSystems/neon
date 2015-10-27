@@ -39,10 +39,7 @@ callbacks for computing validation cost and displaying a progress bar.
 
     # configure default callbacks for computing train and validation cost
     # and displaying a progress bar
-    callbacks = Callbacks(model, train_set,
-                          valid_set=valid_set,
-                          valid_freq=1,
-                          progress_bar=True)
+    callbacks = Callbacks(model, train_set, args, eval_set=valid_set)
 
     # add a callback that saves the best model state
     callbacks.add_save_best_state_callback("./best_state.pkl")
@@ -54,10 +51,10 @@ callbacks for computing validation cost and displaying a progress bar.
 :py:class:`Callbacks<neon.callbacks.callbacks.Callbacks>` provides a shared
 data mechanism that allows callbacks to decouple computation of metrics from
 further processing or consumption of those metrics.  For example the
-:py:class:`ValidationCallback<neon.callbacks.callbacks.ValidationCallback>`
-produces the validation cross entropy metric at some configurable epoch
-frequency.  This metric is used by the
-:py:class:`ProgressBarCallback<neon.callbacks.callbacks.ProgressBarCallback>` 
+:py:class:`LossCallback<neon.callbacks.callbacks.LossCallback>`
+evaluates the training loss/cost function on the provided evaluation set at some configurable
+epoch frequency.  This metric is used by the
+:py:class:`ProgressBarCallback<neon.callbacks.callbacks.ProgressBarCallback>`
 for display purposes, and by the
 :py:class:`SaveBestStateCallback<neon.callbacks.callbacks.SaveBestStateCallback>`
 to decide when to save state.  Such decoupling prevents having to recompute

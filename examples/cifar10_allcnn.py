@@ -45,10 +45,9 @@ train_set = DataIterator(X_train, y_train, nclass=16, lshape=(3, 32, 32))
 valid_set = DataIterator(X_test, y_test, nclass=16, lshape=(3, 32, 32))
 
 init_uni = GlorotUniform()
-opt_gdm = GradientDescentMomentum(learning_rate=0.5,
-                                  schedule=Schedule(step_config=[200, 250, 300],
-                                                    change=0.1),
-                                  momentum_coef=0.9, wdecay=.0001)
+opt_gdm = GradientDescentMomentum(learning_rate=0.5, momentum_coef=0.9, wdecay=.0001,
+                                  schedule=Schedule(step_config=[200, 250, 300], change=0.1))
+
 relu = Rectlin()
 conv = dict(init=init_uni, batch_norm=True, activation=relu)
 convp1 = dict(init=init_uni, batch_norm=True, activation=relu, padding=1)
@@ -74,7 +73,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train_set, args, valid_set=valid_set)
+callbacks = Callbacks(mlp, train_set, args, eval_set=valid_set)
 
 mlp.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))

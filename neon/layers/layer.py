@@ -18,7 +18,6 @@ from neon import NervanaObject
 from neon.backends import Autodiff
 from neon.backends.backend import Tensor
 import numpy as np
-# from neon.layers import Branch, Sequential
 
 logger = logging.getLogger(__name__)
 

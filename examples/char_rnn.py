@@ -64,10 +64,8 @@ valid_set = Text(time_steps, valid_path, vocab=train_set.vocab)
 init = Uniform(low=-0.08, high=0.08)
 
 # model initialization
-layers = [
-    Recurrent(hidden_size, init, Tanh()),
-    Affine(len(train_set.vocab), init, bias=init, activation=Softmax())
-]
+layers = [Recurrent(hidden_size, init, Tanh()),
+          Affine(len(train_set.vocab), init, bias=init, activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
@@ -76,11 +74,7 @@ model = Model(layers=layers)
 optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.rounding)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
+callbacks = Callbacks(model, train_set, args, eval_set=valid_set)
 
 # train model
-model.fit(train_set,
-          optimizer=optimizer,
-          num_epochs=num_epochs,
-          cost=cost,
-          callbacks=callbacks)
+model.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

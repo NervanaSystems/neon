@@ -38,7 +38,6 @@ Examples:
 """
 
 import logging
-import os
 
 from neon.callbacks.callbacks import Callbacks
 from neon.data import DataIterator, load_mnist
@@ -86,13 +85,8 @@ optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=arg
 # initialize model object
 mlp = Model(layers=layers)
 
-if args.model_file:
-    assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    logger.info('loading initial model state from %s' % args.model_file)
-    mlp.load_weights(args.model_file)
-
 # configure callbacks
-callbacks = Callbacks(mlp, train_set, args, valid_set=valid_set)
+callbacks = Callbacks(mlp, train_set, args, eval_set=valid_set)
 
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

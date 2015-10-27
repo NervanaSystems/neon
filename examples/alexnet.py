@@ -17,7 +17,6 @@
 Runs one epoch of Alexnet on imagenet data.
 """
 
-import os
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Constant, Gaussian
 from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
@@ -25,7 +24,7 @@ from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
 from neon.data import ImgMaster
-from neon.callbacks.callbacks import Callbacks, Callback
+from neon.callbacks.callbacks import Callbacks
 
 # For running complete alexnet
 # alexnet.py -e 90 -val 1 -s <save-path> -w <path-to-saved-batches>
@@ -73,26 +72,8 @@ opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 
 model = Model(layers=layers)
 
-if args.model_file:
-    assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    model.load_weights(args.model_file)
-
 # configure callbacks
-callbacks = Callbacks(model, train, args, valid_set=test)
-
-if args.validation_freq:
-    class TopKMetrics(Callback):
-        def __init__(self, valid_set, epoch_freq=args.validation_freq):
-            super(TopKMetrics, self).__init__(epoch_freq=epoch_freq)
-            self.valid_set = valid_set
-
-        def on_epoch_end(self, epoch):
-            self.valid_set.reset()
-            allmetrics = TopKMisclassification(k=5)
-            stats = model.eval(self.valid_set, metric=allmetrics)
-            print ", ".join(allmetrics.metric_names) + ": " + ", ".join(map(str, stats.flatten()))
-
-    callbacks.add_callback(TopKMetrics(test))
+callbacks = Callbacks(model, train, args, eval_set=test, metric=TopKMisclassification(k=5))
 
 try:
     model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

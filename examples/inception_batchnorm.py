@@ -26,7 +26,7 @@ from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
 from neon.data import ImgMaster
-from neon.callbacks.callbacks import Callbacks, Callback
+from neon.callbacks.callbacks import Callbacks
 
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
@@ -127,30 +127,8 @@ aux1 = aux_branch(branch_node)
 
 mlp = Model(layers=Tree([main1, aux1], alphas=[1.0, 0.3]))
 
-if args.model_file:
-    import os
-    assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    mlp.load_weights(args.model_file)
-
 # configure callbacks
-callbacks = Callbacks(mlp, train, output_file=args.output_file)
-
-if args.validation_freq:
-    class TopKMetrics(Callback):
-        def __init__(self, valid_set, epoch_freq=args.validation_freq):
-            super(TopKMetrics, self).__init__(epoch_freq=epoch_freq)
-            self.valid_set = valid_set
-
-        def on_epoch_end(self, epoch):
-            self.valid_set.reset()
-            allmetrics = TopKMisclassification(k=5)
-            stats = mlp.eval(self.valid_set, metric=allmetrics)
-            print ", ".join(allmetrics.metric_names) + ": " + ", ".join(map(str, stats.flatten()))
-
-    callbacks.add_callback(TopKMetrics(test))
-
-if args.save_path:
-    callbacks.add_serialize_callback(args.serialize, args.save_path, history=2)
+callbacks = Callbacks(mlp, train, args, eval_set=test, metric=TopKMisclassification(k=5))
 
 # setup cost function as CrossEntropy
 cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),

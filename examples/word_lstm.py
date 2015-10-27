@@ -95,7 +95,7 @@ optimizer = RMSProp(clip_gradients=clip_gradients, gradient_limit=gradient_limit
                     stochastic_round=args.rounding)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
+callbacks = Callbacks(model, train_set, args, eval_set=valid_set)
 
 # train model
 model.fit(train_set,

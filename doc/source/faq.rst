@@ -64,7 +64,7 @@ For example, during the first epoch of training, if the end of the data set
 is reached and there is not enough data for a full mini-batch, extra data
 will be pulled from the beginning of the data set to fill up a
 complete mini-batch. On the next epoch, the data used will start from where
-the last epoch left off, not from the beginning of the data set. This process 
+the last epoch left off, not from the beginning of the data set. This process
 will continue for each epoch of training and, since the next epoch may not
 start from the beginning of the data set, it is possible that for some of the
 epochs the last item of data will fall at the end of the mini-batch.  For such

@@ -52,13 +52,13 @@ elif args.datatype in [np.float16]:
                                       momentum_coef=0.9,
                                       stochastic_round=args.rounding)
 
-layers = []
-layers.append(Conv((5, 5, 16), init=init_uni, activation=Rectlin(), batch_norm=True))
-layers.append(Pooling((2, 2)))
-layers.append(Conv((5, 5, 32), init=init_uni, activation=Rectlin(), batch_norm=True))
-layers.append(Pooling((2, 2)))
-layers.append(Affine(nout=500, init=init_uni, activation=Rectlin(), batch_norm=True))
-layers.append(Affine(nout=10, init=init_uni, activation=Softmax()))
+layers = [Conv((5, 5, 16), init=init_uni, activation=Rectlin(), batch_norm=True),
+          Pooling((2, 2)),
+          Conv((5, 5, 32), init=init_uni, activation=Rectlin(), batch_norm=True),
+          Pooling((2, 2)),
+          Affine(nout=500, init=init_uni, activation=Rectlin(), batch_norm=True),
+          Affine(nout=10, init=init_uni, activation=Softmax())]
+
 if args.datatype in [np.float32, np.float64]:
     cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 elif args.datatype in [np.float16]:
@@ -67,7 +67,7 @@ elif args.datatype in [np.float16]:
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, args, valid_set=test)
+callbacks = Callbacks(mlp, train, args, eval_set=test)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 

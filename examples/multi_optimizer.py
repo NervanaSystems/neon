@@ -63,6 +63,6 @@ opt = MultiOptimizer({'default': optimizer_one,
                       'special_linear': optimizer_two})
 
 # configure callbacks
-callbacks = Callbacks(mlp, train_set, args, valid_set=valid_set)
+callbacks = Callbacks(mlp, train_set, args, eval_set=valid_set)
 
 mlp.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

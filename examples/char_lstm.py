@@ -73,10 +73,8 @@ elif rlayer_type == 'gru':
 else:
     raise NotImplementedError('%s layer not implemented' % rlayer_type)
 
-layers = [
-    rlayer,
-    Affine(len(train_set.vocab), init, bias=init, activation=Softmax())
-]
+layers = [rlayer,
+          Affine(len(train_set.vocab), init, bias=init, activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
@@ -85,14 +83,10 @@ model = Model(layers=layers)
 optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.rounding)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
+callbacks = Callbacks(model, train_set, args, eval_set=valid_set)
 
 # train model
-model.fit(train_set,
-          optimizer=optimizer,
-          num_epochs=num_epochs,
-          cost=cost,
-          callbacks=callbacks)
+model.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
 # get predictions
 ypred = model.get_outputs(valid_set)

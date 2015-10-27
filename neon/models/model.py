@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import logging
 
 from neon import NervanaObject
 from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj
 from neon.layers import Sequential, Activation, Tree
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 class Model(NervanaObject):
@@ -75,13 +78,12 @@ class Model(NervanaObject):
         self.layers.allocate_deltas()
         self.initialized = True
 
-    def print_layers(self):
+    def __str__(self):
         """
-        Print network layers
+        String representation of model's layers
         """
-        config_string = "Network Layers:"
-        config_string = config_string + "\n" + self.layers.nested_str()
-        print config_string
+        config_string = "Network Layers:\n" + self.layers.nested_str()
+        return config_string
 
     def fit(self, dataset, cost, optimizer, num_epochs, callbacks):
         """
@@ -102,7 +104,6 @@ class Model(NervanaObject):
         """
         self.cost = cost
         self.initialize(dataset, cost)
-        self.print_layers()
         # self.set_shortcut()  # infer if bprop shortcut can be used
         self.optimizer = optimizer
         self.total_cost = self.be.empty((1, 1))
@@ -255,6 +256,7 @@ class Model(NervanaObject):
                                weights and states.
         """
         pdict = load_obj(weight_path)
+
         self.epoch_index = pdict['epoch_index']
 
         param_layers = [l for l in self.layers_to_optimize]
@@ -263,6 +265,8 @@ class Model(NervanaObject):
             l.set_params(ps['params'])
             if 'states' in ps:
                 l.set_states(ps['states'])
+
+        logger.info('Model weights loaded from %s', weight_path)
 
     # serialize tells how to write out the parameters we've learned so
     # far and associate them with layers. it can ignore layers with no

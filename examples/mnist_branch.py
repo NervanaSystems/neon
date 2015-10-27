@@ -37,7 +37,6 @@ The topology of the network is:
 """
 
 import logging
-import os
 
 from neon.backends import gen_backend
 from neon.callbacks.callbacks import Callbacks
@@ -122,25 +121,8 @@ optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=arg
 alphas = [1, 0.25, 0.25]
 mlp = Model(layers=Tree([p1, p2, p3], alphas=alphas))
 
-if args.model_file:
-    assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    logger.info('loading initial model state from %s' % args.model_file)
-    mlp.load_weights(args.model_file)
-
 # setup standard fit callbacks
-callbacks = Callbacks(mlp, train_set, output_file=args.output_file,
-                      progress_bar=args.progress_bar)
-
-if args.validation_freq:
-    # setup validation trial callbacks
-    callbacks.add_validation_callback(valid_set, args.validation_freq)
-
-if args.serialize > 0:
-    # add callback for saving checkpoint file
-    # every args.serialize epchs
-    checkpoint_schedule = args.serialize
-    checkpoint_model_path = args.save_path
-    callbacks.add_serialize_callback(checkpoint_schedule, checkpoint_model_path)
+callbacks = Callbacks(mlp, train_set, args, eval_set=valid_set)
 
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

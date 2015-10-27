@@ -42,7 +42,7 @@ def ensure_dirs_exist(path):
     return path
 
 
-def save_obj(obj, save_path, verbose=True):
+def save_obj(obj, save_path):
     """
     Dumps a python data structure to a saved on-disk representation.  We
     currently support writing to the following file formats (expected filename
@@ -61,14 +61,13 @@ def save_obj(obj, save_path, verbose=True):
     if save_path is None or len(save_path) == 0:
         return
     save_path = os.path.expandvars(os.path.expanduser(save_path))
-    if verbose:
-        logger.warn("serializing object to: %s", save_path)
+    logger.debug("serializing object to: %s", save_path)
     ensure_dirs_exist(save_path)
 
     pickle.dump(obj, open(save_path, 'wb'), -1)
 
 
-def load_obj(load_path, verbose=True):
+def load_obj(load_path):
     """
     Loads a saved on-disk representation to a python data structure. We
     currently support the following file formats:
@@ -89,8 +88,7 @@ def load_obj(load_path, verbose=True):
             load_path = open(load_path)
     fname = load_path.name
 
-    if verbose:
-        logger.warn("deserializing object from:  %s", fname)
+    logger.debug("deserializing object from:  %s", fname)
     try:
         return pickle.load(load_path)
     except AttributeError:

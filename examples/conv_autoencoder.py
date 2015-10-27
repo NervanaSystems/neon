@@ -46,14 +46,13 @@ init_uni = Uniform(low=-0.1, high=0.1)
 opt_gdm = GradientDescentMomentum(learning_rate=0.001, momentum_coef=0.9)
 
 # Define the layers
-layers = []
-layers.append(Conv((4, 4, 8), init=init_uni, activation=Rectlin()))
-layers.append(Pooling(2))
-layers.append(Conv((4, 4, 32), init=init_uni, activation=Rectlin()))
-layers.append(Pooling(2))
-layers.append(Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=1))
-layers.append(Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=2))
-layers.append(Deconv(fshape=(2, 2, 1), init=init_uni, strides=2, padding=1))
+layers = [Conv((4, 4, 8), init=init_uni, activation=Rectlin()),
+          Pooling(2),
+          Conv((4, 4, 32), init=init_uni, activation=Rectlin()),
+          Pooling(2),
+          Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=1),
+          Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=2),
+          Deconv(fshape=(2, 2, 1), init=init_uni, strides=2, padding=1)]
 
 # Define the cost
 cost = GeneralizedCost(costfunc=SumSquared())

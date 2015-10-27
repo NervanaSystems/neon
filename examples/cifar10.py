@@ -42,16 +42,16 @@ init_uni = Uniform(low=-0.1, high=0.1)
 opt_gdm = GradientDescentMomentum(learning_rate=0.01, momentum_coef=0.9)
 
 # set up the model layers
-layers = []
-layers.append(Affine(nout=200, init=init_uni, activation=Rectlin()))
-layers.append(Affine(nout=10, init=init_uni, activation=Logistic(shortcut=True)))
+layers = [Affine(nout=200, init=init_uni, activation=Rectlin()),
+          Affine(nout=10, init=init_uni, activation=Logistic(shortcut=True))]
 
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, args, valid_set=test)
+callbacks = Callbacks(mlp, train, args, eval_set=test)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+
 print('Misclassification error = %.1f%%' % (mlp.eval(test, metric=Misclassification())*100))
