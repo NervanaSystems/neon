@@ -35,8 +35,8 @@ p.add_option("-w", "--warn", action="store_true", dest="warn",
              help="enable warnings (for devel and debug)")
 p.add_option("-j", "--max_concurrent", type="int", default=10,
              help="Concurrently launch a maximum of this many processes.")
-p.add_option("-s", "--silent", type="int", default=1,
-             help="Supress echoing nvcc calls. (default True)")
+p.add_option("-v", "--verbose", action="store_true", dest="verbose", default=False,
+             help="print output of nvcc calls.")
 opts, args = p.parse_args()
 
 if opts.preprocess or opts.dump:
@@ -51,6 +51,7 @@ if not opts.warn:
     maxas_opts_i.append("-w")
 
 include_re = re.compile(r'^<INCLUDE\s+file="([^"]+)"\s*/>')
+kernel_re = re.compile(r'\nKernel: (\S+),')
 
 
 def extract_includes(name, includes=None):
@@ -130,6 +131,7 @@ for kernel_name, kernel_spec in kernels.items():
 
 
 def run_commands(commands):
+    kernels_made = []
     while len(commands) > 0:
         procs = []
         for cmdlist in commands[0:opts.max_concurrent]:
@@ -141,16 +143,21 @@ def run_commands(commands):
             procs.append((proc, cmdline))
 
         commands[0:opts.max_concurrent] = ()
-
         for proc, cmdline in procs:
             code = proc.wait()
-            if not opts.silent:
+            if opts.verbose:
                 print cmdline
             if code:
                 print proc.stderr.read()
             output = proc.stdout.read()
-            if output and not opts.silent:
+            match = kernel_re.search(output)
+            if match:
+                kernels_made.append(match.group(1))
+            if output and opts.verbose:
                 print output
+
+    if len(kernels_made) > 0 and not opts.verbose:
+        print "%d kernels compiled." % len(kernels_made)
 
 run_commands(compile_cubins)
 run_commands(build_cubins)
