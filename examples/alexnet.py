@@ -32,15 +32,16 @@ from neon.callbacks.callbacks import Callbacks
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-train = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='train',
+train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train',
                   dtype=args.datatype)
-test = ImgMaster(repo_dir=args.data_dir, inner_size=227, set_name='validation',
+test = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
                  dtype=args.datatype, do_transforms=False)
 
 train.init_batch_provider()
 test.init_batch_provider()
 
 init1 = Gaussian(scale=0.01)
+init1b = Gaussian(scale=0.03)
 init2 = Gaussian(scale=0.005)
 relu = Rectlin()
 
@@ -52,19 +53,19 @@ opt_gdm = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sche
 opt_biases = GradientDescentMomentum(0.02, 0.9, schedule=Schedule([44], 0.1))
 
 # Set up the model layers
-layers = [Conv((11, 11, 64), strides=4, init=init1, bias=Constant(0), activation=relu),
+layers = [Conv((11, 11, 64), padding=3, strides=4, init=init1, bias=Constant(0), activation=relu),
           Pooling(3, strides=2),
-          Conv((5, 5, 192), padding=2, init=init1, bias=Constant(.1), activation=relu),
+          Conv((5, 5, 192), padding=2, init=init1, bias=Constant(1), activation=relu),
           Pooling(3, strides=2),
-          Conv((3, 3, 384), padding=1, init=init1, bias=Constant(0), activation=relu),
-          Conv((3, 3, 256), padding=1, init=init1, bias=Constant(.1), activation=relu),
-          Conv((3, 3, 256), padding=1, init=init1, bias=Constant(.1), activation=relu),
+          Conv((3, 3, 384), padding=1, init=init1b, bias=Constant(0), activation=relu),
+          Conv((3, 3, 256), padding=1, init=init1b, bias=Constant(1), activation=relu),
+          Conv((3, 3, 256), padding=1, init=init1b, bias=Constant(1), activation=relu),
           Pooling(3, strides=2),
-          Affine(nout=4096, init=init2, bias=Constant(.1), activation=relu),
+          Affine(nout=4096, init=init2, bias=Constant(0.5), activation=relu),
           Dropout(keep=0.5),
-          Affine(nout=4096, init=init2, bias=Constant(.1), activation=relu),
+          Affine(nout=4096, init=init2, bias=Constant(0.5), activation=relu),
           Dropout(keep=0.5),
-          Affine(nout=1000, init=init1, bias=Constant(0), activation=Softmax())]
+          Affine(nout=1000, init=init1, bias=Constant(-7), activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 

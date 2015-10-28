@@ -51,8 +51,8 @@ layers = [Conv((4, 4, 8), init=init_uni, activation=Rectlin()),
           Conv((4, 4, 32), init=init_uni, activation=Rectlin()),
           Pooling(2),
           Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=1),
-          Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=2),
-          Deconv(fshape=(2, 2, 1), init=init_uni, strides=2, padding=1)]
+          Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=1),
+          Deconv(fshape=(4, 4, 1), init=init_uni, strides=2, padding=0)]
 
 # Define the cost
 cost = GeneralizedCost(costfunc=SumSquared())
@@ -63,7 +63,7 @@ mlp = Model(layers=layers)
 # configure callbacks
 callbacks = Callbacks(mlp, train, args)
 
-mlp.fit(train, optimizer=opt_gdm, num_epochs=1, cost=cost, callbacks=callbacks)
+mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 print mlp.layers.layers[-1]
 # Plot the reconstructed digits

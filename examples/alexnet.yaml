@@ -23,10 +23,13 @@ wt_init: &wt_init1
     type: Gaussian
     scale: 0.01
 
-wt_init: &wt_init2
+wt_init: &wt_init1b
     type: Gaussian
     scale: 0.03
 
+wt_init: &wt_init2
+    type: Gaussian
+    scale: 0.005
 
 b_init: &b_init0
     type: Constant
@@ -35,6 +38,10 @@ b_init: &b_init0
 b_init: &b_init1
     type: Constant
     val: 1
+
+b_init: &b_init2
+    type: Constant
+    val: 0.5
 
 b_init: &b_init7
     type: Constant
@@ -80,7 +87,7 @@ layers:
     bias_name: conv3b
     fshape: [3, 3, 384]
     padding: 1
-    init: *wt_init2
+    init: *wt_init1b
     bias: *b_init0
     activation: Rectlin
 -
@@ -90,7 +97,7 @@ layers:
     bias_name: conv4b
     fshape: [3, 3, 256]
     padding: 1
-    init: *wt_init2
+    init: *wt_init1b
     bias: *b_init1
     activation: Rectlin
 -
@@ -100,7 +107,7 @@ layers:
     bias_name: conv5b
     fshape: [3, 3, 256]
     padding: 1
-    init: *wt_init2
+    init: *wt_init1b
     bias: *b_init1
     activation: Rectlin
 -
@@ -114,8 +121,8 @@ layers:
     act_name: relu6
     bias_name: fc6b
     nout: 4096
-    init: *wt_init1
-    bias: *b_init1
+    init: *wt_init2
+    bias: *b_init2
     activation: Rectlin
 -
     type: Dropout
@@ -127,8 +134,8 @@ layers:
     act_name: relu7
     bias_name: fc7b
     nout: 4096
-    init: *wt_init1
-    bias: *b_init1
+    init: *wt_init2
+    bias: *b_init2
     activation: Rectlin
 -
     type: Dropout

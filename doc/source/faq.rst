@@ -90,10 +90,10 @@ both ends of the dimension instead of just one end.
 I'm getting an error loading a serialized model
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Starting with release 1.0.0rc2 there was a change to the way that the
+Starting with release 1.0.1 there was a change to the way that the
 output sizes of convolution and pooling layers are calculated.  This change
 could make this new version incompatible with models saved using previous
-versions of neon.  With release 1.0.0rc2, the calculation of the output size
+versions of neon.  With release 1.0.1, the calculation of the output size
 of convolution and pooling layers stops before the kernel runs over the edge
 of the input data plus the padding.  The formula for this is:
 
@@ -111,7 +111,7 @@ neon.
 I'm getting an error when I try to use ImgMaster
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In release 1.0.0rc2, the format of the mean image saved in the
+In release 1.0.1, the format of the mean image saved in the
 `dataset_cache.pkl` file has changed.  Previous versions of neon were storing
 a mean value for each pixel of the input image whereas in the new version only
 a single mean value is stored for each input channel.  So now, for an RGB
