@@ -307,7 +307,20 @@ class Callback(NervanaObject):
             return True
         return False
 
-    def _epoch_interval_loss(self, epoch, label):
+    def _get_cached_epoch_loss(self, epoch, label):
+        """
+        Helper function that checks if there exists a loss with a given label at a certain
+        epoch index.  Depends on a LossCallback to have previously computed the loss and stored
+        in self.callback_data.  Does not actually do any computation.
+
+        Arguments:
+            epoch (int): epoch index to check
+            label (str): label under which to find cached loss in self.callback_data
+
+        Returns:
+            dict containing loss cost value, timing information, and display information
+        """
+
         if self.costnm is None:
             self.costnm = "Loss"  # default costname to display if we can't resolve cost function
             if hasattr(self, 'model') and self.model.cost:
@@ -531,7 +544,7 @@ class ProgressBarCallback(Callback):
             sys.stdout.flush()
 
     def on_epoch_end(self, epoch):
-        _eil = self._epoch_interval_loss(epoch, 'loss')
+        _eil = self._get_cached_epoch_loss(epoch, 'loss')
         if _eil:
             progress_string = " [%s %.2f, %.2fs]" % (_eil['costnm'], _eil['cost'], _eil['time'])
             sys.stdout.write(progress_string.encode('utf-8'))
@@ -571,7 +584,7 @@ class TrainLoggerCallback(Callback):
         logger.info("Epoch %d Minibatch %d complete. Train cost: %f", epoch, minibatch, train_cost)
 
     def on_epoch_end(self, epoch):
-        _eil = self._epoch_interval_loss(epoch, 'loss')
+        _eil = self._get_cached_epoch_loss(epoch, 'loss')
         log_str = "Epoch %d complete.  Train Cost %f." % (epoch, self.model.total_cost.get())
         log_str += "  Eval Cost %f" % _eil['cost'] if _eil else ""
         logger.info(log_str)
@@ -597,7 +610,7 @@ class SaveBestStateCallback(Callback):
         self.best_cost = None
 
     def on_epoch_end(self, epoch):
-        _eil = self._epoch_interval_loss(epoch, 'loss')
+        _eil = self._get_cached_epoch_loss(epoch, 'loss')
         if _eil:
             if _eil['cost'] < self.best_cost or self.best_cost is None:
                 save_obj(self.model.serialize(keep_states=True), self.best_path)
@@ -626,7 +639,7 @@ class EarlyStopCallback(Callback):
         self.stop_state = None  # state needed for the stop func
 
     def on_epoch_end(self, epoch):
-        _eil = self._epoch_interval_loss(epoch, 'loss')
+        _eil = self._get_cached_epoch_loss(epoch, 'loss')
         if _eil:
             self.stop_state, finished = self.stop_func(self.stop_state, _eil['cost'])
             if finished:
