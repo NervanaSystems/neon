@@ -37,7 +37,7 @@ VIS :=
 
 # style checking related
 STYLE_CHECK_OPTS :=
-STYLE_CHECK_DIRS := neon bin tests
+STYLE_CHECK_DIRS := neon bin tests examples
 
 # pytest options
 TEST_OPTS :=

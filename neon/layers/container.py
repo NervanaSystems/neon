@@ -391,6 +391,7 @@ class Multicost(NervanaObject):
         self.weights = [1.0 for c in costs] if weights is None else weights
         self.errors = None
         self.inputs = None
+        self.costfunc = costs[0].costfunc  # For displaying during callbacks
 
     def initialize(self, in_obj):
         assert hasattr(in_obj, 'layers'), "MultiCost must be passed a layer container"

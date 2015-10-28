@@ -45,9 +45,10 @@ class Callbacks(NervanaObject):
                 eval_freq (int, optional): how often (in epochs) to run evaluation
                 progress_bar (bool): control whether a progress bar callback is created.
                                      Defaults to True.
-                save_path (string):
-                serialize (int):
-                history (int):
+                save_path (string): file path to save model snapshots (default: None)
+                serialize (int): serialize model every N epochs (default: 0)
+                history (int): number of checkpoint files to retain (default: 1)
+                model_file(string, optional): file to load weights (serialized model) from
             eval_set (DataIterator, optional): the dataset upon which to evaluate loss or metric
             metric (Metric, optional):  metric to evaluate
        """
@@ -84,22 +85,25 @@ class Callbacks(NervanaObject):
 
         if eval_freq:
             if not eval_set:
-                err_msg = 'Evaluation frequency specified but no eval set given!'
+                err_msg = 'Evaluation frequency specified but no eval set provided`!'
                 logger.exception(err_msg)
                 raise ValueError(err_msg)
+            epos = None
             if metric:
-                self.add_callback(MetricCallback(model, eval_set, metric, eval_freq))
+                ecb = MetricCallback(model, eval_set, metric, eval_freq)
             else:
-                self.add_callback(LossCallback(self.callback_data, model, eval_set, eval_freq),
-                                  insert_pos=0)
+                ecb = LossCallback(self.callback_data, model, eval_set, eval_freq)
+                epos = 0
+            self.add_callback(ecb, insert_pos=epos)
 
         if save_path:
             serialize_interval = serialize if serialize > 1 else 1
             checkpoint_schedule = range(0, epochs, serialize_interval)
             if not checkpoint_schedule:
-                err_msg = "For %d epochs and schedule %d, model will not be serialized"
-                raise ValueError('With the requested number of epochs and serialization schedule,'
-                                 'model will never be serialized')
+                err_msg = 'For %d epochs and schedule %d, model will not be serialized' % (
+                          epochs, serialize)
+                logger.exception(err_msg)
+                raise ValueError(err_msg)
             scb = SerializeModelCallback(model, save_path, checkpoint_schedule, history)
             self.add_callback(scb)
 
@@ -112,8 +116,7 @@ class Callbacks(NervanaObject):
         Arguments:
             path (string): where to save the best model state.
         """
-        cb = SaveBestStateCallback(self.callback_data, self.model, path)
-        self.add_callback(cb)
+        self.add_callback(SaveBestStateCallback(self.callback_data, self.model, path))
 
     def add_early_stop_callback(self, stop_func):
         """
@@ -122,8 +125,7 @@ class Callbacks(NervanaObject):
         Arguments:
             stop_func (function): function to determine when to stop.
         """
-        cb = EarlyStopCallback(self.callback_data, self.model, stop_func)
-        self.add_callback(cb)
+        self.add_callback(EarlyStopCallback(self.callback_data, self.model, stop_func))
 
     def add_callback(self, callback, insert_pos=None):
         """
@@ -238,6 +240,7 @@ class Callback(NervanaObject):
     def __init__(self, epoch_freq=1, minibatch_freq=1):
         self.epoch_freq = epoch_freq
         self.minibatch_freq = minibatch_freq
+        self.costnm = None
 
     def on_train_begin(self, epochs):
         """
@@ -299,14 +302,16 @@ class Callback(NervanaObject):
             freq (int, list, None): firing frequency, in multiples of the unit used
                                     for time, or a list of times, or None (never fire)
         """
-        fire = False
-        if isinstance(freq, int) and (time + 1) % freq == 0:
-            fire = True
-        elif isinstance(freq, list) and time in freq:
-            fire = True
-        return fire
+        t, f = time, freq
+        if ((type(f) is int and (t + 1) % f == 0) or (type(f) is list and t in f)):
+            return True
+        return False
 
     def _epoch_interval_loss(self, epoch, label):
+        if self.costnm is None:
+            self.costnm = "Loss"  # default costname to display if we can't resolve cost function
+            if hasattr(self, 'model') and self.model.cost:
+                self.costnm = self.model.cost.costfunc.__class__.__name__ + " " + self.costnm
         cost_key = 'cost/' + label
         time_key = 'time/' + label
         if cost_key not in self.callback_data:
@@ -314,7 +319,8 @@ class Callback(NervanaObject):
         eval_freq = self.callback_data[cost_key].attrs['epoch_freq']
         if (epoch + 1) % eval_freq == 0:
             return dict(cost=self.callback_data[cost_key][epoch/eval_freq],
-                        time=self.callback_data[time_key][epoch/eval_freq])
+                        time=self.callback_data[time_key][epoch/eval_freq],
+                        costnm=self.costnm)
 
 
 class SerializeModelCallback(Callback):
@@ -525,9 +531,9 @@ class ProgressBarCallback(Callback):
             sys.stdout.flush()
 
     def on_epoch_end(self, epoch):
-        eloss = self._epoch_interval_loss(epoch, 'loss')
-        if eloss:
-            progress_string = "[loss %.2f cost, %.2fs]" % (eloss['cost'], eloss['time'])
+        _eil = self._epoch_interval_loss(epoch, 'loss')
+        if _eil:
+            progress_string = " [%s %.2f, %.2fs]" % (_eil['costnm'], _eil['cost'], _eil['time'])
             sys.stdout.write(progress_string.encode('utf-8'))
             sys.stdout.flush()
         sys.stdout.write('\n')
@@ -565,10 +571,9 @@ class TrainLoggerCallback(Callback):
         logger.info("Epoch %d Minibatch %d complete. Train cost: %f", epoch, minibatch, train_cost)
 
     def on_epoch_end(self, epoch):
-        log_str = "Epoch %d complete. Train Cost %f" % (epoch, self.model.total_cost.get())
-        eloss = self._epoch_interval_loss(epoch, 'loss')
-        if eloss:
-            log_str += ", Eval Cost %f" % eloss['cost']
+        _eil = self._epoch_interval_loss(epoch, 'loss')
+        log_str = "Epoch %d complete.  Train Cost %f." % (epoch, self.model.total_cost.get())
+        log_str += "  Eval Cost %f" % _eil['cost'] if _eil else ""
         logger.info(log_str)
 
 
@@ -592,11 +597,11 @@ class SaveBestStateCallback(Callback):
         self.best_cost = None
 
     def on_epoch_end(self, epoch):
-        eloss = self._epoch_interval_loss(epoch, 'loss')
-        if eloss:
-            if eloss['cost'] < self.best_cost or self.best_cost is None:
+        _eil = self._epoch_interval_loss(epoch, 'loss')
+        if _eil:
+            if _eil['cost'] < self.best_cost or self.best_cost is None:
                 save_obj(self.model.serialize(keep_states=True), self.best_path)
-                self.best_cost = eloss['cost']
+                self.best_cost = _eil['cost']
 
 
 class EarlyStopCallback(Callback):
@@ -621,10 +626,9 @@ class EarlyStopCallback(Callback):
         self.stop_state = None  # state needed for the stop func
 
     def on_epoch_end(self, epoch):
-        eloss = self._epoch_interval_loss(epoch, 'loss')
-        if eloss:
-            self.stop_state, finished = self.stop_func(self.stop_state, eloss['cost'])
+        _eil = self._epoch_interval_loss(epoch, 'loss')
+        if _eil:
+            self.stop_state, finished = self.stop_func(self.stop_state, _eil['cost'])
             if finished:
-                # should this just exit instead?
                 self.model.finished = True
-                logger.warn('Early stopping function triggered: mean_cost %f.' % (eloss['cost']))
+                logger.warn('Early stopping function triggered: mean_cost %f.' % (_eil['cost']))

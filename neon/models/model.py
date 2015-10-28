@@ -39,11 +39,12 @@ class Model(NervanaObject):
     def __init__(self, layers, name="model", optimizer=None):
         super(Model, self).__init__(name)
         self.optimizer = optimizer
-        self.params = None
-        self.states = None
+        self.params = None  # should be able to remove
+        self.states = None  # should be able to remove
         self.epoch_index = 0
         self.finished = False
         self.initialized = False
+        self.cost = None
 
         # Wrap the list of layers in a Sequential container if a raw list of layers
         self.layers = layers if type(layers) in (Sequential, Tree) else Sequential(layers)
