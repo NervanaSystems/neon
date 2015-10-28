@@ -35,6 +35,8 @@ p.add_option("-w", "--warn", action="store_true", dest="warn",
              help="enable warnings (for devel and debug)")
 p.add_option("-j", "--max_concurrent", type="int", default=10,
              help="Concurrently launch a maximum of this many processes.")
+p.add_option("-s", "--silent", type="int", default=1,
+             help="Supress echoing nvcc calls. (default True)")
 opts, args = p.parse_args()
 
 if opts.preprocess or opts.dump:
@@ -142,11 +144,12 @@ def run_commands(commands):
 
         for proc, cmdline in procs:
             code = proc.wait()
-            print cmdline
+            if not opts.silent:
+                print cmdline
             if code:
                 print proc.stderr.read()
             output = proc.stdout.read()
-            if output:
+            if output and not opts.silent:
                 print output
 
 run_commands(compile_cubins)
