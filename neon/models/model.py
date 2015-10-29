@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from collections import OrderedDict
 import logging
 
 from neon import NervanaObject
@@ -291,3 +292,89 @@ class Model(NervanaObject):
         # start training again on the next epoch
         pdict['epoch_index'] = self.epoch_index + 1
         return pdict
+
+    def benchmark(self, dataset, cost, optimizer, niterations=20, nskip=2):
+        """
+        Measure runtime for computing fprop and bprop seperately, as well as
+        full minibatch run times.
+
+        Arguments:
+              dataset (iterable): Dataset iterator to perform fit on
+
+              cost (Cost): Defines the function which the model is minimizing based
+                            on the output of the last layer and the input labels
+
+             niterations (optional, int): Number of minibatches to average over
+
+             nskip (optional, int): number of iterations at the beginning to skip
+                                    when calculating the runtime statistics
+
+        Returns:
+            dictionary with fprop, bprop run times
+        """
+        # initialize model
+        self.cost = cost
+        self.initialize(dataset, cost)
+        self.optimizer = optimizer
+        self.total_cost = self.be.empty((1, 1))
+        self.total_cost[:] = 0
+
+        # iterate through minibatches of the dataset
+        times = OrderedDict()
+        for ky in ['fprop', 'bprop', 'update', 'iteration']:
+            times[ky] = np.full(niterations + nskip, -1.0)
+        count = 0
+
+        mb_st = self.be.init_mark()
+        mb_end = self.be.init_mark()
+        evt_st = self.be.init_mark()
+        evt_end = self.be.init_mark()
+
+        while count < niterations + nskip:
+            dataset.reset()
+            for mb_idx, (x, t) in enumerate(dataset):
+                self.be.record_mark(mb_st)
+
+                x = self.fprop(x)
+                self.total_cost[:] = self.total_cost + self.cost.get_cost(x, t)
+
+                self.be.record_mark(evt_end)
+
+                times['fprop'][count] = self.be.get_time(mb_st, evt_end)
+
+                self.be.record_mark(evt_st)  # mark bprop start
+                delta = self.cost.get_errors(x, t)
+
+                self.bprop(delta)
+
+                self.be.record_mark(evt_end)  # mark end of bprop
+                times['bprop'][count] = self.be.get_time(evt_st, evt_end)
+
+                self.be.record_mark(evt_st)
+                self.optimizer.optimize(self.layers_to_optimize, epoch=0)
+                self.be.record_mark(evt_end)  # end of update
+
+                times['update'][count] = self.be.get_time(evt_st, evt_end)
+
+                self.be.record_mark(mb_end)
+                times['iteration'][count] = self.be.get_time(mb_st, mb_end)
+
+                count += 1
+                if count >= niterations + nskip:
+                    break
+
+        # print results
+        header = ['Func', 'Mean', 'Median', 'Min', 'Max', 'Units']
+
+        fmt_titles = '| {:^11} '*len(header) + '|'
+        fmt_nums = '| {func:<11} ' + '|  {:<10.5g} '*(len(header)-2) + '| {units:^11} |'
+
+        head_str = fmt_titles.format(*header)
+        sep = '-'*len(head_str)
+        head_str = sep + '\n' + head_str + '\n' + sep
+        print head_str
+        for ky in times:
+            timesu = np.array(times[ky][nskip:])  # in ms
+            stats = [np.mean(timesu), np.median(timesu), np.min(timesu), np.max(timesu)]
+            print fmt_nums.format(*stats, units='msec', func=ky)
+        print sep
