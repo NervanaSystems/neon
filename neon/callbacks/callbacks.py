@@ -41,15 +41,22 @@ class Callbacks(NervanaObject):
             model (Model): the model object
             train_set (DataIterator): the training dataset
             parsed_args (dict): Dictionary of command line args, as follows:
-                output_file (string, optional): path to save callback data to
-                eval_freq (int, optional): how often (in epochs) to run evaluation
-                progress_bar (bool): control whether a progress bar callback is created.
-                                     Defaults to True.
-                save_path (string): file path to save model snapshots (default: None)
-                serialize (int): serialize model every N epochs (default: 0)
-                history (int): number of checkpoint files to retain (default: 1)
-                model_file(string, optional): file to load weights (serialized model) from
-            eval_set (DataIterator, optional): the dataset upon which to evaluate loss or metric
+                                output_file (string, optional): path to save callback
+                                data to
+                                eval_freq (int, optional): how often (in epochs) to run
+                                evaluation
+                                progress_bar (bool): control whether a progress bar
+                                callback is created.  Defaults to True.
+                                save_path (string): file path to save model snapshots
+                                (default: None)
+                                serialize (int): serialize model every N epochs
+                                (default: 0)
+                                history (int): number of checkpoint files to retain
+                                (default: 1)
+                                model_file(string, optional): file to load weights
+                                (serialized model) from
+            eval_set (DataIterator, optional): the dataset upon which to evaluate loss
+                                               or metric
             metric (Metric, optional):  metric to evaluate
        """
 

@@ -56,7 +56,8 @@ API
    neon.callbacks.callbacks.Callback
    neon.callbacks.callbacks.SerializeModelCallback
    neon.callbacks.callbacks.TrainCostCallback
-   neon.callbacks.callbacks.ValidationCallback
+   neon.callbacks.callbacks.LossCallback
+   neon.callbacks.callbacks.MetricCallback
    neon.callbacks.callbacks.ProgressBarCallback
    neon.callbacks.callbacks.TrainLoggerCallback
    neon.callbacks.callbacks.SaveBestStateCallback
@@ -116,9 +117,6 @@ API
    neon.layers.layer.GeneralizedCost
    neon.layers.layer.GeneralizedCostMask
    neon.layers.layer.BatchNorm
-   neon.layers.merge.MergeSum
-   neon.layers.merge.MergeConcat
-   neon.layers.merge.MergeConcatSequence
    neon.layers.recurrent.Recurrent
    neon.layers.recurrent.LSTM
    neon.layers.recurrent.GRU
