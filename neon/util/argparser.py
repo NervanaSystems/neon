@@ -215,9 +215,12 @@ class NeonArgparser(configargparse.ArgumentParser):
             filelog.setLevel(log_thresh)
             main_logger.addHandler(filelog)
 
-            # if a log file is specified the
-            # stderr is set ot default verbosity
-            stderrlog.setLevel(logging.ERROR)
+            # if a log file is specified and progress bar displayed,
+            # log only errors to console.
+            if args.no_progress_bar:
+                stderrlog.setLevel(log_thresh)
+            else:
+                stderrlog.setLevel(logging.ERROR)
         else:
             stderrlog.setLevel(log_thresh)
 
