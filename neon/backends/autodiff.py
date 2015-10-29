@@ -47,11 +47,11 @@ class GradUtil():
     @staticmethod
     def get_grad_back(grad_node):
         """
-        Get left and right gradient increments from back-propagattion.
+        Get left and right gradient increments from back-propagation.
 
         Arguments:
             grad_node (GradNode): The GradNode to perform gradient
-                                  back-propagate.
+                                  back-propagation on.
         """
         if not grad_node:
             return None
@@ -74,7 +74,7 @@ class GradUtil():
     @staticmethod
     def _unbroadcast(grad_op_tree, x, be):
         """
-        Reverse brocast from shape(grad_op_tree) to shape(x)
+        Reverse broadcast from shape(grad_op_tree) to shape(x)
 
         Arguments:
             grad_op_tree (OpTreeNode or Tensor): The OpTreeNode to broadcast.
@@ -268,7 +268,7 @@ grad_map = {
     'finite': GradUtil._zero_grad_unary,
     'argmax': GradUtil._zero_grad_unary,
     'argmin': GradUtil._zero_grad_unary,
-    # binary opterations
+    # binary operations
     'add': GradUtil._add_grad,
     'mul': GradUtil._mul_grad,
     'sub': GradUtil._sub_grad,
@@ -298,7 +298,7 @@ grad_map = {
 
 def memoize_autodiff(func):
     """
-    Memoize to avoid rebuilidng of the gradient tree.
+    Memoize to avoid rebuilding of the gradient tree.
     """
     cache = {}
 
@@ -323,7 +323,7 @@ class Autodiff(object):
     Automatic differentiation given an op-tree.
 
     Arguments:
-        op_tree (OpTreeNode): the op-tree to take gradient
+        op_tree (OpTreeNode): the op-tree to take gradient of
         be (Backend): computation backend used
         next_error (Tensor or OpTreeNode, optional): next layer's error, usually
                                                      self.delta in a layer. If
@@ -341,7 +341,7 @@ class Autodiff(object):
                 or isinstance(op_tree, Tensor)), "op_tree type not supported"
         assert be is not None
 
-        # atttributes
+        # attributes
         self.op_tree = op_tree
         self.be = be
         self.dtype = be.default_dtype
@@ -352,8 +352,6 @@ class Autodiff(object):
 
         self.map_tensor_grad_node = {}  # for building grad tree
         self.map_tensor_grad_op_tree = {}  # quick access to grad_op_tree
-        # self.map_tensor_grad_stack = {} # quick access to grad_op_tree's
-        # stack
 
         # build_grad
         self.grad_node = GradNode(op_tree, self)
@@ -381,7 +379,7 @@ class Autodiff(object):
 
         Arguments:
             Tensors (list): List of Tensors to compute gradients.
-            Gradient (list): List of Tensors, as outoput buffers of the
+            Gradient (list): List of Tensors, as output buffers of the
                              Gradients.
         """
         # avoid tensor reused as a grad_buffer
@@ -425,7 +423,7 @@ class Autodiff(object):
         tensor is not used, its gradient will be set to zero.
 
         Arguments:
-            Tensors (list): List of Tensors to compute gradients.
+            Tensors (list): List of Tensors to compute gradients on.
 
         Returns
             list: A list of Tensors, each of them is the gradent of the input
@@ -448,7 +446,7 @@ class Autodiff(object):
             Tensors (list): List of Tensors to compute gradients.
 
         Returns
-            list: A list of numpy.ndarray, each of them is the gradent of the
+            list: A list of numpy.ndarray, each of them is the gradient of the
                   input tensor.
         """
         grad_vals = self.get_grad_tensor(tensors)
@@ -460,9 +458,9 @@ class Autodiff(object):
 class GradNode(object):
 
     """
-    A node in grad_tree.A GradNode contains the op_optree and the grad_op_tree
+    A node in grad_tree. A GradNode contains the op_optree and the grad_op_tree
     at this location of the grad_tree, and it also has pointers to the left and
-    right child in teh grad_tree.
+    right child in the grad_tree.
     """
 
     __slots__ = ['op_tree', 'grad_op_tree', 'ad', 'left', 'right']
@@ -524,7 +522,7 @@ class GradNode(object):
 
     def build_grad(self):
         """
-        actual back-propagate the gradient
+        actually back-propagate the gradient
         """
         # self.grad_op_tree shall be set by ad or parent grad_node
         assert self.grad_op_tree is not None

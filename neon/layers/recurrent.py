@@ -105,11 +105,9 @@ class Recurrent(ParameterLayer):
 
     def init_params(self, shape):
         """
-        Initialize params for LSTM including weights and biases.
+        Initialize params including weights and biases.
         The weight matrix and bias matrix are concatenated from the weights
         for inputs and weights for recurrent inputs and bias.
-        The shape of the weights are (number of inputs + number of outputs +1 )
-        by (number of outputs * 4)
 
         Arguments:
             shape (Tuple): contains number of outputs and number of inputs
@@ -536,7 +534,7 @@ class GRU(Recurrent):
 
     def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
-        Backpropogation of errors, output delta for previous layer, and
+        Backpropagation of errors, output delta for previous layer, and
         calculate the update on model parmas
 
         Arguments:
@@ -549,7 +547,7 @@ class GRU(Recurrent):
             db (Tensor): bias gradients
 
         Returns:
-            Tensor: Backpropograted errors for each time step
+            Tensor: Backpropagated errors for each time step
                 of model unrolling
         """
 

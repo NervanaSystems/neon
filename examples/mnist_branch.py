@@ -32,6 +32,10 @@ The topology of the network is:
   |        /
   | ___b1_l1
   |/
+  |
+ m_l1
+  |
+  |
  data
 
 """
