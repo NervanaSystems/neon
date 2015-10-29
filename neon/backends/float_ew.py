@@ -302,7 +302,7 @@ __device__ __forceinline__ short fp32_to_int16(float val)
         "u2": r"""
 __device__ __forceinline__ unsigned short fp32_to_uint16(float val)
 {
-    unsigned short;
+    unsigned short ret;
     asm("cvt.rni.u16.f32 %0, %1;" : "=h"(ret) : "f"(val));
     return ret;
 }
