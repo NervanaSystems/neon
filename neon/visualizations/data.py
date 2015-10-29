@@ -96,3 +96,22 @@ def h5_cost_data(filename, epoch_axis=True):
             ret.append((name, x, y))
 
     return ret
+
+
+def h5_hist_data(filename, epoch_axis=True):
+    ret = list()
+    with h5py.File(filename, "r") as f:
+        minibatches = f['config'].attrs['total_minibatches']
+        if 'hist' in f:
+            hists, config = [f[x] for x in ['hist', 'config']]
+            bins, offset, time_markers = [hists.attrs[x]
+                                          for x in ['bins', 'offset', 'time_markers']]
+            total_epochs = config.attrs['total_epochs']
+            total_minibatches = config.attrs['total_minibatches']
+
+            for hname, hdata in hists.iteritems():
+                dw = total_epochs if (time_markers == 'epoch_freq') else total_minibatches
+                dh = bins
+                ret.append((hname, hdata[...], dh, dw, bins, offset))
+
+    return ret

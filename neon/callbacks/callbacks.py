@@ -127,6 +127,10 @@ class Callbacks(NervanaObject):
         """
         self.add_callback(EarlyStopCallback(self.callback_data, self.model, stop_func))
 
+    def add_hist_callback(self, plot_per_mini=False):
+        self.callbacks.append(HistCallback(self.callback_data, self.model,
+                              plot_per_mini=plot_per_mini))
+
     def add_callback(self, callback, insert_pos=None):
         """
         Add a user supplied callback. Since callbacks are run serially and share data,
@@ -478,6 +482,56 @@ class MetricCallback(Callback):
             self.eval_set.reset()
             stats = self.model.eval(self.eval_set, metric=self.metric)
             logger.info('%s: %s', self.metric_desc, ", ".join(map(str, stats.flatten())))
+
+
+class HistCallback(Callback):
+    """
+    Collect histograms of weights of all layers. Configurable to computed
+    histograms once per minibatch or once per epoch using the plot_per_mini
+    flag. Histograms are stored to the hdf5 output file and can be visualized
+    using the nvis tool.
+    """
+    def __init__(self, callback_data, model, plot_per_mini):
+        super(HistCallback, self).__init__(epoch_freq=1, minibatch_freq=1)
+        self.callback_data = callback_data
+        self.plot_per_mini = plot_per_mini
+        self.model = model
+
+    def on_train_begin(self, epochs):
+        self.minibatches = self.callback_data['config'].attrs['total_minibatches']
+
+        hist_grp = self.callback_data.create_group("hist")
+        hist_grp.attrs['bins'] = self.be.hist_bins
+        hist_grp.attrs['offset'] = self.be.hist_offset
+        hist_grp.attrs['time_markers'] = 'minibatch' if self.plot_per_mini else 'epoch'
+        hist_grp.attrs['time_steps'] = self.minibatches if self.plot_per_mini else epochs
+
+    def on_minibatch_end(self, epoch, minibatch):
+        if self.plot_per_mini:
+            prev_epochs_minibatches = 0
+            if epoch > 0:
+                prev_epochs_minibatches = self.callback_data['time_markers/minibatch'][epoch-1]
+
+            timestamp = prev_epochs_minibatches + minibatch
+            self._save_hist_data(timestamp)
+
+    def on_epoch_end(self, epoch):
+        if not self.plot_per_mini:
+            self._save_hist_data(epoch)
+
+    def _save_hist_data(self, timestamp):
+        for l_i, l in enumerate(self.model.layers.layers):
+            if hasattr(l, 'W'):
+                name = "%s_%d_W" % (l.name, l_i)
+                l.W.hist(name)
+
+        hist_grp = self.callback_data['hist']
+        points = hist_grp.attrs['time_steps']
+        hdata, hmap = self.be.dump_hist_data()
+        hdata = hdata.get()
+        for hname in hmap:
+            hist_dset = hist_grp.require_dataset(hname, shape=(64, points), dtype=hdata.dtype)
+            hist_dset[:, timestamp] = hdata[hmap[hname]].reshape((64,))
 
 
 def get_progress_string(tag, epoch, minibatch, nbatches, cost, time,

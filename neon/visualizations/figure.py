@@ -13,6 +13,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+# Imports should not be a requirement for building documentation
+try:
+    from bokeh.plotting import figure
+    from bokeh.palettes import brewer
+except ImportError:
+    pass
 
 def x_label(epoch_axis):
     """
@@ -25,10 +31,6 @@ def cost_fig(cost_data, plot_height, plot_width, epoch_axis=True):
     """
     Generate a figure with lines for each element in cost_data.
     """
-    # NOTE: imports moved inside this function to make them a non-requirement
-    # for building documentation
-    from bokeh.plotting import figure
-    from bokeh.palettes import brewer
 
     fig = figure(plot_height=plot_height,
                  plot_width=plot_width,
@@ -48,4 +50,22 @@ def cost_fig(cost_data, plot_height, plot_width, epoch_axis=True):
 
     for name, x, y in cost_data:
         fig.line(x, y, legend=name, color=colors.pop(0), line_width=2)
+    return fig
+
+
+def hist_fig(hist_data, plot_height, plot_width, x_range=None, epoch_axis=True):
+    """
+    Generate a figure with an image plot for hist_data, bins on the Y axis and
+    time on the X axis.
+    """
+    name, hdata, dh, dw, bins, offset = hist_data
+    if x_range is None:
+        x_range = (0, dw)
+    fig = figure(plot_height=plot_height,
+                 plot_width=plot_width,
+                 title=name,
+                 x_axis_label=x_label(epoch_axis),
+                 x_range=x_range,
+                 y_range=(offset, offset + bins))
+    fig.image(image=[hdata], x=[0],  y=[offset], dw=[dw], dh=[dh], palette="Spectral11")
     return fig

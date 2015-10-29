@@ -37,8 +37,8 @@ import logging
 import sys
 import argparse
 from bokeh import plotting
-from neon.visualizations.figure import cost_fig
-from neon.visualizations.data import h5_cost_data
+from neon.visualizations.figure import cost_fig, hist_fig
+from neon.visualizations.data import h5_cost_data, h5_hist_data
 logging.basicConfig(level=20)
 logger = logging.getLogger()
 
@@ -72,10 +72,17 @@ def static_plot(args, plot_height=400, plot_width=600):
     """
     epoch_axis = args.axis=='epoch'
     cost_data = h5_cost_data(args.in_file, epoch_axis)
-    fig = cost_fig(cost_data, plot_height, plot_width, epoch_axis=epoch_axis)
+    hist_data = h5_hist_data(args.in_file, epoch_axis)
+
+    figs = []
+    figs.append(cost_fig(cost_data, plot_height, plot_width, epoch_axis=epoch_axis))
+    shared_x_range = figs[0].x_range
+    for hist in hist_data:
+        figs.append(hist_fig(hist, plot_height/2, plot_width,
+                             x_range=shared_x_range, epoch_axis=epoch_axis))
 
     plotting.output_file(args.out_file)
-    plotting.save(fig)
+    plotting.show(plotting.vplot(*figs))
 
 if __name__ == "__main__":
     args = parse_args()

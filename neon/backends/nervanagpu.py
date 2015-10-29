@@ -698,7 +698,7 @@ class NervanaGPU(Backend):
         self.hist_offset = hist_offset
         self.hist_map = dict()
         self.hist_idx = 0
-        self.hist_max = 4096
+        self.hist_max = 4*4096
         self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
         drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
 
