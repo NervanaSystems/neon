@@ -453,7 +453,7 @@ _ew_strings = {
         },
         "nearest": {
             "f2": "unsigned short {0} = fp32_to_fp16({1});",
-            "u4": "unsignedint {0}    = fp32_to_uint32({1});",
+            "u4": "unsigned int {0}    = fp32_to_uint32({1});",
             "u2": "unsigned short {0} = fp32_to_uint16({1});",
             "u1": "unsigned char {0}  = fp32_to_uint8({1});",
             "i4": "int {0}            = fp32_to_int32({1});",
