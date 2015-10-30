@@ -1,5 +1,60 @@
 # ChangeLog
 
+## v1.1.0 (2015-10-30):
+
+### Modifications
+
+* Sentiment analysis support (LSTM lookupTable based), new IMDB example
+* Support for merge and branch layer stacks via LayerContainers
+  * Sequential, Tree, MergeBroadcast, MergeMultiStream
+* Support for freezing layer stacks
+* Adagrad optimizer support
+* new GPU kernels for fast compounding batch norm, conv and pooling engine
+  updates, new kernel build system and flags.
+* Modifications for Caffe support
+  * conv, pooling, P/Q updates, dropout layer normalization more in-line with
+    Caffe approach.  NOTE: this breaks backwards compatibility with some
+	strided conv/pool related models serialized using older versions of neon
+	as the output sizes may now be different.  See the FAQ for more info.
+  * serialization enhancements to make caffe model import/export easier
+  * use per-channel mean subtraction instead of single global.  NOTE: this
+    breaks backwards compatibility with ImgMaster saved datasets prior to this
+	revision.  To correct, please use the included `update_dataset_cache.py`
+	script in the util directory.
+* Default training cost display during progress bar is now calculated on a
+  rolling window basis rather than from the beginning of each epoch
+* Separate Layer configuration and initialization steps
+* YAML based alexnet example
+* Callback enhancements.
+  * now pass args instead of having to spell out callbacks in each example
+  * Changed validation callback to loss callback, validation_frequency now
+    evaluation_frequency
+  * Generic metric callback.
+* Various bug fixes
+  * non-contiguous array get for GPUTensors
+  * 1D slicing returns 2D matrices
+  * bin/neon serialization fixes for RNNs
+  * 3D conv fixes for fprop, bprop
+  * batch norm inference fix
+  * bias layer size fix
+* Documentation updates and improvements
+
+## v1.0.0 (2015-09-15):
+
+### Modifications
+
+Primarily bug fixes:
+
+* Ensure root logging handler setup [#82]
+* C++ utility for CUDA compatibility checking [#83]
+* Add predict function to models [#86]
+* Fix bug in learning rate schedule impacting deserialization
+* Speed up batch norm computation
+* Average gradients in OpTree, fix tests
+* Use inference mode for fprop during validation
+* Add top-k misclassifcation metric
+* Simplify maxas install, make vis requirements optional, doc updates.
+
 ## v1.0.0rc1 (2015-09-08):
 
 ### Modifications
