@@ -121,8 +121,8 @@ layers:
     act_name: relu6
     bias_name: fc6b
     nout: 4096
-    init: *wt_init2
-    bias: *b_init2
+    init: *wt_init1
+    bias: *b_init1
     activation: Rectlin
 -
     type: Dropout
@@ -134,8 +134,8 @@ layers:
     act_name: relu7
     bias_name: fc7b
     nout: 4096
-    init: *wt_init2
-    bias: *b_init2
+    init: *wt_init1
+    bias: *b_init1
     activation: Rectlin
 -
     type: Dropout
