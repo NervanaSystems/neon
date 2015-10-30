@@ -20,6 +20,7 @@ try:
 except ImportError:
     pass
 
+
 def x_label(epoch_axis):
     """
     Get the x axis label depending on the boolean epoch_axis.

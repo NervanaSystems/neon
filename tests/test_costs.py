@@ -43,9 +43,10 @@ def compare_tensors(func, y, t, outputs, deriv=False, tol=0.):
 def test_cross_entropy_binary(backend_default):
     outputs = np.array([0.5, 0.9, 0.1, 0.0001]).reshape((4, 1))
     targets = np.array([0.5, 0.99, 0.01, 0.2]).reshape((4, 1))
-    eps = 2 ** -23
-    expected_result = np.sum((-targets * np.log(outputs + eps)) -
-                             (1 - targets) * np.log(1 - outputs + eps),
+    eps = np.exp(-50)
+    expected_log = np.log(np.maximum(outputs, eps))
+    expected_mlog = np.log(np.maximum(1 - outputs, eps))
+    expected_result = np.sum((-targets * expected_log) - (1 - targets) * expected_mlog,
                              keepdims=True)
     compare_tensors(CrossEntropyBinary(),
                     outputs, targets, expected_result, tol=1e-6)
@@ -54,9 +55,10 @@ def test_cross_entropy_binary(backend_default):
 def test_cross_entropy_binary_limits(backend_default):
     outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
-    eps = 2 ** -23
-    expected_result = np.sum((-targets * np.log(outputs + eps)) -
-                             (1 - targets) * np.log(1 - outputs + eps),
+    eps = np.exp(-50)
+    expected_log = np.log(np.maximum(outputs, eps))
+    expected_mlog = np.log(np.maximum(1 - outputs, eps))
+    expected_result = np.sum((-targets * expected_log) - (1 - targets) * expected_mlog,
                              keepdims=True)
     compare_tensors(CrossEntropyBinary(),
                     outputs, targets, expected_result, tol=1e-5)
@@ -79,9 +81,9 @@ def test_cross_entropy_binary_derivative(backend_default):
 def test_cross_entropy_multi(backend_default):
     outputs = np.array([0.5, 0.9, 0.1, 0.0001]).reshape((4, 1))
     targets = np.array([0.5, 0.99, 0.01, 0.2]).reshape((4, 1))
-    eps = 2 ** -23
-    expected_result = np.sum(-targets * np.log(np.clip(outputs, eps, 1.0)),
-                             axis=0, keepdims=True)
+    eps = np.exp(-50)
+    expected_log = np.log(np.maximum(outputs, eps))
+    expected_result = np.sum(-targets * expected_log, axis=0, keepdims=True)
     compare_tensors(CrossEntropyMulti(),
                     outputs, targets, expected_result, tol=1e-6)
 
@@ -89,9 +91,9 @@ def test_cross_entropy_multi(backend_default):
 def test_cross_entropy_multi_limits(backend_default):
     outputs = np.array([0.5, 1.0, 0.0, 0.0001]).reshape((4, 1))
     targets = np.array(([0.5, 0.0, 1.0, 0.2])).reshape((4, 1))
-    eps = 2 ** -23
-    expected_result = np.sum(-targets * np.log(np.clip(outputs, eps, 1.0)),
-                             axis=0, keepdims=True)
+    eps = np.exp(-50)
+    expected_log = np.log(np.maximum(outputs, eps))
+    expected_result = np.sum(-targets * expected_log, axis=0, keepdims=True)
     compare_tensors(CrossEntropyMulti(),
                     outputs, targets, expected_result, tol=1e-5)
 

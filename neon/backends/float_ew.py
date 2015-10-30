@@ -496,6 +496,7 @@ _float_ops = {
     "sqr": (1, "float {0} = {1} * {1};"),
     "exp": (1, "float {0} = expf({1});"),
     "log": (1, "float {0} = logf({1});"),
+    "safelog": (1, "float {0} = ({1} > 0.0f) ? logf({1}) : -50.0f;"),
     "exp2": (1, "float {0} = exp2f({1});"),
     "log2": (1, "float {0} = log2f({1});"),
     "sig": (1, "float {0} = 1.0f/(1.0f + expf(-{1}));"),

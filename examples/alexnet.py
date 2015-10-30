@@ -61,9 +61,9 @@ layers = [Conv((11, 11, 64), padding=3, strides=4, init=init1, bias=Constant(0),
           Conv((3, 3, 256), padding=1, init=init1b, bias=Constant(1), activation=relu),
           Conv((3, 3, 256), padding=1, init=init1b, bias=Constant(1), activation=relu),
           Pooling(3, strides=2),
-          Affine(nout=4096, init=init2, bias=Constant(0.5), activation=relu),
+          Affine(nout=4096, init=init1, bias=Constant(1), activation=relu),
           Dropout(keep=0.5),
-          Affine(nout=4096, init=init2, bias=Constant(0.5), activation=relu),
+          Affine(nout=4096, init=init1, bias=Constant(1), activation=relu),
           Dropout(keep=0.5),
           Affine(nout=1000, init=init1, bias=Constant(-7), activation=Softmax())]
 

@@ -445,6 +445,7 @@ numpy_call_dict = {
     "sqr": lambda left: np.square(left),
     "exp": lambda left: np.exp(left),
     "log": lambda left: np.log(left),
+    "safelog": lambda left: np.log(np.maximum(left, np.exp(-50.))),
     "exp2": lambda left: np.exp2(left),
     "log2": lambda left: np.log2(left),
     "sig": lambda left: 1. / (1. + np.exp(-left)),
@@ -1380,6 +1381,6 @@ class NervanaCPU(Backend):
             out: reference to output
         """
         if out is not None:
-            np.log(1 + np.exp(ary), out)
+            return np.maximum(ary, 0, out)
         else:
-            return np.log(1 + np.exp(ary))
+            return np.maximum(ary, 0)

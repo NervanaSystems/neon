@@ -13,6 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from neon import NervanaObject
+import numpy as np
 
 
 class Cost(NervanaObject):
@@ -85,15 +86,13 @@ class CrossEntropyBinary(Cost):
         bprop assumes that shortcut is used to calculate derivative
     """
 
-    def __init__(self, epsilon=2 ** -23, scale=1):
+    def __init__(self, scale=1):
         """
         Initialize the binary cross entropy function
 
         Args:
-            epsilon (float): set the epsilon
-                             (small number to prevent log(0) errors)
+            scale (float): amount by which to scale the backpropagated error
         """
-        self.epsilon = epsilon
         self.scale = scale
 
     def __call__(self, y, t):
@@ -107,8 +106,8 @@ class CrossEntropyBinary(Cost):
         Returns:
             OpTree: Returns the binary cross entropy cost
         """
-        a = - self.be.log(y + self.epsilon) * t
-        b = - self.be.log(1 - y + self.epsilon) * (1 - t)
+        a = - self.be.safelog(y) * t
+        b = - self.be.safelog(1 - y) * (1 - t)
         return self.be.sum(a + b, axis=0)
 
     def bprop(self, y, t):
@@ -135,18 +134,16 @@ class CrossEntropyMulti(Cost):
         bprop assumes that shortcut is used to calculate derivative
     """
 
-    def __init__(self, epsilon=2 ** -23, scale=1, usebits=False):
+    def __init__(self, scale=1, usebits=False):
         """
         Initialize the multiclass cross entropy function
 
         Args:
-            epsilon (float): set the epsilon
-                             (small number to prevent log(0) errors)
+            scale (float): amount by which to scale the backpropagated error
             usebits (boolean): whether to display costs in bits or nats (default)
         """
-        self.epsilon = epsilon
         self.scale = scale
-        self.logfunc = self.be.log2 if usebits else self.be.log
+        self.logscale = np.float(1. / np.log(2.0) if usebits else 1.)
 
     def __call__(self, y, t):
         """
@@ -159,7 +156,7 @@ class CrossEntropyMulti(Cost):
         Returns:
             OpTree: Returns the multiclass cross entropy cost
         """
-        return (self.be.sum(-t * self.logfunc(self.be.clip(y, self.epsilon, 1.0)), axis=0))
+        return (self.be.sum(-t * self.logscale * self.be.safelog(y), axis=0))
 
     def bprop(self, y, t):
         """
@@ -238,7 +235,7 @@ class TopKMisclassification(Metric):
         nEq = be.sum(y == self.correctProbs, axis=0)
         self.topk[:] = 1. - (nSlots > 0) * ((nEq <= nSlots) * (1 - nSlots / nEq) + nSlots / nEq)
         self.top1[:] = 1. - (be.max(y, axis=0) == self.correctProbs) / nEq
-        self.correctProbs[:] = -be.log(self.correctProbs)
+        self.correctProbs[:] = -be.safelog(self.correctProbs)
 
         return self.outputs.get().mean(axis=1)
 

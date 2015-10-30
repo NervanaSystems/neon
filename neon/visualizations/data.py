@@ -101,7 +101,6 @@ def h5_cost_data(filename, epoch_axis=True):
 def h5_hist_data(filename, epoch_axis=True):
     ret = list()
     with h5py.File(filename, "r") as f:
-        minibatches = f['config'].attrs['total_minibatches']
         if 'hist' in f:
             hists, config = [f[x] for x in ['hist', 'config']]
             bins, offset, time_markers = [hists.attrs[x]

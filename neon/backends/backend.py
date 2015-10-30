@@ -30,7 +30,8 @@ class OpCollection(object):
     """
     zero_operand_ops = {"rand", "onehot"}
     unary_ops = {"finite", "neg", "abs", "sgn", "sqrt", "sqr", "exp", "log",
-                 "exp2", "log2", "sig", "sig2", "tanh", "tanh2", "transpose"}
+                 "exp2", "log2", "sig", "sig2", "tanh", "tanh2", "transpose",
+                 "safelog"}
     binary_ops = {"assign", "add", "sub", "mul", "div", "eq", "ne", "lt", "le",
                   "gt", "ge", "pow", "minimum", "maximum", "dot"}
     reduction_ops = {"sum", "max", "min", "argmax", "argmin"}
@@ -979,6 +980,22 @@ class Backend(object):
             OpTreeNode: the resulting op-tree
         """
         return OpTreeNode.build("exp2", a, None, out=out)
+
+    def safelog(self, a, out=None):
+        """
+        Perform element-wise natural logarithm transformation on Tensor `a`,
+        storing the result in Tensor out. Both Tensor's should have identical
+        shape.  This log function has built in safety for underflow.
+
+        Arguments:
+            a (Tensor): input to be transformed.
+            out (Tensor, optional): where the result will be stored. If out is
+                                    None, only the op-tree will be returned.
+
+        Returns:
+            OpTreeNode: the resulting op-tree
+        """
+        return OpTreeNode.build("safelog", a, None, out=out)
 
     def log(self, a, out=None):
         """
