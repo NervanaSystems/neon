@@ -171,6 +171,34 @@ def load_cifar10(path=".", normalize=True):
     return (X_train, y_train), (X_test, y_test), 10
 
 
+def load_babi(path=".", task='qa1_single-supporting-fact', subset='en'):
+    """
+    Fetch the Facebook bAbI dataset and load it to memory.
+
+    Args:
+        path (str, optional): Local directory in which to cache the raw
+                              dataset.  Defaults to current directory.
+        task (str): bAbI task to load
+
+    Returns:
+        tuple: training and test files are returned
+    """
+    babi = dataset_meta['babi']
+    workdir, filepath = _valid_path_append(path, '', babi['file'])
+    if not os.path.exists(filepath):
+        fetch_dataset(babi['url'], babi['file'], filepath, babi['size'])
+
+    babi_dir_name = babi['file'].split('.')[0]
+    task = babi_dir_name + '/' + subset + '/' + task + '_{}.txt'
+    with tarfile.open(filepath, 'r:gz') as f:
+        train_file = f.extractfile(task.format('train'))
+        train = train_file.read()
+        test_file = f.extractfile(task.format('test'))
+        test = test_file.read()
+
+    return train, test
+
+
 def load_text(dataset, path="."):
     """
     Fetch the specified dataset.
@@ -253,6 +281,12 @@ dataset_meta = {
         'file': 'cifar-10-python.tar.gz',
         'url': 'http://www.cs.toronto.edu/~kriz',
         'func': load_cifar10
+    },
+    'babi': {
+        'size': 11745123,
+        'file': 'tasks_1-20_v1-2.tar.gz',
+        'url': 'http://www.thespermwhale.com/jaseweston/babi',
+        'func': load_babi
     },
     'ptb-train': {
         'size': 5101618,
