@@ -190,13 +190,14 @@ def load_babi(path=".", task='qa1_single-supporting-fact', subset='en'):
 
     babi_dir_name = babi['file'].split('.')[0]
     task = babi_dir_name + '/' + subset + '/' + task + '_{}.txt'
-    with tarfile.open(filepath, 'r:gz') as f:
-        train_file = f.extractfile(task.format('train'))
-        train = train_file.read()
-        test_file = f.extractfile(task.format('test'))
-        test = test_file.read()
+    train_file = os.path.join(workdir, task.format('train'))
+    test_file = os.path.join(workdir, task.format('test'))
 
-    return train, test
+    if os.path.exists(train_file) is False or os.path.exists(test_file):
+        with tarfile.open(filepath, 'r:gz') as f:
+            f.extractall(workdir)
+
+    return train_file, test_file
 
 
 def load_text(dataset, path="."):

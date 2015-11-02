@@ -513,6 +513,11 @@ class GRU(Recurrent):
         """
         self.init_buffers(inputs)
 
+        if self.reset_cells:
+            self.h[-1][:] = 0
+            self.rz[-1][:] = 0
+            self.hcan[-1][:] = 0
+
         for (h, h_prev, rh_prev, xs, rz, r, z, hcan, rz_rec, hcan_rec, rzhcan) in zip(
                 self.h, self.h_prev, self.rh_prev, self.xs, self.rz, self.r,
                 self.z, self.hcan, self.rz_rec, self.hcan_rec, self.rzhcan):

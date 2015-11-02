@@ -42,23 +42,60 @@ QA20 - Agent's Motivations   | 91               | 92.2
 Reference:
     "Towards AI-Complete Question Answering: A Set of Prerequisite Toy Tasks"
     http://arxiv.org/abs/1502.05698
+
+Usage:
+    use -t to specify which bAbI task to run
+    python examples/babi_lstm.py -e 20 -eval 1 -t 1
 """
 
 from neon.backends import gen_backend
 from neon.data import BABI, QA
 from neon.initializers import GlorotUniform, Uniform
-from neon.layers import Affine, GeneralizedCost, GRU, LookupTable, MergeMultistream, Sequential 
+from neon.layers import (Affine, GeneralizedCost, GRU, LookupTable, 
+                        MergeMultistream, Sequential, LSTM)
 from neon.models import Model
 from neon.optimizers import Adam
 from neon.transforms import Accuracy, CrossEntropyMulti, Logistic, Softmax, Tanh
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
 
+# list of bAbI task
+subset = 'en'
+task_list = [
+        'qa1_single-supporting-fact',
+        'qa2_two-supporting-facts',
+        'qa3_three-supporting-facts',
+        'qa4_two-arg-relations',
+        'qa5_three-arg-relations',
+        'qa6_yes-no-questions',
+        'qa7_counting',
+        'qa8_lists-sets',
+        'qa9_simple-negation',
+        'qa10_indefinite-knowledge',
+        'qa11_basic-coreference',
+        'qa12_conjunction',
+        'qa13_compound-coreference',
+        'qa14_time-reasoning',
+        'qa15_basic-deduction',
+        'qa16_basic-induction',
+        'qa17_positional-reasoning',
+        'qa18_size-reasoning',
+        'qa19_path-finding',
+        'qa20_agents-motivations',
+        ]
+
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
+parser.add_argument('-t', '--task',
+                type=int, default='1', choices=xrange(1, 21),
+                help='the task ID to train/test on from bAbI dataset (1-20)')
+
 args = parser.parse_args()
 
 num_epochs = args.epochs
+task_id = args.task-1
+
+task = task_list[task_id]
 
 batch_size = 32
 
@@ -69,28 +106,6 @@ be = gen_backend(backend=args.backend,
                  device_id=args.device_id,
                  default_dtype=args.datatype)
 
-# select bAbI task
-subset = 'en'
-task = 'qa1_single-supporting-fact'
-# task = 'qa2_two-supporting-facts'
-# task = 'qa3_three-supporting-facts'
-# task = 'qa4_two-arg-relations'
-# task = 'qa5_three-arg-relations'
-# task = 'qa6_yes-no-questions'
-# task = 'qa7_counting'
-# task = 'qa8_lists-sets'
-# task = 'qa9_simple-negation'
-# task = 'qa10_indefinite-knowledge'
-# task = 'qa11_basic-coreference'
-# task = 'qa12_conjunction'
-# task = 'qa13_compound-coreference'
-# task = 'qa14_time-reasoning'
-# task = 'qa15_basic-deduction'
-# task = 'qa16_basic-induction'
-# task = 'qa17_positional-reasoning'
-# task = 'qa18_size-reasoning'
-# task = 'qa19_path-finding'
-# task = 'qa20_agents-motivations'
 
 # load the bAbI dataset
 babi = BABI(path=args.data_dir, task=task, subset=subset)
@@ -106,13 +121,26 @@ embedding_dim = 50
 hidden_size = 100
 
 # model construction
+rlayer_type = 'gru'
+if rlayer_type == 'lstm':
+    rlayer_story = LSTM(hidden_size, glorot, Logistic(), Tanh(), reset_cells=True)
+    rlayer_query = LSTM(hidden_size, glorot, Logistic(), Tanh(), reset_cells=True)
+elif rlayer_type == 'gru':
+    rlayer_story = GRU(hidden_size, glorot, activation=Tanh(),
+                        gate_activation=Logistic(), reset_cells=True)
+    rlayer_query = GRU(hidden_size, glorot, activation=Tanh(),
+                        gate_activation=Logistic(), reset_cells=True)
+else:
+    raise NotImplementedError('%s layer not implemented' % rlayer_type)
+
+
 story_path = Sequential([
 	LookupTable(vocab_size=babi.vocab_size, embedding_dim=embedding_dim, init=uniform),
-	GRU(hidden_size, glorot, activation=Tanh(), gate_activation=Logistic())
+	rlayer_story
 ])
 query_path = Sequential([
 	LookupTable(vocab_size=babi.vocab_size, embedding_dim=embedding_dim, init=uniform),
-	GRU(hidden_size, glorot, activation=Tanh(), gate_activation=Logistic())
+	rlayer_query
 ])
 
 layers = [
