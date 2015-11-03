@@ -93,7 +93,7 @@ optimizer = Adagrad(learning_rate=0.01, clip_gradients=clip_gradients)
 
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, args, valid_set=valid_set)
+callbacks = Callbacks(model, train_set, args, eval_set=valid_set)
 
 # train model
 model.fit(train_set,
