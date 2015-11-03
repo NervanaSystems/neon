@@ -151,7 +151,7 @@ def check_rnn(seq_len, input_size, hidden_size,
 
     # comparing outputs
     print '====Verifying hidden states===='
-    print allclose_with_out(rnn.h_buffer.get(),
+    print allclose_with_out(rnn.outputs.get(),
                             h_ref_list,
                             rtol=0.0,
                             atol=1.0e-5)
@@ -188,7 +188,6 @@ def reset_rnn(rnn):
     # cleared
     rnn.x = None
     rnn.xs = None  # just in case
-    rnn.h_buffer = None
     rnn.outputs = None
     return
 

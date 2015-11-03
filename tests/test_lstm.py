@@ -150,7 +150,7 @@ def check_lstm(seq_len, input_size, hidden_size,
                       atol=1.0e-5)
 
     print '====Verifying hidden states===='
-    allclose_with_out(lstm.h_buffer.get(),
+    allclose_with_out(lstm.outputs.get(),
                       Hout_ref,
                       rtol=0.0,
                       atol=1.0e-5)
@@ -214,7 +214,6 @@ def reset_lstm(lstm):
     # cleared
     lstm.x = None
     lstm.xs = None  # just in case
-    lstm.h_buffer = None
     lstm.outputs = None
     return
 

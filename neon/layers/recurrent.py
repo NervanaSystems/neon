@@ -53,7 +53,7 @@ class Recurrent(ParameterLayer):
         self.nout = output_size
         self.h_nout = output_size
         self.activation = activation
-        self.h_buffer = None
+        self.outputs = None
         self.W_input = None
         self.ngates = 1
         self.reset_cells = reset_cells
@@ -69,12 +69,11 @@ class Recurrent(ParameterLayer):
 
     def allocate(self, shared_outputs=None):
         super(Recurrent, self).allocate(shared_outputs)
-        self.h_buffer = self.outputs
-        self.h = get_steps(self.h_buffer, self.out_shape)
+        self.h = get_steps(self.outputs, self.out_shape)
         self.h_prev = self.h[-1:] + self.h[:-1]
         # State deltas
         self.h_delta = get_steps(self.be.iobuf(self.out_shape), self.out_shape)
-        self.bufs_to_reset = [self.h_buffer]
+        self.bufs_to_reset = [self.outputs]
 
         if self.W_input is None:
             self.init_params(self.weight_shape)
@@ -170,7 +169,7 @@ class Recurrent(ParameterLayer):
             self.be.compound_dot(self.W_recur, h_prev, h, beta=1.0)
             h[:] = self.activation(h + self.b)
 
-        return self.h_buffer
+        return self.outputs
 
     def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
@@ -314,7 +313,7 @@ class LSTM(Recurrent):
             c_act[:] = self.activation(c)
             h[:] = o * c_act
 
-        return self.h_buffer
+        return self.outputs
 
     def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
@@ -343,7 +342,7 @@ class LSTM(Recurrent):
             self.in_deltas = get_steps(deltas, self.out_shape)
             self.prev_in_deltas = self.in_deltas[-1:] + self.in_deltas[:-1]
             self.ifog_delta_last_steps = self.ifog_delta_buffer[:, self.be.bsz:]
-            self.h_first_steps = self.h_buffer[:, :-self.be.bsz]
+            self.h_first_steps = self.outputs[:, :-self.be.bsz]
 
         params = (self.h_delta, self.in_deltas, self.prev_in_deltas,
                   self.i, self.f, self.o, self.g, self.ifog_delta,
@@ -530,7 +529,7 @@ class GRU(Recurrent):
             hcan[:] = self.activation(hcan_rec + hcan + self.b_hcan)
             h[:] = (1 - z) * h_prev + z * hcan
 
-        return self.h_buffer
+        return self.outputs
 
     def bprop(self, deltas, alpha=1.0, beta=0.0):
         """

@@ -154,7 +154,7 @@ def check_gru(seq_len, input_size, hidden_size,
                                                                  deltas_ref)
 
     print '====Verifying hidden states===='
-    print allclose_with_out(gru.h_buffer.get(),
+    print allclose_with_out(gru.outputs.get(),
                             h_ref_list,
                             rtol=0.0,
                             atol=1.0e-5)
@@ -276,7 +276,6 @@ def reset_gru(gru):
     # cleared
     gru.x = None
     gru.xs = None  # just in case
-    gru.h_buffer = None
     gru.outputs = None
     return
 
