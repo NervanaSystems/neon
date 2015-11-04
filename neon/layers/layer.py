@@ -861,6 +861,28 @@ class Dropout(Layer):
         return self.deltas
 
 
+class DropoutBinary(Dropout):
+
+    """
+    A dropout layer that does no scaling by keep ratio during training
+
+    Arguments:
+       keep (float): fraction of the inputs that should be stochastically kept.
+    """
+
+    def __init__(self, keep=0.5, name="dropbinarylayer"):
+        super(DropoutBinary, self).__init__(keep, name)
+        self._train_scaling = 1.0  # override scaling factor to retain binary mask
+
+    def __str__(self):
+        return "Dropout Binary Layer '%s': %d inputs and outputs, keep %d%%" % (
+               self.name, self.nout, 100 * self.keep)
+
+    def _fprop_inference(self, inputs):
+        self.outputs[:] = inputs * self.keep
+        return self.outputs
+
+
 class LookupTable(ParameterLayer):
 
     """

@@ -27,10 +27,6 @@ wt_init: &wt_init1b
     type: Gaussian
     scale: 0.03
 
-wt_init: &wt_init2
-    type: Gaussian
-    scale: 0.005
-
 b_init: &b_init0
     type: Constant
     val: 0
@@ -38,10 +34,6 @@ b_init: &b_init0
 b_init: &b_init1
     type: Constant
     val: 1
-
-b_init: &b_init2
-    type: Constant
-    val: 0.5
 
 b_init: &b_init7
     type: Constant
@@ -125,7 +117,7 @@ layers:
     bias: *b_init1
     activation: Rectlin
 -
-    type: Dropout
+    type: DropoutBinary
     name: drop6
     keep: 0.5
 -
@@ -138,7 +130,7 @@ layers:
     bias: *b_init1
     activation: Rectlin
 -
-    type: Dropout
+    type: DropoutBinary
     name: drop7
     keep: 0.5
 -

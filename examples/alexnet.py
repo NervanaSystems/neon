@@ -19,7 +19,7 @@ Runs one epoch of Alexnet on imagenet data.
 
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Constant, Gaussian
-from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
+from neon.layers import Conv, DropoutBinary, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
@@ -32,17 +32,19 @@ from neon.callbacks.callbacks import Callbacks
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train',
-                  dtype=args.datatype)
-test = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='validation',
-                 dtype=args.datatype, do_transforms=False)
+img_master_options = dict(repo_dir=args.data_dir,
+                          inner_size=224,
+                          dtype=args.datatype,
+                          subset_pct=100)
+
+train = ImgMaster(set_name='train', **img_master_options)
+test = ImgMaster(set_name='validation', do_transforms=False, **img_master_options)
 
 train.init_batch_provider()
 test.init_batch_provider()
 
 init1 = Gaussian(scale=0.01)
 init1b = Gaussian(scale=0.03)
-init2 = Gaussian(scale=0.005)
 relu = Rectlin()
 
 # drop LR by 1/250**(1/3) at beginning of epochs 23, 45, 66
@@ -62,9 +64,9 @@ layers = [Conv((11, 11, 64), padding=3, strides=4, init=init1, bias=Constant(0),
           Conv((3, 3, 256), padding=1, init=init1b, bias=Constant(1), activation=relu),
           Pooling(3, strides=2),
           Affine(nout=4096, init=init1, bias=Constant(1), activation=relu),
-          Dropout(keep=0.5),
+          DropoutBinary(keep=0.5),
           Affine(nout=4096, init=init1, bias=Constant(1), activation=relu),
-          Dropout(keep=0.5),
+          DropoutBinary(keep=0.5),
           Affine(nout=1000, init=init1, bias=Constant(-7), activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())

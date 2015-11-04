@@ -60,10 +60,12 @@ Composite Layers
    neon.layers.layer.Conv
    neon.layers.layer.Deconv
 
-Dropout Layer
+Dropout Layers
 -------------
 .. autosummary::
    neon.layers.layer.Dropout
+   neon.layers.layer.DropoutBinary
+
 
 LookupTable Layer
 -----------------
