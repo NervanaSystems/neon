@@ -45,7 +45,7 @@ class Recurrent(ParameterLayer):
         b (Tensor): Biases on output units (output_size, 1)
     """
 
-    def __init__(self, output_size, init, activation,
+    def __init__(self, output_size, init, activation, init_inner=None,
                  reset_cells=False, name="RecurrentLayer"):
         super(Recurrent, self).__init__(init, name)
         self.x = None
@@ -57,6 +57,10 @@ class Recurrent(ParameterLayer):
         self.W_input = None
         self.ngates = 1
         self.reset_cells = reset_cells
+        self.init_inner = init_inner
+        self.init_separate = False
+        if self.init_inner is not None:
+            self.init_separate = True
 
     def configure(self, in_obj):
         super(Recurrent, self).configure(in_obj)
@@ -118,15 +122,22 @@ class Recurrent(ParameterLayer):
         if self.W is None:
             self.W = self.be.empty((nout + nin + 1, g_nout))
             self.dW = self.be.zeros_like(self.W)
-            self.init.fill(self.W)
+            self.W_input = self.W[:nin].reshape((g_nout, nin))
+            self.W_recur = self.W[nin:-1].reshape((g_nout, nout))
+            self.b = self.W[-1:].reshape((g_nout, 1))
+            if self.init_separate is False:
+                self.init.fill(self.W)
+            else:
+                self.init.fill(self.W_input)
+                self.init_inner.fill(self.W_recur)
+                self.b.fill(0)
         else:
             # Deserialized weights and empty grad
             assert self.W.shape == (nout + nin + 1, g_nout)
             assert self.dW.shape == (nout + nin + 1, g_nout)
-
-        self.W_input = self.W[:nin].reshape((g_nout, nin))
-        self.W_recur = self.W[nin:-1].reshape((g_nout, nout))
-        self.b = self.W[-1:].reshape((g_nout, 1))
+            self.W_input = self.W[:nin].reshape((g_nout, nin))
+            self.W_recur = self.W[nin:-1].reshape((g_nout, nout))
+            self.b = self.W[-1:].reshape((g_nout, 1))
 
         self.dW_input = self.dW[:nin].reshape(self.W_input.shape)
         self.dW_recur = self.dW[nin:-1].reshape(self.W_recur.shape)
@@ -232,9 +243,10 @@ class LSTM(Recurrent):
             (out size * 4, out size)
         b (Tensor): Biases (out size * 4 , 1)
     """
-    def __init__(self, output_size, init, activation, gate_activation,
-                 reset_cells=False, name="LstmLayer"):
-        super(LSTM, self).__init__(output_size, init, activation, reset_cells, name)
+    def __init__(self, output_size, init, init_inner=None, activation=None,
+                gate_activation=None, reset_cells=False, name="LstmLayer"):
+        super(LSTM, self).__init__(output_size, init, activation, init_inner,
+                                    reset_cells, name)
         self.gate_activation = gate_activation
         self.ngates = 4  # Input, Output, Forget, Cell
 
@@ -425,9 +437,10 @@ class GRU(Recurrent):
     .. _[Chung2014]: http://arxiv.org/pdf/1412.3555v1.pdf
     """
 
-    def __init__(self, output_size, init, activation, gate_activation,
-                 reset_cells=False, name="GruLayer"):
-        super(GRU, self).__init__(output_size, init, activation, reset_cells, name)
+    def __init__(self, output_size, init, init_inner=None, activation=None,
+                 gate_activation=None, reset_cells=False, name="GruLayer"):
+        super(GRU, self).__init__(output_size, init, activation, init_inner, 
+                                reset_cells, name)
         self.gate_activation = gate_activation
         self.ngates = 3  # r, z, hcandidate
 
@@ -486,8 +499,13 @@ class GRU(Recurrent):
         (nout, nin) = shape
 
         # indices for slicing gate buffers
+        (r1, r2) = (0, nout)
+        (z1, z2) = (nout, nout * 2)
         (rz1, rz2) = (0, nout * 2)
         (c1, c2) = (nout * 2, nout * 3)
+        self.Wr_input = self.W_input[r1:r2]
+        self.Wz_input = self.W_input[z1:z2]
+        self.Wc_input = self.W_input[c1:c2]
 
         self.Wrz_recur = self.W_recur[rz1:rz2]
         self.Whcan_recur = self.W_recur[c1:c2]
@@ -497,6 +515,7 @@ class GRU(Recurrent):
 
         self.dWrz_recur = self.dW_recur[rz1:rz2]
         self.dWhcan_recur = self.dW_recur[c1:c2]
+
 
     def fprop(self, inputs, inference=False):
         """

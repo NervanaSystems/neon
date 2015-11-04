@@ -13,7 +13,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import numpy as np
-import os
 import re
 
 from neon import NervanaObject
@@ -42,6 +41,11 @@ class QA(NervanaObject):
             tuple : the next minibatch of data.
         """
         self.batch_index = 0
+        shuf_idx = self.be.rng.permutation(len(self.story))
+        self.story = self.story[shuf_idx]
+        self.query = self.query[shuf_idx]
+        self.answer = self.answer[shuf_idx]
+
         while self.batch_index < self.nbatches:
             start = self.batch_index*self.be.bsz
             end = (self.batch_index+1)*self.be.bsz
@@ -90,39 +94,37 @@ class BABI(NervanaObject):
             subset (str): subset of the dataset to use: {en, en-10k, hn, hn-10k}
         """
 
-        print 'Downloading bAbI dataset and extract from %s' % path
+        print 'Preparing bAbI dataset or extract from %s' % path
         print 'Task is %s/%s' % (subset, task)
         self.tasks = [
-                    'qa1_single-supporting-fact',
-                    'qa2_two-supporting-facts',
-                    'qa3_three-supporting-facts',
-                    'qa4_two-arg-relations',
-                    'qa5_three-arg-relations',
-                    'qa6_yes-no-questions',
-                    'qa7_counting',
-                    'qa8_lists-sets',
-                    'qa9_simple-negation',
-                    'qa10_indefinite-knowledge',
-                    'qa11_basic-coreference',
-                    'qa12_conjunction',
-                    'qa13_compound-coreference',
-                    'qa14_time-reasoning',
-                    'qa15_basic-deduction',
-                    'qa16_basic-induction',
-                    'qa17_positional-reasoning',
-                    'qa18_size-reasoning',
-                    'qa19_path-finding',
-                    'qa20_agents-motivations',
-                    ]
+            'qa1_single-supporting-fact',
+            'qa2_two-supporting-facts',
+            'qa3_three-supporting-facts',
+            'qa4_two-arg-relations',
+            'qa5_three-arg-relations',
+            'qa6_yes-no-questions',
+            'qa7_counting',
+            'qa8_lists-sets',
+            'qa9_simple-negation',
+            'qa10_indefinite-knowledge',
+            'qa11_basic-coreference',
+            'qa12_conjunction',
+            'qa13_compound-coreference',
+            'qa14_time-reasoning',
+            'qa15_basic-deduction',
+            'qa16_basic-induction',
+            'qa17_positional-reasoning',
+            'qa18_size-reasoning',
+            'qa19_path-finding',
+            'qa20_agents-motivations'
+            ]
         assert task in self.tasks, "given task is not in the bAbI dataset"
 
         self.train_file, self.test_file = load_babi(path, task)
-
         self.train_parsed = BABI.parse_babi(self.train_file)
         self.test_parsed = BABI.parse_babi(self.test_file)
 
         self.compute_statistics()
-
         self.train = self.vectorize_stories(self.train_parsed)
         self.test = self.vectorize_stories(self.test_parsed)
 
@@ -194,7 +196,7 @@ class BABI(NervanaObject):
                 sent = BABI.tokenize(line)
                 story.append(sent)
 
-        return [(BABI.flatten(story), q, answer) for story, q, answer in data]
+        return [(BABI.flatten(_story), _question, answer) for _story, _question, answer in data]
 
     def words_to_vector(self, words):
         """
