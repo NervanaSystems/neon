@@ -24,10 +24,14 @@ Then look at the PNG plots generated.
 
 """
 
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    print 'matplotlib needs to be installed manually to generate plots needed for this example'
+    raise ImportError()
+
 import numpy as np
 import math
-import matplotlib.pyplot as plt
-
 from neon.backends import gen_backend
 from neon.initializers import GlorotUniform
 from neon.layers import GeneralizedCost, LSTM, Affine, RecurrentLast
@@ -57,40 +61,28 @@ def rolling_window(a, lag):
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
-class Time_series(object):
+class TimeSeries(object):
 
-    def __init__(self, npoints=30, ncycles=3,
-                 divide=0.2, amplitude=1, type=None):
+    def __init__(self, npoints=30, ncycles=3, divide=0.2, amplitude=1, curvetype='Lissajous1'):
         """
-        type (str, optional): 'Lissajous1' or 'Lissajous2'
+        curvetype (str, optional): 'Lissajous1' or 'Lissajous2'
         """
-        self.npoints = npoints
         self.nsamples = npoints * ncycles
-        self.divide = divide
-        self.amplitude = amplitude
+        self.x = np.linspace(0, ncycles * 2 * math.pi, self.nsamples)
 
-        x = np.linspace(0, ncycles * 2 * math.pi, self.nsamples)
+        if curvetype not in ('Lissajous1', 'Lissajous2'):
+            raise NotImplementedError()
 
-        self.x = x
-
-        if type is None:
-            type = 'Lissajous1'
-
-        if type is 'Lissajous1':
-            y_x = lambda x: 4.0/5 * math.sin(x/2)
-            y_y = lambda x: 4.0/5 * math.cos(x/2)
-        elif type is 'Lissajous2':
-            y_x = lambda x: 4.0/5 * math.sin(x)
-            y_y = lambda x: 4.0/5 * math.cos(x/2)
-        else:
-            return NotImplemented
+        sin_scale = 2 if curvetype is 'Lissajous1' else 1
+        y_x = lambda x: 4.0/5 * math.sin(x/sin_scale)
+        y_y = lambda x: 4.0/5 * math.cos(x/2)
 
         self.data = np.zeros((self.nsamples, 2))
-        self.data[:, 0] = np.asarray([y_x(xs) for xs in x]).astype(np.float32)
-        self.data[:, 1] = np.asarray([y_y(xs) for xs in x]).astype(np.float32)
+        self.data[:, 0] = np.asarray([y_x(xs) for xs in self.x]).astype(np.float32)
+        self.data[:, 1] = np.asarray([y_y(xs) for xs in self.x]).astype(np.float32)
 
         L = len(self.data)
-        c = int(L*(1-self.divide))
+        c = int(L * (1 - divide))
         self.train = self.data[:c]
         self.test = self.data[c:]
 
@@ -98,31 +90,28 @@ class Time_series(object):
 class DataIteratorSequence(NervanaObject):
 
     """
-    This interface takes a long sequence and prepare data for RNN prediction
-    and create an iterator.This can be used when the entire dataset is small
-    enough to fit within memory.
+    This class takes a sequence and returns an iterator providing data in batches suitable for RNN
+    prediction.  Meant for use when the entire dataset is small enough to fit in memory.
     """
 
     def __init__(self, X, time_steps, forward=1, return_sequences=True):
         """
-        Implements loading of given data into backend tensor objects. If the
-        backend is specific to an accelarator device, the data is copied over
-        to that device.
+        Implements loading of given data into backend tensor objects. If the backend is specific
+        to an accelerator device, the data is copied over to that device.
 
         Args:
-            X (ndarray, shape: [# examples, feature size]): Input sequence with
-                feature size within the dataset.
-            time_steps (int): The number of examples to be put into one
-                sequence.
-            forward (int, optional): how many forward steps the sequence should
-                predict. default is 1, which is the next example
-            return_sequences (boolean, optional): make the target to be a sequence
-                or a single step. It will also imply the data will be formated
-                as stride along or rolling_window
-                True: the target value will be values for one single step and data
-                        will be reshaped as stride along
-                False: the target value will be a sequence as well, the data will
-                        be reshaped with a rolling_window
+            X (ndarray): Input sequence with feature size within the dataset.
+                         Shape should be specified as (num examples, feature size]
+            time_steps (int): The number of examples to be put into one sequence.
+            forward (int, optional): how many forward steps the sequence should predict. default
+                                     is 1, which is the next example
+            return_sequences (boolean, optional): whether the target is a sequence or single step.
+                                                  Also determines whether data will be formatted
+                                                  as strides or rolling windows.
+                                                  If true, target value be a sequence, input data
+                                                  will be reshaped as strides.  If false, target
+                                                  value will be a single step, input data will be
+                                                  a rolling_window
         """
         self.seq_length = time_steps
         self.forward = forward
@@ -131,6 +120,12 @@ class DataIteratorSequence(NervanaObject):
         self.nsamples = X.shape[0]
         self.shape = (self.nfeatures, time_steps)
         self.return_sequences = return_sequences
+
+        target_steps = time_steps if return_sequences else 1
+        # pre-allocate the device buffer to provide data for each minibatch
+        # buffer size is nfeatures x (times * batch_size), which is handled by backend.iobuf()
+        self.X_dev = self.be.iobuf((self.nfeatures, time_steps))
+        self.y_dev = self.be.iobuf((self.nfeatures, target_steps))
 
         if return_sequences is True:
             # truncate to make the data fit into multiples of batches
@@ -145,22 +140,11 @@ class DataIteratorSequence(NervanaObject):
 
             # y is the lagged version of X
             y = np.concatenate((X[forward:], X[:forward]))
-
-            # reshape this way so sequence is continuous along the batches
-            self.X = X.reshape(
-                self.be.bsz, self.nbatches, time_steps, self.nfeatures)
             self.y_series = y
-            self.y = y.reshape(
-                self.be.bsz, self.nbatches, time_steps, self.nfeatures)
-
-            # pre-allocate the device buffer to provide data for each minibatch
-            # this minibatch buffer size is nfeatures x (times * batch_size)
-            # being handled by backend.iobuf()
-            self.X_dev = self.be.iobuf((self.nfeatures, time_steps))
-            self.y_dev = self.be.iobuf((self.nfeatures, time_steps))
-
+            # reshape this way so sequence is continuous along the batches
+            self.X = X.reshape(self.be.bsz, self.nbatches, time_steps, self.nfeatures)
+            self.y = y.reshape(self.be.bsz, self.nbatches, time_steps, self.nfeatures)
         else:
-
             self.X = rolling_window(X, time_steps)
             self.X = self.X[:-1]
             self.y = X[time_steps:]
@@ -175,27 +159,16 @@ class DataIteratorSequence(NervanaObject):
             self.nsamples -= extra_examples
             self.nbatches = self.nsamples / (self.be.bsz)
             self.ndata = self.nbatches * self.be.bsz
-
-            # This way makes the sequence continuous within the batch
-            # self.X = self.X.reshape(self.be.bsz, self.nbatches, time_steps, self.nfeatures)
-            # self.y_series = self.y
-            # self.y = self.y.reshape(self.be.bsz, self.nbatches, 1, self.nfeatures)
-
-            self.X = self.X.reshape(self.nbatches, self.be.bsz,
-                                    time_steps, self.nfeatures
-                                    ).transpose(1, 0, 2, 3)
             self.y_series = self.y
-            self.y = self.y.reshape(self.nbatches, self.be.bsz,
-                                    1, self.nfeatures
-                                    ).transpose(1, 0, 2, 3)
 
-            self.X_dev = self.be.iobuf((self.nfeatures, time_steps))
-            self.y_dev = self.be.iobuf((self.nfeatures, 1))
+            Xshape = (self.nbatches, self.be.bsz, time_steps, self.nfeatures)
+            Yshape = (self.nbatches, self.be.bsz, 1, self.nfeatures)
+            self.X = self.X.reshape(Xshape).transpose(1, 0, 2, 3)
+            self.y = self.y.reshape(Yshape).transpose(1, 0, 2, 3)
 
     def reset(self):
         """
         For resetting the starting index of this dataset back to zero.
-
         """
         self.batch_index = 0
 
@@ -208,18 +181,9 @@ class DataIteratorSequence(NervanaObject):
         """
         self.batch_index = 0
         while self.batch_index < self.nbatches:
-
-            # get the data for this batch and reshape to fit the device buffer
-            # shape
-            X_batch = self.X[:, self.batch_index].reshape(
-                self.be.bsz * self.seq_length, -1).T.astype(np.float32, order='C')
-
-            if self.return_sequences is True:
-                y_batch = self.y[:, self.batch_index].reshape(
-                    self.be.bsz * self.seq_length, -1).T.astype(np.float32, order='C')
-            else:
-                y_batch = self.y[:, self.batch_index].reshape(
-                    self.be.bsz, -1).T.astype(np.float32, order='C')
+            # get the data for this batch and reshape to fit the device buffer shape
+            X_batch = self.X[:, self.batch_index].reshape(self.X_dev.shape[::-1]).T.copy()
+            y_batch = self.y[:, self.batch_index].reshape(self.y_dev.shape[::-1]).T.copy()
 
             # make the data for this batch as backend tensor
             self.X_dev.set(X_batch)
@@ -239,38 +203,35 @@ if __name__ == '__main__':
 
     # parse the command line arguments
     parser = NeonArgparser(__doc__)
+    parser.add_argument('--curvetype', default='Lissajous1', choices=['Lissajous1', 'Lissajous2'],
+                        help='type of input curve data to use (Lissajous1 or Lissajous2)')
     args = parser.parse_args(gen_be=False)
 
     # network hyperparameters
-    num_epochs = args.epochs
     hidden = 32
     batch_size = 1
     clip_gradients = False
 
-    # The following flag will switch between 2 training strategy:
+    # The following flag will switch between 2 training strategies:
     # 1. return_sequence True:
-    #       Inputs are sequence, and target outputs will be sequences.
+    #       Inputs are sequences, and target outputs will be sequences.
     #       The RNN layer's output at EVERY step will be used for errors and optimized.
     #       The RNN model contains a RNN layer and an Affine layer
     #       The data iterator will format the data accordingly, and will stride along the
     #           whole series with no overlap
     # 2. return_sequence False:
-    #       Inputs are sequence, and target output will be a single step.
+    #       Inputs are sequences, and target output will be a single step.
     #       The RNN layer's output at LAST step will be used for errors and optimized.
     #       The RNN model contains a RNN layer and RNN-output layer (i.g. RecurrentLast, etc.)
     #           and an Affine layer
-    #       The data iterator will format the data accordingly, will go through the data
-    #           using a rolling window
-
+    #       The data iterator will format the data accordingly, using a rolling window to go
+    #           through the data
     return_sequences = False
 
-    # Note that when the time series has higher or lower frquence, it requires
-    # different amount of data to learn the temporal pattern, the sequence length
-    # and the batch size for the training process also makes a difference on
-    # learning performance.
+    # Note that when the time series has higher or lower frequency, it requires different amounts
+    # of data to learn the temporal pattern, the sequence length and the batch size for the
+    # training process also makes a difference on learning performance.
 
-    data_type = 'Lissajous1'
-    # data_type = 'Lissajous2'
     seq_len = 30
     npoints = 10
     ncycles = 100
@@ -290,19 +251,16 @@ if __name__ == '__main__':
         args.save_path = 'timeseries.pkl'
 
     # create synthetic data as a whole series
-    Time_series = Time_series(npoints, ncycles=ncycles, type=data_type)
+    time_series = TimeSeries(npoints, ncycles=ncycles, curvetype=args.curvetype)
 
-    # use data iterator to feed X, Y. return_sequence is an option to switch between 2
-    # training strategy.
-    train_set = DataIteratorSequence(
-        Time_series.train, seq_len, return_sequences=return_sequences)
-    valid_set = DataIteratorSequence(
-        Time_series.test, seq_len, return_sequences=return_sequences)
+    # use data iterator to feed X, Y. return_sequence determines training strategy
+    train_set = DataIteratorSequence(time_series.train, seq_len, return_sequences=return_sequences)
+    valid_set = DataIteratorSequence(time_series.test, seq_len, return_sequences=return_sequences)
 
     # define weights initialization
     init = GlorotUniform()  # Uniform(low=-0.08, high=0.08)
 
-    # define model: model is different for these 2 strategy
+    # define model: model is different for the 2 strategies (sequence target or not)
     if return_sequences is True:
         layers = [
             LSTM(hidden, init, Logistic(), Tanh(), reset_cells=False),
@@ -324,18 +282,14 @@ if __name__ == '__main__':
     # fit model
     model.fit(train_set,
               optimizer=optimizer,
-              num_epochs=num_epochs,
+              num_epochs=args.epochs,
               cost=cost,
               callbacks=callbacks)
 
     # =======visualize how the model does on validation set==============
-
-    # run the trained model on train and valid dataset and see how the outputs
-    # match
-    train_output = model.get_outputs(
-        train_set).reshape(-1, train_set.nfeatures)
-    valid_output = model.get_outputs(
-        valid_set).reshape(-1, valid_set.nfeatures)
+    # run the trained model on train and valid dataset and see how the outputs match
+    train_output = model.get_outputs(train_set).reshape(-1, train_set.nfeatures)
+    valid_output = model.get_outputs(valid_set).reshape(-1, valid_set.nfeatures)
     train_target = train_set.y_series
     valid_target = valid_set.y_series
 
@@ -360,8 +314,7 @@ if __name__ == '__main__':
     plt.savefig('neon_series_validation_output.png')
 
     # =====================generate sequence ==================================
-    # when doing fprop to generate sequence, make sequence length to be 1,
-    # since it does not make any difference
+    # when generating sequence, set sequence length to 1, since it doesn't make a difference
     be.bsz = 1
     seq_len = 1
 
@@ -382,7 +335,7 @@ if __name__ == '__main__':
     model_new.initialize(dataset=(train_set.nfeatures, seq_len))
 
     output = np.zeros((train_set.nfeatures, num_predict))
-    seed = Time_series.train[:seed_seq_len]
+    seed = time_series.train[:seed_seq_len]
 
     x = model_new.be.empty((train_set.nfeatures, seq_len))
     for s_in in seed:
@@ -398,8 +351,7 @@ if __name__ == '__main__':
 
     output_seq = np.vstack([seed, output.T])
     plt.figure()
-    plt.plot(output_seq[:, 0], output_seq[:, 1],
-             'b.-', label='generated sequence')
+    plt.plot(output_seq[:, 0], output_seq[:, 1], 'b.-', label='generated sequence')
     plt.plot(seed[:, 0], seed[:, 1], 'r.', label='seed sequence')
     plt.legend()
     plt.title('neon generated sequence')
