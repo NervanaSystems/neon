@@ -372,9 +372,9 @@ class Model(NervanaObject):
         head_str = fmt_titles.format(*header)
         sep = '-'*len(head_str)
         head_str = sep + '\n' + head_str + '\n' + sep
-        print head_str
+        print(head_str)
         for ky in times:
             timesu = np.array(times[ky][nskip:])  # in ms
             stats = [np.mean(timesu), np.median(timesu), np.min(timesu), np.max(timesu)]
-            print fmt_nums.format(*stats, units='msec', func=ky)
-        print sep
+            print(fmt_nums.format(*stats, units='msec', func=ky))
+        print(sep)

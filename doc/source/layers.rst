@@ -28,7 +28,7 @@ Pooling Layers
    neon.layers.layer.Pooling
 
 Parameter Layer
-----------------
+---------------
 .. autosummary::
    neon.layers.layer.ParameterLayer
 
@@ -54,14 +54,14 @@ Activation Layer
    neon.layers.layer.Activation
 
 Composite Layers
------------------
+----------------
 .. autosummary::
    neon.layers.layer.Affine
    neon.layers.layer.Conv
    neon.layers.layer.Deconv
 
 Dropout Layers
--------------
+--------------
 .. autosummary::
    neon.layers.layer.Dropout
    neon.layers.layer.DropoutBinary
