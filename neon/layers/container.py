@@ -403,6 +403,10 @@ class Multicost(NervanaObject):
     def cost(self):
         return self.costs[0].cost
 
+    @property
+    def outputs(self):
+        return self.costs[0].outputs
+
     def get_cost(self, inputs, targets):
         """
         Compute the cost function over a list of inputs and targets.
@@ -417,11 +421,14 @@ class Multicost(NervanaObject):
         Returns:
             Tensor containing cost
         """
-        l_targets = targets if type(targets) in (tuple, list) else [targets for c in self.costs]
-        costvals = [c.get_cost(i, t) for c, i, t in zip(self.costs, inputs, l_targets)]
-        sum_optree = reduce(add, [w * c for w, c in zip(self.weights, costvals)])
-        costvals[0][:] = sum_optree
-        return costvals[0]
+        if not isinstance(inputs, list):
+            return self.costs[0].get_cost(inputs, targets)
+        else:
+            ltargets = targets if type(targets) in (tuple, list) else [targets for c in self.costs]
+            costvals = [c.get_cost(i, t) for c, i, t in zip(self.costs, inputs, ltargets)]
+            sum_optree = reduce(add, [w * c for w, c in zip(self.weights, costvals)])
+            costvals[0][:] = sum_optree
+            return costvals[0]
 
     def get_errors(self, inputs, targets):
         """
