@@ -160,7 +160,7 @@ if __name__ == "__main__":
         model.load_weights(args.model_file)
     train, test = load_data(data_dir=args.data_dir)
     # configure callbacks
-    callbacks = Callbacks(model, train, args, eval_set=test)
+    callbacks = Callbacks(model, train, eval_set=test, **args.callback_args)
 
     model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost,
               callbacks=callbacks)

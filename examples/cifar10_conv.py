@@ -67,7 +67,7 @@ elif args.datatype in [np.float16]:
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, args, eval_set=test)
+callbacks = Callbacks(mlp, train, eval_set=test, **args.callback_args)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 

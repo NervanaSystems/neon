@@ -76,7 +76,8 @@ opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 model = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(model, train, args, eval_set=test, metric=TopKMisclassification(k=5))
+callbacks = Callbacks(model, train, eval_set=test, metric=TopKMisclassification(k=5),
+                      **args.callback_args)
 
 try:
     model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

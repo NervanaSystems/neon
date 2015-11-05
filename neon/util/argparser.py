@@ -27,12 +27,29 @@ import logging
 from logging.handlers import RotatingFileHandler
 import numpy as np
 import os
+import inspect
 
 from neon import __version__ as neon_version
 from neon.backends import gen_backend
 from neon.backends.util.check_gpu import get_compute_capability
+from neon.callbacks.callbacks import Callbacks
 
 logger = logging.getLogger(__name__)
+
+
+def extract_valid_args(args, func):
+    """
+    Given a namespace of argparser args, extract those applicable to func.
+
+    Arguments:
+        args (Namespace): a namespace of args from argparse
+        func (Function): a function to inspect, to determine valid args
+
+    Returns:
+        dict of (arg, value) pairs from args that are valid for func
+    """
+    func_args = inspect.getargspec(func).args[1:]
+    return dict((k, v) for k, v in vars(args).items() if k in func_args)
 
 
 class NeonArgparser(configargparse.ArgumentParser):
@@ -288,4 +305,5 @@ class NeonArgparser(configargparse.ArgumentParser):
 
         self._PARSED = True
         self.args = args
+        args.callback_args = extract_valid_args(args, Callbacks.__init__)
         return args

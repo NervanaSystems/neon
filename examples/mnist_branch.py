@@ -126,7 +126,7 @@ alphas = [1, 0.25, 0.25]
 mlp = Model(layers=Tree([p1, p2, p3], alphas=alphas))
 
 # setup standard fit callbacks
-callbacks = Callbacks(mlp, train_set, args, eval_set=valid_set)
+callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
 
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

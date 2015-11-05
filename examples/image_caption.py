@@ -78,7 +78,7 @@ checkpoint_schedule = range(num_epochs)
 
 model = Model(layers=layers)
 
-callbacks = Callbacks(model, train_set, args)
+callbacks = Callbacks(model, train_set, **args.callback_args)
 
 opt = RMSProp(decay_rate=0.997, learning_rate=0.0005, epsilon=1e-8, clip_gradients=True,
               gradient_limit=1.0)

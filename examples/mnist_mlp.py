@@ -86,7 +86,7 @@ optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=arg
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train_set, args, eval_set=valid_set)
+callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
 
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

@@ -61,7 +61,7 @@ mlp = Model(layers=layers)
 # Fit the model
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, args)
+callbacks = Callbacks(mlp, train, **args.callback_args)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 

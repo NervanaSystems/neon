@@ -33,42 +33,36 @@ class Callbacks(NervanaObject):
         callbacks (list): Ordered set of Callback objects to be run.
     """
 
-    def __init__(self, model, train_set, parsed_args, eval_set=None, metric=None):
+    def __init__(self, model, train_set,
+                 output_file=None,
+                 eval_freq=None,
+                 progress_bar=True,
+                 epochs=None,
+                 save_path=None,
+                 serialize=0,
+                 history=1,
+                 model_file=None,
+                 eval_set=None,
+                 metric=None):
         """
         Create a callbacks container with the default callbacks.
 
         Arguments:
             model (Model): the model object
             train_set (DataIterator): the training dataset
-            parsed_args (dict): Dictionary of command line args, as follows:
-                                output_file (string, optional): path to save callback
-                                data to
-                                eval_freq (int, optional): how often (in epochs) to run
-                                evaluation
-                                progress_bar (bool): control whether a progress bar
-                                callback is created.  Defaults to True.
-                                save_path (string): file path to save model snapshots
-                                (default: None)
-                                serialize (int): serialize model every N epochs
-                                (default: 0)
-                                history (int): number of checkpoint files to retain
-                                (default: 1)
-                                model_file(string, optional): file to load weights
-                                (serialized model) from
+            output_file (string, optional): path to save callback data to
+            eval_freq (int, optional): how often (in epochs) to run evaluation
+            progress_bar (bool): control whether a progress bar
+            callback is created.  Defaults to True.
+            epochs (int): how many epochs the model will train for (default: None)
+            save_path (string): file path to save model snapshots (default: None)
+            serialize (int): serialize model every N epochs (default: 0)
+            history (int): number of checkpoint files to retain (default: 1)
+            model_file(string, optional): file to load weights (serialized model) from
             eval_set (DataIterator, optional): the dataset upon which to evaluate loss
                                                or metric
             metric (Metric, optional):  metric to evaluate
        """
-
-        output_file = parsed_args.output_file
-        eval_freq = parsed_args.evaluation_freq
-        progress_bar = parsed_args.progress_bar
-        epochs = parsed_args.epochs
-        save_path = parsed_args.save_path
-        serialize = parsed_args.serialize
-        history = parsed_args.history
-        model_file = parsed_args.model_file
-
         self.callbacks = list()
         self.epoch_marker = 0
         if output_file is None:

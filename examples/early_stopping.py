@@ -72,7 +72,7 @@ optimizer = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)
 if args.evaluation_freq is None:
     args.evaluation_freq = 1
 
-callbacks = Callbacks(mlp, train_set, args, eval_set=valid_set)
+callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
 callbacks.add_early_stop_callback(stop_func)
 callbacks.add_save_best_state_callback(os.path.join(args.data_dir, "early_stop-best_state.pkl"))
 mlp.fit(train_set,

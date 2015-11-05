@@ -73,7 +73,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train_set, args, eval_set=valid_set)
+callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
 
 mlp.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
