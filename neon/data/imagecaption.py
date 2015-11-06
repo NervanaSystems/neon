@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 from neon import NervanaObject
-from neon.data.loader import fetch_dataset
+from neon.data.datasets import fetch_dataset
 from neon.util.persist import load_obj
 
 

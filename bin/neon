@@ -53,7 +53,7 @@ import yaml
 
 from neon.backends import gen_backend
 from neon.data.dataiterator import DataIterator
-from neon.data.loader import load_dataset
+from neon.data.datasets import load_dataset
 from neon.layers import GeneralizedCost
 from neon.models import Model
 from neon.optimizers import optimizer

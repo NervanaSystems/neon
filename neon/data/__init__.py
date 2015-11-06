@@ -14,9 +14,10 @@
 # ----------------------------------------------------------------------------
 from neon.data.dataiterator import DataIterator
 from neon.data.text import Text
-from neon.data.image import Image, ImgMaster
+from neon.data.imageloader import ImageLoader
+from neon.data.image import ImgMaster
 from neon.data.speech import Speech
 from neon.data.video import Video
-from neon.data.loader import (load_text, load_mnist, load_cifar10, load_flickr8k, load_flickr30k,
-                              load_coco, load_i1kmeta)
+from neon.data.datasets import (load_text, load_mnist, load_cifar10, load_flickr8k, load_flickr30k,
+                                load_coco, load_i1kmeta)
 from neon.data.imagecaption import ImageCaption, ImageCaptionTest

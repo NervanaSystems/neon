@@ -72,13 +72,12 @@ API
    :nosignatures:
 
    neon.data.dataiterator.DataIterator
-   neon.data.image.Image
-   neon.data.image.ImgMaster
+   neon.data.imageloader.ImageLoader
    neon.data.imagecaption.ImageCaption
-   neon.data.loader.load_cifar10
-   neon.data.loader.load_mnist
-   neon.data.loader.load_text
-   neon.data.loader.load_dataset
+   neon.data.datasets.load_cifar10
+   neon.data.datasets.load_mnist
+   neon.data.datasets.load_text
+   neon.data.datasets.load_dataset
    neon.data.text.Text
 
 

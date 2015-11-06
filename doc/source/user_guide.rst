@@ -214,7 +214,7 @@ Loading a Dataset
 '''''''''''''''''
 
 To load the MNIST dataset, the :py:func:`load_mnist` function is included
-with the ``neon/data/loader.py`` utility. The data is set up on the
+with the ``neon/data/datasets.py`` utility. The data is set up on the
 GPU as a :py:class:`DataIterator<neon.data.dataiterator.DataIterator>`, which
 provides an interface to iterate over mini-batches after pre-loading them into
 device memory.

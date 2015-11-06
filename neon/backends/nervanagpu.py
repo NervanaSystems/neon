@@ -671,6 +671,7 @@ class NervanaGPU(Backend):
 
         # context
         drv.init()
+        self.device_type = 1
         self.device_id = device_id if device_id is not None else 0
         self.ctx = drv.Device(device_id).make_context()
 

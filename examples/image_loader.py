@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Runs one epoch of Alexnet on imagenet data.
+Runs one epoch of Alexnet on imagenet data using the data loader library.
 """
 
 from neon.util.argparser import NeonArgparser
@@ -23,7 +23,7 @@ from neon.layers import Conv, DropoutBinary, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
-from neon.data import ImgMaster
+from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks
 
 # For running complete alexnet
@@ -37,8 +37,8 @@ img_set_options = dict(repo_dir=args.data_dir,
                        dtype=args.datatype,
                        subset_pct=100)
 
-train = ImgMaster(set_name='train', **img_set_options)
-test = ImgMaster(set_name='validation', do_transforms=False, **img_set_options)
+train = ImageLoader(set_name='train', **img_set_options)
+test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
 
 train.init_batch_provider()
 test.init_batch_provider()

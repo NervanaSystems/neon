@@ -102,12 +102,12 @@ is where the original tar files are saved.
                                       --set_type=i1k
 
 
-Then an :py:class:`ImgMaster<neon.data.image.ImgMaster>` will start an image
-server and client to feed images to the model.
+Then an :py:class:`ImageLoader<neon.data.imageloader.ImageLoader>` instance can be
+started to feed images to the model.
 
 .. code-block:: python
 
-    train = ImgMaster(repo_dir=args.data_dir, inner_size=224, set_name='train')
+    train = ImageLoader(repo_dir=args.data_dir, inner_size=224, set_name='train')
 
 
 Add a new dataset

@@ -505,6 +505,8 @@ class NervanaCPU(Backend):
 
         super(NervanaCPU, self).__init__(rng_seed, default_dtype)
 
+        self.device_type = 0
+        self.device_id = 0
         self.tensor_cls = CPUTensor
 
         # log
