@@ -1,5 +1,19 @@
 # ChangeLog
 
+## v1.1.1 (2015-11-06):
+
+### Modifications
+
+* Callback initialization bug fix [#127]
+* IMDB LSTM example bug fix [#130]
+* Added cuda-convnet2 style binary dropout variant
+* Added benchmark function to model (separate fprop, bprop, update timings)
+* Remove h_buffer references in lieu of outputs for recurrent layers
+* Multi-cost output buffer bugfix for inference [#131]
+* New timeseries prediction and generation example
+* Change Callback initialization to re-support named arguments.  Separate out
+  these arguments in argparser. [#128]
+
 ## v1.1.0 (2015-10-30):
 
 ### Modifications
