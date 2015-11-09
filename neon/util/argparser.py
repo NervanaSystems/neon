@@ -119,7 +119,7 @@ class NeonArgparser(configargparse.ArgumentParser):
                             help='hdf5 data file for metrics computed during '
                                  'the run, optional.  Can be used by nvis for '
                                  'visualization.')
-        rt_grp.add_argument('-eval', '--evaluation_freq', type=int, default=None,
+        rt_grp.add_argument('-eval', '--eval_freq', type=int, default=None,
                             help='frequency (in epochs) to test the eval set.')
         rt_grp.add_argument('-H', '--history', type=int, default=1,
                             help='number of checkpoint files to retain')
