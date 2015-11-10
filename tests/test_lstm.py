@@ -352,7 +352,7 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
         inp_bl = np.random.randn(*input_shape)
 
     # neon lstm instance
-    lstm = LSTM(hidden_size, Gaussian(), Tanh(), Logistic())
+    lstm = LSTM(hidden_size, Gaussian(), activation=Tanh(), gate_activation=Logistic())
     inpa = lstm.be.array(np.copy(inp_bl))
 
     # run fprop on the baseline input

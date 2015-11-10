@@ -37,7 +37,7 @@ def test_model_get_outputs_rnn(backend_default, data):
 
     # model initialization
     layers = [
-        Recurrent(150, init, Logistic()),
+        Recurrent(150, init, activation=Logistic()),
         Affine(len(data_set.vocab), init, bias=init, activation=Rectlin())
     ]
 

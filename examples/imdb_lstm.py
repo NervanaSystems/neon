@@ -77,7 +77,7 @@ init_glorot = GlorotUniform()
 
 layers = [
     LookupTable(vocab_size=vocab_size, embedding_dim=embedding_dim, init=init_emb),
-    LSTM(hidden_size, init_glorot, activation=Tanh(),
+    LSTM(hidden_size, init=init_glorot, activation=Tanh(),
          gate_activation=Logistic(), reset_cells=True),
     RecurrentSum(),
     Dropout(keep=0.5),

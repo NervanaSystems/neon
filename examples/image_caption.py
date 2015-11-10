@@ -73,8 +73,14 @@ layers = [
 ]
 
 cost = GeneralizedCostMask(costfunc=CrossEntropyMulti(usebits=True))
+
+# configure callbacks
 checkpoint_model_path = "~/image_caption2.pickle"
-checkpoint_schedule = range(num_epochs)
+if args.callback_args['save_path'] is None:
+    args.callback_args['save_path'] = checkpoint_model_path
+
+if args.callback_args['serialize'] is None:
+    args.callback_args['serialize'] = 1
 
 model = Model(layers=layers)
 

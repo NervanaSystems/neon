@@ -47,16 +47,10 @@ class QA(NervanaObject):
         self.answer = self.answer[shuf_idx]
 
         while self.batch_index < self.nbatches:
-            start = self.batch_index*self.be.bsz
-            end = (self.batch_index+1)*self.be.bsz
-
-            story_batch = self.story[start:end, :].T.astype(np.float32, order='C')
-            query_batch = self.query[start:end, :].T.astype(np.float32, order='C')
-            answer_batch = self.answer[start:end, :].T.astype(np.float32, order='C')
-
-            story_tensor = self.be.array(story_batch)
-            query_tensor = self.be.array(query_batch)
-            answer_tensor = self.be.array(answer_batch)
+            batch = slice(self.batch_index*self.be.bsz, (self.batch_index+1)*self.be.bsz)
+            story_tensor = self.be.array(self.story[batch].T.copy())
+            query_tensor = self.be.array(self.query[batch].T.copy())
+            answer_tensor = self.be.array(self.answer[batch].T.copy())
 
             self.batch_index += 1
 

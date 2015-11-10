@@ -198,7 +198,7 @@ class Text(NervanaObject):
         self.index_to_token = dict((i, t) for i, t in enumerate(self.vocab))
 
         # map tokens to indices
-        X = np.asarray([self.token_to_index[t] for t in tokens], dtype=np.uint8)
+        X = np.asarray([self.token_to_index[t] for t in tokens], dtype=np.uint32)
         y = np.concatenate((X[1:], X[:1]))
 
         # reshape to preserve sentence continuity across batches

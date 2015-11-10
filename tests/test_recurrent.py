@@ -102,7 +102,7 @@ def check_rnn(seq_len, input_size, hidden_size,
 
     # ======== create models ========
     # neon RNN
-    rnn = Recurrent(hidden_size, init_func, Tanh())
+    rnn = Recurrent(hidden_size, init_func, activation=Tanh())
 
     # reference numpy RNN
     rnn_ref = RefRecurrent(input_size, hidden_size)
@@ -256,7 +256,7 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
         inp_bl = np.random.randn(*input_shape)
 
     # neon rnn instance
-    rnn = Recurrent(hidden_size, Gaussian(), Tanh())
+    rnn = Recurrent(hidden_size, Gaussian(), activation=Tanh())
     inpa = rnn.be.array(np.copy(inp_bl))
 
     # run fprop on the baseline input

@@ -111,3 +111,20 @@ class Xavier(Initializer):
         fan_in = param.shape[0 if self.local else 1]
         scale = np.sqrt(3./fan_in)
         param[:] = self.be.rng.uniform(-scale, scale, param.shape)
+
+
+class Orthonormal(Initializer):
+    """
+    From Lasagne. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
+    """
+
+    def __init__(self, scale=1.1, name="orthonormal"):
+        super(Orthonormal, self).__init__(name=name)
+        self.scale = scale
+
+    def fill(self, param):
+        a = np.random.normal(0.0, 1.0, param.shape)
+        u, _, v = np.linalg.svd(a, full_matrices=False)
+        # pick the one with the correct shape
+        q = u if u.shape == param.shape else v
+        param[:] = self.scale * q

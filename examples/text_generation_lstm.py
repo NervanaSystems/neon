@@ -46,6 +46,12 @@ num_epochs = args.epochs
 if args.save_path is None:
     args.save_path = 'rnn_text_gen.pickle'
 
+if args.callback_args['save_path'] is None:
+    args.callback_args['save_path'] = args.save_path
+
+if args.callback_args['serialize'] is None:
+    args.callback_args['serialize'] = 1
+
 # hyperparameters
 time_steps = 64
 hidden_size = 512
@@ -71,7 +77,7 @@ init = Uniform(low=-0.08, high=0.08)
 
 # model initialization
 layers = [
-    LSTM(hidden_size, init, Logistic(), Tanh()),
+    LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh()),
     Affine(len(train_set.vocab), init, bias=init, activation=Softmax())
 ]
 model = Model(layers=layers)
@@ -100,7 +106,7 @@ time_steps = 1
 num_predict = 1000
 
 layers = [
-    LSTM(hidden_size, init, Logistic(), Tanh()),
+    LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh()),
     Affine(len(train_set.vocab), init, bias=init, activation=Softmax())
 ]
 model_new = Model(layers=layers)

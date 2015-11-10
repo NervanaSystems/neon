@@ -64,7 +64,7 @@ valid_set = Text(time_steps, valid_path, vocab=train_set.vocab)
 init = Uniform(low=-0.08, high=0.08)
 
 # model initialization
-layers = [Recurrent(hidden_size, init, Tanh()),
+layers = [Recurrent(hidden_size, init, activation=Tanh()),
           Affine(len(train_set.vocab), init, bias=init, activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))

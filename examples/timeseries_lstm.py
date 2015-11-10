@@ -18,7 +18,7 @@ Example that shows how to train on synthetic multi-dimensional time series
 After training, the network is able to generate the sequences
 
 Usage:
-    python examples/timeseries_lstm.py -e 10 -eval 1
+    python examples/timeseries_lstm.py -e 10 --eval_freq 1
 
 Then look at the PNG plots generated.
 
@@ -250,6 +250,12 @@ if __name__ == '__main__':
     if args.save_path is None:
         args.save_path = 'timeseries.pkl'
 
+    if args.callback_args['save_path'] is None:
+        args.callback_args['save_path'] = args.save_path
+
+    if args.callback_args['serialize'] is None:
+        args.callback_args['serialize'] = 1
+
     # create synthetic data as a whole series
     time_series = TimeSeries(npoints, ncycles=ncycles, curvetype=args.curvetype)
 
@@ -263,12 +269,12 @@ if __name__ == '__main__':
     # define model: model is different for the 2 strategies (sequence target or not)
     if return_sequences is True:
         layers = [
-            LSTM(hidden, init, Logistic(), Tanh(), reset_cells=False),
+            LSTM(hidden, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=False),
             Affine(train_set.nfeatures, init, bias=init, activation=Identity())
         ]
     else:
         layers = [
-            LSTM(hidden, init, Logistic(), Tanh(), reset_cells=True),
+            LSTM(hidden, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=True),
             RecurrentLast(),
             Affine(train_set.nfeatures, init, bias=init, activation=Identity())
         ]
@@ -277,7 +283,7 @@ if __name__ == '__main__':
     cost = GeneralizedCost(MeanSquared())
     optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.rounding)
 
-    callbacks = Callbacks(model, train_set, args, eval_set=valid_set)
+    callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
 
     # fit model
     model.fit(train_set,
@@ -320,12 +326,12 @@ if __name__ == '__main__':
 
     if return_sequences is True:
         layers = [
-            LSTM(hidden, init, Logistic(), Tanh(), reset_cells=False),
+            LSTM(hidden, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=False),
             Affine(train_set.nfeatures, init, bias=init, activation=Identity())
         ]
     else:
         layers = [
-            LSTM(hidden, init, Logistic(), Tanh(), reset_cells=False),
+            LSTM(hidden, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=False),
             RecurrentLast(),
             Affine(train_set.nfeatures, init, bias=init, activation=Identity())
         ]

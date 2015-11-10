@@ -344,7 +344,7 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
         inp_bl = np.random.randn(*input_shape)
 
     # neon gru instance
-    gru = GRU(hidden_size, Gaussian(), Tanh(), Logistic())
+    gru = GRU(hidden_size, init=Gaussian(), activation=Tanh(), gate_activation=Logistic())
     inpa = gru.be.array(np.copy(inp_bl))
 
     # run fprop on the baseline input

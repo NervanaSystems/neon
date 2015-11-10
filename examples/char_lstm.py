@@ -67,7 +67,7 @@ init = Uniform(low=-0.08, high=0.08)
 
 # model initialization
 if rlayer_type == 'lstm':
-    rlayer = LSTM(hidden_size, init, Logistic(), Tanh())
+    rlayer = LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh())
 elif rlayer_type == 'gru':
     rlayer = GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
 else:
