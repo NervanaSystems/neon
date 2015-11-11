@@ -115,7 +115,7 @@ class Xavier(Initializer):
 
 class Orthonormal(Initializer):
     """
-    From Lasagne. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
+    Implementation taken from Lasagne. Reference: Saxe et al., http://arxiv.org/abs/1312.6120
     """
 
     def __init__(self, scale=1.1, name="orthonormal"):

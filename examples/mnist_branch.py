@@ -42,7 +42,6 @@ The topology of the network is:
 
 import logging
 
-from neon.backends import gen_backend
 from neon.callbacks.callbacks import Callbacks
 from neon.data import DataIterator, load_mnist
 from neon.initializers import Gaussian
@@ -58,22 +57,6 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 
 args = parser.parse_args()
-
-logger = logging.getLogger()
-logger.setLevel(args.log_thresh)
-
-# hyperparameters
-batch_size = 128
-num_epochs = args.epochs
-
-# setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype,
-                 stochastic_round=False)
-
 
 # load up the mnist data set
 # split into train and tests sets
@@ -129,6 +112,8 @@ mlp = Model(layers=Tree([p1, p2, p3], alphas=alphas))
 callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
 
 # run fit
-mlp.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+mlp.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
+logging.getLogger('neon').info("Misclassification error = %.1f%%",
+                               (mlp.eval(valid_set, metric=Misclassification())*100))
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))

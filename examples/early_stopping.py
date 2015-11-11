@@ -33,9 +33,6 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-# hyperparameters
-num_epochs = 10
-
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
 train_set = DataIterator(X_train, y_train, nclass=nclass)
 valid_set = DataIterator(X_test, y_test, nclass=nclass)
@@ -77,6 +74,6 @@ callbacks.add_early_stop_callback(stop_func)
 callbacks.add_save_best_state_callback(os.path.join(args.data_dir, "early_stop-best_state.pkl"))
 mlp.fit(train_set,
         optimizer=optimizer,
-        num_epochs=num_epochs,
+        num_epochs=args.epochs,
         cost=cost,
         callbacks=callbacks)

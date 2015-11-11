@@ -30,9 +30,6 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-# hyperparameters
-num_epochs = args.epochs
-
 (X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
 
 train = DataIterator(X_train, y_train, nclass=nclass)
@@ -52,6 +49,6 @@ mlp = Model(layers=layers)
 # configure callbacks
 callbacks = Callbacks(mlp, train, eval_set=test, **args.callback_args)
 
-mlp.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 print('Misclassification error = %.1f%%' % (mlp.eval(test, metric=Misclassification())*100))

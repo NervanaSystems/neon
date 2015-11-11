@@ -57,9 +57,6 @@ args = parser.parse_args()
 logger = logging.getLogger()
 logger.setLevel(args.log_thresh)
 
-# hyperparameters
-num_epochs = args.epochs
-
 # load up the mnist data set
 # split into train and tests sets
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
@@ -89,6 +86,6 @@ mlp = Model(layers=layers)
 callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
 
 # run fit
-mlp.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+mlp.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))

@@ -63,12 +63,12 @@ def compare_helper(op, inA, inB, dtype):
     numpy_result = numpy_result.astype(dtype)
 
     if dtype in (np.float32, np.float16):
-        gpu = gen_backend(backend='gpu', default_dtype=dtype)
+        gpu = gen_backend(backend='gpu', datatype=dtype)
         nervanaGPU_result = math_helper(gpu, op, inA, inB, dtype=dtype)
         nervanaGPU_result = nervanaGPU_result.get()
         np.allclose(numpy_result, nervanaGPU_result, rtol=0, atol=1e-5)
 
-    cpu = gen_backend(backend='cpu', default_dtype=dtype)
+    cpu = gen_backend(backend='cpu', datatype=dtype)
     nervanaCPU_result = math_helper(cpu, op, inA, inB, dtype=dtype)
     nervanaCPU_result = nervanaCPU_result.get()
     np.allclose(numpy_result, nervanaCPU_result, rtol=0, atol=1e-5)

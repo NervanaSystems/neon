@@ -26,7 +26,7 @@ from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
 
 
-def gen_backend(backend='cpu', rng_seed=None, default_dtype=np.float32,
+def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0):
     """
     Construct and return a backend instance of the appropriate type based on
@@ -35,51 +35,42 @@ def gen_backend(backend='cpu', rng_seed=None, default_dtype=np.float32,
 
     Arguments:
         backend (string, optional): 'cpu' or 'gpu'.
-        rng_seed (numeric, optional): Set this to a numeric value which can be
-                                      used to seed the random number generator
-                                      of the instantiated backend.  Defaults to
-                                      None, which doesn't explicitly seed (so
-                                      each run will be different)
-        default_dtype (dtype): Default tensor data type. CPU backend supports
-                               np.float64, np.float32 and np.float16; GPU
-                               backend supports np.float32 and np.float16.
+        rng_seed (numeric, optional): Set this to a numeric value which can be used to seed the
+                                      random number generator of the instantiated backend.
+                                      Defaults to None, which doesn't explicitly seed (so each run
+                                      will be different)
+        dataype (dtype): Default tensor data type. CPU backend supports np.float64, np.float32 and
+                         np.float16; GPU backend supports np.float32 and np.float16.
         batch_size (int): Set the size the data batches.
-        stochastic_round (int/bool, optional): Set this to True or an integer
-                                               to implent stochastic rounding.
-                                               If this is False rounding will
-                                               be to nearest.
-                                               If True will perform stochastic
-                                               rounding using default bit width.
-                                               If set to an integer will round
-                                               to that number of bits.
+        stochastic_round (int/bool, optional): Set this to True or an integer to implent
+                                               stochastic rounding. If this is False rounding will
+                                               be to nearest. If True will perform stochastic
+                                               rounding using default bit width. If set to an
+                                               integer will round to that number of bits.
                                                Only affects the gpu backend.
-        device_id (numeric, optional): Set this to a numeric value which can be
-                                       used to select which device to run the
-                                       process on
+        device_id (numeric, optional): Set this to a numeric value which can be used to select
+                                       device on which to run the process
 
     Returns:
         Backend: newly constructed backend instance of the specifed type.
 
     Notes:
-        * Attempts to construct a GPU instance without a CUDA capable card or
-          without nervanagpu package installed will cause the
-          program to display an error message and exit.
+        * Attempts to construct a GPU instance without a CUDA capable card or without nervanagpu
+          package installed will cause the program to display an error message and exit.
     """
     logger = logging.getLogger(__name__)
 
     if NervanaObject.be is not None:
-        # backend was already generated
-        # clean it up first
+        # backend was already generated clean it up first
         cleanup_backend()
     else:
-        # at exit from python force cleanup of backend
-        # only register this function once, will use
+        # at exit from python force cleanup of backend only register this function once, will use
         # NervanaObject.be instead of a global
         atexit.register(cleanup_backend)
 
     if backend == 'cpu' or backend is None:
         from neon.backends.nervanacpu import NervanaCPU
-        be = NervanaCPU(rng_seed=rng_seed, default_dtype=default_dtype)
+        be = NervanaCPU(rng_seed=rng_seed, default_dtype=datatype)
     elif backend == 'gpu':
         gpuflag = False
         # check nvcc
@@ -90,13 +81,12 @@ def gen_backend(backend='cpu', rng_seed=None, default_dtype=np.float32,
                                "capability 5.0 or greater")
         from neon.backends.nervanagpu import NervanaGPU
         # init gpu
-        be = NervanaGPU(rng_seed=rng_seed, default_dtype=default_dtype,
+        be = NervanaGPU(rng_seed=rng_seed, default_dtype=datatype,
                         stochastic_round=stochastic_round, device_id=device_id)
     elif backend == 'mgpu':
         raise NotImplementedError("mgpu will be ready soon")
     else:
-        raise ValueError("backend must be one of "
-                         "('cpu', 'gpu', 'mgpu')")
+        raise ValueError("backend must be one of ('cpu', 'gpu', 'mgpu')")
 
     logger.info("Backend: {}, RNG seed: {}".format(backend, rng_seed))
 

@@ -33,14 +33,11 @@ from neon.models import Model
 from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
-from neon.util.argparser import NeonArgparser
+from neon.util.argparser import NeonArgparser, extract_valid_args
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 args = parser.parse_args(gen_be=False)
-
-batch_size = 64
-num_epochs = args.epochs
 
 # Override save path if None
 if args.save_path is None:
@@ -53,16 +50,13 @@ if args.callback_args['serialize'] is None:
     args.callback_args['serialize'] = 1
 
 # hyperparameters
+args.batch_size = 64
 time_steps = 64
 hidden_size = 512
 clip_gradients = True
 
 # setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype)
+be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download shakespeare text
 data_path = load_text('shakespeare', path=args.data_dir)
@@ -90,7 +84,7 @@ optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.roundin
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
 
 # fit and validate
-model.fit(train_set, optimizer=optimizer, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 
 def sample(prob):

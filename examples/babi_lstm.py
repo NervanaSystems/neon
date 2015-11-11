@@ -18,26 +18,26 @@ Example that trains on Facebook Q&A datatset: bAbI
 
 Task Number                  | FB LSTM Baseline | Neon QA GRU
 ---                          | ---              | ---
-QA1 - Single Supporting Fact | 50               | 49.3
-QA2 - Two Supporting Facts   | 20               | 28.9
-QA3 - Three Supporting Facts | 20               | 23.4
-QA4 - Two Arg. Relations     | 61               | 69.7
-QA5 - Three Arg. Relations   | 70               | 55.7
-QA6 - Yes/No Questions       | 48               | 49.3
-QA7 - Counting               | 49               | 75.7
-QA8 - Lists/Sets             | 45               | 69.3
-QA9 - Simple Negation        | 64               | 62.7
-QA10 - Indefinite Knowledge  | 44               | 44.7
-QA11 - Basic Coreference     | 72               | 69.3
-QA12 - Conjunction           | 74               | 66.0
-QA13 - Compound Coreference  | 94               | 91.5
-QA14 - Time Reasoning        | 27               | 36.6
-QA15 - Basic Deduction       | 21               | 52.2
-QA16 - Basic Induction       | 23               | 50.8
-QA17 - Positional Reasoning  | 51               | 50.5
-QA18 - Size Reasoning        | 52               | 91.6
-QA19 - Path Finding          | 8                | 8.7
-QA20 - Agent's Motivations   | 91               | 96.2
+QA1 - Single Supporting Fact | 50               |  47.9
+QA2 - Two Supporting Facts   | 20               |  29.8
+QA3 - Three Supporting Facts | 20               |  20.0
+QA4 - Two Arg. Relations     | 61               |  69.8
+QA5 - Three Arg. Relations   | 70               |  56.4
+QA6 - Yes/No Questions       | 48               |  49.1
+QA7 - Counting               | 49               |  76.5
+QA8 - Lists/Sets             | 45               |  68.9
+QA9 - Simple Negation        | 64               |  62.8
+QA10 - Indefinite Knowledge  | 44               |  45.3
+QA11 - Basic Coreference     | 72               |  67.6
+QA12 - Conjunction           | 74               |  63.9
+QA13 - Compound Coreference  | 94               |  91.9
+QA14 - Time Reasoning        | 27               |  36.8
+QA15 - Basic Deduction       | 21               |  51.4
+QA16 - Basic Induction       | 23               |  50.1
+QA17 - Positional Reasoning  | 51               |  49.0
+QA18 - Size Reasoning        | 52               |  90.5
+QA19 - Path Finding          | 8                |   9.0
+QA20 - Agent's Motivations   | 91               |  95.6
 
 Reference:
     "Towards AI-Complete Question Answering: A Set of Prerequisite Toy Tasks"
@@ -45,19 +45,18 @@ Reference:
 
 Usage:
     use -t to specify which bAbI task to run
-    python examples/babi_lstm.py -e 10 -eval 1 -t 1 --rlayer_type gru
+    python examples/babi_lstm.py -e 20 -eval 1 -t 1 --rlayer_type gru
 """
 
 from neon.backends import gen_backend
 from neon.data import BABI, QA
 from neon.initializers import GlorotUniform, Uniform, Orthonormal
-from neon.layers import (Affine, GeneralizedCost, GRU, LookupTable,
-                         MergeMultistream, LSTM)
+from neon.layers import Affine, GeneralizedCost, GRU, LookupTable, MergeMultistream, LSTM
 from neon.models import Model
 from neon.optimizers import Adam
 from neon.transforms import Accuracy, CrossEntropyMulti, Logistic, Softmax, Tanh
 from neon.callbacks.callbacks import Callbacks
-from neon.util.argparser import NeonArgparser
+from neon.util.argparser import NeonArgparser, extract_valid_args
 
 # list of bAbI task
 subset = 'en'
@@ -90,59 +89,49 @@ parser.add_argument('-t', '--task', type=int, default='1', choices=xrange(1, 21)
                     help='the task ID to train/test on from bAbI dataset (1-20)')
 parser.add_argument('--rlayer_type', default='gru', choices=['gru', 'lstm'],
                     help='type of recurrent layer to use (gru or lstm)')
-args = parser.parse_args()
+args = parser.parse_args(gen_be=False)
+args.batch_size = 32
 
 task = task_list[args.task - 1]
-batch_size = 32
 
 # setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype)
+be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # load the bAbI dataset
 babi = BABI(path=args.data_dir, task=task, subset=subset)
 train_set = QA(*babi.train)
 valid_set = QA(*babi.test)
 
-# recurrent layer parameters
-rlayer_params = dict(output_size=100, init=GlorotUniform(),
-                     init_inner=Orthonormal(0.5), reset_cells=True)
-
-rlayer_params['activation'] = Tanh() if args.rlayer_type == 'gru' else Logistic()
-rlayer_params['gate_activation'] = Logistic() if args.rlayer_type == 'gru' else Tanh()
-
+# recurrent layer parameters (default gru)
 rlayer_obj = GRU if args.rlayer_type == 'gru' else LSTM
+rlayer_params = dict(output_size=100, reset_cells=True,
+                     init=GlorotUniform(), init_inner=Orthonormal(0.5),
+                     activation=Tanh(), gate_activation=Logistic())
+
+# if using lstm, swap the activation functions
+if args.rlayer_type == 'lstm':
+    rlayer_params.update(dict(activation=Logistic(), gate_activation=Tanh()))
 
 # lookup layer parameters
-lookup_params = dict(
-    vocab_size=babi.vocab_size, embedding_dim=50, init=Uniform(-0.05, 0.05))
+lookup_params = dict(vocab_size=babi.vocab_size, embedding_dim=50, init=Uniform(-0.05, 0.05))
 
 # Model construction
-story_path = [
-    LookupTable(**lookup_params), rlayer_obj(**rlayer_params)]
-query_path = [
-    LookupTable(**lookup_params), rlayer_obj(**rlayer_params)]
+story_path = [LookupTable(**lookup_params), rlayer_obj(**rlayer_params)]
+query_path = [LookupTable(**lookup_params), rlayer_obj(**rlayer_params)]
 
 layers = [MergeMultistream(layers=[story_path, query_path], merge="stack"),
           Affine(babi.vocab_size, init=GlorotUniform(), activation=Softmax())]
 
 model = Model(layers=layers)
 
-# cost function and optimizer
-cost = GeneralizedCost(costfunc=CrossEntropyMulti())
-optimizer = Adam()
-
 # setup callbacks
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
 
 # train model
 model.fit(train_set,
-          optimizer=optimizer,
+          optimizer=Adam(),
           num_epochs=args.epochs,
-          cost=cost,
+          cost=GeneralizedCost(costfunc=CrossEntropyMulti()),
           callbacks=callbacks)
 
 # output accuracies

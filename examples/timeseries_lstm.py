@@ -40,7 +40,7 @@ from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Identity, MeanSquared
 from neon.callbacks.callbacks import Callbacks
 from neon import NervanaObject
-from neon.util.argparser import NeonArgparser
+from neon.util.argparser import NeonArgparser, extract_valid_args
 
 
 def rolling_window(a, lag):
@@ -209,7 +209,7 @@ if __name__ == '__main__':
 
     # network hyperparameters
     hidden = 32
-    batch_size = 1
+    args.batch_size = 1
     clip_gradients = False
 
     # The following flag will switch between 2 training strategies:
@@ -240,11 +240,7 @@ if __name__ == '__main__':
 
     # ================= Main neon script ====================
 
-    be = gen_backend(backend=args.backend,
-                     batch_size=batch_size,
-                     rng_seed=args.rng_seed,
-                     device_id=args.device_id,
-                     default_dtype=args.datatype)
+    be = gen_backend(**extract_valid_args(args, gen_backend))
 
     # a file to save the trained model
     if args.save_path is None:

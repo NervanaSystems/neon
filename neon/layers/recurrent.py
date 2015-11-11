@@ -34,7 +34,13 @@ class Recurrent(ParameterLayer):
 
     Arguments:
         output_size (int): Number of hidden/output units
-        init (Initializer): Function for initializing the model parameters
+        init (Initializer): Function for initializing the model's input to hidden weights.  By
+                            default, this initializer will also be used for recurrent parameters
+                            unless init_inner is also specified.  Biases will always be
+                            initialized to zero.
+        init_inner (Initializer, optional): Function for initializing the model's recurrent
+                                            parameters.  If absent, will default to using same
+                                            initializer provided to init.
         activation (Transform): Activation function for the input modulation
 
     Attributes:
@@ -234,7 +240,13 @@ class LSTM(Recurrent):
 
     Arguments:
         output_size (int): Number of hidden/output units
-        init (Initializer): Function for initializing the model parameters
+        init (Initializer): Function for initializing the model's input to hidden weights.  By
+                            default, this initializer will also be used for recurrent parameters
+                            unless init_inner is also specified.  Biases will always be
+                            initialized to zero.
+        init_inner (Initializer, optional): Function for initializing the model's recurrent
+                                            parameters.  If absent, will default to using same
+                                            initializer provided to init.
         activation (Transform): Activation function for the input modulation
         gate_activation (Transform): Activation function for the gates
 
@@ -406,8 +418,7 @@ class GRU(Recurrent):
 
     - It uses two gates: reset gate (r) and update gate (z)
     - The update gate (z) decides how much the activation is updated
-    - The reset gate (r) decides how much to reset (when r = 0) from the previous
-        activation
+    - The reset gate (r) decides how much to reset (when r = 0) from the previous activation
     - Activation (h_t) is a linear interpolation (by z) between the previous
         activation (h_t-1) and the new candidate activation ( h_can )
     - r and z are compuated the same way, using different weights
@@ -418,7 +429,13 @@ class GRU(Recurrent):
 
     Arguments:
         output_size (int): Number of hidden/output units
-        init (Initializer): Function for initializing the model parameters
+        init (Initializer): Function for initializing the model's input to hidden weights.  By
+                            default, this initializer will also be used for recurrent parameters
+                            unless init_inner is also specified.  Biases will always be
+                            initialized to zero.
+        init_inner (Initializer, optional): Function for initializing the model's recurrent
+                                            parameters.  If absent, will default to using same
+                                            initializer provided to init.
         activation (Transform): Activiation function for the input modulation
         gate_activation (Transform): Activation function for the gates
 
@@ -517,13 +534,11 @@ class GRU(Recurrent):
 
     def fprop(self, inputs, inference=False):
         """
-        Apply the forward pass transformation to the input data.  The input
-            data is a list of inputs with an element for each time step of
-            model unrolling.
+        Apply the forward pass transformation to the input data.  The input data is a list of
+            inputs with an element for each time step of model unrolling.
 
         Arguments:
-            inputs (Tensor): input data as 3D tensors, then being converted
-                             into a list of 2D tensors
+            inputs (Tensor): input data as 3D tensors, then converted into a list of 2D tensors
 
         Returns:
             Tensor: GRU output for each model time step
@@ -555,8 +570,8 @@ class GRU(Recurrent):
 
     def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
-        Backpropagation of errors, output delta for previous layer, and
-        calculate the update on model parmas
+        Backpropagation of errors, output delta for previous layer, and calculate the update on
+            model parmas
 
         Arguments:
             deltas (Tensor): error tensors for each time step of unrolling
@@ -568,8 +583,7 @@ class GRU(Recurrent):
             db (Tensor): bias gradients
 
         Returns:
-            Tensor: Backpropagated errors for each time step
-                of model unrolling
+            Tensor: Backpropagated errors for each time step of model unrolling
         """
 
         self.dW[:] = 0

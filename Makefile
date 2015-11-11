@@ -259,7 +259,7 @@ check: env
 	                 neon | grep "^C" | wc -l
 	@echo
 	@echo "Running unit tests..."
-	-@. $(ACTIVATE); py.test tests/ | tail -1 | cut -f 2,3 -d ' '
+	-@. $(ACTIVATE); py.test $(TEST_DIRS) | tail -1 | cut -f 2,3 -d ' '
 	@echo
 
 doc: env

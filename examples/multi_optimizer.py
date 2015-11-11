@@ -31,9 +31,6 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-# hyperparameters
-num_epochs = args.epochs
-
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(args.data_dir)
 train_set = DataIterator(X_train, y_train, nclass=nclass)
 valid_set = DataIterator(X_test, y_test, nclass=nclass)
@@ -65,4 +62,4 @@ opt = MultiOptimizer({'default': optimizer_one,
 # configure callbacks
 callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
 
-mlp.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+mlp.fit(train_set, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

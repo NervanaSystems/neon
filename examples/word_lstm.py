@@ -33,30 +33,23 @@ from neon.models import Model
 from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
-from neon.util.argparser import NeonArgparser
+from neon.util.argparser import NeonArgparser, extract_valid_args
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
+parser.add_argument('--rlayer_type', default='lstm', choices=['gru', 'lstm'],
+                    help='type of recurrent layer to use (gru or lstm)')
 args = parser.parse_args(gen_be=False)
 
-num_epochs = args.epochs
-
-# Set the type of layer to use {lstm|gru}
-rlayer_type = "lstm"
-
 # hyperparameters from the reference
-batch_size = 20
+args.batch_size = 20
 time_steps = 20
 hidden_size = 200
 clip_gradients = True
 gradient_limit = 5
 
 # setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype)
+be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download penn treebank
 train_path = load_text('ptb-train', path=args.data_dir)
@@ -72,20 +65,16 @@ valid_set = Text(time_steps, valid_path, vocab=train_set.vocab, tokenizer=str.sp
 init = Uniform(low=-0.08, high=0.08)
 
 # model initialization
-if rlayer_type == 'lstm':
+if args.rlayer_type == 'lstm':
     rlayer1 = LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh())
     rlayer2 = LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh())
-elif rlayer_type == 'gru':
+else:
     rlayer1 = GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
     rlayer2 = GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
-else:
-    raise NotImplementedError('%s layer not implemented' % rlayer_type)
 
-layers = [
-    rlayer1,
-    rlayer2,
-    Affine(len(train_set.vocab), init, bias=init, activation=Softmax())
-]
+layers = [rlayer1,
+          rlayer2,
+          Affine(len(train_set.vocab), init, bias=init, activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
@@ -98,8 +87,4 @@ optimizer = RMSProp(clip_gradients=clip_gradients, gradient_limit=gradient_limit
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
 
 # train model
-model.fit(train_set,
-          optimizer=optimizer,
-          num_epochs=num_epochs,
-          cost=cost,
-          callbacks=callbacks)
+model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

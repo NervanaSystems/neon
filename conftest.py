@@ -25,8 +25,7 @@ from neon.backends import gen_backend
 
 def pytest_addoption(parser):
     '''
-    Add a --all option to run the full range of
-    parameters for tests generated using the
+    Add a --all option to run the full range of parameters for tests generated using the
     pytest test generators
     '''
     parser.addoption("--all", action="store_true",
@@ -41,29 +40,24 @@ def data():
 @pytest.fixture(scope='module', params=['gpu', 'cpu'])
 def backend_default(request):
     '''
-    Fixture to setup the backend before running a
-    test.  Also registers the teardown function to clean
-    up the backend after a test is done.  This had module
-    scope, so this will be run once for each test in a
-    given test file (module).
+    Fixture to setup the backend before running a test.  Also registers the teardown function to
+    clean up the backend after a test is done.  This has module scope, so this will be run once
+    for each test in a given test file (module).
 
-    This fixture is parameterized to run both the cpu and
-    gpu backends for every test
+    This fixture is parameterized to run both the cpu and gpu backends for every test
     '''
     be = gen_backend(backend=request.param,
-                     default_dtype=np.float32,
+                     datatype=np.float32,
                      batch_size=128,
                      rng_seed=0)
 
-    # add a cleanup call - will run after all
-    # test in module are done
+    # add a cleanup call - will run after all test in module are done
     def cleanup():
         be = request.getfuncargvalue('backend_default')
         del be
     request.addfinalizer(cleanup)
 
-    # tests using this fixture can
-    # access the backend object from
+    # tests using this fixture can access the backend object from
     # backend or use the NervanaObject.be global
     return be
 
@@ -76,53 +70,45 @@ def backend_cpu64(request):
     precision
     '''
     be = gen_backend(backend='cpu',
-                     default_dtype=np.float64,
+                     datatype=np.float64,
                      batch_size=128,
                      rng_seed=0)
 
-    # add a cleanup call - will run after all
-    # test in module are done
+    # add a cleanup call - will run after all tests in module are done
     def cleanup():
         be = request.getfuncargvalue('backend_cpu64')
         del be
     request.addfinalizer(cleanup)
 
-    # tests using this fixture can
-    # access the backend object from
+    # tests using this fixture can access the backend object from
     # backend or use the NervanaObject.be global
     return be
 
 def idfunc(vals):
     '''
-    Prnit out a human readable format for the
-    parameterized tests
+    Print out a human readable format for the parameterized tests
     '''
     dtype = str(vals[1])
     dtype = dtype.split("numpy.")[1].strip("'>")
     return vals[0] + '_' + dtype
 
 gpu_cpu_32_16 = itertools.product(['gpu','cpu'], [np.float16, np.float32])
-@pytest.fixture(scope='module', params=list(gpu_cpu_32_16),
-               ids=idfunc)
+@pytest.fixture(scope='module', params=list(gpu_cpu_32_16), ids=idfunc)
 def backend_tests(request):
     '''
-    Fixture that returns a cpu and gpu backes for 16, and 32 bit
-    For use in tests like gradient checking whihch need higher
-    precision
+    Fixture that returns cpu and gpu backends for 16 and 32 bit
     '''
     be = gen_backend(backend=request.param[0],
-                     default_dtype=request.param[1],
+                     datatype=request.param[1],
                      batch_size=128,
                      rng_seed=0)
 
-    # add a cleanup call - will run after all
-    # test in module are done
+    # add a cleanup call - will run after all tests in module are done
     def cleanup():
         be = request.getfuncargvalue('backend_tests')
         del be
     request.addfinalizer(cleanup)
 
-    # tests using this fixture can
-    # access the backend object from
+    # tests using this fixture can access the backend object from
     # backend or use the NervanaObject.be global
     return be

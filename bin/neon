@@ -16,37 +16,31 @@
 """
 Main neon run script.
 
-This script will parse a YAML formated model configuration file,
-instantiate the model, and run a fit.
+This script will parse a YAML formatted model configuration file, instantiate the model, and run
+a fit.
 
 To run this script, first activate the virtualenv and then run
 "python <path to script>/neon <yaml config file> [options]"
 
 Some of the commonly used arguments to this script are:
 
-    -b | --backend [gpu | cpu] : backend to use (currently gpu backend only
-                                                 works on Maxwell arch GPUs)
+    -b | --backend [gpu | cpu] : backend to use (currently gpu backend only works on Maxwell GPUs)
 
     -e | --epochs [ epochs ] : number of epochs to run fit
 
-    -d | --datatype [ fp16 | fp32 | fp64] : floating point data precision to
-                                            use,  note 64 bit float only works
-                                            with cpu backend
+    -d | --datatype [ fp16 | fp32 | fp64] : floating point data precision to use, note 64-bit
+                                            float only works with cpu backend
 
-    -l | --log [ LOGFILE ] : log file for messages, use the -v option to
-                             control logging level, if this optionn is not set
-                             then log messages will only go to the screen
+    -l | --log [ LOGFILE ] : log file for messages, use the -v option to control logging level, if
+                             this optionn is not set then log messages will only go to the screen
 
     -v[vv] | --verbose : verbosity level
 
-Args that start with '--' (eg. --data_dir) can also be set in a config file
-(~/nervana/neon.cfg or specified via -c) by using .ini or .yaml-
-style syntax (eg. data_dir=value). If an arg is specified in more than one
-place, then command-line values override config file values which override
-defaults.
+Args that start with '--' (eg. --data_dir) can also be set in a config file (~/nervana/neon.cfg or
+specified via -c) by using .ini or .yaml-style syntax (eg. data_dir=value). If an arg is specified
+in more than one place, command-line values override config file values which override defaults.
 
-For details of all the command line arguments run this script with
-the --help option.
+For details of all the command line arguments run this script with the --help option.
 """
 import sys
 import yaml
@@ -102,7 +96,7 @@ def parse_args():
                 rng_seed=args.rng_seed,
                 device_id=args.device_id,
                 batch_size=batch_size,
-                default_dtype=args.datatype,
+                datatype=args.datatype,
                 stochastic_round=args.rounding)
 
     return root_yaml, args, be_name, num_epochs, batch_size
@@ -113,9 +107,8 @@ def load_data(data_dir="."):
     Load the specified dataset.
 
     Arguments:
-        data_dir (str, optional): Local directory in which to check for and
-                                  save newly downloaded datasets.  Defaults to
-                                  current directory
+        data_dir (str, optional): Local directory in which to check for and save newly downloaded
+                                  datasets.  Defaults to current directory
     Returns:
         tuple: Contains data iterator objects for training and test datasets.
     """
@@ -153,7 +146,7 @@ if __name__ == "__main__":
                                         batch_size=batch_size,
                                         rng_seed=args.rng_seed,
                                         device_id=args.device_id,
-                                        default_dtype=args.datatype,
+                                        datatype=args.datatype,
                                         stochastic_rounding=args.rounding)
 
     if args.model_file:
@@ -162,8 +155,7 @@ if __name__ == "__main__":
     # configure callbacks
     callbacks = Callbacks(model, train, eval_set=test, **args.callback_args)
 
-    model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost,
-              callbacks=callbacks)
+    model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
     if root_yaml['dataset']['name'] == 'i1k':
         test.exit_batch_provider()

@@ -42,3 +42,8 @@ Xavier
 -------------
 .. autosummary::
    neon.initializers.initializer.Xavier
+
+Orthonormal
+-------------
+.. autosummary::
+   neon.initializers.initializer.Orthonormal

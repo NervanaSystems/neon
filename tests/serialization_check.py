@@ -88,7 +88,7 @@ def gen_model(backend_type):
                 batch_size=batch_size,
                 rng_seed=2,
                 device_id=args.device_id,
-                default_dtype=args.datatype)
+                datatype=args.datatype)
 
     init_uni = Uniform(low=-0.1, high=0.1)
 

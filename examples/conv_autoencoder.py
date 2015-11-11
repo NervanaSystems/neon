@@ -33,8 +33,6 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-num_epochs = args.epochs
-
 # Load dataset
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
 

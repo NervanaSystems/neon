@@ -37,7 +37,7 @@ from neon.callbacks.callbacks import Callbacks
 logger = logging.getLogger(__name__)
 
 
-def extract_valid_args(args, func):
+def extract_valid_args(args, func, startidx=0):
     """
     Given a namespace of argparser args, extract those applicable to func.
 
@@ -48,7 +48,7 @@ def extract_valid_args(args, func):
     Returns:
         dict of (arg, value) pairs from args that are valid for func
     """
-    func_args = inspect.getargspec(func).args[1:]
+    func_args = inspect.getargspec(func).args[startidx:]
     return dict((k, v) for k, v in vars(args).items() if k in func_args)
 
 
@@ -144,7 +144,7 @@ class NeonArgparser(configargparse.ArgumentParser):
                             help='use stochastic rounding [will round to BITS number '
                                  'of bits if specified]')
         be_grp.add_argument('-d', '--datatype', choices=['f16', 'f32', 'f64'],
-                            default='f32', metavar='default dtype',
+                            default='f32', metavar='default datatype',
                             help='default floating point '
                             'precision for backend [f64 for cpu only]')
 
@@ -297,7 +297,7 @@ class NeonArgparser(configargparse.ArgumentParser):
                         rng_seed=args.rng_seed,
                         device_id=args.device_id,
                         batch_size=args.batch_size,
-                        default_dtype=args.datatype,
+                        datatype=args.datatype,
                         stochastic_round=args.rounding)
 
         # display what command line / config options were set (and from where)
@@ -305,5 +305,5 @@ class NeonArgparser(configargparse.ArgumentParser):
 
         self._PARSED = True
         self.args = args
-        args.callback_args = extract_valid_args(args, Callbacks.__init__)
+        args.callback_args = extract_valid_args(args, Callbacks.__init__, startidx=1)
         return args

@@ -33,23 +33,18 @@ from neon.models import Model
 from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
-from neon.util.argparser import NeonArgparser
+from neon.util.argparser import NeonArgparser, extract_valid_args
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 args = parser.parse_args(gen_be=False)
 
 # hyperparameters
-batch_size = 128
 hidden_size = 512
 num_epochs = args.epochs
 
 # setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 default_dtype=args.datatype)
+be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download dataset
 data_path = load_flickr8k(path=args.data_dir)  # Other setnames are flickr30k and coco
