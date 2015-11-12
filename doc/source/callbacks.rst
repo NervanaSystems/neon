@@ -39,7 +39,7 @@ callbacks for computing validation cost and displaying a progress bar.
 
     # configure default callbacks for computing train and validation cost
     # and displaying a progress bar
-    callbacks = Callbacks(model, train_set, args, eval_set=valid_set)
+    callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
 
     # add a callback that saves the best model state
     callbacks.add_save_best_state_callback("./best_state.pkl")
