@@ -14,6 +14,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+[-
+
+our $int16;
+
+our $convert = $int16 ? 'I2F.F32.S16' : 'F2F.F32.F16';
+
+sub convert_in {return $convert;}
+
+
+sub int16_params {
+    return $int16 ? q{
+param_Stats[0]  : c[0x0][0x190]
+param_Stats[1]  : c[0x0][0x194]
+param_scale     : c[0x0][0x198]
+    } : "";
+}
+-]
+
 
 <CONSTANT_MAPPING>
     addr_zero  : 4x<128*8*4>
@@ -40,6 +58,7 @@
     param_ldbz      : c[0x0][0x180]
     param_ldcz      : c[0x0][0x184]
     param_loops     : c[0x0][0x188]
+    [+ int16_params() +]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -69,9 +88,10 @@
 
     64-75   ~ ldc, ldcz, ci, xmad_c, tid_31, tid_96, tid_128
 
-    64-75   : c<0-7>, d3, d2, d1, d0
-    76-85   : C00y<0-1>, C04y<0-1>, C08y<0-1>, C12y<0-1>
-    86-107  ~ ldc1, ldc4, ldc60, writeCs, readCs, cx<00|64>, cy<00|04|08|12>, alpha, beta, flags
+    64-79   : c<0-7>, d3, d2, d1, d0, cs<0-3>
+    64-65   : Stats<0-1>
+    80-89   : C00y<0-1>, C04y<0-1>, C08y<0-1>, C12y<0-1>
+    90-118  ~ ldc1, ldc4, ldc60, writeCs, readCs, cx<00|64>, cy<00|04|08|12>, alpha, beta, flags, warp_max, maxabs
 
 </REGISTER_MAPPING>
 
@@ -87,9 +107,9 @@
 --:-:-:-:1      MOV loop, RZ;
 
 --:-:-:-:1      STS.128 [addr_zero], RZ;
-<CODE>
+[+
         join('', map sprintf("--:-:-:-:1      LDS.U.128 czero%02d, [addr_zero];\n", $_ * 4), 0..15);
-</CODE>
++]
 
 --:-:-:-:1      MOV lda, param_lda;
 --:-:-:-:1      MOV ldb, param_ldb;
@@ -139,7 +159,7 @@
 
 REMAINDER:
 
-<CODE>
+[+
     our $vec;
     return $vec ? q{
 // k must be multiple of 8
@@ -197,30 +217,31 @@ REMAINDER:
 --:-:-:-:1      ISETP.GT.AND P1, PT, k, 8, P4;
 </SCHEDULE_BLOCK>
     };
-</CODE>
++]
 
-<CODE>
+[+
     our $vec;
-    return $vec ? q{
+    our $convert;
+    return $vec ? qq{
 
-06:-:1:-:4      F2F.F32.F16 loadA3, loadA1.H1;
+06:-:1:-:4      $convert loadA3, loadA1.H1;
 --:-:-:-:0      IADD   trackA0.CC, trackA0, 2x<16>;
---:-:2:-:4      F2F.F32.F16 loadA2, loadA1.H0;
---:-:-:-:4      F2F.F32.F16 loadA1, loadA0.H1;
+--:-:2:-:4      $convert loadA2, loadA1.H0;
+--:-:-:-:4      $convert loadA1, loadA0.H1;
 --:-:-:-:0      IADD.X trackA1, trackA1, RZ;
---:-:3:-:1      F2F.F32.F16 loadA0, loadA0.H0;
+--:-:3:-:1      $convert loadA0, loadA0.H0;
 
 01:-:-:-:1      STS [writeS + 4x<3*128>], loadA3;
 02:-:-:-:1      STS [writeS + 4x<2*128>], loadA2;
 04:-:-:-:1      STS [writeS + 4x<1*128>], loadA1;
 --:-:-:-:1      STS [writeS + 4x<0*128>], loadA0;
 
-08:-:1:-:4      F2F.F32.F16 loadB3, loadB1.H1;
+08:-:1:-:4      $convert loadB3, loadB1.H1;
 10:-:-:-:0      IADD   trackB0.CC, trackB0, 2x<16>;
---:-:2:-:4      F2F.F32.F16 loadB2, loadB1.H0;
---:-:3:-:4      F2F.F32.F16 loadB1, loadB0.H1;
+--:-:2:-:4      $convert loadB2, loadB1.H0;
+--:-:3:-:4      $convert loadB1, loadB0.H1;
 --:-:-:-:0      IADD.X trackB1, trackB1, RZ;
---:-:4:-:1      F2F.F32.F16 loadB0, loadB0.H0;
+--:-:4:-:1      $convert loadB0, loadB0.H0;
 
 01:-:-:-:1      STS [writeS + 4x<11*128>], loadB3;
 02:-:-:-:1      STS [writeS + 4x<10*128>], loadB2;
@@ -228,13 +249,13 @@ REMAINDER:
 08:-:-:-:1      STS [writeS + 4x< 8*128>], loadB0;
 
     // scalar loads
-    } : q{
+    } : qq{
 
-02:-:-:-:4      F2F.F32.F16 loadA0, loadA0;
+02:-:-:-:4      $convert loadA0, loadA0;
 --:-:-:-:0      IADD   trackA0.CC, trackA0, 2x<8>;
---:-:2:-:4      F2F.F32.F16 loadA1, loadA1;
---:-:-:-:4      F2F.F32.F16 loadA2, loadA2;
---:-:3:-:1      F2F.F32.F16 loadA3, loadA3;
+--:-:2:-:4      $convert loadA1, loadA1;
+--:-:-:-:4      $convert loadA2, loadA2;
+--:-:3:-:1      $convert loadA3, loadA3;
 
 --:-:-:-:0      IADD.X trackA1, trackA1, RZ;
 
@@ -243,11 +264,11 @@ REMAINDER:
 04:-:-:-:1      STS [writeS + 4x<2*128>], loadA2;
 --:-:-:-:1      STS [writeS + 4x<3*128>], loadA3;
 
-08:-:-:-:4      F2F.F32.F16 loadB0, loadB0;
+08:-:-:-:4      $convert loadB0, loadB0;
 --:-:-:-:0      IADD   trackB0.CC, trackB0, 2x<8>;
---:-:2:-:4      F2F.F32.F16 loadB1, loadB1;
---:-:-:-:4      F2F.F32.F16 loadB2, loadB2;
---:-:3:-:1      F2F.F32.F16 loadB3, loadB3;
+--:-:2:-:4      $convert loadB1, loadB1;
+--:-:-:-:4      $convert loadB2, loadB2;
+--:-:3:-:1      $convert loadB3, loadB3;
 
 --:-:-:-:0      IADD.X trackB1, trackB1, RZ;
 
@@ -256,15 +277,18 @@ REMAINDER:
 04:-:-:-:1      STS [writeS + 4x<10*128>], loadB2;
 --:-:-:-:1      STS [writeS + 4x<11*128>], loadB3;
     };
-</CODE>
++]
+
 
 --:-:-:-:1      LOP.XOR readAs, readAs, 4x<128*8*2>;
 --:-:-:-:0      LOP.XOR readBs, readBs, 4x<128*8*2>;
 01:-:-:-:5      BAR.SYNC 0;
 --:-:-:-:0      LOP.XOR writeS, writeS, 4x<128*8*2>;
 
-<CODE>
+
+[+
     our $vec;
+    our $convert;
     our @top = $vec ?
         ("--:-:-:-:1      ISETP.GE.AND P0, PT, k, 16, PT;\n") :
         ("--:-:-:-:1      ISETP.GE.AND P2, PT, k, 16, P5;\n");
@@ -281,30 +305,30 @@ REMAINDER:
         j0c31 => "--:-:4:-:1  \@P3 LDG.E.CI.64 loadB0, [trackB + 2x<0>];\n",
         j0c33 => "20:5:6:-:1  \@P3 LDG.E.CI.64 loadB4, [trackB + 2x<8>];\n",
 
-        j3c5  => "--:-:-:-:1 \@!P1 F2F.F32.F16 loadA3, loadA5.H1;\n",
-        j3c9  => "--:-:-:-:1 \@!P1 F2F.F32.F16 loadA2, loadA5.H0;\n",
-        j3c13 => "--:-:-:-:1 \@!P1 F2F.F32.F16 loadA1, loadA4.H1;\n",
-        j3c17 => "--:-:-:-:1 \@!P1 F2F.F32.F16 loadA0, loadA4.H0;\n",
+        j3c5  => "--:-:-:-:1 \@!P1 $convert loadA3, loadA5.H1;\n",
+        j3c9  => "--:-:-:-:1 \@!P1 $convert loadA2, loadA5.H0;\n",
+        j3c13 => "--:-:-:-:1 \@!P1 $convert loadA1, loadA4.H1;\n",
+        j3c17 => "--:-:-:-:1 \@!P1 $convert loadA0, loadA4.H0;\n",
 
-        j4c5  => "--:-:-:-:1 \@!P1 F2F.F32.F16 loadB3, loadB5.H1;\n",
-        j4c9  => "--:-:-:-:1 \@!P1 F2F.F32.F16 loadB2, loadB5.H0;\n",
-        j4c13 => "--:-:-:-:1 \@!P1 F2F.F32.F16 loadB1, loadB4.H1;\n",
-        j4c17 => "--:-:-:-:1 \@!P1 F2F.F32.F16 loadB0, loadB4.H0;\n",
+        j4c5  => "--:-:-:-:1 \@!P1 $convert loadB3, loadB5.H1;\n",
+        j4c9  => "--:-:-:-:1 \@!P1 $convert loadB2, loadB5.H0;\n",
+        j4c13 => "--:-:-:-:1 \@!P1 $convert loadB1, loadB4.H1;\n",
+        j4c17 => "--:-:-:-:1 \@!P1 $convert loadB0, loadB4.H0;\n",
 
-        j5c5  => "02:-:-:-:1  \@P1 F2F.F32.F16 loadA3, loadA1.H1;\n",
-        j5c9  => "--:-:2:-:1  \@P1 F2F.F32.F16 loadA2, loadA1.H0;\n",
-        j5c13 => "--:-:-:-:1  \@P1 F2F.F32.F16 loadA1, loadA0.H1;\n",
-        j5c17 => "--:-:3:-:1  \@P1 F2F.F32.F16 loadA0, loadA0.H0;\n",
+        j5c5  => "02:-:-:-:1  \@P1 $convert loadA3, loadA1.H1;\n",
+        j5c9  => "--:-:2:-:1  \@P1 $convert loadA2, loadA1.H0;\n",
+        j5c13 => "--:-:-:-:1  \@P1 $convert loadA1, loadA0.H1;\n",
+        j5c17 => "--:-:3:-:1  \@P1 $convert loadA0, loadA0.H0;\n",
 
         j5c29 => "02:-:-:-:1  \@P0 STS [writeS + 4x<3*128>], loadA3;\n",
         j5c31 => "--:-:-:-:1  \@P0 STS [writeS + 4x<2*128>], loadA2;\n",
         j5c33 => "04:-:-:-:1  \@P0 STS [writeS + 4x<1*128>], loadA1;\n",
         j5c35 => "--:-:-:-:1  \@P0 STS [writeS + 4x<0*128>], loadA0;\n",
 
-        j6c5  => "08:-:-:-:1  \@P1 F2F.F32.F16 loadB3, loadB1.H1;\n",
-        j6c9  => "--:-:2:-:1  \@P1 F2F.F32.F16 loadB2, loadB1.H0;\n",
-        j6c13 => "--:-:3:-:1  \@P1 F2F.F32.F16 loadB1, loadB0.H1;\n",
-        j6c17 => "--:-:4:-:1  \@P1 F2F.F32.F16 loadB0, loadB0.H0;\n",
+        j6c5  => "08:-:-:-:1  \@P1 $convert loadB3, loadB1.H1;\n",
+        j6c9  => "--:-:2:-:1  \@P1 $convert loadB2, loadB1.H0;\n",
+        j6c13 => "--:-:3:-:1  \@P1 $convert loadB1, loadB0.H1;\n",
+        j6c17 => "--:-:4:-:1  \@P1 $convert loadB0, loadB0.H0;\n",
 
         j6c29 => "02:-:-:-:1  \@P0 STS [writeS + 4x<11*128>], loadB3;\n",
         j6c31 => "--:-:-:-:1  \@P0 STS [writeS + 4x<10*128>], loadB2;\n",
@@ -333,20 +357,20 @@ REMAINDER:
         j0c33 => "--:-:6:-:1  \@P3 LDG.E.CI.S16 loadB2, [trackB + 2x<2>];\n",
         j0c35 => "--:-:6:-:1  \@P3 LDG.E.CI.S16 loadB3, [trackB + 2x<3>];\n",
 
-        j5c5  => "02:-:2:-:1  \@P2 F2F.F32.F16 loadA0, loadA0;\n",
-        j5c9  => "--:-:3:-:1  \@P2 F2F.F32.F16 loadA1, loadA1;\n",
-        j5c13 => "--:-:4:-:1  \@P2 F2F.F32.F16 loadA2, loadA2;\n",
-        j5c17 => "--:-:5:-:1  \@P2 F2F.F32.F16 loadA3, loadA3;\n",
+        j5c5  => "02:-:2:-:1  \@P2 $convert loadA0, loadA0;\n",
+        j5c9  => "--:-:3:-:1  \@P2 $convert loadA1, loadA1;\n",
+        j5c13 => "--:-:4:-:1  \@P2 $convert loadA2, loadA2;\n",
+        j5c17 => "--:-:5:-:1  \@P2 $convert loadA3, loadA3;\n",
 
         j5c29 => "02:-:-:-:1  \@P0 STS [writeS + 4x<0*128>], loadA0;\n",
         j5c31 => "04:-:-:-:1  \@P0 STS [writeS + 4x<1*128>], loadA1;\n",
         j5c33 => "08:-:-:-:1  \@P0 STS [writeS + 4x<2*128>], loadA2;\n",
         j5c35 => "10:-:-:-:1  \@P0 STS [writeS + 4x<3*128>], loadA3;\n",
 
-        j6c5  => "20:-:2:-:1  \@P3 F2F.F32.F16 loadB0, loadB0;\n",
-        j6c9  => "--:-:3:-:1  \@P3 F2F.F32.F16 loadB1, loadB1;\n",
-        j6c13 => "--:-:4:-:1  \@P3 F2F.F32.F16 loadB2, loadB2;\n",
-        j6c17 => "--:-:5:-:1  \@P3 F2F.F32.F16 loadB3, loadB3;\n",
+        j6c5  => "20:-:2:-:1  \@P3 $convert loadB0, loadB0;\n",
+        j6c9  => "--:-:3:-:1  \@P3 $convert loadB1, loadB1;\n",
+        j6c13 => "--:-:4:-:1  \@P3 $convert loadB2, loadB2;\n",
+        j6c17 => "--:-:5:-:1  \@P3 $convert loadB3, loadB3;\n",
 
         j6c29 => "02:-:-:-:1  \@P0 STS [writeS + 4x< 8*128>], loadB0;\n",
         j6c31 => "04:-:-:-:1  \@P0 STS [writeS + 4x< 9*128>], loadB1;\n",
@@ -371,6 +395,6 @@ REMAINDER:
                  "--:-:-:-:1      IADD32I k, k, -8;\n",
     );
     return;
-</CODE>
++]
 
 <INCLUDE file="hgemm_common_128x128.sass"/>

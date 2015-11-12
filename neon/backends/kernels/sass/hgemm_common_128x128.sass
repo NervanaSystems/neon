@@ -15,6 +15,88 @@
 # limitations under the License.
 
 
+[-
+
+our $int16;
+
+sub convert_in {
+    return $int16 ? 'I2F.F32.S16' : 'F2F.F32.F16';
+}
+
+
+sub convert_out {
+    return $int16 ? 'F2I.S16.F32': 'F2F.F16.F32';
+}
+
+
+sub scale_int16 {
+    return $int16? q{
+--:-:-:-:1      FMUL c0, c0, param_scale;
+--:-:-:-:1      FMUL c1, c1, param_scale;
+--:-:-:-:1      FMUL c2, c2, param_scale;
+--:-:-:-:0      FMUL c3, c3, param_scale;
+    } : "";
+}
+
+
+sub max_abs1 {
+    return $int16? q{
+--:-:-:-:1 @!P0 MOV cs0, RZ;
+--:-:-:-:1 @!P1 MOV cs1, RZ;
+--:-:-:-:1 @!P2 MOV cs2, RZ;
+--:-:-:-:1 @!P3 MOV cs3, RZ;
+
+--:-:-:-:1  @P0 VABSDIFF.S16.S16.MRG_16L cs0, c0, RZ, RZ;
+--:-:-:-:1  @P1 VABSDIFF.S16.S16.MRG_16L cs1, c1, RZ, RZ;
+--:-:-:-:1  @P2 VABSDIFF.S16.S16.MRG_16L cs2, c2, RZ, RZ;
+--:-:-:-:1  @P3 VABSDIFF.S16.S16.MRG_16L cs3, c3, RZ, RZ;
+    } : "";
+}
+
+
+sub max_abs2 {
+    return $int16? q{
+<SCHEDULE_BLOCK>
+
+// a = abs(a)
+--:-:-:-:1  @P0 VABSDIFF.S16.S16.MRG_16H cs0, c0, RZ, cs0;
+--:-:-:-:1  @P1 VABSDIFF.S16.S16.MRG_16H cs1, c1, RZ, cs1;
+--:-:-:-:1  @P2 VABSDIFF.S16.S16.MRG_16H cs2, c2, RZ, cs2;
+--:-:-:-:1  @P3 VABSDIFF.S16.S16.MRG_16H cs3, c3, RZ, cs3;
+
+// max = max(c,d,max(a,b,max)) ...
+--:-:-:-:1      VMNMX.UD.U16.U16.MX.MAX maxabs, cs0, cs0.H1, maxabs;
+--:-:-:-:1      VMNMX.UD.U16.U16.MX.MAX maxabs, cs1, cs1.H1, maxabs;
+--:-:-:-:1      VMNMX.UD.U16.U16.MX.MAX maxabs, cs2, cs2.H1, maxabs;
+--:-:-:-:1      VMNMX.UD.U16.U16.MX.MAX maxabs, cs3, cs3.H1, maxabs;
+</SCHEDULE_BLOCK>
+
+    } : "";
+}
+
+
+sub butterfly {
+    return $int16 ? q{
+--:-:-:-:0      LOP.AND.Z P0, RZ, tid, 31;
+--:-:1:-:2      SHFL.BFLY PT, warp_max, maxabs, 0x10, 0x1f;
+01:-:-:-:4      IMNMX maxabs, warp_max, maxabs, !PT;
+--:-:1:-:2      SHFL.BFLY PT, warp_max, maxabs, 0x8,  0x1f;
+01:-:-:-:4      IMNMX maxabs, warp_max, maxabs, !PT;
+--:-:1:-:2      SHFL.BFLY PT, warp_max, maxabs, 0x4,  0x1f;
+01:-:-:-:4      IMNMX maxabs, warp_max, maxabs, !PT;
+--:-:-:-:0      MOV Stats0, param_Stats[0];
+--:-:1:-:2      SHFL.BFLY PT, warp_max, maxabs, 0x2,  0x1f;
+01:-:-:-:4      IMNMX maxabs, warp_max, maxabs, !PT;
+--:-:-:-:0      MOV Stats1, param_Stats[1];
+--:-:1:-:2      SHFL.BFLY PT, warp_max, maxabs, 0x1,  0x1f;
+01:-:-:-:2      IMNMX maxabs, warp_max, maxabs, !PT;
+--:-:-:-:1  @P0 RED.E.MAX [Stats], maxabs;
+    } : "";
+}
+
+-]
+
+
 --:-:1:-:1      LDS.U.128 j0Ay0, [readAs + 4x<0*128 + 00>];
 --:-:1:-:1      LDS.U.128 j0Bx0, [readBs + 4x<0*128 + 00>];
 --:-:1:-:1      LDS.U.128 j0Ay4, [readAs + 4x<0*128 + 64>];
@@ -22,7 +104,7 @@
 
 LOOP:
 
-<CODE>
+[+
 
     our @top;
     our %insert;
@@ -63,7 +145,7 @@ LOOP:
 
             my $wait   = $c == 0 ? '01' : '--';
 
-            my $stall  = (split "\n", $ins)[0] =~ /LDS|F2F|I2I|LDG|STS|BAR|BRA/ ? 0 : 1;
+            my $stall  = (split "\n", $ins)[0] =~ /LDS|F2F|I2F|I2I|LDG|STS|BAR|BRA/ ? 0 : 1;
 
             my $ctrl   = "$wait:-:-:$yield:$stall";
 
@@ -72,7 +154,7 @@ LOOP:
     }
     return $out;
 
-</CODE>
++]
 
 --:-:-:-:1      IADD loop, loop, 1;
 --:-:-:-:1      IADD ta, ta, param_ldaz;
@@ -128,6 +210,7 @@ LOOP:
 --:-:-:-:1      MOV alpha, param_alpha;
 --:-:-:-:1      MOV beta,  param_beta;
 --:-:-:-:1      MOV flags, param_flags;
+--:-:-:-:1      MOV maxabs, RZ;
 
 --:-:-:-:1      ISETP.NE.AND P6, PT, beta, RZ, PT; // beta != 0
 
@@ -181,6 +264,7 @@ LOOP:
 
 </CODE>
 
+[+ butterfly() +]
 --:-:-:-:5      EXIT;
 
 STORE_C:
@@ -237,20 +321,22 @@ STORE_C:
 
 --:-:-:-:0      IADD cy04, cy04, 1;
 
-01:-:1:-:1  @P6 F2F.F32.F16 d0, d0;
-02:-:2:-:1  @P6 F2F.F32.F16 d1, d1;
-04:-:3:-:1  @P6 F2F.F32.F16 d2, d2;
-08:-:4:-:1  @P6 F2F.F32.F16 d3, d3;
+01:-:1:-:1  @P6 [+ convert_in() +] d0, d0;
+02:-:2:-:1  @P6 [+ convert_in() +] d1, d1;
+04:-:3:-:1  @P6 [+ convert_in() +] d2, d2;
+08:-:4:-:1  @P6 [+ convert_in() +] d3, d3;
 
 11:-:-:-:1  @P6 FFMA c0, d0, beta, c0;
 02:-:-:-:1  @P6 FFMA c1, d1, beta, c1;
 24:-:-:-:1  @P6 FFMA c2, d2, beta, c2;
-08:-:-:-:0  @P6 FFMA c3, d3, beta, c3;
+08:-:-:-:3  @P6 FFMA c3, d3, beta, c3;
 
---:-:1:-:1      F2F.F16.F32 c0, c0;
---:-:2:-:1      F2F.F16.F32 c1, c1;
---:-:3:-:1      F2F.F16.F32 c2, c2;
---:-:4:-:1      F2F.F16.F32 c3, c3;
+[+ scale_int16() +]
+
+--:-:1:-:1      [+ convert_out() +] c0, c0;
+--:-:2:-:1      [+ convert_out() +] c1, c1;
+--:-:3:-:1      [+ convert_out() +] c2, c2;
+--:-:4:-:1      [+ convert_out() +] c3, c3;
 
 <SCHEDULE_BLOCK>
 --:-:-:-:1      ISETP.LT.AND P4, PT, cx00, param_n, P6;
@@ -260,6 +346,8 @@ STORE_C:
 02:5:-:-:1  @P1 STG.E.S16 [C00y0 + 2x<64>], c1;
 04:-:-:-:1  @P2 STG.E.S16 [C04y0 + 2x<00>], c2;
 08:6:-:-:1  @P3 STG.E.S16 [C04y0 + 2x<64>], c3;
+
+[+ max_abs1() +]
 
 --:-:-:-:1      ISETP.LT.AND P0, PT, cy08, param_m, P4;
 --:-:-:-:1      ISETP.LT.AND P1, PT, cy08, param_m, P5;
@@ -296,25 +384,29 @@ STORE_C:
 --:-:-:-:1      LDS c2, [readCs + 4x<3*128 + 00>];
 --:-:6:-:1      LDS c3, [readCs + 4x<3*128 + 64>];
 
-01:-:1:-:4  @P6 F2F.F32.F16 d0, d0;
-02:-:2:-:4  @P6 F2F.F32.F16 d1, d1;
-04:-:3:-:4  @P6 F2F.F32.F16 d2, d2;
-08:-:4:-:1  @P6 F2F.F32.F16 d3, d3;
+01:-:1:-:4  @P6 [+ convert_in() +] d0, d0;
+02:-:2:-:4  @P6 [+ convert_in() +] d1, d1;
+04:-:3:-:4  @P6 [+ convert_in() +] d2, d2;
+08:-:4:-:1  @P6 [+ convert_in() +] d3, d3;
 
 11:-:-:-:1  @P6 FFMA c0, d0, beta, c0;
 02:-:-:-:1  @P6 FFMA c1, d1, beta, c1;
 24:-:-:-:1  @P6 FFMA c2, d2, beta, c2;
-08:-:-:-:0  @P6 FFMA c3, d3, beta, c3;
+08:-:-:-:3  @P6 FFMA c3, d3, beta, c3;
 
---:-:1:-:1      F2F.F16.F32 c0, c0;
---:-:2:-:1      F2F.F16.F32 c1, c1;
---:-:3:-:1      F2F.F16.F32 c2, c2;
---:-:4:-:1      F2F.F16.F32 c3, c3;
+[+ scale_int16() +]
+
+--:-:1:-:1      [+ convert_out() +] c0, c0;
+--:-:2:-:1      [+ convert_out() +] c1, c1;
+--:-:3:-:1      [+ convert_out() +] c2, c2;
+--:-:4:-:1      [+ convert_out() +] c3, c3;
 
 01:-:-:-:1  @P0 STG.E.S16 [C08y0 + 2x<00>], c0;
 02:5:-:-:1  @P1 STG.E.S16 [C08y0 + 2x<64>], c1;
 04:-:-:-:1  @P2 STG.E.S16 [C12y0 + 2x<00>], c2;
 08:6:-:-:1  @P3 STG.E.S16 [C12y0 + 2x<64>], c3;
+
+[+ max_abs2() +]
 
 10:-:-:-:6      IADD   C08y0.CC, C08y0, ldc1;
 --:-:-:-:1      IADD.X C08y1,    C08y1, RZ;

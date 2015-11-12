@@ -57,9 +57,6 @@ kernels = {
     "hgemm_nt_32x128":       {"threads": 128, "sass": "hgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4"},
     "hgemm_nn_vec_32x128":   {"threads": 128, "sass": "hgemm_nn_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4", "args": {"vec": "1"}},
     "hgemm_nt_vec_32x128":   {"threads": 128, "sass": "hgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4", "args": {"vec": "1"}},
-    "hpool_bprop_avg":       {"sass": "hpool_bprop_avg", "params": "pool2"},
-    "hpool_avg":             {"sass": "hpool_avg", "params": "pool"},
-    "hpool_max":             {"sass": "hpool_max", "params": "pool"},
 
     "sconv_bprop_C1_N64":    {"threads":  32, "sass": "sconv_bprop_C1_N64",    "params": "bprop1", "share": " 32*8*2 +  64*8*2"},
     "sconv_bprop_C128_N128": {"threads": 256, "sass": "sconv_xprop_X128_N128", "params": "bprop",  "share": "128*8*2 + 128*8*2 + 8", "args": {"prop": "b"}},
@@ -92,9 +89,6 @@ kernels = {
     "sgemm_nt_32x128":       {"threads": 128, "sass": "sgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4"},
     "sgemm_nn_vec_32x128":   {"threads": 128, "sass": "sgemm_nn_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4", "args": {"vec": "1"}},
     "sgemm_nt_vec_32x128":   {"threads": 128, "sass": "sgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4", "args": {"vec": "1"}},
-    "spool_bprop_avg":       {"sass": "spool_bprop_avg", "params": "pool2"},
-    "spool_avg":             {"sass": "spool_avg",       "params": "pool"},
-    "spool_max":             {"sass": "spool_max",       "params": "pool"},
 }
 
 _params = {
@@ -388,10 +382,10 @@ def get_cu_file(kernel_name):
     kernel_type = _dtypes[kernel_name[0]]
     param_spec  = _params[kernel_spec["params"]]
 
-    kerenl_params = []
+    kernel_params = []
     for p in param_spec:
-        kerenl_params.append("    " + p.format(kernel_type))
-    kerenl_params = ",\n".join(kerenl_params)
+        kernel_params.append("    " + p.format(kernel_type))
+    kernel_params = ",\n".join(kernel_params)
 
     # the first param is always an output pointer
     out_param = _pspace.split(param_spec[0])[1]
@@ -401,7 +395,7 @@ def get_cu_file(kernel_name):
     else:
         body = _no_share_template.format(out_param)
 
-    kernel_text = _kernel_template.format(kernel_name, kerenl_params, body)
+    kernel_text = _kernel_template.format(kernel_name, kernel_params, body)
     kernel_cu   = os.path.join(cu_dir, kernel_name + ".cu")
 
     current_text = ""

@@ -75,8 +75,7 @@ def test_pooling(backend_cpu64, poolargs):
     inp = inp.reshape((nin * nin * nifm, batch_size))
 
     lshape = (nifm, nin, nin)
-    layer = PoolingWithReset(fshape)
-    layer.op = op
+    layer = PoolingWithReset(fshape, op=op)
 
     pert_frac = 0.1  # test 10% of the inputs
     # select pert_frac fraction of inps to perturb

@@ -313,14 +313,20 @@ class Pooling(Layer):
             self.out_shape = (K, M, P, Q) if len(self.in_shape) == 4 else (K, P, Q)
         return self
 
+    def set_deltas(self, delta_buffers):
+        super(Pooling, self).set_deltas(delta_buffers)
+        if self.op == "max":
+            self.argmax = self.be.empty(self.outputs.shape, dtype=np.uint8)
+        else:
+            self.argmax = None
+
     def fprop(self, inputs, inference=False):
         self.inputs = inputs
-        self.be.fprop_pool(self.nglayer, inputs, self.outputs)
+        self.be.fprop_pool(self.nglayer, inputs, self.outputs, self.argmax)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
-        if self.deltas:
-            self.be.bprop_pool(self.nglayer, self.inputs, error, self.deltas, alpha, beta)
+        self.be.bprop_pool(self.nglayer, error, self.deltas, self.argmax, alpha, beta)
         return self.deltas
 
 

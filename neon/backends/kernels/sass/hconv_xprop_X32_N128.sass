@@ -14,12 +14,15 @@
 # limitations under the License.
 
 [-
-    our $prefix = 'h';
-    our $shareI = 128;
-    our $shareF = 32;
-    our $stepI  = 32;
-    our $stepF  = 16;
-    our $remapI = 1;
+    our $int16;
+    our $prefix  = 'h';
+    our $shareI  = 128;
+    our $shareF  = 32;
+    our $stepI   = 32;
+    our $stepF   = 16;
+    our $remapI  = 1;
+    our $convert = $int16 ? 'I2F.F32.S16' : 'F2F.F32.F16';
+    sub convert {return $convert;}
 -]
 
 <INCLUDE file="xconv_xprop_common.sass"/>
@@ -82,8 +85,9 @@
 
     72-91   : cs<0-7>, b<0-7>, c<0-3>
     92-93   : Out<0-1>
+    92-93   : Stats<0-1>
     94-95   : Sum<0-1>
-    96-140  ~ writeCs, readCs, alpha, beta, flags, tidOX, tidOX63, tidOY, to, k, n, MPQN, MPQN1, MPQN4, MPQN12, sum<0-3>
+    96-140  ~ writeCs, readCs, alpha, beta, flags, tidOX, tidOX63, tidOY, to, k, n, MPQN, MPQN1, MPQN4, MPQN12, sum<0-3>, max, warp_max
 
 </REGISTER_MAPPING>
 
@@ -151,33 +155,33 @@
 --:-:-:-:1 @!P1 LDS.U.128 load0I, [addr_zero];
 --:-:6:-:1 @!P1 LDS.U.128 load1I, [addr_zero];
 
-12:-:-:-:1      F2F.F32.F16 storeF3, loadF1.H1;
---:-:-:-:1      F2F.F32.F16 storeF2, loadF1.H0;
---:-:-:-:1      F2F.F32.F16 storeF1, loadF0.H1;
---:-:2:-:2      F2F.F32.F16 storeF0, loadF0.H0;
+12:-:-:-:1      [+ convert() +] storeF3, loadF1.H1;
+--:-:-:-:1      [+ convert() +] storeF2, loadF1.H0;
+--:-:-:-:1      [+ convert() +] storeF1, loadF0.H1;
+--:-:2:-:2      [+ convert() +] storeF0, loadF0.H0;
 
 02:1:-:-:2      STS.128 [writeFs], storeF0;
 
-25:-:-:-:1      F2F.F32.F16 store0I7, load0I3.H1;
---:-:-:-:1      F2F.F32.F16 store0I6, load0I3.H0;
---:-:-:-:1      F2F.F32.F16 store0I5, load0I2.H1;
---:-:2:-:1      F2F.F32.F16 store0I4, load0I2.H0;
---:-:-:-:1      F2F.F32.F16 store0I3, load0I1.H1;
---:-:-:-:1      F2F.F32.F16 store0I2, load0I1.H0;
---:-:-:-:1      F2F.F32.F16 store0I1, load0I0.H1;
---:-:3:-:1      F2F.F32.F16 store0I0, load0I0.H0;
+25:-:-:-:1      [+ convert() +] store0I7, load0I3.H1;
+--:-:-:-:1      [+ convert() +] store0I6, load0I3.H0;
+--:-:-:-:1      [+ convert() +] store0I5, load0I2.H1;
+--:-:2:-:1      [+ convert() +] store0I4, load0I2.H0;
+--:-:-:-:1      [+ convert() +] store0I3, load0I1.H1;
+--:-:-:-:1      [+ convert() +] store0I2, load0I1.H0;
+--:-:-:-:1      [+ convert() +] store0I1, load0I0.H1;
+--:-:3:-:1      [+ convert() +] store0I0, load0I0.H0;
 
 02:-:-:-:1      STS.128 [writeIs + 4x<32>], store0I4;
 04:1:-:-:2      STS.128 [writeIs + 4x<00>], store0I0;
 
-09:-:-:-:1      F2F.F32.F16 store1I7, load1I3.H1;
---:-:-:-:1      F2F.F32.F16 store1I6, load1I3.H0;
---:-:-:-:1      F2F.F32.F16 store1I5, load1I2.H1;
---:-:2:-:1      F2F.F32.F16 store1I4, load1I2.H0;
---:-:-:-:1      F2F.F32.F16 store1I3, load1I1.H1;
---:-:-:-:1      F2F.F32.F16 store1I2, load1I1.H0;
---:-:-:-:1      F2F.F32.F16 store1I1, load1I0.H1;
---:-:3:-:1      F2F.F32.F16 store1I0, load1I0.H0;
+09:-:-:-:1      [+ convert() +] store1I7, load1I3.H1;
+--:-:-:-:1      [+ convert() +] store1I6, load1I3.H0;
+--:-:-:-:1      [+ convert() +] store1I5, load1I2.H1;
+--:-:2:-:1      [+ convert() +] store1I4, load1I2.H0;
+--:-:-:-:1      [+ convert() +] store1I3, load1I1.H1;
+--:-:-:-:1      [+ convert() +] store1I2, load1I1.H0;
+--:-:-:-:1      [+ convert() +] store1I1, load1I0.H1;
+--:-:3:-:1      [+ convert() +] store1I0, load1I0.H0;
 
 02:-:-:-:1      STS.128 [writeIs + 4x<96>], store1I4;
 04:1:-:-:1      STS.128 [writeIs + 4x<64>], store1I0;
@@ -189,6 +193,7 @@
 --:5:4:-:1  @P1 LDG.E.128   load1I, [trackI + 2x<64>];
 
 [-
+    our $convert;
     our %insert =
     (
         j0c1  => "--:-:-:-:1      ISETP.GE.AND P1, PT, posCRST,  RZ, PT;\n",
@@ -203,10 +208,10 @@
         j1c8  => "20:-:-:-:1  \@P1 VMAD.U16.U16 lutOffset, -channel, lutSize, posCRST;\n",
         j1c13 => "--:-:-:-:1  \@P1 SHL lutOffset, lutOffset, 3;\n",
 
-        j1c33 => "02:-:-:-:1  \@P0 F2F.F32.F16 storeF3, loadF1.H1;\n",
-        j1c37 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeF2, loadF1.H0;\n",
-        j1c41 => "--:-:-:-:1  \@P0 F2F.F32.F16 storeF1, loadF0.H1;\n",
-        j1c45 => "--:-:2:-:1  \@P0 F2F.F32.F16 storeF0, loadF0.H0;\n",
+        j1c33 => "02:-:-:-:1  \@P0 $convert storeF3, loadF1.H1;\n",
+        j1c37 => "--:-:-:-:1  \@P0 $convert storeF2, loadF1.H0;\n",
+        j1c41 => "--:-:-:-:1  \@P0 $convert storeF1, loadF0.H1;\n",
+        j1c45 => "--:-:2:-:1  \@P0 $convert storeF0, loadF0.H0;\n",
 
         j1c60 => "02:-:-:-:1  \@P0 STS.128 [writeFs], storeF0;\n",
 
@@ -225,14 +230,14 @@
         j2c40 => "--:-:2:-:1  \@P1 LDG.E.CI.64 loadF0, [trackF];\n",
 
 
-        j3c29 => "04:-:-:-:1  \@P0 F2F.F32.F16 store0I7, load0I3.H1;\n",
-        j3c33 => "--:-:-:-:1  \@P0 F2F.F32.F16 store0I6, load0I3.H0;\n",
-        j3c37 => "--:-:-:-:1  \@P0 F2F.F32.F16 store0I5, load0I2.H1;\n",
-        j3c41 => "--:-:6:-:1  \@P0 F2F.F32.F16 store0I4, load0I2.H0;\n",
-        j3c45 => "--:-:-:-:1  \@P0 F2F.F32.F16 store0I3, load0I1.H1;\n",
-        j3c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 store0I2, load0I1.H0;\n",
-        j3c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 store0I1, load0I0.H1;\n",
-        j3c57 => "--:-:3:-:1  \@P0 F2F.F32.F16 store0I0, load0I0.H0;\n",
+        j3c29 => "04:-:-:-:1  \@P0 $convert store0I7, load0I3.H1;\n",
+        j3c33 => "--:-:-:-:1  \@P0 $convert store0I6, load0I3.H0;\n",
+        j3c37 => "--:-:-:-:1  \@P0 $convert store0I5, load0I2.H1;\n",
+        j3c41 => "--:-:6:-:1  \@P0 $convert store0I4, load0I2.H0;\n",
+        j3c45 => "--:-:-:-:1  \@P0 $convert store0I3, load0I1.H1;\n",
+        j3c49 => "--:-:-:-:1  \@P0 $convert store0I2, load0I1.H0;\n",
+        j3c53 => "--:-:-:-:1  \@P0 $convert store0I1, load0I0.H1;\n",
+        j3c57 => "--:-:3:-:1  \@P0 $convert store0I0, load0I0.H0;\n",
 
         j3c59 => "20:-:-:-:1  \@P0 STS.128 [writeIs + 4x<32>], store0I4;\n",
         j4c8  => "04:3:-:-:1  \@P0 STS.128 [writeIs + 4x<00>], store0I0;\n",
@@ -243,14 +248,14 @@
         j4c61 => "04:-:3:-:1  \@P1 LDG.E.128 load0I0, [trackI + 2x<00>];\n",
 
 
-        j5c29 => "08:-:-:-:1  \@P0 F2F.F32.F16 store1I7, load1I3.H1;\n",
-        j5c33 => "--:-:-:-:1  \@P0 F2F.F32.F16 store1I6, load1I3.H0;\n",
-        j5c37 => "--:-:-:-:1  \@P0 F2F.F32.F16 store1I5, load1I2.H1;\n",
-        j5c41 => "--:-:6:-:1  \@P0 F2F.F32.F16 store1I4, load1I2.H0;\n",
-        j5c45 => "--:-:-:-:1  \@P0 F2F.F32.F16 store1I3, load1I1.H1;\n",
-        j5c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 store1I2, load1I1.H0;\n",
-        j5c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 store1I1, load1I0.H1;\n",
-        j5c57 => "--:-:4:-:1  \@P0 F2F.F32.F16 store1I0, load1I0.H0;\n",
+        j5c29 => "08:-:-:-:1  \@P0 $convert store1I7, load1I3.H1;\n",
+        j5c33 => "--:-:-:-:1  \@P0 $convert store1I6, load1I3.H0;\n",
+        j5c37 => "--:-:-:-:1  \@P0 $convert store1I5, load1I2.H1;\n",
+        j5c41 => "--:-:6:-:1  \@P0 $convert store1I4, load1I2.H0;\n",
+        j5c45 => "--:-:-:-:1  \@P0 $convert store1I3, load1I1.H1;\n",
+        j5c49 => "--:-:-:-:1  \@P0 $convert store1I2, load1I1.H0;\n",
+        j5c53 => "--:-:-:-:1  \@P0 $convert store1I1, load1I0.H1;\n",
+        j5c57 => "--:-:4:-:1  \@P0 $convert store1I0, load1I0.H0;\n",
 
         j5c59 => "20:-:-:-:1  \@P0 STS.128 [writeIs + 4x<96>], store1I4;\n",
         j6c8  => "08:4:-:-:1  \@P0 STS.128 [writeIs + 4x<64>], store1I0;\n",

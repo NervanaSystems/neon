@@ -790,21 +790,26 @@ class PoolLayer(Layer):
         magic_S     = _magic32(RS+32, S)
         magic_P     = _magic32(PM, P)
 
-        fprop_name = clss + "_" + op
+        fprop_name = "fprop_" + op
+        bprop_name = "bprop_" + op
 
-        self.fprop_kernel = [fprop_name, (Q, PM, K), (N, 1, 1), bprop_zero, _flatten([
+        self.fprop_kernel = [fprop_name, (Q, PM, K), (N, 1, 1), _flatten([
             N, W, H, D, C, WN, HWN, DHWN,
             P, Q, magic_P, QN, PQN, MPQN,
             pad_c, pad_d, pad_h, pad_w,
             str_c, str_d, str_h, str_w,
-            S, RS, RST, JRST, magic_S, magic_RS, magic_RST, self.overlap])]
+            S, RS, RST, JRST, magic_S, magic_RS, magic_RST])]
 
-        self.fprop_lut_size = (JRST + 4) * 4
+        lut_size = JRST
+        if lut_size % 4 != 0:
+            lut_size += 4 - lut_size % 4
 
-        if op == "avg" and self.overlap > 0:
+        self.bprop_lut_size = self.fprop_lut_size = lut_size * 4
+
+        if self.overlap > 0:
 
             # we have a special kernel to handle the overlapping avg pooling
-            bprop_name  = clss + "_bprop_avg"
+            bprop_name += "_overlap"
 
             magic_H     = _magic32(DH, H)
             magic_str_w = _magic32(W + S, str_w)
@@ -812,7 +817,7 @@ class PoolLayer(Layer):
             magic_str_d = _magic32(D + T, str_d)
             magic_str_c = _magic32(C + J, str_c)
 
-            self.bprop_kernel = [bprop_name, (W, DH, C), (N, 1, 1), False, _flatten([
+            self.bprop_kernel = [bprop_name, (W, DH, C), (N, 1, 1), _flatten([
                 N, W, H, D, C, WN, HWN, DHWN, magic_H,
                 pad_w, pad_h, pad_d, pad_c,
                 str_w, str_h, str_d, str_c,
@@ -820,14 +825,17 @@ class PoolLayer(Layer):
                 S, R, T, J, RS, RST, JRST, magic_S, magic_RS, magic_RST,
                 Q, P, M, K, QN, PQN, MPQN])]
 
-            self.bprop_lut_size = (JRST + 1) * 4 * 2
-
+            self.bprop_lut_size *= 2
         else:
-            self.bprop_kernel   = self.fprop_kernel
-            self.bprop_lut_size = self.fprop_lut_size
+            self.bprop_kernel = [bprop_name, (Q, PM, K), (N, 1, 1), _flatten([
+                N, W, H, D, C, WN, HWN, DHWN,
+                P, Q, magic_P, QN, PQN, MPQN,
+                pad_c, pad_d, pad_h, pad_w,
+                str_c, str_d, str_h, str_w,
+                S, RS, RST, JRST, magic_S, magic_RS, magic_RST])]
 
     def fprop(self, fprop_in, scale_weights=0):
-
+        """ Used for benchmarking only"""
         fprop_in = super(PoolLayer, self).fprop(fprop_in)
         self.lib.fprop_pool(self, fprop_in, self.fprop_out)
         return self.fprop_out

@@ -72,11 +72,12 @@ def run_backend_pool(lib, layer, I, E, dtype):
     beI = lib.array(I, dtype=dtype)
     beE = lib.array(E, dtype=dtype)
     beO = lib.zeros(layer.dimO, dtype=dtype)
+    beA = lib.zeros(layer.dimO, dtype=np.int8)
     beB = lib.zeros(layer.dimI, dtype=dtype)
 
     for i in range(repeat):
-        lib.fprop_pool(layer, beI, beO)
-        lib.bprop_pool(layer, beI, beE, beB)
+        lib.fprop_pool(layer, beI, beO, beA)
+        lib.bprop_pool(layer, beE, beB, beA)
 
     return beO, beB
 

@@ -1183,7 +1183,7 @@ class NervanaCPU(Backend):
         return PoolLayer(self, dtype, op, N, C, D, H, W, J, T, R, S,
                          pad_c, pad_d, pad_h, pad_w, str_c, str_d, str_h, str_w)
 
-    def fprop_pool(self, layer, I, O):
+    def fprop_pool(self, layer, I, O, argmax=None):
         """
         Forward propagate pooling layer.
 
@@ -1192,10 +1192,13 @@ class NervanaCPU(Backend):
                                different pool layers.
             I (Tensor): Input tensor.
             O (Tensor): output tensor.
+            argmax (Tensor): tensor to store location of the maximum
         """
 
         assert layer.sizeI == I.size
         assert layer.sizeO == O.size
+        if layer.op == "max":
+            assert layer.sizeO == argmax.size
         op = layer.op
 
         J, T, R, S = layer.JTRS
@@ -1208,6 +1211,8 @@ class NervanaCPU(Backend):
 
         array_I = I.get().reshape(layer.dimI)
         array_O = O.get().reshape(layer.dimO)
+        if op == "max":
+            array_argmax = argmax.get().reshape(layer.dimO)
 
         for k in range(K):
             sliceC = layer.pool_slice(k, J, C, pad_c, str_c)
@@ -1230,32 +1235,32 @@ class NervanaCPU(Backend):
 
                         sliceI = array_I.reshape((-1, N))
                         if op == "max":
-                            array_O[k, m, p, q, :] = np.max(
-                                sliceI[sliceCDHW, :], axis=0)
+                            array_argmax[k, m, p, q, :] = np.argmax(sliceI[sliceCDHW, :], axis=0)
+                            array_O[k, m, p, q, :] = np.max(sliceI[sliceCDHW, :], axis=0)
                         elif op == "avg":
-                            array_O[k, m, p, q, :] = np.mean(
-                                sliceI[sliceCDHW, :], axis=0)
+                            array_O[k, m, p, q, :] = np.mean(sliceI[sliceCDHW, :], axis=0)
                         elif op == "l2":
                             array_O[k, m, p, q, :] = np.sqrt(np.sum(
                                 np.square(sliceI[sliceCDHW, :]), axis=0))
 
-    def bprop_pool(self, layer, I, E, delta, alpha=1.0, beta=0.0):
+    def bprop_pool(self, layer, I, O, argmax=None, alpha=1.0, beta=0.0):
         """
         Backward propagate pooling layer.
 
         Arguments:
             layer (PoolLayer): The pool layer object. Different backends have
                                different pool layers.
-            I (Tensor): Input tensor.
-            E (Tensor): Error tensor.
-            delta (Tensor): Gradient tensor (delta)
+            I (Tensor): Input (error) tensor.
+            O (Tensor): Output (delta) tensor.
+            argmax (Tensor): tensor to store location of the maximum
             alpha (float): linear scaling (does not work for l2 pooling)
             beta (float): accumulation value into grad_I
         """
 
-        assert layer.sizeI == I.size
-        assert layer.sizeO == E.size
-        assert layer.sizeI == delta.size
+        assert layer.sizeI == O.size
+        assert layer.sizeO == I.size
+        if layer.op == "max":
+            assert layer.sizeO == argmax.size
         op = layer.op
 
         J, T, R, S = layer.JTRS
@@ -1266,11 +1271,12 @@ class NervanaCPU(Backend):
         WH = W * H
         DWH = D * W * H
 
-        array_I = I.get().reshape(layer.dimI)
-        array_E = E.get().reshape(layer.dimO)
+        array_E = I.get().reshape(layer.dimO)
         array_E[:] = array_E * alpha
-        array_delta = delta.get().reshape(layer.dimI)
+        array_delta = O.get().reshape(layer.dimI)
         array_delta[:] = array_delta * beta
+        if op == "max":
+            array_argmax = argmax.get().reshape(layer.dimO)
 
         for k in range(K):
             sliceC = layer.pool_slice(k, J, C, pad_c, str_c)
@@ -1294,11 +1300,10 @@ class NervanaCPU(Backend):
                         sliceB = array_delta.reshape((-1, N))
 
                         if op == "max":
-                            sliceI = array_I.reshape((-1, N))
-                            max_idx = np.argmax(sliceI[sliceCDHW, :], axis=0)
                             for n in range(N):
+                                max_n = array_argmax[k, m, p, q, n]
                                 sliceB[
-                                    sliceCDHW[max_idx[n]], n] += array_E[k, m, p, q, n]
+                                    sliceCDHW[max_n], n] += array_E[k, m, p, q, n]
                         elif op == "avg":
                             sliceB[
                                 sliceCDHW, :] += array_E[k, m, p, q, :] * (1.0 / sliceCDHW.size)
