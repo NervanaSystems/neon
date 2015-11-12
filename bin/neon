@@ -146,7 +146,7 @@ if __name__ == "__main__":
                                         batch_size=batch_size,
                                         rng_seed=args.rng_seed,
                                         device_id=args.device_id,
-                                        datatype=args.datatype,
+                                        default_dtype=args.datatype,
                                         stochastic_rounding=args.rounding)
 
     if args.model_file:
