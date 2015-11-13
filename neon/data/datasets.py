@@ -124,7 +124,64 @@ def load_mnist(path=".", normalize=True):
         return (X_train, y_train), (X_test, y_test), 10
 
 
-def load_cifar10(path=".", normalize=True):
+def _compute_zca_transform(imgs, filter_bias=0.1):
+    """
+    Compute the zca whitening transform matrix
+    """
+    logger.info("Computing ZCA transform matrix")
+    meanX = np.mean(imgs, 0)
+
+    covX = np.cov(imgs.T)
+    D, E = np.linalg.eigh(covX)
+
+    assert not np.isnan(D).any()
+    assert not np.isnan(E).any()
+    assert D.min() > 0
+
+    D = D ** -.5
+
+    W = np.dot(E, np.dot(np.diag(D), E.T))
+    return meanX, W
+
+
+def zca_whiten(train, test, cache=None):
+    """
+    Use train set statistics to apply the ZCA whitening transform to
+    both train and test sets.
+    """
+    if cache and os.path.isfile(cache):
+        with open(cache, 'rb') as f:
+            (meanX, W) = cPickle.load(f)
+    else:
+        meanX, W = _compute_zca_transform(train)
+        if cache:
+            logger.info("Caching ZCA transform matrix")
+            with open(cache, 'wb') as f:
+                cPickle.dump((meanX, W), f)
+
+    logger.info("Applying ZCA whitening transform")
+    train_w = np.dot(train - meanX, W)
+    test_w = np.dot(test - meanX, W)
+
+    return train_w, test_w
+
+
+def global_contrast_normalize(X, scale=1., min_divisor=1e-8):
+    """
+    Subtract mean and normalize by vector norm
+    """
+
+    X = X - X.mean(axis=1)[:, np.newaxis]
+
+    normalizers = np.sqrt((X ** 2).sum(axis=1)) / scale
+    normalizers[normalizers < min_divisor] = 1.
+
+    X /= normalizers[:, np.newaxis]
+
+    return X
+
+
+def load_cifar10(path=".", normalize=True, whiten=False):
     """
     Fetch the CIFAR-10 dataset and load it into memory.
 
@@ -165,8 +222,13 @@ def load_cifar10(path=".", normalize=True):
     y_test = np.array(y_test).reshape(-1, 1)
 
     if normalize:
-        X_train = X_train / 255.
-        X_test = X_test / 255.
+        norm_scale = 55.0  # Goodfellow
+        X_train = global_contrast_normalize(X_train, scale=norm_scale)
+        X_test = global_contrast_normalize(X_test, scale=norm_scale)
+
+    if whiten:
+        zca_cache = os.path.join(workdir, 'cifar-10-zca-cache.pkl')
+        X_train, X_test = zca_whiten(X_train, X_test, cache=zca_cache)
 
     return (X_train, y_train), (X_test, y_test), 10
 

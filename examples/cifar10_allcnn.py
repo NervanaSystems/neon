@@ -22,7 +22,7 @@ Reference:
 ..  _[Springenber2015]: http://arxiv.org/pdf/1412.6806.pdf
 """
 
-from neon.initializers import GlorotUniform
+from neon.initializers import Gaussian
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
@@ -33,28 +33,33 @@ from neon.util.argparser import NeonArgparser
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
+parser.add_argument("--learning_rate", default=0.05, help="initial learning rate")
+parser.add_argument("--weight_decay", default=0.001, help="weight decay")
 args = parser.parse_args()
 
 # hyperparameters
 num_epochs = args.epochs
 
-(X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
+(X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir,
+                                                            normalize=True,
+                                                            whiten=True)
 
 # really 10 classes, pad to nearest power of 2 to match conv output
 train_set = DataIterator(X_train, y_train, nclass=16, lshape=(3, 32, 32))
 valid_set = DataIterator(X_test, y_test, nclass=16, lshape=(3, 32, 32))
 
-init_uni = GlorotUniform()
-opt_gdm = GradientDescentMomentum(learning_rate=0.5, momentum_coef=0.9, wdecay=.0001,
+init_uni = Gaussian(scale=0.05)
+opt_gdm = GradientDescentMomentum(learning_rate=float(args.learning_rate), momentum_coef=0.9,
+                                  wdecay=float(args.weight_decay),
                                   schedule=Schedule(step_config=[200, 250, 300], change=0.1))
 
 relu = Rectlin()
-conv = dict(init=init_uni, batch_norm=True, activation=relu)
-convp1 = dict(init=init_uni, batch_norm=True, activation=relu, padding=1)
-convp1s2 = dict(init=init_uni, batch_norm=True, activation=relu, padding=1, strides=2)
+conv = dict(init=init_uni, batch_norm=False, activation=relu)
+convp1 = dict(init=init_uni, batch_norm=False, activation=relu, padding=1)
+convp1s2 = dict(init=init_uni, batch_norm=False, activation=relu, padding=1, strides=2)
 
 layers = [Dropout(keep=.8),
-          Conv((3, 3, 96), **conv),
+          Conv((3, 3, 96), **convp1),
           Conv((3, 3, 96), **convp1),
           Conv((3, 3, 96), **convp1s2),
           Dropout(keep=.5),
@@ -62,10 +67,10 @@ layers = [Dropout(keep=.8),
           Conv((3, 3, 192), **convp1),
           Conv((3, 3, 192), **convp1s2),
           Dropout(keep=.5),
-          Conv((3, 3, 192), **conv),
+          Conv((3, 3, 192), **convp1),
           Conv((1, 1, 192), **conv),
-          Conv((1, 1, 16), init=init_uni, activation=relu),
-          Pooling(6, op="avg"),
+          Conv((1, 1, 16), **conv),
+          Pooling(8, op="avg"),
           Activation(Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
