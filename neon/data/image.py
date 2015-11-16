@@ -107,7 +107,8 @@ class ImgEndpoint(NervanaObject):
             if r not in dataset_cache:
                 raise ValueError("Dataset cache missing required attribute %s" % (r))
 
-        if dataset_cache['global_mean'].shape != (3, 1):
+        global_mean = dataset_cache['global_mean']
+        if global_mean is not None and global_mean.shape != (3, 1):
             raise ValueError('Dataset cache global mean is not in the proper format. Run '
                              'neon/util/update_dataset_cache.py utility on %s.' % cache_filepath)
 
