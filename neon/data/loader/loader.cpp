@@ -465,6 +465,7 @@ public:
     }
 
     int start() {
+        _first = true;
         try {
             _readBufs =
                 new InBufferPool(_minibatchSize * _itemMaxSize,
@@ -503,6 +504,21 @@ public:
         while (_decodePool->stopped() == false) {
             std::this_thread::yield();
         }
+        delete _readBufs;
+        delete _readPool;
+        delete _decodeBufs;
+        delete _decodePool;
+        _readBufs = 0;
+        _readPool = 0;
+        _decodeBufs = 0;
+        _decodePool = 0;
+    }
+
+    int reset() {
+        stop();
+        _reader->reset();
+        start();
+        return 0;
     }
 
     void next(Buffer<DataType>* dataBuf, Buffer<LabelType>* labelBuf) {
@@ -737,8 +753,11 @@ extern int next(ImageLoader* loader) {
 }
 
 extern int reset(ImageLoader* loader) {
-    // TODO
-    return 0;
+    try {
+        return loader->reset();
+    } catch(...) {
+        return -1;
+    }
 }
 
 extern int stop(ImageLoader* loader) {
