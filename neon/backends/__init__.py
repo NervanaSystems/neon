@@ -119,13 +119,13 @@ def cleanup_backend():
     from neon.backends.nervanacpu import NervanaCPU
     if type(be) is not NervanaCPU:
         from neon.backends.nervanagpu import NervanaGPU
-        from neon.backends.nervanamgpu import NervanaMGPU
-        assert type(be) is NervanaGPU or type(be) is NervanaMGPU
         try:
             if type(be) is NervanaGPU:
                 be.ctx.pop()
                 be.ctx.detach()
             else:
+                from neon.backends.nervanamgpu import NervanaMGPU
+                assert type(be) is NervanaMGPU
                 for ctx in be.ctxs:
                     ctx.pop()
                     ctx.detach()

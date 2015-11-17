@@ -140,7 +140,7 @@ class Layer(NervanaObject):
             delta_buffers (list): list of pre-allocated tensors (provided by layer container)
 
         """
-        if self.next_layer is None or self.next_layer.parallelism != self.parallelism:
+        if self.next_layer is not None and self.next_layer.parallelism != self.parallelism:
             self.owns_delta = True
 
         if self.owns_delta and self.prev_layer:

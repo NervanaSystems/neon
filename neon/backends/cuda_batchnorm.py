@@ -18,6 +18,7 @@ from pycuda.tools import context_dependent_memoize
 #                                           _reduction_ops)
 from neon.backends.cuda_templates import (_common_round,
                                           _ew_types,
+                                          _common_fp16_to_fp32,
                                           _ew_strings)
 
 
