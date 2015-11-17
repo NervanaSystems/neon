@@ -63,5 +63,35 @@ def get_compute_capability(device_id=None, verbose=False):
 
     return max(full_version)
 
+def get_device_count(verbose=False):
+    """
+    Query device count through PyCuda.
+
+    Arguments:
+        verbose (bool): prints verbose logging if True, default False.
+
+    Returns:
+        int: Number of GPUs available.
+    """
+    try:
+        import pycuda
+        import pycuda.driver as drv
+    except ImportError:
+        if verbose:
+            print("PyCUDA module not found")
+        return 0
+    try:
+        drv.init()
+    except pycuda._driver.RuntimeError as e:
+        print("PyCUDA Runtime error: {0}".format(str(e)))
+        return 0
+
+    count = drv.Device.count()
+
+    if verbose:
+        print "Found %d GPU(s)", count
+
+    return count
+
 if __name__ == '__main__':
     print get_compute_capability(verbose=False)

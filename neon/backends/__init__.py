@@ -24,11 +24,12 @@ import numpy as np
 
 from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
+from neon.backends.util.check_gpu import get_device_count
 
 
 def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
-                max_devices=4):
+                max_devices=get_device_count()):
     """
     Construct and return a backend instance of the appropriate type based on
     the arguments given. With no parameters, a single CPU core, float32
@@ -95,7 +96,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 be = NervanaMGPU(rng_seed=rng_seed,
                                  default_dtype=datatype,
                                  stochastic_round=stochastic_round,
-                                 max_devices=max_devices)
+                                 num_devices=max_devices)
             except ImportError:
                 logger.error("Multi-GPU support is a premium feature "
                              "available exclusively through the Nervana cloud."

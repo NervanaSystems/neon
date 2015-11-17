@@ -31,7 +31,7 @@ import inspect
 
 from neon import __version__ as neon_version
 from neon.backends import gen_backend
-from neon.backends.util.check_gpu import get_compute_capability
+from neon.backends.util.check_gpu import get_compute_capability, get_device_count
 from neon.callbacks.callbacks import Callbacks
 
 logger = logging.getLogger(__name__)
@@ -134,7 +134,7 @@ class NeonArgparser(configargparse.ArgumentParser):
                                  'info@nervanasys.com for details.')
         be_grp.add_argument('-i', '--device_id', type=int, default=0,
                             help='gpu device id (only used with GPU backend)')
-        be_grp.add_argument('-m', '--max_devices', type=int, default=4,
+        be_grp.add_argument('-m', '--max_devices', type=int, default=get_device_count(),
                             help='max number of GPUs (only used with mgpu backend')
 
         be_grp.add_argument('-r', '--rng_seed', type=int,
