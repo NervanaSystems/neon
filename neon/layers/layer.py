@@ -35,14 +35,6 @@ def interpret_in_shape(xshape):
         else:
             return (np.prod(xshape), 1)
 
-
-class LayerParallelism:
-    """
-    Enumerator for layer parallelism types
-    """
-    Unknown, Disabled, Data, Model = range(4)
-
-
 class Layer(NervanaObject):
 
     """
@@ -51,12 +43,12 @@ class Layer(NervanaObject):
 
     Arguments:
         name (string): Name identifying this layer (in logs, etc.)
-        parallelism (int): Type of parallelism preferred by this layer. See
-            LayerParallelism for possible values. Only applicable to
+        parallelism (int): Type of parallelism preferred by this layer. Possible
+            values are "Unknown", "Disabled", and "Data". Only applicable to
             distributed backends (see gen_backend for details).
     """
 
-    def __init__(self, name="layer", parallelism=LayerParallelism.Unknown):
+    def __init__(self, name="layer", parallelism="Unknown"):
         super(Layer, self).__init__(name)
         self.outputs = None
         self.has_params = False
@@ -99,7 +91,7 @@ class Layer(NervanaObject):
         if isinstance(in_obj, Layer):
             self.prev_layer = in_obj
             self.in_shape = in_obj.out_shape
-            if self.parallelism == LayerParallelism.Unknown:
+            if self.parallelism == "Unknown":
                 self.parallelism = in_obj.parallelism
         else:
             self.prev_layer = None
@@ -366,7 +358,7 @@ class ParameterLayer(Layer):
     """
 
     def __init__(self, init=None, name="ParameterLayer",
-                 parallelism=LayerParallelism.Unknown):
+                 parallelism="Unknown"):
         super(ParameterLayer, self).__init__(name, parallelism)
         self.has_params = True
         self.init = init
@@ -401,10 +393,10 @@ class ParameterLayer(Layer):
         self.init.fill(self.W)
 
     def get_param_attrs(self):
-        if self.parallelism == LayerParallelism.Data:
+        if self.parallelism == "Data":
             parallel = True
             distributed = False
-        elif self.parallelism == LayerParallelism.Model:
+        elif self.parallelism == "Model":
             parallel = True
             distributed = True
         else:
@@ -479,7 +471,7 @@ class Convolution(ParameterLayer):
     """
 
     def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
-                 name="ConvolutionLayer", parallelism=LayerParallelism.Data):
+                 name="ConvolutionLayer", parallelism="Data"):
         super(Convolution, self).__init__(init, name, parallelism)
         self.nglayer = None
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
@@ -642,7 +634,7 @@ class Linear(ParameterLayer):
     """
 
     def __init__(self, nout, init, bsum=False, name="LinearLayer"):
-        super(Linear, self).__init__(init, name, LayerParallelism.Disabled)
+        super(Linear, self).__init__(init, name, "Disabled")
         self.nout = nout
         self.inputs = None
         self.bsum = bsum
@@ -1026,7 +1018,7 @@ class GeneralizedCost(NervanaObject):
         self.prev_layer = in_obj
         (_, self.nstep) = interpret_in_shape(in_obj.out_shape)
         self.outputs = self.be.iobuf((1, self.nstep))
-        self.deltas = self.be.iobuf(in_obj.out_shape, parallelism=LayerParallelism.Disabled)
+        self.deltas = self.be.iobuf(in_obj.out_shape, parallelism="Disabled")
         self.cost = self.be.empty((1, 1))
 
     def get_cost(self, inputs, targets):
@@ -1162,10 +1154,10 @@ class BatchNorm(Layer):
             self.compute_batch_sum = False
 
     def init_params(self, dim0):
-        if self.parallelism == LayerParallelism.Data:
+        if self.parallelism == "Data":
             parallel = True
             distributed = False
-        elif self.parallelism == LayerParallelism.Model:
+        elif self.parallelism == "Model":
             parallel = True
             distributed = True
         else:

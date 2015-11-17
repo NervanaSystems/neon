@@ -1,5 +1,5 @@
 import numpy as np
-from neon.layers.layer import Layer, BranchNode, Dropout, LayerParallelism
+from neon.layers.layer import Layer, BranchNode, Dropout
 from neon import NervanaObject
 from operator import add
 
@@ -87,7 +87,7 @@ class Sequential(LayerContainer):
             in_sizes = [np.prod(l.in_shape) for l in self.layers[1:]]
             if in_sizes:
                 self.global_deltas = [self.be.iobuf(
-                    max(in_sizes), parallelism=LayerParallelism.Data) for _ in range(ndelta_bufs)]
+                    max(in_sizes), parallelism="Data") for _ in range(ndelta_bufs)]
             else:
                 self.global_deltas = None
         else:
