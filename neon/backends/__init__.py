@@ -91,7 +91,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                             stochastic_round=stochastic_round, device_id=device_id)
         else:
             try:
-                from neon.backends.nervanamgpu import NervanaMGPU
+                from mgpu.nervanamgpu import NervanaMGPU
                 # init multiple GPU
                 be = NervanaMGPU(rng_seed=rng_seed,
                                  default_dtype=datatype,
@@ -124,7 +124,7 @@ def cleanup_backend():
                 be.ctx.pop()
                 be.ctx.detach()
             else:
-                from neon.backends.nervanamgpu import NervanaMGPU
+                from mgpu.nervanamgpu import NervanaMGPU
                 assert type(be) is NervanaMGPU
                 for ctx in be.ctxs:
                     ctx.pop()

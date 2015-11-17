@@ -35,6 +35,7 @@ def interpret_in_shape(xshape):
         else:
             return (np.prod(xshape), 1)
 
+
 class Layer(NervanaObject):
 
     """

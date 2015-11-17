@@ -63,6 +63,7 @@ def get_compute_capability(device_id=None, verbose=False):
 
     return max(full_version)
 
+
 def get_device_count(verbose=False):
     """
     Query device count through PyCuda.
