@@ -53,7 +53,7 @@ if args.callback_args['serialize'] is None:
 args.batch_size = 64
 time_steps = 64
 hidden_size = 512
-clip_gradients = True
+gradient_clip_value = 5
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
@@ -78,7 +78,7 @@ model = Model(layers=layers)
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
-optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.rounding)
+optimizer = RMSProp(gradient_clip_value=gradient_clip_value, stochastic_round=args.rounding)
 
 # configure callbacks
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)

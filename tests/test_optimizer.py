@@ -148,7 +148,7 @@ def test_multi_optimizer(backend_default):
     opt_ada = Adadelta()
     opt_adam = Adam()
     opt_rms = RMSProp()
-    opt_rms_1 = RMSProp(clip_gradients=True)
+    opt_rms_1 = RMSProp(gradient_clip_value=5)
     init_one = Gaussian(scale=0.01)
 
     l1 = Conv((11, 11, 64), strides=4, padding=3,

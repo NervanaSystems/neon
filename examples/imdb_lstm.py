@@ -40,8 +40,7 @@ args = parser.parse_args(gen_be=False)
 
 # hyperparameters from the reference
 args.batch_size = 128
-clip_gradients = True
-gradient_limit = 15
+gradient_clip_value = 15
 vocab_size = 20000
 sentence_length = 100
 embedding_dim = 128
@@ -79,7 +78,7 @@ layers = [
 model = Model(layers=layers)
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
-optimizer = Adagrad(learning_rate=0.01, clip_gradients=clip_gradients)
+optimizer = Adagrad(learning_rate=0.01, gradient_clip_value=5)
 
 # configure callbacks
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)

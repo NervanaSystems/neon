@@ -25,12 +25,11 @@ Reference:
 """
 
 from neon.backends import gen_backend
-from neon.data import Text
-from neon.data import load_text
+from neon.data import Text, load_text
 from neon.initializers import Uniform
-from neon.layers import GeneralizedCost, LSTM, Affine, GRU
+from neon.layers import GeneralizedCost, LSTM, Affine, GRU, LookupTable
 from neon.models import Model
-from neon.optimizers import RMSProp
+from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser, extract_valid_args
@@ -45,8 +44,7 @@ args = parser.parse_args(gen_be=False)
 args.batch_size = 20
 time_steps = 20
 hidden_size = 200
-clip_gradients = True
-gradient_limit = 5
+gradient_clip_norm = 5
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
@@ -58,30 +56,37 @@ valid_path = load_text('ptb-valid', path=args.data_dir)
 # load data and parse on word-level
 # a Text object can take a given tokenizer, for word-level parsing, it is str.split
 # a user can pass in a custom-defined tokenzier as well
-train_set = Text(time_steps, train_path, tokenizer=str.split)
-valid_set = Text(time_steps, valid_path, vocab=train_set.vocab, tokenizer=str.split)
+tokenizer = lambda s: s.replace('\n', '<eos>').split()
+train_set = Text(time_steps, train_path, tokenizer=tokenizer, onehot_input=False)
+valid_set = Text(time_steps, valid_path, vocab=train_set.vocab, tokenizer=tokenizer,
+                 onehot_input=False)
 
 # weight initialization
-init = Uniform(low=-0.08, high=0.08)
+init = Uniform(low=-0.1, high=0.1)
 
 # model initialization
+rlayer_params = {"output_size": hidden_size, "init": init,
+                 "activation": Tanh(), "gate_activation": Logistic()}
 if args.rlayer_type == 'lstm':
-    rlayer1 = LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh())
-    rlayer2 = LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh())
+    rlayer1, rlayer2 = LSTM(**rlayer_params), LSTM(**rlayer_params)
 else:
-    rlayer1 = GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
-    rlayer2 = GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
+    rlayer1, rlayer2 = GRU(**rlayer_params), GRU(**rlayer_params)
 
-layers = [rlayer1,
-          rlayer2,
-          Affine(len(train_set.vocab), init, bias=init, activation=Softmax())]
+layers = [
+    LookupTable(vocab_size=len(train_set.vocab), embedding_dim=hidden_size, init=init),
+    rlayer1,
+    rlayer2,
+    Affine(len(train_set.vocab), init, bias=init, activation=Softmax())
+]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
 model = Model(layers=layers)
 
-optimizer = RMSProp(clip_gradients=clip_gradients, gradient_limit=gradient_limit,
-                    stochastic_round=args.rounding)
+# vanilla gradient descent with decay schedule on learning rate and gradient scaling
+learning_rate_sched = Schedule(range(5, args.epochs), .5)
+optimizer = GradientDescentMomentum(1, 0, gradient_clip_norm=gradient_clip_norm,
+                                    schedule=learning_rate_sched)
 
 # configure callbacks
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)

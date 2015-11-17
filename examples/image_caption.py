@@ -81,8 +81,7 @@ model = Model(layers=layers)
 
 callbacks = Callbacks(model, train_set, **args.callback_args)
 
-opt = RMSProp(decay_rate=0.997, learning_rate=0.0005, epsilon=1e-8, clip_gradients=True,
-              gradient_limit=1.0)
+opt = RMSProp(decay_rate=0.997, learning_rate=0.0005, epsilon=1e-8, gradient_clip_value=1)
 
 # train model
 model.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

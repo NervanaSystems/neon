@@ -43,7 +43,7 @@ args = parser.parse_args(gen_be=False)
 args.batch_size = 64  # note Karpathy's char-rnn uses 50
 time_steps = 40  # note Karpathy's char-rnn uses 50
 hidden_size = 1000
-clip_gradients = False
+gradient_clip_value = None
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
@@ -71,7 +71,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
 model = Model(layers=layers)
 
-optimizer = RMSProp(clip_gradients=clip_gradients, stochastic_round=args.rounding)
+optimizer = RMSProp(gradient_clip_value=gradient_clip_value, stochastic_round=args.rounding)
 
 # configure callbacks
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)

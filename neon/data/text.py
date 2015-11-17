@@ -166,7 +166,8 @@ class Text(NervanaObject):
         """
         pass
 
-    def __init__(self, time_steps, path, vocab=None, tokenizer=None):
+    def __init__(self, time_steps, path, vocab=None, tokenizer=None,
+                 onehot_input=True):
         """
         Construct a text dataset object.
 
@@ -175,9 +176,11 @@ class Text(NervanaObject):
             path (str) : Path to text file.
             vocab (python.set) : A set of unique tokens.
             tokenizer (object) : Tokenizer object.
+            onehot_input (boolean): One-hot representation of input
         """
         # figure out how to remove seq_length from the dataloader
         self.seq_length = time_steps
+        self.onehot_input = onehot_input
         self.batch_index = 0
 
         text = open(path).read()
@@ -207,8 +210,13 @@ class Text(NervanaObject):
 
         # stuff below this comment needs to be cleaned up and commented
         self.nout = len(self.vocab)
-        self.shape = (self.nout, time_steps)
-        self.dev_X = self.be.iobuf((self.nout, time_steps))
+        if self.onehot_input:
+            self.shape = (self.nout, time_steps)
+            self.dev_X = self.be.iobuf((self.nout, time_steps))
+        else:
+            self.shape = (time_steps, 1)
+            self.dev_X = self.be.iobuf(time_steps, dtype=np.int32)
+
         self.dev_y = self.be.iobuf((self.nout, time_steps))
         self.dev_lbl = self.be.iobuf(time_steps, dtype=np.int32)
         self.dev_lblflat = self.dev_lbl.reshape((1, -1))
@@ -225,8 +233,11 @@ class Text(NervanaObject):
             X_batch = self.X[:, self.batch_index, :].T.astype(np.float32, order='C')
             y_batch = self.y[:, self.batch_index, :].T.astype(np.float32, order='C')
 
-            self.dev_lbl.set(X_batch)
-            self.dev_X[:] = self.be.onehot(self.dev_lblflat, axis=0)
+            if self.onehot_input:
+                self.dev_lbl.set(X_batch)
+                self.dev_X[:] = self.be.onehot(self.dev_lblflat, axis=0)
+            else:
+                self.dev_X.set(X_batch)
 
             self.dev_lbl.set(y_batch)
             self.dev_y[:] = self.be.onehot(self.dev_lblflat, axis=0)

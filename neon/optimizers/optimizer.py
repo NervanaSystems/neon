@@ -38,6 +38,39 @@ class Optimizer(NervanaObject):
     def optimize(self, layer_list, epoch):
         raise NotImplementedError()
 
+    def clip_gradient_norm(self, param_list, clip_norm):
+        """
+        Scale the magnitude of the network's gradients
+
+        Arguments:
+            param_list (list): a list of layer parameters
+            clip_norm (float, optional): Value to scale gradients'
+                                         magnitude by.
+        """
+        scale_factor = 1
+        if clip_norm:
+            grad_list = [grad for (param, grad), states in param_list]
+            grad_square_sums = sum(self.be.sum(self.be.square(grad)) for grad in grad_list)
+            grad_norm = self.be.zeros((1, 1))
+            grad_norm[:] = self.be.sqrt(grad_square_sums)/self.be.bsz
+            scale_factor = clip_norm / max(float(grad_norm.get()), float(clip_norm))
+        return scale_factor
+
+    def clip_gradient_value(self, grad, clip_value):
+        """
+        Element-wise clip a list of gradients.
+
+        Arguments:
+            grad (list): a list of gradients of a single layer
+            gradient_clip_value (float, optional): Value to element-wise clip
+                                                   gradients.
+                                                   Defaults to None.
+        """
+        if clip_value:
+            return self.be.clip(grad, -abs(clip_value), abs(clip_value))
+        else:
+            return grad
+
 
 class Schedule(NervanaObject):
     """
@@ -131,7 +164,8 @@ class GradientDescentMomentum(Optimizer):
     """
 
     def __init__(self, learning_rate, momentum_coef, stochastic_round=False,
-                 wdecay=0.0, name="gdm", schedule=Schedule()):
+                 wdecay=0.0, gradient_clip_norm=None, gradient_clip_value=None,
+                 name="gdm", schedule=Schedule()):
         """
         Arguments:
             learning_rate (float): the multiplicative coefficient of updates
@@ -144,6 +178,12 @@ class GradientDescentMomentum(Optimizer):
                                                this only affects the GPU
                                                backend.
             wdecay (float, optional): Amount of weight decay.  Defaults to 0
+            gradient_clip_norm (float, optional): Value to scale gradients'
+                                                  magnitude by.
+                                                  Defaults to None.
+            gradient_clip_value (float, optional): Value to element-wise clip
+                                                   gradients.
+                                                   Defaults to None.
             name (str, optional): the optimizer's layer's pretty-print name.
                                   Defaults to "gdm".
             schedule (neon.optimizers.optimizer.Schedule, optional): Learning
@@ -151,6 +191,8 @@ class GradientDescentMomentum(Optimizer):
         """
         super(GradientDescentMomentum, self).__init__(name=name)
         self.learning_rate, self.momentum_coef = (learning_rate, momentum_coef)
+        self.gradient_clip_norm = gradient_clip_norm
+        self.gradient_clip_value = gradient_clip_value
         self.wdecay = wdecay
         self.schedule = schedule
         self.stochastic_round = stochastic_round
@@ -165,13 +207,19 @@ class GradientDescentMomentum(Optimizer):
         """
         lrate = self.schedule.get_learning_rate(self.learning_rate, epoch)
         param_list = get_param_list(layer_list)
+
+        scale_factor = self.clip_gradient_norm(param_list, self.gradient_clip_norm)
+
         for (param, grad), states in param_list:
             param.rounding = self.stochastic_round
             if len(states) == 0:
                 states.append(self.be.zeros_like(grad))
             grad = grad / self.be.bsz
+            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
+
             velocity = states[0]
-            velocity[:] = velocity * self.momentum_coef - lrate * (grad + self.wdecay * param)
+            velocity[:] = velocity * self.momentum_coef \
+                - lrate * (scale_factor * grad + self.wdecay * param)
             param[:] = param + velocity
 
 
@@ -182,7 +230,7 @@ class RMSProp(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, decay_rate=0.95, learning_rate=2e-3, epsilon=1e-6,
-                 clip_gradients=False, gradient_limit=5, name="rmsprop"):
+                 gradient_clip_norm=None, gradient_clip_value=None, name="rmsprop"):
         """
         Arguments:
             stochastic_round (bool): Set this to True for stochastic rounding.
@@ -192,9 +240,12 @@ class RMSProp(Optimizer):
             decay_rate (float): decay rate of states
             learning_rate (float): the multiplication coefficent of updates
             epsilon (float): smoothing epsilon to avoid divide by zeros
-            clip_gradients (bool): whether to truncate the gradients.
-            gradient_limit (float): positive value to clip gradients between.
-
+            gradient_clip_norm (float, optional): Value to scale gradients'
+                                                  magnitude by.
+                                                  Defaults to None.
+            gradient_clip_value (float, optional): Value to element-wise clip
+                                                   gradients.
+                                                   Defaults to None.
         Notes:
             Only constant learning rate is supported currently.
         """
@@ -203,8 +254,8 @@ class RMSProp(Optimizer):
         self.epsilon = epsilon
         self.decay_rate = decay_rate
         self.learning_rate = learning_rate
-        self.clip_gradients = clip_gradients
-        self.gradient_limit = gradient_limit
+        self.gradient_clip_norm = gradient_clip_norm
+        self.gradient_clip_value = gradient_clip_value
         self.stochastic_round = stochastic_round
 
     def optimize(self, layer_list, epoch):
@@ -216,8 +267,9 @@ class RMSProp(Optimizer):
             epoch (int): the current epoch, needed for the Schedule object.
         """
         lrate, epsilon, decay = (self.learning_rate, self.epsilon, self.decay_rate)
-
         param_list = get_param_list(layer_list)
+
+        scale_factor = self.clip_gradient_norm(param_list, self.gradient_clip_norm)
 
         for (param, grad), states in param_list:
 
@@ -226,14 +278,14 @@ class RMSProp(Optimizer):
                 states.append(self.be.zeros_like(grad))
 
             grad = grad / self.be.bsz
-            if self.clip_gradients:
-                grad = self.be.clip(grad, -self.gradient_limit, self.gradient_limit)
+            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
 
             # update state
             state = states[0]
             state[:] = decay * state + self.be.square(grad) * (1.0 - decay)
 
-            param[:] = param - grad * lrate / (self.be.sqrt(state + epsilon) + epsilon)
+            param[:] = param \
+                - (scale_factor * grad * lrate) / (self.be.sqrt(state + epsilon) + epsilon)
 
 
 class Adagrad(Optimizer):
@@ -243,7 +295,7 @@ class Adagrad(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, learning_rate=0.01, epsilon=1e-6,
-                 clip_gradients=False, gradient_limit=5, name="adagrad"):
+                 gradient_clip_norm=None, gradient_clip_value=None, name="adagrad"):
         """
         Arguments:
             stochastic_round (bool): Set this to True for stochastic rounding.
@@ -252,17 +304,20 @@ class Adagrad(Optimizer):
                                      Only affects the gpu backend.
             learning_rate (float): the multiplication coefficent of updates
             epsilon (float): smoothing epsilon to avoid divide by zeros
-            clip_gradients (bool): whether to truncate the gradients.
-            gradient_limit (float): positive value to clip gradients between.
-
+            gradient_clip_norm (float, optional): Value to scale gradients'
+                                                  magnitude by.
+                                                  Defaults to None.
+            gradient_clip_value (float, optional): Value to element-wise clip
+                                                   gradients.
+                                                   Defaults to None.
         Notes:
             Only constant learning rate is supported currently.
         """
         self.state_list = None
         self.epsilon = epsilon
         self.learning_rate = learning_rate
-        self.clip_gradients = clip_gradients
-        self.gradient_limit = gradient_limit
+        self.gradient_clip_norm = gradient_clip_norm
+        self.gradient_clip_value = gradient_clip_value
         self.stochastic_round = stochastic_round
 
     def optimize(self, layer_list, epoch):
@@ -276,6 +331,8 @@ class Adagrad(Optimizer):
         lrate, epsilon = (self.learning_rate, self.epsilon)
         param_list = get_param_list(layer_list)
 
+        scale_factor = self.clip_gradient_norm(param_list, self.gradient_clip_norm)
+
         for (param, grad), states in param_list:
 
             param.rounding = self.stochastic_round
@@ -283,13 +340,12 @@ class Adagrad(Optimizer):
                 states.append(self.be.zeros_like(grad))
 
             grad = grad / self.be.bsz
-            # clip gradients
-            if self.clip_gradients:
-                grad = self.be.clip(grad, -self.gradient_limit, self.gradient_limit)
+            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
+
             # update state
             state = states[0]
             state[:] = state + self.be.square(grad)
-            param[:] = param - grad * lrate / (self.be.sqrt(state + epsilon))
+            param[:] = param - (scale_factor * grad * lrate) / (self.be.sqrt(state + epsilon))
 
 
 class Adadelta(Optimizer):
