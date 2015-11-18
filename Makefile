@@ -31,6 +31,24 @@ RELEASE := $(strip $(shell grep '^VERSION *=' setup.py | cut -f 2 -d '=' \
 # set this to false to turn off GPU related functionality
 HAS_GPU := $(shell nvcc --version > /dev/null 2>&1 && echo true)
 
+ifdef HAS_GPU
+# Get CUDA_ROOT for LD_RUN_PATH
+export CUDA_ROOT:=$(patsubst %/bin/nvcc,%, $(realpath $(shell which nvcc)))
+else
+# Try to find CUDA.  Kernels will still need nvcc in path
+export CUDA_ROOT:=$(firstword $(wildcard $(addprefix /usr/local/, cuda-7.5 cuda-7.0 cuda)))
+
+ifdef CUDA_ROOT
+export PATH:=$(CUDA_ROOT)/bin:$(PATH)
+HAS_GPU := $(shell $(CUDA_ROOT)/bin/nvcc --version > /dev/null 2>&1 && echo true)
+endif
+endif
+ifdef CUDA_ROOT
+# Compiling with LD_RUN_PATH eliminates the need for LD_LIBRARY_PATH
+# when running
+export LD_RUN_PATH:=$(CUDA_ROOT)/lib64
+endif
+
 # set this to true to install visualization dependencies and functionality
 # (off by default)
 VIS :=
