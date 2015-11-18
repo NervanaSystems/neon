@@ -19,7 +19,7 @@ Example that trains an LSTM or GRU networks for sentiment analysis
 Reference:
    See J.Li et al, EMNLP2015 - http://arxiv.org/pdf/1503.00185v5.pdf
 
-$ python examples/imdb_lstm.py -b gpu -e 2 -val 1 -r 0
+$ python examples/imdb_lstm.py -b gpu -e 2 -eval 1 -r 0
 
 
 """
@@ -78,7 +78,7 @@ layers = [
 model = Model(layers=layers)
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
-optimizer = Adagrad(learning_rate=0.01, gradient_clip_value=5)
+optimizer = Adagrad(learning_rate=0.01, gradient_clip_value=gradient_clip_value)
 
 # configure callbacks
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)

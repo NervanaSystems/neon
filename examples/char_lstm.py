@@ -43,7 +43,7 @@ args = parser.parse_args(gen_be=False)
 args.batch_size = 64  # note Karpathy's char-rnn uses 50
 time_steps = 40  # note Karpathy's char-rnn uses 50
 hidden_size = 1000
-gradient_clip_value = None
+gradient_clip_value = 5
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))

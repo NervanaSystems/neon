@@ -22,6 +22,10 @@ Reference:
     Generating sequences with recurrent neural networks `[Graves2014]`_
 .. _[Zaremba2015]: http://arxiv.org/pdf/1409.2329v5.pdf
 .. _[Graves2014]: http://arxiv.org/pdf/1308.0850.pdf
+
+Usage:
+    python examples/word_lstm.py -e 13 -eval 1 --rlayer_type lstm
+
 """
 
 from neon.backends import gen_backend

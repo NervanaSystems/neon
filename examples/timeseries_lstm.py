@@ -18,7 +18,7 @@ Example that shows how to train on synthetic multi-dimensional time series
 After training, the network is able to generate the sequences
 
 Usage:
-    python examples/timeseries_lstm.py -e 10 --eval_freq 1
+    python examples/timeseries_lstm.py -e 10 -eval 1
 
 Then look at the PNG plots generated.
 
@@ -210,7 +210,6 @@ if __name__ == '__main__':
     # network hyperparameters
     hidden = 32
     args.batch_size = 1
-    gradient_clip_value = None
 
     # The following flag will switch between 2 training strategies:
     # 1. return_sequence True:
@@ -277,7 +276,7 @@ if __name__ == '__main__':
 
     model = Model(layers=layers)
     cost = GeneralizedCost(MeanSquared())
-    optimizer = RMSProp(gradient_clip_value=gradient_clip_value, stochastic_round=args.rounding)
+    optimizer = RMSProp(stochastic_round=args.rounding)
 
     callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
 
