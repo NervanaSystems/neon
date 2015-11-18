@@ -1,5 +1,17 @@
 # ChangeLog
 
+## v1.1.2 (2015-11-17):
+
+### Modifications
+
+* completely re-written C++ multithreaded dataloader
+* new weight initialization options for recurrent layers
+* Added deconvolution visualization support (guided backprop)
+* new bAbI question answering example network
+* Improved performance of cifar10_allcnn, word_lstm examples
+* new CUDA-C max and avg pooling kernels
+* Additional bugfixes and documentation updates
+
 ## v1.1.1 (2015-11-06):
 
 ### Modifications
