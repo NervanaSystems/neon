@@ -32,19 +32,6 @@ from neon.util.persist import load_obj, save_obj
 from neon.data import load_i1kmeta
 from neon.util.argparser import NeonArgparser
 
-parser = NeonArgparser(__doc__)
-parser.add_argument('--set_type', help='(i1k|directory)', required=True,
-                    choices=['i1k', 'directory'])
-parser.add_argument('--image_dir', help='Directory to find images', required=True)
-parser.add_argument('--target_size', type=int, default=256,
-                    help='Size in pixels to scale images (Must be 256 for i1k dataset)')
-parser.add_argument('--macro_size', type=int, default=5000, help='Images per processed batch')
-parser.add_argument('--file_pattern', default='*.jpg', help='Image extension to include in'
-                    'directory crawl')
-args = parser.parse_args()
-
-logger = logging.getLogger(__name__)
-
 
 # NOTE: We have to leave this helper function out of the class to use multiprocess pool.map
 def proc_img(target_size, squarecrop, is_string=False, imgfile=None):
@@ -269,6 +256,19 @@ class BatchWriterImagenet(BatchWriter):
 
 
 if __name__ == "__main__":
+    parser = NeonArgparser(__doc__)
+    parser.add_argument('--set_type', help='(i1k|directory)', required=True,
+                        choices=['i1k', 'directory'])
+    parser.add_argument('--image_dir', help='Directory to find images', required=True)
+    parser.add_argument('--target_size', type=int, default=256,
+                        help='Size in pixels to scale images (Must be 256 for i1k dataset)')
+    parser.add_argument('--macro_size', type=int, default=5000, help='Images per processed batch')
+    parser.add_argument('--file_pattern', default='*.jpg', help='Image extension to include in'
+                        'directory crawl')
+    args = parser.parse_args()
+
+    logger = logging.getLogger(__name__)
+
     # Supply dataset type and location
     if args.set_type == 'i1k':
         bw = BatchWriterImagenet(out_dir=args.data_dir, image_dir=args.image_dir,
