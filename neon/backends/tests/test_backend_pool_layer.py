@@ -207,3 +207,7 @@ def test_pool_layer(poolargs):
         assert np.allclose(ncA.get(), cpuA, rtol=0, atol=1e-5)
 
     del ng, nc
+
+if __name__ == '__main__':
+    fargs = ["max"]
+    test_pool_layer(fargs)

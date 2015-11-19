@@ -960,33 +960,20 @@ class NervanaCPU(Backend):
         array_O = O.get().reshape(layer.dimO)
 
         for m in range(M):
-            sliceT, sliceD = layer.fprop_slice(m, T, D, pad_d, str_d)
+            sliceT, sliceD, _ = layer.mSlice[m]
 
             for p in range(P):
-                sliceR, sliceH = layer.fprop_slice(p, R, H, pad_h, str_h)
+                sliceR, sliceH, _ = layer.pSlice[p]
 
                 for q in range(Q):
-                    sliceS, sliceW = layer.fprop_slice(q, S, W, pad_w, str_w)
+                    sliceS, sliceW, _ = layer.qSlice[q]
 
-                    sliceTRS = np.array([
-                        t * R * S + r * S + s
-                        for t in sliceT
-                        for r in sliceR
-                        for s in sliceS], dtype=np.intp)
-
-                    sliceDHW = np.array([
-                        d * H * W + y * W + w
-                        for d in sliceD
-                        for y in sliceH
-                        for w in sliceW], dtype=np.intp)
-
-                    slicedF = array_F.reshape(
-                        (C, -1, K))[:, sliceTRS, :].reshape((-1, K))
-                    slicedI = array_I.reshape(
-                        (C, -1, N))[:, sliceDHW, :].reshape((-1, N))
+                    slicedF = array_F[:, sliceT, sliceR, sliceS, :].reshape((-1, K))
+                    slicedI = array_I[:, sliceD, sliceH, sliceW, :].reshape((-1, N))
 
                     array_O[:, m, p, q, :] = beta * array_O[:, m, p, q, :] + alpha * \
                         np.dot(slicedF.T,  slicedI)
+
         if bsum is not None:
             bsum[:] = array_O.sum((1, 2, 3, 4))
 
@@ -1009,7 +996,6 @@ class NervanaCPU(Backend):
         assert layer.sizeI == grad_I.size
 
         M, P, Q = layer.MPQ
-
         C, D, H, W, N = layer.dimI
         C, T, R, S, K = layer.dimF
         K, M, P, Q, N = layer.dimO
@@ -1021,18 +1007,28 @@ class NervanaCPU(Backend):
         array_E = E.get().reshape(layer.dimO)
         array_grad_I = grad_I.get().reshape(layer.dimI)
 
-        # array_grad_I = array_grad_I.fill(0.)
-
         array_F = np.transpose(array_F, (4, 1, 2, 3, 0)).copy()
 
+        # for d in range(D):
+        #     sliceT, sliceM, _ = layer.bprop_slice(d, T, M, pad_d, str_d)
+
+        #     for h in range(H):
+        #         sliceR, sliceP, _ = layer.bprop_slice(h, R, P, pad_h, str_h)
+
+        #         for w in range(W):
+        #             sliceS, sliceQ, _ = layer.bprop_slice(w, S, Q, pad_w, str_w)
+
+                    # slicedF = array_F[:, sliceT, sliceR, sliceS, :].reshape((-1, C))
+                    # slicedE = array_E[:, sliceM, sliceP, sliceQ, :].reshape((-1, N))
+
         for d in range(D):
-            sliceT, sliceM = layer.bprop_slice(d, T, M, pad_d, str_d)
+            sliceT, sliceM = layer.dSlice[d]
 
             for h in range(H):
-                sliceR, sliceP = layer.bprop_slice(h, R, P, pad_h, str_h)
+                sliceR, sliceP = layer.hSlice[h]
 
                 for w in range(W):
-                    sliceS, sliceQ = layer.bprop_slice(w, S, Q, pad_w, str_w)
+                    sliceS, sliceQ = layer.wSlice[w]
 
                     sliceTRS = np.array([
                         t * R * S + r * S + s
@@ -1085,33 +1081,18 @@ class NervanaCPU(Backend):
         array_U.fill(0.)
 
         for m in range(M):
-            sliceT, sliceD = layer.fprop_slice(m, T, D, pad_d, str_d)
+            sliceT, sliceD, tlen = layer.mSlice[m]
 
             for p in range(P):
-                sliceR, sliceH = layer.fprop_slice(p, R, H, pad_h, str_h)
+                sliceR, sliceH, rlen = layer.pSlice[p]
 
                 for q in range(Q):
-                    sliceS, sliceW = layer.fprop_slice(q, S, W, pad_w, str_w)
+                    sliceS, sliceW, slen = layer.qSlice[q]
 
-                    sliceTRS = np.array([
-                        t * R * S + r * S + s
-                        for t in sliceT
-                        for r in sliceR
-                        for s in sliceS], dtype=np.intp)
-
-                    sliceDHW = np.array([
-                        d * H * W + y * W + w
-                        for d in sliceD
-                        for y in sliceH
-                        for w in sliceW], dtype=np.intp)
-
-                    slicedI = array_I.reshape(
-                        (C, -1, N))[:, sliceDHW, :].reshape((-1, N))
+                    slicedI = array_I[:, sliceD, sliceH, sliceW, :].reshape((-1, N))
                     slicedE = array_E[:, m, p, q, :]
-                    slicedU = array_U.reshape((C, -1, K))
-
-                    slicedU[:, sliceTRS, :] += alpha * np.dot(
-                        slicedI,  slicedE.T).reshape((C, -1, K))
+                    array_U[:, sliceT, sliceR, sliceS, :] += alpha * np.dot(
+                        slicedI, slicedE.T).reshape((C, tlen, rlen, slen, K))
 
     def deconv_layer(self, dtype,
                      N, C, K,
@@ -1187,6 +1168,7 @@ class NervanaCPU(Backend):
         return PoolLayer(self, dtype, op, N, C, D, H, W, J, T, R, S,
                          pad_c, pad_d, pad_h, pad_w, str_c, str_d, str_h, str_w)
 
+
     def fprop_pool(self, layer, I, O, argmax=None):
         """
         Forward propagate pooling layer.
@@ -1210,8 +1192,6 @@ class NervanaCPU(Backend):
         K, M, P, Q, N = layer.dimO
         pad_c, pad_d, pad_h, pad_w = layer.padding
         str_c, str_d, str_h, str_w = layer.strides
-        WH = W * H
-        DWH = D * W * H
 
         array_I = I.get().reshape(layer.dimI)
         array_O = O.get().reshape(layer.dimO)
@@ -1219,33 +1199,27 @@ class NervanaCPU(Backend):
             array_argmax = argmax.get().reshape(layer.dimO)
 
         for k in range(K):
-            sliceC = layer.pool_slice(k, J, C, pad_c, str_c)
+            sliceC, _ = layer.kSlice[k]
 
             for m in range(M):
-                sliceD = layer.pool_slice(m, T, D, pad_d, str_d)
+                sliceD, _ = layer.mSlice[m]
 
                 for p in range(P):
-                    sliceH = layer.pool_slice(p, R, H, pad_h, str_h)
+                    sliceH, _ = layer.pSlice[p]
 
                     for q in range(Q):
-                        sliceW = layer.pool_slice(q, S, W, pad_w, str_w)
+                        sliceW, _ = layer.qSlice[q]
 
-                        sliceCDHW = np.array([
-                            c * DWH + d * WH + y * W + x
-                            for c in sliceC
-                            for d in sliceD
-                            for y in sliceH
-                            for x in sliceW], dtype=np.intp)
-
-                        sliceI = array_I.reshape((-1, N))
+                        sliceI = array_I[sliceC, sliceD, sliceH, sliceW, :].reshape(-1, N)
                         if op == "max":
-                            array_argmax[k, m, p, q, :] = np.argmax(sliceI[sliceCDHW, :], axis=0)
-                            array_O[k, m, p, q, :] = np.max(sliceI[sliceCDHW, :], axis=0)
+                            array_argmax[k, m, p, q, :] = np.argmax(sliceI, axis=0)
+                            array_O[k, m, p, q, :] = np.max(sliceI, axis=0)
                         elif op == "avg":
-                            array_O[k, m, p, q, :] = np.mean(sliceI[sliceCDHW, :], axis=0)
+                            array_O[k, m, p, q, :] = np.mean(sliceI, axis=0)
                         elif op == "l2":
                             array_O[k, m, p, q, :] = np.sqrt(np.sum(
-                                np.square(sliceI[sliceCDHW, :]), axis=0))
+                                np.square(sliceI), axis=0))
+
 
     def bprop_pool(self, layer, I, O, argmax=None, alpha=1.0, beta=0.0):
         """
@@ -1272,8 +1246,6 @@ class NervanaCPU(Backend):
         K, M, P, Q, N = layer.dimO
         pad_c, pad_d, pad_h, pad_w = layer.padding
         str_c, str_d, str_h, str_w = layer.strides
-        WH = W * H
-        DWH = D * W * H
 
         array_E = I.get().reshape(layer.dimO)
         array_E[:] = array_E * alpha
@@ -1283,36 +1255,32 @@ class NervanaCPU(Backend):
             array_argmax = argmax.get().reshape(layer.dimO)
 
         for k in range(K):
-            sliceC = layer.pool_slice(k, J, C, pad_c, str_c)
+            sliceC, clen = layer.kSlice[k]
 
             for m in range(M):
-                sliceD = layer.pool_slice(m, T, D, pad_d, str_d)
+                sliceD, dlen = layer.mSlice[m]
 
                 for p in range(P):
-                    sliceH = layer.pool_slice(p, R, H, pad_h, str_h)
+                    sliceH, hlen = layer.pSlice[p]
 
                     for q in range(Q):
-                        sliceW = layer.pool_slice(q, S, W, pad_w, str_w)
+                        sliceW, wlen = layer.qSlice[q]
 
-                        sliceCDHW = np.array([
-                            c * DWH + d * WH + y * W + x
-                            for c in sliceC
-                            for d in sliceD
-                            for y in sliceH
-                            for x in sliceW], dtype=np.intp)
-
-                        sliceB = array_delta.reshape((-1, N))
-
+                        sliceB = array_delta[sliceC, sliceD, sliceH, sliceW, :].reshape((-1, N))
                         if op == "max":
                             for n in range(N):
                                 max_n = array_argmax[k, m, p, q, n]
-                                sliceB[
-                                    sliceCDHW[max_n], n] += array_E[k, m, p, q, n]
+                                sliceB[max_n, n] += array_E[k, m, p, q, n]
                         elif op == "avg":
-                            sliceB[
-                                sliceCDHW, :] += array_E[k, m, p, q, :] * (1.0 / sliceCDHW.size)
+                            sliceB += array_E[k, m, p, q, :] * (1.0 / sliceB.shape[0])
                         else:
                             raise NotImplementedError
+
+                        array_delta[sliceC, sliceD, sliceH, sliceW, :] = sliceB.reshape((clen,
+                                                                                        dlen,
+                                                                                        hlen,
+                                                                                        wlen,
+                                                                                        N))
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho, relu):
         """
