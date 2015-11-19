@@ -447,7 +447,9 @@ class ParameterLayer(Layer):
         self.W = self.be.empty(shape, parallel=parallel, distributed=distributed)
         self.dW = self.be.empty_like(self.W)
         self.states = []
+
         if isinstance(self.init, Tensor) or isinstance(self.init, np.ndarray):
+            assert self.init.shape == self.W.shape, "Initial weights shape does not match"
             self.W[:] = self.init
         else:
             self.init.fill(self.W)
@@ -1274,9 +1276,10 @@ class LookupTable(ParameterLayer):
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0):
-        self.dW[:] = 0
-        self.be.compound_bprop_lut(self.nin, self.inputs, error, self.outputs_t, self.dW,
-                                   self.pad_idx, alpha, beta)
+        if self.update:
+            self.dW[:] = 0
+            self.be.compound_bprop_lut(self.nin, self.inputs, error, self.outputs_t,
+                                       self.dW, self.pad_idx, alpha, beta)
 
         return self.deltas
 

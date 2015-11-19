@@ -122,3 +122,41 @@ def get_paddedXY(X, y, vocab_size=20000, sentence_length=100, oov=2,
     y = np.array(y, dtype=np.int32).reshape((len(y), 1))
 
     return X, y
+
+
+def get_google_word2vec_W(fname, vocab, vocab_size=50000, index_from=3, verbose=1):
+    f = open(fname, 'rb')
+    header = f.readline()
+    vocab1_size, embedding_dim = map(int, header.split())
+    binary_len = np.dtype('float32').itemsize * embedding_dim
+    vocab_size = min(len(vocab) + index_from, vocab_size)
+    W = np.zeros((vocab_size, embedding_dim))
+
+    found_words = {}
+    for i, line in enumerate(range(vocab1_size)):
+        word = []
+        while True:
+            ch = f.read(1)
+            if ch == ' ':
+                word = ''.join(word)
+                break
+            if ch != '\n':
+                word.append(ch)
+        if word in vocab:
+            wrd_id = vocab[word] + index_from
+            if wrd_id < vocab_size:
+                W[wrd_id] = np.fromstring(
+                    f.read(binary_len), dtype='float32')
+                found_words[wrd_id] = 1
+        else:
+            f.read(binary_len)
+    if verbose:
+        print "# words with word2vec embeddings - {0}".format(len(found_words))
+        print "Initializing with random vectors for remaining words"
+    cnt = 0
+    for wrd_id in range(vocab_size):
+        if wrd_id not in found_words:
+            W[wrd_id] = np.random.uniform(-0.25, 0.25, embedding_dim)
+            cnt += 1
+    assert cnt + len(found_words) == vocab_size
+    return W, embedding_dim, vocab_size
