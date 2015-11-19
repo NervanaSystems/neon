@@ -212,6 +212,8 @@ public:
       _outputItemSize(outputItemSize),
       _labelCount(labelCount),
       _device(device), _decoder(decoder) {
+        assert(_itemsPerThread * count >= _minibatchSize);
+        assert(_itemsPerThread * (count - 1) < _minibatchSize);
         for (int i = 0; i < count; i++) {
             _startSignaled.push_back(0);
             _itemCounts.push_back(0);
@@ -476,7 +478,9 @@ public:
             _decodeBufs =
                 new OutBufferPool(_minibatchSize * _itemMaxSize,
                                   _labelCount * _minibatchSize, pinned);
-            int threadCount = thread::hardware_concurrency();
+            int numCores = thread::hardware_concurrency();
+            int itemsPerThread = (_minibatchSize - 1) /  numCores + 1;
+            int threadCount =  (_minibatchSize - 1) / itemsPerThread + 1;
             threadCount = std::min(threadCount, _minibatchSize);
             _decodePool =
                 new DecodePool(threadCount, _minibatchSize, _itemMaxSize,
