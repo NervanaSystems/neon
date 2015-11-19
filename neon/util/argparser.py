@@ -88,7 +88,7 @@ class NeonArgparser(configargparse.ArgumentParser):
         self.add_argument('-c', '--config', is_config_file=True,
                           help='Read values for these arguments from the '
                                'configuration file specified here first.')
-        self.add_argument('-v', '--verbose', action='count', default=0,
+        self.add_argument('-v', '--verbose', action='count', default=1,
                           help="verbosity level.  Add multiple v's to "
                                "further increase verbosity")
         # we store the negation of no_progress_bar in args.progress_bar during
@@ -215,7 +215,7 @@ class NeonArgparser(configargparse.ArgumentParser):
         except (AttributeError, TypeError):
             # if defaults are not set or not -v given
             # for latter will get type error
-            log_thresh = 40
+            log_thresh = 30
         args.log_thresh = log_thresh
 
         # logging formater
