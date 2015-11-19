@@ -195,8 +195,7 @@ class Model(NervanaObject):
 
             # This logic is for handling partial batch sizes at the end of the dataset
             bsz = min(dataset.ndata - nprocessed, self.be.bsz)
-            metric(x, t)
-            running_error += metric.outputs.get()[:, :bsz].sum(axis=1)
+            running_error += metric(x, t, calcrange=slice(0, bsz)) * bsz
             nprocessed += bsz
         running_error /= nprocessed
         return running_error

@@ -211,14 +211,14 @@ class TopKMisclassification(Metric):
     """
 
     def __init__(self, k):
-        self.outputs = self.be.iobuf(3)
-        self.correctProbs = self.outputs[0].reshape((1, self.be.bsz))
-        self.top1 = self.outputs[1].reshape((1, self.be.bsz))
-        self.topk = self.outputs[2].reshape((1, self.be.bsz))
+        self.correctProbs = self.be.iobuf(1)
+        self.top1 = self.be.iobuf(1)
+        self.topk = self.be.iobuf(1)
+
         self.k = k
         self.metric_names = ['LogLoss', 'Top1Misclass', 'Top' + str(k) + 'Misclass']
 
-    def __call__(self, y, t):
+    def __call__(self, y, t, calcrange=slice(0, None)):
         """
         Compute the misclassification error metric
 
@@ -236,8 +236,9 @@ class TopKMisclassification(Metric):
         self.topk[:] = 1. - (nSlots > 0) * ((nEq <= nSlots) * (1 - nSlots / nEq) + nSlots / nEq)
         self.top1[:] = 1. - (be.max(y, axis=0) == self.correctProbs) / nEq
         self.correctProbs[:] = -be.safelog(self.correctProbs)
-
-        return self.outputs.get().mean(axis=1)
+        return np.array((self.correctProbs.get()[:, calcrange].mean(),
+                         self.top1.get()[:, calcrange].mean(),
+                         self.topk.get()[:, calcrange].mean()))
 
 
 class Misclassification(Metric):
@@ -252,7 +253,7 @@ class Misclassification(Metric):
         self.outputs = self.preds  # Contains per record metric
         self.metric_names = ['Top1Misclass']
 
-    def __call__(self, y, t):
+    def __call__(self, y, t, calcrange=slice(0, None)):
         """
         Compute the misclassification error metric
 
@@ -268,7 +269,7 @@ class Misclassification(Metric):
         self.hyps[:] = self.be.argmax(t, axis=0)
         self.outputs[:] = self.be.not_equal(self.preds, self.hyps)
 
-        return self.outputs.get().mean()
+        return self.outputs.get()[:, calcrange].mean()
 
 
 class Accuracy(Metric):
@@ -283,7 +284,7 @@ class Accuracy(Metric):
         self.outputs = self.preds  # Contains per record metric
         self.metric_names = ['Accuracy']
 
-    def __call__(self, y, t):
+    def __call__(self, y, t, calcrange=slice(0, None)):
         """
         Compute the accuracy metric
 
@@ -299,4 +300,4 @@ class Accuracy(Metric):
         self.hyps[:] = self.be.argmax(t, axis=0)
         self.outputs[:] = self.be.equal(self.preds, self.hyps)
 
-        return self.outputs.get().mean()
+        return self.outputs.get()[:, calcrange].mean()
