@@ -53,7 +53,7 @@ visualizing it via ``nvis``:
 .. code-block:: bash
 
     neon examples/mnist_mlp.yaml -o data.h5
-    nvis -i data.h5 -o data.html
+    nvis -i data.h5 -o .
 
 If validation cost is computed in ``neon``, it will also be saved and
 visualized by ``nvis``:
@@ -61,7 +61,7 @@ visualized by ``nvis``:
 .. code-block:: bash
 
     neon examples/mnist_mlp.yaml -o data.h5 --evaluation_freq 1
-    nvis -i data.h5 -o data.html
+    nvis -i data.h5 -o .
 
 Script examples not directly using the ``neon`` command can still dump
 visualization data:
@@ -70,4 +70,11 @@ visualization data:
 .. code-block:: bash
 
     examples/cifar10_allcnn.py -o data.h5
-    nvis -i data.h5 -o data.html
+    nvis -i data.h5 -o .
+
+Guided Backprop visualization of convolutional layer activations:
+
+.. code-block:: bash
+
+    examples/imagenet_allcnn.py -o data.h5 --deconv
+    nvis -i data.h5 -o .
