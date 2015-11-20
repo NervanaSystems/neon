@@ -309,7 +309,6 @@ class CPUTensor(Tensor):
 
         Returns:
             Tensor: new array object with the same values as input tensor
-
         """
         return self._assign(a)
 
@@ -1009,18 +1008,6 @@ class NervanaCPU(Backend):
 
         array_F = np.transpose(array_F, (4, 1, 2, 3, 0)).copy()
 
-        # for d in range(D):
-        #     sliceT, sliceM, _ = layer.bprop_slice(d, T, M, pad_d, str_d)
-
-        #     for h in range(H):
-        #         sliceR, sliceP, _ = layer.bprop_slice(h, R, P, pad_h, str_h)
-
-        #         for w in range(W):
-        #             sliceS, sliceQ, _ = layer.bprop_slice(w, S, Q, pad_w, str_w)
-
-                    # slicedF = array_F[:, sliceT, sliceR, sliceS, :].reshape((-1, C))
-                    # slicedE = array_E[:, sliceM, sliceP, sliceQ, :].reshape((-1, N))
-
         for d in range(D):
             sliceT, sliceM = layer.dSlice[d]
 
@@ -1168,7 +1155,6 @@ class NervanaCPU(Backend):
         return PoolLayer(self, dtype, op, N, C, D, H, W, J, T, R, S,
                          pad_c, pad_d, pad_h, pad_w, str_c, str_d, str_h, str_w)
 
-
     def fprop_pool(self, layer, I, O, argmax=None):
         """
         Forward propagate pooling layer.
@@ -1220,7 +1206,6 @@ class NervanaCPU(Backend):
                             array_O[k, m, p, q, :] = np.sqrt(np.sum(
                                 np.square(sliceI), axis=0))
 
-
     def bprop_pool(self, layer, I, O, argmax=None, alpha=1.0, beta=0.0):
         """
         Backward propagate pooling layer.
@@ -1266,21 +1251,17 @@ class NervanaCPU(Backend):
                     for q in range(Q):
                         sliceW, wlen = layer.qSlice[q]
 
-                        sliceB = array_delta[sliceC, sliceD, sliceH, sliceW, :].reshape((-1, N))
+                        patch_in = (sliceC, sliceD, sliceH, sliceW, slice(None))
+                        patch_out = (k, m, p, q, slice(None))
+                        sliceB = array_delta[patch_in].reshape((-1, N))
                         if op == "max":
-                            for n in range(N):
-                                max_n = array_argmax[k, m, p, q, n]
-                                sliceB[max_n, n] += array_E[k, m, p, q, n]
+                            max_n = array_argmax[patch_out]
+                            sliceB[max_n, range(N)] += array_E[patch_out]
                         elif op == "avg":
-                            sliceB += array_E[k, m, p, q, :] * (1.0 / sliceB.shape[0])
+                            sliceB += array_E[patch_out] * (1.0 / sliceB.shape[0])
                         else:
                             raise NotImplementedError
-
-                        array_delta[sliceC, sliceD, sliceH, sliceW, :] = sliceB.reshape((clen,
-                                                                                        dlen,
-                                                                                        hlen,
-                                                                                        wlen,
-                                                                                        N))
+                        array_delta[patch_in] = sliceB.reshape((clen, dlen, hlen, wlen, N))
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho, relu):
         """

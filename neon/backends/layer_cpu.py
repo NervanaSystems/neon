@@ -106,20 +106,6 @@ class ConvLayer(object):
         self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w) for w in range(W)]
 
     def fprop_slice(self, q, S, X, padding, strides):
-        # new way of slice #1
-        # qs = q * strides - padding
-        # firstF = None
-        # for s in range(S):
-        #     x = qs + s
-        #     if x >= 0 and x < X:
-        #         if firstF is None:
-        #             firstF = s
-        #             firstI = x
-        #         lastF = s
-        #         lastI = x
-        # return (slice(firstF,lastF+1), slice(firstI,lastI+1), lastF-firstF+1)
-
-        # new way of slice #2 (both works)
         firstF = 0
         lastF = S - 1
         qs = q * strides - padding
@@ -134,19 +120,6 @@ class ConvLayer(object):
         return (slice(firstF, lastF+1), slice(qs, x2+1), lastF-firstF+1)
 
     def bprop_slice(self, x, S, Q, padding, strides):
-        # qs = x - (S - padding - 1)
-        # firstF = None
-        # for s in range(S):
-        #     q = qs + s
-        #     if q % strides == 0:
-        #         q //= strides
-        #         if q >= 0 and q < Q:
-        #             if firstF is None:
-        #                 firstF = s
-        #                 firstE = q
-        #             lastF = s
-        #             lastE = q
-        # return (slice(firstF,lastF+1,strides), slice(firstE,lastE+1,strides), 0)
         qs = x - (S - padding - 1)
         sliceF = []
         sliceO = []
@@ -332,5 +305,4 @@ class PoolLayer(object):
                 if firstI is None:
                     firstI = x
                 lastI = x
-        return (slice(firstI,lastI+1), lastI-firstI+1)
-
+        return (slice(firstI, lastI+1), lastI-firstI+1)

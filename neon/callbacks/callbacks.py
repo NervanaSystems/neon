@@ -70,7 +70,7 @@ class Callbacks(NervanaObject):
         if output_file is None:
             if hasattr(self, 'callback_data'):
                 del self.callback_data
-            self.callback_data = h5py.File("no_file"+str(np.random.rand()), driver='core', backing_store=False)
+            self.callback_data = h5py.File("no_file", driver='core', backing_store=False)
         else:
             if os.path.isfile(output_file):
                 logger.warn("Overwriting output file %s", output_file)
