@@ -103,6 +103,7 @@ class Model(NervanaObject):
                 on the output of the last layer and the input labels
             optimizer (Optimizer): Defines the learning rule for updating the model parameters
             num_epochs: Number of times to iterate over the dataset.
+            callbacks (Callbacks): Defines callbacks to run at the end of each mini-batch / epoch.
         """
         self.cost = cost
         self.initialize(dataset, cost)

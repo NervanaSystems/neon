@@ -16,16 +16,27 @@
 Backends
 ========
 
+Generating a backend
+--------------------
+To create a backend use the ``neon.backends.gen_backend`` function
+
+.. code-block:: python
+
+    from neon.backends import gen_backend
+    be = gen_backend()
+
+Without any arguments, this will return a CPU backend
+
 Nervana GPU
 -----------
 .. autosummary::
    neon.backends.nervanagpu.NervanaGPU
 
-The NervanaGPU backend consists of kernels written in MaxAs_ assembler and 
+The NervanaGPU backend consists of kernels written in MaxAs_ assembler and
 Python wrappers. It includes pre-compiled kernels for matrix operations such
 as GEMM and CONV. Kernels for element-wise operations are templated and build
 on the fly so multiple operations can be compounded into a single kernel,
-which avoids memory bandwidth bottlenecks. The backend follows the API 
+which avoids memory bandwidth bottlenecks. The backend follows the API
 defined by the MOP layer.
 
 Sequences of operations are performed using a lazy evaluation scheme where

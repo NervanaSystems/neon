@@ -73,7 +73,7 @@ class DataIterator(NervanaObject):
             # store shape of the input data
             self.lshape = lshape
 
-        assert self.ndata > self.be.bsz
+        assert self.ndata >= self.be.bsz
 
         self.ybuf = None
         self.make_onehot = make_onehot
