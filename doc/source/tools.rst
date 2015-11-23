@@ -60,8 +60,13 @@ visualized by ``nvis``:
 
 .. code-block:: bash
 
-    neon examples/mnist_mlp.yaml -o data.h5 --evaluation_freq 1
+    neon examples/mnist_mlp.yaml -o data.h5 --eval_freq 1
     nvis -i data.h5 -o .
+
+Here's an example of the visualized output:
+
+.. raw:: html
+   :file: assets/cost-hist.html
 
 Script examples not directly using the ``neon`` command can still dump
 visualization data:
