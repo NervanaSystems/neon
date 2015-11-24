@@ -58,10 +58,12 @@ API
    neon.callbacks.callbacks.TrainCostCallback
    neon.callbacks.callbacks.LossCallback
    neon.callbacks.callbacks.MetricCallback
+   neon.callbacks.callbacks.HistCallback
    neon.callbacks.callbacks.ProgressBarCallback
    neon.callbacks.callbacks.TrainLoggerCallback
    neon.callbacks.callbacks.SaveBestStateCallback
    neon.callbacks.callbacks.EarlyStopCallback
+   neon.callbacks.callbacks.DeconvCallback
 
 
 ``neon.data``

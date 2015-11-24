@@ -745,10 +745,7 @@ class DeconvCallback(Callback):
         self.callback_data = callback_data
         self.max_fm = max_fm
         self.dataset_pct = dataset_pct
-
-    @property
-    def name(self):
-        return "Guided Bprop"
+        self.name = "Guided Bprop"
 
     def _progress_update(self, tag, curr, total, unit, time, blockchar=u'\u2588'):
         # clear and redraw progress bar
