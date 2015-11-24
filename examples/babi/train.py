@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains on Facebook Q&A datatset: bAbI
+Example that trains on Facebook Q&A dataset: bAbI
 
 Task Number                  | FB LSTM Baseline | Neon QA GRU
 ---                          | ---              | ---
@@ -45,43 +45,16 @@ Reference:
 
 Usage:
     use -t to specify which bAbI task to run
-    python examples/babi_lstm.py -e 20 -eval 1 -t 1 --rlayer_type gru
+    python examples/babi/train.py -e 20 --rlayer_type gru --save_path babi_lstm.p -t 1
 """
-
+from util import create_model, babi_handler
 from neon.backends import gen_backend
-from neon.data import BABI, QA
-from neon.initializers import GlorotUniform, Uniform, Orthonormal
-from neon.layers import Affine, GeneralizedCost, GRU, LookupTable, MergeMultistream, LSTM
-from neon.models import Model
+from neon.data import QA
+from neon.layers import GeneralizedCost
 from neon.optimizers import Adam
-from neon.transforms import Accuracy, CrossEntropyMulti, Logistic, Softmax, Tanh
+from neon.transforms import Accuracy, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser, extract_valid_args
-
-# list of bAbI task
-subset = 'en'
-task_list = [
-    'qa1_single-supporting-fact',
-    'qa2_two-supporting-facts',
-    'qa3_three-supporting-facts',
-    'qa4_two-arg-relations',
-    'qa5_three-arg-relations',
-    'qa6_yes-no-questions',
-    'qa7_counting',
-    'qa8_lists-sets',
-    'qa9_simple-negation',
-    'qa10_indefinite-knowledge',
-    'qa11_basic-coreference',
-    'qa12_conjunction',
-    'qa13_compound-coreference',
-    'qa14_time-reasoning',
-    'qa15_basic-deduction',
-    'qa16_basic-induction',
-    'qa17_positional-reasoning',
-    'qa18_size-reasoning',
-    'qa19_path-finding',
-    'qa20_agents-motivations',
-]
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -90,39 +63,25 @@ parser.add_argument('-t', '--task', type=int, default='1', choices=xrange(1, 21)
 parser.add_argument('--rlayer_type', default='gru', choices=['gru', 'lstm'],
                     help='type of recurrent layer to use (gru or lstm)')
 args = parser.parse_args(gen_be=False)
-args.batch_size = 32
 
-task = task_list[args.task - 1]
+# Override save path if None
+if args.save_path is None:
+    args.save_path = 'babi.p'
+
+if args.callback_args['save_path'] is None:
+    args.callback_args['save_path'] = args.save_path
 
 # setup backend
+args.batch_size = 32
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # load the bAbI dataset
-babi = BABI(path=args.data_dir, task=task, subset=subset)
+babi = babi_handler(args.data_dir, args.task)
 train_set = QA(*babi.train)
 valid_set = QA(*babi.test)
 
-# recurrent layer parameters (default gru)
-rlayer_obj = GRU if args.rlayer_type == 'gru' else LSTM
-rlayer_params = dict(output_size=100, reset_cells=True,
-                     init=GlorotUniform(), init_inner=Orthonormal(0.5),
-                     activation=Tanh(), gate_activation=Logistic())
-
-# if using lstm, swap the activation functions
-if args.rlayer_type == 'lstm':
-    rlayer_params.update(dict(activation=Logistic(), gate_activation=Tanh()))
-
-# lookup layer parameters
-lookup_params = dict(vocab_size=babi.vocab_size, embedding_dim=50, init=Uniform(-0.05, 0.05))
-
-# Model construction
-story_path = [LookupTable(**lookup_params), rlayer_obj(**rlayer_params)]
-query_path = [LookupTable(**lookup_params), rlayer_obj(**rlayer_params)]
-
-layers = [MergeMultistream(layers=[story_path, query_path], merge="stack"),
-          Affine(babi.vocab_size, init=GlorotUniform(), activation=Softmax())]
-
-model = Model(layers=layers)
+# create model
+model = create_model(babi.vocab_size, args.rlayer_type)
 
 # setup callbacks
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)

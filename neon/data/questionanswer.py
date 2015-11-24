@@ -88,7 +88,7 @@ class BABI(NervanaObject):
             subset (str): subset of the dataset to use: {en, en-10k, hn, hn-10k}
         """
 
-        print 'Preparing bAbI dataset or extract from %s' % path
+        print 'Preparing bAbI dataset or extracting from %s' % path
         print 'Task is %s/%s' % (subset, task)
         self.tasks = [
             'qa1_single-supporting-fact',
@@ -202,7 +202,8 @@ class BABI(NervanaObject):
         Returns:
             list : Vectorized list of words.
         """
-        return [self.word_idx[w] for w in words]
+        return [self.word_to_index[w] if w in self.word_to_index
+                else self.vocab_size - 1 for w in words]
 
     def one_hot_vector(self, answer):
         """
@@ -215,7 +216,7 @@ class BABI(NervanaObject):
             list : One-hot representation of answer.
         """
         vector = np.zeros(self.vocab_size)
-        vector[self.word_idx[answer]] = 1
+        vector[self.word_to_index[answer]] = 1
         return vector
 
     def vectorize_stories(self, data):
@@ -245,8 +246,10 @@ class BABI(NervanaObject):
         """
         all_data = self.train_parsed + self.test_parsed
         vocab = sorted(reduce(lambda x, y: x | y, (set(s + q + [a]) for s, q, a in all_data)))
-        # Reserve 0 for masking via pad_sequences
-        self.vocab_size = len(vocab) + 1
-        self.word_idx = dict((c, i + 1) for i, c in enumerate(vocab))
+        self.vocab = vocab
+        # Reserve 0 for masking via pad_sequences and self.vocab_size - 1 for <UNK> token
+        self.vocab_size = len(vocab) + 2
+        self.word_to_index = dict((c, i + 1) for i, c in enumerate(vocab))
+        self.index_to_word = dict((i + 1, c) for i, c in enumerate(vocab))
         self.story_maxlen = max(map(len, (s for s, _, _ in all_data)))
         self.query_maxlen = max(map(len, (q for _, q, _ in all_data)))
