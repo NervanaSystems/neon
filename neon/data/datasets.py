@@ -181,7 +181,7 @@ def global_contrast_normalize(X, scale=1., min_divisor=1e-8):
     return X
 
 
-def load_cifar10(path=".", normalize=True, whiten=False):
+def load_cifar10(path=".", normalize=True, constrast_normalize=False, whiten=False):
     """
     Fetch the CIFAR-10 dataset and load it into memory.
 
@@ -221,10 +221,14 @@ def load_cifar10(path=".", normalize=True, whiten=False):
     y_train = y_train.reshape(-1, 1)
     y_test = np.array(y_test).reshape(-1, 1)
 
-    if normalize:
+    if constrast_normalize:
         norm_scale = 55.0  # Goodfellow
         X_train = global_contrast_normalize(X_train, scale=norm_scale)
         X_test = global_contrast_normalize(X_test, scale=norm_scale)
+
+    if normalize:
+        X_train = X_train / 255.
+        X_test = X_test / 255.
 
     if whiten:
         zca_cache = os.path.join(workdir, 'cifar-10-zca-cache.pkl')

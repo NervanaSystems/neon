@@ -43,7 +43,8 @@ args = parser.parse_args()
 num_epochs = args.epochs
 
 (X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir,
-                                                            normalize=True,
+                                                            normalize=False,
+                                                            contrast_normalize=True,
                                                             whiten=True)
 
 # really 10 classes, pad to nearest power of 2 to match conv output
