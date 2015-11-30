@@ -197,7 +197,7 @@ def load_cifar10(path=".", normalize=True, contrast_normalize=False, whiten=Fals
     cifar = dataset_meta['cifar-10']
     workdir, filepath = _valid_path_append(path, '', cifar['file'])
     batchdir = os.path.join(workdir, 'cifar-10-batches-py')
-    if not os.path.isdir(os.path.join(batchdir, 'data_batch_1')):
+    if not os.path.exists(os.path.join(batchdir, 'data_batch_1')):
         if not os.path.exists(filepath):
             fetch_dataset(cifar['url'], cifar['file'], filepath, cifar['size'])
         with tarfile.open(filepath, 'r:gz') as f:
