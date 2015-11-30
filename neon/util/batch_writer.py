@@ -38,8 +38,10 @@ def proc_img(target_size, squarecrop, is_string=False, imgfile=None):
     imgfile = StringIO(imgfile) if is_string else imgfile
     im = PILImage.open(imgfile)
 
-    # This part does the processing
     scale_factor = target_size / np.float32(min(im.size))
+    if scale_factor == 1 and im.size[0] == im.size[1] and is_string is False:
+        return np.fromfile(imgfile, dtype=np.uint8)
+
     (wnew, hnew) = map(lambda x: int(round(scale_factor * x)), im.size)
     if scale_factor != 1:
         filt = PILImage.BICUBIC if scale_factor > 1 else PILImage.ANTIALIAS
@@ -58,6 +60,7 @@ class BatchWriter(object):
 
     def __init__(self, out_dir, image_dir, target_size=256, squarecrop=True, validation_pct=0.2,
                  class_samples_max=None, file_pattern='*.jpg', macro_size=3072):
+        np.random.seed(0)
         self.out_dir = os.path.expanduser(out_dir)
         self.image_dir = os.path.expanduser(image_dir)
         self.macro_size = macro_size
@@ -70,7 +73,7 @@ class BatchWriter(object):
         self.train_file = os.path.join(self.out_dir, 'train_file.csv.gz')
         self.val_file = os.path.join(self.out_dir, 'val_file.csv.gz')
         self.meta_file = os.path.join(self.out_dir, 'dataset_cache.pkl')
-        self.global_mean = None
+        self.global_mean = np.array([0, 0, 0]).reshape((3, 1))
         self.batch_prefix = 'data_batch_'
 
     def write_csv_files(self):
@@ -86,16 +89,13 @@ class BatchWriter(object):
         for subdir in subdirs:
             subdir_label = self.label_dict[os.path.basename(subdir)]
             files = glob(os.path.join(subdir, self.file_pattern))
-            np.random.shuffle(files)
             if self.class_samples_max is not None:
                 files = files[:self.class_samples_max]
             lines = [(filename, subdir_label) for filename in files]
             v_idx = int(self.validation_pct * len(lines))
             tlines += lines[v_idx:]
             vlines += lines[:v_idx]
-
         np.random.shuffle(tlines)
-        np.random.shuffle(vlines)
 
         if not os.path.exists(self.out_dir):
             os.makedirs(self.out_dir)
@@ -112,7 +112,10 @@ class BatchWriter(object):
 
         self.val_nrec = len(vlines)
         self.nval = -(-self.val_nrec // self.macro_size)
-        self.val_start = 10 ** int(np.log10(self.ntrain * 10))
+        if self.ntrain == 0:
+            self.val_start = 0
+        else:
+            self.val_start = 10 ** int(np.log10(self.ntrain * 10))
 
     def parse_file_list(self, infile):
         lines = np.loadtxt(infile, delimiter=',', skiprows=1, dtype={'names': ('fname', 'l_id'),
@@ -175,9 +178,18 @@ class BatchWriter(object):
 
     def run(self):
         self.write_csv_files()
-        namelist = ['train', 'validation']
-        filelist = [self.train_file, self.val_file]
-        startlist = [self.train_start, self.val_start]
+        if self.validation_pct == 0:
+            namelist = ['train']
+            filelist = [self.train_file]
+            startlist = [self.train_start]
+        elif self.validation_pct == 1:
+            namelist = ['validation']
+            filelist = [self.val_file]
+            startlist = [self.val_start]
+        else:
+            namelist = ['train', 'validation']
+            filelist = [self.train_file, self.val_file]
+            startlist = [self.train_start, self.val_start]
         for sname, fname, start in zip(namelist, filelist, startlist):
             print("%s %s %s" % (sname, fname, start))
             if fname is not None and os.path.exists(fname):
