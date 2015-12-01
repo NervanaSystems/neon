@@ -72,9 +72,6 @@ class ImageLoader(NervanaObject):
             self.mean = 127.
         self.start()
 
-    def __del__(self):
-        self.stop()
-
     def configure(self, repo_dir, inner_size, do_transforms,
                   rgb, multiview, set_name, subset_pct, macro):
         """
@@ -161,7 +158,7 @@ class ImageLoader(NervanaObject):
         """
         For backward compatibility.
         """
-        pass
+        self.stop()
 
     def start(self):
         """
@@ -257,3 +254,4 @@ if __name__ == '__main__':
         for x, t in master:
             print '****', epoch, master.start, master.idx, master.ndata
             print t.get().argmax(axis=0)[:17]
+    master.stop()
