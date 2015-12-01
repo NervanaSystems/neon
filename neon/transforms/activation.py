@@ -29,16 +29,32 @@ class Identity(Transform):
 class Rectlin(Transform):
     """
     ReLu activation function (Nair and  Hinton, ICML 2010)
+    Can optionally set a slope which will make this a Leaky ReLu
     Computes the function f(x) = max(0, x)
     """
-    def __init__(self, name='relu'):
+    def __init__(self, slope=0, name='relu'):
         super(Rectlin, self).__init__(name)
+        self.slope = slope
 
     def __call__(self, x):
-        return self.be.maximum(x, 0)
+        return self.be.maximum(x, 0) + self.slope * self.be.minimum(0, x)
 
     def bprop(self, x):
-        return self.be.greater(x, 0)
+        return self.be.greater(x, 0) + self.slope * self.be.less(x, 0)
+
+
+class Explin(Transform):
+    """
+    ELU activation function (Clevert, Unterthiner and Hochreiter, ICLR 2016 submission)
+    """
+    def __init__(self, alpha=1.0, name='elu'):
+        super(Explin, self).__init__(name)
+
+    def __call__(self, x):
+        return self.be.maximum(x, 0) + self.alpha * (self.be.exp(self.be.minimum(x, 0)) - 1)
+
+    def bprop(self, x):
+        return self.be.greater(x, 0) + self.be.minimum(x, 0) + self.alpha * self.be.less(x, 0)
 
 
 class Normalizer(Transform):

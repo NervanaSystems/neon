@@ -78,7 +78,7 @@ class ImgEndpoint(NervanaObject):
     SERVER_RESET = 254
 
     def __init__(self, repo_dir, inner_size,
-                 do_transforms=True, rgb=True, multiview=False,
+                 do_transforms=True, rgb=True, shuffle=False,
                  set_name='train', subset_pct=100):
 
         assert(subset_pct > 0 and subset_pct <= 100), "subset_pct must be between 0 and 100"
@@ -118,7 +118,7 @@ class ImgEndpoint(NervanaObject):
         self.center = False if do_transforms else True
         self.flip = True if do_transforms else False
         self.rgb = rgb
-        self.multiview = multiview
+        self.shuffle = shuffle
         self.label = 'l_id'
         if isinstance(self.nclass, dict):
             self.nclass = self.nclass[self.label]
@@ -144,9 +144,9 @@ class ImgMaster(ImgEndpoint):
     This is just a client that starts its own server process
     """
     def __init__(self, repo_dir, inner_size, do_transforms=True, rgb=True,
-                 multiview=False, set_name='train', subset_pct=100, dtype=np.float32):
+                 shuffle=False, set_name='train', subset_pct=100, dtype=np.float32):
         super(ImgMaster, self).__init__(repo_dir, inner_size, do_transforms,
-                                        rgb, multiview, set_name, subset_pct)
+                                        rgb, shuffle, set_name, subset_pct)
 
         # Create the communication buffers
         # We have two response buffers b/c we are double buffering
@@ -161,7 +161,7 @@ class ImgMaster(ImgEndpoint):
         self.jpg_idx = 0
 
         self.server_args = [repo_dir, inner_size, do_transforms, rgb,
-                            multiview, set_name, subset_pct]
+                            shuffle, set_name, subset_pct]
         self.server_args.append((self.request, self.response))
 
         # For debugging, we can just make a local copy
@@ -282,9 +282,9 @@ class ImgServer(ImgEndpoint):
     """
 
     def __init__(self, repo_dir, inner_size, do_transforms=True, rgb=True,
-                 multiview=False, set_name='train', subset_pct=100, shared_objs=None):
+                 shuffle=False, set_name='train', subset_pct=100, shared_objs=None):
         super(ImgServer, self).__init__(repo_dir, inner_size, do_transforms,
-                                        rgb, multiview, set_name, subset_pct)
+                                        rgb, shuffle, set_name, subset_pct)
         assert(shared_objs is not None)
         libpath = os.path.dirname(os.path.realpath(__file__))
         try:
@@ -300,7 +300,7 @@ class ImgServer(ImgEndpoint):
                                                       ct.c_bool(self.center),
                                                       ct.c_bool(self.flip),
                                                       ct.c_bool(self.rgb),
-                                                      ct.c_bool(self.multiview),
+                                                      ct.c_bool(self.shuffle),
                                                       ct.c_int(self.minibatch_size),
                                                       ct.c_char_p(self.filename),
                                                       ct.c_int(self.macro_start),
@@ -339,10 +339,16 @@ if __name__ == "__main__":
     be = gen_backend(backend='gpu', rng_seed=100)
     NervanaObject.be.bsz = 128
 
-    master = ImgMaster(repo_dir=args.data_dir, set_name='train', inner_size=224, subset_pct=10)
+    master = ImgMaster(repo_dir=args.data_dir, set_name='train', shuffle=True, inner_size=224,
+                       subset_pct=10)
     master.init_batch_provider()
     t0 = default_timer()
     total_time = 0
+
+    def dump_img_idx(imgbuf, tgtbuf, ii):
+        img = (imgbuf.get()[:, ii].reshape(3, -1) + master.global_mean).astype(np.uint8)
+        lbl = tgtbuf.get().argmax(axis=0)[ii]
+        save_pbuf(img, (3, 224, 224), 'tmp_' + str(lbl) + '.jpg')
 
     for epoch in range(3):
         for x, t in master:

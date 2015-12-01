@@ -230,7 +230,8 @@ class RMSProp(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, decay_rate=0.95, learning_rate=2e-3, epsilon=1e-6,
-                 gradient_clip_norm=None, gradient_clip_value=None, name="rmsprop"):
+                 gradient_clip_norm=None, gradient_clip_value=None, name="rmsprop",
+                 schedule=Schedule()):
         """
         Arguments:
             stochastic_round (bool): Set this to True for stochastic rounding.
@@ -246,6 +247,8 @@ class RMSProp(Optimizer):
             gradient_clip_value (float, optional): Value to element-wise clip
                                                    gradients.
                                                    Defaults to None.
+            schedule (neon.optimizers.optimizer.Schedule, optional): Learning rate schedule.
+                                                                     Defaults to a constant.
         Notes:
             Only constant learning rate is supported currently.
         """
@@ -254,6 +257,7 @@ class RMSProp(Optimizer):
         self.epsilon = epsilon
         self.decay_rate = decay_rate
         self.learning_rate = learning_rate
+        self.schedule = schedule
         self.gradient_clip_norm = gradient_clip_norm
         self.gradient_clip_value = gradient_clip_value
         self.stochastic_round = stochastic_round
@@ -266,7 +270,8 @@ class RMSProp(Optimizer):
             layer_list (list): a list of Layer objects to optimize.
             epoch (int): the current epoch, needed for the Schedule object.
         """
-        lrate, epsilon, decay = (self.learning_rate, self.epsilon, self.decay_rate)
+        lrate = self.schedule.get_learning_rate(self.learning_rate, epoch)
+        epsilon, decay = (self.epsilon, self.decay_rate)
         param_list = get_param_list(layer_list)
 
         scale_factor = self.clip_gradient_norm(param_list, self.gradient_clip_norm)

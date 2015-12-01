@@ -86,6 +86,51 @@ def test_rectlin_derivative_mixed(backend_default):
     outputs = np.array([[1, 0], [0, 1]])
     compare_tensors(Rectlin(), inputs, outputs, deriv=True)
 
+"""Leaky Rectified Linear unit
+"""
+
+
+def test_leaky_rectlin_positives(backend_default):
+    slope = 0.2
+    inputs = np.array([1, 3, 2]).reshape((3, 1))
+    outputs = np.array([1, 3, 2]).reshape((3, 1))
+    compare_tensors(Rectlin(slope=slope), inputs, outputs)
+
+
+def test_leaky_rectlin_negatives(backend_default):
+    slope = 0.2
+    inputs = np.array([[-1, -3], [-2, -4]])
+    outputs = inputs * slope
+    compare_tensors(Rectlin(slope=slope), inputs, outputs, tol=1e-7)
+
+
+def test_leaky_rectlin_mixed(backend_default):
+    slope = 0.2
+    inputs = np.array([[4, 0], [-2, 9]])
+    outputs = np.array([[4, 0], [-2 * slope, 9]])
+    compare_tensors(Rectlin(slope=slope), inputs, outputs, tol=1e-7)
+
+
+def test_leaky_rectlin_derivative_positives(backend_default):
+    slope = 0.2
+    inputs = np.array([1, 3, 2]).reshape((3, 1))
+    outputs = np.array([1, 1, 1]).reshape((3, 1))
+    compare_tensors(Rectlin(slope=slope), inputs, outputs, deriv=True)
+
+
+def test_leaky_rectlin_derivative_negatives(backend_default):
+    slope = 0.2
+    inputs = np.array([[-1, -3], [-2, -4]])
+    outputs = np.array([[0, 0], [0, 0]]) + slope
+    compare_tensors(Rectlin(slope=slope), inputs, outputs, deriv=True, tol=1e-7)
+
+
+def test_leaky_rectlin_derivative_mixed(backend_default):
+    slope = 0.2
+    inputs = np.array([[4, 0], [-2, 9]])
+    outputs = np.array([[1, 0], [slope, 1]])
+    compare_tensors(Rectlin(slope=slope), inputs, outputs, deriv=True, tol=1e-7)
+
 """Softmax
 """
 
