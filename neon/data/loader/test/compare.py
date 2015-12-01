@@ -20,6 +20,9 @@ downloads the CIFAR-10 dataset and saves it as individual JPEG files. It then
 proceeds to fit and evaluate a model using two different ways of loading the
 data. Macrobatches are written to disk as needed.
 
+run as follows:
+python compare.py -e 1 -r 0 -b cpu
+
 """
 import os
 import numpy as np
@@ -34,7 +37,6 @@ from neon.util.argparser import NeonArgparser
 from neon.data import load_cifar10, ImageLoader
 from neon.util.batch_writer import BatchWriter
 from PIL import Image
-import cv2
 from glob import glob
 
 trainimgs = 'trainimgs'
@@ -82,8 +84,7 @@ def load_dataset(basepath, datadir, shuffle):
         np.random.seed(0)
         np.random.shuffle(lines)
     for idx in range(len(lines)):
-        im = cv2.imread(lines[idx][0])
-        im = np.asarray(im)
+        im = np.asarray(Image.open(lines[idx][0]))[:, :, ::-1]
         im = np.transpose(im, axes=[2, 0, 1]).ravel()
         if data is None:
             data = np.empty((len(lines), im.shape[0]), dtype='float32')
