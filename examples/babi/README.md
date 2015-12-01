@@ -20,6 +20,9 @@ python examples/babi/demo.py -t 15 --rlayer_type gru --model_weights babi.p
 ```
 Task is en/qa15_basic-deduction
 
+The vocabulary set from this task has 29 words:
+.? Cats Emily Gertrude Jessica Mice Sheep What Winona Wolves a afraid are cat cats emily gertrude is jessica mice mouse of sheep winona wolf wolves
+
 Example from test set:
 
 Story

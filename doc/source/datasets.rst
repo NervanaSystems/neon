@@ -118,6 +118,21 @@ started to feed images to the model.
     from neon.data import ImageLoader
     train = ImageLoader(repo_dir=args.data_dir, inner_size=224, set_name='train')
 
+QA and bAbI 
+-----------
+A bAbI dataset object can be created by specifying which task and which subset (20 tasks and 4 subsets in bAbI) to retrieve. The object will use built-in metadata to get bAbI data from online sources, save and unzip the files for that task locally, and then vectorize the story-question-answer data. The training and test files are both needed to build a vocabulary set.
+
+A general question&answering container can take the story-question-answer data from a bAbI data object and create a data iterator for training.
+
+.. code-block:: python
+
+    # get the bAbI data
+    babi = BABI(path='.', task='qa15_basic-deduction', subset='en')
+
+    # create a QA iterator
+    train_set = QA(*babi.train)
+    valid_set = QA(*babi.test)
+
 
 Add a new dataset
 ------------------

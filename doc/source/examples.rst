@@ -86,6 +86,29 @@ text_generation_lstm.py_
 
 .. _text_generation_lstm.py: https://github.com/NervanaSystems/neon/blob/master/examples/text_generation_lstm.py
 
+Example 5 - Time series learning and prediction
+-------------------------------------------------
+This example trains a network using a LSTM on synthetic multi-dimensional time series data. After training,
+the network will generate the sequences. The results can be visualized by the plots generated as PNG files.
+
+timeseries_lstm.py_
+
+.. _timeseries_lstm.py: https://github.com/NervanaSystems/neon/blob/master/examples/timeseries_lstm.py
+
+Q&A model
+===================
+
+Example 1 - Baseline GRU/LSTM on bAbI dataset
+----------------------------------------------------
+This is an implementation of Facebook's baseline GRU/LSTM model on the bAbI dataset. 
+This model connects two paths of networks to process the story and question seperately. Each path includes word embedding and GRU/LSTM layers. Refer to the README in the babi directory for how to run the interactive demo.
+
+train.py_
+demo.py_
+
+.. _train.py: https://github.com/NervanaSystems/neon/blob/master/examples/babi/train.py
+.. _demo.py: https://github.com/NervanaSystems/neon/blob/master/examples/babi/demo.py
+
 Fully-connected Nets (MLP)
 ==========================
 

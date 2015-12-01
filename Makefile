@@ -239,7 +239,7 @@ test: env
 examples: env
 	@echo "Running all examples..."
 	@. $(ACTIVATE); \
-		for fn in `ls -1 examples/*.py`; \
+		for fn in `ls -1 examples/*.py examples/*/train.py`; \
 		do \
 		    echo "Running $$fn $(EXAMPLE_ARGS)"; \
 		    python $$fn $(EXAMPLE_ARGS); \
