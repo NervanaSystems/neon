@@ -33,6 +33,8 @@ class ImageLoader(NervanaObject):
     def __init__(self, repo_dir, inner_size, do_transforms=True,
                  rgb=True, multiview=False, set_name='train', subset_pct=100,
                  nlabels=1, macro=True, dtype=np.float32):
+        if not rgb:
+            raise ValueError('Non-RGB images are currently not supported')
         self.configure(repo_dir, inner_size, do_transforms,
                        rgb, multiview, set_name, subset_pct, macro)
         libpath = os.path.dirname(os.path.realpath(__file__))
@@ -46,30 +48,32 @@ class ImageLoader(NervanaObject):
         except:
             logger.error('Unable to load loader.so. Ensure that '
                          'this file has been compiled')
-        self.npix = self.inner_size * self.inner_size * 3
+        self.npix = 3 * self.inner_size * self.inner_size
         ishape = (3, self.inner_size, self.inner_size)
         self.bsz = self.be.bsz
         self.shape = ishape
         self.idx = 0
         self.nlabels = nlabels
 
-        self.dev_X = self.be.iobuf(self.npix, dtype=dtype)
-        # view for mean subtract
-        self.dev_X_ms = self.dev_X.reshape((ishape[0], -1))
-        self.dev_XT = []
-        self.dev_lbls = []
+        self.data = self.be.iobuf(self.npix, dtype=dtype)
+        # View for subtracting the mean.
+        self.data_view = self.data.reshape((ishape[0], -1))
+        self.buffers = []
+        self.labels = []
         for i in range(2):
-            self.dev_XT.append(self.be.empty(self.dev_X.shape, dtype=np.uint8))
-            self.dev_lbls.append(self.be.iobuf(nlabels, dtype=np.int32))
-        self.dev_Y = self.be.iobuf(self.nclass, dtype=dtype)
+            self.buffers.append(self.be.empty(self.data.shape, dtype=np.uint8))
+            self.labels.append(self.be.iobuf(nlabels, dtype=np.int32))
+        self.onehot_labels = self.be.iobuf(self.nclass, dtype=dtype)
 
-        # Crop the mean according to the inner_size
         if self.global_mean is not None:
-            # switch to BGR order
-            self.dev_mean = self.be.array(self.global_mean, dtype=dtype)
+            self.mean = self.be.array(self.global_mean, dtype=dtype)
         else:
-            # Just center uint8 values if missing global mean
-            self.dev_mean = 127.
+            # Just center uint8 values if missing global mean.
+            self.mean = 127.
+        self.start()
+
+    def __del__(self):
+        self.stop()
 
     def configure(self, repo_dir, inner_size, do_transforms,
                   rgb, multiview, set_name, subset_pct, macro):
@@ -89,7 +93,7 @@ class ImageLoader(NervanaObject):
         self.flip = do_transforms
         self.rgb = rgb
         self.multiview = multiview
-        self.start = 0
+        self.start_idx = 0
         self.macro = macro
 
         if not macro:
@@ -103,7 +107,7 @@ class ImageLoader(NervanaObject):
             self.nlabels = 1
             self.nclass = 1
             self.global_mean = None
-            self.img_size = 256
+            self.img_size = inner_size
             return
 
         # Load from repo dataset_cache:
@@ -111,9 +115,9 @@ class ImageLoader(NervanaObject):
             cache_filepath = os.path.join(repo_dir, 'dataset_cache.pkl')
             dataset_cache = load_obj(cache_filepath)
         except IOError:
-            raise IOError("Cannot find '%s/dataset_cache.pkl'. Run batch_writer "
-                          "to preprocess the data and create batch files for "
-                          "imageset" % (repo_dir))
+            raise IOError("Cannot find '%s/dataset_cache.pkl'. Run "
+                          "batch_writer to preprocess the data and create "
+                          "batch files for imageset" % (repo_dir))
 
         # Should have following defined:
         req_attributes = ['global_mean', 'nclass', 'val_start', 'ntrain',
@@ -127,8 +131,9 @@ class ImageLoader(NervanaObject):
                     'Dataset cache missing required attribute %s' % (r))
 
         if dataset_cache['global_mean'].shape != (3, 1):
-            raise ValueError('Dataset cache global mean is not in the proper format. Run '
-                             'neon/util/update_dataset_cache.py utility on %s.' % cache_filepath)
+            raise ValueError('Dataset cache global mean is not in the proper '
+                             'format. Run neon/util/update_dataset_cache.py '
+                             'utility on %s.' % cache_filepath)
 
         self.__dict__.update(dataset_cache)
         self.filename = os.path.join(repo_dir, self.batch_prefix)
@@ -144,9 +149,21 @@ class ImageLoader(NervanaObject):
 
     @property
     def nbatches(self):
-        return -((self.start - self.ndata) // self.bsz)  # ceildiv
+        return -((self.start_idx - self.ndata) // self.bsz)  # ceildiv
 
     def init_batch_provider(self):
+        """
+        For backward compatibility.
+        """
+        pass
+
+    def exit_batch_provider(self):
+        """
+        For backward compatibility.
+        """
+        pass
+
+    def start(self):
         """
         Launch background threads for loading the data.
         """
@@ -161,18 +178,18 @@ class ImageLoader(NervanaObject):
 
         if self.be.device_type == 0:
             data_buffers = DataBufferPair(
-                self.dev_XT[0].get().ctypes.data_as(ct.POINTER(ct.c_ubyte)),
-                self.dev_XT[1].get().ctypes.data_as(ct.POINTER(ct.c_ubyte)))
+                self.buffers[0].get().ctypes.data_as(ct.POINTER(ct.c_ubyte)),
+                self.buffers[1].get().ctypes.data_as(ct.POINTER(ct.c_ubyte)))
             label_buffers = LabelBufferPair(
-                self.dev_lbls[0].get().ctypes.data_as(ct.POINTER(ct.c_int)),
-                self.dev_lbls[1].get().ctypes.data_as(ct.POINTER(ct.c_int)))
+                self.labels[0].get().ctypes.data_as(ct.POINTER(ct.c_int)),
+                self.labels[1].get().ctypes.data_as(ct.POINTER(ct.c_int)))
         else:
             data_buffers = DataBufferPair(
-                ct.cast(int(self.dev_XT[0].gpudata), ct.POINTER(ct.c_ubyte)),
-                ct.cast(int(self.dev_XT[1].gpudata), ct.POINTER(ct.c_ubyte)))
+                ct.cast(int(self.buffers[0].gpudata), ct.POINTER(ct.c_ubyte)),
+                ct.cast(int(self.buffers[1].gpudata), ct.POINTER(ct.c_ubyte)))
             label_buffers = LabelBufferPair(
-                ct.cast(int(self.dev_lbls[0].gpudata), ct.POINTER(ct.c_int)),
-                ct.cast(int(self.dev_lbls[1].gpudata), ct.POINTER(ct.c_int)))
+                ct.cast(int(self.labels[0].gpudata), ct.POINTER(ct.c_int)),
+                ct.cast(int(self.labels[1].gpudata), ct.POINTER(ct.c_int)))
         params = DeviceParams(self.be.device_type, self.be.device_id,
                               data_buffers, label_buffers)
         self.loader = self.loaderlib.start(ct.c_int(self.img_size),
@@ -188,9 +205,9 @@ class ImageLoader(NervanaObject):
                                            ct.c_int(self.nlabels),
                                            ct.c_bool(self.macro),
                                            ct.POINTER(DeviceParams)(params))
-        assert self.start % self.bsz == 0
+        assert self.start_idx % self.bsz == 0
 
-    def exit_batch_provider(self):
+    def stop(self):
         """
         Clean up and exit background threads.
         """
@@ -201,24 +218,24 @@ class ImageLoader(NervanaObject):
         Restart data from index 0
         """
         # Reset local state
-        self.start = 0
+        self.start_idx = 0
         self.loaderlib.reset(self.loader)
 
     def __iter__(self):
-        for start in range(self.start, self.ndata, self.bsz):
+        for start in range(self.start_idx, self.ndata, self.bsz):
             end = min(start + self.bsz, self.ndata)
             if end == self.ndata:
-                self.start = self.bsz - (self.ndata - start)
+                self.start_idx = self.bsz - (self.ndata - start)
             self.loaderlib.next(self.loader)
             # Separating these steps to avoid possible casting error
-            self.dev_X[:] = self.dev_XT[self.idx]
-            self.dev_X_ms[:] = self.dev_X_ms - self.dev_mean
+            self.data[:] = self.buffers[self.idx]
+            self.data_view[:] = self.data_view - self.mean
 
             # Expanding out the labels on device
-            self.dev_Y[:] = self.be.onehot(self.dev_lbls[self.idx], axis=0)
+            self.onehot_labels[:] = self.be.onehot(self.labels[self.idx],
+                                                   axis=0)
             self.idx = 1 if self.idx == 0 else 0
-
-            yield self.dev_X, self.dev_Y
+            yield self.data, self.onehot_labels
 
 
 if __name__ == '__main__':
@@ -233,7 +250,6 @@ if __name__ == '__main__':
 
     master = ImageLoader(repo_dir=args.data_dir, set_name='train',
                          inner_size=224, subset_pct=10)
-    master.init_batch_provider()
     t0 = default_timer()
     total_time = 0
 
@@ -241,4 +257,3 @@ if __name__ == '__main__':
         for x, t in master:
             print '****', epoch, master.start, master.idx, master.ndata
             print t.get().argmax(axis=0)[:17]
-    master.stop()

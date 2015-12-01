@@ -100,7 +100,7 @@ def load_cifar10_imgs(path):
 
 
 def write_batches(args, macrodir, datadir, val_pct):
-    if not os.path.exists(macrodir):
+    if os.path.exists(macrodir):
         return
     print('Writing batches to %s' % macrodir)
     bw = BatchWriter(out_dir=macrodir,
