@@ -103,7 +103,6 @@ def test_cpu_randomstate():
     z1 = a.get()
 
     # check equality
-    # import ipdb; ipdb.set_trace()
     assert_tensors_allclose([x0, x1], [y0, y1], rtol=0., atol=0.)
     assert_tensors_allclose([x0, x1], [z0, z1], rtol=0., atol=0.)
     del(be)

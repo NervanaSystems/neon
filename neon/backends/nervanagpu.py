@@ -640,6 +640,8 @@ class NervanaGPU(Backend):
         bench (bool, optional): set to True to print out performance data for
                                     most kernel calls.  If False (default) no
                                     performance data is printed.
+        compat_mode (str, optional): set flag to match implementation of other libraries
+                                     for compatibility.  currently only 'caffe' is supported
 
         TODO: define other keyword parameters!
         """
@@ -652,7 +654,8 @@ class NervanaGPU(Backend):
                  device_id=0,
                  bench=False,
                  hist_bins=64,
-                 hist_offset=-48):
+                 hist_offset=-48,
+                 compat_mode=None):
 
         if default_dtype not in [np.float16, np.float32]:
             raise ValueError('Default data type for nervanagpu '
@@ -668,7 +671,7 @@ class NervanaGPU(Backend):
                             'rounding to %d bits' % stochastic_round)
 
         # super class init
-        super(NervanaGPU, self).__init__(rng_seed, default_dtype)
+        super(NervanaGPU, self).__init__(rng_seed, default_dtype, compat_mode=compat_mode)
 
         # context
         drv.init()

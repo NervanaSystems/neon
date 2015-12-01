@@ -152,9 +152,11 @@ class NeonArgparser(configargparse.ArgumentParser):
                             default='f32', metavar='default datatype',
                             help='default floating point '
                             'precision for backend [f64 for cpu only]')
-
         be_grp.add_argument('-z', '--batch_size', type=int, default=128,
                             help='batch size')
+        be_grp.add_argument('--caffe', action='store_true',
+                            help='match caffe when computing conv and pool layer output '
+                                 'sizes and dropout implementation')
 
         return
 
@@ -295,6 +297,11 @@ class NeonArgparser(configargparse.ArgumentParser):
                 logger.exception(err_msg)
                 raise IOError(err_msg)
 
+        if args.caffe:
+            args.compat_mode = 'caffe'
+        else:
+            args.compat_mode = None
+
         # extended parsers may need to generate backend after argparsing
         if gen_be:
             # generate the backend
@@ -304,7 +311,8 @@ class NeonArgparser(configargparse.ArgumentParser):
                         batch_size=args.batch_size,
                         datatype=args.datatype,
                         stochastic_round=args.rounding,
-                        max_devices=args.max_devices)
+                        max_devices=args.max_devices,
+                        compat_mode=args.compat_mode)
 
         # display what command line / config options were set (and from where)
         logger.info(self.format_values())

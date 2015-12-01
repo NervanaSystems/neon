@@ -88,7 +88,6 @@ def run_numpy_pool(op, cpuI, cpuE, dytpe, be_layer):
     dimI = be_layer.dimI
     dimO = be_layer.dimO
     op = be_layer.op
-    # C = be_layer.C
     K = be_layer.K
     N = be_layer.N
     M, P, Q = be_layer.MPQ

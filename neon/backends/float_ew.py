@@ -888,8 +888,6 @@ def call_compound_kernel(rand_state, *args):
     # for s in kernel_args: print s
     # for s in type_args:   print s
 
-    # import ipdb; ipdb.set_trace()
-
     # get or create the kernel in the memoize cache
     kernel = _get_compound_kernel(tuple(type_args))
 

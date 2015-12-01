@@ -382,7 +382,7 @@ class Backend(object):
     NervanaGPU and NervanaCPU inherits Backend.
     """
 
-    def __init__(self, rng_seed=None, default_dtype=np.float32):
+    def __init__(self, rng_seed=None, default_dtype=np.float32, compat_mode=None):
         # dtype
         self.default_dtype = default_dtype
 
@@ -393,6 +393,24 @@ class Backend(object):
         # batch size
         self.bsz = None
         self._min_dims = 2
+
+        if compat_mode is not None:
+            if compat_mode == 'caffe':
+                self.set_caffe_compat()
+            else:
+                raise ValueError('%s mode not supported currently' % compat_mode)
+        else:
+            self.compat_mode = None
+
+    def set_caffe_compat(self):
+        """
+        Set flag to make layers compatible with caffe in terms of conv and pool
+        layer output size determination and dropout layer implementation
+        """
+        self.compat_mode = 'caffe'
+
+    def check_caffe_compat(self):
+        return self.compat_mode == 'caffe'
 
     def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True,
               shared=None, parallelism=0):

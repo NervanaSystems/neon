@@ -495,14 +495,15 @@ class NervanaCPU(Backend):
                  rng_seed=None,
                  default_dtype=np.float32,
                  hist_bins=64,
-                 hist_offset=-48):
+                 hist_offset=-48,
+                 compat_mode=None):
 
         if default_dtype not in [np.float16, np.float32, np.float64]:
             logger.error('Default data type for nervanagpu '
                          'backend must be float16, 32 or 64')
             raise ValueError
 
-        super(NervanaCPU, self).__init__(rng_seed, default_dtype)
+        super(NervanaCPU, self).__init__(rng_seed, default_dtype, compat_mode=compat_mode)
 
         self.device_type = 0
         self.device_id = 0
