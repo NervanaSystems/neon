@@ -18,6 +18,8 @@
 #include <iostream>
 #include <fstream>
 #include <sstream> //for filename on oss
+#include <algorithm> //for shuffle
+#include <random>   // for default_random_engine
 #include <map>
 #include <vector>
 #include <deque>
@@ -60,11 +62,19 @@ template<typename T> vector<T> load_vect(ifstream& ifs, uint numel)
     return result;
 }
 
+void shuffle_deque(JpegList &d_imgs, LabelList &d_lbls,
+                   default_random_engine &e1,
+                   default_random_engine &e2)
+{
+    shuffle(d_imgs.begin(), d_imgs.end(), e1);
+    shuffle(d_lbls.begin(), d_lbls.end(), e2);
+}
+
 class ImagesetWorker {
  public:
     int _img_size, _inner_size, _border;
     int _npixels_in, _npixels_out, _inner_pixels;
-    bool _center, _flip, _multiview;
+    bool _center, _flip, _shuffle;
     int _minibatch_size;
     int _cur_batch;
     char *_filename;
@@ -75,7 +85,7 @@ class ImagesetWorker {
     uint _rseed;
     PtVect _corners;
     Size2i _length;
-    ImagesetWorker(int img_size, int inner_size, bool center, bool flip, bool rgb, bool multiview,
+    ImagesetWorker(int img_size, int inner_size, bool center, bool flip, bool rgb, bool shuffle,
                  int minibatch_size, char *filename, int macro_start, uint num_data);
 
     int reset();
@@ -90,15 +100,22 @@ class ImagesetWorker {
     JpegList imgs;
     int _nthreads;
     int _num_imgs_per_thread;
+    default_random_engine _eng1, _eng2;
 };
 
 ImagesetWorker::ImagesetWorker(int img_size, int inner_size, bool center,
                            bool flip, bool rgb, bool multiview, int minibatch_size,
                            char *filename, int macro_start, uint num_data)
     : _img_size(img_size), _inner_size(inner_size), _center(center),
-      _flip(flip), _multiview(multiview), _minibatch_size(minibatch_size),
+      _flip(flip), _shuffle(multiview), _minibatch_size(minibatch_size),
       _filename(filename), _macro_start(macro_start), _num_data(num_data)
 {
+
+
+    // create random engines tracking same state
+    _eng1 = default_random_engine{random_device{}()};
+    _eng2 = _eng1;
+    std::srand ( unsigned ( std::time(0) ) );
     _cur_batch = _macro_start;
     _channels = rgb ? 3 : 1;
     _colormode = rgb ? CV_LOAD_IMAGE_COLOR : CV_LOAD_IMAGE_GRAYSCALE;
@@ -194,6 +211,10 @@ int ImagesetWorker::read_from_flat_binary()
             _cur_batch++;
         }
 
+        if (_shuffle) {
+            shuffle_deque(imgs, _labels[0], _eng1, _eng2);
+        }
+
         return (int) num_images;
     }
     else {
@@ -206,7 +227,7 @@ int ImagesetWorker::process_next_minibatch(unsigned char* outdata)
 {
     // Do we need to add more imgs to our list?
     // (If we care about 40 ms, we can make this asynchronous too)
-    if (imgs.size() < (unsigned int) _minibatch_size) {
+    while (imgs.size() < (unsigned int) _minibatch_size) {
         read_from_flat_binary();
     }
     thread t[MAXTHREADS];

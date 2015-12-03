@@ -703,7 +703,7 @@ int main() {
 extern "C" {
 
 extern void* start(int img_size, int inner_size, bool center, bool flip,
-                   bool rgb, bool multiview, int minibatch_size,
+                   bool rgb, bool shuffle, int minibatch_size,
                    char *filename, int macro_start,
                    uint num_data, uint num_labels, bool macro,
                    DeviceParams* params) {

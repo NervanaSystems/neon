@@ -31,12 +31,12 @@ class ImageLoader(NervanaObject):
     """
 
     def __init__(self, repo_dir, inner_size, do_transforms=True,
-                 rgb=True, multiview=False, set_name='train', subset_pct=100,
+                 rgb=True, shuffle=False, set_name='train', subset_pct=100,
                  nlabels=1, macro=True, dtype=np.float32):
         if not rgb:
             raise ValueError('Non-RGB images are currently not supported')
         self.configure(repo_dir, inner_size, do_transforms,
-                       rgb, multiview, set_name, subset_pct, macro)
+                       rgb, shuffle, set_name, subset_pct, macro)
         libpath = os.path.dirname(os.path.realpath(__file__))
         try:
             self.loaderlib = ct.cdll.LoadLibrary(
@@ -73,7 +73,7 @@ class ImageLoader(NervanaObject):
         self.start()
 
     def configure(self, repo_dir, inner_size, do_transforms,
-                  rgb, multiview, set_name, subset_pct, macro):
+                  rgb, shuffle, set_name, subset_pct, macro):
         """
         Set up all dataset config options.
         """
@@ -89,7 +89,7 @@ class ImageLoader(NervanaObject):
         self.center = not do_transforms
         self.flip = do_transforms
         self.rgb = rgb
-        self.multiview = multiview
+        self.shuffle = shuffle
         self.start_idx = 0
         self.macro = macro
 
@@ -194,7 +194,7 @@ class ImageLoader(NervanaObject):
                                            ct.c_bool(self.center),
                                            ct.c_bool(self.flip),
                                            ct.c_bool(self.rgb),
-                                           ct.c_bool(self.multiview),
+                                           ct.c_bool(self.shuffle),
                                            ct.c_int(self.minibatch_size),
                                            ct.c_char_p(self.filename),
                                            ct.c_int(self.macro_start),
