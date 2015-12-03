@@ -13,15 +13,15 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 '''
-Test of the mlp/linear layer
+Test of the recurrent outputs layers.
 '''
 import itertools as itt
 import numpy as np
 
+from neon.backends import gen_backend
 from neon import NervanaObject
-from neon.initializers.initializer import Uniform
-from neon.layers.layer import Linear
 from neon.layers.recurrent import RecurrentSum, RecurrentMean, RecurrentLast
+
 
 def pytest_generate_tests(metafunc):
     bsz_rng = [1]
@@ -37,22 +37,11 @@ def pytest_generate_tests(metafunc):
         fargs = itt.product(seq_rng, inp_rng, bsz_rng)
         metafunc.parametrize('refgruargs', fargs)
 
-    if 'gradgruargs' in metafunc.fixturenames:
-        fargs = []
-        if metafunc.config.option.all:
-            seq_rng = [2, 3]
-            inp_rng = [5, 10]
-        else:
-            seq_rng = [3]
-            inp_rng = [5]
-        fargs = itt.product(seq_rng, inp_rng, bsz_rng)
-        metafunc.parametrize('gradgruargs', fargs)
 
 def test_recurrent_sum(backend_default, refgruargs):
     seq_len, nin, batch_size = refgruargs
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
 
-    dtypeu = np.float32
     in_shape = (nin, seq_len)
     layer = RecurrentSum()
     layer.configure(in_shape)
@@ -74,7 +63,7 @@ def test_recurrent_sum(backend_default, refgruargs):
     assert np.all(out.get() == seq_len * np.ones((nin, batch_size)))
     assert np.all(err == seq_len * inp.get())
 
-    # random batch 
+    # random batch
     rinp = np.random.random((nin, batch_size))
     inp = np.repeat(rinp, repeats=seq_len, axis=1)
     inp_g = layer.be.array(inp)
@@ -84,26 +73,23 @@ def test_recurrent_sum(backend_default, refgruargs):
     assert np.allclose(err.get(), seq_len * inp)
 
     # full random
-    """
     inp = np.random.random((nin, seq_len * batch_size))
     inp_g = layer.be.array(inp)
-    out = layer.fprop(inp)
+    out = layer.fprop(inp_g)
     err = layer.bprop(out)
     out_comp = np.zeros(out.shape)
     err_comp = np.zeros(inp.shape)
     for i in range(seq_len):
-        out_comp[:] = out_camp + inp[:, i*batch_size:(i+1)*batch_size].get()
-        err_comp[i*batch_size:(i+1)*batch_size] = err.get()
-    #assert np.allclose(out_comp, out.get())
-    #assert np.allclose(err_comp, err.get())
-    """
+        out_comp[:] = out_comp + inp[:, i*batch_size:(i+1)*batch_size]
+        err_comp[:, i*batch_size:(i+1)*batch_size] = out.get()
+    assert np.allclose(out_comp, out.get())
+    assert np.allclose(err_comp, err.get())
 
 
 def test_recurrent_mean(backend_default, refgruargs):
     seq_len, nin, batch_size = refgruargs
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
 
-    dtypeu = np.float32
     in_shape = (nin, seq_len)
     layer = RecurrentMean()
     layer.configure(in_shape)
@@ -123,7 +109,7 @@ def test_recurrent_mean(backend_default, refgruargs):
     out = layer.fprop(inp)
     err = layer.bprop(out).get()
     assert np.all(out.get() == np.ones((nin, batch_size)))
-    assert np.all(err == 1./ seq_len * inp.get())
+    assert np.all(err == 1. / seq_len * inp.get())
 
     # random
     rinp = np.random.random((nin, batch_size))
@@ -132,13 +118,28 @@ def test_recurrent_mean(backend_default, refgruargs):
     out = layer.fprop(inp_g)
     err = layer.bprop(out)
     assert np.allclose(out.get(), rinp)
-    assert np.allclose(err.get(), 1./ seq_len * inp)
+    assert np.allclose(err.get(), 1. / seq_len * inp)
+
+    # full random
+    inp = np.random.random((nin, seq_len * batch_size))
+    inp_g = layer.be.array(inp)
+    out = layer.fprop(inp_g)
+    err = layer.bprop(out)
+    out_comp = np.zeros(out.shape)
+    err_comp = np.zeros(inp.shape)
+    for i in range(seq_len):
+        out_comp[:] = out_comp + inp[:, i*batch_size:(i+1)*batch_size]
+        err_comp[:, i*batch_size:(i+1)*batch_size] = out.get()/seq_len
+    out_comp[:] /= seq_len
+
+    assert np.allclose(out_comp, out.get())
+    assert np.allclose(err_comp, err.get())
+
 
 def test_recurrent_last(backend_default, refgruargs):
     seq_len, nin, batch_size = refgruargs
     NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
 
-    dtypeu = np.float32
     in_shape = (nin, seq_len)
     layer = RecurrentLast()
     layer.configure(in_shape)
@@ -159,7 +160,8 @@ def test_recurrent_last(backend_default, refgruargs):
     err = layer.bprop(out).get()
     assert np.all(out.get() == np.ones((nin, batch_size)))
     assert np.all(err[:, -batch_size:] == inp.get()[:, -batch_size:])
-    assert np.all(err[:, :-batch_size] == np.zeros((nin, (seq_len-1)*batch_size)))
+    assert np.all(
+        err[:, :-batch_size] == np.zeros((nin, (seq_len-1)*batch_size)))
 
     # random
     rinp = np.random.random((nin, batch_size))
@@ -169,4 +171,20 @@ def test_recurrent_last(backend_default, refgruargs):
     err = layer.bprop(out)
     assert np.allclose(out.get(), rinp)
     assert np.allclose(err[:, -batch_size:].get(), rinp)
-    return 
+
+    # full random
+    inp = np.random.random((nin, seq_len * batch_size))
+    inp_g = layer.be.array(inp)
+    out = layer.fprop(inp_g)
+    err = layer.bprop(out)
+    out_comp = np.zeros(out.shape)
+    err_comp = np.zeros(inp.shape)
+    out_comp[:] = inp[:, -batch_size:]
+    err_comp[:, -batch_size:] = out.get()
+
+
+if __name__ == '__main__':
+
+    fargs = (2, 3, 1)
+    be = gen_backend(backend='gpu')
+    test_recurrent_sum(be, fargs)

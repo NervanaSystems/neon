@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 '''
-Test of the mlp/linear layer
+Test of a LookupTable layer, which is often being used for word embedding
 '''
 import itertools as itt
 import numpy as np
@@ -42,18 +42,6 @@ def pytest_generate_tests(metafunc):
         fargs = itt.product(nin_rng, nout_rng, vocab_size, bsz_rng)
         print fargs
         metafunc.parametrize('basic_linargs', fargs)
-
-    if 'allrand_args' in metafunc.fixturenames:
-        fargs = []
-        eps = np.finfo(np.float32).eps
-        # weight ranges
-        w_rng = [[0.0, 1.0], [-1.0, 0.0], [-1.0, 1.0]]
-        if metafunc.config.option.all:
-            rng_max = [eps, eps*10, 1.0, 2048.0, 1.0e6, 1.0e10]
-        else:
-            rng_max = [eps, 1.0, 1.0e10]
-        fargs = itt.product(w_rng, rng_max)
-        metafunc.parametrize('allrand_args', fargs)
 
 
 def test_lookuptable_zeros_error(backend_default, basic_linargs):
