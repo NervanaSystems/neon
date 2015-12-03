@@ -18,8 +18,6 @@ CPU backend layers
 import math
 from operator import mul
 
-from neon.backends import output_dim
-
 
 def ceil_div(x, y):
     """
@@ -59,9 +57,9 @@ class ConvLayer(object):
                  bsum=False):
 
         # Compute the output spatial dimensions
-        M = output_dim(D, T, pad_d, str_d)
-        P = output_dim(H, R, pad_h, str_h)
-        Q = output_dim(W, S, pad_w, str_w)
+        M = lib.output_dim(D, T, pad_d, str_d)
+        P = lib.output_dim(H, R, pad_h, str_h)
+        Q = lib.output_dim(W, S, pad_w, str_w)
 
         self.C = C
         self.K = K
@@ -253,10 +251,10 @@ class PoolLayer(object):
             self.overlap = 0.0
 
         # Compute the output dimensions
-        K = output_dim(C, J, pad_c, str_c, pooling=True)
-        M = output_dim(D, T, pad_d, str_d, pooling=True)
-        P = output_dim(H, R, pad_h, str_h, pooling=True)
-        Q = output_dim(W, S, pad_w, str_w, pooling=True)
+        K = lib.output_dim(C, J, pad_c, str_c, pooling=True)
+        M = lib.output_dim(D, T, pad_d, str_d, pooling=True)
+        P = lib.output_dim(H, R, pad_h, str_h, pooling=True)
+        Q = lib.output_dim(W, S, pad_w, str_w, pooling=True)
 
         self.op = op
         self.C = C

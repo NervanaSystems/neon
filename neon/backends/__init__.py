@@ -28,29 +28,6 @@ from neon.backends.autodiff import Autodiff
 from neon.backends.util.check_gpu import get_device_count
 
 
-def output_dim(X, S, padding, strides, pooling=False):
-    """ 
-    compute along 1 dimension, with these sizes, what will be the output dimension
-
-    Arguments:
-        X (int): input data dimension
-        S (int): filter dimension
-        padding (int): padding on each side
-        strides (int): striding
-        pooling (bool): flag for setting pooling layer size
-    """
-
-    if NervanaObject.be.check_caffe_compat() and pooling:
-        size = int(ceil(float(X - S + 2 * padding)/strides)) + 1 
-        if padding > 0 and (size - 1)*stride >= X + padding:
-            # decrement size if last pooling op is completely in padding
-            size -= 1
-    else:
-        # normal neon output size determination
-        size = (X - S + 2 * padding)/strides + 1 
-    return size
-
-
 def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
                 max_devices=get_device_count(), compat_mode=None):
