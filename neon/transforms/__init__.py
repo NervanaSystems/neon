@@ -15,5 +15,5 @@
 from neon.transforms.activation import (Identity, Rectlin, Softmax, Tanh,
                                         Logistic, Normalizer)
 from neon.transforms.cost import (CrossEntropyBinary, CrossEntropyMulti,
-                                  SumSquared, MeanSquared,
+                                  SumSquared, MeanSquared, LogLoss,
                                   Misclassification, TopKMisclassification, Accuracy)

@@ -204,6 +204,29 @@ class MeanSquared(Cost):
         self.funcgrad = lambda y, t: (y - t)/y.shape[0]
 
 
+class LogLoss(Metric):
+    """
+    Compute logloss
+    """
+    def __init__(self):
+        self.correctProbs = self.be.iobuf(1)
+        self.metric_names = ['LogLoss']
+
+    def __call__(self, y, t, calcrange=slice(0, None)):
+        """
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            numpy array : Returns the log loss  metric in numpy array,
+                         [LogLoss]
+        """
+        self.correctProbs[:] = self.be.sum(y * t, axis=0)
+        self.correctProbs[:] = -self.be.safelog(self.correctProbs)
+        return np.array(self.correctProbs.get()[:, calcrange].mean())
+
+
 class TopKMisclassification(Metric):
 
     """
@@ -227,7 +250,8 @@ class TopKMisclassification(Metric):
             t (Tensor or OpTree): True targets corresponding to y
 
         Returns:
-            float: Returns the metric
+            numpy ary : Returns the metrics in numpy array,
+                        [LogLoss, Top 1 misclass, Top k misclass]
         """
         be = self.be
         self.correctProbs[:] = be.sum(y * t, axis=0)
