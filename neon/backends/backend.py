@@ -18,7 +18,7 @@ Defines Tensor and Backend class
 
 import numpy as np
 import logging
-
+from math import ceil
 
 logger = logging.getLogger(__name__)
 
@@ -401,6 +401,28 @@ class Backend(object):
                 raise ValueError('%s mode not supported currently' % compat_mode)
         else:
             self.compat_mode = None
+
+    def output_dim(self, X, S, padding, strides, pooling=False):
+        """
+        compute along 1 dimension, with these sizes, what will be the output dimension
+
+        Arguments:
+            X (int): input data dimension
+            S (int): filter dimension
+            padding (int): padding on each side
+            strides (int): striding
+            pooling (bool): flag for setting pooling layer size
+        """
+
+        if self.check_caffe_compat() and pooling:
+            size = int(ceil(float(X - S + 2 * padding)/strides)) + 1
+            if padding > 0 and (size - 1)*strides >= X + padding:
+                # decrement size if last pooling op is completely in padding
+                size -= 1
+        else:
+            # normal neon output size determination
+            size = (X - S + 2 * padding)/strides + 1
+        return size
 
     def set_caffe_compat(self):
         """
