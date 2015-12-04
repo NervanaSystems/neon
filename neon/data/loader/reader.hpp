@@ -27,6 +27,7 @@
 #include <vector>
 
 #include "buffer.hpp"
+#include "batchfile.hpp"
 
 using std::string;
 using std::ifstream;
@@ -38,25 +39,20 @@ public:
     virtual ~Reader() {};
     virtual int read(CharBuffer* data, IntBuffer* labels) = 0;
     virtual int reset() = 0;
-#if STANDALONE
-    virtual int open() = 0;
-    virtual int next() = 0;
-    virtual int close() = 0;
     // For unit testing.
-    virtual int readAll(CharBuffer* data, IntBuffer* labels) = 0;
-#endif
+    virtual void readAll(CharBuffer* data, IntBuffer* labels) = 0;
+    virtual int totalDataSize() = 0;
 };
 
 class MacrobatchReader : public Reader {
 public:
     MacrobatchReader(string pathPrefix, int startFileIdx,
-                    int itemCount, int batchSize)
+                     int itemCount, int batchSize)
     : Reader(), _pathPrefix(pathPrefix), _startFileIdx(startFileIdx),
       _fileIdx(startFileIdx), _itemIdx(0), _itemCount(itemCount),
-      _batchSize(batchSize), _itemsLeft(0), _itemsRead(0), _ifs(0),
-      _labels(0), _labelCount(0), _imageCount(0) {
+      _batchSize(batchSize), _itemsLeft(0), _itemsRead(0) {
         static_assert(sizeof(int) == 4, "int is not 4 bytes");
-        _error = open();
+        open();
     }
 
     virtual ~MacrobatchReader() {
@@ -64,11 +60,10 @@ public:
     }
 
     int read(CharBuffer* data, IntBuffer* labels) {
-        assert(_error == 0);
         int offset = 0;
         while (offset < _batchSize) {
             int count = _batchSize - offset;
-            int result = read(data, labels, offset, count);
+            int result = read(data, labels, count);
             if (result == -1) {
                 return -1;
             }
@@ -77,7 +72,6 @@ public:
 
         assert(offset == _batchSize);
         assert(_itemIdx <= _itemCount);
-        labels->pushItem(_labelCount * sizeof(int) * _batchSize);
         return 0;
     }
 
@@ -85,34 +79,37 @@ public:
         close();
         _fileIdx = _startFileIdx;
         _itemIdx = 0;
-        _error = open();
+        open();
         return 0;
     }
 
-#if STANDALONE
-    // For unit testing.
-    int readAll(CharBuffer* data, IntBuffer* labels) {
-        int fileSize = 0;
-        int chunkSize = sizeof(int) * _labelCount * _itemsLeft;
-        memcpy(labels->getCurrent(), _labels, chunkSize);
-        labels->pushItem(chunkSize);
-        int bufSize = data->getSize();
-        for (int i = 0; i < _itemsLeft; ++i) {
-            uint imageSize = loadVal<uint>();
-            fileSize += imageSize;
-            if (fileSize > bufSize) {
-                printf("buffer too small for file %d\n", _fileIdx);
-                return -2;
-            }
-            _ifs->read(reinterpret_cast<char *>(data->getCurrent()), imageSize);
-            data->pushItem(imageSize);
-        }
-        return fileSize;
+    int itemCount() {
+        return _batchFile.itemCount();
     }
-#endif
+
+    int maxDataSize() {
+        return _batchFile.maxDataSize();
+    }
+
+    int maxLabelsSize() {
+        return _batchFile.maxLabelsSize();
+    }
+
+    int totalDataSize() {
+        return _batchFile.totalDataSize();
+    }
+
+    int totalLabelsSize() {
+        return _batchFile.totalLabelsSize();
+    }
+
+    // For unit testing.
+    void readAll(CharBuffer* data, IntBuffer* labels) {
+        readExact(data, labels, _itemsLeft);
+    }
 
 private:
-    int read(CharBuffer* data, IntBuffer* labels, int offset, int count) {
+    int read(CharBuffer* data, IntBuffer* labels, int count) {
         if (_itemsLeft == 0) {
             next();
         }
@@ -120,90 +117,46 @@ private:
         int realCount = std::min(count, _itemsLeft);
         if (_itemIdx + realCount >= _itemCount) {
             realCount = _itemCount - _itemIdx;
-            readExact(data, labels, offset, realCount);
+            readExact(data, labels, realCount);
             reset();
             return realCount;
         }
-        readExact(data, labels, offset, realCount);
+        readExact(data, labels, realCount);
         return realCount;
     }
 
-    void readExact(CharBuffer* data, IntBuffer* labels, int offset, int count) {
+    void readExact(CharBuffer* data, IntBuffer* labels, int count) {
         assert(count <= _itemsLeft);
-        for (int i = 0; i < _labelCount; i++) {
-            memcpy(labels->getCurrent() + i * _batchSize + offset,
-                   _labels + i * _imageCount + _itemsRead,
-                   sizeof(int) * count);
-        }
         for (int i = 0; i < count; ++i) {
-            uint imageSize = loadVal<uint>();
-            _ifs->read(reinterpret_cast<char *>(data->getCurrent()), imageSize);
-            data->pushItem(imageSize);
+            int         dataSize;
+            int         labelSize;
+            _batchFile.readItem((char*) data->getCurrent(),
+                                (char*) labels->getCurrent(),
+                                &dataSize, &labelSize);
+            data->pushItem(dataSize);
+            labels->pushItem(1);
         }
         _itemsLeft -= count;
         _itemsRead += count;
         _itemIdx += count;
     }
 
-    int next() {
+    void next() {
         close();
         _fileIdx++;
-        _error = open();
-        return _error;
+        open();
     }
 
-    int open() {
-        assert(_ifs == 0);
-        assert(_labels == 0);
+    void open() {
         stringstream fileName;
         fileName << _pathPrefix << _fileIdx;
-        _ifs = new ifstream(fileName.str(), ifstream::binary);
-        if (_ifs->is_open() == false) {
-            printf("Error opening file %s\n", fileName.str().c_str());
-            return -1;
-        }
-
-        _imageCount = loadVal<uint>();
-        _labelCount = loadVal<uint>();
-        _labels = new int[_labelCount * _imageCount];
-        for (int i = 0; i < _labelCount; i++) {
-            loadString();
-            _ifs->read(reinterpret_cast<char *>(_labels + i * _imageCount),
-                       _imageCount * sizeof(int));
-        }
-        _itemsLeft = _imageCount;
+        _batchFile.openForRead(fileName.str());
+        _itemsLeft = _batchFile.itemCount();
         _itemsRead = 0;
-        return 0;
     }
 
-    int close() {
-        if (_ifs == 0) {
-            return 0;
-        }
-        _ifs->close();
-        delete _ifs;
-        delete[] _labels;
-        _ifs = 0;
-        _labels = 0;
-        return 0;
-    }
-
-    template<typename T>
-    T loadVal()
-    {
-        T result;
-        _ifs->read(reinterpret_cast<char *> (&result), sizeof(T));
-        return result;
-    }
-
-    string loadString()
-    {
-        long length;
-        string result;
-        _ifs->read(reinterpret_cast<char *> (&length), sizeof(long));
-        result.resize(length);
-        _ifs->read(&result[0], length);
-        return result;
+    void close() {
+        _batchFile.close();
     }
 
 private:
@@ -221,12 +174,7 @@ private:
     int                         _itemsLeft;
     // Number of items  that has been read from the current macrobatch.
     int                         _itemsRead;
-    ifstream*                   _ifs;
-    int*                        _labels;
-    int                         _labelCount;
-    // Total number of images in the current macrobatch.
-    int                         _imageCount;
-    int                         _error;
+    BatchFile                   _batchFile;
 };
 
 class ImageFileReader : public Reader {
@@ -234,7 +182,8 @@ public:
     ImageFileReader(string listFile, int itemCount, int batchSize, int outerSize)
     : Reader(), _listFile(listFile), _itemIdx(0), _itemCount(itemCount),
       _batchSize(batchSize), _outerSize(outerSize) {
-        _error = loadFileList();
+
+        _error = readFileLines(_listFile, _fileNames);
         _rootPath = _listFile.c_str();
         _rootPath = dirname((char*) _rootPath.c_str());
     }
@@ -243,9 +192,6 @@ public:
         if (_error != 0) {
             return _error;
         }
-
-        memset(labels->getCurrent(), 0, labels->getSize() * sizeof(int));
-        labels->pushItem(labels->getSize() * sizeof(int));
         vector<uchar> buf;
         vector<int> param = vector<int>(2);
         param[0] = CV_IMWRITE_JPEG_QUALITY;
@@ -264,10 +210,14 @@ public:
             int imageSize = buf.size();
             memcpy(data->getCurrent(), &buf[0], imageSize);
             data->pushItem(imageSize);
+            memset(labels->getCurrent(), 0, sizeof(int));
+            labels->pushItem(1);
+
             if (++_itemIdx == _itemCount) {
                 // Wrap around.
                 reset();
             }
+
         }
         return 0;
     }
@@ -278,28 +228,12 @@ public:
         return 0;
     }
 
-#if STANDALONE
     // For unit testing.
-    virtual int readAll(CharBuffer* data, IntBuffer* labels) {
+    virtual void readAll(CharBuffer* data, IntBuffer* labels) {
         assert(0);
-        return -1;
     };
-#endif
 
-private:
-    int loadFileList() {
-        ifstream ifs(_listFile);
-        if (!ifs) {
-            printf("Could not open %s\n", _listFile.c_str());
-            return -1;
-        }
-        string line;
-        while (std::getline(ifs, line)) {
-            _fileNames.push_back(line);
-            if (_fileNames.size() == _itemCount) {
-                break;
-            }
-        }
+    int totalDataSize() {
         return 0;
     }
 

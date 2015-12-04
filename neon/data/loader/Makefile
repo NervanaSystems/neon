@@ -36,6 +36,36 @@ else
 	$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 -pthread $< $$(pkg-config opencv --cflags --libs)
 endif
 
+reader_test: reader_test.cpp $(SRCS)
+	@echo "Building $@..."
+ifneq ($(CC), nvcc)
+	$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
+endif
+
+decode_test: decode_test.cpp $(SRCS)
+	@echo "Building $@..."
+ifneq ($(CC), nvcc)
+	$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
+endif
+
+examine_batchfile: examine_batchfile.cpp $(SRCS)
+	@echo "Building $@..."
+ifneq ($(CC), nvcc)
+		$(CC) -o $@ $(INC) $(LIB) -Wall -O0 -g -std=c++11 $<
+endif
+
+img_macrowriter: img_macrowriter.cpp $(SRCS)
+	@echo "Building $@..."
+ifneq ($(CC), nvcc)
+		$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
+endif
+
+writer.so: img_macrowriter.cpp $(SRCS)
+	@echo "Building $@..."
+ifneq ($(CC), nvcc)
+		$(CC) -shared -o $@ -fPIC $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
+endif
+
 loader.so: loader.cpp $(SRCS)
 	@echo "Building $@..."
 ifneq ($(shell pkg-config --modversion opencv >/dev/null 2>&1; echo $$?), 0)

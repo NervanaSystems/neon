@@ -16,17 +16,126 @@
 #include <string.h>
 #include <stdlib.h>
 #include <fstream>
+#include <vector>
 
 #include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
 typedef uint8_t uchar;
 
 using std::ofstream;
+using std::vector;
 using cv::Mat;
 using cv::Rect;
 using cv::Point2i;
 using cv::Size2i;
+
+void resizeInput(vector<uchar> &jpgdata, int maxDim){
+    // Takes the buffer containing encoded jpg, determines if its shortest dimension
+    // is greater than maxDim.  If so, it scales it down so that the shortest dimension
+    // is equal to maxDim.  equivalent to "512x512^>" for maxDim=512 geometry argument in
+    // imagemagick
+
+    Mat image = Mat(1, jpgdata.size(), CV_8UC3, &jpgdata[0]);
+    Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
+
+    int minDim = std::min(decodedImage.rows, decodedImage.cols);
+    // If no resizing necessary, just return, original image still in jpgdata;
+    if (minDim <= maxDim)
+        return;
+
+    vector<int> param = {CV_IMWRITE_JPEG_QUALITY, 90};
+    double scaleFactor = (double) maxDim / (double) minDim;
+    Mat resizedImage;
+    cv::resize(decodedImage, resizedImage, Size2i(0, 0), scaleFactor, scaleFactor, CV_INTER_AREA);
+    cv::imencode(".jpg", resizedImage, jpgdata, param);
+    return;
+}
+
+class AugmentationParams {
+public:
+    AugmentationParams(int innerSize,
+                       bool center, bool flip, bool rgb,
+                       float aspectRatio, int scaleMin,
+                       int contrastMin, int contrastMax,
+                       int rotateMin, int rotateMax)
+    : _rngSeed(0), _innerSize(innerSize, innerSize),
+      _center(center), _flip(flip), _rgb(rgb),
+      _aspectRatio(aspectRatio), _scaleMin(scaleMin),
+      _contrastMin(contrastMin), _contrastMax(contrastMax),
+      _rotateMin(rotateMin), _rotateMax(rotateMax) {
+    }
+
+    AugmentationParams()
+    : AugmentationParams(224, true, false, true, 1.0f, 100, 0, 0, 0, 0){}
+
+    bool doRandomFlip() {
+        return _flip && (rand_r(&(_rngSeed)) % 2 == 0);
+    }
+
+    void randomCorner(const Size2i &border, Point2i* point) {
+        if (!_center) {
+            point->x = rand_r(&_rngSeed) % (border.width + 1);
+            point->y = rand_r(&_rngSeed) % (border.height + 1);
+        } else {
+            point->x = border.width / 2;
+            point->y = border.height / 2;
+        }
+    }
+
+    float getRandomContrast() {
+        if (_contrastMin == _contrastMax)
+            return 0;
+        else {
+            return (_contrastMin + (rand_r(&(_rngSeed)) % (_contrastMax - _contrastMin))) / 100.0;
+        }
+    }
+
+    void getRandomCrop(const Size2i &inputSize, Rect* cropBox) {
+        Size2i cropSize = inputSize;
+        Point2i corner;
+        // _scaleMin == 100 % means no random rescaling;
+        // ignore aspectRatio and just use the entire image.
+        if (_scaleMin < 100) {
+            // get a scale factor between _scaleMin % to 100 %
+            float scaleFactor = (_scaleMin + (rand_r(&(_rngSeed)) % (100 - _scaleMin))) / 100.0;
+            // randomly toggle between portrait and landscape aspect ratio (no effect if square)
+            float aspectRatio = (rand_r(&(_rngSeed)) % 2 == 0) ? _aspectRatio : 1.0 / _aspectRatio;
+
+            cropSize.width = std::min(inputSize.width, (int) (inputSize.height / aspectRatio));
+            cropSize.height = std::min(inputSize.height, (int) (inputSize.width * aspectRatio));
+            float areaRatio = cropSize.area() / (float) inputSize.area();
+            float linearScale = std::sqrt(scaleFactor / areaRatio);
+            if (linearScale < 1.0) {
+                cropSize.width *= linearScale;
+                cropSize.height *= linearScale;
+            }
+        }
+        randomCorner(inputSize - cropSize, &corner);
+        cropBox->width = cropSize.width;
+        cropBox->height = cropSize.height;
+        cropBox->x = corner.x;
+        cropBox->y = corner.y;
+        return;
+    }
+
+    virtual ~AugmentationParams() {};
+
+    const Size2i &getSize() {
+        return _innerSize;
+    }
+
+protected:
+    unsigned int                _rngSeed;
+    Size2i                      _innerSize;
+    bool                        _center, _flip, _rgb;
+    // Aspect ratio of bounding box.  We will flip between portrait and landscape at random
+    float                       _aspectRatio;
+    int                         _scaleMin;
+    int                         _contrastMin, _contrastMax;
+    int                         _rotateMin, _rotateMax;
+};
 
 class Decoder {
 public:
@@ -36,61 +145,62 @@ public:
 
 class ImageDecoder : public Decoder {
 public:
-    ImageDecoder(int innerSize, bool augment)
-    : _rngSeed(0), _innerSize(innerSize), _augment(augment) {
+    ImageDecoder(AugmentationParams *augParams)
+    : _augParams(augParams) {
+        _scratchbuf = new uchar[_augParams->getSize().area() * 3];
     }
 
-    void save(int i, uchar* item, int itemSize, uchar* buf) {
-        char filn[256];
-        sprintf(filn, "imgs/file%d.jpg", i);
+    virtual ~ImageDecoder() {
+        delete[] _scratchbuf;
+    }
+
+    void save_binary(char *filn, uchar* item, int itemSize, uchar* buf) {
         ofstream file(filn, ofstream::out | ofstream::binary);
+        file.write((char*)(&itemSize), sizeof(int));
         file.write((char*)item, itemSize);
         printf("wrote %s\n", filn);
-    }
-
-    void randomCorner(Point2i* point, int border) {
-        point->x = rand_r(&_rngSeed) % (border + 1);
-        point->y = rand_r(&_rngSeed) % (border + 1);
     }
 
     void decode(uchar* item, int itemSize, uchar* buf) {
         Mat image = Mat(1, itemSize, CV_8UC3, item);
         Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
-        Point2i corner;
-        Size2i size(_innerSize, _innerSize);
+        Rect cropBox;
+        _augParams->getRandomCrop(decodedImage.size(), &cropBox);
+        auto cropArea = cropBox.area();
+        auto innerSize = _augParams->getSize();
 
-        int outerSize = decodedImage.size().height;
-        assert(outerSize == decodedImage.size().width);
-        assert(outerSize >= _innerSize);
-        int border = outerSize - _innerSize;
-        if (_augment == true) {
-            randomCorner(&corner, border);
-        } else {
-            corner.x = corner.y = border / 2;
-        }
-
-        Mat croppedImage = decodedImage(Rect(corner, size));
+        Mat croppedImage = decodedImage(cropBox);
+        // This would be more efficient, but we should allocate separate bufs for each thread
+        // Mat resizedImage = Mat(innerSize, CV_8UC3, _scratchbuf);
+        Mat resizedImage;
+        int interp_method = cropArea < innerSize.area() ? CV_INTER_AREA : CV_INTER_CUBIC;
+        cv::resize(croppedImage, resizedImage, innerSize, 0, 0, interp_method);
         Mat flippedImage;
-        Mat* finalImage;
-        if (_augment && (rand_r(&(_rngSeed)) % 2 == 0)) {
-            cv::flip(croppedImage, flippedImage, 1);
+        Mat *finalImage;
+
+        if (_augParams->doRandomFlip()) {
+            cv::flip(resizedImage, flippedImage, 1);
             finalImage = &flippedImage;
         } else {
-            finalImage = &croppedImage;
+            finalImage = &resizedImage;
+        }
+        Mat newImage;
+        float alpha = _augParams->getRandomContrast();
+        if (alpha) {
+            finalImage->convertTo(newImage, -1, alpha);
+            finalImage = &newImage;
         }
 
-        auto channelSize = _innerSize * _innerSize;
+        Mat ch_b(innerSize, CV_8U, buf + innerSize.area()*0);
+        Mat ch_g(innerSize, CV_8U, buf + innerSize.area()*1);
+        Mat ch_r(innerSize, CV_8U, buf + innerSize.area()*2);
 
-        Mat red(_innerSize, _innerSize, CV_8U, buf + channelSize*0);
-        Mat green(_innerSize, _innerSize, CV_8U, buf + channelSize*1);
-        Mat blue(_innerSize, _innerSize, CV_8U, buf + channelSize*2);
-
-        Mat channels[3] = {red, green, blue};
+        Mat channels[3] = {ch_b, ch_g, ch_r};
         cv::split(*finalImage, channels);
     }
 
 private:
-    unsigned int                _rngSeed;
-    int                         _innerSize;
-    bool                        _augment;
+    AugmentationParams*         _augParams;
+    uchar*                      _scratchbuf;
 };
+

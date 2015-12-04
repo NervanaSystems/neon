@@ -117,6 +117,10 @@ public:
         return _size;
     }
 
+    int getIndex() {
+        return _cur - _data;
+    }
+
 public:
     T*                          _data;
     int                         _size;

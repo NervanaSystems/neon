@@ -21,7 +21,7 @@ proceeds to fit and evaluate a model using two different ways of loading the
 data. Macrobatches are written to disk as needed.
 
 run as follows:
-python compare.py -e 1 -r 0 -b cpu
+python compare.py -e 1 -r 0 -b cpu -w <place where data lives>
 
 """
 import os
@@ -132,6 +132,7 @@ def run(args, train, test):
 
 
 def test_iterator():
+    print('Testing iterator based data reader first')
     parser = NeonArgparser(__doc__)
     args = parser.parse_args()
     (X_train, y_train), (X_test, y_test), nclass = load_cifar10_imgs(path=args.data_dir)

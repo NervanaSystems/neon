@@ -276,14 +276,15 @@ protected:
             _startSignaled[id]--;
             assert(_startSignaled[id] == 0);
         }
-        BufferPair& outBuf = _out.getForWrite();
-        DataType* dataBuf = outBuf.first->_data;
-        LabelType* labelBuf = outBuf.second->_data;
-        dataBuf += _minibatchOffsets[id] * _outputItemSize;
-        labelBuf += _minibatchOffsets[id];
         int start = _minibatchOffsets[id];
         int end = start + _itemCounts[id];
+
+        BufferPair& outBuf = _out.getForWrite();
+
+        DataType* dataBuf = outBuf.first->_data + start * _outputItemSize;
+        LabelType* labelBuf = outBuf.second->_data;
         for (int i = start; i < end; i++) {
+            // Handle the Data
             int itemSize = 0;
             DataType* item = _inputBuf->first->getItem(i, itemSize);
             if (item == 0) {
@@ -291,15 +292,14 @@ protected:
             }
             _decoder->decode(item, itemSize, dataBuf);
             dataBuf += _outputItemSize;
+
+            // Handle the targets
+            int lblsPerDatum = 0;
+            LabelType* labelSrc = _inputBuf->second->getItem(i, lblsPerDatum);
+            assert((uint) lblsPerDatum == _labelCount);
+            labelBuf[i] = labelSrc[0];
         }
-        int labelChunkSize = 0;
-        LabelType* labels = _inputBuf->second->getItem(0, labelChunkSize);
-        assert(labelChunkSize == outBuf.second->_size * sizeof(LabelType));
-        for (int i = 0; i < _labelCount; i++) {
-            int offset = i * _minibatchSize;
-            memcpy(labelBuf + offset, labels + start + offset,
-                   _itemCounts[id] * sizeof(LabelType));
-        }
+
         {
             lock_guard<mutex> lock(_mutex);
             _endSignaled++;
@@ -447,10 +447,11 @@ typedef ReadThreadPool<DataType, LabelType>     ReadPool;
 typedef DecodeThreadPool<DataType, LabelType>   DecodePool;
 
 public:
-    Loader(int minibatchSize, int itemMaxSize, int labelCount,
+    Loader(int minibatchSize, int readMaxSize, int itemMaxSize, int labelCount,
            Device* device, Reader* reader, Decoder* decoder)
     : _first(true),
-      _minibatchSize(minibatchSize), _itemMaxSize(itemMaxSize),
+      _minibatchSize(minibatchSize),
+      _readMaxSize(readMaxSize), _itemMaxSize(itemMaxSize),
       _labelCount(labelCount), _readBufs(0), _readPool(0),
       _decodeBufs(0), _decodePool(0), _device(device),
       _reader(reader), _decoder(decoder) {
@@ -470,7 +471,7 @@ public:
         _first = true;
         try {
             _readBufs =
-                new InBufferPool(_minibatchSize * _itemMaxSize,
+                new InBufferPool(_minibatchSize * _readMaxSize,
                                  _labelCount * _minibatchSize);
             _readPool =
                 new ReadPool(*_readBufs, _reader);
@@ -574,6 +575,7 @@ private:
 private:
     bool                        _first;
     int                         _minibatchSize;
+    int                         _readMaxSize;
     int                         _itemMaxSize;
     int                         _labelCount;
     InBufferPool*               _readBufs;
@@ -603,7 +605,9 @@ int single(Reader* reader, Decoder* decoder, int epochCount,
     typedef pair<Buffer<uchar>*, Buffer<int>*>  BufferPair;
     typedef BufferPool<uchar, int>              InBufferPool;
 
-    InBufferPool* readBufs = new InBufferPool(macrobatchSize * itemMaxSize,
+    // let's find the actual size of the file to prevent maxing out memory
+    int macrobatchDataSize = reader->totalDataSize();
+    InBufferPool* readBufs = new InBufferPool(macrobatchDataSize,
                                               macrobatchSize);
     unsigned int sm = 0;
     uchar* dataBuf = new uchar[itemMaxSize];
@@ -619,17 +623,15 @@ int single(Reader* reader, Decoder* decoder, int epochCount,
                 assert(item != 0);
                 decoder->decode(item, itemSize, dataBuf);
                 sm += sum(dataBuf, itemMaxSize);
+                int labelChunkSize = 0;
+                int* labels = bufPair.second->getItem(j, labelChunkSize);
+                labelBuf[j] = *labels;
             }
-            int labelChunkSize = 0;
-            int* labels = bufPair.second->getItem(0, labelChunkSize);
-            assert((uint) labelChunkSize == macrobatchSize * sizeof(int));
-            memcpy(labelBuf, labels, macrobatchSize * sizeof(int));
+
             sm += sum(reinterpret_cast<uchar *>(labelBuf),
                       macrobatchSize * sizeof(int));
-            reader->next();
         }
     }
-    reader->close();
     delete[] dataBuf;
     delete[] labelBuf;
     delete readBufs;
@@ -655,7 +657,7 @@ int multi(ImageLoader* loader, Device* device, Reader* reader, Decoder* decoder,
             device->copyDataBack(bufIdx, data, minibatchSize*itemMaxSize);
             device->copyLabelsBack(bufIdx, labels, minibatchSize*sizeof(int));
             sm += sum(data, minibatchSize * itemMaxSize);
-            sm += sum(labels, minibatchSize*4);
+            sm += sum(labels, minibatchSize*sizeof(int));
         }
     }
     delete[] data;
@@ -664,48 +666,77 @@ int multi(ImageLoader* loader, Device* device, Reader* reader, Decoder* decoder,
     return sm;
 }
 
-int test(int minibatchSize, int itemMaxSize, Device* device) {
+int test(const char *pathPrefix, int minibatchSize, int itemMaxSize, Device* device) {
     int epochCount = 1;
     int macrobatchCount = 1;
-    int macrobatchSize = 3072;
-    string pathPrefix = "/usr/local/data/I1K/imageset_batches_dw/data_batch_";
+    int readMaxSize = itemMaxSize;
+    stringstream fileName;
+    fileName << pathPrefix << 0;
+
+    // Peek into macrobatch to check the size of the file
+    int macrobatchSize;
+    {
+        MacrobatchReader reader(pathPrefix, 0, 0, 0);
+        macrobatchSize = reader.itemCount();
+        readMaxSize = reader.maxDataSize();
+    }
+
+    if (macrobatchSize % minibatchSize != 0){
+        std::cout << "Macrobatch size " << macrobatchSize;
+        std::cout << " is not a multiple of minibatch size " << minibatchSize << std::endl;
+        return -1;
+    }
     Reader* reader = new MacrobatchReader(pathPrefix, 0,
-                                          macrobatchCount*macrobatchSize,
+                                          macrobatchCount * macrobatchSize,
                                           minibatchSize);
-    Decoder* decoder = new ImageDecoder(224, false);
-    ImageLoader loader(minibatchSize, itemMaxSize, 1, device, reader, decoder);
+    AugmentationParams *agp = new AugmentationParams();
+    Decoder* decoder = new ImageDecoder(agp);
+    ImageLoader loader(minibatchSize, readMaxSize, itemMaxSize, 1, device, reader, decoder);
     unsigned int multiSum = multi(&loader, device, reader, decoder, epochCount,
                                   macrobatchCount, macrobatchSize,
                                   minibatchSize, itemMaxSize);
     unsigned int singleSum = single(reader, decoder, epochCount,
                                     macrobatchCount, macrobatchSize,
                                     minibatchSize, itemMaxSize);
-    printf("sum %d true sum %d\n", multiSum, singleSum);
+    std::cout << "Got single sum " << singleSum << std::endl;
+
+    printf("sum %u true sum %u\n", multiSum, singleSum);
     assert(multiSum == singleSum);
     return 0;
 }
 
-int main() {
-    int minibatchSize = 128;
+int main(int argc, char **argv) {
     int itemMaxSize = 3*224*224;
+    if (argc < 3) {
+        std::cout << "Usage:  loader macrobatch_prefix minibatch_size" << std::endl;
+        exit (EXIT_FAILURE);
+    }
+    char *pathPrefix = argv[1];
+    int minibatchSize = atoi(argv[2]);
+
 #if HASGPU
     Device* gpu = new Gpu(0, minibatchSize*itemMaxSize,
                           minibatchSize*sizeof(int));
-    test(minibatchSize, itemMaxSize, gpu);
+    test(pathPrefix, minibatchSize, itemMaxSize, gpu);
 #endif
     Device* cpu = new Cpu(0, minibatchSize*itemMaxSize,
                           minibatchSize*sizeof(int));
-    test(minibatchSize, itemMaxSize, cpu);
+    test(pathPrefix, minibatchSize, itemMaxSize, cpu);
 }
 
 #else  // STANDALONE else
 
 extern "C" {
 
-extern void* start(int img_size, int inner_size, bool center, bool flip,
-                   bool rgb, bool shuffle, int minibatch_size,
+extern void* start(int inner_size,
+                   bool center, bool flip, bool rgb,
+                   float aspect_ratio, int scale_min,
+                   int contrast_min, int contrast_max,
+                   int rotate_min, int rotate_max,
+                   int minibatch_size,
                    char *filename, int macro_start,
                    uint num_data, uint num_labels, bool macro,
+                   bool shuffle, int read_max_size,
                    DeviceParams* params) {
     static_assert(sizeof(int) == 4, "int is not 4 bytes");
     try {
@@ -729,10 +760,16 @@ extern void* start(int img_size, int inner_size, bool center, bool flip,
                                           num_data, minibatch_size);
         } else {
             reader = new ImageFileReader(filename, num_data,
-                                         minibatch_size, img_size);
+                                         minibatch_size, inner_size);
         }
-        Decoder* decoder = new ImageDecoder(inner_size, flip);
-        ImageLoader* loader = new ImageLoader(minibatch_size, item_max_size,
+        AugmentationParams *agp = new AugmentationParams(inner_size, center, flip, rgb,
+            /* Scale Params */                           aspect_ratio, scale_min,
+            /* Contrast Params */                        contrast_min, contrast_max,
+            /* Rotate Params (ignored) */                rotate_min, rotate_max);
+
+        Decoder* decoder = new ImageDecoder(agp);
+        ImageLoader* loader = new ImageLoader(minibatch_size, read_max_size,
+                                              item_max_size,
                                               num_labels, device,
                                               reader, decoder);
         int result = loader->start();

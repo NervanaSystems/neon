@@ -90,10 +90,15 @@ class ImageLoader(NervanaObject):
 
         self.center = not do_transforms
         self.flip = do_transforms
+        self.contrast_range = (75, 125) if do_transforms else (100, 100)
+        self.scale_min = 25 if do_transforms else 100
+        self.aspect_ratio = 3/4. if do_transforms else 1.
+
         self.rgb = rgb
         self.shuffle = shuffle
         self.start_idx = 0
         self.macro = macro
+        self.batch_prefix = "macrobatch_"
 
         if not macro:
             self.filename = os.path.join(repo_dir, 'filelist.txt')
@@ -110,29 +115,28 @@ class ImageLoader(NervanaObject):
             return
 
         # Load from repo dataset_cache:
+        cache_filepath = os.path.join(repo_dir, self.batch_prefix + 'meta')
         try:
-            cache_filepath = os.path.join(repo_dir, 'dataset_cache.pkl')
-            dataset_cache = load_obj(cache_filepath)
+            dataset_cache = dict()
+            with open(cache_filepath, 'r') as f:
+                for line in f:
+                    (k, v) = line.split()
+                    dataset_cache[k] = float(v) if k.endswith('mean') else int(v)
+            rgbmean = [[dataset_cache[c + '_mean']] for c in ['B', 'G', 'R']]
+            dataset_cache['global_mean'] = np.array(rgbmean, dtype=np.float32)
         except IOError:
-            raise IOError("Cannot find '%s/dataset_cache.pkl'. Run "
-                          "batch_writer to preprocess the data and create "
-                          "batch files for imageset" % (repo_dir))
+            raise IOError("Cannot find '%s'. Run batch_writer to preprocess the "
+                          "data and create batch files for imageset" % (cache_filepath))
 
         # Should have following defined:
         req_attributes = ['global_mean', 'nclass', 'val_start', 'ntrain',
-                          'label_names', 'train_nrec', 'img_size', 'nval',
-                          'train_start', 'val_nrec', 'label_dict',
-                          'batch_prefix']
+                          'train_nrec', 'nval', 'train_start', 'val_nrec',
+                          'item_max_size']
 
         for r in req_attributes:
             if r not in dataset_cache:
                 raise ValueError(
                     'Dataset cache missing required attribute %s' % (r))
-
-        if dataset_cache['global_mean'].shape != (3, 1):
-            raise ValueError('Dataset cache global mean is not in the proper '
-                             'format. Run neon/util/update_dataset_cache.py '
-                             'utility on %s.' % cache_filepath)
 
         self.__dict__.update(dataset_cache)
         self.filename = os.path.join(repo_dir, self.batch_prefix)
@@ -191,18 +195,23 @@ class ImageLoader(NervanaObject):
                 ct.cast(int(self.labels[1].gpudata), ct.POINTER(ct.c_int)))
         params = DeviceParams(self.be.device_type, self.be.device_id,
                               data_buffers, label_buffers)
-        self.loader = self.loaderlib.start(ct.c_int(self.img_size),
-                                           ct.c_int(self.inner_size),
+        self.loader = self.loaderlib.start(ct.c_int(self.inner_size),
                                            ct.c_bool(self.center),
                                            ct.c_bool(self.flip),
                                            ct.c_bool(self.rgb),
-                                           ct.c_bool(self.shuffle),
+                                           ct.c_float(self.aspect_ratio),
+                                           ct.c_int(self.scale_min),
+                                           ct.c_int(self.contrast_range[0]),
+                                           ct.c_int(self.contrast_range[1]),
+                                           ct.c_int(0), ct.c_int(0), # ignored rotation params
                                            ct.c_int(self.minibatch_size),
                                            ct.c_char_p(self.filename),
                                            ct.c_int(self.macro_start),
                                            ct.c_uint(self.ndata),
                                            ct.c_int(self.nlabels),
                                            ct.c_bool(self.macro),
+                                           ct.c_bool(self.shuffle),
+                                           ct.c_int(self.item_max_size),
                                            ct.POINTER(DeviceParams)(params))
         assert self.start_idx % self.bsz == 0
 
