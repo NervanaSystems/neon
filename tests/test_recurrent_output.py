@@ -40,7 +40,7 @@ def pytest_generate_tests(metafunc):
 
 def test_recurrent_sum(backend_default, refgruargs):
     seq_len, nin, batch_size = refgruargs
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     in_shape = (nin, seq_len)
     layer = RecurrentSum()
@@ -88,7 +88,7 @@ def test_recurrent_sum(backend_default, refgruargs):
 
 def test_recurrent_mean(backend_default, refgruargs):
     seq_len, nin, batch_size = refgruargs
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     in_shape = (nin, seq_len)
     layer = RecurrentMean()
@@ -138,7 +138,7 @@ def test_recurrent_mean(backend_default, refgruargs):
 
 def test_recurrent_last(backend_default, refgruargs):
     seq_len, nin, batch_size = refgruargs
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     in_shape = (nin, seq_len)
     layer = RecurrentLast()

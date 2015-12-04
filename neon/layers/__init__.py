@@ -16,6 +16,6 @@ from neon.layers.layer import (Linear, Bias, Affine, Conv, Convolution, Generali
                                Pooling, Activation, DataTransform, BatchNorm, BatchNormAutodiff,
                                Deconv, Deconvolution, GeneralizedCostMask, LookupTable,
                                DropoutBinary, BranchNode)
-from neon.layers.recurrent import Recurrent, LSTM, GRU, RecurrentSum, RecurrentMean, RecurrentLast
-from neon.layers.birecurrent import BiRNN, BiLSTM, DeepBiRNN, DeepBiLSTM
+from neon.layers.recurrent import (Recurrent, LSTM, GRU, RecurrentSum, RecurrentMean, RecurrentLast,
+									BiRNN, BiLSTM, DeepBiRNN, DeepBiLSTM)
 from neon.layers.container import Tree, Sequential, MergeMultistream, MergeBroadcast, Multicost

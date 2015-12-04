@@ -79,7 +79,7 @@ def pytest_generate_tests(metafunc):
 def test_conv_zeros(backend_default, zeros_convargs):
     fshape, nofm, batch_size = zeros_convargs
 
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     # basic sanity check with 0 weights random inputs
     init_unif = Uniform(low=0.0, high=0.0)
@@ -108,7 +108,7 @@ def test_conv_zeros(backend_default, zeros_convargs):
 def test_conv_ones(backend_default, ones_convargs):
     dtypeu = np.float32
     indim, nifm, fshape, nofm, batch_size = ones_convargs
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     # weights set to one
     init_unif = Uniform(low=1.0, high=1.0)
@@ -173,7 +173,7 @@ def test_conv_ones(backend_default, ones_convargs):
 
 def test_conv_rand(backend_default, rand_convargs):
     indim, nifm, fshape, nofm, batch_size, rng_max, w_rng = rand_convargs
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
     inp_rng = [0.0, rng_max]
     dtypeu = np.float32
     init_unif = Uniform(low=w_rng[0], high=w_rng[1])

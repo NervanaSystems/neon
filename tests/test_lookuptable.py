@@ -47,7 +47,7 @@ def pytest_generate_tests(metafunc):
 def test_lookuptable_zeros_error(backend_default, basic_linargs):
     # basic sanity check with 0 weights random inputs
     nin, nout, batch_size, vocab_size = basic_linargs
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     dtypeu = np.float32
 
@@ -78,7 +78,7 @@ def test_lookuptable_zeros_error(backend_default, basic_linargs):
 
 def test_lookuptable_ones_error(backend_default, basic_linargs):
     nin, nout, batch_size, vocab_size = basic_linargs
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     dtypeu = np.float32
 
@@ -113,7 +113,7 @@ def test_lookuptable_ones_error(backend_default, basic_linargs):
 
 def test_lookuptable_rand_error(backend_default, basic_linargs):
     nin, nout, batch_size, vocab_size = basic_linargs
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     dtypeu = np.float32
 

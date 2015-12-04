@@ -20,16 +20,15 @@ import numpy as np
 
 from neon import NervanaObject
 from neon.initializers.initializer import GlorotUniform
-from neon.layers.birecurrent import BiLSTM
+from neon.layers.recurrent import BiLSTM, LSTM, get_steps
 from neon.transforms import Logistic, Tanh
 from numpy import concatenate as con
-from neon.layers import LSTM
 
 
 def pytest_generate_tests(metafunc):
     bsz_rng = [1, 2]
 
-    if 'refgruargs' in metafunc.fixturenames:
+    if 'fargs' in metafunc.fixturenames:
         fargs = []
         if metafunc.config.option.all:
             seq_rng = [2, 3, 4, 5]
@@ -40,39 +39,16 @@ def pytest_generate_tests(metafunc):
             inp_rng = [5]
             out_rng = [10]
         fargs = itt.product(seq_rng, inp_rng, out_rng, bsz_rng)
-        metafunc.parametrize('refgruargs', fargs)
-
-    if 'gradgruargs' in metafunc.fixturenames:
-        fargs = []
-        if metafunc.config.option.all:
-            seq_rng = [2, 3]
-            inp_rng = [5, 10]
-            out_rng = [3, 5, 10]
-        else:
-            seq_rng = [3]
-            inp_rng = [5]
-            out_rng = [10]
-        fargs = itt.product(seq_rng, inp_rng, out_rng, bsz_rng)
-        metafunc.parametrize('gradgruargs', fargs)
+        metafunc.parametrize('fargs', fargs)
 
 
-def get_steps(x, shape):
-    """
-    Convert a (vocab_size, steps * batch_size) array
-    into a [(vocab_size, batch_size)] * steps list of views
-    """
-    steps = shape[1]
-    xs = x.reshape(shape + (-1,))
-    return [xs[:, step, :] for step in range(steps)]
-
-
-def test_biLSTM_fprop_rnn(backend_default, refgruargs):
+def test_biLSTM_fprop_rnn(backend_default, fargs):
 
     # basic sanity check with 0 weights random inputs
-    seq_len, input_size, hidden_size, batch_size = refgruargs
+    seq_len, input_size, hidden_size, batch_size = fargs
     in_shape = (input_size, seq_len)
     out_shape = (hidden_size, seq_len)
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
@@ -134,13 +110,13 @@ def test_biLSTM_fprop_rnn(backend_default, refgruargs):
         assert np.all(x_rnn == y_b)
 
 
-def test_biLSTM_fprop(backend_default, refgruargs):
+def test_biLSTM_fprop(backend_default, fargs):
 
     # basic sanity check with 0 weights random inputs
-    seq_len, input_size, hidden_size, batch_size = refgruargs
+    seq_len, input_size, hidden_size, batch_size = fargs
     in_shape = (input_size, seq_len)
     out_shape = (hidden_size, seq_len)
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
@@ -185,13 +161,13 @@ def test_biLSTM_fprop(backend_default, refgruargs):
         assert np.all(x_b == y_f)
 
 
-def test_biLSTM_bprop(backend_default, refgruargs):
+def test_biLSTM_bprop(backend_default, fargs):
 
     # basic sanity check with 0 weights random inputs
-    seq_len, input_size, hidden_size, batch_size = refgruargs
+    seq_len, input_size, hidden_size, batch_size = fargs
     in_shape = (input_size, seq_len)
     out_shape = (hidden_size, seq_len)
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()

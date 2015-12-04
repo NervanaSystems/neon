@@ -41,7 +41,7 @@ def test_concat_l1_l1(backend_default, allrand_args):
     nins = [128, 1024]
     nouts = [64, 2048]
     batch_size = 16
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
     be = NervanaObject.be
 
     init_unif = Uniform(low=w_rng[0], high=w_rng[1])
@@ -79,7 +79,7 @@ def test_concat_sequence_l1_l1(backend_default, allrand_args):
     steps = [32, 64]
     nout = 256
     batch_size = 16
-    NervanaObject.be.bsz = NervanaObject.be.bs = batch_size
+    NervanaObject.be.bsz = batch_size
     be = NervanaObject.be
 
     init_unif = Uniform(low=w_rng[0], high=w_rng[1])
