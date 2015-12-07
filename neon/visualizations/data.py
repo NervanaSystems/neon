@@ -112,6 +112,7 @@ def h5_hist_data(filename, epoch_axis=True):
                 dh = bins
                 ret.append((hname, hdata[...], dh, dw, bins, offset))
 
+    return ret
 
 def convert_rgb_to_bokehrgba(img_data, downsample=1):
     """
