@@ -18,8 +18,8 @@ Example that trains an LSTM or GRU based recurrent networks.
 The dataset uses Penn Treebank dataset parsing on character-level.
 
 Reference:
-    Generating sequences with recurrent neural networks `[Grave2014]`_
-.. _[Grave2014]: http://arxiv.org/pdf/1308.0850.pdf
+    Andrej Karpathy's char-rnn `[Karpathy]`_
+.. _[Karpathy]: http://github.com/karpathy/char-rnn
 """
 
 from neon.backends import gen_backend
@@ -28,7 +28,7 @@ from neon.data import load_text
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, LSTM, Affine, GRU
 from neon.models import Model
-from neon.optimizers import RMSProp
+from neon.optimizers import RMSProp, Schedule
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser, extract_valid_args
@@ -41,8 +41,8 @@ args = parser.parse_args(gen_be=False)
 
 # hyperparameters
 args.batch_size = 64  # note Karpathy's char-rnn uses 50
-time_steps = 40  # note Karpathy's char-rnn uses 50
-hidden_size = 1000
+time_steps = 50
+hidden_size = 128
 gradient_clip_value = 5
 
 # setup backend
@@ -50,7 +50,7 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download penn treebank
 train_path = load_text('ptb-train', path=args.data_dir)
-valid_path = load_text('ptb-valid', path=args.data_dir)
+valid_path = load_text('ptb-test', path=args.data_dir)
 
 train_set = Text(time_steps, train_path)
 valid_set = Text(time_steps, valid_path, vocab=train_set.vocab)
@@ -60,18 +60,24 @@ init = Uniform(low=-0.08, high=0.08)
 
 # model initialization
 if args.rlayer_type == 'lstm':
-    rlayer = LSTM(hidden_size, init, activation=Logistic(), gate_activation=Tanh())
+    rlayer1 = LSTM(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
+    rlayer2 = LSTM(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
 else:
-    rlayer = GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
+    rlayer1 = GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
+    rlayer2 = GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic())
 
-layers = [rlayer,
+layers = [rlayer1,
+          rlayer2,
           Affine(len(train_set.vocab), init, bias=init, activation=Softmax())]
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
 model = Model(layers=layers)
 
-optimizer = RMSProp(gradient_clip_value=gradient_clip_value, stochastic_round=args.rounding)
+learning_rate_sched = Schedule(range(10, args.epochs), .97)
+optimizer = RMSProp(gradient_clip_value=gradient_clip_value,
+                    stochastic_round=args.rounding,
+                    schedule=learning_rate_sched)
 
 # configure callbacks
 callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)

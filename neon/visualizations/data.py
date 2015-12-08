@@ -114,6 +114,7 @@ def h5_hist_data(filename, epoch_axis=True):
 
     return ret
 
+
 def convert_rgb_to_bokehrgba(img_data, downsample=1):
     """
     Convert RGB image to two-dimensional array of RGBA values (encoded as 32-bit integers)
