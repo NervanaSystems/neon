@@ -310,7 +310,6 @@ class NeonArgparser(configargparse.ArgumentParser):
                         device_id=args.device_id,
                         batch_size=args.batch_size,
                         datatype=args.datatype,
-                        stochastic_round=args.rounding,
                         max_devices=args.max_devices,
                         compat_mode=args.compat_mode)
 
