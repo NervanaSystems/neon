@@ -109,7 +109,7 @@ class Model(NervanaObject):
         self.initialize(dataset, cost)
         # self.set_shortcut()  # infer if bprop shortcut can be used
         self.optimizer = optimizer
-        self.total_cost = self.be.empty((1, 1))
+        self.total_cost = self.be.empty((1, 1), dtype=np.float32)
 
         callbacks.on_train_begin(num_epochs)
 
