@@ -485,7 +485,7 @@ class LossCallback(Callback):
         super(LossCallback, self).__init__(epoch_freq=epoch_freq)
         self.model = model
         self.eval_set = eval_set
-        self.loss = self.be.zeros((1, 1))
+        self.loss = self.be.zeros((1, 1), dtype=np.float32)
         self.callback_data = callback_data
 
     def on_train_begin(self, epochs):

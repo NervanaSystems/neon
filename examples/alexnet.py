@@ -67,8 +67,10 @@ model = Model(layers=layers)
 
 # drop weights LR by 1/250**(1/3) at epochs (23, 45, 66), drop bias LR by 1/10 at epoch 45
 weight_sched = Schedule([22, 44, 65], (1/250.)**(1/3.))
-opt_gdm = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sched)
-opt_biases = GradientDescentMomentum(0.02, 0.9, schedule=Schedule([44], 0.1))
+opt_gdm = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sched,
+                                  stochastic_round=args.rounding)
+opt_biases = GradientDescentMomentum(0.02, 0.9, schedule=Schedule([44], 0.1),
+                                     stochastic_round=args.rounding)
 opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 
 # configure callbacks
