@@ -27,7 +27,7 @@ from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
-from neon.data import ImgMaster
+from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks
 
 # parse the command line arguments
@@ -46,10 +46,8 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # initialize the data provider
 img_set_options = dict(repo_dir=args.data_dir, inner_size=224, dtype=args.datatype, subset_pct=100)
-train = ImgMaster(set_name='train', **img_set_options)
-test = ImgMaster(set_name='validation', do_transforms=False, **img_set_options)
-train.init_batch_provider()
-test.init_batch_provider()
+train = ImageLoader(set_name='train', **img_set_options)
+test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
 
 init1 = GlorotUniform()
 relu = Rectlin()
@@ -90,7 +88,3 @@ opt_biases = GradientDescentMomentum(0.02, 0.9, schedule=weight_sched)
 opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 
 mlp.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
-
-# clean up the data providers
-test.exit_batch_provider()
-train.exit_batch_provider()

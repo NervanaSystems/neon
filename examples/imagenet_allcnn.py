@@ -30,14 +30,12 @@ from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost, Dat
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Normalizer
 from neon.models import Model
 from neon.callbacks.callbacks import Callbacks
-from neon.data import ImgMaster, ImageLoader
+from neon.data import ImageLoader
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 parser.add_argument('--deconv', action='store_true',
                     help='save visualization data from deconvolution')
-parser.add_argument('--loader_version', default='old', choices=['old', 'new'],
-                    help='whether to use old dataloader (ImgMaster) or new (ImageLoader)')
 args = parser.parse_args()
 
 
@@ -52,15 +50,12 @@ be = gen_backend(backend=args.backend,
                  datatype=args.datatype)
 
 # setup data provider
-img_provider = ImgMaster if args.loader_version == 'old' else ImageLoader
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        dtype=args.datatype,
                        subset_pct=100)
-train = img_provider(set_name='train', **img_set_options)
-test = img_provider(set_name='validation', do_transforms=False, **img_set_options)
-train.init_batch_provider()
-test.init_batch_provider()
+train = ImageLoader(set_name='train', **img_set_options)
+test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
 
 relu = Rectlin()
 
@@ -112,6 +107,3 @@ if args.deconv:
     callbacks.add_deconv_callback(train, test)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
-
-test.exit_batch_provider()
-train.exit_batch_provider()

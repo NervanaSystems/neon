@@ -109,18 +109,15 @@ def load_data(data_dir="."):
     """
 
     if root_yaml['dataset']['name'] == 'i1k':
-        # we are using an ImgMaster type dataset:
-        from neon.data import ImgMaster
+        # we are using an ImageLoader type dataset:
+        from neon.data import ImageLoader
         try:
-            train = ImgMaster(repo_dir=data_dir, inner_size=224, set_name='train')
-            test = ImgMaster(repo_dir=data_dir, inner_size=224, set_name='validation',
-                             do_transforms=False)
+            train = ImageLoader(repo_dir=data_dir, inner_size=224, set_name='train')
+            test = ImageLoader(repo_dir=data_dir, inner_size=224, set_name='validation',
+                               do_transforms=False)
         except (OSError, IOError, ValueError) as err:
             print err
             sys.exit(0)
-
-        train.init_batch_provider()
-        test.init_batch_provider()
     else:
         if 'dataset' not in root_yaml:
             raise ValueError('dataset not specified in configuration file')
@@ -151,7 +148,3 @@ if __name__ == "__main__":
     callbacks = Callbacks(model, train, eval_set=test, **args.callback_args)
 
     model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
-
-    if root_yaml['dataset']['name'] == 'i1k':
-        test.exit_batch_provider()
-        train.exit_batch_provider()

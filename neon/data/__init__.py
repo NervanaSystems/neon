@@ -15,7 +15,6 @@
 from neon.data.dataiterator import DataIterator
 from neon.data.text import Text
 from neon.data.imageloader import ImageLoader
-from neon.data.image import ImgMaster
 from neon.data.questionanswer import BABI, QA
 from neon.data.speech import Speech
 from neon.data.video import Video

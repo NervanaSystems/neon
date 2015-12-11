@@ -152,11 +152,7 @@ def test_loader():
                         repo_dir=train_dir)
     test = ImageLoader(set_name='validation', do_transforms=False, inner_size=32,
                        repo_dir=test_dir)
-    train.init_batch_provider()
-    test.init_batch_provider()
     err = run(args, train, test)
-    test.exit_batch_provider()
-    train.exit_batch_provider()
     return err
 
 

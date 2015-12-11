@@ -88,7 +88,6 @@ KERNEL_BUILDER_CLEAN_OPTS := --clean
 
 # neon compiled objects
 DATA_LOADER := neon/data/loader
-IMAGESET_DECODER := neon/data/imageset_decoder.so
 
 .PHONY: default env maxas kernels sysinstall sysinstall_nodeps neon_install \
 	      sysdeps sysuninstall clean_py clean_maxas clean_so clean_kernels \
@@ -97,7 +96,7 @@ IMAGESET_DECODER := neon/data/imageset_decoder.so
 
 default: env
 
-env: $(ACTIVATE) kernels $(DATA_LOADER) $(IMAGESET_DECODER)
+env: $(ACTIVATE) kernels $(DATA_LOADER)
 
 $(ACTIVATE): requirements.txt gpu_requirements.txt vis_requirements.txt
 	@echo "Updating virtualenv dependencies in: $(VIRTUALENV_DIR)..."
@@ -161,22 +160,9 @@ else
 	@cd $(DATA_LOADER) && $(MAKE) -s loader.so CC=g++
 endif
 
-$(IMAGESET_DECODER): $(subst so,cpp,$(IMAGESET_DECODER))
-ifeq ($(shell pkg-config --modversion opencv >/dev/null 2>&1; echo $$?), 0)
-	@echo "Compiling $(IMAGESET_DECODER) ..."
-  ifeq ($(shell uname -s), Darwin)
-		-g++ -w -O3 -stdlib=libc++ -shared -o $(IMAGESET_DECODER) -std=c++11 -fPIC $< $$(pkg-config opencv --cflags --libs)
-  else
-		-g++ -w -O3 -shared -o $(IMAGESET_DECODER) -std=c++11 -fPIC $< $$(pkg-config opencv --cflags --libs)
-  endif
-else
-	@echo "pkg-config or opencv not installed.  Unable to build imageset_decoder"
-	@echo
-endif
-
 # TODO: handle kernel/.so compilation via setup.py directly
-sysinstall_nodeps: kernels $(DATA_LOADER) $(IMAGESET_DECODER) neon_install
-sysinstall: sysdeps kernels $(DATA_LOADER) $(IMAGESET_DECODER) neon_install
+sysinstall_nodeps: kernels $(DATA_LOADER) neon_install
+sysinstall: sysdeps kernels $(DATA_LOADER) neon_install
 neon_install:
 	@echo "Installing neon system wide..."
 	@pip install .
@@ -208,7 +194,6 @@ clean_py:
 clean_so:
 	@echo "Cleaning compiled shared object files..."
 	@cd $(DATA_LOADER) && $(MAKE) clean
-	@rm -f $(IMAGESET_DECODER)
 	@echo
 
 clean_maxas:
