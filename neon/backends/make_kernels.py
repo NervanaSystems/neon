@@ -20,7 +20,9 @@ import re
 import os
 import os.path
 import subprocess
-from kernel_specs import get_cu_file, kernels, sass_dir, cu_dir, pre_dir, cubin_dir, dump_dir
+import pycuda.driver as drv
+import pycuda.autoinit
+from kernel_specs import get_ptx_file, kernels, sass_dir, ptx_dir, pre_dir, cubin_dir, dump_dir
 
 p = optparse.OptionParser()
 p.add_option("-k", "--kernels", action="store_true", dest="kernels", default=True,
@@ -42,7 +44,16 @@ opts, args = p.parse_args()
 if opts.preprocess or opts.dump:
     opts.kernels = False
 
-nvcc_opts    = ["nvcc", "-arch sm_50", "-cubin"]  # TODO require 52 for hpool and hconv kenels
+attributes = drv.Context.get_device().get_attributes()
+major = attributes[drv.device_attribute.COMPUTE_CAPABILITY_MAJOR]
+minor = attributes[drv.device_attribute.COMPUTE_CAPABILITY_MINOR]
+
+if major == 5 and minor == 3:
+    arch = "sm_53"
+else:
+    arch = "sm_50"
+
+ptxas_opts   = ["ptxas", "-arch " + arch ]
 maxas_opts_i = ["maxas.pl", "-i"]
 maxas_opts_p = ["maxas.pl", "-p"]
 dump_opts    = ["nvdisasm", "-raw"]
@@ -65,7 +76,7 @@ def extract_includes(name, includes=None):
             extract_includes(match.group(1), includes)
     return includes
 
-for d in (cu_dir, cubin_dir, pre_dir, dump_dir):
+for d in (ptx_dir, cubin_dir, pre_dir, dump_dir):
     if not os.path.exists(d):
         os.mkdir(d)
 
@@ -81,7 +92,7 @@ for kernel_name, kernel_spec in kernels.items():
     pre_name   = kernel_name + "_pre.sass"
     dump_name  = kernel_name + "_dump.sass"
 
-    cu_file    = get_cu_file(kernel_name)
+    ptx_file   = get_ptx_file(kernel_name, arch)
     sass_file  = os.path.join(sass_dir, sass_name)
     pre_file   = os.path.join(pre_dir, pre_name)
     cubin_file = os.path.join(cubin_dir, cubin_name)
@@ -96,7 +107,7 @@ for kernel_name, kernel_spec in kernels.items():
             maxas_p.append("-D%s %s" % pair)
 
     if opts.clean:
-        for f in (cu_file, cubin_file, pre_file, dump_file):
+        for f in (ptx_file, cubin_file, pre_file, dump_file):
             if os.path.exists(f):
                 os.remove(f)
         continue
@@ -105,13 +116,13 @@ for kernel_name, kernel_spec in kernels.items():
         print "Missing sass file: %s for kernel: %s" % (sass_file, kernel_name)
         continue
 
-    cu_age    = os.path.getmtime(cu_file)
+    ptx_age   = os.path.getmtime(ptx_file)
     pre_age   = os.path.getmtime(pre_file) if os.path.exists(pre_file) else 0
     cubin_age = os.path.getmtime(cubin_file) if os.path.exists(cubin_file) else 0
     dump_age  = os.path.getmtime(dump_file) if os.path.exists(dump_file) else 0
 
-    if opts.kernels and cu_age > cubin_age:
-        compile_cubins.append(nvcc_opts + ["-o %s" % cubin_file, cu_file])
+    if opts.kernels and ptx_age > cubin_age:
+        compile_cubins.append(ptxas_opts + ["-o %s" % cubin_file, ptx_file])
         cubin_age = 0
 
     if opts.dump and cubin_age > dump_age:

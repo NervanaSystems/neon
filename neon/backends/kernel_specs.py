@@ -19,7 +19,7 @@ from pycuda.tools import context_dependent_memoize
 from math import ceil
 
 base_dir  = os.path.dirname(__file__)
-cu_dir    = os.path.join(base_dir, "kernels", "cu")
+ptx_dir   = os.path.join(base_dir, "kernels", "ptx")
 sass_dir  = os.path.join(base_dir, "kernels", "sass")
 pre_dir   = os.path.join(base_dir, "kernels", "pre")
 cubin_dir = os.path.join(base_dir, "kernels", "cubin")
@@ -53,10 +53,10 @@ kernels = {
     "hgemm_tn_128x32":       {"threads": 128, "sass": "hgemm_tn_128x32",       "params": "gemm",   "share": "(128*16 +  0)*2 + 32*16*2 + 4"},
     "hgemm_nn_vec_128x32":   {"threads": 128, "sass": "hgemm_nn_128x32",       "params": "gemm",   "share": "(128*16 + 32)*2 + 32*16*2 + 4", "args": {"vec": "1"}},
     "hgemm_tn_vec_128x32":   {"threads": 128, "sass": "hgemm_tn_128x32",       "params": "gemm",   "share": "(128*16 +  0)*2 + 32*16*2 + 4", "args": {"vec": "1"}},
-    "hgemm_nn_32x128":       {"threads": 128, "sass": "hgemm_nn_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4"},
-    "hgemm_nt_32x128":       {"threads": 128, "sass": "hgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4"},
-    "hgemm_nn_vec_32x128":   {"threads": 128, "sass": "hgemm_nn_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4", "args": {"vec": "1"}},
-    "hgemm_nt_vec_32x128":   {"threads": 128, "sass": "hgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4", "args": {"vec": "1"}},
+    "hgemm_nn_32x128":       {"threads": 128, "sass": "hgemm_nn_32x128",       "params": "gemm",   "share": "(32*32 + 32)*2 + (128*32 +  0)*2 + 4"},
+    "hgemm_nt_32x128":       {"threads": 128, "sass": "hgemm_nt_32x128",       "params": "gemm",   "share": "(32*32 + 32)*2 + (128*32 + 32)*2 + 4"},
+    "hgemm_nn_vec_32x128":   {"threads": 128, "sass": "hgemm_nn_32x128",       "params": "gemm",   "share": "(32*32 + 32)*2 + (128*32 +  0)*2 + 4", "args": {"vec": "1"}},
+    "hgemm_nt_vec_32x128":   {"threads": 128, "sass": "hgemm_nt_32x128",       "params": "gemm",   "share": "(32*32 + 32)*2 + (128*32 + 32)*2 + 4", "args": {"vec": "1"}},
 
     "sconv_bprop_C1_N64":    {"threads":  32, "sass": "sconv_bprop_C1_N64",    "params": "bprop1", "share": " 32*8*2 +  64*8*2"},
     "sconv_bprop_C128_N128": {"threads": 256, "sass": "sconv_xprop_X128_N128", "params": "bprop",  "share": "128*8*2 + 128*8*2 + 8", "args": {"prop": "b"}},
@@ -93,10 +93,10 @@ kernels = {
 
 _params = {
     "fprop": [
-        "float*     param_Sum",
-        "{0}*       param_O",
-        "const {0}* param_I",
-        "const {0}* param_F",
+        "float* param_Sum",
+        "float* param_O",
+        "float* param_I",
+        "float* param_F",
         "float param_alpha",
         "float param_beta",
         "int param_flags",
@@ -134,11 +134,58 @@ _params = {
         "int param_magic_PQ",
         "int param_shift_PQ",
     ],
+    "fpropw": [
+        "float* param_Sum",
+        "float* param_O",
+        "float* param_I",
+        "float* param_F",
+        "float param_alpha",
+        "float param_beta",
+        "int param_flags",
+        "int param_offset_K",
+        "int param_K",
+        "int param_C",
+        "int param_Y",
+        "int param_X",
+        "int param_N",
+        "int param_P",
+        "int param_Q",
+        "int param_XN",
+        "int param_YXN",
+        "int param_RSK",
+        "int param_QN",
+        "int param_PQN",
+        "int param_shiftY",
+        "int param_shiftX",
+        "int param_shiftN",
+        "int param_superY",
+        "int param_superX",
+        "int param_gridX",
+        "int param_gridK",
+        "int param_Y2",
+        "int param_YXGK",
+        "int param_X2GK",
+        "int param_groupK",
+        "int param_magic_YXGK",
+        "int param_shift_YXGK",
+        "int param_magic_X2GK",
+        "int param_shift_X2GK",
+        "int param_magic_groupK",
+        "int param_shift_groupK",
+        "int param_2XNp",
+        "int param_XNp",
+        "int param_4YXN_n3XNp",
+        "int param_2SKp",
+        "int param_SKp",
+        "int param_4RSK_nSKp",
+        "int param_pad_y",
+        "int param_pad_x",
+    ],
     "bprop1": [
-        "float*     param_Sum",
-        "{0}*       param_O",
-        "const {0}* param_I",
-        "const {0}* param_F",
+        "float* param_Sum",
+        "float* param_O",
+        "float* param_I",
+        "float* param_F",
         "float para_alpha",
         "float param_beta",
         "int param_flags",
@@ -181,10 +228,10 @@ _params = {
         "int param_MPQN8",
     ],
     "updat": [
-        "float*     param_Sum",
-        "float*     param_F",
-        "const {0}* param_I",
-        "const {0}* param_E",
+        "float* param_Sum",
+        "float* param_F",
+        "float* param_I",
+        "float* param_E",
         "float param_alpha",
         "float param_beta",
         "int param_flags",
@@ -229,9 +276,9 @@ _params = {
         "int param_part_PQ",
     ],
     "pool": [
-        "{0}*       param_O",
-        "{0}*       param_B",
-        "const {0}* param_I",
+        "float* param_O",
+        "float* param_B",
+        "float* param_I",
         "float param_alpha",
         "float param_beta",
         "int param_mode",
@@ -271,9 +318,9 @@ _params = {
         "int param_overlap",
     ],
     "pool2": [
-        "{0}*       param_E",
-        "{0}*       param_B",
-        "const {0}* param_I",
+        "float* param_E",
+        "float* param_B",
+        "float* param_I",
         "float param_alpha",
         "float param_beta",
         "int param_mode",
@@ -325,9 +372,9 @@ _params = {
         "int param_MPQN",
     ],
     "gemm": [
-        "{0}*       param_C",
-        "const {0}* param_A",
-        "const {0}* param_B",
+        "float* param_C",
+        "float* param_A",
+        "float* param_B",
         "float param_alpha",
         "float param_beta",
         "int   param_flags",
@@ -355,81 +402,92 @@ _params["bprop"] = _params["fprop"] + [
         "int param_shift_str_d",
     ]
 
-_pspace = re.compile(r"\s+")
-_dtypes = {"s": "float", "h": "unsigned short"}
+_space_re = re.compile(r"\s+")
 
 _share_template = r"""
-    __shared__ float share[{0}];
-    *{1} = share[0];
-"""
-
-_no_share_template = r"""
-    *{0} = 0;
+    .shared .align 4 .b32 share[{0}];
 """
 
 _kernel_template = r"""
-extern "C" __global__ void {0}(
-{1}
-) {{
+.version 4.2
+.target {0}
+.address_size 64
+
+.visible .entry  {1}(
 {2}
+)
+.reqntid {3}
+{{
+{4}
+    ret;
 }}
 """
 
-
-def get_cu_file(kernel_name):
+def get_ptx_file(kernel_name, arch):
 
     kernel_spec = kernels[kernel_name]
-    kernel_type = _dtypes[kernel_name[0]]
+    thread_spec = kernel_spec["threads"]
     param_spec  = _params[kernel_spec["params"]]
 
     kernel_params = []
     for p in param_spec:
-        kernel_params.append("    " + p.format(kernel_type))
+        ptype, pname = _space_re.split(p)
+
+        if ptype[-1] == '*':
+            ptype = '.u64'
+        elif ptype == 'float':
+            ptype = '.f32'
+        else:
+            ptype = '.u32'
+
+        kernel_params.append("    .param %s %s" % (ptype, pname))
+
     kernel_params = ",\n".join(kernel_params)
 
-    # the first param is always an output pointer
-    out_param = _pspace.split(param_spec[0])[1]
-
     if "share" in kernel_spec:
-        body = _share_template.format(kernel_spec["share"], out_param)
+        share = _share_template.format(eval(kernel_spec["share"]))
     else:
-        body = _no_share_template.format(out_param)
+        share = ""
 
-    kernel_text = _kernel_template.format(kernel_name, kernel_params, body)
-    kernel_cu   = os.path.join(cu_dir, kernel_name + ".cu")
+    kernel_text = _kernel_template.format(arch, kernel_name, kernel_params, thread_spec, share)
+    kernel_ptx  = os.path.join(ptx_dir, kernel_name + ".ptx")
 
     current_text = ""
-    if os.path.exists(kernel_cu):
-        f = open(kernel_cu, "r")
+    if os.path.exists(kernel_ptx):
+        f = open(kernel_ptx, "r")
         current_text = f.read()
         f.close()
     # only write out the kernel if text has changed.
     if kernel_text != current_text:
-        f = open(kernel_cu, "w")
+        f = open(kernel_ptx, "w")
         f.write(kernel_text)
         f.close()
 
-    return kernel_cu
+    return kernel_ptx
 
 
 @context_dependent_memoize
 def get_kernel(kernel_name):
 
+    #import ipdb; ipdb.set_trace()
+
     kernel_spec = kernels[kernel_name]
-    params = _params[kernel_spec["params"]]
+    params  = _params[kernel_spec["params"]]
     sig = ""
     for p in params:
-        if p[0:4] == "int ":
-            sig += "I"
-        elif p[0:6] == "float ":
+        ptype, pname = _space_re.split(p)
+        if ptype[-1] == '*':
+            sig += "Q"
+        elif ptype == 'float':
             sig += "f"
         else:
-            sig += "P"
+            sig += "I"
 
     module = drv.module_from_file(os.path.join(cubin_dir, kernel_name + ".cubin"))
     func   = module.get_function(kernel_name)
     func.prepare(sig)
-    # print("Loaded: " + kernel)
+    func.threads = kernel_spec["threads"]
+    # print("Loaded: " + kernel_name)
     return func
 
 
