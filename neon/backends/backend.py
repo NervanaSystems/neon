@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 
 
 class OpCollection(object):
-
     """
     A collection of the set of operation strings
     """
@@ -40,7 +39,6 @@ class OpCollection(object):
 
 
 class Tensor(object):
-
     """
     The n-dimensional array data structure. GPUTensor and Tensor inherits
     Tensor. Depending on backend, may have additional keyword arguments.
@@ -48,20 +46,25 @@ class Tensor(object):
 
     Arguments:
         backend (Backend): backend of the tensor.
-        shape (tuple): shape of the tensor.
+        shape (tuple, optional): shape of the tensor.
         dtype (numpy.ndtype, optional): underlying data type of the elements.
-        name (str, optional): name of the tensor.
+        name (str, optional): name indentifying the tensor (used in printing).
+        persist_values (bool, optional): If set to True (the default), the
+                                         values assigned to this Tensor will
+                                         persist across multiple begin and
+                                         end calls.  Setting to False may
+                                         provide a performance increase if
+                                         values do not need to be maintained
+                                         across such calls
 
     See also:
         GPUTensor class, Tensor class
 
     Notes:
         Unlike numpy, in this implementation we never collapse dimensions, and
-        the minimal number of dimensions will be _min_dims (currently set to 2
-        to match cudanet GPU implementation).  So a wrapped scalar will have
-        dimension 1x1.
+        the minimal number of dimensions will be _min_dims (currently set to
+        2).  So a wrapped scalar will have dimension 1x1.
     """
-
     def __init__(self,
                  backend,
                  shape=None,
@@ -123,7 +126,7 @@ class Tensor(object):
         value of ':' allows one to select all elements along that dimension.
 
         Arguments:
-            key (int, slice, tuple): indices of each dimension's slice.
+            index (int, slice, tuple): indices of each dimension's slice.
             value (numeric array, Tensor): values to be assigned to the
                                           extracted element subset.  If an
                                           array it should be the same shape
@@ -146,7 +149,7 @@ class Tensor(object):
         select all elements along that dimension.
 
         Arguments:
-            key (int, slice, tuple): indices of each dimension's slice.
+            index (int, slice, tuple): indices of each dimension's slice.
 
         Returns:
             Tensor: view of self corresponding to the subset items.
@@ -208,6 +211,9 @@ class Tensor(object):
         Arguments:
             indices (Tensor, numpy ndarray): indicies of elements to select
             axis (int): axis across which to select the values
+            out (Tensor, numpy ndarray, optional): place the resultant values
+                                                   into this array if
+                                                   specified.
 
         Return:
             Tensor: Tensor with selected values
@@ -275,7 +281,13 @@ class Tensor(object):
     @property
     def T(self):
         """
-        Return a transposed view
+        Return a transposed view of the data.
+
+        Returns:
+            Tensor: transposed view of self.
+
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
         """
         raise NotImplementedError()
 
@@ -283,6 +295,17 @@ class Tensor(object):
         """
         Return a transposed view of the data.  Alias of .T property needed for
         MOP compatibility.
+
+        Arguments:
+            out (Tensor, numpy ndarray, optional): place the resultant values
+                                                   into this array if
+                                                   specified.
+
+        Returns:
+            Tensor: transposed view of self.
+
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
         """
         raise NotImplementedError()
 
@@ -298,6 +321,8 @@ class Tensor(object):
         Returns:
             Tensor containing the histogram data.
 
+        Raises:
+            NotImplementedError: Can't be instantiated directly.
         """
         raise NotImplementedError()
 
@@ -307,6 +332,7 @@ class Tensor(object):
 
         Arguments:
             other: the right-hand side operand
+
         Returns:
             OpTreeNode: the resulting op-tree
         """
@@ -369,20 +395,25 @@ class Tensor(object):
     def __neg__(self):
         return OpTreeNode.build("neg", self, None)
 
-    # def __nonzero__  (self): raise ValueError("The truth value of an array"
-    #                                           "with more than one element is"
-    #                                           "ambiguous.")
-
 
 class Backend(object):
-
     """
     Backend interface used to manipulate Tensor data. This abstract base class
     defines what operations each concrete backend must support.
-    NervanaGPU and NervanaCPU inherits Backend.
-    """
+    NervanaGPU and NervanaCPU inherit Backend.
 
-    def __init__(self, rng_seed=None, default_dtype=np.float32, compat_mode=None):
+    Arguments:
+        rng_seed (int, optional): random number generator seed value
+        default_dtype (numpy.ndtype, optional): Elemental data type to use when
+                                                creating new tensors if not
+                                                otherwise specified.  Defaults
+                                                to np.float32
+        compat_mode (str, optional): Flag to match implementation of other
+                                     libraries.  Currently only 'caffe' is
+                                     supported, defaults to None.
+    """
+    def __init__(self, rng_seed=None, default_dtype=np.float32,
+                 compat_mode=None):
         # dtype
         self.default_dtype = default_dtype
 
@@ -435,7 +466,7 @@ class Backend(object):
         return self.compat_mode == 'caffe'
 
     def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True,
-              shared=None, parallelism=0):
+              shared=None, parallelism=None):
         """
         Allocate input and output buffer for layer based on batch size. This
         is used because the layer does not know about the batch size.
@@ -448,8 +479,20 @@ class Backend(object):
                                      the buffer has already been allocated.
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
-            shared (buffer, optional): If present will attempt to reuse the memory in shared to
-                                       allocate the I/O buffer
+            name (str, optional): name indentifying the tensor (used in printing).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor will
+                                             persist across multiple begin and
+                                             end calls.  Setting to False may
+                                             provide a performance increase if
+                                             values do not need to be maintained
+                                             across such calls
+            shared (buffer, optional): If present will attempt to reuse the memory
+                                       in shared to allocate the I/O buffer
+            parallelism (str, optional): Indicates type of parallelism (Data,
+                                         Model) employed by this buffer.
+                                         Ignored on CPU and GPU backends,
+                                         defaults to no parallelism.
         Returns:
             Tensor: array object
         """
@@ -544,6 +587,7 @@ class Backend(object):
             shape (int, list): length of each dimension of the Tensor.
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            name (str, optional): name indentifying the tensor (used in printing).
             persist_values (bool, optional): If set to True (the default), the
                                              values assigned to this Tensor
                                              will persist across multiple begin
@@ -551,6 +595,15 @@ class Backend(object):
                                              may provide a performance increase
                                              if values do not need to be
                                              maintained across such calls
+            parallel (bool, optional): If True and using multi-GPU backend,
+                                       replicate copies of this tensor across
+                                       devices.  Defaults to False, and has no
+                                       effect on CPU, or (single) GPU backends.
+            distributed (bool, optional): If True and using multi-GPU backend,
+                                          this tensor is fragmented and
+                                          partitioned across devices.  Defaults
+                                          to False, and has no effect on CPU,
+                                          or (single) GPU backends.
 
         Returns:
             Tensor: array object
@@ -569,21 +622,31 @@ class Backend(object):
               parallel=False, distributed=False):
         """
         Instantiate a new instance of this backend's Tensor class, populating
-        elements based on obj values.
+        elements based on ary values.
 
         Arguments:
-            obj (array_like): input array object to construct from.  Can be
+            ary (array_like): input array object to construct from.  Can be
                               built-in python scalar or list (of lists), or a
                               numpy.ndarray
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            name (str, optional): name indentifying the tensor (used in printing).
             persist_values (bool, optional): If set to True (the default), the
                                              values assigned to this Tensor
                                              will persist across multiple begin
                                              and end calls.  Setting to False
                                              may provide a performance increase
                                              if values do not need to be
-                                             maintained across such calls.
+                                             maintained across such calls
+            parallel (bool, optional): If True and using multi-GPU backend,
+                                       replicate copies of this tensor across
+                                       devices.  Defaults to False, and has no
+                                       effect on CPU, or (single) GPU backends.
+            distributed (bool, optional): If True and using multi-GPU backend,
+                                          this tensor is fragmented and
+                                          partitioned across devices.  Defaults
+                                          to False, and has no effect on CPU,
+                                          or (single) GPU backends.
 
         Returns:
             Tensor: array object
@@ -608,13 +671,23 @@ class Backend(object):
             shape (int, list): length of each dimension of the Tensor.
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            name (str, optional): name indentifying the tensor (used in printing).
             persist_values (bool, optional): If set to True (the default), the
                                              values assigned to this Tensor
                                              will persist across multiple begin
                                              and end calls.  Setting to False
                                              may provide a performance increase
                                              if values do not need to be
-                                             maintained across such calls.
+                                             maintained across such calls
+            parallel (bool, optional): If True and using multi-GPU backend,
+                                       replicate copies of this tensor across
+                                       devices.  Defaults to False, and has no
+                                       effect on CPU, or (single) GPU backends.
+            distributed (bool, optional): If True and using multi-GPU backend,
+                                          this tensor is fragmented and
+                                          partitioned across devices.  Defaults
+                                          to False, and has no effect on CPU,
+                                          or (single) GPU backends.
 
         Returns:
             Tensor: array object
@@ -639,13 +712,23 @@ class Backend(object):
             shape (int, list): length of each dimension of the Tensor.
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
+            name (str, optional): name indentifying the tensor (used in printing).
             persist_values (bool, optional): If set to True (the default), the
                                              values assigned to this Tensor
                                              will persist across multiple begin
                                              and end calls.  Setting to False
                                              may provide a performance increase
                                              if values do not need to be
-                                             maintained across such calls.
+                                             maintained across such calls
+            parallel (bool, optional): If True and using multi-GPU backend,
+                                       replicate copies of this tensor across
+                                       devices.  Defaults to False, and has no
+                                       effect on CPU, or (single) GPU backends.
+            distributed (bool, optional): If True and using multi-GPU backend,
+                                          this tensor is fragmented and
+                                          partitioned across devices.  Defaults
+                                          to False, and has no effect on CPU,
+                                          or (single) GPU backends.
 
         Returns:
             Tensor: array object
@@ -666,7 +749,8 @@ class Backend(object):
         shape taken from other_ary.
 
         Arguments:
-            ary (tensor object): Tensor to inherit the dimensions of.
+            other_ary (tensor object): Tensor to inherit the dimensions of.
+            name (str, optional): name indentifying the tensor (used in printing).
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
             persist_values (bool, optional): If set to True (the default), the
@@ -696,7 +780,8 @@ class Backend(object):
         shape taken from other_ary and populating each element with a value of 0.
 
         Arguments:
-            ary (tensor object): Tensor to inherit the dimensions of.
+            other_ary (tensor object): Tensor to inherit the dimensions of.
+            name (str, optional): name indentifying the tensor (used in printing).
             dtype (data-type, optional): If present, specifies the underlying
                                          type to employ for each element.
             persist_values (bool, optional): If set to True (the default), the
@@ -738,12 +823,12 @@ class Backend(object):
 
     def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False):
         """
-        Doing following operations (* is dot product)
+        Perform one of the following operations (* is dot product)
         C = alpha * A * B   + beta * C
         C = alpha * A.T * B + beta * C
         C = alpha * A * B.T + beta * C
 
-        relu: if true applied before output (and prior to beta addition)
+        relu: if true, applied before output (and prior to beta addition)
 
         The operation will be short-circuited to: out <- alpha * left * right
         if beta has value 0 (the default).
@@ -751,24 +836,29 @@ class Backend(object):
         Arguments:
             A (Tensor): left-hand side operand.
             B (Tensor): right-hand side operand.
-            C (Tensor): output operands
-            alpha (float): scale A*B term
-            beta (float): scale C term before sum
-            relu (bool): whether to apply ReLu before output
+            C (Tensor): output operand
+            alpha (float. optional): scale A*B term
+            beta (float, optional): scale C term before sum
+            relu (bool, optional): If True apply ReLu non-linearity before
+                                   output.  Defaults to False.
         """
         raise NotImplementedError()
 
     def batched_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False):
         """
-        Doing following operations:
+        Perform one of the following operations:
         1. For fprop: A(K, C), B(X,C,N), C(X,K,N) --> call batched_dot(A, B, C)
         2. For bprop: A(K, C), B(X,K,N), C(X,C,N) --> call batched_dot(A.T, B, C)
         3. For update: A(X,K,N), B(X,C,N), C(K,C) --> call batched_dot(A, B.T, C)
 
         Arguments:
-            A, B (Tensor): input operands.
-            C (Tensor): output operands.
-            alpha, beta, relu: see usage in dot().
+            A (Tensor): left-hand input operand
+            B (Tensor): right-hand input operand
+            C (Tensor): output operand
+            alpha (float. optional): scale A*B term
+            beta (float, optional): scale C term before sum
+            relu (bool, optional): If True apply ReLu non-linearity before
+                                   output.  Defaults to False.
         """
         raise NotImplementedError()
 
@@ -778,7 +868,7 @@ class Backend(object):
 
         Arguments:
             out (Tensor): Output tensor
-            keepthresh (float): fraction of ones
+            keepthresh (float, optional): fraction of ones. Defaults to 0.5
         """
         raise NotImplementedError()
 
@@ -1258,9 +1348,9 @@ class Backend(object):
 
     def maximum(self, a, b, out=None):
         """
-        Performs element-wise greater than or equal testing on each element of
-        left and right, storing the result in out. Each operand is assumed to
-        be the same shape (or broadcastable as such).
+        Performs element-wise maximum value assignment based on corresponding
+        elements of left and right, storing the result in out. Each operand is
+        assumed to be the same shape (or broadcastable as such).
 
         Arguments:
             a (Tensor, numeric): left-hand side operand.
@@ -1275,9 +1365,9 @@ class Backend(object):
 
     def minimum(self, a, b, out=None):
         """
-        Performs element-wise greater than or equal testing on each element of
-        left and right, storing the result in out. Each operand is assumed to
-        be the same shape (or broadcastable as such).
+        Performs element-wise minimum value assignment based on corresponding
+        elements of left and right, storing the result in out. Each operand is
+        assumed to be the same shape (or broadcastable as such).
 
         Arguments:
             a (Tensor, numeric): left-hand side operand.
@@ -1317,6 +1407,9 @@ class Backend(object):
                                   dimensions.
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
+            keepdims (bool, optional): Keep the axes being computed over in the
+                                       output (with size 1), instead of
+                                       collapsing.  Defaults to True.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1331,12 +1424,15 @@ class Backend(object):
         Calculates the maximal element value along the specified axes.
 
         Arguments:
-            a (Tensor): the Tensor on which to perform the sum
+            a (Tensor): the Tensor on which to perform the operation
             axis (int, optional): the dimension along which to compute.
-                                  If set to None, we will sum over all
+                                  If set to None, we will take max over all
                                   dimensions.
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
+            keepdims (bool, optional): Keep the axes being computed over in the
+                                       output (with size 1), instead of
+                                       collapsing.  Defaults to True.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1351,12 +1447,15 @@ class Backend(object):
         Calculates the minimal element value along the specified axes.
 
         Arguments:
-            a (Tensor): the Tensor on which to perform the sum
+            a (Tensor): the Tensor on which to perform the operation
             axis (int, optional): the dimension along which to compute.
-                                  If set to None, we will sum over all
+                                  If set to None, we will take min over all
                                   dimensions.
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
+            keepdims (bool, optional): Keep the axes being computed over in the
+                                       output (with size 1), instead of
+                                       collapsing.  Defaults to True.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1373,12 +1472,15 @@ class Backend(object):
         the first are returned.
 
         Arguments:
-            a (Tensor): the Tensor on which to perform the sum
+            a (Tensor): the Tensor on which to perform the operation
             axis (int, optional): the dimension along which to compute.
-                                  If set to None, we will sum over all
-                                  dimensions.
+                                  If set to None, we will take argmax over all
+                                  dimensions.  Defaults to 1
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
+            keepdims (bool, optional): Keep the axes being computed over in the
+                                       output (with size 1), instead of
+                                       collapsing.  Defaults to True.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1392,12 +1494,15 @@ class Backend(object):
         the first are returned.
 
         Arguments:
-            a (Tensor): the Tensor on which to perform the sum
+            a (Tensor): the Tensor on which to perform the operation
             axis (int, optional): the dimension along which to compute.
-                                  If set to None, we will sum over all
-                                  dimensions.
+                                  If set to None, we will take argmin over all
+                                  dimensions.  Defaults to 1
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
+            keepdims (bool, optional): Keep the axes being computed over in the
+                                       output (with size 1), instead of
+                                       collapsing.  Defaults to True.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1410,12 +1515,16 @@ class Backend(object):
         axes.
 
         Arguments:
-            a (Tensor): the Tensor on which to perform the sum
+            a (Tensor): the Tensor on which to perform the operation
             axis (int, optional): the dimension along which to compute.
-                                  If set to None, we will sum over all
-                                  dimensions.
+                                  If set to None, we will take mean over all
+                                  dimensions.  Defaults to None
+            partial (bool, optional): Not currently used.
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
+            keepdims (bool, optional): Keep the axes being computed over in the
+                                       output (with size 1), instead of
+                                       collapsing.  Defaults to True.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1431,12 +1540,16 @@ class Backend(object):
         axes.
 
         Arguments:
-            a (Tensor): the Tensor on which to perform the sum
+            a (Tensor): the Tensor on which to perform the operation
             axis (int, optional): the dimension along which to compute.
-                                  If set to None, we will sum over all
-                                  dimensions.
+                                  If set to None, we will take var over all
+                                  dimensions.  Defaults to None
+            partial (bool, optional): Not currently used.
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
+            keepdims (bool, optional): Keep the axes being computed over in the
+                                       output (with size 1), instead of
+                                       collapsing.  Defaults to True.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1451,12 +1564,16 @@ class Backend(object):
         axes.
 
         Arguments:
-            a (Tensor): the Tensor on which to perform the sum
+            a (Tensor): the Tensor on which to perform the operation
             axis (int, optional): the dimension along which to compute.
-                                  If set to None, we will sum over all
+                                  If set to None, we will take std over all
                                   dimensions.
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
+            partial (bool, optional): Not currently used.
+            keepdims (bool, optional): Keep the axes being computed over in the
+                                       output (with size 1), instead of
+                                       collapsing.  Defaults to True.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1465,17 +1582,29 @@ class Backend(object):
 
     def take(self, a, indices, axis, out=None):
         """
+        Extract elements based on the indices along a given axis.
+
+        Arguments:
+            a (Tensor): the Tensor on which to perform the operation
+            indices (Tensor, numpy ndarray): indicies of elements to select
+            axis (int, optional): the dimension along which to compute.
+                                  If set to None, we will extract over all
+                                  dimensions (flattened first)
+            out (Tensor, optional): where the result will be stored. If out is
+                                    None, only the op-tree will be returned.
         """
         return a.take(indices, axis, out)
 
     def onehot(self, indices, axis, out=None):
         """
-        Generate optree for converting `indices` to onehot representation
+        Generate optree for converting `indices` to a onehot representation
 
         Arguments:
-            indices (Tensor): must be in numpy interger type for gpu onehot to
-                              work.
-            axis (interger): the axis along the feature length dimension
+            indices (Tensor): Elements must be of numpy integer type for gpu
+                              onehot to work.
+            axis (int): the axis along the feature length dimension
+            out (Tensor, optional): where the result will be stored. If out is
+                                    None, only the op-tree will be returned.
 
         Returns:
             OpTreeNode: the resulting op-tree
@@ -1489,8 +1618,8 @@ class Backend(object):
         Compute the updated bias gradient for a fully connected network layer.
 
         Arguments:
-            out (GPUTensor): Where to store the updated gradient value.
-            err (GPUTensor): backpropagated error
+            err (Tensor): backpropagated error
+            out (Tensor): Where to store the updated gradient value.
         """
         self.ng.sum(err, axis=1, out=out)
 
@@ -1499,8 +1628,8 @@ class Backend(object):
         Add the bias for a fully connected network layer.
 
         Arguments:
-            inputs (GPUTensor): the input to update.
-            bias (GPUTensor): the amount to increment
+            inputs (Tensor): the input to update.
+            bias (Tensor): the amount to increment
         """
         self.ng.add(inputs, bias, out=inputs)
 
@@ -1510,27 +1639,52 @@ class Backend(object):
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
                    str_d=1, str_h=1, str_w=1,
-                   grid_P=0, grid_Q=0, update_size=None):
+                   relu=False, bsum=False, deterministic_update=False):
         """
         Create a new ConvLayer parameter object.
-        This then is passed as an argument to all the convolution operations.
+        This is then passed as an argument to all the convolution operations.
 
-        N: Number of images in mini-batch
-        C: Number of input feature maps
-        K: Number of output feature maps
+        Arguments:
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
 
-        D: Depth  of input image
-        H: Height of input image
-        W: Width  of input image
+            N (int): Number of images in mini-batch
+            C (int): Number of input feature maps
+            K (int): Number of output feature maps
 
-        T: Depth  of filter kernel
-        R: Height of filter kernel
-        S: Width  of filter kernel
+            D (int, optional): Depth of input image.  Defaults to 1
+            H (int, optional): Height of input image.  Defaults to 1
+            W (int, optional): Width of input image.  Defaults to 1
 
-        padding: amount of zero-padding around the given edge
-        strides: factor to step the filters by in a given direction
+            T (int, optional): Depth of filter kernel.  Defaults to 1
+            R (int, optional): Height of filter kernel.  Defaults to 1
+            S (int, optional): Width of filter kernel.  Defaults to 1
 
-        dtype: need to know dtype to setup proper kernels and params.
+            pad_d (int, optional): amount of zero-padding around the depth edge
+                                   Defaults to 0.
+            pad_h (int, optional): amount of zero-padding around the height edge
+                                   Defaults to 0.
+            pad_w (int, optional): amount of zero-padding around the width edge
+                                   Defaults to 0.
+
+            str_d (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
+            str_h (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
+            str_w (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
+
+            relu (bool, optional): apply a relu transform to the output for
+                                   fprop or bprop.  Defaults to False
+    
+            bsum (bool, optional): calculate the sum along the batchnorm axis
+                                   for fprop or bprop.  Outputs an fp32 tensor
+                                   of size Kx1.  Defaults to False.
+    
+            deterministic_update (bool, optional): eleminate atomic adds in the
+                                                   update operation.  Increases
+                                                   reproducibility but runs
+                                                   slower.  Defaults to False.
         """
         raise NotImplementedError()
 
@@ -1544,8 +1698,10 @@ class Backend(object):
             I (Tensor): inputs
             F (Tensor): the weights (filters)
             O (Tensor): outputs
-            alpha (float): linear scaling
-            relu (boolean): apply ReLu or not before output
+            alpha (float, optional): linear scaling.  Defaults to 1.0
+            relu (bool, optional): apply ReLu before output.  Default not to.
+            repeat (int, optional): Repeat this operation the specified number
+                                    of times.  Defaults to 1.
         """
         raise NotImplementedError()
 
@@ -1558,7 +1714,9 @@ class Backend(object):
             F (Tensor): the weights (filters)
             E (Tensor): errors
             grad_I (Tensor): gradient to inputs (output delta)
-            alpha (float): linear scaling
+            alpha (float, optional): linear scaling.  Defaults to 1.0
+            repeat (int, optional): Repeat this operation the specified number
+                                    of times.  Defaults to 1.
         """
         raise NotImplementedError()
 
@@ -1570,7 +1728,10 @@ class Backend(object):
             layer: the conv layer as a parameter object
             I (Tensor): the inputs
             E (Tensor): the errors
-            U (Tensor): the updates
+            grad_F (Tensor): filter gradients (weights) to update.
+            alpha (float, optional): linear scaling.  Defaults to 1.0
+            repeat (int, optional): Repeat this operation the specified number
+                                    of times.  Defaults to 1.
         """
         raise NotImplementedError()
 
@@ -1581,27 +1742,38 @@ class Backend(object):
                      pad_d=0, pad_h=0, pad_w=0,
                      str_d=1, str_h=1, str_w=1):
         """
-        Create a new PoolLayer parameter object.
-        This then is passed as an argument to all pooling kernels.
+        Create a new Deconvolution parameter object.
+        This then is passed as an argument to all deconvolution kernels.
 
-        op: max, avg, l2 pooling
-        N: Number of images in mini-batch
+        Arguments:
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
 
-        C: Number of input feature maps
-        D: Depth  of input image
-        H: Height of input image
-        W: Width  of input image
+            N (int): Number of images in mini-batch
+            C (int): Number of input feature maps
+            K (int): Number of output feature maps
 
-        J: Size of feature map pooling window (maxout n_pieces)
-        T: Depth  of pooling window
-        R: Height of pooling window
-        S: Width  of pooling window
+            P (int): Height of output
+            Q (int): Width of output
 
-        padding: amount of zero-padding around the given image or feature map edge
-        strides: factor to step the window by in a given direction (overlap allowed)
+            R (int, optional): Height of filter kernel.  Defaults to 1
+            S (int, optional): Width of filter kernel.  Defaults to 1
+
+            pad_d (int, optional): amount of zero-padding around the depth edge
+                                   Defaults to 0.
+            pad_h (int, optional): amount of zero-padding around the height edge
+                                   Defaults to 0.
+            pad_w (int, optional): amount of zero-padding around the width edge
+                                   Defaults to 0.
+
+            str_d (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
+            str_h (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
+            str_w (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
 
         Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
-
         """
         raise NotImplementedError()
 
@@ -1615,21 +1787,39 @@ class Backend(object):
         Create a new PoolLayer parameter object.
         This then is passed as an argument to all pooling kernels.
 
-        op: "max", "avg", "l2" pooling (currently bprop only supports max, but not avg and l2)
-        N: Number of images in mini-batch
+        Arguments:
+            op (str): "max", "avg", "l2" pooling (currently bprop only supports
+                      max, but not avg and l2)
+            N (int): Number of images in mini-batch
 
-        C: Number of input feature maps
-        D: Depth  of input image
-        H: Height of input image
-        W: Width  of input image
+            C (int): Number of input feature maps
+            D (int, optional): Depth of input image.  Defaults to 1
+            H (int, optional): Height of input image.  Defaults to 1
+            W (int, optional): Width of input image.  Defaults to 1
 
-        J: Size of feature map pooling window (maxout n_pieces)
-        T: Depth  of pooling window
-        R: Height of pooling window
-        S: Width  of pooling window
+            J (int, optional): Size of feature map pooling window
+                               (maxout n_pieces).  Defaults to 1
+            T (int, optional): Depth of pooling window.  Defaults to 1
+            R (int, optional): Height of pooling window.  Defaults to 1
+            S (int, optional): Width of pooling window.  Defaults to 1
 
-        padding: amount of zero-padding around the given image or feature map edge
-        strides: factor to step the window by in a given direction (overlap allowed)
+            pad_j (int, optional): amount of zero-padding around the fm pooling
+                                   window edge.  Defaults to 0.
+            pad_d (int, optional): amount of zero-padding around the depth edge
+                                   Defaults to 0.
+            pad_h (int, optional): amount of zero-padding around the height edge
+                                   Defaults to 0.
+            pad_w (int, optional): amount of zero-padding around the width edge
+                                   Defaults to 0.
+
+            str_d (int, optional): factor to step the filters by in the fm
+                                   pooling window direction.  Defaults to 1
+            str_d (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
+            str_h (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
+            str_w (int, optional): factor to step the filters by in the depth
+                                   direction.  Defaults to 1
 
         Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
         """
@@ -1663,7 +1853,6 @@ class Backend(object):
 
 # For constructing an op tree used in lazy evaluation
 class OpTreeNode(tuple):
-
     """
     An OpTreeNode is a tuple of length 3. The first element is a dict
     specifying the operation, and the second and third elements specify the
@@ -1671,7 +1860,6 @@ class OpTreeNode(tuple):
     elements as 3 nodes. The second and third element are the left and right
     child of the first element.
     """
-
     def __new__(cls, *args):
         return tuple.__new__(cls, args)
 
@@ -1704,6 +1892,9 @@ class OpTreeNode(tuple):
         Returns a key for identifying the optree. The key is depended on the ops
         and the id of the tensors. Since __eq__ is overloaded, need to manage
         the hashing of the OpTreeNode manually.
+
+        Returns:
+            tuple: optree key
         """
         stack = self.traverse(list())
         for i in range(len(stack)):
@@ -1963,6 +2154,9 @@ class OpTreeNode(tuple):
         """
         Returns the evaluated value of the optree as a host numpy.ndarray.
         Allocates new memory, usually used for debug.
+
+        Returns:
+            numpy.ndarray: evaluated value
         """
         return self.astensor().get()
 
@@ -1970,6 +2164,9 @@ class OpTreeNode(tuple):
         """
         Returns the evaluated value of the optree as a Tensor.
         Allocates new memory, usually used for debug.
+
+        Returns:
+            Tensor: evaluated value
         """
         stack = self.traverse(list())
 
@@ -2044,7 +2241,3 @@ class OpTreeNode(tuple):
 
     def __neg__(self):
         return self.build("neg", self, None)
-
-    # def __nonzero__  (self): raise ValueError("The truth value of an array"
-    #                                           "with more than one element is"
-    #                                           "ambiguous.")
