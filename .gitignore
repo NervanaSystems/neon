@@ -24,6 +24,6 @@ generated
 *.log
 neon_help_output.txt
 neon/backends/util/cuda_capability
-neon/backends/kernels/cu
+neon/backends/kernels/ptx
 neon/backends/kernels/pre
 neon/backends/kernels/dump
