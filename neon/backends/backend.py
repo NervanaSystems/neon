@@ -1676,11 +1676,11 @@ class Backend(object):
 
             relu (bool, optional): apply a relu transform to the output for
                                    fprop or bprop.  Defaults to False
-    
+
             bsum (bool, optional): calculate the sum along the batchnorm axis
                                    for fprop or bprop.  Outputs an fp32 tensor
                                    of size Kx1.  Defaults to False.
-    
+
             deterministic_update (bool, optional): eleminate atomic adds in the
                                                    update operation.  Increases
                                                    reproducibility but runs

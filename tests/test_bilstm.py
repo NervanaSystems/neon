@@ -104,10 +104,10 @@ def test_biLSTM_fprop_rnn(backend_default, fargs):
     # asserts for fprop
     for x_rnn, x_f, x_b, y_f, y_b in zip(out_rnn_s, out_lr_f_s, out_lr_b_s,
                                          reversed(out_rl_f_s), reversed(out_rl_b_s)):
-        assert np.all(x_f == y_b)
-        assert np.all(x_b == y_f)
-        assert np.all(x_rnn == x_f)
-        assert np.all(x_rnn == y_b)
+        assert np.allclose(x_f, y_b, rtol=0.0, atol=1.0e-5)
+        assert np.allclose(x_b, y_f, rtol=0.0, atol=1.0e-5)
+        assert np.allclose(x_rnn, x_f, rtol=0.0, atol=1.0e-5)
+        assert np.allclose(x_rnn, y_b, rtol=0.0, atol=1.0e-5)
 
 
 def test_biLSTM_fprop(backend_default, fargs):
@@ -157,8 +157,8 @@ def test_biLSTM_fprop(backend_default, fargs):
     # asserts
     for x_f, x_b, y_f, y_b in zip(out_lr_f_s, out_lr_b_s,
                                   reversed(out_rl_f_s), reversed(out_rl_b_s)):
-        assert np.all(x_f == y_b)
-        assert np.all(x_b == y_f)
+        assert np.allclose(x_f, y_b, rtol=0.0, atol=1.0e-5)
+        assert np.allclose(x_b, y_f, rtol=0.0, atol=1.0e-5)
 
 
 def test_biLSTM_bprop(backend_default, fargs):
@@ -212,11 +212,11 @@ def test_biLSTM_bprop(backend_default, fargs):
     # asserts
     for x_f, x_b, y_f, y_b in zip(out_lr_f_s, out_lr_b_s,
                                   reversed(out_rl_f_s), reversed(out_rl_b_s)):
-        assert np.all(x_f == y_b)
-        assert np.all(x_b == y_f)
+        assert np.allclose(x_f, y_b, rtol=0.0, atol=1.0e-5)
+        assert np.allclose(x_b, y_f, rtol=0.0, atol=1.0e-5)
 
     del_lr_s = get_steps(del_lr, in_shape)
     del_rl_s = get_steps(del_rl, in_shape)
 
     for (x, y) in zip(del_lr_s, reversed(del_rl_s)):
-        assert np.all(x == y)
+        assert np.allclose(x, y, rtol=0.0, atol=1.0e-5)
