@@ -83,7 +83,7 @@ mlp = Model(layers=layers)
 if args.model_file:
     import os
     assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    mlp.load_weights(args.model_file)
+    mlp.load_params(args.model_file)
 
 # configure callbacks
 callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)

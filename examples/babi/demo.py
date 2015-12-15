@@ -52,7 +52,7 @@ valid_set = QA(*babi.test)
 
 # create model
 model_inference = create_model(babi.vocab_size, args.rlayer_type)
-model_inference.load_weights(args.model_weights)
+model_inference.load_params(args.model_weights)
 model_inference.initialize(dataset=valid_set)
 
 ex_story, ex_question, ex_answer = babi.test_parsed[0]

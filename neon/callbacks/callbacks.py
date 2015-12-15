@@ -78,7 +78,7 @@ class Callbacks(NervanaObject):
             self.callback_data = h5py.File(output_file, "w")
 
         if model_file:
-            model.load_weights(model_file)
+            model.load_params(model_file)
 
         self.model = model
         self.train_set = train_set

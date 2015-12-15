@@ -104,7 +104,7 @@ layers = [
     Affine(len(train_set.vocab), init, bias=init, activation=Softmax())
 ]
 model_new = Model(layers=layers)
-model_new.load_weights(args.save_path)
+model_new.load_params(args.save_path)
 model_new.initialize(dataset=(train_set.shape[0], time_steps))
 
 # Generate text

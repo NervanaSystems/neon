@@ -142,7 +142,7 @@ if __name__ == "__main__":
                                         stochastic_rounding=args.rounding)
 
     if args.model_file:
-        model.load_weights(args.model_file)
+        model.load_params(args.model_file)
     train, test = load_data(data_dir=args.data_dir)
     # configure callbacks
     callbacks = Callbacks(model, train, eval_set=test, **args.callback_args)

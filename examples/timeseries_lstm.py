@@ -332,7 +332,7 @@ if __name__ == '__main__':
         ]
 
     model_new = Model(layers=layers)
-    model_new.load_weights(args.save_path)
+    model_new.load_params(args.save_path)
     model_new.initialize(dataset=(train_set.nfeatures, seq_len))
 
     output = np.zeros((train_set.nfeatures, num_predict))
