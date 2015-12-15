@@ -58,6 +58,7 @@ roles. Apply here_!
    :caption: For Users
 
    user_guide.rst
+   introductory_resources.rst
    tools.rst
 
 .. toctree::
