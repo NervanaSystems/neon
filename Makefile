@@ -20,7 +20,7 @@
 
 # where our installed python packages will live
 VIRTUALENV_DIR := .venv
-VIRTUALENV_EXE := virtualenv  # use pyvenv for python3 install
+VIRTUALENV_EXE := virtualenv -p python2.7  # use pyvenv for python3 install
 ACTIVATE := $(VIRTUALENV_DIR)/bin/activate
 
 # get release version info
