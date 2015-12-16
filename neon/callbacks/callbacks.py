@@ -897,14 +897,14 @@ class DeconvCallback(Callback):
         imgs_to_store = set()
 
         for l, lyr in enumerate(self.model.layers.layers, 0):
-            num_fm, H, W = lyr.out_shape
-            fm_argmax = self.be.zeros((num_fm, 1), dtype=np.int32)
-            maxact_idx = self.be.array(np.arange(num_fm) * H * W * self.be.bsz, dtype=np.int32)
-
             x = lyr.fprop(x, inference=True)
 
             if not isinstance(lyr, Convolution):
                 continue
+            
+            num_fm, H, W = lyr.out_shape
+            fm_argmax = self.be.zeros((num_fm, 1), dtype=np.int32)
+            maxact_idx = self.be.array(np.arange(num_fm) * H * W * self.be.bsz, dtype=np.int32)
 
             act_data = self.callback_data["deconv/max_act/{0:04}".format(l)]
 
