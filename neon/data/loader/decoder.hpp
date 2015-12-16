@@ -22,8 +22,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
-typedef uint8_t uchar;
-
 using std::ofstream;
 using std::vector;
 using cv::Mat;
@@ -140,28 +138,29 @@ protected:
 class Decoder {
 public:
     virtual ~Decoder() {};
-    virtual void decode(uchar* item, int itemSize, uchar* buf) = 0;
+    virtual void decode(char* item, int itemSize, char* buf) = 0;
 };
 
 class ImageDecoder : public Decoder {
 public:
     ImageDecoder(AugmentationParams *augParams)
     : _augParams(augParams) {
-        _scratchbuf = new uchar[_augParams->getSize().area() * 3];
+        _scratchbuf = new char[_augParams->getSize().area() * 3];
     }
 
     virtual ~ImageDecoder() {
         delete[] _scratchbuf;
+        delete _augParams;
     }
 
-    void save_binary(char *filn, uchar* item, int itemSize, uchar* buf) {
+    void save_binary(char *filn, char* item, int itemSize, char* buf) {
         ofstream file(filn, ofstream::out | ofstream::binary);
         file.write((char*)(&itemSize), sizeof(int));
         file.write((char*)item, itemSize);
         printf("wrote %s\n", filn);
     }
 
-    void decode(uchar* item, int itemSize, uchar* buf) {
+    void decode(char* item, int itemSize, char* buf) {
         Mat image = Mat(1, itemSize, CV_8UC3, item);
         Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
         Rect cropBox;
@@ -201,6 +200,6 @@ public:
 
 private:
     AugmentationParams*         _augParams;
-    uchar*                      _scratchbuf;
+    char*                       _scratchbuf;
 };
 

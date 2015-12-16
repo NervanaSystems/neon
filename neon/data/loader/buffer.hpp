@@ -19,9 +19,17 @@
 #endif
 
 #include <vector>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
 
 typedef uint8_t uchar;
 using std::vector;
+using std::pair;
+using std::make_pair;
+using std::mutex;
+using std::unique_lock;
+using std::condition_variable;
 
 template<typename T>
 class Buffer {
@@ -133,6 +141,91 @@ protected:
     bool                        _pinned;
 };
 
-typedef Buffer<float>           FloatBuffer;
-typedef Buffer<uint8_t>         CharBuffer;
-typedef Buffer<int32_t>         IntBuffer;
+typedef Buffer<char>                                    CharBuffer;
+typedef pair<CharBuffer*, CharBuffer*>                  BufferPair;
+
+class BufferPool {
+public:
+    BufferPool(int dataSize, int labelSize, bool pinned = false, int count = 2)
+    : _count(count), _used(0), _readPos(0), _writePos(0) {
+        for (int i = 0; i < count; i++) {
+            CharBuffer* dataBuffer = new CharBuffer(dataSize, pinned);
+            CharBuffer* labelBuffer = new CharBuffer(labelSize, pinned);
+            _bufs.push_back(make_pair(dataBuffer, labelBuffer));
+        }
+    }
+
+    virtual ~BufferPool() {
+        for (auto buf : _bufs) {
+            delete buf.first;
+            delete buf.second;
+        }
+    }
+
+    BufferPair& getForWrite() {
+        _bufs[_writePos].first->reset();
+        _bufs[_writePos].second->reset();
+        return _bufs[_writePos];
+    }
+
+    BufferPair& getForRead() {
+        return _bufs[_readPos];
+    }
+
+    void advanceReadPos() {
+        _used--;
+        advance(_readPos);
+    }
+
+    void advanceWritePos() {
+        _used++;
+        advance(_writePos);
+    }
+
+    bool empty() {
+        assert(_used >= 0);
+        return (_used == 0);
+    }
+
+    bool full() {
+        assert(_used <= _count);
+        return (_used == _count);
+    }
+
+    mutex& getMutex() {
+        return _mutex;
+    }
+
+    void waitForNonEmpty(unique_lock<mutex>& lock) {
+        _nonEmpty.wait(lock);
+    }
+
+    void waitForNonFull(unique_lock<mutex>& lock) {
+        _nonFull.wait(lock);
+    }
+
+    void signalNonEmpty() {
+        _nonEmpty.notify_all();
+    }
+
+    void signalNonFull() {
+        _nonFull.notify_all();
+    }
+
+protected:
+    void advance(int& index) {
+        if (++index == _count) {
+            index = 0;
+        }
+    }
+
+protected:
+    int                         _count;
+    int                         _used;
+    vector<BufferPair>          _bufs;
+    int                         _readPos;
+    int                         _writePos;
+    mutex                       _mutex;
+    condition_variable          _nonFull;
+    condition_variable          _nonEmpty;
+};

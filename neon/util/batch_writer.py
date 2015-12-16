@@ -28,6 +28,9 @@ import ctypes as ct
 from neon.util.compat import range
 from neon.util.argparser import NeonArgparser
 
+logger = logging.getLogger(__name__)
+
+
 class BatchWriter(object):
 
     def __init__(self, out_dir, image_dir, target_size=256, validation_pct=0.2,
@@ -146,6 +149,7 @@ class BatchWriter(object):
                 f.write('%s_nrec %d\n' % (settype, getattr(self, settype + '_nrec')))
             f.write('nclass %d\n' % (self.nclass['l_id']))
             f.write('item_max_size %d\n' % (25000))
+            f.write('label_size %d\n' % (4))
             f.write('R_mean      %f\n' % self.pixel_mean[0])
             f.write('G_mean      %f\n' % self.pixel_mean[1])
             f.write('B_mean      %f\n' % self.pixel_mean[2])

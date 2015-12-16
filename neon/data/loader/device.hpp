@@ -17,7 +17,6 @@
 
 #include <exception>
 
-typedef uint8_t uchar;
 enum DeviceType { CPU=0, GPU=1 };
 
 class Device {
@@ -25,10 +24,10 @@ public:
     Device(int type) : _type(type) {}
     virtual ~Device() {};
     virtual int init() = 0;
-    virtual int copyData(int idx, uchar* data, int size) = 0;
-    virtual int copyLabels(int idx, uchar* data, int size) = 0;
-    virtual int copyDataBack(int idx, uchar* data, int size) = 0;
-    virtual int copyLabelsBack(int idx, uchar* data, int size) = 0;
+    virtual int copyData(int idx, char* data, int size) = 0;
+    virtual int copyLabels(int idx, char* data, int size) = 0;
+    virtual int copyDataBack(int idx, char* data, int size) = 0;
+    virtual int copyLabelsBack(int idx, char* data, int size) = 0;
 
 public:
     int                         _type;
@@ -42,8 +41,8 @@ public:
 
 class CpuParams : public DeviceParams {
 public:
-    uchar*                      _data[2];
-    uchar*                      _labels[2];
+    char*                       _data[2];
+    char*                       _labels[2];
 };
 
 #if HASGPU
@@ -109,24 +108,24 @@ public:
         return 0;
     }
 
-    int copyData(int idx, uchar* data, int size) {
+    int copyData(int idx, char* data, int size) {
         return copy(_data[idx], data, size);
     }
 
-    int copyLabels(int idx, uchar* labels, int size) {
+    int copyLabels(int idx, char* labels, int size) {
         return copy(_labels[idx], labels, size);
     }
 
-    int copyDataBack(int idx, uchar* data, int size) {
+    int copyDataBack(int idx, char* data, int size) {
         return copyBack(data, _data[idx], size);
     }
 
-    int copyLabelsBack(int idx, uchar* labels, int size) {
+    int copyLabelsBack(int idx, char* labels, int size) {
         return copyBack(labels, _labels[idx], size);
     }
 
 private:
-    int copy(CUdeviceptr dst, uchar* src, int size) {
+    int copy(CUdeviceptr dst, char* src, int size) {
         try {
             checkDriverErrors(cuMemcpyHtoD(dst, src, size));
         } catch(...) {
@@ -135,7 +134,7 @@ private:
         return 0;
     }
 
-    int copyBack(uchar* dst, CUdeviceptr src, int size) {
+    int copyBack(char* dst, CUdeviceptr src, int size) {
         try {
             checkDriverErrors(cuMemcpyDtoH(dst, src, size));
         } catch(...) {
@@ -158,8 +157,8 @@ public:
     : Device(CPU), _alloc(true) {
         init();
         for (int i = 0; i < 2; i++) {
-            _data[i] = new uchar[dataSize];
-            _labels[i] = new uchar[labelSize];
+            _data[i] = new char[dataSize];
+            _labels[i] = new char[labelSize];
         }
     }
 
@@ -185,28 +184,28 @@ public:
         return 0;
     }
 
-    int copyData(int idx, uchar* data, int size) {
+    int copyData(int idx, char* data, int size) {
         memcpy(_data[idx], data, size);
         return 0;
     }
 
-    int copyLabels(int idx, uchar* labels, int size) {
+    int copyLabels(int idx, char* labels, int size) {
         memcpy(_labels[idx], labels, size);
         return 0;
     }
 
-    int copyDataBack(int idx, uchar* data, int size) {
+    int copyDataBack(int idx, char* data, int size) {
         memcpy(data, _data[idx], size);
         return 0;
     }
 
-    int copyLabelsBack(int idx, uchar* labels, int size) {
+    int copyLabelsBack(int idx, char* labels, int size) {
         memcpy(labels, _labels[idx], size);
         return 0;
     }
 
 private:
-    uchar*                      _data[2];
-    uchar*                      _labels[2];
+    char*                       _data[2];
+    char*                       _labels[2];
     bool                        _alloc;
 };

@@ -37,11 +37,12 @@ using std::vector;
 class Reader {
 public:
     virtual ~Reader() {};
-    virtual int read(CharBuffer* data, IntBuffer* labels) = 0;
+    virtual int read(CharBuffer* data, CharBuffer* labels) = 0;
     virtual int reset() = 0;
     // For unit testing.
-    virtual void readAll(CharBuffer* data, IntBuffer* labels) = 0;
+    virtual void readAll(CharBuffer* data, CharBuffer* labels) = 0;
     virtual int totalDataSize() = 0;
+    virtual int totalLabelsSize() = 0;
 };
 
 class MacrobatchReader : public Reader {
@@ -59,7 +60,7 @@ public:
         close();
     }
 
-    int read(CharBuffer* data, IntBuffer* labels) {
+    int read(CharBuffer* data, CharBuffer* labels) {
         int offset = 0;
         while (offset < _batchSize) {
             int count = _batchSize - offset;
@@ -104,12 +105,12 @@ public:
     }
 
     // For unit testing.
-    void readAll(CharBuffer* data, IntBuffer* labels) {
+    void readAll(CharBuffer* data, CharBuffer* labels) {
         readExact(data, labels, _itemsLeft);
     }
 
 private:
-    int read(CharBuffer* data, IntBuffer* labels, int count) {
+    int read(CharBuffer* data, CharBuffer* labels, int count) {
         if (_itemsLeft == 0) {
             next();
         }
@@ -125,16 +126,16 @@ private:
         return realCount;
     }
 
-    void readExact(CharBuffer* data, IntBuffer* labels, int count) {
+    void readExact(CharBuffer* data, CharBuffer* labels, int count) {
         assert(count <= _itemsLeft);
         for (int i = 0; i < count; ++i) {
             int         dataSize;
             int         labelSize;
-            _batchFile.readItem((char*) data->getCurrent(),
-                                (char*) labels->getCurrent(),
+            _batchFile.readItem(data->getCurrent(),
+                                labels->getCurrent(),
                                 &dataSize, &labelSize);
             data->pushItem(dataSize);
-            labels->pushItem(1);
+            labels->pushItem(labelSize);
         }
         _itemsLeft -= count;
         _itemsRead += count;
@@ -188,7 +189,7 @@ public:
         _rootPath = dirname((char*) _rootPath.c_str());
     }
 
-    int read(CharBuffer* data, IntBuffer* labels) {
+    int read(CharBuffer* data, CharBuffer* labels) {
         if (_error != 0) {
             return _error;
         }
@@ -211,7 +212,7 @@ public:
             memcpy(data->getCurrent(), &buf[0], imageSize);
             data->pushItem(imageSize);
             memset(labels->getCurrent(), 0, sizeof(int));
-            labels->pushItem(1);
+            labels->pushItem(sizeof(int));
 
             if (++_itemIdx == _itemCount) {
                 // Wrap around.
@@ -229,11 +230,15 @@ public:
     }
 
     // For unit testing.
-    virtual void readAll(CharBuffer* data, IntBuffer* labels) {
+    virtual void readAll(CharBuffer* data, CharBuffer* labels) {
         assert(0);
     };
 
     int totalDataSize() {
+        return 0;
+    }
+
+    int totalLabelsSize() {
         return 0;
     }
 

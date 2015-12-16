@@ -131,7 +131,7 @@ class ImageLoader(NervanaObject):
         # Should have following defined:
         req_attributes = ['global_mean', 'nclass', 'val_start', 'ntrain',
                           'train_nrec', 'nval', 'train_start', 'val_nrec',
-                          'item_max_size']
+                          'item_max_size', 'label_size']
 
         for r in req_attributes:
             if r not in dataset_cache:
@@ -212,6 +212,7 @@ class ImageLoader(NervanaObject):
                                            ct.c_bool(self.macro),
                                            ct.c_bool(self.shuffle),
                                            ct.c_int(self.item_max_size),
+                                           ct.c_int(self.label_size),
                                            ct.POINTER(DeviceParams)(params))
         assert self.start_idx % self.bsz == 0
 

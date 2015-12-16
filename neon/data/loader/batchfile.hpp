@@ -72,8 +72,7 @@ public:
     }
 
     ~BatchFile() {
-        assert(_ifs.is_open() == false);
-        assert(_ofs.is_open() == false);
+        close();
     }
 
     void openForRead(const string& fileName) {
