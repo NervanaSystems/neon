@@ -915,15 +915,13 @@ class DeconvCallback(Callback):
         Returns:
             img (ndarray): image array with valid RGB values
         """
-        absMax = np.max((abs(img)))
-        minVal = - absMax
-        img -= minVal
-        maxImg = np.max(img)
-        maxVal = max(absMax - minVal, maxImg)
-        if maxVal == 0:
-            maxVal = 1
-        img = img / maxVal * 255
-        return img
+        img_min = np.min(img)
+        img_rng = np.max(img) - img_min
+        img_255 = img - img_min
+        if img_rng > 0:
+            img_255 /= img_rng
+            img_255 *= 255.
+        return img_255
 
     def store_images(self, batch_ind, imgs_to_store, img_batch_data, C, H, W):
         n_imgs = len(imgs_to_store)
