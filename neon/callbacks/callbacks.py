@@ -901,7 +901,7 @@ class DeconvCallback(Callback):
 
             if not isinstance(lyr, Convolution):
                 continue
-            
+
             num_fm, H, W = lyr.out_shape
             fm_argmax = self.be.zeros((num_fm, 1), dtype=np.int32)
             maxact_idx = self.be.array(np.arange(num_fm) * H * W * self.be.bsz, dtype=np.int32)

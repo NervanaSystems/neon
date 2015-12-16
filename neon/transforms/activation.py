@@ -49,6 +49,7 @@ class Explin(Transform):
     """
     def __init__(self, alpha=1.0, name='elu'):
         super(Explin, self).__init__(name)
+        self.alpha = alpha
 
     def __call__(self, x):
         return self.be.maximum(x, 0) + self.alpha * (self.be.exp(self.be.minimum(x, 0)) - 1)

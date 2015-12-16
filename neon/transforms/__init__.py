@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from neon.transforms.activation import (Identity, Rectlin, Softmax, Tanh,
+from neon.transforms.activation import (Identity, Explin, Rectlin, Softmax, Tanh,
                                         Logistic, Normalizer)
 from neon.transforms.cost import (CrossEntropyBinary, CrossEntropyMulti,
                                   SumSquared, MeanSquared, LogLoss,
