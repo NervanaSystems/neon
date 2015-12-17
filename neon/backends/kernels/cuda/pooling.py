@@ -29,12 +29,20 @@ def map_string2func(funcname, clss):
         return _get_bprop_max(clss)
     if funcname == "bprop_max_overlap":
         return _get_bprop_max_overlap(clss)
+
     if funcname == "fprop_avg":
         return _get_fprop_avg(clss)
     if funcname == "bprop_avg":
         return _get_bprop_avg(clss)
     if funcname == "bprop_avg_overlap":
         return _get_bprop_avg_overlap(clss)
+
+    if funcname == "fprop_lrn":
+        return _get_fprop_lrn(clss)
+    if funcname == "bprop_lrn_overlap":
+        return _get_bprop_lrn_overlap(clss)
+
+    raise AttributeError("kernel type '" + funcname + "' not understood")
 
 
 # this template is used to hide variables that are only defined conditionally.
@@ -49,11 +57,9 @@ def prepare_template_vals(dtype, rounding=False):
     Most are data type conversion and statistics collection related.
     """
     template_vals = dict()
-    for key in ("common", "inits", "finish", "stats_args", "mul_by_scale", "atomic_max"):
+    for key in ("common", "inits", "finish", "stats_args", "mul_by_scale", "atomic_max", "cvt_out"):
         template_vals[key] = ""
 
-    if dtype == "f2":
-        template_vals["common"] += _common_fp16_to_fp32
 
     if rounding:
         template_vals["common"] += _common_urand_gen
@@ -71,6 +77,7 @@ def prepare_template_vals(dtype, rounding=False):
     template_vals["cvt"] = _ew_types[dtype]["cvt"]
 
     if dtype == "f2":
+        template_vals["common"] += _common_fp16_to_fp32
         template_vals["cvt_out"] = "fp32_to_fp16"
     elif dtype == "x2":
         template_vals["stats_args"] += ", int* maxabs, float scale0"
@@ -79,7 +86,7 @@ def prepare_template_vals(dtype, rounding=False):
         template_vals["mul_by_scale"] += "1/scale0 *"
         template_vals["atomic_max"] += atomic_max
     elif dtype == "f4":
-        template_vals["cvt_out"] = ""
+        pass
     else:
         raise ValueError("Did not understand clss dtype " + str(dtype))
 
@@ -350,6 +357,333 @@ __global__ void spool_fprop_avg(
     kernel = module.get_function("spool_fprop_avg")
     kernel.prepare("3P 2f 34I" + ("Pf" if (clss[0] == "x") else ""))
     return kernel
+
+
+@context_dependent_memoize
+def _get_fprop_lrn(clss):
+    """
+    Local Response Normalization (LRN) layer.
+    Implementation based on fprop_avg kernel.
+
+    Implements the following operation:
+    for each output pixel
+        x' = x / response
+    where the response is
+        response = [1 + alpha/N * sum_neighbors x_neighbor**2 ]**beta
+    so we compute the pooling output
+    """
+    code = r"""
+%(common)s
+
+__global__ void spool_fprop_lrn(
+    const %(type)s* I, %(type)s* O, %(type)s* A,
+    float alpha, float beta, float ascale, float bpower, int flags,
+    int N, int W, int H, int D, int C,
+    int WN, int HWN, int DHWN, int P, int Q,
+    int magic_P, int shift_P, int QN, int PQN, int MPQN,
+    int pad_c, int pad_d, int pad_h, int pad_w,
+    int str_c, int str_d, int str_h, int str_w,
+    int S, int RS, int RST, int JRST,
+    int magic_S, int shift_S,
+    int magic_RS, int shift_RS, int magic_RST, int shift_RST
+    %(stats_args)s
+    )
+{
+    __shared__ float rcpWindowSize;
+    extern __shared__ int lut[];
+
+    int tid = threadIdx.x;
+
+    // paralellism is over QMPK dimensions (output pixels and ofm's)
+    int n  = tid;
+    int q  = blockIdx.x;
+    int mp = blockIdx.y;
+    int k  = blockIdx.z;
+
+    int m = mp * magic_P; m >>= shift_P;
+    int p = mp - m*P;
+
+    // zigzag q back and forth to improve L2 cache perf
+    if (p & 1)
+        q = Q - q - 1;
+
+    const %(type)s* IonO = I;  // input pixel at output location
+    I += n;
+    IonO += k*MPQN + m*PQN + p*QN + q*N + n;
+    O += k*MPQN + m*PQN + p*QN + q*N + n;
+    A += k*MPQN + m*PQN + p*QN + q*N + n;
+
+    float O_val = beta != 0.0f ? %(cvt)s(__ldg(O)) : 0.0f;
+
+    if (tid < 32)
+    {
+        int kj = k * str_c - pad_c;
+        int mt = m * str_d - pad_d;
+        int pr = p * str_h - pad_h;
+        int qs = q * str_w - pad_w;
+
+        int window_size = 0;
+        int jrst = tid;
+        // this loop generates the LUT (same for pooling and normalization)
+        while (jrst < JRST)
+        {
+            int j = jrst * magic_RST; j >>= shift_RST;
+            int rst = jrst - j * RST;
+
+            int t = rst * magic_RS; t >>= shift_RS;
+            int rs = rst - t * RS;
+
+            int r = rs * magic_S; r >>= shift_S;
+            int s = rs - r*S;
+
+            int x = qs + s;
+            int y = pr + r;
+            int z = mt + t;
+            int c = kj + j;
+
+            bool bounds_x  = x >= 0.0f && x < W;
+            bool bounds_y  = y >= 0.0f && y < H;
+            bool bounds_z  = z >= 0.0f && z < D;
+            bool bounds_c  = c >= 0.0f && c < C;
+            bool in_bounds = bounds_x && bounds_y && bounds_z && bounds_c;
+
+            // Count the total valid slices
+            window_size += __popc(__ballot(in_bounds));
+
+            int sliceI  = c*DHWN + z*HWN + y*WN + x*N;
+
+            lut[jrst] = in_bounds ? sliceI : -1;
+            jrst += 32;
+        }
+
+        rcpWindowSize = 1.0f / (float)window_size;
+    }
+    __syncthreads();
+
+    float out = 0.0f;
+    float denom;
+    float sumsquare = 0.0f;
+    float input = 0.0f;
+    int jrst = 0;
+    while (jrst < JRST)
+    {
+        int slice0 = lut[jrst + 0];
+        int slice1 = lut[jrst + 1];
+        int slice2 = lut[jrst + 2];
+        int slice3 = lut[jrst + 3];
+
+        // TODO: May not need to load all slices if they are not used.
+        input =      jrst + 0 < JRST && slice0 >= 0 ? %(cvt)s(__ldg(I + slice0)) : 0.0f;
+        sumsquare += jrst + 0 < JRST && slice0 >= 0 ? input * input: 0.0f;
+        input =      jrst + 1 < JRST && slice1 >= 0 ? %(cvt)s(__ldg(I + slice1)) : 0.0f;
+        sumsquare += jrst + 1 < JRST && slice1 >= 0 ? input * input: 0.0f;
+        input =      jrst + 2 < JRST && slice2 >= 0 ? %(cvt)s(__ldg(I + slice2)) : 0.0f;
+        sumsquare += jrst + 2 < JRST && slice2 >= 0 ? input * input: 0.0f;
+        input =      jrst + 3 < JRST && slice3 >= 0 ? %(cvt)s(__ldg(I + slice3)) : 0.0f;
+        sumsquare += jrst + 3 < JRST && slice3 >= 0 ? input * input: 0.0f;
+
+        jrst += 4;
+    }
+
+    denom = (1 + ascale*sumsquare*rcpWindowSize);
+    out = %(cvt)s(__ldg(IonO)) / powf(denom, bpower);
+
+
+    // convert back to fp to write out
+    %(type)s temp_out = %(cvt_out)s( %(mul_by_scale)s (out*alpha + O_val*beta));
+
+    // predicate write with no-op flag
+    if (!(flags & 1)) {
+        *O = temp_out;
+        *A = %(cvt_out)s( %(mul_by_scale)s denom );  // write the denomiantor to address
+    }
+
+    // collect max abs stats
+    int intermediate_max = max_abs(0, temp_out); // compute abs
+    %(atomic_max)s
+}
+"""
+
+    template_vals = prepare_template_vals(clss)
+    code = code % template_vals
+    module = SourceModule(code)
+    kernel = module.get_function("spool_fprop_lrn")
+    kernel.prepare("3P 4f 34I" + ("Pf" if (clss[0] == "x") else ""))
+    return kernel
+
+
+@context_dependent_memoize
+def _get_bprop_lrn_overlap(clss):
+
+    code = r"""
+%(common)s
+
+union LutEntry {
+    struct {
+        int slice;
+        int argmax;
+    } data;
+    int2 data2;
+};
+
+__global__ void spool_bprop_lrn_overlap(
+    const %(type)s* I, const %(type)s* O, const %(type)s* E, %(type)s* delta, const %(type)s* A,
+    float alpha, float beta, float ascale, float bpower, int flags,
+    int N, int W, int H, int D, int C,
+    int WN, int HWN, int DHWN,
+    int magic_H, int shift_H,
+    int pad_w, int pad_h, int pad_d, int pad_c,
+    int str_w, int str_h, int str_d, int str_c,
+    int magic_str_w, int shift_str_w,
+    int magic_str_h, int shift_str_h,
+    int magic_str_d, int shift_str_d,
+    int magic_str_c, int shift_str_c,
+    int S, int R, int T, int J, int RS, int RST, int JRST,
+    int magic_S, int shift_S, int magic_RS, int shift_RS,
+    int magic_RST, int shift_RST,
+    int Q, int P, int M, int K, int QN, int PQN, int MPQN
+    %(stats_args)s  // template for "int* maxabs, float scale0"
+    )
+{
+    extern __shared__ int2 lut[];
+
+    int tid = threadIdx.x;
+
+    int n  = tid;
+    int x  = blockIdx.x;
+    int yz = blockIdx.y;
+    int c  = blockIdx.z;
+
+    int z = yz * magic_H; z >>= shift_H;
+    int y = yz - z*H;
+
+    // zigzag q back and forth to improve L2 cache perf
+    if (y & 1)
+        x = W - x - 1;
+
+    // O E A used inside JRST loop
+    O += n;  // output
+    E += n;  // error
+    A += n;  // denom
+
+    // I E A used for output
+    const %(type)s* E_out = E;
+    const %(type)s* A_out = A;
+    delta += c*DHWN + z*HWN + y*WN + x*N + n;
+    I     += c*DHWN + z*HWN + y*WN + x*N + n;
+    E_out += c*DHWN + z*HWN + y*WN + x*N;
+    A_out += c*DHWN + z*HWN + y*WN + x*N;
+
+    float delta_val = (beta != 0.0f) ? %(cvt)s(__ldg(delta)) : 0.0f;
+
+    // build the lookup table
+    if (tid < 32)
+    {
+        int kj = c - J + pad_c + 1;
+        int mt = z - T + pad_d + 1;
+        int pr = y - R + pad_h + 1;
+        int qs = x - S + pad_w + 1;
+
+        int jrst = tid;
+        while (jrst < JRST)
+        {
+            int j = jrst * magic_RST; j >>= shift_RST;
+            int rst = jrst - j * RST;
+
+            int t = rst * magic_RS; t >>= shift_RS;
+            int rs = rst - t * RS;
+
+            int r = rs * magic_S; r >>= shift_S;
+            int s = rs - r*S;
+
+            int k_prime = kj + j;
+            int m_prime = mt + t;
+            int p_prime = pr + r;
+            int q_prime = qs + s;
+
+            int k     = k_prime * magic_str_c; k >>= shift_str_c;
+            int k_mod = k_prime - k*str_c;
+            bool k_bounds = k_mod == 0 && k >= 0 && k < K;
+
+            int m     = m_prime * magic_str_d; m >>= shift_str_d;
+            int m_mod = m_prime - m*str_d;
+            bool m_bounds = m_mod == 0 && m >= 0 && m < M;
+
+            int p     = p_prime * magic_str_h; p >>= shift_str_h;
+            int p_mod = p_prime - p*str_h;
+            bool p_bounds = p_mod == 0 && p >= 0 && p < P;
+
+            int q     = q_prime * magic_str_w; q >>= shift_str_w;
+            int q_mod = q_prime - q*str_w;
+            bool q_bounds = q_mod == 0 && q >= 0 && q < Q;
+
+            bool in_bounds = k_bounds && m_bounds && p_bounds && q_bounds;
+
+            int j_prime = c - k_prime + pad_c;
+            int t_prime = z - m_prime + pad_d;
+            int r_prime = y - p_prime + pad_h;
+            int s_prime = x - q_prime + pad_w;
+
+            int sliceI  = k*MPQN + m*PQN + p*QN + q*N;
+            int argmaxI = j_prime*RST + t_prime*RS + r_prime*S + s_prime;
+
+            LutEntry entry;
+            entry.data.slice  = sliceI;
+            entry.data.argmax = in_bounds ? argmaxI : -1;
+
+            lut[jrst] = entry.data2;
+            jrst += 32;
+        }
+    }
+    __syncthreads();
+
+    int jrst = 0;
+    // float out = 0.0f;
+    float array_delta = 0.0f;
+    int intermediate_max = 0;
+
+    while (jrst < JRST)
+    {
+        LutEntry entry0;
+        LutEntry entry1;
+        LutEntry entry2;
+        LutEntry entry3;
+
+        entry0.data2 = lut[jrst + 0];
+        entry1.data2 = lut[jrst + 1];
+        entry2.data2 = lut[jrst + 2];
+        entry3.data2 = lut[jrst + 3];
+
+        array_delta += (jrst + 0 < JRST && entry0.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry0.data.slice)) * %(cvt)s(__ldg(E + entry0.data.slice)) * %(cvt)s(__ldg(A + entry0.data.slice)) : 0.0f;
+        array_delta += (jrst + 1 < JRST && entry1.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry1.data.slice)) * %(cvt)s(__ldg(E + entry1.data.slice)) * %(cvt)s(__ldg(A + entry1.data.slice)) : 0.0f;
+        array_delta += (jrst + 2 < JRST && entry2.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry2.data.slice)) * %(cvt)s(__ldg(E + entry2.data.slice)) * %(cvt)s(__ldg(A + entry2.data.slice)) : 0.0f;
+        array_delta += (jrst + 3 < JRST && entry3.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry3.data.slice)) * %(cvt)s(__ldg(E + entry3.data.slice)) * %(cvt)s(__ldg(A + entry3.data.slice)) : 0.0f;
+
+        jrst += 4;
+    }
+
+    array_delta = -2 * bpower * ascale * __ldg(I) * array_delta + (__ldg(E_out) * powf(__ldg(A_out), -bpower));
+
+    %(type)s temp_out = %(cvt_out)s( %(mul_by_scale)s (array_delta*alpha + delta_val*beta));
+    if (!(flags & 1)) {
+        *delta = temp_out;
+    }
+
+    // compute max-abs
+    intermediate_max = max_abs(intermediate_max, temp_out);  // used for abs
+    %(atomic_max)s
+}
+"""
+
+    template_vals = prepare_template_vals(clss)
+    code = code % template_vals
+    module = SourceModule(code)
+    kernel = module.get_function("spool_bprop_lrn_overlap")
+    kernel.prepare("5P 4f 47I" + ("Pf" if (clss[0] == "x") else ""))
+    return kernel
+
+
+
 
 
 @context_dependent_memoize

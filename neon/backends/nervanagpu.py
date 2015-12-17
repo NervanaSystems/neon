@@ -1489,6 +1489,7 @@ class NervanaGPU(Backend):
         A_gpudata      = A.gpudata
         B_gpudata      = B.gpudata
         C_gpudata      = C.gpudata
+
         shuffle_kernel = None
         convert_type   = False
 
@@ -1598,6 +1599,135 @@ class NervanaGPU(Backend):
                            pad_d, pad_h, pad_w, str_d, str_h, str_w,
                            relu, bsum, deterministic_update)
 
+    def lrn_layer(self, dtype, N, C, D=1, H=1, W=1, J=1):
+        """
+        Create a new PoolLayer parameter object.
+        This then is passed as an argument to all pooling kernels.
+
+        N: Number of images in mini-batch
+
+        C: Number of input feature maps
+        H: Height of input image
+        W: Width  of input image
+
+        J: Size of feature map pooling window (maxout n_pieces)
+
+        padding: amount of zero-padding around the given image or feature map edge
+        strides: factor to step the window by in a given direction (overlap allowed)
+
+        Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
+        """
+        assert J % 2 == 1, "Only support odd LRN window size"
+        pad_c = J / 2
+        op = 'lrn'
+        lrn_opts = dict(T=1, R=1, S=1,
+                        pad_c=pad_c,
+                        pad_d=0, pad_h=0, pad_w=0,
+                        str_c=1, str_d=1, str_h=1, str_w=1)
+
+        return PoolLayer(lib=self, dtype=dtype, op=op, N=N, C=C, D=D, H=H, W=W, J=J, **lrn_opts)
+
+    def fprop_lrn(self, layer, I, O, denom, alpha=1., beta=0., ascale=1., bpower=1., repeat=1):
+        """
+        Forward propagate lrn layer.
+
+        Arguments:
+            layer (PoolLayer): The pool layer object, specd for LRN
+            I (Tensor): Input tensor.
+            O (Tensor): output tensor.
+            denom (Tensor): denominator tensor, stores the result of the squared pooling/contrast
+            ascale (float): scaling parameter (alpha) to multiply the pooled sum (1.25e-5 in AK)
+            bpower (float): exponential parameter (beta) to raise denominator by (0.75 in AK)
+        """
+
+        assert layer.sizeI == I.size
+        assert layer.sizeO == O.size
+
+        J, T, R, S = layer.JTRS
+        C, D, H, W, N = layer.dimI
+        K, M, P, Q, N = layer.dimO
+        pad_c, pad_d, pad_h, pad_w = layer.padding
+        str_c, str_d, str_h, str_w = layer.strides
+        WH = W * H
+        DWH = D * W * H
+
+        kernel_args = layer.fprop_kernel
+        shared = layer.bprop_lut_size
+
+        self._execute_lrn(layer, I, O, None, None, denom,
+                          alpha, beta, ascale, bpower, kernel_args, shared, repeat)
+
+    def bprop_lrn(self, layer, I, O, E, delta, denom,
+                  alpha=1., beta=0., ascale=1., bpower=1., repeat=1):
+        """
+        Backward propagate pooling layer.
+
+        Arguments:
+            layer (PoolLayer): The pool layer object. Different backends have
+                               different pool layers.
+            I (Tensor): Input tensor.
+            E (Tensor): Error tensor.
+            delta (Tensor): Gradient tensor (delta)
+            denom (Tensor): denominator tensor computed during bprop
+            ascale (float): scaling parameter (alpha) to multiply the pooled sum (1.25e-5 in AK)
+            bpower (float): exponential parameter (beta) to raise denominator by (0.75 in AK)
+        """
+
+        assert layer.sizeI == I.size
+        assert layer.sizeO == E.size
+        assert layer.sizeI == delta.size
+        op = layer.op
+
+        J, T, R, S = layer.JTRS
+        C, D, H, W, N = layer.dimI
+        K, M, P, Q, N = layer.dimO
+        pad_c, pad_d, pad_h, pad_w = layer.padding
+        str_c, str_d, str_h, str_w = layer.strides
+        WH = W * H
+        DWH = D * W * H
+
+        kernel_args = layer.bprop_kernel
+        shared = layer.bprop_lut_size
+
+        self._execute_lrn(layer, I, O, E, delta, denom,
+                          alpha, beta, ascale, bpower, kernel_args, shared, repeat)
+
+    def _execute_lrn(self, layer, I, O, E, delta, denom,
+                     alpha, beta, ascale, bpower, kernel_args, shared, repeat):
+
+        assert I.dtype == O.dtype
+        A_data = denom.gpudata if denom is not None else 0
+        kernel = pooling.map_string2func(kernel_args[0], layer.dtype.str[1:])
+
+        flags = 0
+        params = [kernel_args[1], kernel_args[2], self.stream,
+                  I.gpudata, O.gpudata, A_data, alpha, beta, ascale, bpower, flags]
+        params.extend(kernel_args[3])
+
+        if kernel_args[0][0] == "b":  # backprop kernel
+            params = [kernel_args[1], kernel_args[2], self.stream,
+                      I.gpudata, O.gpudata, E.gpudata, delta.gpudata, A_data,
+                      alpha, beta, ascale, bpower, flags]
+            params.extend(kernel_args[3])
+
+        # Warmup
+        if repeat > 1:
+            for r in range(max(repeat // 10, 1)):
+                kernel.prepared_async_call(*params, shared_size=shared)
+
+        if self.bench or repeat > 1:
+            start, end = _get_events()
+            start.record(self.stream)
+
+        for r in range(repeat):
+            kernel.prepared_async_call(*params, shared_size=shared)
+
+        if self.bench or repeat > 1:
+            end.record(self.stream)
+            end.synchronize()
+            msecs = end.time_since(start) / repeat
+            print("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
+
     def pool_layer(self, dtype,
                    op, N, C,
                    D=1, H=1, W=1,
@@ -1640,7 +1770,6 @@ class NervanaGPU(Backend):
                          pad_c, pad_d, pad_h, pad_w, str_c, str_d, str_h, str_w)
 
     def fprop_pool(self, layer, I, O, argmax=None, alpha=1.0, beta=0.0, repeat=1):
-
         assert layer.sizeI == I.size
         assert layer.sizeO == O.size
         if layer.op == "max":
@@ -1649,7 +1778,6 @@ class NervanaGPU(Backend):
                                   layer.fprop_lut_size, repeat)
 
     def bprop_pool(self, layer, I, O, argmax=None, alpha=1.0, beta=0.0, repeat=1):
-
         assert layer.sizeI == O.size, "missmatch between sizeI %d and O %d" % (layer.sizeI, O.size)
         assert layer.sizeO == I.size, "missmatch between sizeO %d and I %d" % (layer.sizeO, I.size)
         if layer.op == "max":
@@ -1687,6 +1815,7 @@ class NervanaGPU(Backend):
             end.synchronize()
             msecs = end.time_since(start) / repeat
             print("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
+
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
                           relu=False, threads=None, repeat=1):

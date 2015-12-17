@@ -1115,6 +1115,126 @@ class NervanaCPU(Backend):
         return DeconvLayer(self, dtype, N, C, K, P, Q, R, S,
                            pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
+    def lrn_layer(self, dtype, N, C, D=1, H=1, W=1, J=1):
+        """
+        Create a new PoolLayer parameter object.
+        This then is passed as an argument to all pooling kernels.
+
+        N: Number of images in mini-batch
+
+        C: Number of input feature maps
+        H: Height of input image
+        W: Width  of input image
+
+        J: Size of feature map pooling window (maxout n_pieces)
+
+        padding: amount of zero-padding around the given image or feature map edge
+        strides: factor to step the window by in a given direction (overlap allowed)
+
+        Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
+        """
+        assert J % 2 == 1, "Only support odd LRN window size"
+        pad_c = J / 2
+        op = 'lrn'
+        # Bunch of defaults since we're only interested in the k-axis
+        lrn_opts = dict(T=1, R=1, S=1,
+                        pad_c=pad_c,
+                        pad_d=0, pad_h=0, pad_w=0,
+                        str_c=1, str_d=1, str_h=1, str_w=1)
+
+        return PoolLayer(self, dtype, op, N, C, D, H, W, J, **lrn_opts)
+
+    def fprop_lrn(self, layer, I, O, denom, alpha=None, beta=None, ascale=1, bpower=1):
+        """
+        Forward propagate pooling layer.
+
+        Arguments:
+            layer (PoolLayer): The pool layer object, different backends have
+                               different pool layers.
+            I (Tensor): Input tensor.
+            O (Tensor): output tensor.
+            denom (Tensor): denominator tensor, stores the result of the squared pooling/contrast
+            ascale (float): scaling parameter (alpha) to multiply the pooled sum (1.25e-5 in AK)
+            bpower (float): exponential parameter (beta) to raise denominator by (0.75 in AK)
+        """
+
+        assert layer.sizeI == I.size
+        assert layer.sizeO == O.size
+
+        J, T, R, S = layer.JTRS
+        C, D, H, W, N = layer.dimI
+        K, M, P, Q, N = layer.dimO
+        pad_c, pad_d, pad_h, pad_w = layer.padding
+        str_c, str_d, str_h, str_w = layer.strides
+
+        array_I = I.get().reshape(layer.dimI)
+        array_O = O._tensor.reshape(layer.dimO)  # _tensor to write to
+        # although we can calculate directly into O, keeping denom around is useful for bprop
+        array_d = denom._tensor.reshape(layer.dimO)  # _tensor to write to
+
+        for k in range(K):
+            sliceC, _ = layer.kSlice[k]
+            _ascale = ascale / (sliceC.stop - sliceC.start)  # valid window size
+            for m in range(M):
+                sliceD, _ = layer.mSlice[m]
+                for p in range(P):
+                    sliceH, _ = layer.pSlice[p]
+                    for q in range(Q):
+                        sliceW, _ = layer.qSlice[q]
+                        sliceI = array_I[sliceC, sliceD, sliceH, sliceW, :].reshape(-1, N)
+                        array_d[k, m, p, q, :] = 1 + _ascale * np.sum(np.square(sliceI), axis=0)
+
+        array_O[:] = array_I * np.power(array_d, -bpower)  # elementwise divide by denominator
+
+    def bprop_lrn(self, layer, I, O, E, delta, denom, alpha=None, beta=None, ascale=1, bpower=1):
+        """
+        Backward propagate pooling layer.
+
+        Arguments:
+            layer (PoolLayer): The pool layer object. Different backends have
+                               different pool layers.
+            I (Tensor): Input tensor.
+            E (Tensor): Error tensor.
+            delta (Tensor): Gradient tensor (delta)
+            denom (Tensor): denominator tensor computed during bprop
+            ascale (float): scaling parameter (alpha) to multiply the pooled sum (1.25e-5 in AK)
+            bpower (float): exponential parameter (beta) to raise denominator by (0.75 in AK)
+        """
+
+        assert layer.sizeI == I.size
+        assert layer.sizeO == E.size
+        assert layer.sizeI == delta.size
+
+        J, T, R, S = layer.JTRS
+        C, D, H, W, N = layer.dimI
+        K, M, P, Q, N = layer.dimO
+        pad_c, pad_d, pad_h, pad_w = layer.padding
+        str_c, str_d, str_h, str_w = layer.strides
+
+        array_I = I.get().reshape(layer.dimI)
+        array_E = E.get().reshape(layer.dimO)
+        array_O = O.get().reshape(layer.dimO)
+        array_delta = delta._tensor.reshape(layer.dimI)  # write to
+        array_denom = denom.get().reshape(layer.dimO)
+
+        for k in range(K):
+            sliceC, _ = layer.kSlice[k]
+            for m in range(M):
+                sliceD, _ = layer.mSlice[m]
+                for p in range(P):
+                    sliceH, _ = layer.pSlice[p]
+                    for q in range(Q):
+                        sliceW, _ = layer.qSlice[q]
+
+                        _O = array_O[sliceC, sliceD, sliceH, sliceW, :].reshape(-1, N)
+                        _E = array_E[sliceC, sliceD, sliceH, sliceW, :].reshape(-1, N)
+                        _den = array_denom[sliceC, sliceD, sliceH, sliceW, :].reshape(-1, N)
+                        # temporarily store part of the derivative in here
+                        array_delta[k, m, p, q, :] = np.sum(_O * _E * _den, axis=0)
+
+        array_delta[:] = -2 * bpower * ascale * array_delta * array_I + (
+            array_E * np.power(array_denom, -bpower))
+
     def pool_layer(self, dtype,
                    op, N, C,
                    D=1, H=1, W=1,

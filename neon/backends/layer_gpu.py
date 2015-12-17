@@ -772,10 +772,10 @@ class PoolLayer(Layer):
         assert JRST+32 < 2**16, "Integer division is faster with 16bit numerators"
 
         # precompute the magic numbers and shift amounts for integer division
-        magic_RST   = _magic32(JRST+32, RST)
-        magic_RS    = _magic32(RST+32, RS)
-        magic_S     = _magic32(RS+32, S)
-        magic_P     = _magic32(PM, P)
+        magic_RST = _magic32(JRST+32, RST)
+        magic_RS  = _magic32(RST+32, RS)
+        magic_S   = _magic32(RS+32, S)
+        magic_P   = _magic32(PM, P)
 
         fprop_name = "fprop_" + op
         bprop_name = "bprop_" + op

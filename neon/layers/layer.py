@@ -883,6 +883,49 @@ class Deconv(Affine):
         self.add_postfilter_layers(bias, batch_norm, activation, bias_name, act_name)
 
 
+class LRN(Layer):
+    def __init__(self, depth, alpha=1., beta=0., ascale=1., bpower=1.):
+        super(LRN, self).__init__(name="LRNLayer")
+        self.J = depth
+        self.alpha = alpha
+        self.beta = beta
+        self.ascale = ascale
+        self.bpower = bpower
+        self.owns_delta = True
+        self.lrnparams = {'J': self.J}
+        self.nglayer = None
+
+    def configure(self, in_obj):
+        super(LRN, self).configure(in_obj)
+        if self.nglayer is None:
+            assert isinstance(self.in_shape, tuple)
+            ikeys = ('C', 'H', 'W') if len(self.in_shape) == 3 else ('C', 'D', 'H', 'W')
+            shapedict = {k: x for k, x in zip(ikeys, self.in_shape)}
+            shapedict['N'] = self.be.bsz
+            self.lrnparams.update(shapedict)
+            self.nglayer = self.be.lrn_layer(self.be.default_dtype, **self.lrnparams)
+            self.out_shape = self.in_shape
+        return self
+
+    def allocate(self, shared_outputs=None):
+        super(LRN, self).allocate(shared_outputs)
+        self.denom = self.be.iobuf(self.in_shape)
+
+    def fprop(self, inputs, inference=False):
+        self.inputs = inputs
+        self.be.fprop_lrn(self.nglayer,
+                          inputs, self.outputs, self.denom,
+                          self.alpha, self.beta, self.ascale, self.bpower)
+        return self.outputs
+
+    def bprop(self, error):
+        if self.deltas:
+            self.be.bprop_lrn(self.nglayer,
+                              self.inputs, self.outputs, error, self.deltas, self.denom,
+                              self.alpha, self.beta, self.ascale, self.bpower)
+        return self.deltas
+
+
 class Dropout(Layer):
 
     """
