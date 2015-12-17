@@ -545,12 +545,16 @@ class MultiLabelStatsCallback(Callback):
     """
     Callback for calculating statistics on multi-label classification tasks.
 
-    Can be used with PrecisionRecallMetric to calculate precision and recall values of the classification task
+    Can be used with PrecisionRecall metric to calculate precision and recall
+    values of the classification task.
 
     Arguments:
         model (Model): model object
         eval_set (DataIterator): dataset to evaluate
-        labels (list): the list of classifications (order must be the same as
+        labels (list): the list of class names (order must be the same as
+                       the rows of the target)
+        metric (Metric): An instantiated performance metric like
+                         PrecisionRecall
         epoch_freq (int, optional): how often (in epochs) to log info.
                                     Defaults to every 1 epoch.
     """
@@ -568,9 +572,8 @@ class MultiLabelStatsCallback(Callback):
             self.eval_set.reset()
 
             running_stats = np.zeros_like(self.metric.outputs.get(), dtype=np.float32)
-            nprocessed = 0
 
-            # Calculate the precision and recall values
+            # Calculate the metric values
             nbatch = 0
             for x, t in self.eval_set:
                 x = self.model.fprop(x, inference=True)
@@ -581,7 +584,7 @@ class MultiLabelStatsCallback(Callback):
 
             running_stats /= nbatch
 
-            # Generate the statistics for all the labels ignoring the first label (which is teh UNKNOWN category)
+            # Print the statistics for all the labels
             for i, label in enumerate(self.labels):
                 metric_text = "["
                 for k, metric in enumerate(self.metric.metric_names):
@@ -590,6 +593,7 @@ class MultiLabelStatsCallback(Callback):
                 metric_text += " ] -> %s\n" % label
                 sys.stdout.write(metric_text.encode('utf-8'))
                 sys.stdout.flush()
+
 
 class HistCallback(Callback):
     """

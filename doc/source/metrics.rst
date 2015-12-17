@@ -29,8 +29,19 @@ Computes the fraction of data samples that have been misclassified. Multiply by 
 
 
 Accuracy
------------------
+--------
 .. autosummary::
    neon.transforms.cost.Accuracy
 
 Computes the fraction of data samples that have been correctly classified. Multiply by 100 to obtain accuracy percentage.
+
+
+Precision and Recall
+--------------------
+.. autosummary::
+   neon.transforms.cost.PrecisionRecall
+
+Computes the precision (portion of samples correctly predicted to have a given
+class out of all predictions made of that class), and recall (portion of
+samples predicted to have a given class out of all samples that are actually of
+that class).

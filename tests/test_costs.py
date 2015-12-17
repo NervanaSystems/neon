@@ -18,7 +18,7 @@ Test of the cost functions
 import numpy as np
 from neon import NervanaObject
 from neon.transforms import (CrossEntropyBinary, CrossEntropyMulti, SumSquared,
-                             MeanSquared, Misclassification)
+                             MeanSquared, Misclassification, PrecisionRecall)
 
 
 def compare_tensors(func, y, t, outputs, deriv=False, tol=0.):
@@ -178,3 +178,16 @@ def test_misclassification(backend_default):
     expected_result = np.ones((1, 1)) / 3.
     compare_metric(Misclassification(),
                    outputs, targets, expected_result, tol=1e-7)
+
+"""
+    Precision / Recall
+"""
+
+
+def test_precision_recall(backend_default):
+    be = NervanaObject.be
+    be.bsz = 4
+    preds = np.array([[0, 1, 0, 1], [1, 0, 0, 0], [0, 0, 1, 0]])
+    targets = np.array([[0, 1, 0, 1], [1, 0, 1, 0], [0, 0, 0, 0]])
+    expected_result = np.array([1 + 1 + 0, 1 + 0.5 + 0]) / 3.
+    compare_metric(PrecisionRecall(3), preds, targets, expected_result, tol=1e-6)
