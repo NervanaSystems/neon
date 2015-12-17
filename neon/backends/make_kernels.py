@@ -21,7 +21,6 @@ import os
 import os.path
 import subprocess
 import pycuda.driver as drv
-import pycuda.autoinit
 from kernel_specs import get_ptx_file, kernels, sass_dir, ptx_dir, pre_dir, cubin_dir, dump_dir
 
 p = optparse.OptionParser()
@@ -44,9 +43,15 @@ opts, args = p.parse_args()
 if opts.preprocess or opts.dump:
     opts.kernels = False
 
-attributes = drv.Context.get_device().get_attributes()
-major = attributes[drv.device_attribute.COMPUTE_CAPABILITY_MAJOR]
-minor = attributes[drv.device_attribute.COMPUTE_CAPABILITY_MINOR]
+try:
+    import pycuda.autoinit
+    attributes = drv.Context.get_device().get_attributes()
+    major = attributes[drv.device_attribute.COMPUTE_CAPABILITY_MAJOR]
+    minor = attributes[drv.device_attribute.COMPUTE_CAPABILITY_MINOR]
+except:
+    # No working local CUDA, default to 5,0
+    major = 5
+    minor = 0
 
 if major == 5 and minor == 3:
     arch = "sm_53"
