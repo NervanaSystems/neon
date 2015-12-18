@@ -43,16 +43,16 @@ def pytest_generate_tests(metafunc):
 
     # global parameter
     if metafunc.config.option.all:
-        bsz_rng = [16, 32]
+        bsz_rng = [8]  # [16, 32]
     else:
         bsz_rng = [8]
 
     if 'lrnargs' in metafunc.fixturenames:
         fargs = []
         if metafunc.config.option.all:
-            nin_rng = [5, 8]
+            nin_rng = [5, 6]
             nifm_rng = [1, 2, 4]
-            fs_rng = [2, 3, 4]
+            fs_rng = [3, 5]
         else:
             nin_rng = [2]
             nifm_rng = [7, 20]
@@ -85,4 +85,4 @@ def test_lrnorm(backend_cpu64, lrnargs):
                                                epsilon=epsilon,
                                                lshape=lshape,
                                                pert_inds=pert_inds)
-    assert max_abs < 1.0e-7
+    assert max_abs < 1.0e-6
