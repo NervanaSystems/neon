@@ -40,12 +40,11 @@ class BatchWriter(object):
         libpath = os.path.dirname(os.path.realpath(__file__))
         try:
             self.writerlib = ct.cdll.LoadLibrary(
-                os.path.join(libpath, '../data/loader', 'writer.so'))
+                os.path.join(libpath, 'loader', 'loader.so'))
             self.writerlib.write.restype = None
-            self.writerlib.write_data.restype = None
-
+            self.writerlib.read_max_item.restype = ct.c_int
         except:
-            logger.error('Unable to load writer.so. Ensure that '
+            logger.error('Unable to load loader.so. Ensure that '
                          'this file has been compiled')
 
         np.random.seed(0)
@@ -61,6 +60,7 @@ class BatchWriter(object):
         self.batch_prefix = 'macrobatch_'
         self.meta_file = os.path.join(self.out_dir, self.batch_prefix + 'meta')
         self.pixel_mean = pixel_mean
+        self.item_max_size = 25000  # reasonable default max image size
         self.post_init()
 
     def post_init(self):
@@ -132,7 +132,7 @@ class BatchWriter(object):
         imfiles = [imfiles[s:s + self.macro_size] for s in starts]
         labels = [{k: v[s:s + self.macro_size] for k, v in labels.iteritems()} for s in starts]
 
-        for i, jpeg_file_batch in enumerate(imfiles[:4]):
+        for i, jpeg_file_batch in enumerate(imfiles):
             bfile = os.path.join(self.out_dir, '%s%d' % (self.batch_prefix, offset + i))
             label_batch = labels[i]['l_id']
             if os.path.exists(bfile):
@@ -141,6 +141,13 @@ class BatchWriter(object):
                 self.write_individual_batch(bfile, label_batch, jpeg_file_batch)
                 print("Wrote batch %d" % (i))
 
+            # Check the batchfile for the max item value
+            batch_max_item = self.writerlib.read_max_item(ct.c_char_p(bfile))
+            if batch_max_item == 0:
+                raise ValueError("Batch file %s probably empty or corrupt" % (bfile))
+
+            self.item_max_size = max(batch_max_item, self.item_max_size)
+
     def save_meta(self):
         with open(self.meta_file, 'w') as f:
             for settype in ('train', 'val'):
@@ -148,7 +155,7 @@ class BatchWriter(object):
                 f.write('%s_start %d\n' % (settype, getattr(self, settype + '_start')))
                 f.write('%s_nrec %d\n' % (settype, getattr(self, settype + '_nrec')))
             f.write('nclass %d\n' % (self.nclass['l_id']))
-            f.write('item_max_size %d\n' % (25000))
+            f.write('item_max_size %d\n' % (self.item_max_size))
             f.write('label_size %d\n' % (4))
             f.write('R_mean      %f\n' % self.pixel_mean[0])
             f.write('G_mean      %f\n' % self.pixel_mean[1])
@@ -175,7 +182,9 @@ class BatchWriter(object):
                 self.write_batches(start, labels, imgs)
             else:
                 print("Skipping %s, file missing" % (sname))
+        # Get the max item size and store it for meta file
         self.save_meta()
+
 
 
 class BatchWriterI1K(BatchWriter):
@@ -207,7 +216,6 @@ class BatchWriterI1K(BatchWriter):
             # get the ground truth validation labels and offset to zero
             self.val_labels = {"%08d" % (i + 1) : int(x) - 1 for i, x in
                                enumerate(tf.extractfile(valfile))}
-        self.file_pattern = "*.JPEG"
         self.validation_pct = None
 
         self.train_nrec = 1281167
@@ -217,6 +225,7 @@ class BatchWriterI1K(BatchWriter):
         self.val_nrec = 50000
         self.nval = -(-self.val_nrec // self.macro_size)
         self.val_start = self.ntrain
+        self.pixel_mean = [104.41227722, 119.21331787, 126.80609131]
 
     def extract_images(self, overwrite=False):
         for setn in ('train', 'val'):
@@ -274,9 +283,11 @@ class BatchWriterI1K(BatchWriter):
 
 if __name__ == "__main__":
     parser = NeonArgparser(__doc__)
+    parser.add_argument('--set_type', help='(i1k|directory)', required=True,
+                        choices=['i1k', 'directory'])
     parser.add_argument('--image_dir', help='Directory to find images', required=True)
-    parser.add_argument('--target_size', type=int, default=256,
-                        help='Size in pixels to scale images (Must be 256 for i1k dataset)')
+    parser.add_argument('--target_size', type=int, default=0,
+                        help='Size in pixels to scale shortest side DOWN to (0 means no scaling)')
     parser.add_argument('--macro_size', type=int, default=5000, help='Images per processed batch')
     parser.add_argument('--file_pattern', default='*.jpg', help='Image extension to include in'
                         'directory crawl')
@@ -284,12 +295,15 @@ if __name__ == "__main__":
 
     logger = logging.getLogger(__name__)
 
-    # Supply dataset type and location
-    # bw = BatchWriter(out_dir=args.data_dir, image_dir=args.image_dir,
-    #                  target_size=args.target_size, macro_size=args.macro_size,
-    #                  file_pattern=args.file_pattern)
-
-    bw = BatchWriterI1K(out_dir=args.data_dir, image_dir=args.image_dir,
-                        target_size=args.target_size, macro_size=args.macro_size)
+    if args.set_type == 'i1k':
+        args.target_size = 512  # This follows Simonyan's methodology
+        args.file_pattern = "*.JPEG"
+        bw = BatchWriterI1K(out_dir=args.data_dir, image_dir=args.image_dir,
+                            target_size=args.target_size, macro_size=args.macro_size,
+                            file_pattern=args.file_pattern)
+    else:
+        bw = BatchWriter(out_dir=args.data_dir, image_dir=args.image_dir,
+                         target_size=args.target_size, macro_size=args.macro_size,
+                         file_pattern=args.file_pattern)
 
     bw.run()

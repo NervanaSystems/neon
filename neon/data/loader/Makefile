@@ -18,7 +18,7 @@ SRCS = $(wildcard *.hpp)
 
 .PHONY: clean
 
-all: loader loader.so
+all: loader loader.so examine_batchfile
 INC = -I/usr/local/cuda/include
 ifeq ($(CC), nvcc)
 LIB = -L/usr/local/cuda/lib64
@@ -51,19 +51,7 @@ endif
 examine_batchfile: examine_batchfile.cpp $(SRCS)
 	@echo "Building $@..."
 ifneq ($(CC), nvcc)
-		$(CC) -o $@ $(INC) $(LIB) -Wall -O0 -g -std=c++11 $<
-endif
-
-img_macrowriter: img_macrowriter.cpp $(SRCS)
-	@echo "Building $@..."
-ifneq ($(CC), nvcc)
-		$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
-endif
-
-writer.so: img_macrowriter.cpp $(SRCS)
-	@echo "Building $@..."
-ifneq ($(CC), nvcc)
-		$(CC) -shared -o $@ -fPIC $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
+	$(CC) -o $@ $(INC) $(LIB) -Wall -O0 -g -std=c++11 $<
 endif
 
 loader.so: loader.cpp $(SRCS)

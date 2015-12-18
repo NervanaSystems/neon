@@ -13,6 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from neon.data.dataiterator import DataIterator
+from neon.data.batch_writer import BatchWriter, BatchWriterI1K
 from neon.data.text import Text
 from neon.data.imageloader import ImageLoader
 from neon.data.questionanswer import BABI, QA

@@ -91,7 +91,7 @@ class ImageLoader(NervanaObject):
         self.center = not do_transforms
         self.flip = do_transforms
         self.contrast_range = (75, 125) if do_transforms else (100, 100)
-        self.scale_min = 25 if do_transforms else 100
+        self.scale_min = 15 if do_transforms else 100
         self.aspect_ratio = 3/4. if do_transforms else 1.
 
         self.rgb = rgb

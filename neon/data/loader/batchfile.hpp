@@ -12,7 +12,7 @@ using std::ofstream;
 using std::string;
 
 typedef std::vector<string> LineList;
-typedef std::vector<uint8_t> ByteVect;
+typedef std::vector<char> ByteVect;
 
 class BatchFileHeader {
 friend class BatchFile;
@@ -120,11 +120,9 @@ public:
     }
 
     void writeItem(ByteVect &data, ByteVect &label) {
-        char *dataPtr = (char *) &data[0];
-        char *labelPtr = (char *) &label[0];
         uint32_t dataSize = data.size();
         uint32_t labelSize = label.size();
-        writeItem(dataPtr, labelPtr, &dataSize, &labelSize);
+        writeItem(&data[0], &label[0], &dataSize, &labelSize);
     }
 
     int itemCount() {
@@ -178,7 +176,7 @@ int readFileBytes(const string &filn, ByteVect &b) {
         ifs.seekg (0, ifs.beg);
 
         b.resize(length);
-        ifs.read(reinterpret_cast<char*>(&b[0]), length);
+        ifs.read(&b[0], length);
         ifs.close();
         return 0;
     } else {

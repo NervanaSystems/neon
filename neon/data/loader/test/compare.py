@@ -34,8 +34,7 @@ from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Misclassification, Rectlin, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
-from neon.data import load_cifar10, ImageLoader
-from neon.util.batch_writer import BatchWriter
+from neon.data import load_cifar10, ImageLoader, BatchWriter
 from PIL import Image
 from glob import glob
 

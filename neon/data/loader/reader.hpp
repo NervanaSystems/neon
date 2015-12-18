@@ -194,9 +194,7 @@ public:
             return _error;
         }
         vector<uchar> buf;
-        vector<int> param = vector<int>(2);
-        param[0] = CV_IMWRITE_JPEG_QUALITY;
-        param[1] = 95;
+	vector<int> param = {CV_IMWRITE_JPEG_QUALITY, 95};
         for (int i = 0; i < _batchSize; ++i) {
             string path = _rootPath + '/' + _fileNames[_itemIdx];
             cv::Mat src = cv::imread(path);
