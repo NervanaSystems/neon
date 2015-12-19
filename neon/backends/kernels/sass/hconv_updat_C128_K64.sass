@@ -75,6 +75,7 @@
     param_grid_P       : c[0x0][0x1fc]
     param_grid_Q       : c[0x0][0x200]
     param_grid_PQ      : c[0x0][0x204]
+    param_CRSTK        : c[0x0][0x208]
 
 </CONSTANT_MAPPING>
 
@@ -108,7 +109,7 @@
     165-167 ~ readIs, readEs, swapBuf
 
      68-83  : f<0-7>, track00F<0-1>, track04F<0-1>, track08F<0-1>, track12F<0-1>
-     84-164 ~ K, K4, K1, K60, tid31, tid96, kk, tf, writeCs, readCs, crst<00|04|08|12>, alpha
+     84-164 ~ K, K4, K1, K60, tid31, tid96, kk, tf, writeCs, readCs, crst<00|04|08|12>, alpha, blk_MPQ, CRSTK, xmad_determ
 
 </REGISTER_MAPPING>
 
@@ -652,12 +653,14 @@ FINISH:
 --:-:1:-:6      S2R tid, SR_TID.X;
 --:-:-:Y:d      ISETP.EQ.AND P0, PT, one, param_RST, PT;
 --:-:-:-:5  @P0 BRA.U CTAID2;
---:-:2:-:1      S2R blkI,   SR_CTAID.Y;
---:-:3:-:1      S2R blkE,   SR_CTAID.Z;
+--:-:2:-:1      S2R blkI,    SR_CTAID.Y;
+--:-:3:-:1      S2R blkE,    SR_CTAID.Z;
+--:-:4:-:1      S2R blk_MPQ, SR_CTAID.X;
 --:-:-:-:5      BRA.U END_CTAID2;
 CTAID2:
---:-:2:-:1      S2R blkI,   SR_CTAID.X;
---:-:3:-:1      S2R blkE,   SR_CTAID.Y;
+--:-:2:-:1      S2R blkI,    SR_CTAID.X;
+--:-:3:-:1      S2R blkE,    SR_CTAID.Y;
+--:-:4:-:1      S2R blk_MPQ, SR_CTAID.Z;
 END_CTAID2:
 
 <SCHEDULE_BLOCK>
@@ -696,6 +699,17 @@ END_CTAID2:
 
 // trackF += crst*K + k;
 --:-:-:-:1      VMAD.U16.U16 tf, crst00, K, kk;
+[+
+    our $determ;
+    if ($determ)
+    {
+        return q{
+--:-:-:-:1      MOV CRSTK, param_CRSTK;
+08:-:-:-:1      XMAD.LO tf, blk_MPQ, CRSTK, tf, xmad_determ;
+        };
+    }
+    return '';
++]
 --:-:-:-:1      LEA      track00F0.CC, tf, param_F[0],     2;
 --:-:-:-:1      LEA.HI.X track00F1,    tf, param_F[1], RZ, 2;
 
@@ -773,6 +787,24 @@ STORE_C:
 --:-:3:-:1      LDS f4, [readCs + 4x<2*64 + 00>];
 --:-:4:-:1      LDS f6, [readCs + 4x<3*64 + 00>];
 
+[+
+    our $determ;
+    if ($determ)
+    {
+        return q{
+01:-:-:-:1  @P0 STG.E.CG [track00F], f0;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P6, PT;
+02:-:-:-:1  @P1 STG.E.CG [track04F], f2;
+--:-:-:-:1      PSETP.AND.AND P1, PT, P1, P6, PT;
+04:-:-:-:1  @P2 STG.E.CG [track08F], f4;
+--:-:-:-:1      PSETP.AND.AND P2, PT, P2, P6, PT;
+08:-:-:-:1  @P3 STG.E.CG [track12F], f6;
+--:-:-:-:1      PSETP.AND.AND P3, PT, P3, P6, PT;
+        };
+    }
+    else
+    {
+        return q{
 01:-:-:-:1  @P0 RED.E.ADD.F32.FTZ.RN [track00F], f0;
 --:-:-:-:1      PSETP.AND.AND P0, PT, P0, P6, PT;
 02:-:-:-:1  @P1 RED.E.ADD.F32.FTZ.RN [track04F], f2;
@@ -781,16 +813,36 @@ STORE_C:
 --:-:-:-:1      PSETP.AND.AND P2, PT, P2, P6, PT;
 08:-:-:-:1  @P3 RED.E.ADD.F32.FTZ.RN [track12F], f6;
 --:-:-:-:1      PSETP.AND.AND P3, PT, P3, P6, PT;
+        };
+    }
++]
 
 --:-:1:-:1      LDS f1, [readCs + 4x<0*64 + 32>];
 --:-:2:-:1      LDS f3, [readCs + 4x<1*64 + 32>];
 --:-:3:-:1      LDS f5, [readCs + 4x<2*64 + 32>];
 --:-:4:-:1      LDS f7, [readCs + 4x<3*64 + 32>];
 
+[+
+    our $determ;
+    if ($determ)
+    {
+        return q{
+01:1:-:-:1  @P0 STG.E.CG [track00F + 4x<32>], f1;
+02:2:-:-:1  @P1 STG.E.CG [track04F + 4x<32>], f3;
+04:3:-:-:1  @P2 STG.E.CG [track08F + 4x<32>], f5;
+08:4:-:-:1  @P3 STG.E.CG [track12F + 4x<32>], f7;
+        };
+    }
+    else
+    {
+        return q{
 01:1:-:-:1  @P0 RED.E.ADD.F32.FTZ.RN [track00F + 4x<32>], f1;
 02:2:-:-:1  @P1 RED.E.ADD.F32.FTZ.RN [track04F + 4x<32>], f3;
 04:3:-:-:1  @P2 RED.E.ADD.F32.FTZ.RN [track08F + 4x<32>], f5;
 08:4:-:-:1  @P3 RED.E.ADD.F32.FTZ.RN [track12F + 4x<32>], f7;
+        };
+    }
++]
 
 01:-:-:-:6      IADD   track00F0.CC, track00F0, K1;
 --:-:-:-:1      IADD.X track00F1,    track00F1, RZ;

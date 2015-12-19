@@ -919,23 +919,76 @@ def call_compound_kernel(rand_state, *args):
     return out
 
 
-# quick wrapper to convert raw fp32 scratch data to a destination tensor
-def _fp_convert(src_data, src_type, dest_tensor):
+def _fp_convert(src_data, src_type, dest_tensor, reduce_shape):
 
-    shape, strides = _get_fast_ew_dims(dest_tensor.size)
-    kernel_args = [0,
-                   dest_tensor.gpudata, strides[0], strides[1],
-                   src_data, strides[0], strides[1],
-                   shape[1]]
+    if reduce_shape:
 
-    kernel = _get_compound_kernel((
-        (ng.GPUTensor, 0, dest_tensor.dtype.str[1:], 0, False),
-        (ng.GPUTensor, 1, src_type, 0, False),
-        ('assign', 0, False, 32)))
-    kernel.prepared_async_call((shape[0], 1, 1),
-                               (32, 1, 1),
-                               dest_tensor.backend.stream,
-                               *kernel_args)
+        #print reduce_shape
+
+        kernel = _get_reduce_kernel(dest_tensor.dtype.str[1:])
+        blocks = (reduce_shape[1] >> 5) + ((reduce_shape[1] & 31) != 0)
+        kernel.prepared_async_call((blocks, 1, 1), (32, 1, 1),
+                                   dest_tensor.backend.stream,
+                                   dest_tensor.gpudata,
+                                   src_data,
+                                   reduce_shape[1],
+                                   reduce_shape[0]*reduce_shape[1])
+
+    else:
+        # quick wrapper to convert raw fp32 scratch data to a destination tensor
+        shape, strides = _get_fast_ew_dims(dest_tensor.size)
+        kernel_args = [0,
+                       dest_tensor.gpudata, strides[0], strides[1],
+                       src_data, strides[0], strides[1],
+                       shape[1]]
+
+        kernel = _get_compound_kernel((
+            (ng.GPUTensor, 0, dest_tensor.dtype.str[1:], 0, False),
+            (ng.GPUTensor, 1, src_type, 0, False),
+            ('assign', 0, False, 32)))
+        kernel.prepared_async_call((shape[0], 1, 1),
+                                   (32, 1, 1),
+                                   dest_tensor.backend.stream,
+                                   *kernel_args)
+
+# fast axis=0 reduction kernel used for deterministic update
+@context_dependent_memoize
+def _get_reduce_kernel(dtype):
+
+    _reduce_kernel = r"""
+%(common)s
+
+__global__ void reduce(%(type)s* out, const float* in, int CRSTK, int PQCRSTK)
+{
+    int offset = blockIdx.x * 32 + threadIdx.x;
+
+    if (offset < CRSTK)
+    {
+        float sum = 0.0f;
+        for (int i = offset; i < PQCRSTK; i += CRSTK)
+        {
+            sum += __ldg(in + i);
+        }
+        out[offset] = %(cvt_out)s(sum);
+    }
+}
+"""
+    template_vals = {
+        "common" : _common_round["nearest"].get(dtype, ""),
+        "type"   : _ew_types[dtype]["type"],
+    }
+    if dtype == "f2":
+        template_vals["cvt_out"] = "fp32_to_fp16"
+    elif dtype == "f4":
+        template_vals["cvt_out"] = ""
+    else:
+        raise TypeError("Missing reduction type")
+
+    code = _reduce_kernel % template_vals
+    module = SourceModule(code)
+    kernel = module.get_function("reduce")
+    kernel.prepare("PPII")
+    return kernel
 
 
 _transpose_kernel = r"""

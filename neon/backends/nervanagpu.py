@@ -1492,6 +1492,7 @@ class NervanaGPU(Backend):
 
         shuffle_kernel = None
         convert_type   = False
+        reduce_shape   = False
 
         from neon.backends.float_ew import _get_transpose_kernel, _get_shuffle_kernel, _fp_convert
 
@@ -1508,9 +1509,12 @@ class NervanaGPU(Backend):
             shuffle_args = [layer.shuffle_grid, layer.shuffle_block, self.stream,
                             B_gpudata, B.gpudata] + layer.shuffle_args
 
-        elif op == "updat" and C.dtype.type is not np.float32:
-            C_gpudata    = self.scratch_buffer(C.size)
+        elif op == "updat" and (C.dtype.type is not np.float32 or layer.determ):
+            C_gpudata    = self.scratch_buffer(layer.determ or C.size)
             convert_type = "f4"
+            if layer.determ:
+                zero = False
+                reduce_shape = layer.determ_shape
 
         kernels = []
         for kernel in kernel_list:
@@ -1543,7 +1547,7 @@ class NervanaGPU(Backend):
                 kernel[0].prepared_async_call(*kernel[1:], shared_size=shared)
 
             if convert_type:
-                _fp_convert(C_gpudata, convert_type, C)
+                _fp_convert(C_gpudata, convert_type, C, reduce_shape)
 
         if self.bench or repeat > 1:
             end.record(stream=self.stream)

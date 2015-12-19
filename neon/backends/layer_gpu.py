@@ -406,20 +406,21 @@ class ConvLayer(Layer):
         self.nOut   = reduce(mul, self.MPQ, 1) * K
 
         # precompute some multiplications for fast constant memory access
-        HW   = H*W
-        DHW  = D*HW
-        WN   = W*N
-        HWN  = H*WN
-        DHWN = D*HWN
-        RS   = R*S
-        RST  = T*RS
-        CRST = C*RST
-        KRST = K*RST
-        PQ   = P*Q
-        PQM  = M*PQ
-        QN   = Q*N
-        PQN  = P*QN
-        MPQN = M*PQN
+        HW    = H*W
+        DHW   = D*HW
+        WN    = W*N
+        HWN   = H*WN
+        DHWN  = D*HWN
+        RS    = R*S
+        RST   = T*RS
+        CRST  = C*RST
+        CRSTK = K*CRST
+        KRST  = K*RST
+        PQ    = P*Q
+        PQM   = M*PQ
+        QN    = Q*N
+        PQN   = P*QN
+        MPQN  = M*PQN
 
         if CRST > 2**16:
             assert CRST  < 2**16, "Integer division is faster with 16bit numerators"
@@ -505,6 +506,10 @@ class ConvLayer(Layer):
         # exit()
 
         ####### UPDATE ###########
+
+        grid_C   = _grid_dim(128, CRST)
+        sm_count = _get_sm_count()
+
         # in float32 for big feature_map layers the smaller tile is actually faster
         # so restrict tile selection to just that.
         if self.dtype.type is np.float32 and PQ > 56*56:
@@ -512,21 +517,25 @@ class ConvLayer(Layer):
         else:
             K_tiles = (128, 64)
 
-        grid_C   = _grid_dim(128, CRST)
-        sm_count = _get_sm_count()
+        if deterministic_update:
+            determ = "D"
+            if K <= 64:
+                K_tiles = (64,)
+            else:
+                K_tiles = K_tiles[0:1]
+            self.determ = CRSTK
+        else:
+            determ = ""
+            self.determ = 0
+
 
         self.updat_kernels = []
         for tile_K, grid_K, offset_K in kernel_specs.K_partitions(K, K_tiles):
 
-            kernel_name = "%s_updat_C128_K%d" % (clss, tile_K)
+            kernel_name = "%s_updat%s_C128_K%d" % (clss, determ, tile_K)
             base_blocks = M*grid_C*grid_K
 
-            grid_P, grid_Q, threads = kernel_specs.update_grid(kernel_name, base_blocks, P, Q,
-                                                               sm_count)
-
-            if deterministic_update:
-                grid_P, grid_Q = 1, 1
-
+            grid_P, grid_Q, threads = kernel_specs.update_grid(kernel_name, base_blocks, P, Q, sm_count)
             # print grid_P, grid_Q
 
             grid_PQ   = grid_P * grid_Q
@@ -539,12 +548,15 @@ class ConvLayer(Layer):
             else:
                 grid = (grid_C, grid_K, M*grid_PQ)
 
+            self.determ *= M*grid_PQ
+            self.determ_shape = (M*grid_PQ, CRSTK)
+
             self.updat_kernels.append([kernel_name, grid, block, offset_K, _flatten([
                 N, K, D, H, W, WN, HWN, DHWN,
                 C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
                 pad_d, pad_h, pad_w, str_d, str_h, str_w,
                 P, Q, PQ, QN, PQN, MPQN, magic_Qu, magic_PQu,
-                grid_P, grid_Q, grid_PQ])])
+                grid_P, grid_Q, grid_PQ, CRSTK])])
 
         # for k in self.updat_kernels: print k
         # exit()
