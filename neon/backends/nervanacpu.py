@@ -60,7 +60,8 @@ class CPUTensor(Tensor):
                  dtype=np.float32,
                  ary=None,
                  name=None,
-                 persist_values=True):
+                 persist_values=True,
+                 base=None):
 
         super(CPUTensor, self).__init__(backend, shape, dtype, name,
                                         persist_values)
@@ -95,13 +96,7 @@ class CPUTensor(Tensor):
             self.shape = (self.shape,)
 
         self.size = size
-
-    @property
-    def base(self):
-        """The base of a tensor is none if it's an original tensor, or a reference to the parent
-           tensor if it's a slice or view.
-        """
-        return self._tensor.base
+        self.base = base
 
     def __str__(self):
         """
@@ -205,7 +200,8 @@ class CPUTensor(Tensor):
         return self.__class__(
             backend=self.backend,
             ary=self._tensor[key].reshape(new_shape),
-            dtype=self._tensor.dtype)
+            dtype=self._tensor.dtype,
+            base=self)
 
     def _assign(self, value):
         """
@@ -286,7 +282,8 @@ class CPUTensor(Tensor):
         return self.__class__(
             backend=self.backend,
             ary=self._tensor.take(indices, axis).reshape(new_shape),
-            dtype=self._tensor.dtype)
+            dtype=self._tensor.dtype,
+            base=self)
 
     def fill(self, value):
         """
@@ -330,7 +327,8 @@ class CPUTensor(Tensor):
         return self.__class__(
             backend=self.backend,
             ary=self._tensor.reshape(shape),
-            dtype=self._tensor.dtype)
+            dtype=self._tensor.dtype,
+            base=self)
 
     @property
     def T(self):
@@ -352,7 +350,8 @@ class CPUTensor(Tensor):
         return self.__class__(
             backend=self.backend,
             ary=ary,
-            dtype=self._tensor.dtype)
+            dtype=self._tensor.dtype,
+            base=self)
 
     def transpose(self, out=None):
         """
@@ -377,7 +376,8 @@ class CPUTensor(Tensor):
         return self.__class__(
             backend=self.backend,
             ary=ary,
-            dtype=self._tensor.dtype)
+            dtype=self._tensor.dtype,
+            base=self)
 
     def hist(self, tag):
         """

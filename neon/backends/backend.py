@@ -78,6 +78,7 @@ class Tensor(object):
         self.name = name
         self.persist_values = persist_values
         self._min_dims = 2
+        self.base = None
 
     def __str__(self):
         """
@@ -325,6 +326,18 @@ class Tensor(object):
             NotImplementedError: Can't be instantiated directly.
         """
         raise NotImplementedError()
+
+    @property
+    def _original_base(self):
+        """
+        Returns the original base of the tensor. B is a view of A, C is a view
+        of B, then A, B and C's original base is A.
+        """
+        # return self if self.base is None else self.base
+        original_base = self
+        while original_base.base is not None:
+            original_base = original_base.base
+        return original_base
 
     def __add__(self, other):
         """

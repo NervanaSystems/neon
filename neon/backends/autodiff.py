@@ -256,6 +256,10 @@ class GradUtil():
         assert('axis' in op_dict and (op_dict['axis'] in (0, 1)))
         return (dz, None)  # will be unbroadcasted
 
+    @staticmethod
+    def _transpose_grad(x, y, z, dz, op_dict, be):
+        return (dz.T, None)
+
 
 grad_map = {
     # zero gradients
@@ -293,7 +297,10 @@ grad_map = {
     'maximum': GradUtil._maximum_grad,
     'minimum': GradUtil._minimum_grad,
     # reduction operations
-    'sum': GradUtil._sum_grad}
+    'sum': GradUtil._sum_grad,
+    # transpose
+    'transpose': GradUtil._transpose_grad
+}
 
 
 def memoize_autodiff(func):
@@ -346,6 +353,9 @@ class Autodiff(object):
         self.be = be
         self.dtype = be.default_dtype
         if next_error is not None:
+            assert next_error.shape == op_tree.shape, (
+                "next_error.shape %s must be consistant with op_tree.shape %s"
+                % (next_error.shape, op_tree.shape))
             self.next_error = next_error
         else:
             self.next_error = self.be.ones(op_tree.shape)
@@ -384,7 +394,7 @@ class Autodiff(object):
         """
         # avoid tensor reused as a grad_buffer
         for grad_buffer in gradients:
-            assert(grad_buffer not in self.map_tensor_grad_op_tree)
+            assert(grad_buffer._original_base not in self.map_tensor_grad_op_tree)
 
         skipped_tensor = None
         for tensor, grad_buffer in zip(tensors, gradients):
@@ -393,11 +403,11 @@ class Autodiff(object):
                 skipped_tensor = tensor
             else:
                 grad_buffer[:] = self.map_tensor_grad_op_tree.get(
-                    tensor, grad_buffer * 0.)
+                    tensor._original_base, grad_buffer * 0.)
 
         if skipped_tensor:
-            self.next_error[:] = self.map_tensor_grad_op_tree.get(skipped_tensor,
-                                                                  self.next_error * 0.)
+            self.next_error[:] = self.map_tensor_grad_op_tree.get(
+                skipped_tensor._original_base, self.next_error * 0.)
 
     def get_grad_op_tree(self, tensors):
         """
@@ -414,7 +424,7 @@ class Autodiff(object):
         grad_op_trees = []
         for tensor in tensors:
             grad_op_trees.append(
-                self.map_tensor_grad_op_tree.get(tensor, tensor * 0.))
+                self.map_tensor_grad_op_tree.get(tensor._original_base, tensor * 0.))
         return grad_op_trees
 
     def get_grad_tensor(self, tensors):
@@ -483,23 +493,23 @@ class GradNode(object):
         # build GradNode recursively
         if isinstance(op_tree, Tensor):
             # save to ad.map_tensor_grad_node
-            if op_tree not in ad.map_tensor_grad_node:
-                ad.map_tensor_grad_node[op_tree] = self
+            if op_tree._original_base not in ad.map_tensor_grad_node:
+                ad.map_tensor_grad_node[op_tree._original_base] = self
         elif type(op_tree) == OpTreeNode:
             # init recursively
             if op_tree[1] is not None:
                 if (isinstance(op_tree[1], Tensor) and
-                        op_tree[1] in ad.map_tensor_grad_node):
+                        op_tree[1]._original_base in ad.map_tensor_grad_node):
                     # seen tensor before
-                    self.left = ad.map_tensor_grad_node[op_tree[1]]
+                    self.left = ad.map_tensor_grad_node[op_tree[1]._original_base]
                 else:
                     # build recursively
                     self.left = GradNode(op_tree[1], ad)
             if op_tree[2] is not None:
                 if (isinstance(op_tree[2], Tensor) and
-                        op_tree[2] in ad.map_tensor_grad_node):
+                        op_tree[2]._original_base in ad.map_tensor_grad_node):
                     # seen tensor before
-                    self.right = ad.map_tensor_grad_node[op_tree[2]]
+                    self.right = ad.map_tensor_grad_node[op_tree[2]._original_base]
                 else:
                     # build recursively
                     self.right = GradNode(op_tree[2], ad)
@@ -556,4 +566,4 @@ class GradNode(object):
             self.right.build_grad()
 
         elif isinstance(self.op_tree, Tensor):
-            self.ad.map_tensor_grad_op_tree[self.op_tree] = self.grad_op_tree
+            self.ad.map_tensor_grad_op_tree[self.op_tree._original_base] = self.grad_op_tree
