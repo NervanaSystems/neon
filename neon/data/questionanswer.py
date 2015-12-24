@@ -84,8 +84,8 @@ class BABI(NervanaObject):
             path (str): Directory to store the dataset
             task (str): a particular task to solve (all bAbI tasks are train
                         and tested separately)
-            train (str): to load the train data or test data {'train', 'test'}
-            subset (str): subset of the dataset to use: {en, en-10k, hn, hn-10k}
+            subset (str): subset of the dataset to use:
+                          {en, en-10k, shuffled, hn, hn-10k, shuffled-10k}
         """
 
         print 'Preparing bAbI dataset or extracting from %s' % path

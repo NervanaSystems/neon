@@ -256,6 +256,169 @@ its misclassification rate on the held out test set.
     print('Misclassification error = %.1f%%'
           % (mlp.eval(test_set, metric=Misclassification())*100))
 
+Adding a Custom Dataset Walk-through: bAbI
+------------------------------------------
+
+Neon provides many tools to facilitate adding new datasets. In this tutorial, we will walk-through adding `Facebook’s bAbI dataset <https://research.facebook.com/researchers/1543934539189348>`_. There are three main pieces:
+
+1. File handler for the dataset
+2. Pre-processing the data
+3. Packaging the data in an iterator
+
+We will walk-through each in turn.
+
+1. File handler for the dataset
+'''''''''''''''''''''''''''''''
+The bAbI dataset comprises 20 tasks. Each task has both a small and large training and test split, and comes in English, Hindi, and shuffled characters. The first step is to tell Neon where to find the dataset, the size of the dataset, and a function handler ``load_babi``.
+
+.. code-block:: python
+
+    dataset_meta = {
+       'babi': {
+           'size': 11745123,
+           'file': 'tasks_1-20_v1-2.tar.gz',
+           'url': 'http://www.thespermwhale.com/jaseweston/babi',
+           'func': load_babi
+       }
+    }
+
+With this specification, we can now call the function ``load_dataset`` and call bAbI by name, in addition to calling ``load_babi`` directly. Since bAbI comes with a number of tasks, different languages, and different splits, the role of the ``load_babi`` function is to extract the correct split. One useful helper function that Neon provides you is ``fetch_dataset`` which downloads data from a URL in chunks.
+
+.. code-block:: python
+
+    def fetch_dataset(url, sourcefile, destfile, totalsz):
+       """
+       Download the file specified by the given URL.
+
+       Args:
+           url (str): Base URL of the file to be downloaded.
+           sourcefile (str): Name of the source file.
+           destfile (str): Path to the destination.
+           totalsz (int): Size of the file to be downloaded.
+       """
+
+The ``load_babi`` function downloads the dataset, extracts the specified training and test splits, and returns file handlers to the splits.
+
+.. code-block:: python
+
+    def load_babi(path=".", task='qa1_single-supporting-fact', subset='en'):
+        """
+        Fetch the Facebook bAbI dataset and load it to memory.
+
+        Args:
+            path (str, optional): Local directory in which to cache the raw
+                                  dataset.  Defaults to current directory.
+            task (str, optional): bAbI task to load
+            subset (str, optional): Data comes in English, Hindi, or Shuffled
+                                    characters. Options are 'en', 'hn', and
+                                    'shuffled' for 1000 training and test
+                                    examples or 'en-10k', 'hn-10k', and 
+                                    'shuffled-10k' for 10000 examples.
+
+        Returns:
+            tuple: training and test files are returned
+        """
+        babi = dataset_meta['babi']
+        workdir, filepath = _valid_path_append(path, '', babi['file'])
+        if not os.path.exists(filepath):
+            fetch_dataset(babi['url'], babi['file'], filepath, babi['size'])
+
+        babi_dir_name = babi['file'].split('.')[0]
+        task = babi_dir_name + '/' + subset + '/' + task + '_{}.txt'
+        train_file = os.path.join(workdir, task.format('train'))
+        test_file = os.path.join(workdir, task.format('test'))
+
+        if os.path.exists(train_file) is False or os.path.exists(test_file):
+            with tarfile.open(filepath, 'r:gz') as f:
+                f.extractall(workdir)
+
+        return train_file, test_file
+
+2. Pre-processing the data
+''''''''''''''''''''''''''
+bAbI is a question answering (QA) dataset. The examples consist of stories, questions, and answers. Stories paint a sequence of actions and events, questions ask a basic fact or logical conclusion based on the story, and answers are the targets of the example. In bAbI, these stories, questions, and answers come in an interleaved format.
+
+::
+
+    1 John travelled to the hallway.
+    2 Mary journeyed to the bathroom.
+    3 Where is John?    hallway 1
+    4 Daniel went back to the bathroom.
+    5 John moved to the bedroom.
+    6 Where is Mary?    bathroom    2
+    7 John went to the hallway.
+    8 Sandra journeyed to the kitchen.
+    9 Where is Sandra?  kitchen 8
+    10 Sandra travelled to the hallway.
+    11 John went to the garden.
+    12 Where is Sandra?     hallway 10
+    13 Sandra went back to the bathroom.
+    14 Sandra moved to the kitchen.
+    15 Where is Sandra?     kitchen 14
+
+Every line has a leftmost number indicating the position within the story. When this number restarts, it indicates a new story. Lines with a rightmost number consist of a question, an answer, and the number of the line in the story which provides evidence for the answer. An example of a story, question, and answer are:
+
+::
+
+    Story:
+    John travelled to the hallway.
+    Mary journeyed to the bathroom.
+    Daniel went back to the bathroom.
+    John moved to the bedroom.
+
+    Question:
+    Where is Mary?
+
+    Answer:
+    bathroom
+
+We wrote a ``BABI`` class in ``neon/data/questionanswer.py`` to take care of this pre-processing.
+
+.. code-block:: python
+
+    class BABI(NervanaObject):
+        """
+        This class loads in the Facebook bAbI dataset and vectorizes them into stories,
+        questions, and answers as described in:
+        "Towards AI-Complete Question Answering: A Set of Prerequisite Toy Tasks"
+        http://arxiv.org/abs/1502.05698
+
+        """
+        def __init__(self, path='.', task='qa1_single-supporting-fact', subset='en'):
+            """
+            Load bAbI dataset and extract text and read the stories
+            For a particular task, the class will read both train and test files
+            and combine the vocabulary.
+
+            Args:
+                path (str): Directory to store the dataset
+                task (str): a particular task to solve (all bAbI tasks are train
+                            and tested separately)
+                subset (str): subset of the dataset to use:
+                              {en, en-10k, shuffled, hn, hn-10k, shuffled-10k}
+            """
+
+An important additional pre-processing step we perform is tokenizing the text and vectorizing the tokens. Rather than working with raw text, we create a dictionary that maps every token in the vocabulary to an index. The vocabulary comprises every unique token in both the training and test sets. A sentence is then a vector of integer indices. This step is specific to your dataset and you should do any desired pre-processing and transformations.
+
+3. Packaging the data in an iterator
+''''''''''''''''''''''''''''''''''''
+Neon requires a python iterator to traverse through datasets for training and evaluation. Luckily, Neon comes with a QA class, which is a general purpose iterator for QA datasets such as bAbI. It takes as input vectorized stories, queries, and answers. On each iteration it yields a minibatch of inputs and outputs. We simply need to load our pre-processed bAbI data into a QA instance for neural network use.
+
+.. code-block:: python
+
+    class QA(NervanaObject):
+        """
+        A general QA container to take Q&A dataset, which has already been
+        vectorized and create a data iterator to feed data to training
+        """
+        def __init__(self, story, query, answer):
+
+Neon comes with tools for other formats as well such as text, images, videos, among others.
+
+Conclusion
+''''''''''
+Neon provides many tools for easily integrating custom datasets. To see bAbI dataset used in action, please visit `here <https://gist.github.com/SNagappan/a7be6ce6e75c36c7406e>`_.
+
 
 Videos
 ------

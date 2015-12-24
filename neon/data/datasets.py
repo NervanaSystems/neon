@@ -244,7 +244,12 @@ def load_babi(path=".", task='qa1_single-supporting-fact', subset='en'):
     Args:
         path (str, optional): Local directory in which to cache the raw
                               dataset.  Defaults to current directory.
-        task (str): bAbI task to load
+        task (str, optional): bAbI task to load
+        subset (str, optional): Data comes in English, Hindi, or Shuffled
+                                characters. Options are 'en', 'hn', and
+                                'shuffled' for 1000 training and test
+                                examples or 'en-10k', 'hn-10k', and
+                                'shuffled-10k' for 10000 examples.
 
     Returns:
         tuple: training and test files are returned
