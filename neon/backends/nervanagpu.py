@@ -1439,8 +1439,8 @@ class NervanaGPU(Backend):
         bsum: calculate the sum along the batchnorm axis for fprop or bprop
               outputs an fp32 tensor of size Kx1
 
-        deterministic_update: eleminate atom adds in the update operation
-                              can slow the kernel down
+        deterministic_update: avoid use of atomic operations for update
+                              to make it deterministic (GPU only)
 
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,

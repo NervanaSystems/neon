@@ -981,6 +981,8 @@ __global__ void reduce(%(type)s* out, const float* in, int CRSTK, int PQCRSTK)
         template_vals["cvt_out"] = "fp32_to_fp16"
     elif dtype == "f4":
         template_vals["cvt_out"] = ""
+    elif dtype == "x2":
+        template_vals["cvt_out"] = "fp32_to_int16"
     else:
         raise TypeError("Missing reduction type")
 

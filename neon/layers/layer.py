@@ -475,12 +475,14 @@ class Convolution(ParameterLayer):
     """
 
     def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
-                 name="ConvolutionLayer", parallelism="Data"):
+                 name="ConvolutionLayer", parallelism="Data",
+                 deterministic_update=False):
         super(Convolution, self).__init__(init, name, parallelism)
         self.nglayer = None
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                            'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
-                           'T': 1, 'D': 1, 'bsum': bsum}  # 3D paramaters
+                           'T': 1, 'D': 1, 'bsum': bsum,
+                           'deterministic_update': deterministic_update}  # 3D paramaters
 
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
@@ -861,10 +863,12 @@ class Conv(Affine):
 
     def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
                  activation=None, conv_name='ConvolutionLayer',
-                 bias_name='BiasLayer', act_name='ActivationLayer'):
+                 bias_name='BiasLayer', act_name='ActivationLayer',
+                 deterministic_update=False):
         list.__init__(self)
         self.append(Convolution(fshape=fshape, strides=strides, padding=padding,
-                                init=init, bsum=batch_norm, name=conv_name))
+                                init=init, bsum=batch_norm, name=conv_name,
+                                deterministic_update=deterministic_update))
         self.add_postfilter_layers(bias, batch_norm, activation, bias_name, act_name)
 
 
