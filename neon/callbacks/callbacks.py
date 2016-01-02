@@ -597,9 +597,9 @@ class MultiLabelStatsCallback(Callback):
             for i, label in enumerate(self.labels):
                 metric_text = "["
                 for k, metric in enumerate(self.metric.metric_names):
-                    metric_text += "%s: %d%% " % (metric, running_stats[k][i+1]*100.0)
+                    metric_text += "%s: %d%% " % (metric, running_stats[i][k]*100.0)
 
-                metric_text += " ] -> %s\n" % label
+                metric_text += "] -> %s\n" % label
                 sys.stdout.write(metric_text.encode('utf-8'))
                 sys.stdout.flush()
 
