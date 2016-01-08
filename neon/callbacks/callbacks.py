@@ -408,6 +408,15 @@ class SerializeModelCallback(Callback):
         self.checkpoint_files.append(save_path)
         save_obj(self.model.serialize(keep_states=True), save_path)
 
+        # maintain a symlink pointing to the latest model params
+        try:
+            if os.path.islink(self.save_path):
+                os.remove(self.save_path)
+            os.symlink(save_path, self.save_path)
+        except OSError:
+            logger.warn('Could not create latest model symlink %s -> %s'
+                        % (self.save_path, save_path))
+
 
 class RunTimerCallback(Callback):
     """
