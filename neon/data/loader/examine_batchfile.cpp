@@ -17,11 +17,11 @@ int main(int argc, char** argv){
   BatchFile bf;
   bf.openForRead(batchfile);
 
-  ByteVect data(bf.maxDataSize());
-  ByteVect label(bf.maxLabelsSize());
+  ByteVect data(bf.maxDatumSize());
+  ByteVect label(bf.maxTargetSize());
   for (int i=0; i<bf.itemCount(); i++) {
     char fname[256];
-    int labelSize, dataSize;
+    uint labelSize, dataSize;
     bf.readItem((char *) &data[0], (char *) &label[0], &dataSize, &labelSize);
     int labelNum = *(int *) (&label[0]);
     sprintf(fname, "%s_%03d_%03d.jpg", prefix.c_str(), i, labelNum);

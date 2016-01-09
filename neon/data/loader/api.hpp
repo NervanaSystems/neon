@@ -124,7 +124,7 @@ extern "C" {
   extern int read_max_item(char *batchfile) {
     BatchFile bf;
     bf.openForRead(batchfile);
-    int maxItemSize = bf.maxDataSize();
+    int maxItemSize = bf.maxDatumSize();
     bf.close();
     return maxItemSize;
   }

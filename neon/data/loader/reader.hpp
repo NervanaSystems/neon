@@ -42,7 +42,7 @@ public:
     // For unit testing.
     virtual void readAll(CharBuffer* data, CharBuffer* labels) = 0;
     virtual int totalDataSize() = 0;
-    virtual int totalLabelsSize() = 0;
+    virtual int totalTargetsSize() = 0;
 };
 
 class MacrobatchReader : public Reader {
@@ -88,20 +88,20 @@ public:
         return _batchFile.itemCount();
     }
 
-    int maxDataSize() {
-        return _batchFile.maxDataSize();
+    int maxDatumSize() {
+        return _batchFile.maxDatumSize();
     }
 
-    int maxLabelsSize() {
-        return _batchFile.maxLabelsSize();
+    int maxTargetSize() {
+        return _batchFile.maxTargetSize();
     }
 
     int totalDataSize() {
         return _batchFile.totalDataSize();
     }
 
-    int totalLabelsSize() {
-        return _batchFile.totalLabelsSize();
+    int totalTargetsSize() {
+        return _batchFile.totalTargetsSize();
     }
 
     // For unit testing.
@@ -129,8 +129,8 @@ private:
     void readExact(CharBuffer* data, CharBuffer* labels, int count) {
         assert(count <= _itemsLeft);
         for (int i = 0; i < count; ++i) {
-            int         dataSize;
-            int         labelSize;
+            uint        dataSize;
+            uint        labelSize;
             _batchFile.readItem(data->getCurrent(),
                                 labels->getCurrent(),
                                 &dataSize, &labelSize);
@@ -150,7 +150,7 @@ private:
 
     void open() {
         stringstream fileName;
-        fileName << _pathPrefix << _fileIdx;
+        fileName << _pathPrefix << _fileIdx << ".cpio";
         _batchFile.openForRead(fileName.str());
         _itemsLeft = _batchFile.itemCount();
         _itemsRead = 0;
@@ -236,7 +236,7 @@ public:
         return 0;
     }
 
-    int totalLabelsSize() {
+    int totalTargetsSize() {
         return 0;
     }
 

@@ -157,4 +157,4 @@ def test_loader():
     return err
 
 
-assert test_iterator() == test_loader()
+assert test_loader() == test_iterator()

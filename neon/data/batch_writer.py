@@ -133,7 +133,7 @@ class BatchWriter(object):
         labels = [{k: v[s:s + self.macro_size] for k, v in labels.iteritems()} for s in starts]
 
         for i, jpeg_file_batch in enumerate(imfiles):
-            bfile = os.path.join(self.out_dir, '%s%d' % (self.batch_prefix, offset + i))
+            bfile = os.path.join(self.out_dir, '%s%d.cpio' % (self.batch_prefix, offset + i))
             label_batch = labels[i]['l_id']
             if os.path.exists(bfile):
                 print("File %s exists, skipping..." % (bfile))
@@ -296,7 +296,7 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     if args.set_type == 'i1k':
-        args.target_size = 512  # This follows Simonyan's methodology
+        args.target_size = 256  #  (maybe 512 for Simonyan's methodology?)
         args.file_pattern = "*.JPEG"
         bw = BatchWriterI1K(out_dir=args.data_dir, image_dir=args.image_dir,
                             target_size=args.target_size, macro_size=args.macro_size,

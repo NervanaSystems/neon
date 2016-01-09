@@ -34,7 +34,7 @@ int single(Reader* reader, Decoder* decoder, int epochCount,
            int macrobatchCount, int macrobatchSize,
            int minibatchSize, int itemMaxSize, int labelSize) {
     BufferPool* readBufs = new BufferPool(reader->totalDataSize(),
-                                          reader->totalLabelsSize());
+                                          reader->totalTargetsSize());
     unsigned int sm = 0;
     char* dataBuf = new char[itemMaxSize];
     char* labelBuf = new char[macrobatchSize * labelSize];
@@ -106,7 +106,7 @@ int test(const char* pathPrefix, int minibatchSize, int itemMaxSize,
     {
         MacrobatchReader reader(pathPrefix, 0, 0, 0);
         macrobatchSize = reader.itemCount();
-        readMaxSize = reader.maxDataSize();
+        readMaxSize = reader.maxDatumSize();
     }
 
     if (macrobatchSize % minibatchSize != 0) {

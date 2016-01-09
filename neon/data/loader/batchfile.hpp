@@ -1,3 +1,20 @@
+/*
+ Copyright 2015 Nervana Systems Inc.
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
+
+#include <time.h>
+
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -6,67 +23,230 @@
 #define FORMAT_VERSION  1
 #define WRITER_VERSION  1
 #define MAGIC_STRING    "MACR"
+#define CPIO_FOOTER     "TRAILER!!!"
 
-using std::ifstream;
-using std::ofstream;
 using std::string;
 
 typedef std::vector<string> LineList;
 typedef std::vector<char> ByteVect;
 
+static_assert(sizeof(int) == 4, "int is not 4 bytes");
+static_assert(sizeof(uint) == 4, "uint is not 4 bytes");
+static_assert(sizeof(short) == 2, "short is not 2 bytes");
+
+/*
+
+The data is stored as a cpio archive and may be unpacked using the
+GNU cpio utility.
+
+    https://www.gnu.org/software/cpio/
+
+Individual items are packed into a macrobatch file as follows:
+    - header
+    - datum 1
+    - target 1
+    - datum 2
+    - target 2
+      ...
+    - trailer
+
+Each of these items comprises of a cpio header record followed by data.
+
+*/
+
+class ifstream : public std::ifstream {
+public:
+    template <typename T>
+    void read(T* data) {
+        read(reinterpret_cast<char*>(data), sizeof(T));
+    }
+
+    void read(char* data, int len) {
+        std::ifstream::read(data, len);
+    }
+
+    void readPadding(uint length) {
+        // Read a byte if length is odd.
+        if (length % 2 == 0) {
+            return;
+        }
+        char byte = 0;
+        read(&byte);
+    }
+};
+
+class ofstream : public std::ofstream {
+public:
+    template <typename T>
+    void write(T* data) {
+        write(reinterpret_cast<char*>(data), sizeof(T));
+    }
+
+    void write(char* data, int len) {
+        std::ofstream::write(data, len);
+    }
+
+    void writePadding(uint length) {
+        // Write a byte if length is odd.
+        if (length % 2 == 0) {
+            return;
+        }
+        char byte = 0;
+        write(&byte);
+    }
+};
+
+class RecordHeader {
+public:
+    RecordHeader()
+    : _magic(070707), _dev(0), _ino(0), _mode(0100644), _uid(0), _gid(0),
+      _nlink(0), _rdev(0), _namesize(0) {
+        memset((void*) _mtime, 0, 2 * sizeof(short));
+        memset((void*) _filesize, 0, 2 * sizeof(short));
+    }
+
+    void loadDoubleShort(uint* dst, ushort src[2]) {
+        *dst =  ((uint) src[0]) << 16 | (uint) src[1];
+    }
+
+    void saveDoubleShort(ushort* dst, uint src) {
+        dst[0] = (ushort) (src >> 16);
+        dst[1] = (ushort) src;
+    }
+
+    void read(ifstream& ifs, uint* fileSize) {
+        ifs.read(&_magic);
+        assert(_magic == 070707);
+        ifs.read(&_dev);
+        ifs.read(&_ino);
+        ifs.read(&_mode);
+        ifs.read(&_uid);
+        ifs.read(&_gid);
+        ifs.read(&_nlink);
+        ifs.read(&_rdev);
+        uint mtime;
+        ifs.read(&_mtime);
+        loadDoubleShort(&mtime, _mtime);
+        ifs.read(&_namesize);
+        ifs.read(&_filesize);
+        loadDoubleShort(fileSize, _filesize);
+        // Skip over filename.
+        ifs.seekg(_namesize, ifs.cur);
+        ifs.readPadding(_namesize);
+    }
+
+    void write(ofstream& ofs, uint fileSize, const char* fileName) {
+        _namesize = strlen(fileName) + 1;
+        ofs.write(&_magic);
+        ofs.write(&_dev);
+        ofs.write(&_ino);
+        ofs.write(&_mode);
+        ofs.write(&_uid);
+        ofs.write(&_gid);
+        ofs.write(&_nlink);
+        ofs.write(&_rdev);
+        time_t mtime;
+        time(&mtime);
+        saveDoubleShort(_mtime, mtime);
+        ofs.write(&_mtime);
+        ofs.write(&_namesize);
+        saveDoubleShort(_filesize, fileSize);
+        ofs.write(&_filesize);
+        // Write filename.
+        ofs.write((char*) fileName, _namesize);
+        ofs.writePadding(_namesize);
+    }
+
+public:
+    ushort                      _magic;
+    ushort                      _dev;
+    ushort                      _ino;
+    ushort                      _mode;
+    ushort                      _uid;
+    ushort                      _gid;
+    ushort                      _nlink;
+    ushort                      _rdev;
+    ushort                      _mtime[2];
+    ushort                      _namesize;
+    ushort                      _filesize[2];
+};
+
 class BatchFileHeader {
 friend class BatchFile;
 public:
     BatchFileHeader()
-    : _formatVersion(-1), _writerVersion(-1), _itemCount(0),
-      _maxDataSize(0), _maxLabelsSize(0),
-      _totalDataSize(0), _totalLabelsSize(0) {
-        static_assert(sizeof(int) == 4, "int is not 4 bytes");
+    : _formatVersion(FORMAT_VERSION), _writerVersion(WRITER_VERSION),
+      _itemCount(0), _maxDatumSize(0), _maxTargetSize(0),
+      _totalDataSize(0), _totalTargetsSize(0) {
         memset(_dataType, 0, sizeof(_dataType));
+        memset(_unused, 0, sizeof(_unused));
     }
 
     void read(ifstream& ifs) {
-        char magic[4];
-        ifs.read(magic, sizeof(magic));
-        if (strncmp(magic, MAGIC_STRING, 4) != 0) {
+        ifs.read(&_magic);
+        if (strncmp(_magic, MAGIC_STRING, 4) != 0) {
             throw std::runtime_error("Unrecognized format\n");
         }
-        ifs.read(reinterpret_cast<char*>(&_formatVersion), 4);
-        ifs.read(reinterpret_cast<char*>(&_writerVersion), 4);
-        ifs.read(_dataType, sizeof(_dataType));
-        ifs.read(reinterpret_cast<char*>(&_itemCount), 4);
-        ifs.read(reinterpret_cast<char*>(&_maxDataSize), 4);
-        ifs.read(reinterpret_cast<char*>(&_maxLabelsSize), 4);
-        ifs.read(reinterpret_cast<char*>(&_totalDataSize), 4);
-        ifs.read(reinterpret_cast<char*>(&_totalLabelsSize), 4);
+        ifs.read(&_formatVersion);
+        ifs.read(&_writerVersion);
+        ifs.read(&_dataType);
+        ifs.read(&_itemCount);
+        ifs.read(&_maxDatumSize);
+        ifs.read(&_maxTargetSize);
+        ifs.read(&_totalDataSize);
+        ifs.read(&_totalTargetsSize);
+        ifs.read(&_unused);
     }
 
     void write(ofstream& ofs) {
-        ofs.write(MAGIC_STRING, strlen(MAGIC_STRING));
-        ofs.write(reinterpret_cast<char*>(&_formatVersion), 4);
-        ofs.write(reinterpret_cast<char*>(&_writerVersion), 4);
-        ofs.write(_dataType, sizeof(_dataType));
-        ofs.write(reinterpret_cast<char*>(&_itemCount), 4);
-        ofs.write(reinterpret_cast<char*>(&_maxDataSize), 4);
-        ofs.write(reinterpret_cast<char*>(&_maxLabelsSize), 4);
-        ofs.write(reinterpret_cast<char*>(&_totalDataSize), 4);
-        ofs.write(reinterpret_cast<char*>(&_totalLabelsSize), 4);
+        ofs.write((char*) MAGIC_STRING, strlen(MAGIC_STRING));
+        ofs.write(&_formatVersion);
+        ofs.write(&_writerVersion);
+        ofs.write(&_dataType);
+        ofs.write(&_itemCount);
+        ofs.write(&_maxDatumSize);
+        ofs.write(&_maxTargetSize);
+        ofs.write(&_totalDataSize);
+        ofs.write(&_totalTargetsSize);
+        ofs.write(&_unused);
     }
 
 private:
-    int                         _formatVersion;
-    int                         _writerVersion;
+#pragma pack(1)
+    char                        _magic[4];
+    uint                        _formatVersion;
+    uint                        _writerVersion;
     char                        _dataType[8];
-    uint32_t                    _itemCount;
-    uint32_t                    _maxDataSize;
-    uint32_t                    _maxLabelsSize;
-    uint32_t                    _totalDataSize;
-    uint32_t                    _totalLabelsSize;
+    uint                        _itemCount;
+    uint                        _maxDatumSize;
+    uint                        _maxTargetSize;
+    uint                        _totalDataSize;
+    uint                        _totalTargetsSize;
+    char                        _unused[24];
+#pragma pack()
+};
+
+class BatchFileTrailer {
+public:
+    BatchFileTrailer() {
+        memset(_unused, 0, sizeof(_unused));
+    }
+
+    void write(ofstream& ofs) {
+        ofs.write(&_unused);
+    }
+
+    void read(ifstream& ifs) {
+        ifs.read(&_unused);
+    }
+
+private:
+    uint                        _unused[4];
 };
 
 class BatchFile {
 public:
-    BatchFile() {
+    BatchFile() : _fileHeaderOffset(0)  {
         _ifs.exceptions(_ifs.failbit);
         _ofs.exceptions(_ofs.failbit);
     }
@@ -78,14 +258,21 @@ public:
     void openForRead(const string& fileName) {
         assert(_ifs.is_open() == false);
         _ifs.open(fileName, ifstream::binary);
-        _header.read(_ifs);
+        uint fileSize;
+        _recordHeader.read(_ifs, &fileSize);
+        assert(fileSize == sizeof(_fileHeader));
+        _fileHeader.read(_ifs);
     }
 
     void openForWrite(const string& fileName, const string& dataType) {
+        static_assert(sizeof(_fileHeader) == 64, "file header is not 64 bytes");
         assert(_ofs.is_open() == false);
         _ofs.open(fileName, ofstream::binary);
-        memcpy(_header._dataType, dataType.c_str(), 8);
-        _header.write(_ofs);  // This will be incomplete until the write on close()
+        _recordHeader.write(_ofs, 64, "cpiohdr");
+        _fileHeaderOffset = _ofs.tellp();
+        memcpy(_fileHeader._dataType, dataType.c_str(), 8);
+        // This will be incomplete until the write on close()
+        _fileHeader.write(_ofs);
     }
 
     void close() {
@@ -93,67 +280,90 @@ public:
             _ifs.close();
         }
         if (_ofs.is_open() == true) {
+            // Write the trailer.
+            static_assert(sizeof(_fileTrailer) == 16,
+                          "file trailer is not 16 bytes");
+            _recordHeader.write(_ofs, 16, "cpiotlr");
+            _fileTrailer.write(_ofs);
+            _recordHeader.write(_ofs, 0, CPIO_FOOTER);
             // Need to write back the max size values before cleaning up
-            _ofs.seekp(0, _ofs.beg);
-            _header.write(_ofs);
+            _ofs.seekp(_fileHeaderOffset, _ofs.beg);
+            _fileHeader.write(_ofs);
             _ofs.close();
         }
     }
 
-    void readItem(char* data, char* labels, int* dataSize, int* labelsSize) {
-        _ifs.read(reinterpret_cast<char*>(dataSize), 4);
-        _ifs.read(reinterpret_cast<char*>(labelsSize), 4);
-        _ifs.read(data, *dataSize);
-        _ifs.read(labels, *labelsSize);
+    void readItem(char* datum, char* target,
+                  uint* datumSize, uint* targetSize) {
+        _recordHeader.read(_ifs, datumSize);
+        _ifs.read(datum, *datumSize);
+        _ifs.readPadding(*datumSize);
+        _recordHeader.read(_ifs, targetSize);
+        _ifs.read(target, *targetSize);
+        _ifs.readPadding(*targetSize);
     }
 
-    void writeItem(char* data, char* labels, uint32_t* dataSize, uint32_t* labelsSize) {
-        _ofs.write(reinterpret_cast<char*>(dataSize), 4);
-        _ofs.write(reinterpret_cast<char*>(labelsSize), 4);
-        _ofs.write(data, *dataSize);
-        _ofs.write(labels, *labelsSize);
-        _header._maxDataSize = std::max(*dataSize, _header._maxDataSize);
-        _header._maxLabelsSize = std::max(*labelsSize, _header._maxLabelsSize);
-        _header._totalDataSize += *dataSize;
-        _header._totalLabelsSize += *labelsSize;
-        _header._itemCount++;
+    void writeItem(char* datum, char* target,
+                   uint* datumSize, uint* targetSize) {
+        char fileName[16];
+        // Write the datum.
+        sprintf(fileName, "cpiodtm%d",  _fileHeader._itemCount);
+        _recordHeader.write(_ofs, *datumSize, fileName);
+        _ofs.write(datum, *datumSize);
+        _ofs.writePadding(*datumSize);
+        // Write the target.
+        sprintf(fileName, "cpiotgt%d",  _fileHeader._itemCount);
+        _recordHeader.write(_ofs, *targetSize, fileName);
+        _ofs.write(target, *targetSize);
+        _ofs.writePadding(*targetSize);
+
+        _fileHeader._maxDatumSize =
+                std::max(*datumSize, _fileHeader._maxDatumSize);
+        _fileHeader._maxTargetSize =
+                std::max(*targetSize, _fileHeader._maxTargetSize);
+        _fileHeader._totalDataSize += *datumSize;
+        _fileHeader._totalTargetsSize += *targetSize;
+        _fileHeader._itemCount++;
     }
 
-    void writeItem(ByteVect &data, ByteVect &label) {
-        uint32_t dataSize = data.size();
-        uint32_t labelSize = label.size();
-        writeItem(&data[0], &label[0], &dataSize, &labelSize);
+    void writeItem(ByteVect &datum, ByteVect &target) {
+        uint    datumSize = datum.size();
+        uint    targetSize = target.size();
+        writeItem(&datum[0], &target[0], &datumSize, &targetSize);
     }
 
     int itemCount() {
-        return _header._itemCount;
+        return _fileHeader._itemCount;
     }
 
     int totalDataSize() {
-        return _header._totalDataSize;
+        return _fileHeader._totalDataSize;
     }
 
-    int totalLabelsSize() {
-        return _header._totalLabelsSize;
+    int totalTargetsSize() {
+        return _fileHeader._totalTargetsSize;
     }
 
-    int maxDataSize() {
-        return _header._maxDataSize;
+    int maxDatumSize() {
+        return _fileHeader._maxDatumSize;
     }
 
-    int maxLabelsSize() {
-        return _header._maxLabelsSize;
+    int maxTargetSize() {
+        return _fileHeader._maxTargetSize;
     }
 
 private:
     ifstream                    _ifs;
     ofstream                    _ofs;
-    BatchFileHeader             _header;
+    BatchFileHeader             _fileHeader;
+    BatchFileTrailer            _fileTrailer;
+    RecordHeader                _recordHeader;
+    int                         _fileHeaderOffset;
 };
 
 // Some utilities that would be used by batch writers
 int readFileLines(const string &filn, LineList &ll) {
-    ifstream ifs(filn);
+    std::ifstream ifs(filn);
     if (ifs) {
         for (string line; std::getline( ifs, line ); /**/ )
            ll.push_back( line );
@@ -169,7 +379,7 @@ int readFileBytes(const string &filn, ByteVect &b) {
 /* Reads in the binary file as a sequence of bytes, resizing
  * the provided byte vector to fit
 */
-    ifstream ifs(filn, ifstream::binary);
+    std::ifstream ifs(filn, ifstream::binary);
     if (ifs) {
         ifs.seekg (0, ifs.end);
         int length = ifs.tellg();
