@@ -1850,6 +1850,22 @@ class Backend(object):
         """
         raise NotImplementedError()
 
+    def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0):
+        """
+        Backward propagate lookup table layer.
+
+        Arguments:
+            nin (integer): Number of input word_ids.
+            inputs (Tensor): Input tensor.
+            error (Tensor): Error tensor.
+            error_t (Tensor): Transposed error tensor.
+            dW (Tensor): Gradient tensor (delta).
+            pad_idx (integer):
+            alpha (float):
+            beta (float):
+        """
+        raise NotImplementedError()
+
 
 # For constructing an op tree used in lazy evaluation
 class OpTreeNode(tuple):

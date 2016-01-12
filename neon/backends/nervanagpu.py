@@ -1928,6 +1928,76 @@ class NervanaGPU(Backend):
             print("%7.3f msecs %4.0f GBps %s(%d,%d,%d) %.1f" %
                   (msecs, bandwidth, kernel.name, blocks, N, threads, occup))
 
+    def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0,
+                           deterministic=True):
+        """
+        Backward propagate lookup table layer.
+
+        Arguments:
+            nin (integer): Number of input word_ids.
+            inputs (Tensor): Input tensor.
+            error (Tensor): Error tensor.
+            error_t (Tensor): Transposed error tensor.
+            dW (Tensor): Gradient tensor (delta).
+            pad_idx (integer):
+            alpha (float):
+            beta (float):
+            deterministic (boolean): Chooses between deterministic and non-deterministic kernels.
+        """
+        from neon.backends.float_ew import (_get_lut_bprop_kernel,
+                                            _get_sorting_kernel)
+        embedding_dim = dW.shape[1]
+        vocab_size = dW.shape[0]
+
+        if pad_idx is None:
+            pad_idx = int(-1)
+
+        if deterministic:
+            index_buffer = self.empty((error.shape[1],), dtype=np.int32)
+            offset_buffer = self.empty((error.shape[1],), dtype=np.int32)
+            word_counts = self.zeros((max(512, vocab_size) + 512,), dtype=np.int32)
+
+            for kernel_id in range(5):
+                threads = 512
+                if kernel_id in [1, 3]:
+                    blocks = vocab_size / (threads * 2)
+                    if vocab_size % (threads * 2):
+                        blocks = blocks + 1
+                elif kernel_id == 2:
+                    blocks = 1
+                else:
+                    blocks = error.shape[1] / threads
+                    if error.shape[1] % threads:
+                        blocks = blocks + 1
+
+                params = [(blocks, 1, 1), (threads, 1, 1), inputs.backend.stream,
+                          inputs.gpudata, index_buffer.gpudata, offset_buffer.gpudata, word_counts.gpudata,
+                          max(512, vocab_size), error.shape[1]]
+                kernel = _get_sorting_kernel(kernel_id, threads)
+                kernel.prepared_async_call(*params)
+
+            threads = 32
+            blocks = error.shape[1]
+
+            error_t[:] = error.T
+            params = [(blocks, 1, 1), (threads, 1, 1), inputs.backend.stream,
+                      inputs.gpudata, index_buffer.gpudata, dW.gpudata, error_t.gpudata,
+                      nin, embedding_dim, vocab_size, pad_idx]
+
+            kernel = _get_lut_bprop_kernel(error.dtype.str[1:], True)
+            kernel.prepared_async_call(*params)
+        else:
+            threads = 32
+            blocks = error.shape[1]
+
+            error_t[:] = error.T
+            params = [(blocks, 1, 1), (threads, 1, 1), inputs.backend.stream,
+                      inputs.gpudata, dW.gpudata, error_t.gpudata, nin, embedding_dim, vocab_size,
+                      pad_idx]
+
+            kernel = _get_lut_bprop_kernel(error.dtype.str[1:])
+            kernel.prepared_async_call(*params)
+
     def init_mark(self):
         """
         Generate a timing mark object

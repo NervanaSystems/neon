@@ -17,7 +17,7 @@ Test of a LookupTable layer, which is often being used for word embedding
 '''
 import itertools as itt
 import numpy as np
-
+from neon.backends import gen_backend
 from neon import NervanaObject
 from neon.initializers.initializer import GlorotUniform
 from neon.layers.layer import LookupTable
@@ -65,7 +65,7 @@ def test_lookuptable_zeros_error(backend_default, basic_linargs):
     out = layer.fprop(inputs).get()
     W = layer.W.get()
     for i in range(nin*batch_size):
-        assert np.all(W[:, inp[i]] == out[:, i])
+        assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.zeros((nout, nin * batch_size)))
     layer.bprop(layer.be.array(err)).asnumpyarray()
@@ -96,7 +96,7 @@ def test_lookuptable_ones_error(backend_default, basic_linargs):
     out = layer.fprop(inputs).get()
     W = layer.W.get()
     for i in range(nin*batch_size):
-        assert np.all(W[:, inp[i]] == out[:, i])
+        assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.ones((nout, nin * batch_size)))
     layer.bprop(layer.be.array(err)).asnumpyarray()
@@ -106,7 +106,7 @@ def test_lookuptable_ones_error(backend_default, basic_linargs):
     dw_exp = np.zeros((1, nout))
     for wrd_id, cnt in zip(unqidx, count):
         dw_exp = err[:, 0] * cnt
-        assert np.all(dw_exp == dw[:, wrd_id])
+        assert np.all(dw_exp == dw[wrd_id, :])
 
     return
 
@@ -131,7 +131,7 @@ def test_lookuptable_rand_error(backend_default, basic_linargs):
     out = layer.fprop(inputs).get()
     W = layer.W.get()
     for i in range(nin*batch_size):
-        assert np.all(W[:, inp[i]] == out[:, i])
+        assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.random.random((nout, nin * batch_size)))
     layer.bprop(layer.be.array(err)).asnumpyarray()
@@ -146,8 +146,20 @@ def test_lookuptable_rand_error(backend_default, basic_linargs):
             if w_id == wrd_id:
                 dw_exp[:] = dw_exp[:] + err[:, i]
                 cnt_exp += 1
-        assert np.allclose(dw[:, wrd_id], dw_exp, atol=1e-2, rtol=0)
-        assert np.allclose(dw_exp, dw[:, wrd_id], atol=1e-2, rtol=0)
+        assert np.allclose(dw[wrd_id, :], dw_exp, atol=0, rtol=1e-4)
+        assert np.allclose(dw_exp, dw[wrd_id, :], atol=0, rtol=1e-4)
         assert cnt == cnt_exp
 
     return
+
+
+if __name__ == '__main__':
+
+    fargs = [1, 128, 1, 1]
+
+    be = gen_backend(backend='cpu',
+                     datatype=np.float32,
+                     batch_size=128,
+                     rng_seed=0)
+
+    test_lookuptable_zeros_error(be, fargs)

@@ -167,7 +167,9 @@ class CPUTensor(Tensor):
         defaults to 1.  If start_idx isn't specified it defaults to 0.  If
         stop_idx isn't specified it defaults to the total number of elements
         along that dimension.  As such a slice value of ':' allows one to
-        select all elements along that dimension
+        select all elements along that dimension. To be consistent with GPU
+        Tensors, CPU Tensors remove the axis that has size 1 unless it needs to
+        maintain 2D.
 
         Arguments:
             key (int, slice, tuple): indices of each dimension's slice.
@@ -187,25 +189,22 @@ class CPUTensor(Tensor):
         # let a.shape = (3,4)
         # a[1,1] = 10 # cpu, gpu and numpy
         # type(a[1,1]) # for cpu and gpu type is Tensor; for numpy type is float
-        first_int_idx = None
-        is_all_int = True
+        key_list = list(key)
         for idx, k in enumerate(key):
             if type(k) is int:
-                if first_int_idx is None:
-                    first_int_idx = idx
-            else:
-                is_all_int = False
-                break
-        if is_all_int:
-            key_list = list(key)
-            idx = key_list[first_int_idx]
-            key_list[first_int_idx] = slice(idx, idx + 1, None)
-            key = tuple(key_list)
+                k = self.shape[idx] + k if k < 0 else k
+                key_list[idx] = slice(k, k + 1, None)
+        key = tuple(key_list)
+
+        new_shape = list(self._tensor[key].shape)
+        for idx, k in enumerate(new_shape):
+            if len(new_shape) > 2 and k is 1:
+                new_shape.remove(k)
 
         # return a view of the tensor
         return self.__class__(
             backend=self.backend,
-            ary=self._tensor[key],
+            ary=self._tensor[key].reshape(new_shape),
             dtype=self._tensor.dtype)
 
     def _assign(self, value):
@@ -214,7 +213,7 @@ class CPUTensor(Tensor):
         for int and uint types, when overflow happens
 
         Arguments:
-            value (GPUTennsor, OpTreNode, numeric): the value to be assigned.
+            value (GPUTensor, OpTreeNode, numeric): the value to be assigned.
 
         """
         if isinstance(value, (CPUTensor, OpTreeNode)):
@@ -282,9 +281,11 @@ class CPUTensor(Tensor):
         # collapsed, hence the squeeze call.
         if type(indices) == np.ndarray:
             indices = indices.squeeze()
+        new_shape = list(self.shape)
+        new_shape[axis] = indices.size
         return self.__class__(
             backend=self.backend,
-            ary=self._tensor.take(indices, axis),
+            ary=self._tensor.take(indices, axis).reshape(new_shape),
             dtype=self._tensor.dtype)
 
     def fill(self, value):
@@ -1435,6 +1436,33 @@ class NervanaCPU(Backend):
         grad_beta[:] = self.sum(delta, axis=1)
         xtmp = (xhat * grad_gamma + grad_beta) / float(x.shape[1])
         delta[:] = gamma * (delta - xtmp) / self.sqrt(xvar + eps)
+
+    def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0):
+        """
+        Backward propagate lookup table layer.
+
+        Arguments:
+            nin (integer): Number of input word_ids.
+            inputs (Tensor): Input tensor.
+            error (Tensor): Error tensor.
+            error_t (Tensor): Transposed error tensor.
+            dW (Tensor): Gradient tensor (delta).
+            pad_idx (integer):
+            alpha (float):
+            beta (float):
+        """
+        wrd_ids = inputs.get()[0]
+        unqidx, inv = np.unique(wrd_ids, return_inverse=True)
+        groups = [np.where(inv == i) for i in range(len(unqidx))]
+
+        for (wrd_id, group) in zip(unqidx, groups):
+            if wrd_id != pad_idx:
+                dW[wrd_id, :] = self.sum(error.take(group[0], axis=1), axis=1)
+        """
+        alternative bprop
+        for (j, wrd_id) in enumerate(wrd_ids):
+            dW[:, wrd_id] = dW[:, wrd_id] + error[:, j]
+        """
 
     def _hist_tensor(self, tag):
         """

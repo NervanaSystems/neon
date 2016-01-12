@@ -47,6 +47,8 @@ from neon.backends.cuda_templates import (_ew_template,
 
 from neon.backends.cuda_batchnorm import (_get_bn_fprop_kernel,
                                           _get_bn_bprop_kernel)
+from neon.backends.kernels.cuda.lookuptable import (_get_lut_bprop_kernel,
+                                                    _get_sorting_kernel)
 
 # RAND_POOL_SIZE set to 65536 == 2048 * 32
 
@@ -740,10 +742,18 @@ def call_compound_kernel(rand_state, *args):
                 arg_cnt += 1
 
                 # support broadcast
-                if shape[0] == 1:
-                    strides[1 - axis] = 0
-                if shape[1] == 1:
-                    strides[axis] = 0
+                # Need to use shape of base array to determin stride if this
+                # operation is a take
+                if arg.take_array:
+                    if arg.base.shape[0] == 1:
+                        strides[1 - axis] = 0
+                    if arg.base.shape[1] == 1:
+                        strides[axis] = 0
+                else:
+                    if shape[0] == 1:
+                        strides[1 - axis] = 0
+                    if shape[1] == 1:
+                        strides[axis] = 0
 
                 kernel_args.extend((arg.gpudata, strides[0], strides[1]))
 

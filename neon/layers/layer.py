@@ -1050,6 +1050,7 @@ class LookupTable(ParameterLayer):
         self.vocab_size = vocab_size
         self.update = update
         self.pad_idx = pad_idx
+        self.outputs_t = None
 
     def __str__(self):
         return "LookupTable Layer : %d inputs, (%d, %d) outputs size" % (
@@ -1060,7 +1061,7 @@ class LookupTable(ParameterLayer):
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
         self.out_shape = (self.embedding_dim, self.nin)
         if self.weight_shape is None:
-            self.weight_shape = (self.embedding_dim, self.vocab_size)
+            self.weight_shape = (self.vocab_size, self.embedding_dim)
         return self
 
     def allocate(self):
@@ -1071,26 +1072,20 @@ class LookupTable(ParameterLayer):
         self.dW[:] = 0
         if self.pad_idx is not None:
             self.W[:, self.pad_idx] = 0
+        if self.outputs_t is None:
+            self.outputs_t = self.be.empty_like(self.outputs.T)
 
     def fprop(self, inputs, inference=False):
         self.inputs[:] = inputs.reshape(self.inputs.shape)
-        self.outputs[:] = self.W.take(self.inputs, axis=1)
+        self.outputs_t[:] = self.W.take(self.inputs, axis=0)
+        self.outputs[:] = self.outputs_t.T
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0):
-        if self.update:
-            self.dW[:] = 0
-            wrd_ids = self.inputs.get()[0]
-            unqidx, inv = np.unique(wrd_ids, return_inverse=True)
-            groups = [np.where(inv == i) for i in range(len(unqidx))]
-            for (wrd_id, group) in zip(unqidx, groups):
-                if self.pad_idx != wrd_id:
-                    self.dW[:, wrd_id] = self.be.sum(error.take(group[0], axis=1), axis=1)
-        """
-        alternative bprop
-        for (j, wrd_id) in enumerate(wrd_ids):
-            self.dW[:, wrd_id] = self.dW[:, wrd_id] + error[:, j]
-        """
+        self.dW[:] = 0
+        self.be.compound_bprop_lut(self.nin, self.inputs, error, self.outputs_t, self.dW,
+                                   self.pad_idx, alpha, beta)
+
         return self.deltas
 
 
