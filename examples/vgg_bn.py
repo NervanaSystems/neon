@@ -45,7 +45,11 @@ biases = None if use_batch_norm else Constant(0)
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # initialize the data provider
-img_set_options = dict(repo_dir=args.data_dir, inner_size=224, dtype=args.datatype, subset_pct=100)
+img_set_options = dict(repo_dir=args.data_dir,
+                       inner_size=224,
+                       scale_range=(256, 384),
+                       dtype=args.datatype,
+                       subset_pct=100)
 train = ImageLoader(set_name='train', **img_set_options)
 test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
 

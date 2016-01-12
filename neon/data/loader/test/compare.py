@@ -150,9 +150,9 @@ def test_loader():
     write_batches(args, train_dir, trainimgs, 0)
     write_batches(args, test_dir, testimgs, 1)
     train = ImageLoader(set_name='train', do_transforms=False, inner_size=32,
-                        repo_dir=train_dir)
+                        scale_range=(32, 32), repo_dir=train_dir)
     test = ImageLoader(set_name='validation', do_transforms=False, inner_size=32,
-                       repo_dir=test_dir)
+                       scale_range=(32, 32), repo_dir=test_dir)
     err = run(args, train, test)
     return err
 

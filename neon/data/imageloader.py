@@ -31,13 +31,15 @@ class ImageLoader(NervanaObject):
     to iterate over minibatches of images.
     """
 
-    def __init__(self, repo_dir, inner_size, do_transforms=True,
+    def __init__(self, repo_dir, inner_size, scale_range, do_transforms=True,
                  rgb=True, shuffle=False, set_name='train', subset_pct=100,
-                 nlabels=1, macro=True, dtype=np.float32):
+                 nlabels=1, macro=True, dtype=np.float32,
+                 contrast_range=(75, 125)):
         if not rgb:
             raise ValueError('Non-RGB images are currently not supported')
-        self.configure(repo_dir, inner_size, do_transforms,
-                       rgb, shuffle, set_name, subset_pct, macro)
+        self.configure(repo_dir, inner_size, scale_range, do_transforms,
+                       rgb, shuffle, set_name, subset_pct, macro,
+                       contrast_range)
         libpath = os.path.dirname(os.path.realpath(__file__))
         try:
             self.loaderlib = ct.cdll.LoadLibrary(
@@ -74,8 +76,9 @@ class ImageLoader(NervanaObject):
         self.start()
         atexit.register(self.stop)
 
-    def configure(self, repo_dir, inner_size, do_transforms,
-                  rgb, shuffle, set_name, subset_pct, macro):
+    def configure(self, repo_dir, inner_size, scale_range, do_transforms,
+                  rgb, shuffle, set_name, subset_pct, macro,
+                  contrast_range):
         """
         Set up all dataset config options.
         """
@@ -86,13 +89,15 @@ class ImageLoader(NervanaObject):
 
         self.repo_dir = repo_dir
         self.inner_size = inner_size
+        if isinstance(scale_range, int):
+            self.scale_range = (scale_range, scale_range)
+        else:
+            self.scale_range = scale_range
         self.minibatch_size = self.be.bsz
 
         self.center = not do_transforms
         self.flip = do_transforms
-        self.contrast_range = (75, 125) if do_transforms else (100, 100)
-        self.scale_min = 15 if do_transforms else 100
-        self.aspect_ratio = 3/4. if do_transforms else 1.
+        self.contrast_range = contrast_range if do_transforms else (100, 100)
 
         self.rgb = rgb
         self.shuffle = shuffle
@@ -199,8 +204,8 @@ class ImageLoader(NervanaObject):
                                            ct.c_bool(self.center),
                                            ct.c_bool(self.flip),
                                            ct.c_bool(self.rgb),
-                                           ct.c_float(self.aspect_ratio),
-                                           ct.c_int(self.scale_min),
+                                           ct.c_int(self.scale_range[0]),
+                                           ct.c_int(self.scale_range[1]),
                                            ct.c_int(self.contrast_range[0]),
                                            ct.c_int(self.contrast_range[1]),
                                            ct.c_int(0), ct.c_int(0), # ignored rotation params

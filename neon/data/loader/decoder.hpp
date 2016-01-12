@@ -56,18 +56,18 @@ class AugmentationParams {
 public:
     AugmentationParams(int innerSize,
                        bool center, bool flip, bool rgb,
-                       float aspectRatio, int scaleMin,
+                       int scaleMin, int scaleMax,
                        int contrastMin, int contrastMax,
                        int rotateMin, int rotateMax)
     : _rngSeed(0), _innerSize(innerSize, innerSize),
       _center(center), _flip(flip), _rgb(rgb),
-      _aspectRatio(aspectRatio), _scaleMin(scaleMin),
+      _scaleMin(scaleMin), _scaleMax(scaleMax),
       _contrastMin(contrastMin), _contrastMax(contrastMax),
       _rotateMin(rotateMin), _rotateMax(rotateMax) {
     }
 
     AugmentationParams()
-    : AugmentationParams(224, true, false, true, 1.0f, 100, 0, 0, 0, 0){}
+    : AugmentationParams(224, true, false, true, 256, 256, 0, 0, 0, 0){}
 
     bool doRandomFlip() {
         return _flip && (rand_r(&(_rngSeed)) % 2 == 0);
@@ -92,25 +92,10 @@ public:
     }
 
     void getRandomCrop(const Size2i &inputSize, Rect* cropBox) {
-        Size2i cropSize = inputSize;
+        int scaleSize = (_scaleMin + (rand_r(&(_rngSeed)) % (_scaleMax + 1 - _scaleMin)));
+        float scaleFactor = std::min(inputSize.width, inputSize.height) / (float) scaleSize;
         Point2i corner;
-        // _scaleMin == 100 % means no random rescaling;
-        // ignore aspectRatio and just use the entire image.
-        if (_scaleMin < 100) {
-            // get a scale factor between _scaleMin % to 100 %
-            float scaleFactor = (_scaleMin + (rand_r(&(_rngSeed)) % (100 - _scaleMin))) / 100.0;
-            // randomly toggle between portrait and landscape aspect ratio (no effect if square)
-            float aspectRatio = (rand_r(&(_rngSeed)) % 2 == 0) ? _aspectRatio : 1.0 / _aspectRatio;
-
-            cropSize.width = std::min(inputSize.width, (int) (inputSize.height / aspectRatio));
-            cropSize.height = std::min(inputSize.height, (int) (inputSize.width * aspectRatio));
-            float areaRatio = cropSize.area() / (float) inputSize.area();
-            float linearScale = std::sqrt(scaleFactor / areaRatio);
-            if (linearScale < 1.0) {
-                cropSize.width *= linearScale;
-                cropSize.height *= linearScale;
-            }
-        }
+        Size2i cropSize(_innerSize.height * scaleFactor, _innerSize.width * scaleFactor);
         randomCorner(inputSize - cropSize, &corner);
         cropBox->width = cropSize.width;
         cropBox->height = cropSize.height;
@@ -129,9 +114,8 @@ protected:
     unsigned int                _rngSeed;
     Size2i                      _innerSize;
     bool                        _center, _flip, _rgb;
-    // Aspect ratio of bounding box.  We will flip between portrait and landscape at random
-    float                       _aspectRatio;
-    int                         _scaleMin;
+    // Pixel scale to jitter at (image from which to crop will have short side in [scaleMin, Max])
+    int                         _scaleMin, _scaleMax;
     int                         _contrastMin, _contrastMax;
     int                         _rotateMin, _rotateMax;
 };
@@ -171,8 +155,12 @@ public:
         // This would be more efficient, but we should allocate separate bufs for each thread
         // Mat resizedImage = Mat(innerSize, CV_8UC3, _scratchbuf);
         Mat resizedImage;
-        int interp_method = cropArea < innerSize.area() ? CV_INTER_AREA : CV_INTER_CUBIC;
-        cv::resize(croppedImage, resizedImage, innerSize, 0, 0, interp_method);
+        if (innerSize.width == cropBox.width && innerSize.height == cropBox.height) {
+            resizedImage = croppedImage;
+        } else {
+            int interp_method = cropArea < innerSize.area() ? CV_INTER_AREA : CV_INTER_CUBIC;
+            cv::resize(croppedImage, resizedImage, innerSize, 0, 0, interp_method);
+        }
         Mat flippedImage;
         Mat *finalImage;
 

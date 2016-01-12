@@ -37,8 +37,9 @@ img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        dtype=args.datatype,
                        subset_pct=100)
-train = ImageLoader(set_name='train', **img_set_options)
-test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
+train = ImageLoader(set_name='train', scale_range=(256, 384), shuffle=True, **img_set_options)
+test = ImageLoader(set_name='validation', scale_range=(256, 256), do_transforms=False,
+                   **img_set_options)
 
 layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01), bias=Constant(0), activation=Rectlin(),
                padding=3, strides=4),

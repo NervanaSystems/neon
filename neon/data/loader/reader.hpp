@@ -25,7 +25,8 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
-
+#include <memory>
+#include <deque>
 #include "buffer.hpp"
 #include "batchfile.hpp"
 
@@ -33,6 +34,8 @@ using std::string;
 using std::ifstream;
 using std::stringstream;
 using std::vector;
+
+typedef std::pair<std::unique_ptr<ByteVect>,std::unique_ptr<ByteVect>> DataPair;
 
 class Reader {
 public:
@@ -48,10 +51,10 @@ public:
 class MacrobatchReader : public Reader {
 public:
     MacrobatchReader(string pathPrefix, int startFileIdx,
-                     int itemCount, int batchSize)
+                     int itemCount, int batchSize, bool shuffle=false)
     : Reader(), _pathPrefix(pathPrefix), _startFileIdx(startFileIdx),
       _fileIdx(startFileIdx), _itemIdx(0), _itemCount(itemCount),
-      _batchSize(batchSize), _itemsLeft(0), _itemsRead(0) {
+      _batchSize(batchSize), _itemsLeft(0), _shuffle(shuffle) {
         static_assert(sizeof(int) == 4, "int is not 4 bytes");
         open();
     }
@@ -64,7 +67,12 @@ public:
         int offset = 0;
         while (offset < _batchSize) {
             int count = _batchSize - offset;
-            int result = read(data, labels, count);
+            int result;
+            if (_shuffle) {
+                result = readShuffle(data, labels, count);
+            } else {
+                result = read(data, labels, count);
+            }
             if (result == -1) {
                 return -1;
             }
@@ -126,6 +134,41 @@ private:
         return realCount;
     }
 
+    int replenishQueue(int count) {
+        // Make sure we have at least count in our queue
+        if ( (int) _shuffleQueue.size() >= count)
+            return 0;
+
+        while (_itemsLeft > 0 && _itemIdx < _itemCount) {
+            DataPair d = _batchFile.readItem();
+            _shuffleQueue.push_back(std::move(d));
+            _itemIdx++;
+            _itemsLeft--;
+        }
+        std::shuffle(_shuffleQueue.begin(), _shuffleQueue.end(),
+                     std::mt19937{std::random_device{}()});
+        if (_itemIdx == _itemCount)
+            reset();
+        else
+            next();
+        return 0;
+    }
+
+    int readShuffle(CharBuffer* data, CharBuffer* labels, int count) {
+        replenishQueue(count);
+        for (int i=0; i<count; ++i) {
+            auto ee = std::move(_shuffleQueue.at(0));
+            int dataSize = ee.first->size();
+            int labelSize = ee.second->size();
+            memcpy(data->getCurrent(), &(*ee.first)[0], dataSize);
+            memcpy(labels->getCurrent(), &(*ee.second)[0], labelSize);
+            data->pushItem(dataSize);
+            labels->pushItem(labelSize);
+            _shuffleQueue.pop_front();
+        }
+        return count;
+    }
+
     void readExact(CharBuffer* data, CharBuffer* labels, int count) {
         assert(count <= _itemsLeft);
         for (int i = 0; i < count; ++i) {
@@ -138,7 +181,6 @@ private:
             labels->pushItem(labelSize);
         }
         _itemsLeft -= count;
-        _itemsRead += count;
         _itemIdx += count;
     }
 
@@ -153,7 +195,6 @@ private:
         fileName << _pathPrefix << _fileIdx << ".cpio";
         _batchFile.openForRead(fileName.str());
         _itemsLeft = _batchFile.itemCount();
-        _itemsRead = 0;
     }
 
     void close() {
@@ -173,16 +214,18 @@ private:
     int                         _batchSize;
     // Number of items left in the current macrobatch.
     int                         _itemsLeft;
-    // Number of items  that has been read from the current macrobatch.
-    int                         _itemsRead;
     BatchFile                   _batchFile;
+    bool                        _shuffle;
+    std::deque<DataPair>        _shuffleQueue;
 };
 
 class ImageFileReader : public Reader {
 public:
-    ImageFileReader(string listFile, int itemCount, int batchSize, int outerSize)
+    ImageFileReader(string listFile, int itemCount, int batchSize, int outerSize,
+                    bool shuffle=false)
     : Reader(), _listFile(listFile), _itemIdx(0), _itemCount(itemCount),
-      _batchSize(batchSize), _outerSize(outerSize) {
+      _batchSize(batchSize), _outerSize(outerSize),
+      _shuffle(shuffle) {
 
         _error = readFileLines(_listFile, _fileNames);
         _rootPath = _listFile.c_str();
@@ -194,7 +237,7 @@ public:
             return _error;
         }
         vector<uchar> buf;
-	vector<int> param = {CV_IMWRITE_JPEG_QUALITY, 95};
+        vector<int> param = {CV_IMWRITE_JPEG_QUALITY, 95};
         for (int i = 0; i < _batchSize; ++i) {
             string path = _rootPath + '/' + _fileNames[_itemIdx];
             cv::Mat src = cv::imread(path);
@@ -249,4 +292,5 @@ private:
     int                         _batchSize;
     int                         _outerSize;
     int                         _error;
+    bool                        _shuffle;
 };

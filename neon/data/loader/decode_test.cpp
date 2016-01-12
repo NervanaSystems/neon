@@ -15,7 +15,7 @@ using std::ofstream;
 
 int main (int argc, char **argv) {
     AugmentationParams *agp = new AugmentationParams(224, false, true, true,
-        4/3.f, 40,  // Scale Params
+        256, 256,   // Scale Params
         75, 125,    // Contrast params
         0, 0);      // Rotation params
     if (argc < 3)

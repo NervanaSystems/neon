@@ -19,6 +19,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <memory>
 
 #define FORMAT_VERSION  1
 #define WRITER_VERSION  1
@@ -26,9 +27,11 @@
 #define CPIO_FOOTER     "TRAILER!!!"
 
 using std::string;
+using std::unique_ptr;
 
 typedef std::vector<string> LineList;
 typedef std::vector<char> ByteVect;
+typedef std::pair<unique_ptr<ByteVect>,unique_ptr<ByteVect>> DataPair;
 
 static_assert(sizeof(int) == 4, "int is not 4 bytes");
 static_assert(sizeof(uint) == 4, "uint is not 4 bytes");
@@ -301,6 +304,21 @@ public:
         _recordHeader.read(_ifs, targetSize);
         _ifs.read(target, *targetSize);
         _ifs.readPadding(*targetSize);
+    }
+
+    DataPair readItem() {
+        uint datumSize = 0;
+        _recordHeader.read(_ifs, &datumSize);
+        unique_ptr<ByteVect> datum(new ByteVect((size_t) datumSize));
+        _ifs.read(&(*datum)[0], datumSize);
+        _ifs.readPadding(datumSize);
+
+        uint targetSize = 0;
+        _recordHeader.read(_ifs, &targetSize);
+        unique_ptr<ByteVect> target(new ByteVect((size_t) targetSize));
+        _ifs.read(&(*target)[0], targetSize);
+        _ifs.readPadding(targetSize);
+        return DataPair(std::move(datum), std::move(target));
     }
 
     void writeItem(char* datum, char* target,

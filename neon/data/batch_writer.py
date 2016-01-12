@@ -186,7 +186,6 @@ class BatchWriter(object):
         self.save_meta()
 
 
-
 class BatchWriterI1K(BatchWriter):
 
     def post_init(self):
@@ -281,10 +280,54 @@ class BatchWriterI1K(BatchWriter):
                     f.write('{},{}\n'.format(*tup))
 
 
+class BatchWriterCIFAR10(BatchWriterI1K):
+
+    def post_init(self):
+        self.pad_size = (self.target_size - 32) / 2 if self.target_size > 32 else 0
+        self.pad_width = ((0, 0), (self.pad_size, self.pad_size), (self.pad_size, self.pad_size))
+
+        self.validation_pct = None
+
+        self.train_nrec = 50000
+        self.ntrain = -(-self.train_nrec // self.macro_size)
+        self.train_start = 0
+
+        self.val_nrec = 10000
+        self.nval = -(-self.val_nrec // self.macro_size)
+        self.val_start = self.ntrain
+
+    def extract_images(self, overwrite=False):
+        from neon.data import load_cifar10
+        from PIL import Image
+        dataset = dict()
+        dataset['train'], dataset['val'], _ = load_cifar10(self.out_dir, normalize=False)
+
+        for setn in ('train', 'val'):
+            data, labels = dataset[setn]
+
+            img_dir = os.path.join(self.out_dir, setn)
+            ulabels = np.unique(labels)
+            for ulabel in ulabels:
+                subdir = os.path.join(img_dir, str(ulabel))
+                if not os.path.exists(subdir):
+                    os.makedirs(subdir)
+
+            for idx in range(data.shape[0]):
+                im = np.pad(data[idx].reshape((3, 32, 32)), self.pad_width, mode='mean')
+                im = np.uint8(np.transpose(im, axes=[1, 2, 0]).copy())
+                im = Image.fromarray(im)
+                path = os.path.join(img_dir, str(labels[idx][0]), str(idx) + '.png')
+                im.save(path, format='PNG')
+
+            if setn == 'train':
+                self.pixel_mean = list(data.mean(axis=0).reshape(3, -1).mean(axis=1))
+                self.pixel_mean.reverse()  # We will see this in BGR order b/c of opencv
+
+
 if __name__ == "__main__":
     parser = NeonArgparser(__doc__)
-    parser.add_argument('--set_type', help='(i1k|directory)', required=True,
-                        choices=['i1k', 'directory'])
+    parser.add_argument('--set_type', help='(i1k|cifar10|directory)', required=True,
+                        choices=['i1k', 'cifar10', 'directory'])
     parser.add_argument('--image_dir', help='Directory to find images', required=True)
     parser.add_argument('--target_size', type=int, default=0,
                         help='Size in pixels to scale shortest side DOWN to (0 means no scaling)')
@@ -297,10 +340,13 @@ if __name__ == "__main__":
 
     if args.set_type == 'i1k':
         args.target_size = 256  #  (maybe 512 for Simonyan's methodology?)
-        args.file_pattern = "*.JPEG"
         bw = BatchWriterI1K(out_dir=args.data_dir, image_dir=args.image_dir,
                             target_size=args.target_size, macro_size=args.macro_size,
-                            file_pattern=args.file_pattern)
+                            file_pattern="*.JPEG")
+    elif args.set_type == 'cifar10':
+        bw = BatchWriterCIFAR10(out_dir=args.data_dir, image_dir=args.image_dir,
+                                target_size=args.target_size, macro_size=args.macro_size,
+                                file_pattern="*.png")
     else:
         bw = BatchWriter(out_dir=args.data_dir, image_dir=args.image_dir,
                          target_size=args.target_size, macro_size=args.macro_size,
