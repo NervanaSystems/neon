@@ -1,5 +1,5 @@
 import numpy as np
-from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform
+from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform, Convolution
 from neon import NervanaObject
 from operator import add
 
@@ -82,9 +82,12 @@ class Sequential(LayerContainer):
             l.allocate()
 
     def allocate_deltas(self, global_deltas=None):
+        def needs_extra_delta(ll):
+            return True if type(ll) in (MergeBroadcast, ResidualModule) else False
+
         if not global_deltas:
             # See if we have any inception-ish layers:
-            ndelta_bufs = 4 if [l for l in self.layers if type(l) is MergeBroadcast] else 2
+            ndelta_bufs = 4 if any([needs_extra_delta(l) for l in self.layers]) else 2
             in_sizes = [np.prod(l.in_shape) for l in self.layers[1:]]
             if in_sizes:
                 self.global_deltas = [self.be.iobuf(
@@ -118,6 +121,98 @@ class Sequential(LayerContainer):
     def get_terminal(self):
         terminal = self.layers[-1].get_terminal()
         return terminal
+
+
+class ResidualModule(LayerContainer):
+    """
+    Layer that encapsulates a sequential plus a residual skip branch, optionally
+    containing a projection
+
+    Arguments:
+        layers (list): List of objects which can be either a list of layers (including layer
+                       containers).
+        projection (Initializer, optional): If a valid Initializer is supplied, then the skip
+                                            layer will perform a 1x1 convolution with
+                                            appropriate striding to match the size and shape
+                                            of the output of the main branch.  The default is
+                                            None, which means that the input to the module will
+                                            be added directly to the output of the main branch
+                                            with no projection applied.  NB:  IdentityInit are
+                                            treated differently from regular Initializers in
+                                            that the projection is applied, but those Identity
+                                            weights are never updated.
+
+    """
+    def __init__(self, layers, projection=None, name='residual'):
+        super(ResidualModule, self).__init__(name)
+
+        self.layers = [Sequential([l for l in flatten(layers)])]
+        convlayers = [l for l in self.layers[0].layers if type(l) is Convolution]
+        nofm = convlayers[-1].convparams['K']
+        skip_stride = convlayers[-2].convparams['str_h']
+
+        self.owns_output = True
+        self.error_views = None
+        if projection is not None:
+            self.skip_layer = Convolution((1, 1, nofm), init=projection, strides=skip_stride)
+            if projection.name != "Identity":
+                self.layers.append(self.skip_layer)
+        else:
+            self.skip_layer = None
+
+    def configure(self, in_obj):
+        """
+        sets shape based parameters of this layer given an input tuple or int
+        or input layer
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor or dataset): object that provides shape
+                                                             information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
+        super(ResidualModule, self).configure(in_obj)
+        self.layers[0].configure(in_obj)
+        self.out_shape = self.layers[0].out_shape
+        if self.skip_layer is not None:
+            self.skip_layer.configure(in_obj)
+        return self
+
+    def allocate(self, shared_outputs=None):
+        self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
+        self.layers[0].allocate(self.outputs)
+        if self.skip_layer is not None:
+            self.skip_layer.allocate(self.outputs)
+
+    def set_deltas(self, delta_buffers):
+        assert len(delta_buffers) == 4, "Need extra delta buffer pool for residual layers"
+        self.layers[0].allocate_deltas(delta_buffers[1:3])
+        self.layers[0].layers[0].set_deltas(delta_buffers[0:1])
+        if self.skip_layer is not None:
+            self.skip_layer.set_deltas(delta_buffers[0:1])
+        self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
+        delta_buffers.reverse()
+
+    def fprop(self, inputs, inference=False):
+        self.inputs = inputs
+        self.layers[0].fprop(inputs, inference)
+        if self.skip_layer is not None:
+            self.skip_layer.fprop(inputs, inference, beta=1.0)
+        else:
+            self.outputs[:] = self.outputs + inputs
+        return self.outputs
+
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        if self.skip_layer is not None:
+            self.skip_layer.bprop(error, alpha=alpha)
+        else:
+            self.deltas[:] = error
+        self.layers[0].bprop(error, alpha=alpha, beta=1.0)
+        return self.deltas
+
+    def get_terminal(self):
+        return self.layers[0].get_terminal()
 
 
 class Tree(LayerContainer):

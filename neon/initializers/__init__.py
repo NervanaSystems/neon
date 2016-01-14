@@ -13,4 +13,4 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from neon.initializers.initializer import (Constant, Uniform, Gaussian, GlorotUniform, Xavier,
-                                           Orthonormal)
+                                           Kaiming, IdentityInit, Orthonormal)

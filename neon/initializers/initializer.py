@@ -113,6 +113,30 @@ class Xavier(Initializer):
         param[:] = self.be.rng.uniform(-scale, scale, param.shape)
 
 
+class Kaiming(Initializer):
+
+    def __init__(self, local=True, name="Kaiming"):
+        super(Kaiming, self).__init__(name=name)
+        self.local = local
+
+    def fill(self, param):
+        fan_in = param.shape[0 if self.local else 1]
+        scale = np.sqrt(2./fan_in)
+        param[:] = self.be.rng.normal(0, scale, param.shape)
+
+
+class IdentityInit(Initializer):
+    def __init__(self, local=True, name="Identity"):
+        super(IdentityInit, self).__init__(name=name)
+        self.local = local
+
+    def fill(self, param):
+        (nin, nout) = param.shape
+        w_ary = np.zeros((nin, nout), dtype=np.float32)
+        w_ary[:, :nin] = np.eye(nin)
+        param[:] = w_ary
+
+
 class Orthonormal(Initializer):
     """
     Implementation taken from Lasagne. Reference: Saxe et al., http://arxiv.org/abs/1312.6120

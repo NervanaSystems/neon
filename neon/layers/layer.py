@@ -524,9 +524,10 @@ class Convolution(ParameterLayer):
             self.batch_sum_shape = (self.nglayer.K, 1)
         return self
 
-    def fprop(self, inputs, inference=False):
+    def fprop(self, inputs, inference=False, beta=0.0):
         self.inputs = inputs
-        self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, bsum=self.batch_sum)
+        self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, beta=beta,
+                           bsum=self.batch_sum)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
@@ -659,9 +660,10 @@ class Linear(ParameterLayer):
             self.batch_sum_shape = (self.nout, 1)
         return self
 
-    def fprop(self, inputs, inference=False):
+    def fprop(self, inputs, inference=False, beta=0.0):
         self.inputs = inputs
-        self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs, bsum=self.batch_sum)
+        self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs, beta=beta,
+                             bsum=self.batch_sum)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
@@ -1217,7 +1219,7 @@ class BatchNorm(Layer):
     .. [Ioffe2015] http://arxiv.org/abs/1502.03167
     """
 
-    def __init__(self, rho=0.99, eps=1e-6, name="BatchNormLayer"):
+    def __init__(self, rho=0.9, eps=1e-3, name="BatchNormLayer"):
         super(BatchNorm, self).__init__(name)
         self.allparams = None
         self.x = None  # used to point to reshaped view of inputs
