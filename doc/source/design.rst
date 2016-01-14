@@ -50,6 +50,8 @@ Layer buffer allocations
 
 * Parameter layers (``Linear``, ``Bias``, ``Convolution``, and ``BatchNorm``) maintain
   their own parameters ``W``, gradients ``dW``, and states ``states`` (for the optimizer).
+* In general, layer buffer allocation is kicked off by the containing model, being
+  called prior to the first ``fit`` or ``eval`` call.
 
 Initialization
 '''''''''''''''
@@ -65,7 +67,8 @@ Models
 Model container
 ''''''''''''''''
 * The model provides a container of all the network layers and provides function calls
-  to run and train the network.
+  to run and train the network.  It is also responsible for initializing and
+  allocating layer parameter buffers.
 * We can create a list of layers and give that to the model.
 * When forward or backward propagation functions are called, the model will iterate
   through all the layers to forward pass the inputs and backward pass the errors.

@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 class Model(NervanaObject):
     """
     Basic model class which stores a list of layers describing the model. Can train the layer
-    weights on a dataset, evaluate on a test set and serialize the mode.
-    Additional functionality can be added to fit through callback functions.
+    weights on a dataset, evaluate on a test set and serialize the model.
+    Additional functionality can be added to :func:`fit` through callback functions.
 
     Arguments:
         layers: layer container, or a list of layers (that will be containerized)
@@ -52,8 +52,11 @@ class Model(NervanaObject):
         self.layers_to_optimize = self.layers.layers_to_optimize
 
     def set_shortcut(self):
-        # infer whether bprop shortcut can be used on final activation
-        # self.cost should be set to run this otherwise do nothing
+        """
+        Utilize the faster shortcut backprop operation for an appropriately
+        paired cost and last layer activation function.  If such a pairing is
+        not found, this call has no effect.
+        """
         lastlayer = self.layers[-1]
         try:
             if self.cost.costfunc.__class__ is CrossEntropyBinary:
@@ -66,6 +69,25 @@ class Model(NervanaObject):
             pass
 
     def initialize(self, dataset, cost=None):
+        """
+        Performs initial setup and device buffer allocation required for each
+        layer.  Generally this will be called as part of the first call to
+        :func:`fit` or :func:`eval`, and subsequent calls will re-use the same
+        buffers.
+
+        Arguments:
+            dataset (iterator): An iterable of minibatches.
+            cost (Cost, optional): The cost function to be minimized (in the
+                                   case of model fitting).
+
+        Notes:
+            You will need to explicitly call initialize prior to subsequent
+            :func:`fit` or :func:`eval` calls if input data, the cost function,
+            or any of the layers change.  For instance if running eval prior to
+            the first fit, the cost will not be initialized during eval since
+            it isn't required.  An explicit :func:`initialize` call alleviates
+            this.
+        """
         if self.initialized:
             return
         # Propagate shapes through the layers to configure
