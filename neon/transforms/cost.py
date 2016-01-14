@@ -333,13 +333,20 @@ class PrecisionRecall(Metric):
 
     Arguments:
         num_classes (int): Number of different output classes.
+        binarize (bool, optional): If True will attempt to convert the model
+                                   outputs to a one-hot encoding (in place).
+                                   Defaults to False.
         epsilon (float, optional): Smoothing to apply to avoid divsion by zero.
                                    Defaults to 1e-6.
     """
-    def __init__(self, num_classes, epsilon=1e-6):
+    def __init__(self, num_classes, binarize=False, epsilon=1e-6):
         self.outputs = self.be.empty((num_classes, 2))
         self.token_stats = self.be.empty((num_classes, 3))
         self.metric_names = ['Precision', 'Recall']
+        if binarize:
+            self.bin_buf = self.be.iobuf(1, dtype=np.int32)
+        else:
+            self.bin_buf = None
         self.eps = epsilon
 
     def __call__(self, y, t):
@@ -348,7 +355,8 @@ class PrecisionRecall(Metric):
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model (we assume
-                                  already binarized)
+                                  already binarized, or you need to ensure
+                                  binarize is True during construction).
             t (Tensor or OpTree): True targets corresponding to y (we assume
                                   already binarized)
 
@@ -356,6 +364,9 @@ class PrecisionRecall(Metric):
             ndarray: Returns the class averaged precision (item 0) and recall (item
                      1) values.  Per-class statistics remain in self.outputs.
         """
+        if self.bin_buf is not None:
+            self.be.argmax(y, axis=0, out=self.bin_buf)
+            y[:] = self.be.onehot(self.bin_buf, axis=0)
         # True positives
         self.token_stats[:, 0] = self.be.sum(y * t, axis=1)
 

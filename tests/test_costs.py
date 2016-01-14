@@ -191,3 +191,17 @@ def test_precision_recall(backend_default):
     targets = np.array([[0, 1, 0, 1], [1, 0, 1, 0], [0, 0, 0, 0]])
     expected_result = np.array([1 + 1 + 0, 1 + 0.5 + 0]) / 3.
     compare_metric(PrecisionRecall(3), preds, targets, expected_result, tol=1e-6)
+
+
+def test_precision_recall_binarize(backend_default):
+    be = NervanaObject.be
+    be.bsz = 4
+    preds = np.array([[0.2,  0.9,  0.01, 1],
+                      [0.75, 0.05, 0.44, 0],
+                      [0.05, 0.05, 0.55, 0]])
+    targets = np.array([[0, 1, 0, 1],
+                        [1, 0, 1, 0],
+                        [0, 0, 0, 0]])
+    expected_result = np.array([1 + 1 + 0, 1 + 0.5 + 0]) / 3.
+    compare_metric(PrecisionRecall(3, binarize=True), preds, targets,
+                   expected_result, tol=1e-6)
