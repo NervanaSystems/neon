@@ -1,5 +1,23 @@
 # ChangeLog
 
+## v1.1.5 (2016-01-13):
+
+### Modifications
+
+* CUDA kernels for lookuptable layer (up to 4x speedup)
+* support for determinstic Conv layer updatesa
+* LRN layer support
+* custom dataset walkthrough utilizing bAbI data
+* reduced number of threads in deep reduction EW kernels [#171]
+* additional (de)serialization routines [#106]
+* CPU tensor slicing fix
+* corrections for PrecisionRecall, MultiLabelStats [#148]
+* explicitly specify python2.7 for virtualenv [#155]
+* default to SM50 when no working GPU found [#186]
+* Add alpha to ELU activation [#164]
+* deconv callback fix [#162]
+* various documentation updates [#151, #152]
+
 ## v1.1.4 (2015-12-14):
 
 ### Modifications
