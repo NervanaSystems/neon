@@ -23,7 +23,6 @@ from neon.layers import Dropout, Conv, Pooling, Sequential, MergeMultistream, Re
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
-from neon.util.persist import save_obj
 
 
 def test_model_get_outputs_rnn(backend_default, data):

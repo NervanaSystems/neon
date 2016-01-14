@@ -506,11 +506,21 @@ class NervanaCPU(Backend):
 
         super(NervanaCPU, self).__init__(rng_seed, default_dtype, compat_mode=compat_mode)
 
+        # ensure an optimized BLAS is present and warn if not
+        try:
+            if not any(x in str(np.__config__.blas_opt_info['libraries']).lower()
+                       for x in ['openblas', 'atlas', 'mkl', 'accelerate']):
+                logger.warn("No accelerated BLAS libraries found, CPU "
+                            "performance may be suffer.  Consider installing "
+                            "one of openblas, Atlas, MKL, or vecLib")
+        except (AttributeError, KeyError):
+            logger.warn("Problems inferring BLAS info, CPU performance may "
+                        "be suboptimal")
+
         self.device_type = 0
         self.device_id = 0
         self.tensor_cls = CPUTensor
 
-        # log
         logger.info("Initialized NervanaCPU")
 
         self.hist_bins = hist_bins
