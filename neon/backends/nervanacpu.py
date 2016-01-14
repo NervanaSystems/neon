@@ -511,7 +511,7 @@ class NervanaCPU(Backend):
             if not any(x in str(np.__config__.blas_opt_info['libraries']).lower()
                        for x in ['openblas', 'atlas', 'mkl', 'accelerate']):
                 logger.warn("No accelerated BLAS libraries found, CPU "
-                            "performance may be suffer.  Consider installing "
+                            "performance may suffer.  Consider installing "
                             "one of openblas, Atlas, MKL, or vecLib")
         except (AttributeError, KeyError):
             logger.warn("Problems inferring BLAS info, CPU performance may "
