@@ -52,8 +52,9 @@ Recurrent Neural Nets (RNN)
 
 Example 1 - Single Unit RNN on Penn Treebank (char level)
 ---------------------------------------------------------
-This example trains a network with one recurrent layer of tanh units on Penn Treebank data, parsed on
-the character level.
+This example trains a network with one recurrent layer of tanh units on Penn
+Treebank data, parsed on the character level.
+See: http://arxiv.org/pdf/1212.0901.pdf
 
 char_rnn.py_
 
@@ -61,8 +62,9 @@ char_rnn.py_
 
 Example 2 - LSTM or GRU layer on Penn Treebank (char level)
 -----------------------------------------------------------
-This example trains a network using a LSTM layer or GRU layer on Penn Treebank data, parsed on the
-character level. Inside the example script, you can switch between using a LSTM or GRU Layer.
+This example trains a network using a LSTM layer or GRU layer on Penn Treebank
+data, parsed at the character level. Inside the example script, you can switch
+between using a LSTM or GRU Layer.  See: http://github.com/karpathy/char-rnn
 
 char_lstm.py_
 
@@ -70,8 +72,10 @@ char_lstm.py_
 
 Example 3 - LSTM or GRU layer on Penn Treebank (word level)
 -----------------------------------------------------------
-This example trains a network using a LSTM layer or GRU layer on Penn Treebank data, parsed on the word level.
-Inside the example script, you can switch between using a LSTM or GRU Layer.
+This example trains a network using a LSTM layer or GRU layer on Penn Treebank
+data, parsed at the word level.  Inside the example script, you can switch
+between using a LSTM or GRU Layer.  See: http://arxiv.org/pdf/1409.2329v5.pdf
+and http://arxiv.org/pdf/1308.0850.pdf
 
 word_lstm.py_
 
@@ -79,8 +83,9 @@ word_lstm.py_
 
 Example 4 - LSTM on Shakespeare data (char level)
 -------------------------------------------------
-This example trains a network using a LSTM on Shakespeare data, parsed on the character level. After training,
-the network will generate text from a seed sequence.
+This example trains a network using a LSTM on Shakespeare data, parsed at the
+character level. After training, the network will generate text from a seed
+sequence.  See: http://arxiv.org/pdf/1308.0850.pdf
 
 text_generation_lstm.py_
 
@@ -88,12 +93,15 @@ text_generation_lstm.py_
 
 Example 5 - Time series learning and prediction
 -------------------------------------------------
-This example trains a network using a LSTM on synthetic multi-dimensional time series data. After training,
-the network will generate the sequences. The results can be visualized by the plots generated as PNG files.
+This example trains a network using a LSTM on synthetic multi-dimensional time
+series data. After training, the network will generate sequences. The results
+can be visualized by the plots generated as PNG files (requires matplotlib
+python package to be installed).
 
 timeseries_lstm.py_
 
 .. _timeseries_lstm.py: https://github.com/NervanaSystems/neon/blob/master/examples/timeseries_lstm.py
+
 
 Q&A model
 ===================
@@ -101,13 +109,17 @@ Q&A model
 Example 1 - Baseline GRU/LSTM on bAbI dataset
 ----------------------------------------------------
 This is an implementation of Facebook's baseline GRU/LSTM model on the bAbI dataset. 
-This model connects two paths of networks to process the story and question seperately. Each path includes word embedding and GRU/LSTM layers. Refer to the README in the babi directory for how to run the interactive demo.
+See: http://arxiv.org/abs/1502.05698
+This model connects two paths of networks to process the story and question
+seperately. Each path includes word embedding and GRU/LSTM layers. Refer to the
+README in the babi directory for how to run the interactive demo.
 
 train.py_
 demo.py_
 
 .. _train.py: https://github.com/NervanaSystems/neon/blob/master/examples/babi/train.py
 .. _demo.py: https://github.com/NervanaSystems/neon/blob/master/examples/babi/demo.py
+
 
 Fully-connected Nets (MLP)
 ==========================
@@ -122,8 +134,8 @@ cifar10.py_
 Example 2 - MNIST
 -----------------
 This example can be enabled with different neon features through
-command line arguments. Through the command line, you can choose whether or not to save the model
-via serialization.
+command line arguments. Through the command line, you can choose whether or not
+to save the model via serialization.
 
 mnist_mlp.py_
 
@@ -137,49 +149,58 @@ mnist_mlp.yaml_
 
 .. _mnist_mlp.yaml: https://github.com/NervanaSystems/neon/blob/master/examples/mnist_mlp.yaml
 
+
 Image caption model
 ===================
 
 Example 1 - VGG features
 ------------------------
-This model connects image features with sentences to learn how to caption unseen images.
-It concatenates the precomputed VGG features and a sentence and uses that as data to train the RNN.
+This model connects image features with sentences to learn how to caption
+unseen images.  It concatenates the precomputed VGG features and a sentence and
+uses that as data to train the RNN.  See:
+https://github.com/karpathy/neuraltalk
 
 image_caption.py_
 
 .. _image_caption.py: https://github.com/NervanaSystems/neon/blob/master/examples/image_caption.py
+
 
 Merge layer example
 ===================
 
 Example 1 - MNIST
 -----------------
-This example uses MNIST data to demonstrate how to use a network that merges two paths of input.
+This example uses MNIST data to demonstrate how to use a network that merges
+two paths of input.
 
 mnist_merge.py_
 
 .. _mnist_merge.py: https://github.com/NervanaSystems/neon/blob/master/examples/mnist_merge.py
+
 
 Multiple optimizer example
 ==========================
 
 Example 1 - MNIST
 -----------------
-This example demonstrates the ability to apply different optimizers to different layers, or
-different components of the same layer. The multi-optimizer will pair layers and optimizers using
-layer names.
+This example demonstrates the ability to apply different optimizers to
+different layers, or different components of the same layer. The
+multi-optimizer will pair layers and optimizers using layer names.
 
 multi_optimizer.py_
 
 .. _multi_optimizer.py: https://github.com/NervanaSystems/neon/blob/master/examples/multi_optimizer.py
+
 
 Early stopping example
 ======================
 
 Example 1 - MNIST
 -----------------
-This model trains a MLP using MNIST data and stops the training when a stopping criterion is satisfied
-or when the number of training epochs is completed, whichever happens first.
+This model trains a MLP using MNIST data and stops the training when a
+particular stopping criterion is satisfied or when the number of training
+epochs is completed, whichever happens first.  It also highlights the use of
+callbacks.
 
 early_stopping.py_
 

@@ -27,6 +27,9 @@ versions of the following system software (Ubuntu package names shown):
 * ``python-virtualenv`` - Needed to configure an isolated environment
 * ``libhdf5-dev`` - (h5py) for callback hdf5 datasets
 * ``libyaml-dev`` - (pyyaml) for YAML input file parsing
+* ``libopenblas-dev`` - optional requirement, greatly enhances performance
+  of the numpy based CPU backend, supports multi-threading for basic algebric
+  operations
 * ``libopencv-dev``, ``pkg-config`` - (imageset_decoder) optional requirement,
   used to perform decoding of image data
 
