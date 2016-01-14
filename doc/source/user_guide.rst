@@ -118,6 +118,15 @@ When complete, you can deactivate the environment:
     source deactivate
 
 
+Docker
+------
+
+If you would prefer having a containerized installation of neon and its dependencies, the open source community has contributed the following Docker images (note that these are not supported/maintained by Nervana):
+
+* `neon (CPU-only) <https://hub.docker.com/r/kaixhin/neon/>`_
+* `cuda-neon <https://hub.docker.com/r/kaixhin/cuda-neon/>`_
+
+
 Support
 -------
 For any bugs or feature requests please:
