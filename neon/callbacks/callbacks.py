@@ -412,7 +412,7 @@ class SerializeModelCallback(Callback):
         try:
             if os.path.islink(self.save_path):
                 os.remove(self.save_path)
-            os.symlink(save_path, self.save_path)
+            os.symlink(os.path.split(save_path)[-1], self.save_path)
         except OSError:
             logger.warn('Could not create latest model symlink %s -> %s'
                         % (self.save_path, save_path))

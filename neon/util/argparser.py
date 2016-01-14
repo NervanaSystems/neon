@@ -269,7 +269,10 @@ class NeonArgparser(configargparse.ArgumentParser):
         if args.save_path:
             savedir = os.path.dirname(os.path.abspath(args.save_path))
             if not os.access(savedir, os.R_OK | os.W_OK):
-                err_msg = 'Can not write to save_path dir %s' % savedir
+                try:
+                    os.makedirs(savedir)
+                except OSError:
+                    err_msg = 'Can not create save_path %s' % (savedir)
             if os.path.exists(args.save_path):
                 logger.warning('save file %s exists, attempting to overwrite' % args.save_path)
                 if not os.access(args.save_path, os.R_OK | os.W_OK):
