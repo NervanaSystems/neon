@@ -102,9 +102,9 @@ extern int stop(Loader* loader) {
 }
 
 
-extern void write(char *outfile, const int num_data,
-                  char **jpgfiles, uint32_t *labels,
-                  int maxDim) {
+extern void write_batch(char *outfile, const int num_data,
+                        char **jpgfiles, uint32_t *labels,
+                        int maxDim) {
     if (num_data == 0) {
         return;
     }

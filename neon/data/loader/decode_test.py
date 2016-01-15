@@ -16,10 +16,9 @@ offset = 8
 imlist = []
 for i in range(n_img):
     buf = struct.unpack('B' * sz_img, contents[offset:(offset + sz_img)])
-    ary = np.array(buf, dtype=np.uint8).reshape(C, H, W).transpose(1,2,0)[:, :, ::-1].copy()
+    ary = np.array(buf, dtype=np.uint8).reshape(C, H, W).transpose(1, 2, 0)[:, :, ::-1].copy()
     imlist.append(ary)
     offset += sz_img
 
 img = PILImage.fromarray(np.vstack(imlist))
 img.save(infile + ".jpg")
-

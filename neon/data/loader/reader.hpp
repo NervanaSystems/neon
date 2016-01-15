@@ -27,6 +27,7 @@
 #include <vector>
 #include <memory>
 #include <deque>
+#include <random>
 #include "buffer.hpp"
 #include "batchfile.hpp"
 
@@ -145,8 +146,9 @@ private:
             _itemIdx++;
             _itemsLeft--;
         }
+        std::random_device rd;
         std::shuffle(_shuffleQueue.begin(), _shuffleQueue.end(),
-                     std::mt19937{std::random_device{}()});
+                     std::mt19937(rd()));
         if (_itemIdx == _itemCount)
             reset();
         else
@@ -235,6 +237,10 @@ public:
     int read(CharBuffer* data, CharBuffer* labels) {
         if (_error != 0) {
             return _error;
+        }
+        if (_shuffle) {
+            printf("Shuffling not supported yet\n");
+            return -1;
         }
         vector<uchar> buf;
         vector<int> param = {CV_IMWRITE_JPEG_QUALITY, 95};

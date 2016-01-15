@@ -20,7 +20,6 @@ import os
 import atexit
 
 from neon import NervanaObject
-from neon.util.persist import load_obj
 
 logger = logging.getLogger(__name__)
 
@@ -208,7 +207,7 @@ class ImageLoader(NervanaObject):
                                            ct.c_int(self.scale_range[1]),
                                            ct.c_int(self.contrast_range[0]),
                                            ct.c_int(self.contrast_range[1]),
-                                           ct.c_int(0), ct.c_int(0), # ignored rotation params
+                                           ct.c_int(0), ct.c_int(0),  # ignored rotation params
                                            ct.c_int(self.minibatch_size),
                                            ct.c_char_p(self.filename),
                                            ct.c_int(self.macro_start),

@@ -41,7 +41,7 @@ class BatchWriter(object):
         try:
             self.writerlib = ct.cdll.LoadLibrary(
                 os.path.join(libpath, 'loader', 'loader.so'))
-            self.writerlib.write.restype = None
+            self.writerlib.write_batch.restype = None
             self.writerlib.read_max_item.restype = ct.c_int
         except:
             logger.error('Unable to load loader.so. Ensure that '
@@ -120,11 +120,11 @@ class BatchWriter(object):
         # This interface to the batchfile.hpp allows you to specify
         # destination file, number of input jpg files, list of jpg files,
         # and corresponding list of integer labels
-        self.writerlib.write(ct.c_char_p(batch_file),
-                             ct.c_int(ndata),
-                             jpgfiles,
-                             (ct.c_int * ndata)(*label_batch),
-                             ct.c_int(self.target_size))
+        self.writerlib.write_batch(ct.c_char_p(batch_file),
+                                   ct.c_int(ndata),
+                                   jpgfiles,
+                                   (ct.c_int * ndata)(*label_batch),
+                                   ct.c_int(self.target_size))
 
     def write_batches(self, offset, labels, imfiles):
         npts = -(-len(imfiles) // self.macro_size)
@@ -213,7 +213,7 @@ class BatchWriterI1K(BatchWriter):
             self.train_labels = {s: i for i, s in enumerate(self.synsets)}
 
             # get the ground truth validation labels and offset to zero
-            self.val_labels = {"%08d" % (i + 1) : int(x) - 1 for i, x in
+            self.val_labels = {"%08d" % (i + 1): int(x) - 1 for i, x in
                                enumerate(tf.extractfile(valfile))}
         self.validation_pct = None
 
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     if args.set_type == 'i1k':
-        args.target_size = 256  #  (maybe 512 for Simonyan's methodology?)
+        args.target_size = 256  # (maybe 512 for Simonyan's methodology?)
         bw = BatchWriterI1K(out_dir=args.data_dir, image_dir=args.image_dir,
                             target_size=args.target_size, macro_size=args.macro_size,
                             file_pattern="*.JPEG")

@@ -273,7 +273,7 @@ class TestAutodiff:
     def test_batchnorm(self):
         for _ in range(self.test_epoch):
             # tensor
-            x0 = np.random.randn(10, 128)
+            x0 = np.random.randn(10, 64)
             x1 = np.random.randn(10, 1)  # gamma
             x2 = np.random.randn(10, 1)  # beta
 

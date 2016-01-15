@@ -1,5 +1,3 @@
-import logging
-
 from glob import glob
 import os
 import ctypes as ct
@@ -7,6 +5,7 @@ import struct
 from neon.util.compat import range
 from neon.util.argparser import NeonArgparser
 from neon.util.persist import load_obj
+
 
 class BatchConverter(object):
     def __init__(self, in_dir, out_dir, outprefix='macrobatch_'):
@@ -23,8 +22,7 @@ class BatchConverter(object):
             self.writerlib.write_raw.restype = None
             self.writerlib.read_max_item.restype = ct.c_int
         except:
-            logger.error('Unable to load loader.so. Ensure that '
-                         'this file has been compiled')
+            print('Unable to load loader.so. Ensure that this file has been compiled')
 
     def write_individual_batch(self, batch_file, label_batch, jpeg_file_batch):
         ndata = len(jpeg_file_batch)
@@ -43,7 +41,7 @@ class BatchConverter(object):
         # Check the batchfile for the max item value
         batch_max_item = self.writerlib.read_max_item(ct.c_char_p(batch_file))
         if batch_max_item == 0:
-            raise ValueError("Batch file %s probably empty or corrupt" % (bfile))
+            raise ValueError("Batch file %s probably empty or corrupt" % (batch_file))
 
         self.item_max_size = max(batch_max_item, self.item_max_size)
 
@@ -86,7 +84,6 @@ class BatchConverter(object):
 
         # Now write out the metadatafile
         self.save_meta()
-
 
 
 if __name__ == "__main__":
