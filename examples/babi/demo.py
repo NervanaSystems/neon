@@ -38,7 +38,7 @@ parser.add_argument('-t', '--task', type=int, default='1', choices=xrange(1, 21)
                     help='the task ID to train/test on from bAbI dataset (1-20)')
 parser.add_argument('--rlayer_type', default='gru', choices=['gru', 'lstm'],
                     help='type of recurrent layer to use (gru or lstm)')
-parser.add_argument('--model_weights',
+parser.add_argument('--model_weights', required=True,
                     help='pickle file of trained weights')
 args = parser.parse_args(gen_be=False)
 
@@ -56,8 +56,18 @@ model_inference.load_params(args.model_weights)
 model_inference.initialize(dataset=valid_set)
 
 ex_story, ex_question, ex_answer = babi.test_parsed[0]
-stitch_sentence = lambda words: \
-    " ".join(words).replace(" ?", "?").replace(" .", ".\n").replace("\n ", "\n")
+
+
+def stitch_sentence(words):
+    return " ".join(words).replace(" ?", "?").replace(" .", ".\n") \
+              .replace("\n ", "\n")
+
+
+def vectorize(words, max_len):
+    return be.array(Text.pad_sentences([babi.words_to_vector(BABI.tokenize(words))],
+                                       max_len))
+
+
 print "\nThe vocabulary set from this task has {} words:".format(babi.vocab_size)
 print stitch_sentence(babi.vocab)
 print "\nExample from test set:"
@@ -80,8 +90,6 @@ while True:
     question = raw_input("Please enter a question:\n")
 
     # convert user input into a suitable network input
-    vectorize = lambda words, max_len: \
-        be.array(Text.pad_sentences([babi.words_to_vector(BABI.tokenize(words))], max_len))
     s = vectorize(story, babi.story_maxlen)
     q = vectorize(question, babi.query_maxlen)
 

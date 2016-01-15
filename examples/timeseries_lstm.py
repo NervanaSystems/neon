@@ -74,8 +74,10 @@ class TimeSeries(object):
             raise NotImplementedError()
 
         sin_scale = 2 if curvetype is 'Lissajous1' else 1
-        y_x = lambda x: 4.0/5 * math.sin(x/sin_scale)
-        y_y = lambda x: 4.0/5 * math.cos(x/2)
+
+        def y_x(x): return 4.0/5 * math.sin(x/sin_scale)
+
+        def y_y(x): return 4.0/5 * math.cos(x/2)
 
         self.data = np.zeros((self.nsamples, 2))
         self.data[:, 0] = np.asarray([y_x(xs) for xs in self.x]).astype(np.float32)

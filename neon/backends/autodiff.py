@@ -337,8 +337,8 @@ class Autodiff(object):
 
     def __init__(self, op_tree, be, next_error=None):
         # check type
-        assert (type(op_tree) in _scalar_types or type(op_tree) == OpTreeNode
-                or isinstance(op_tree, Tensor)), "op_tree type not supported"
+        assert (type(op_tree) in _scalar_types or type(op_tree) == OpTreeNode or
+                isinstance(op_tree, Tensor)), "op_tree type not supported"
         assert be is not None
 
         # attributes
