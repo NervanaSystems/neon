@@ -57,10 +57,14 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 train_path = load_text('ptb-train', path=args.data_dir)
 valid_path = load_text('ptb-valid', path=args.data_dir)
 
+
+# define a custom function to parse the input into individual tokens, which for
+# this data, splits into individual words.  This can be passed into the Text
+# object during dataset creation as seen below.
+def tokenizer(s):
+    return s.replace('\n', '<eos>').split()
+
 # load data and parse on word-level
-# a Text object can take a given tokenizer, for word-level parsing, it is str.split
-# a user can pass in a custom-defined tokenzier as well
-tokenizer = lambda s: s.replace('\n', '<eos>').split()
 train_set = Text(time_steps, train_path, tokenizer=tokenizer, onehot_input=False)
 valid_set = Text(time_steps, valid_path, vocab=train_set.vocab, tokenizer=tokenizer,
                  onehot_input=False)

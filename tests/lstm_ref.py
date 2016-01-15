@@ -126,8 +126,8 @@ class LSTM:
             dIFOGf[t, :, 3 * d:] = IFOGf[t, :, :d] * dC[t]
 
             # backprop activation functions
-            dIFOG[t, :, 3 * d:] = (1 - IFOGf[t, :, 3 * d:]
-                                   ** 2) * dIFOGf[t, :, 3 * d:]
+            dIFOG[t, :, 3 * d:] = (1 - IFOGf[t, :, 3 * d:] **
+                                   2) * dIFOGf[t, :, 3 * d:]
             y = IFOGf[t, :, :3 * d]
             dIFOG[t, :, :3 * d] = (y * (1.0 - y)) * dIFOGf[t, :, :3 * d]
 
@@ -308,8 +308,8 @@ def checkBatchGradient():
                 rel_error = 0  # not enough precision to check this
                 status = 'VAL SMALL WARNING'
             else:
-                rel_error = abs(grad_analytic - grad_numerical) / abs(grad_numerical
-                                                                      + grad_analytic)
+                rel_error = (abs(grad_analytic - grad_numerical) /
+                             abs(grad_numerical + grad_analytic))
                 status = 'OK'
                 if rel_error > rel_error_thr_warning:
                     status = 'WARNING'
