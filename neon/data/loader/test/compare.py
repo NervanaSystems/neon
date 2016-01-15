@@ -53,8 +53,8 @@ def process_dataset(data, labels, inputpath, leafdir):
         im = data[idx].reshape((3, 32, 32))
         im = np.uint8(np.transpose(im, axes=[1, 2, 0]).copy())
         im = Image.fromarray(im)
-        path = os.path.join(datadir, str(labels[idx][0]), str(idx) + '.jpg')
-        im.save(path, format='JPEG', subsampling=0, quality=95)
+        path = os.path.join(datadir, str(labels[idx][0]), str(idx) + '.png')
+        im.save(path, format='PNG')
 
 
 def process(inputpath):
@@ -75,7 +75,7 @@ def load_dataset(basepath, datadir, shuffle):
     lines = []
     for subdir in subdirs:
         subdirlabel = labeldict[os.path.basename(subdir)]
-        files = glob(os.path.join(subdir, '*.jpg'))
+        files = glob(os.path.join(subdir, '*.png'))
         lines += [(filename, subdirlabel) for filename in files]
     assert(len(lines) > 0)
     data = None
@@ -106,7 +106,7 @@ def write_batches(args, macrodir, datadir, val_pct):
     bw = BatchWriter(out_dir=macrodir,
                      image_dir=os.path.join(args.data_dir, datadir),
                      target_size=32, macro_size=1024,
-                     file_pattern='*.jpg', validation_pct=val_pct)
+                     file_pattern='*.png', validation_pct=val_pct)
     bw.run()
 
 
@@ -157,4 +157,4 @@ def test_loader():
     return err
 
 
-assert test_loader() == test_iterator()
+assert test_iterator() == test_loader()
