@@ -30,6 +30,7 @@ from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
 from neon.backends.kernels.cuda import pooling
+from scikits.cuda import cublas
 
 _none_slice = slice(None, None, None)
 
@@ -711,6 +712,20 @@ class NervanaGPU(Backend):
         self.context_rand_state_map = {}  # stores gpu memory reference
         self.context_rand_state_alive = {}  # set whether randstate is fresh
 
+        # Fall back to CUDA C kernels on older (pre-Maxwell) GPU generations
+        self.compute_capability = drv.Device(self.device_id).compute_capability()
+        if self.compute_capability[0] < 5:
+            self.use_cudac_kernels = True
+            self.cublas_handle = cublas.cublasCreate()
+
+            logger.warn("Neon is highly optimized for Maxwell GPUs. "
+                        "Please note that you are running on a pre-Maxwell GPU "
+                        "and you might not experience the fastest performance. "
+                        "For faster performance using the Nervana Cloud contact "
+                        "info@nervanasys.com")
+        else:
+            self.use_cudac_kernels = False
+
     def scratch_buffer(self, size, offset=0):
 
         if offset & 255 != 0:
@@ -978,7 +993,7 @@ class NervanaGPU(Backend):
 
         # bypass stage creation
         if self._is_simple_stack(stack):
-            return call_compound_kernel(self._get_rand_state(), *stack)
+            return call_compound_kernel(self._get_rand_state(), self.compute_capability, *stack)
 
         # create stages and evaluate
         stacks = self._split_to_stacks(optree)
@@ -989,7 +1004,7 @@ class NervanaGPU(Backend):
                 # evaluate the simple dot
                 self.compound_dot(stack[1], stack[2], stack[0])
             else:
-                call_compound_kernel(self._get_rand_state(), *stack)
+                call_compound_kernel(self._get_rand_state(), self.compute_capability, *stack)
 
         return stacks[-1][0]  # TODO: to be removed, used in partial
 
@@ -1064,6 +1079,11 @@ class NervanaGPU(Backend):
               fastest tiling isn't chosen for you.
         """
         assert A.dtype.type == B.dtype.type == C.dtype.type
+
+        if self.use_cudac_kernels:
+            for r in range(repeat):
+                self.cublas_dot(A=A, B=B, C=C, alpha=alpha, beta=beta)
+            return C
 
         # one dimention must be contiguous
         assert min(A.strides) == 1
@@ -1208,6 +1228,11 @@ class NervanaGPU(Backend):
 
     def batched_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False, repeat=1, size=None):
         assert A.dtype.type == B.dtype.type == C.dtype.type
+
+        if self.use_cudac_kernels:
+            for r in range(repeat):
+                self.cublas_dot(A=A, B=B, C=C, alpha=alpha, beta=beta)
+            return C
 
         flags = 0
         if relu:
@@ -1451,6 +1476,7 @@ class NervanaGPU(Backend):
         assert layer.sizeI == I.size
         assert layer.sizeF == F.size
         assert layer.sizeO == O.size
+
         return self._execute_conv(
             layer, "fprop", layer.fprop_kernels, layer.fprop_lut_size,
             I, F, O, alpha, beta, bsum, 0, repeat)
@@ -1459,6 +1485,7 @@ class NervanaGPU(Backend):
         assert layer.sizeF == F.size
         assert layer.sizeO == E.size
         assert layer.sizeI == grad_I.size
+
         return self._execute_conv(
             layer, "bprop", layer.bprop_kernels, layer.bprop_lut_size,
             E, F, grad_I, alpha, beta, bsum, layer.bprop_zero, repeat)
@@ -1494,6 +1521,12 @@ class NervanaGPU(Backend):
         convert_type   = False
         reduce_shape   = False
 
+        # Disable two step deterministic update when CUDA C kernels are used
+        if layer.determ and self.use_cudac_kernels:
+            determ_size = 0
+        else:
+            determ_size = layer.determ
+
         from neon.backends.float_ew import _get_transpose_kernel, _get_shuffle_kernel, _fp_convert
 
         if op == "bprop":
@@ -1509,19 +1542,28 @@ class NervanaGPU(Backend):
             shuffle_args = [layer.shuffle_grid, layer.shuffle_block, self.stream,
                             B_gpudata, B.gpudata] + layer.shuffle_args
 
-        elif op == "updat" and (C.dtype.type is not np.float32 or layer.determ):
-            C_gpudata    = self.scratch_buffer(layer.determ or C.size)
+        elif op == "updat" and (C.dtype.type is not np.float32 or determ_size):
+            C_gpudata    = self.scratch_buffer(determ_size or C.size)
             convert_type = "f4"
-            if layer.determ:
+            if determ_size:
                 zero = False
                 reduce_shape = layer.determ_shape
 
         kernels = []
         for kernel in kernel_list:
-            kernels.append([
-                kernel_specs.get_kernel(kernel[0]), kernel[1], kernel[2], self.stream,
-                batch_sum_data, C_gpudata, A_gpudata, B_gpudata, alpha, beta, flags,
-                kernel[3]] + kernel[4])
+            if self.use_cudac_kernels:
+                from neon.backends.kernels.cuda.convolution import _get_conv_kernel
+
+                kernels.append([
+                    _get_conv_kernel(A.dtype.str[1:], layer.TRS[1] * layer.TRS[2],
+                                     (flags & 4) == 4, kernel[0], layer.K < 32),
+                    kernel[1], kernel[2], self.stream, alpha, beta, A_gpudata, B_gpudata,
+                    C_gpudata, batch_sum_data] + kernel[3])
+            else:
+                kernels.append([
+                    kernel_specs.get_kernel(kernel[0]), kernel[1], kernel[2], self.stream,
+                    batch_sum_data, C_gpudata, A_gpudata, B_gpudata, alpha, beta, flags,
+                    kernel[3]] + kernel[4])
 
         # Warmup
         if repeat > 1:
@@ -1547,7 +1589,8 @@ class NervanaGPU(Backend):
                 kernel[0].prepared_async_call(*kernel[1:], shared_size=shared)
 
             if convert_type:
-                _fp_convert(C_gpudata, convert_type, C, reduce_shape)
+                _fp_convert(C_gpudata, convert_type, C, reduce_shape,
+                            self.compute_capability)
 
         if self.bench or repeat > 1:
             end.record(stream=self.stream)
@@ -1796,7 +1839,7 @@ class NervanaGPU(Backend):
 
         assert I.dtype == O.dtype
         A_data = argmax.gpudata if argmax is not None else 0
-        kernel = pooling.map_string2func(kernel_args[0], layer.dtype.str[1:])
+        kernel = pooling.map_string2func(kernel_args[0], layer.dtype.str[1:], self.compute_capability)
         flags = 0
         params = [kernel_args[1], kernel_args[2], self.stream,
                   I.gpudata, O.gpudata, A_data, alpha, beta, flags]
@@ -1864,7 +1907,7 @@ class NervanaGPU(Backend):
 
         from neon.backends.float_ew import _get_bn_fprop_kernel
 
-        kernel = _get_bn_fprop_kernel(x.dtype.str[1:], threads)
+        kernel = _get_bn_fprop_kernel(x.dtype.str[1:], threads, self.compute_capability)
 
         self._execute_bn(kernel, params, repeat, x.nbytes*2, N)
 
@@ -1899,7 +1942,7 @@ class NervanaGPU(Backend):
 
         from neon.backends.float_ew import _get_bn_bprop_kernel
 
-        kernel = _get_bn_bprop_kernel(x.dtype.str[1:], threads)
+        kernel = _get_bn_bprop_kernel(x.dtype.str[1:], threads, self.compute_capability)
 
         self._execute_bn(kernel, params, repeat, x.nbytes*4, N)
 
@@ -1927,6 +1970,7 @@ class NervanaGPU(Backend):
             occup = blocks * threads / (128.0 * _get_sm_count())
             print("%7.3f msecs %4.0f GBps %s(%d,%d,%d) %.1f" %
                   (msecs, bandwidth, kernel.name, blocks, N, threads, occup))
+
 
     def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0,
                            deterministic=True):
@@ -1997,6 +2041,34 @@ class NervanaGPU(Backend):
 
             kernel = _get_lut_bprop_kernel(error.dtype.str[1:])
             kernel.prepared_async_call(*params)
+
+    def cublas_dot(self, A, B, C, alpha=1.0, beta=0.0):
+        """
+        Matrix multiplication using cublas library. Intended for use on Kepler
+        GPUs where maxas kernels are not supported.
+
+        C = alpha * (AB) + beta * C
+
+        Arguments:
+            A (Tensor): Input tensor
+            B (Tensor): Input tensor
+            C (Tensor): Output tensor
+            alpha (float): Scalar for AB
+            beta (float): Scalar for C
+        """
+        lda = max(A.strides)
+        ldb = max(B.strides)
+        ldc = max(C.strides)
+
+        opA = 't' if A.is_trans else 'n'
+        opB = 't' if B.is_trans else 'n'
+
+        m = A.shape[0]
+        n = B.shape[1]
+        k = A.shape[1]
+
+        # Swap A and B to map from C order to Fortran
+        cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha, B.gpudata, ldb, A.gpudata, lda, beta, C.gpudata, ldc)
 
     def init_mark(self):
         """

@@ -6,6 +6,7 @@ from neon.backends import cuda_templates
 from neon.backends.cuda_templates import (_common_fp16_to_fp32,
                                           _common_round,  # for fp32_to_fp16 converter
                                           _common_max_abs,
+                                          _common_kepler,
                                           _ew_types)
 
 """
@@ -19,28 +20,27 @@ argument.
 """
 
 
-def map_string2func(funcname, clss):
+def map_string2func(funcname, clss, compute_capability):
     """
     Helper function that converts string function names to function calls
     """
     if funcname == "fprop_max":
-        return _get_fprop_max(clss)
+        return _get_fprop_max(clss, compute_capability)
     if funcname == "bprop_max":
-        return _get_bprop_max(clss)
+        return _get_bprop_max(clss, compute_capability)
     if funcname == "bprop_max_overlap":
-        return _get_bprop_max_overlap(clss)
-
+        return _get_bprop_max_overlap(clss, compute_capability)
     if funcname == "fprop_avg":
-        return _get_fprop_avg(clss)
+        return _get_fprop_avg(clss, compute_capability)
     if funcname == "bprop_avg":
-        return _get_bprop_avg(clss)
+        return _get_bprop_avg(clss, compute_capability)
     if funcname == "bprop_avg_overlap":
-        return _get_bprop_avg_overlap(clss)
+        return _get_bprop_avg_overlap(clss, compute_capability)
 
     if funcname == "fprop_lrn":
-        return _get_fprop_lrn(clss)
+        return _get_fprop_lrn(clss, compute_capability)
     if funcname == "bprop_lrn_overlap":
-        return _get_bprop_lrn_overlap(clss)
+        return _get_bprop_lrn_overlap(clss, compute_capability)
 
     raise AttributeError("kernel type '" + funcname + "' not understood")
 
@@ -51,7 +51,7 @@ atomicMax(maxabs, intermediate_max);
 """
 
 
-def prepare_template_vals(dtype, rounding=False):
+def prepare_template_vals(dtype, compute_capability, rounding=False):
     """
     Set up template code snippets that are reused across multiple kernels.
     Most are data type conversion and statistics collection related.
@@ -72,6 +72,9 @@ def prepare_template_vals(dtype, rounding=False):
 
     template_vals["common"] += _common_round[mode].get(dtype, "")
     template_vals["common"] += _common_max_abs
+
+    if (compute_capability[0] == 3 and compute_capability[1] < 5) or compute_capability[0] < 3:
+        template_vals["common"] += _common_kepler
 
     template_vals["type"] = _ew_types[dtype]["type"]
     template_vals["cvt"] = _ew_types[dtype]["cvt"]
@@ -95,7 +98,7 @@ def prepare_template_vals(dtype, rounding=False):
 
 # This section of the code contains templated CUDA-C code for the kernels.
 @context_dependent_memoize
-def _get_fprop_max(clss):
+def _get_fprop_max(clss, compute_capability):
 
     code = r"""
 #define FLT_MAX 3.402823466E+38F
@@ -228,7 +231,7 @@ __global__ void spool_fprop_max(
 }
 """
 
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_fprop_max")
@@ -238,7 +241,7 @@ __global__ void spool_fprop_max(
 
 
 @context_dependent_memoize
-def _get_fprop_avg(clss):
+def _get_fprop_avg(clss, compute_capability):
 
     code = r"""
 %(common)s
@@ -351,7 +354,7 @@ __global__ void spool_fprop_avg(
 }
 """
 
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_fprop_avg")
@@ -360,7 +363,7 @@ __global__ void spool_fprop_avg(
 
 
 @context_dependent_memoize
-def _get_fprop_lrn(clss):
+def _get_fprop_lrn(clss, compute_capability):
     """
     Local Response Normalization (LRN) layer.
     Implementation based on fprop_avg kernel.
@@ -504,7 +507,7 @@ __global__ void spool_fprop_lrn(
 }
 """
 
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_fprop_lrn")
@@ -513,7 +516,7 @@ __global__ void spool_fprop_lrn(
 
 
 @context_dependent_memoize
-def _get_bprop_lrn_overlap(clss):
+def _get_bprop_lrn_overlap(clss, compute_capability):
 
     code = r"""
 %(common)s
@@ -675,19 +678,15 @@ __global__ void spool_bprop_lrn_overlap(
 }
 """
 
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_bprop_lrn_overlap")
     kernel.prepare("5P 4f 47I" + ("Pf" if (clss[0] == "x") else ""))
     return kernel
 
-
-
-
-
 @context_dependent_memoize
-def _get_bprop_max(clss):
+def _get_bprop_max(clss, compute_capability):
 
     code = r"""
 // sig 3P2f33I
@@ -834,7 +833,7 @@ __global__ void spool_bprop_max(
 
 }
 """
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_bprop_max")
@@ -846,7 +845,7 @@ __global__ void spool_bprop_max(
 
 
 @context_dependent_memoize
-def _get_bprop_avg(clss):
+def _get_bprop_avg(clss, compute_capability):
 
     code = r"""
 
@@ -990,7 +989,7 @@ __global__ void spool_bprop_avg(
     %(atomic_max)s
 }
 """
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_bprop_avg")
@@ -999,7 +998,7 @@ __global__ void spool_bprop_avg(
 
 
 @context_dependent_memoize
-def _get_bprop_max_overlap(clss):
+def _get_bprop_max_overlap(clss, compute_capability):
 
     code = r"""
 %(common)s
@@ -1154,7 +1153,7 @@ __global__ void spool_bprop_max_overlap(
 }
 """
 
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_bprop_max_overlap")
@@ -1163,7 +1162,7 @@ __global__ void spool_bprop_max_overlap(
 
 
 @context_dependent_memoize
-def _get_bprop_avg_overlap(clss):
+def _get_bprop_avg_overlap(clss, compute_capability):
 
     code = r"""
 
@@ -1329,7 +1328,7 @@ __global__ void spool_bprop_avg_overlap(
 }
 """
 
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_bprop_avg_overlap")

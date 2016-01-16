@@ -35,6 +35,7 @@ from neon.backends.cuda_templates import (_ew_template,
                                           _init_rand_func,
                                           _init_rand_round_func,
                                           _finish_rand_func,
+                                          _common_kepler,
                                           _common_urand_gen,
                                           _common_frand,
                                           _common_round,
@@ -263,7 +264,7 @@ def _init_rand(template_vals):
 
 
 @context_dependent_memoize
-def _get_compound_kernel(type_args):
+def _get_compound_kernel(type_args, compute_capability):
     """
     generate compound kernel for the optree from type_args
     """
@@ -560,6 +561,9 @@ def _get_compound_kernel(type_args):
                 else:
                     raise ValueError("Bad op type.")
 
+    if (compute_capability[0] == 3 and compute_capability[1] < 5) or compute_capability[0] < 3:
+        template_vals["common"].append(_common_kepler)
+
     template += _fin_template
 
     # since we reorderd the operations we need to generate the argument list
@@ -635,7 +639,7 @@ def _get_fast_ew_dims(size):
 # assignment.
 
 
-def call_compound_kernel(rand_state, *args):
+def call_compound_kernel(rand_state, compute_capability, *args):
     """
     Pass in a list of GPUTensor objects, constants and operators in postfix notation..
 
@@ -903,7 +907,7 @@ def call_compound_kernel(rand_state, *args):
     # for s in type_args:   print s
 
     # get or create the kernel in the memoize cache
-    kernel = _get_compound_kernel(tuple(type_args))
+    kernel = _get_compound_kernel(tuple(type_args), compute_capability)
 
     shared = threads * 4 if reduction and threads > 32 else 0
 
@@ -932,14 +936,13 @@ def call_compound_kernel(rand_state, *args):
 
     return out
 
-
-def _fp_convert(src_data, src_type, dest_tensor, reduce_shape):
+def _fp_convert(src_data, src_type, dest_tensor, reduce_shape, compute_capability):
 
     if reduce_shape:
 
         #print reduce_shape
 
-        kernel = _get_reduce_kernel(dest_tensor.dtype.str[1:])
+        kernel = _get_reduce_kernel(dest_tensor.dtype.str[1:], compute_capability)
         blocks = (reduce_shape[1] >> 5) + ((reduce_shape[1] & 31) != 0)
         kernel.prepared_async_call((blocks, 1, 1), (32, 1, 1),
                                    dest_tensor.backend.stream,
@@ -959,7 +962,7 @@ def _fp_convert(src_data, src_type, dest_tensor, reduce_shape):
         kernel = _get_compound_kernel((
             (ng.GPUTensor, 0, dest_tensor.dtype.str[1:], 0, False),
             (ng.GPUTensor, 1, src_type, 0, False),
-            ('assign', 0, False, 32)))
+            ('assign', 0, False, 32)), compute_capability)
         kernel.prepared_async_call((shape[0], 1, 1),
                                    (32, 1, 1),
                                    dest_tensor.backend.stream,
@@ -967,7 +970,7 @@ def _fp_convert(src_data, src_type, dest_tensor, reduce_shape):
 
 # fast axis=0 reduction kernel used for deterministic update
 @context_dependent_memoize
-def _get_reduce_kernel(dtype):
+def _get_reduce_kernel(dtype, compute_capability):
 
     _reduce_kernel = r"""
 %(common)s
@@ -999,6 +1002,9 @@ __global__ void reduce(%(type)s* out, const float* in, int CRSTK, int PQCRSTK)
         template_vals["cvt_out"] = "fp32_to_int16"
     else:
         raise TypeError("Missing reduction type")
+
+    if (compute_capability[0] == 3 and compute_capability[1] < 5) or compute_capability[0] < 3:
+        template_vals["common"].append(_common_kepler)
 
     code = _reduce_kernel % template_vals
     module = SourceModule(code)

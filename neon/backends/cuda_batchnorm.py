@@ -17,13 +17,14 @@ from pycuda.tools import context_dependent_memoize
 #                                           _float_ops,
 #                                           _reduction_ops)
 from neon.backends.cuda_templates import (_common_round,
+                                          _common_kepler,
                                           _ew_types,
                                           _common_fp16_to_fp32,
                                           _ew_strings)
 
 
 @context_dependent_memoize
-def _get_bn_fprop_kernel(dtype, threads):
+def _get_bn_fprop_kernel(dtype, threads, compute_capability):
 
     if threads > 32:
         shr_code = "__shared__ float sPartials[THREADS];"
@@ -162,6 +163,9 @@ __global__ void batchnorm_fprop (
     if dtype == "f2":
         common_code += _common_fp16_to_fp32
 
+    if (compute_capability[0] == 3 and compute_capability[1] < 5) or compute_capability[0] < 3:
+        common_code += _common_kepler
+
     code = code % {
         "common"    : common_code,
         "share"     : shr_code,
@@ -185,7 +189,7 @@ __global__ void batchnorm_fprop (
 
 
 @context_dependent_memoize
-def _get_bn_bprop_kernel(dtype, threads):
+def _get_bn_bprop_kernel(dtype, threads, compute_capability):
 
     if threads > 32:
         shr_code = "__shared__ float sPartials[THREADS * 2];"
@@ -336,6 +340,9 @@ __global__ void batchnorm_bprop (
     common_code = _common_round["nearest"].get(dtype, "")
     if dtype == "f2":
         common_code += _common_fp16_to_fp32
+
+    if (compute_capability[0] == 3 and compute_capability[1] < 5) or compute_capability[0] < 3:
+        common_code += _common_kepler
 
     code = code % {
         "common"         : common_code,

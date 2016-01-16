@@ -445,12 +445,24 @@ class ConvLayer(Layer):
         tiles_CK = (128, 64, 32) if tile_N == 128 else (128, 64)
 
         ####### FPROP ###########
-        self.fprop_kernels = kernel_specs.xprop_conv_kernels(
-            clss, "fprop", "K", tile_N, grid_N, K, tiles_CK, PQM, RST,
-            _flatten([N, K, D, H, W, WN, HWN, DHWN,
-                      C, KRST, RST, RS, magic_RS, S, magic_S,
-                      pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                      Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ]))
+        if lib.use_cudac_kernels:
+            #3D conv not supported yet
+            if T > 1 or D > 1:
+                raise ValueError("3D Convolution not supported by CUDA C kernels.")
+            self.fprop_kernels = [["fprop",
+                                   (PQ * (-(-N // 32)), (-(-K // 32)), 1), (8, 8, 1),
+                                   _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
+                                            str_w, str_h, pad_w, pad_h,
+                                            HWN // 4, KRST // 4, PQN // 4,
+                                            PQ, 0, 0,
+                                            magic_PQ, magic_Q, magic_S])]]
+        else:
+            self.fprop_kernels = kernel_specs.xprop_conv_kernels(
+                clss, "fprop", "K", tile_N, grid_N, K, tiles_CK, PQM, RST,
+                _flatten([N, K, D, H, W, WN, HWN, DHWN,
+                          C, KRST, RST, RS, magic_RS, S, magic_S,
+                          pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                          Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ]))
 
         # shared lookup table size
         self.fprop_lut_size = RST * 4 * 2
@@ -460,15 +472,23 @@ class ConvLayer(Layer):
             # special kernel for deconv into first layer
             kernel_name = "%s_bprop_C1_N64" % clss
 
-            grid  = (PQM, _grid_dim(32, CRST), _grid_dim(64, N))
-            block = (32, 1, 1)
-
-            self.bprop_kernels = [[kernel_name, grid, block, 0, _flatten([
-                N, K, D, H, W, WN, HWN, DHWN,
-                C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
-                pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ,
-                CRST*8*self.dtype.itemsize, MPQN*8*self.dtype.itemsize])]]
+            if lib.use_cudac_kernels:
+                self.bprop_kernels = [["bprop",
+                                       (HW * (-(-N // 32)), -(-C // 32), 1), (8, 8, 1),
+                                       _flatten([K, M, P, Q, N, T, R, S, C, D, H, W,
+                                                str_w, str_h, pad_w, pad_h,
+                                                PQN // 4, CRST // 4, HWN // 4,
+                                                HW, 0, 0,
+                                                magic_HW, magic_W, magic_S])]]
+            else:
+                grid  = (PQM, _grid_dim(32, CRST), _grid_dim(64, N))
+                block = (32, 1, 1)
+                self.bprop_kernels = [[kernel_name, grid, block, 0, _flatten([
+                    N, K, D, H, W, WN, HWN, DHWN,
+                    C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
+                    pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                    Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ,
+                    CRST*8*self.dtype.itemsize, MPQN*8*self.dtype.itemsize])]]
 
             # generate the kernel args for transpose CRST,K => K,CRST
             self.shuffle_args = [CRST, K]
@@ -481,13 +501,22 @@ class ConvLayer(Layer):
 
         else:
 
-            self.bprop_kernels = kernel_specs.xprop_conv_kernels(
-                clss, "bprop", "C", tile_N, grid_N, C, tiles_CK, DHW, RST, _flatten([
-                    N, C, M, P, Q, QN, PQN, MPQN,
-                    K, CRST, RST, RS, magic_RS, S, magic_S,
-                    pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                    W, HW, WN, HWN, DHWN, magic_W, magic_HW,
-                    R, T, magic_str_w, magic_str_h, magic_str_d]))
+            if lib.use_cudac_kernels:
+                self.bprop_kernels = [["bprop",
+                                       (HW * (-(-N // 32)), -(-C // 32), 1), (8, 8, 1),
+                                       _flatten([K, M, P, Q, N, T, R, S, C, D, H, W,
+                                                str_w, str_h, pad_w, pad_h,
+                                                PQN // 4, CRST // 4, HWN // 4,
+                                                HW, 0, 0,
+                                                magic_HW, magic_W, magic_S])]]
+            else:
+                self.bprop_kernels = kernel_specs.xprop_conv_kernels(
+                    clss, "bprop", "C", tile_N, grid_N, C, tiles_CK, DHW, RST, _flatten([
+                        N, C, M, P, Q, QN, PQN, MPQN,
+                        K, CRST, RST, RS, magic_RS, S, magic_S,
+                        pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                        W, HW, WN, HWN, DHWN, magic_W, magic_HW,
+                        R, T, magic_str_w, magic_str_h, magic_str_d]))
 
             # generate the kernel args for dim shuffling CRSTK => KRSTC
             self.shuffle_args = _flatten([
@@ -512,51 +541,73 @@ class ConvLayer(Layer):
 
         # in float32 for big feature_map layers the smaller tile is actually faster
         # so restrict tile selection to just that.
-        if self.dtype.type is np.float32 and PQ > 56*56:
-            K_tiles = (64,)
-        else:
-            K_tiles = (128, 64)
+        if lib.use_cudac_kernels:
+            if deterministic_update:
+                grid_P = 1
+                grid_Q = 1
+                self.determ = CRSTK
+            else:
+                grid_P = P
+                grid_Q = Q
+                self.determ = 0
 
-        if deterministic_update:
-            determ = "D"
-            if K <= 64:
+            pq_blocks = grid_P * grid_Q
+            magic_PQ = _magic64(pq_blocks)
+            magic_Q = _magic64(grid_Q)
+
+            self.updat_kernels = [["update",
+                                   (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1), (8, 32, 1),
+                                   _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
+                                            str_w, str_h, pad_w, pad_h,
+                                            HWN // 4, KRST // 4, PQN // 4,
+                                            PQ, grid_P, grid_Q,
+                                            magic_PQ, magic_Q, magic_S])]]
+        else:
+            if self.dtype.type is np.float32 and PQ > 56*56:
                 K_tiles = (64,)
             else:
-                K_tiles = K_tiles[0:1]
-            self.determ = CRSTK
-        else:
-            determ = ""
-            self.determ = 0
+                K_tiles = (128, 64)
 
-
-        self.updat_kernels = []
-        for tile_K, grid_K, offset_K in kernel_specs.K_partitions(K, K_tiles):
-
-            kernel_name = "%s_updat%s_C128_K%d" % (clss, determ, tile_K)
-            base_blocks = M*grid_C*grid_K
-
-            grid_P, grid_Q, threads = kernel_specs.update_grid(kernel_name, base_blocks, P, Q, sm_count)
-            # print grid_P, grid_Q
-
-            grid_PQ   = grid_P * grid_Q
-            magic_PQu = _magic64(grid_PQ)
-            magic_Qu  = _magic64(grid_Q)
-
-            block = (threads, 1, 1)
-            if RST > 1:
-                grid = (M*grid_PQ, grid_C, grid_K)
+            if deterministic_update:
+                determ = "D"
+                if K <= 64:
+                    K_tiles = (64,)
+                else:
+                    K_tiles = K_tiles[0:1]
+                self.determ = CRSTK
             else:
-                grid = (grid_C, grid_K, M*grid_PQ)
+                determ = ""
+                self.determ = 0
 
-            self.determ *= M*grid_PQ
-            self.determ_shape = (M*grid_PQ, CRSTK)
 
-            self.updat_kernels.append([kernel_name, grid, block, offset_K, _flatten([
-                N, K, D, H, W, WN, HWN, DHWN,
-                C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
-                pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                P, Q, PQ, QN, PQN, MPQN, magic_Qu, magic_PQu,
-                grid_P, grid_Q, grid_PQ, CRSTK])])
+            self.updat_kernels = []
+            for tile_K, grid_K, offset_K in kernel_specs.K_partitions(K, K_tiles):
+
+                kernel_name = "%s_updat%s_C128_K%d" % (clss, determ, tile_K)
+                base_blocks = M*grid_C*grid_K
+
+                grid_P, grid_Q, threads = kernel_specs.update_grid(kernel_name, base_blocks, P, Q, sm_count)
+                # print grid_P, grid_Q
+
+                grid_PQ   = grid_P * grid_Q
+                magic_PQu = _magic64(grid_PQ)
+                magic_Qu  = _magic64(grid_Q)
+
+                block = (threads, 1, 1)
+                if RST > 1:
+                    grid = (M*grid_PQ, grid_C, grid_K)
+                else:
+                    grid = (grid_C, grid_K, M*grid_PQ)
+
+                self.determ *= M*grid_PQ
+                self.determ_shape = (M*grid_PQ, CRSTK)
+
+                self.updat_kernels.append([kernel_name, grid, block, offset_K, _flatten([
+                    N, K, D, H, W, WN, HWN, DHWN,
+                    C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
+                    pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                    P, Q, PQ, QN, PQN, MPQN, magic_Qu, magic_PQu,
+                    grid_P, grid_Q, grid_PQ, CRSTK])])
 
         # for k in self.updat_kernels: print k
         # exit()

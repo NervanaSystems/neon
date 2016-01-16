@@ -152,6 +152,9 @@ _finish_rand_func = r"""
     *(rand_state + 2*RAND_POOL_SIZE) = lfsr2;
 """
 
+_common_kepler = r"""
+#define __ldg(x) (*(x))
+"""
 
 _common_urand_gen = r"""
 __device__ unsigned urand_gen(unsigned& lfsr0, unsigned& lfsr1, unsigned& lfsr2)

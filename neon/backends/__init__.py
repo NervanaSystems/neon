@@ -84,10 +84,10 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
         gpuflag = False
         # check nvcc
         from neon.backends.util import check_gpu
-        gpuflag = (check_gpu.get_compute_capability(device_id) >= 5.0)
+        gpuflag = (check_gpu.get_compute_capability(device_id) >= 3.0)
         if gpuflag is False:
             raise RuntimeError("Device " + str(device_id) + " does not have CUDA compute " +
-                               "capability 5.0 or greater")
+                               "capability 3.0 or greater")
         if backend == 'gpu':
             from neon.backends.nervanagpu import NervanaGPU
             # init gpu

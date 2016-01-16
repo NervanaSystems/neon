@@ -126,7 +126,7 @@ class NeonArgparser(configargparse.ArgumentParser):
 
         be_grp = self.add_argument_group('backend')
         be_grp.add_argument('-b', '--backend', choices=['cpu', 'gpu', 'mgpu'],
-                            default='gpu' if get_compute_capability() >= 5.0
+                            default='gpu' if get_compute_capability() >= 3.0
                                     else 'cpu',
                             help='backend type. Multi-GPU support is a premium '
                                  'feature available exclusively through the '
