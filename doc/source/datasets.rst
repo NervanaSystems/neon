@@ -99,15 +99,15 @@ mapping can be used for all training, testing and validation sets.
 ImageNet
 --------
 The raw images need to be downloaded from ILSVRC as a tar file. The
-``neon.util.batch_writer.py`` script can convert the raw images into binaries.
+``neon.data.batch_writer.py`` script can convert the raw images into binaries.
 ``data_dir`` is where the processed batches will be stored, and ``image_dir``
 is where the original tar files are saved.
 
 .. code-block:: bash
 
-    python neon/util/batch_writer.py  --data_dir /usr/local/data/tmp \
-                                      --image_dir=/usr/local/data/I1K/imagenet_orig \
-                                      --set_type=i1k
+    python neon/data/batch_writer.py  --data_dir /usr/local/data/tmp \
+                                      --image_dir /usr/local/data/I1K/imagenet_orig \
+                                      --set_type i1k
 
 
 Then an :py:class:`ImageLoader<neon.data.imageloader.ImageLoader>` instance can be
@@ -116,9 +116,9 @@ started to feed images to the model.
 .. code-block:: python
 
     from neon.data import ImageLoader
-    train = ImageLoader(repo_dir=args.data_dir, inner_size=224, set_name='train')
+    train = ImageLoader(repo_dir=args.data_dir, inner_size=224, scale_range=256, set_name='train')
 
-QA and bAbI 
+QA and bAbI
 -----------
 A bAbI dataset object can be created by specifying which task and which subset (20 tasks and 4 subsets in bAbI) to retrieve. The object will use built-in metadata to get bAbI data from online sources, save and unzip the files for that task locally, and then vectorize the story-question-answer data. The training and test files are both needed to build a vocabulary set.
 

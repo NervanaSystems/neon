@@ -32,6 +32,35 @@ logger = logging.getLogger(__name__)
 
 
 class BatchWriter(object):
+    """
+    Parent class for batchwriter object for taking a set of input images and outputting
+    macrobatches for use with the ImageLoader data provider
+
+    Arguments:
+        out_dir (str): Directory to output the macrobatches
+        image_dir (str): Directory to find the images.  For general batch writer, directory
+                         should be organized in subdirectories with each subdirectory
+                         containing a different category of images.  For imagenet batch writer,
+                         directory should contain the ILSVRC provided tar files.
+        target_size (int, optional): Size to which to scale DOWN the shortest side of the
+                                     input image.  For example, if an image is 200 x 300, and
+                                     target_size is 100, then the image will be scaled to
+                                     100 x 150.  However if the input image is 80 x 80, then
+                                     the image will not be resized.
+                                     If target_size is 0, no resizing is done.
+                                     Default is 256.
+        validation_pct (float, optional):  Percentage between 0 and 1 indicating what percentage
+                                           of the data to hold out for validation. Default is 0.2.
+        class_samples_max (int, optional): Maximum number of images to include for each class
+                                           from the input image directories.  Default is None,
+                                           which indicates no maximum.
+        file_pattern (str, optional): file suffix to use for globbing from the image_dir.
+                                      Default is '*.jpg'
+        macro_size (int, optional): number of images to include by default in each macrobatch.
+                                    Default is 3072.
+        pixel_mean (tuple, optional): per pixel mean values to use for saving to metafile.
+                                      Default is (0, 0, 0).
+    """
 
     def __init__(self, out_dir, image_dir, target_size=256, validation_pct=0.2,
                  class_samples_max=None, file_pattern='*.jpg', macro_size=3072,
@@ -49,7 +78,7 @@ class BatchWriter(object):
 
         np.random.seed(0)
         self.out_dir = os.path.expanduser(out_dir)
-        self.image_dir = os.path.expanduser(image_dir)
+        self.image_dir = os.path.expanduser(image_dir) if image_dir is not None else None
         self.macro_size = macro_size
         self.target_size = target_size
         self.file_pattern = file_pattern
@@ -97,12 +126,10 @@ class BatchWriter(object):
                     f.write('{},{}\n'.format(*tup))
 
         self.train_nrec = len(tlines)
-        self.ntrain = -(-self.train_nrec // self.macro_size)
         self.train_start = 0
 
         self.val_nrec = len(vlines)
-        self.nval = -(-self.val_nrec // self.macro_size)
-        self.val_start = self.ntrain
+        self.val_start = -(-self.train_nrec // self.macro_size)
 
     def parse_file_list(self, infile):
         lines = np.loadtxt(infile, delimiter=',', skiprows=1, dtype={'names': ('fname', 'l_id'),
@@ -151,7 +178,6 @@ class BatchWriter(object):
     def save_meta(self):
         with open(self.meta_file, 'w') as f:
             for settype in ('train', 'val'):
-                f.write('n%s %d\n' % (settype, getattr(self, 'n' + settype)))
                 f.write('%s_start %d\n' % (settype, getattr(self, settype + '_start')))
                 f.write('%s_nrec %d\n' % (settype, getattr(self, settype + '_nrec')))
             f.write('nclass %d\n' % (self.nclass['l_id']))
@@ -218,12 +244,10 @@ class BatchWriterI1K(BatchWriter):
         self.validation_pct = None
 
         self.train_nrec = 1281167
-        self.ntrain = -(-self.train_nrec // self.macro_size)
         self.train_start = 0
 
         self.val_nrec = 50000
-        self.nval = -(-self.val_nrec // self.macro_size)
-        self.val_start = self.ntrain
+        self.val_start = -(-self.train_nrec // self.macro_size)
         self.pixel_mean = [104.41227722, 119.21331787, 126.80609131]
 
     def extract_images(self, overwrite=False):
@@ -289,12 +313,10 @@ class BatchWriterCIFAR10(BatchWriterI1K):
         self.validation_pct = None
 
         self.train_nrec = 50000
-        self.ntrain = -(-self.train_nrec // self.macro_size)
         self.train_start = 0
 
         self.val_nrec = 10000
-        self.nval = -(-self.val_nrec // self.macro_size)
-        self.val_start = self.ntrain
+        self.val_start = -(-self.train_nrec // self.macro_size)
 
     def extract_images(self, overwrite=False):
         from neon.data import load_cifar10
@@ -328,7 +350,7 @@ if __name__ == "__main__":
     parser = NeonArgparser(__doc__)
     parser.add_argument('--set_type', help='(i1k|cifar10|directory)', required=True,
                         choices=['i1k', 'cifar10', 'directory'])
-    parser.add_argument('--image_dir', help='Directory to find images', required=True)
+    parser.add_argument('--image_dir', help='Directory to find images', default=None)
     parser.add_argument('--target_size', type=int, default=0,
                         help='Size in pixels to scale shortest side DOWN to (0 means no scaling)')
     parser.add_argument('--macro_size', type=int, default=5000, help='Images per processed batch')

@@ -28,12 +28,50 @@ class ImageLoader(NervanaObject):
     """
     Encapsulates the data loader library and exposes a backward-compatible API
     to iterate over minibatches of images.
+
+    Arguments:
+        repo_dir (str): Directory to find image batches to load
+        inner_size (int): Side dimension of image to return from the loader.  The spatial
+                          dimensions of each image datum will be inner_size x inner_size
+        scale_range (int, tuple): Scale range to scale the short side of a given input image.
+                                  If an image is 100 x 200, for example, scale_range is 256,
+                                  and inner_size is 224, then the image will be first scaled to
+                                  256 x 512, and then a random crop of size 224 x 224 will be
+                                  taken from the result.  (If do_transforms is False, the center
+                                  crop will be taken).  If scale_range is a tuple like (256, 300)
+                                  then the resize dimension will be randomly selected between
+                                  256 and 300 (unless do_transforms is False, in which case the
+                                  lower value, 256, will always be used).  If scale_range is 0,
+                                  then the entire image will be used, without regard to aspect
+                                  ratio.  For the 100 x 200 image, the entire image will be used
+                                  and rescaled into an inner_size x inner_size output.
+        do_transforms (boolean, optional): whether to apply transformations (scaling, flipping,
+                                           random cropping) or not.  If False, no flipping or
+                                           center cropping will be taken.  If False, the shuffle
+                                           argument will also be ignored.  Defaults to True.
+        rgb (boolean, optional): whether to use rgb channel input or not (for now, purely
+                                 grayscale is not supported).  Defaults to True.
+        shuffle (boolean, optional): whether to shuffle the order of images as they are loaded.
+                                     Useful for batch normalization.  Defaults to False.
+        subset_pct (float, optional): value between 0 and 100 indicating what percentage of the
+                                      dataset partition to use.  Defaults to 100
+        set_name (str, optional): Which dataset partition to use.  Either 'train' or 'validation'.
+                                  Defaults to 'train'
+        nlabels (int, optional): how many labels exist per image.  Defaults to 1.
+        macro (boolean, optional): whether to use macrobatches as input.  If False, uses an input
+                                   list of files from which to read images. Useful for debugging.
+                                   Defaults to True.
+        contrast_range (tuple, optional): specified as (contrast_min, contrast_max), which are
+                                          percentage values indicating the range over which to
+                                          randomly vary the contrast of the image.  No contrast
+                                          variation is applied if contrast_min == contrast_max.
+                                          Defaults to (100, 100).
     """
 
     def __init__(self, repo_dir, inner_size, scale_range, do_transforms=True,
                  rgb=True, shuffle=False, set_name='train', subset_pct=100,
                  nlabels=1, macro=True, dtype=np.float32,
-                 contrast_range=(75, 125)):
+                 contrast_range=(100, 100)):
         if not rgb:
             raise ValueError('Non-RGB images are currently not supported')
         self.configure(repo_dir, inner_size, scale_range, do_transforms,
@@ -97,9 +135,11 @@ class ImageLoader(NervanaObject):
         self.center = not do_transforms
         self.flip = do_transforms
         self.contrast_range = contrast_range if do_transforms else (100, 100)
+        if not do_transforms:
+            self.scale_range = (self.scale_range[0], self.scale_range[0])
+        self.shuffle = shuffle if do_transforms else False
 
         self.rgb = rgb
-        self.shuffle = shuffle
         self.start_idx = 0
         self.macro = macro
         self.batch_prefix = "macrobatch_"
@@ -133,8 +173,8 @@ class ImageLoader(NervanaObject):
                           "data and create batch files for imageset" % (cache_filepath))
 
         # Should have following defined:
-        req_attributes = ['global_mean', 'nclass', 'val_start', 'ntrain',
-                          'train_nrec', 'nval', 'train_start', 'val_nrec',
+        req_attributes = ['global_mean', 'nclass', 'val_start', 'train_start',
+                          'train_nrec', 'val_nrec',
                           'item_max_size', 'label_size']
 
         for r in req_attributes:
@@ -151,7 +191,6 @@ class ImageLoader(NervanaObject):
 
         self.recs_available = getattr(self, self.set_name + '_nrec')
         self.macro_start = getattr(self, self.set_name + '_start')
-        self.macros_available = getattr(self, 'n' + self.set_name)
         self.ndata = int(self.recs_available * subset_pct / 100.)
 
     @property

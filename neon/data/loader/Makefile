@@ -18,7 +18,7 @@ SRCS = $(wildcard *.hpp)
 
 .PHONY: clean
 
-all: loader loader.so examine_batchfile
+all: loader loader.so
 INC = -I/usr/local/cuda/include
 ifeq ($(CC), nvcc)
 LIB = -L/usr/local/cuda/lib64
@@ -36,22 +36,10 @@ else
 	$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 -pthread $< $$(pkg-config opencv --cflags --libs)
 endif
 
-reader_test: reader_test.cpp $(SRCS)
+test/decode_test: test/decode_test.cpp $(SRCS)
 	@echo "Building $@..."
 ifneq ($(CC), nvcc)
 	$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
-endif
-
-decode_test: decode_test.cpp $(SRCS)
-	@echo "Building $@..."
-ifneq ($(CC), nvcc)
-	$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
-endif
-
-examine_batchfile: examine_batchfile.cpp $(SRCS)
-	@echo "Building $@..."
-ifneq ($(CC), nvcc)
-	$(CC) -o $@ $(INC) $(LIB) -Wall -O0 -g -std=c++11 $<
 endif
 
 loader.so: loader.cpp $(SRCS)

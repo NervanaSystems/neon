@@ -13,7 +13,7 @@
 .. limitations under the License.
 ..  ---------------------------------------------------------------------------
 
-Tutorials 
+Tutorials
 =========
 
 How to run a model
@@ -256,10 +256,338 @@ its misclassification rate on the held out test set.
     print('Misclassification error = %.1f%%'
           % (mlp.eval(test_set, metric=Misclassification())*100))
 
+Using the ImageLoader module
+----------------------------
+
+The :py:class:`ImageLoader<neon.data.imageloader.ImageLoader>` module was created to provide a way
+to feed images from disk to neon with minimal latency.  The module takes advantage of the high
+compressibility of images to conserve diskspace and disk to host memory IO.  For small datasets,
+images can stored in their decoded state in host memory, but for large datasets, that approach is
+not practical.  ImageLoader uses a multithreaded library to hide the latency of decoding images,
+applying augmentation and/or transformations, and transferring the resulting outputs to device
+memory (if necessary).
+
+Writing macrobatches
+''''''''''''''''''''
+
+In order to use the ImageLoader module, the images of the dataset must be packaged into flat binary
+files which we refer to as "macrobatches".  Macrobatches are simply archive files that package
+together many data files (jpegs) to take advantage of disk locality.  The container for these
+macrobatches is designed to be compatible with the `GNU tool cpio
+<http://www.gnu.org/software/cpio/manual/cpio.html>`_.  The ``neon.util.batch_writer.py``
+illustrates how to generate macrobatch datasets from three types of raw image sources:
+
+1.  General Directory Structure
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This option presumes that your data is provided as a directory of images, each with the same
+extension, ``<ext>``, that are organized in a hierarchy as follows:
+
+::
+
+    image_dir/
+    image_dir/<category_name1>/<img_1_1>.<ext>
+    image_dir/<category_name1>/<img_1_2>.<ext>
+    ...
+    image_dir/<category_name1>/<img_1_N1>.<ext>
+    image_dir/<category_name2>/<img_2_1>.<ext>
+    image_dir/<category_name2>/<img_2_2>.<ext>
+    ...
+    image_dir/<category_name2>/<img_2_N2>.<ext>
+    ...
+    ...
+    image_dir/<category_nameM>/<img_M_1>.<ext>
+    image_dir/<category_nameM>/<img_M_2>.<ext>
+    ...
+    image_dir/<category_nameM>/<img_M_NM>.<ext>
+
+With this organization, there are ``M`` categories, with each category containing a variable number
+of images.  The ``batch_writer.py`` utility will partition the data into train and validation sets,
+write out csv files pairing the file location to an integer corresponding to the category label
+index, and then copy the files into macrobatch files, optionally resizing the images along the way.
+The following command illustrates how to invoke the ``batch_writer.py`` command for this type of
+scenario.
+
+.. code-block:: bash
+
+    python neon/data/batch_writer.py  --data_dir /usr/local/data/macrobatch_out \
+                                      --image_dir /usr/local/data/raw_images \
+                                      --set_type directory \
+                                      --target_size 256 \
+                                      --macro_size 5000 \
+                                      --file_pattern "*.jpg"
+
+In this command, ``/usr/local/data/macrobatch_out`` is the directory to which the macrobatches will
+be written, ``/usr/local/data/raw_images`` is where the image subdirectories reside, ``directory``
+indicates that we are using the general directory structure mode of ``batch_writer``,
+``target_size`` indicates the pixel dimension that larger images will be scaled down to (e.g. a 512
+x 768 image will be rescaled to 256 x 384, but a 128 x 128 image will be untouched), ``macro_size``
+indicates the maximum number of images that will be packed per macrobatch file, and
+``file_pattern`` indicates the extension of the files in the subdirectories that will be included
+in the batch writing process.
+
+2.  ILSVRC ImageNet 1K tar files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Imagenet task is recognition task is described on the `ILSVRC website <http://www.image-
+net.org/challenges/LSVRC/>`_.  The 1.3M training images, 50K validation images, and development kit
+are provided as TAR archives.  Because the images are organized in a way that makes them unamenable
+to the generalized directory structure in the previous scenario, we provide some special handling
+to properly unpack the TARs and correctly associate the category names (synsets) to the integer
+labels using the provided development kit.  Imagenet macrobatches can be created using the
+following command:
+
+.. code-block:: bash
+
+    python neon/data/batch_writer.py  --data_dir /usr/local/data/macrobatch_out \
+                                      --image_dir /usr/local/data/I1K_tar_location \
+                                      --set_type i1k
+
+In this command, the ``file_pattern``, ``target_size``, and ``macro_size`` arguments are handled as
+defaults, and the only difference from the previous example are the ``set_type`` argument and the
+``image_dir`` argument.  The ``image_dir`` should contain the three TAR files that are provided by
+ILSVRC:
+
+- ILSVRC2012_img_train.tar
+- ILSVRC2012_img_val.tar
+- ILSVRC2012_devkit_t12.tar.gz
+
+Furthermore, one should ensure that the disk where ``data_dir`` is pointing has sufficient space to
+hold the resulting macrobatches as well as space for the unpacked images (these can be deleted once
+the macrobatches have been written).  Since the dataset is relatively large, an SSD can greatly
+speed up the batch_writing process.
+
+3.  CIFAR10 python pickled numpy pixel buffers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The CIFAR10 dataset is provided as a pickled set of numpy arrays containing the uncompressed pixel
+buffers of each image.  This dataset is small enough to easily fit in host memory.  However, using
+the :py:class:`DataIterator<neon.data.dataiterator.DataIterator>` module is limited in that it does
+not allow for random flipping, cropping, or shuffling.  We therefore added the ability to write out
+CIFAR10 data as macrobatches so that the ImageLoader module could be used with this command:
+
+.. code-block:: bash
+
+    python neon/data/batch_writer.py  --data_dir /usr/local/data/macrobatch_out \
+                                      --set_type cifar10 \
+                                      --target_size 40
+
+CIFAR10 images are 32x32, so if the ``target_size`` argument is omitted, then the images will be
+written out at this size.  However, in many scenarios, one might wish to zero-pad the images so that
+random cropping can be done without further reducing the feature map size.  Setting ``target_size``
+to the desired padded image size instructs the batch writer to center the image in the target
+feature map size and pad the border with the means of that image along each channel.  See `numpy.pad
+<http://docs.scipy.org/doc/numpy-dev/reference/generated/numpy.pad.html>`_ for more details.
+Because CIFAR images are so small, we have found that JPEG encoding of the images can negatively
+impact the accuracy of classification algorithms, so in this case we use lossless PNG encoding as
+the format to dump into the macrobatches.
+
+Metafile
+~~~~~~~~
+
+The macrobatch dataset directory must contain a metafile for instructing the dataset loader how
+many batches to consider.  The metafile is a simply a plain text file with a different attribute
+for each line.  As an example, the metafile for the Imagenet dataset would look like this:
+
+::
+
+    train_start 0
+    train_nrec 1281167
+    val_start 257
+    val_nrec 50000
+    nclass 1000
+    item_max_size 1845130
+    label_size 4
+    R_mean 104.412277
+    G_mean 119.213318
+    B_mean 126.806091
+
+Each of these attributes is described below:
+
+- ``train_nrec`` and ``val_nrec`` are the number of records for the train and validation sets,
+  respectively
+- ``train_start`` and ``val_start`` are the index of the macrobatch where each of those partitions
+  start (e.g. ``macrobatch_0`` through ``macrobatch_256`` contain training images, while
+  ``macrobatch_257`` on contain validation images)
+- ``nclass`` is the number of distinct categories
+- ``item_max_size`` is the size (in bytes) of the largest encoded jpeg file
+- ``label_size`` is the size (in bytes) of the label format (in this case it's an integer, which is
+  4 bytes)
+- ``R_mean``, ``G_mean``, ``B_mean`` are the pixel means for the red, green, and blue channels,
+  respectively.
+
+Command Line Macrobatch creation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A final way that macrobatches can be created using the ``cpio`` command line utility is illustrated
+here:
+
+.. code-block:: bash
+
+    # A list of image files
+    file_list=../file_list
+
+    # corresponding list of labels
+    label_list=../label_list
+
+    # Dump a blank header
+    perl -e 'print pack("a4I2a8I5Q3", "MACR", 1, 1, "imgclass")' > cpiohdr
+
+    # begin the macrobatch
+    echo cpiohdr | cpio -o --quiet > macrobatch.cpio
+
+    # now start adding in image, label pairs
+    ndata=0; totalsz=0; maxsz=0;
+    for i in $(paste -d ',' $file_list $label_list); do
+        imgfile=cpiodtm$ndata
+        lblfile=cpiotgt$((ndata++))
+
+        # copy the image (could also be a resizing filter)
+        cp `echo $i | cut -d ',' -f 1` $imgfile
+        echo $imgfile | cpio -A -o --quiet -F macrobatch.cpio
+
+        # Now we need to make a temporary file for the label
+        label=`echo $i | cut -d ',' -f 2`
+        perl -e 'print pack("I", $ARGV[0])' $label > $lblfile
+        echo $lblfile | cpio -A -o --quiet -F macrobatch.cpio
+
+        imgsz=`stat --printf "%s" $imgfile`
+        totalsz=$((totalsz+imgsz))
+        if (( "$maxsz" < "$imgsz" )); then
+            maxsz=$imgsz
+        fi
+
+        rm $lblfile $imgfile
+    done
+
+    # Update the header with appropriate size information
+    perl -e 'print pack('I5', @ARGV)' $ndata $maxsz 4 $totalsz $((ndata*4)) | dd conv=notrunc of=macrobatch.cpio bs=1 seek=54
+
+Loading Images
+''''''''''''''
+
+Once macrobatches have been created, the :py:class:`ImageLoader<neon.data.imageloader.ImageLoader>`
+module can be instantiated to load images in a pipelined fashion while applying several types of
+image transformations or augmentations.  One can look at the documentation for the arguments to the
+:py:class:`ImageLoader<neon.data.imageloader.ImageLoader>` constructor for an explanation of each of
+the parameters, but here we give some example invocations.  In all of the examples that follow, each
+batch of images on disk can be any size and any aspect ratio, depending on how they were written out
+to the macrobatch.  The ImageLoader takes care of rescaling the image and cropping a region of
+interest.  In general, the ``do_transforms`` flag is used to switch on or off random transformations
+en masse, so even if arguments are provided that indicate some range over which random values can be
+picked, setting ``do_transforms`` to ``False`` will override those ranges.
+
+In the examples below, we will assume that the macrobatches are in the ``/usr/local/data/batches``
+directory for simplicity.  Note that the default value of ``do_transforms`` is ``True``, but we
+provide it explicitly in the examples for clarity.
+
+1. Scale the original image so that its short side is ``256`` pixels, randomly perform a horizontal
+reflection, then crop a randomly selected ``100x100`` region from the result.
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=100,
+                            scale_range=256,
+                            do_transforms=True)
+
+
+2. Scale the original image so that its short side is ``256`` pixels, *do not* perform a horizontal
+reflection, then crop the *center* ``100x100`` region from the result.
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=100,
+                            scale_range=256,
+                            do_transforms=False)  # Overrides flipping/random cropping
+
+3. Randomly scale the original image so that the short side is between ``100`` and ``200`` pixels,
+randomly perform a horizontal reflection, then crop a randomly selected ``80x80`` region from the
+result.
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=80,
+                            scale_range=(100, 200),
+                            do_transforms=True)
+
+
+4. Same as 3, but also randomly adjust the contrast to between ``75%`` and ``125%`` of the original
+image.
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=80,
+                            scale_range=(100, 200),
+                            contrast_range=(75, 125),
+                            do_transforms=True)
+
+5. Same as 4, but also shuffle the order of images returned.
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=80,
+                            scale_range=(100, 200),
+                            contrast_range=(75, 125),
+                            shuffle=True,
+                            do_transforms=True)
+
+6. Scale the original image so that the short side is ``100`` pixels, *do not* perform a horizontal
+   reflection, *do not* adjust contrast, crop the *center* ``80x80`` region from the resulting
+   image, and *do not* shuffle the order in which images are returned
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=80,
+                            scale_range=(100, 200),
+                            contrast_range=(75, 125),
+                            shuffle=True,
+                            do_transforms=False)  # Overrides all randomness
+
+7. Force the original image to be scaled so that the entire image fits into a ``100x100`` region,
+   regardless of aspect ratio distortion, and perform random horizontal reflections.
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=100,
+                            scale_range=0,  # Force scaling to match inner_size
+                            do_transforms=True)
+
+8. Typical setup for imagenet training.  Randomly select a ``224x224`` crop of an image randomly
+   scaled so that its shortest side is between ``256`` and ``480``, randomly flipped, shuffled.
+   For testing, scale to various scales and take the whole image so that convolutional inference
+   can be performed.
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=224,
+                            scale_range=(256, 480),  # Force scaling to match inner_size
+                            shuffle=True,
+                            do_transforms=True)
+
+    test256 = ImageLoader(repo_dir='/usr/local/data/batches', set_name='validation',
+                          inner_size=256,
+                          scale_range=0,  # Force scaling to match inner_size
+                          do_transforms=False)
+
+    test384 = ImageLoader(repo_dir='/usr/local/data/batches', set_name='validation',
+                          inner_size=384,
+                          scale_range=0,  # Force scaling to match inner_size
+                          do_transforms=False)
+
 Adding a Custom Dataset Walk-through: bAbI
 ------------------------------------------
 
-Neon provides many tools to facilitate adding new datasets. In this tutorial, we will walk-through adding `Facebook’s bAbI dataset <https://research.facebook.com/researchers/1543934539189348>`_. There are three main pieces:
+Neon provides many tools to facilitate adding new datasets. In this tutorial, we will walk-through
+adding `Facebook’s bAbI dataset <https://research.facebook.com/researchers/1543934539189348>`_.
+There are three main pieces:
 
 1. File handler for the dataset
 2. Pre-processing the data
@@ -269,7 +597,10 @@ We will walk-through each in turn.
 
 1. File handler for the dataset
 '''''''''''''''''''''''''''''''
-The bAbI dataset comprises 20 tasks. Each task has both a small and large training and test split, and comes in English, Hindi, and shuffled characters. The first step is to tell Neon where to find the dataset, the size of the dataset, and a function handler ``load_babi``.
+
+The bAbI dataset comprises 20 tasks. Each task has both a small and large training and test split,
+and comes in English, Hindi, and shuffled characters. The first step is to tell Neon where to find
+the dataset, the size of the dataset, and a function handler ``load_babi``.
 
 .. code-block:: python
 
@@ -282,7 +613,11 @@ The bAbI dataset comprises 20 tasks. Each task has both a small and large traini
        }
     }
 
-With this specification, we can now call the function ``load_dataset`` and call bAbI by name, in addition to calling ``load_babi`` directly. Since bAbI comes with a number of tasks, different languages, and different splits, the role of the ``load_babi`` function is to extract the correct split. One useful helper function that Neon provides you is ``fetch_dataset`` which downloads data from a URL in chunks.
+With this specification, we can now call the function ``load_dataset`` and call bAbI by name, in
+addition to calling ``load_babi`` directly. Since bAbI comes with a number of tasks, different
+languages, and different splits, the role of the ``load_babi`` function is to extract the correct
+split. One useful helper function that Neon provides you is ``fetch_dataset`` which downloads data
+from a URL in chunks.
 
 .. code-block:: python
 
@@ -297,7 +632,8 @@ With this specification, we can now call the function ``load_dataset`` and call 
            totalsz (int): Size of the file to be downloaded.
        """
 
-The ``load_babi`` function downloads the dataset, extracts the specified training and test splits, and returns file handlers to the splits.
+The ``load_babi`` function downloads the dataset, extracts the specified training and test splits,
+and returns file handlers to the splits.
 
 .. code-block:: python
 
@@ -312,7 +648,7 @@ The ``load_babi`` function downloads the dataset, extracts the specified trainin
             subset (str, optional): Data comes in English, Hindi, or Shuffled
                                     characters. Options are 'en', 'hn', and
                                     'shuffled' for 1000 training and test
-                                    examples or 'en-10k', 'hn-10k', and 
+                                    examples or 'en-10k', 'hn-10k', and
                                     'shuffled-10k' for 10000 examples.
 
         Returns:
@@ -336,7 +672,11 @@ The ``load_babi`` function downloads the dataset, extracts the specified trainin
 
 2. Pre-processing the data
 ''''''''''''''''''''''''''
-bAbI is a question answering (QA) dataset. The examples consist of stories, questions, and answers. Stories paint a sequence of actions and events, questions ask a basic fact or logical conclusion based on the story, and answers are the targets of the example. In bAbI, these stories, questions, and answers come in an interleaved format.
+
+bAbI is a question answering (QA) dataset. The examples consist of stories, questions, and answers.
+Stories paint a sequence of actions and events, questions ask a basic fact or logical conclusion
+based on the story, and answers are the targets of the example. In bAbI, these stories, questions,
+and answers come in an interleaved format.
 
 ::
 
@@ -398,11 +738,20 @@ We wrote a ``BABI`` class in ``neon/data/questionanswer.py`` to take care of thi
                               {en, en-10k, shuffled, hn, hn-10k, shuffled-10k}
             """
 
-An important additional pre-processing step we perform is tokenizing the text and vectorizing the tokens. Rather than working with raw text, we create a dictionary that maps every token in the vocabulary to an index. The vocabulary comprises every unique token in both the training and test sets. A sentence is then a vector of integer indices. This step is specific to your dataset and you should do any desired pre-processing and transformations.
+An important additional pre-processing step we perform is tokenizing the text and vectorizing the
+tokens. Rather than working with raw text, we create a dictionary that maps every token in the
+vocabulary to an index. The vocabulary comprises every unique token in both the training and test
+sets. A sentence is then a vector of integer indices. This step is specific to your dataset and you
+should do any desired pre-processing and transformations.
 
 3. Packaging the data in an iterator
 ''''''''''''''''''''''''''''''''''''
-Neon requires a python iterator to traverse through datasets for training and evaluation. Luckily, Neon comes with a QA class, which is a general purpose iterator for QA datasets such as bAbI. It takes as input vectorized stories, queries, and answers. On each iteration it yields a minibatch of inputs and outputs. We simply need to load our pre-processed bAbI data into a QA instance for neural network use.
+
+Neon requires a python iterator to traverse through datasets for training and evaluation. Luckily,
+Neon comes with a QA class, which is a general purpose iterator for QA datasets such as bAbI. It
+takes as input vectorized stories, queries, and answers. On each iteration it yields a minibatch of
+inputs and outputs. We simply need to load our pre-processed bAbI data into a QA instance for
+neural network use.
 
 .. code-block:: python
 
@@ -417,7 +766,9 @@ Neon comes with tools for other formats as well such as text, images, videos, am
 
 Conclusion
 ''''''''''
-Neon provides many tools for easily integrating custom datasets. To see bAbI dataset used in action, please visit `here <https://gist.github.com/SNagappan/a7be6ce6e75c36c7406e>`_.
+
+Neon provides many tools for easily integrating custom datasets. To see bAbI dataset used in
+action, please visit `here <https://gist.github.com/SNagappan/a7be6ce6e75c36c7406e>`_.
 
 
 Videos

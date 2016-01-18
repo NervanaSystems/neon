@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <string.h>
 #include <stdint.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -6,12 +7,8 @@
 #include <vector>
 #include <string>
 #include <cstdio>
-#include <iostream>
-#include "decoder.hpp"
-#include "batchfile.hpp"
-
-using std::ifstream;
-using std::ofstream;
+#include "../batchfile.hpp"
+#include "../decoder.hpp"
 
 int main (int argc, char **argv) {
     AugmentationParams *agp = new AugmentationParams(224, false, true, true,
@@ -24,11 +21,11 @@ int main (int argc, char **argv) {
     BatchFile bf;
     string batchFileName(argv[1]);
     bf.openForRead(batchFileName);
-    ByteVect data(bf.maxDataSize());
-    ByteVect labels(bf.maxLabelsSize());
+    ByteVect data(bf.maxDatumSize());
+    ByteVect labels(bf.maxTargetSize());
 
     // Just get a single item
-    int dsize, lsize;
+    uint dsize, lsize;
     bf.readItem((char *) &data[0], (char *) &labels[0], &dsize, &lsize);
     bf.close();
     int label_idx = *reinterpret_cast<int *>(&labels[0]);
@@ -45,7 +42,7 @@ int main (int argc, char **argv) {
         decoder.decode(&data[0], dsize, &outbuf[i * num_pixels]);
     }
 
-    ofstream file (argv[2], ofstream::out | ofstream::binary);
+    std::ofstream file (argv[2], std::ofstream::out | std::ofstream::binary);
     file.write((char *) &num_decode, sizeof(int));
     file.write((char *) &num_pixels, sizeof(int));
     file.write((char *) &outbuf[0], outbuf.size());

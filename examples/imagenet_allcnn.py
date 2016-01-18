@@ -52,6 +52,7 @@ be = gen_backend(backend=args.backend,
 # setup data provider
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
+                       scale_range=256,
                        dtype=args.datatype,
                        subset_pct=100)
 train = ImageLoader(set_name='train', **img_set_options)
