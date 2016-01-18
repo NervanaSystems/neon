@@ -92,6 +92,13 @@ public:
     }
 
     void getRandomCrop(const Size2i &inputSize, Rect* cropBox) {
+        // Use the entire squashed image (Caffe style evaluation)
+        if (_scaleMin == 0) {
+            cropBox->x = cropBox->y = 0;
+            cropBox->width = inputSize.width;
+            cropBox->height = inputSize.height;
+            return;
+        }
         int scaleSize = (_scaleMin + (rand_r(&(_rngSeed)) % (_scaleMax + 1 - _scaleMin)));
         float scaleFactor = std::min(inputSize.width, inputSize.height) / (float) scaleSize;
         Point2i corner;
