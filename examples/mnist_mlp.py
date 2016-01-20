@@ -23,7 +23,7 @@ Examples:
     python mnist_mlp.py -b gpu -e 10
         Run the example for 10 epochs of mnist data using the nervana gpu backend
 
-    python mnist_mlp.py --validation_freq 1
+    python mnist_mlp.py --eval_freq 1
         After each training epoch the validation/test data set will be processed through the model
         and the cost will be displayed.
 
