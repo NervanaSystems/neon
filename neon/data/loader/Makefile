@@ -15,43 +15,44 @@
 # ----------------------------------------------------------------------------
 
 SRCS = $(wildcard *.hpp)
+CFLAGS = -Wall -Werror -O3 -std=c++11
+INC = $$(pkg-config --cflags opencv)
+LDIR = -L$$(dirname `pkg-config opencv --libs-only-other | cut -d' ' -f1`)
+LIBS = $$(pkg-config --libs-only-l opencv)
+CC = g++
+OPENCVPKG := $(shell pkg-config --list-all | grep -e '^opencv' | cut -d' ' -f1 | xargs)
+
+ifeq ($(USEGPU), true)
+	GPUFLAG = -DHASGPU
+	INC := -I$(CUDA_ROOT)/include $(INC)
+	LDIR := -L$(CUDA_ROOT)/lib64 $(LDIR)
+	LIBS := -lcuda -lcudart $(LIBS)
+endif
 
 .PHONY: clean
 
 all: loader loader.so
-INC = -I/usr/local/cuda/include
-ifeq ($(CC), nvcc)
-LIB = -L/usr/local/cuda/lib64
-endif
-CC = nvcc
 
 loader: loader.cpp $(SRCS)
+ifeq (${OPENCVPKG},)
+	$(error opencv not installed.  Unable to build $@)
+endif
 	@echo "Building $@..."
-ifneq ($(shell pkg-config --modversion opencv >/dev/null 2>&1; echo $$?), 0)
-	$(error pkg-config or opencv not installed.  Unable to build $@)
-endif
-ifeq ($(CC), nvcc)
-	$(CC) -o $@ -DSTANDALONE -DHASGPU $(INC) $(LIB) -O0 -g -std=c++11 -lcudart -lcuda $< $$(pkg-config opencv --cflags --libs)
-else
-	$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 -pthread $< $$(pkg-config opencv --cflags --libs)
-endif
+	$(CC) -o $@ -DSTANDALONE $(GPUFLAG) $(CFLAGS) $< $(INC) $(LDIR) $(LIBS)
 
 test/decode_test: test/decode_test.cpp $(SRCS)
-	@echo "Building $@..."
-ifneq ($(CC), nvcc)
-	$(CC) -o $@ -DSTANDALONE $(INC) $(LIB) -Wall -O0 -g -std=c++11 $< $$(pkg-config opencv --cflags --libs)
+ifeq (${OPENCVPKG},)
+	$(error opencv not installed.  Unable to build $@)
 endif
+	@echo "Building $@..."
+	$(CC) -o $@ -DSTANDALONE $(CFLAGS) $< $(INC) $(LDIR) $(LIBS)
 
 loader.so: loader.cpp $(SRCS)
+ifeq (${OPENCVPKG},)
+	$(error opencv not installed.  Unable to build $@)
+endif
 	@echo "Building $@..."
-ifneq ($(shell pkg-config --modversion opencv >/dev/null 2>&1; echo $$?), 0)
-	$(error pkg-config or opencv not installed.  Unable to build $@)
-endif
-ifeq ($(CC), nvcc)
-	$(CC) -shared -o $@ -Xcompiler -fpic -DHASGPU $(INC) $(LIB) -O3 -std=c++11 -lcuda -lcudart $< $$(pkg-config opencv --cflags --libs)
-else
-	$(CC) -shared -o $@ -fPIC $(INC) $(LIB) -Wall -Werror -O0 -g -std=c++11 -pthread $< $$(pkg-config opencv --cflags --libs)
-endif
+	$(CC) -shared -o $@ -fPIC $(CFLAGS) $(GPUFLAG) $< $(INC) $(LDIR) $(LIBS)
 
 clean:
 	@rm -vf *.o loader loader.so

@@ -154,11 +154,7 @@ ifeq ($(HAS_GPU), true)
 endif
 
 $(DATA_LOADER):
-ifeq ($(HAS_GPU), true)
-	@cd $(DATA_LOADER) && $(MAKE) -s loader.so CC=nvcc
-else
-	@cd $(DATA_LOADER) && $(MAKE) -s loader.so CC=g++
-endif
+	-@cd $(DATA_LOADER) && $(MAKE) -s loader.so USEGPU=$(HAS_GPU)
 
 # TODO: handle kernel/.so compilation via setup.py directly
 sysinstall_nodeps: kernels $(DATA_LOADER) neon_install
