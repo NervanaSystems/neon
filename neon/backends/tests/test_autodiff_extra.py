@@ -131,7 +131,8 @@ class TestAutodiff:
 
         return result
 
-    def _get_autodiff_grads_and_val(self, f_str, tensor_vals, get_op_tree=False):
+    def _get_autodiff_grads_and_val(self, f_str, tensor_vals, get_op_tree=False,
+                                    next_error=None):
         '''
         get autodiff grads from optree string expression
         f_str: the string of expression to be executed
@@ -153,8 +154,11 @@ class TestAutodiff:
         # evaluate op tree
         f_val = be.empty(f.shape)
         f_val[:] = f
+        # init next error
+        if next_error is not None:
+            next_error = self.be.array(next_error)
         # get gradient
-        ad = Autodiff(f, be)
+        ad = Autodiff(f, be, next_error=next_error)
         # get list
         if get_op_tree:
             gradients = list(ad.get_grad_op_tree(tensors))
@@ -163,7 +167,7 @@ class TestAutodiff:
 
         return [gradients, f_val.get()]
 
-    def _get_numerical_grads_and_val(self, f_str, tensors):
+    def _get_numerical_grads_and_val(self, f_str, tensors, next_error=None):
         '''`
         get autodiff grads from numpy string expression
         tensors: numpy tensor vals
@@ -174,6 +178,9 @@ class TestAutodiff:
             gradients.append(np.zeros(tensor.shape))
         # function values
         f_val = TestAutodiff._numpy_call(f_str, tensors)
+        # init next error
+        if next_error is None:
+            next_error = np.ones_like(f_val)
         # numerical gradients
         for tensor, gradient in zip(tensors, gradients):
             gradient_flat = np.copy(gradient.reshape((-1, )))
@@ -183,11 +190,11 @@ class TestAutodiff:
                 x_backup = np.copy(x)
                 # increment
                 x[...] = x + self.delta
-                f_inc = np.sum(TestAutodiff._numpy_call(f_str, tensors))
+                f_inc = np.sum(TestAutodiff._numpy_call(f_str, tensors) * next_error)
                 x[...] = x_backup
                 # decrement
                 x[...] = x - self.delta
-                f_dec = np.sum(TestAutodiff._numpy_call(f_str, tensors))
+                f_dec = np.sum(TestAutodiff._numpy_call(f_str, tensors) * next_error)
                 x[...] = x_backup
                 # gradient
                 gradient_flat[ind] = (f_inc - f_dec) / (2.0 * self.delta)
@@ -197,7 +204,7 @@ class TestAutodiff:
 
         return [gradients, f_val]
 
-    def _assert_grad_equal(self, f_str, tensors, rtol=1e-2, atol=1e-5):
+    def _assert_grad_equal(self, f_str, tensors, rtol=1e-2, atol=1e-5, next_error=None):
 
         def debug_msg(count):
             msg = ''
@@ -211,9 +218,9 @@ class TestAutodiff:
 
         # gradients
         autodiff_grads_and_val = self._get_autodiff_grads_and_val(
-            f_str, tensors)
+            f_str, tensors, next_error=next_error)
         numerical_grads_and_val = self._get_numerical_grads_and_val(
-            f_str, tensors)
+            f_str, tensors, next_error=next_error)
 
         # asserts
         assert(len(autodiff_grads_and_val) == len(numerical_grads_and_val))
@@ -222,8 +229,7 @@ class TestAutodiff:
         numerical_grads_and_val[1] = numerical_grads_and_val[
             1].reshape(autodiff_grads_and_val[1].shape)
         np.testing.assert_allclose(autodiff_grads_and_val[1].astype(self.dtype),
-                                   numerical_grads_and_val[
-                                       1].astype(self.dtype),
+                                   numerical_grads_and_val[1].astype(self.dtype),
                                    rtol=rtol, atol=atol)
 
         # check gradient
@@ -276,9 +282,11 @@ class TestAutodiff:
             x0 = np.random.randn(10, 64)
             x1 = np.random.randn(10, 1)  # gamma
             x2 = np.random.randn(10, 1)  # beta
-
+            next_error = np.random.randn(10, 64) / 64.
             f_str = '((x0 - be.mean(x0, axis=1)) / be.sqrt(be.var(x0, axis=1) + 1e-6)) * x1 + x2'
-            self._assert_grad_equal(f_str, [x0, x1, x2], rtol=1e-5)
+            # gradient
+            self._assert_grad_equal(f_str, [x0, x1, x2], rtol=1e-1, atol=1e-2,
+                                    next_error=next_error)
 
     def test_positive(self):
         # TODO potentially problematic
