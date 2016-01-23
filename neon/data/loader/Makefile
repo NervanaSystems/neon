@@ -14,18 +14,26 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-SRCS = $(wildcard *.hpp)
-CFLAGS = -Wall -Werror -O3 -std=c++11
-INC = $$(pkg-config --cflags opencv)
-LDIR = -L$$(dirname `pkg-config opencv --libs-only-other | cut -d' ' -f1`)
-LIBS = $$(pkg-config --libs-only-l opencv)
-CC = g++
-OPENCVPKG := $(shell pkg-config --list-all | grep -e '^opencv' | cut -d' ' -f1 | xargs)
+SRCS := $(wildcard *.hpp)
+CFLAGS := -Wall -Werror -O3 -std=c++11
+INC := $(shell pkg-config --cflags opencv)
+LDIR := $(shell pkg-config --libs-only-L opencv)
+LIBS := $(shell pkg-config --libs-only-l opencv)
+CC := g++
+OPENCVPKG := $(shell pkg-config --list-all | grep -e '^opencv' | cut -d' ' -f1)
+
+ifeq ($(LDIR),)
+	LDIR := -L$(shell dirname `pkg-config opencv --libs-only-other | cut -f' ' -f1`)
+endif
 
 ifeq ($(USEGPU), true)
 	GPUFLAG = -DHASGPU
 	INC := -I$(CUDA_ROOT)/include $(INC)
-	LDIR := -L$(CUDA_ROOT)/lib64 $(LDIR)
+	ifeq ($(shell uname -s),Darwin)
+		LDIR := -L$(CUDA_ROOT)/lib $(LDIR)
+	else
+		LDIR := -L$(CUDA_ROOT)/lib64 $(LDIR)
+	endif
 	LIBS := -lcuda -lcudart $(LIBS)
 endif
 
