@@ -17,4 +17,5 @@ from neon.transforms.activation import (Identity, Explin, Rectlin, Softmax, Tanh
 from neon.transforms.cost import (CrossEntropyBinary, CrossEntropyMulti,
                                   SumSquared, MeanSquared, LogLoss,
                                   Misclassification, TopKMisclassification,
-                                  Accuracy, PrecisionRecall)
+                                  Accuracy, PrecisionRecall, SmoothL1Loss,
+                                  ObjectDetection)

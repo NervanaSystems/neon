@@ -199,17 +199,43 @@ class MeanSquared(Cost):
 
     def __init__(self):
         """
-        Initialize the squared error cost functions
+        Initialize the mean squared error cost function
         """
         self.func = lambda y, t: self.be.mean(
             self.be.square(y - t), axis=0) / 2.
         self.funcgrad = lambda y, t: (y - t)/y.shape[0]
 
 
+class SmoothL1Loss(Cost):
+
+    """
+    A smooth L1 loss cost function from Fast-RCNN
+    http://arxiv.org/pdf/1504.08083v2.pdf
+    L1 loss is less sensitive to the outlier than L2 loss used in RCNN
+    """
+
+    def smoothL1(self, x):
+        return (0.5 * self.be.square(x) * (self.be.absolute(x) < 1) +
+                (self.be.absolute(x) - 0.5) * (self.be.absolute(x) >= 1))
+
+    def smoothL1grad(self, x):
+        return (x * (self.be.absolute(x) < 1) + self.be.sgn(x) *
+                (self.be.absolute(x) >= 1))
+
+    def __init__(self):
+        """
+        Initialize the smooth L1 loss cost function
+        """
+        self.func = lambda y, t: self.be.sum(self.smoothL1(y - t), axis=0)
+        self.funcgrad = lambda y, t: self.smoothL1grad(y - t)
+
+
 class LogLoss(Metric):
+
     """
     Compute logloss
     """
+
     def __init__(self):
         self.correctProbs = self.be.iobuf(1)
         self.metric_names = ['LogLoss']
@@ -387,3 +413,57 @@ class PrecisionRecall(Metric):
                                                        self.eps)
 
         return self.outputs.get().mean(axis=0)
+
+
+class ObjectDetection(Metric):
+
+    """
+    Compute the object deteciton metric includes object label accuracy, and
+    bounding box regression
+    """
+
+    def __init__(self):
+        self.metric_names = ['Accuracy', 'SmoothL1Loss']
+        self.label_ind = 0
+        self.bbox_ind = 1
+
+    def smoothL1(self, x):
+        return (0.5 * self.be.square(x) * (self.be.absolute(x) < 1) +
+                (self.be.absolute(x) - 0.5) * (self.be.absolute(x) >= 1))
+
+    def __call__(self, y, t, calcrange=slice(0, None)):
+        """
+        Compute the object detection metric
+
+        Args:
+            y (Tensor or OpTree): Output of a model like Fast-RCNN model with 2 elements:
+                                    1. class label: (# classes, # batchsize for ROIs)
+                                    2. object bounding box (# classes * 4, # bacthsize for ROIs)
+            t (Tensor or OpTree): True targets corresponding to y, with 2 elements:
+                                    1. class labels: (# classes, # batchsize for ROIs)
+                                    2. object bounding box and mask, where mask will indicate the
+                                        real object to detect other than the background objects
+                                        2.1 object bounding box
+                                                    (# classes * 4, # bacthsize for ROIs)
+                                        2.2 object bounding box mask
+                                                    (# classes * 4, # bacthsize for ROIs)
+
+        Returns:
+            numpy ary : Returns the metrics in numpy array. Metric has 2 elements
+        """
+
+        self.detectionMetric = self.be.empty((1, t[self.bbox_ind][0].shape[1]))
+        self.detectionMetric[:] = self.be.sum(self.smoothL1(y[self.bbox_ind] -
+                                                            t[self.bbox_ind][0] *
+                                                            t[self.bbox_ind][1]), axis=0)
+
+        self.preds = self.be.empty((1, y[self.label_ind].shape[1]))
+        self.hyps = self.be.empty((1, t[self.label_ind].shape[1]))
+        self.labelMetric = self.be.empty((1, y[self.label_ind].shape[1]))
+
+        self.preds[:] = self.be.argmax(y[self.label_ind], axis=0)
+        self.hyps[:] = self.be.argmax(t[self.label_ind], axis=0)
+        self.labelMetric[:] = self.be.equal(self.preds, self.hyps)
+
+        return np.array((self.labelMetric.get()[:, calcrange].mean(),
+                         self.detectionMetric.get()[:, calcrange].mean()))

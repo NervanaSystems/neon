@@ -14,11 +14,29 @@
 '''
 Test of the cost functions
 '''
-
+import itertools as itt
 import numpy as np
 from neon import NervanaObject
+from neon.backends import gen_backend
 from neon.transforms import (CrossEntropyBinary, CrossEntropyMulti, SumSquared,
-                             MeanSquared, Misclassification, PrecisionRecall)
+                             MeanSquared, Misclassification, PrecisionRecall,
+                             SmoothL1Loss)
+
+
+def pytest_generate_tests(metafunc):
+
+    if 'fargs' in metafunc.fixturenames:
+        fargs = []
+        if metafunc.config.option.all:
+            shape1_rng = [2, 3, 4, 5]
+            shape2_rng = [3, 5, 10, 20]
+            mag_rng = [3, 5, 10, 20]
+        else:
+            shape1_rng = [3]
+            shape2_rng = [5]
+            mag_rng = [10]
+        fargs = itt.product(shape1_rng, shape2_rng, mag_rng)
+        metafunc.parametrize('fargs', fargs)
 
 
 def compare_tensors(func, y, t, outputs, deriv=False, tol=0.):
@@ -205,3 +223,82 @@ def test_precision_recall_binarize(backend_default):
     expected_result = np.array([1 + 1 + 0, 1 + 0.5 + 0]) / 3.
     compare_metric(PrecisionRecall(3, binarize=True), preds, targets,
                    expected_result, tol=1e-6)
+
+"""
+    Smooth L1 loss
+"""
+
+
+def test_smoothL1_random(backend_default, fargs):
+    s1, s2, m = fargs
+    shape = (s1, s2)
+    magnitude = m
+    outputs = (np.random.random(shape) - 0.5) * magnitude
+    targets = np.random.random(shape)
+    x = outputs - targets
+    expected_result = np.zeros(shape)
+    I1, J1 = np.where(abs(x) < 1)
+    I2, J2 = np.where(abs(x) >= 1)
+    expected_result[I1, J1] = 0.5 * x[I1, J1]**2
+    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5
+    expected_result = np.sum(expected_result, axis=0, keepdims=True)
+    compare_tensors(SmoothL1Loss(), outputs,
+                    targets, expected_result,
+                    deriv=False, tol=1e-5)
+
+
+def test_smoothL1_zeros(backend_default, fargs):
+    s1, s2, m = fargs
+    shape = (s1, s2)
+    outputs = np.zeros(shape)
+    targets = np.zeros(shape)
+    x = outputs - targets
+    expected_result = np.zeros(shape)
+    I1, J1 = np.where(abs(x) < 1)
+    I2, J2 = np.where(abs(x) >= 1)
+    expected_result[I1, J1] = 0.5 * x[I1, J1]**2
+    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5
+    expected_result = np.sum(expected_result, axis=0, keepdims=True)
+    compare_tensors(SmoothL1Loss(), outputs,
+                    targets, expected_result,
+                    deriv=False, tol=1e-5)
+
+
+def test_smoothL1_ones(backend_default, fargs):
+    s1, s2, m = fargs
+    shape = (s1, s2)
+    outputs = np.ones(shape) * m
+    targets = np.ones(shape) * m
+    x = outputs - targets
+    expected_result = np.zeros(shape)
+    I1, J1 = np.where(abs(x) < 1)
+    I2, J2 = np.where(abs(x) >= 1)
+    expected_result[I1, J1] = 0.5 * x[I1, J1]**2
+    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5
+    expected_result = np.sum(expected_result, axis=0, keepdims=True)
+    compare_tensors(SmoothL1Loss(), outputs,
+                    targets, expected_result,
+                    deriv=False, tol=1e-5)
+
+
+def test_smoothL1_random_derivative(backend_default, fargs):
+    s1, s2, m = fargs
+    shape = (s1, s2)
+    magnitude = m
+    outputs = (np.random.random(shape) - 0.5) * magnitude
+    targets = np.random.random(shape)
+    x = outputs - targets
+    expected_result = np.zeros(shape)
+    I1, J1 = np.where(abs(x) < 1)
+    I2, J2 = np.where(abs(x) >= 1)
+    expected_result[I1, J1] = x[I1, J1]
+    expected_result[I2, J2] = np.sign(x[I2, J2])
+    compare_tensors(SmoothL1Loss(), outputs,
+                    targets, expected_result,
+                    deriv=True, tol=1e-5)
+
+if __name__ == '__main__':
+    be = gen_backend(backend='gpu', batch_size=50)
+    fargs = (4, 10, 20)
+    test_smoothL1_random(be, fargs)
+    test_smoothL1_random_derivative(be, fargs)
