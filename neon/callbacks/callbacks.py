@@ -183,8 +183,8 @@ class Callbacks(NervanaObject):
         """
         self.add_callback(EarlyStopCallback(stop_func))
 
-    def add_hist_callback(self, plot_per_mini=False):
-        self.callbacks.append(HistCallback(plot_per_mini=plot_per_mini))
+    def add_hist_callback(self, plot_per_mini=False, filter_key=['W']):
+        self.callbacks.append(HistCallback(plot_per_mini=plot_per_mini, filter_key=filter_key))
 
     def add_callback(self, callback, insert_pos=None):
         """
@@ -564,7 +564,7 @@ class LossCallback(Callback):
             x = model.fprop(x, inference=True)
             bsz = min(self.eval_set.ndata - nprocessed, self.be.bsz)
             model.cost.get_cost(x, t)
-            nsteps = x.shape[1] / self.be.bsz
+            nsteps = x.shape[1] / self.be.bsz if len(x) == 1 else x[0].shape[1] / self.be.bsz
             costbuf = model.cost.outputs[:, :bsz*nsteps]
             nprocessed += bsz
             self.loss[:] = self.loss + self.be.sum(costbuf, axis=1)/nsteps
@@ -669,9 +669,10 @@ class HistCallback(Callback):
     flag. Histograms are stored to the hdf5 output file and can be visualized
     using the nvis tool.
     """
-    def __init__(self, plot_per_mini):
+    def __init__(self, plot_per_mini, filter_key):
         super(HistCallback, self).__init__(epoch_freq=1, minibatch_freq=1)
         self.plot_per_mini = plot_per_mini
+        self.filter = filter_key
 
     def on_train_begin(self, callback_data, model, epochs):
         self.minibatches = callback_data['config'].attrs['total_minibatches']
@@ -696,11 +697,12 @@ class HistCallback(Callback):
             self._save_hist_data(callback_data, model, epoch)
 
     def _save_hist_data(self, callback_data, model, timestamp):
-        # TODO: generalize this for container layers
         for l_i, l in enumerate(model.layers.layers):
-            if hasattr(l, 'W'):
-                name = "%s_%d_W" % (l.name, l_i)
-                l.W.hist(name)
+            for item in self.filter:
+                if hasattr(l, item):
+                    name = "%s_%d_%s" % (l.name, l_i, item)
+                    if getattr(l, item):
+                        getattr(l, item).hist(name)
 
         hist_grp = callback_data['hist']
         points = hist_grp.attrs['time_steps']
