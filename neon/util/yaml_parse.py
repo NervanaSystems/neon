@@ -17,15 +17,32 @@ Tools for parsing NEON model definition files (YAML formatted) and
 generating NEON model objects from the definition.
 '''
 
+from copy import deepcopy
 import numpy as np
 import yaml
 
 from neon import NervanaObject
 from neon.layers import GeneralizedCost
 from neon.models import Model
-from neon.optimizers import optimizer
-import neon.transforms as transforms
-from neon.util.persist import initialize_layer, initialize_obj
+import neon.optimizers
+from neon.layers.container import Sequential
+
+
+def format_yaml_dict(yamldict, type_prefix):
+    """
+    Helper function for format the YAML model config into
+    the proper format for object and layer initialization
+
+    Arguments:
+        yamldict (dict): dictionary with model parameters
+
+        type_prefix (str): module path for this object
+
+    Returns:
+        dict : formatted dict
+    """
+    yamldict['type'] = type_prefix + yamldict['type']
+    return yamldict
 
 
 def create_objects(root_yaml,
@@ -45,7 +62,7 @@ def create_objects(root_yaml,
 
         rng_seed (None or int): random number generator seed
 
-        device_id (int): for GPOU backends id of device to use
+        device_id (int): for GPU backends id of device to use
 
         default_dtype (type): numpy data format for default data types,
 
@@ -63,34 +80,28 @@ def create_objects(root_yaml,
         with open(root_yaml, 'r') as fid:
             root_yaml = yaml.safe_load(fid.read())
 
-    # cost (before layers for shortcut derivs)
-    cost_name = root_yaml['cost']
-    cost = GeneralizedCost(costfunc=getattr(transforms, cost_name)())
+    # in case references were used
+    root_yaml = deepcopy(root_yaml)
 
     # initialize layers
     yaml_layers = root_yaml['layers']
-    layers = []
-    for i in range(len(yaml_layers)):
-        ld = yaml_layers[i]
-        l = initialize_layer(ld)
-        layers.append(l)
+
+    # currently only support sequential in yaml
+    layer_dict = {'layers': yaml_layers}
+    layers = Sequential.gen_class(layer_dict)
 
     # initialize model
     model = Model(layers=layers)
 
+    # cost (before layers for shortcut derivs)
+    cost_name = root_yaml['cost']
+    cost = GeneralizedCost.gen_class({'costfunc': {'type': cost_name}})
+
     # create optimizer
-    optim = None
+    opt = None
     if 'optimizer' in root_yaml:
         yaml_opt = root_yaml['optimizer']
-        if yaml_opt['type'] == 'MultiOptimizer':
-            # multioptimizer init
-            for ltype in yaml_opt:
-                opt = yaml_opt[ltype]
-                if isinstance(opt, dict):
-                    if 'schedule' in opt:
-                        opt['schedule'] = optimizer.Schedule(opt['schedule'])
-                    yaml_opt[ltype] = initialize_obj(opt, optimizer)
-            optim = optimizer.MultiOptimizer(yaml_opt)
-        else:
-            optim = initialize_obj(yaml_opt, optimizer)
-    return model, cost, optim
+        typ = yaml_opt['type']
+        opt = getattr(neon.optimizers, typ).gen_class(yaml_opt['config'])
+
+    return model, cost, opt

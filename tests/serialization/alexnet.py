@@ -14,9 +14,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Runs one epoch of Alexnet on imagenet data.
-For running complete alexnet
-alexnet.py -e 90 -eval 1 -s <save-path> -w <path-to-saved-batches>
+alexnet model adapted for serialization testing
+
+has subset_pct set so that there are a low number of iterations per epoch
+and no partial minibatches, dropout is turned off for reproducibility on gpu
+and the learning rate is scaled to handle the reduced dropuot percentage.
+
 """
 
 from neon.util.argparser import NeonArgparser
@@ -30,18 +33,15 @@ from neon.callbacks.callbacks import Callbacks
 
 # parse the command line arguments (generates the backend)
 parser = NeonArgparser(__doc__)
-parser.add_argument('--subset_pct', type=float, default=100,
-                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
 
 # setup data provider
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        dtype=args.datatype,
-                       subset_pct=args.subset_pct)
-train = ImageLoader(set_name='train', scale_range=(256, 384), shuffle=True, **img_set_options)
-test = ImageLoader(set_name='validation', scale_range=(256, 256), do_transforms=False,
-                   **img_set_options)
+                       subset_pct=0.09990891117239205)
+train = ImageLoader(set_name='train', do_transforms=False, **img_set_options)
+test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
 
 layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01), bias=Constant(0),
                activation=Rectlin(), padding=3, strides=4),
@@ -57,17 +57,17 @@ layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01), bias=Constant(0),
                activation=Rectlin(), padding=1),
           Pooling(3, strides=2),
           Affine(nout=4096, init=Gaussian(scale=0.01), bias=Constant(1), activation=Rectlin()),
-          Dropout(keep=0.5),
+          Dropout(keep=1.0),
           Affine(nout=4096, init=Gaussian(scale=0.01), bias=Constant(1), activation=Rectlin()),
-          Dropout(keep=0.5),
+          Dropout(keep=1.0),
           Affine(nout=1000, init=Gaussian(scale=0.01), bias=Constant(-7), activation=Softmax())]
 model = Model(layers=layers)
 
 # drop weights LR by 1/250**(1/3) at epochs (23, 45, 66), drop bias LR by 1/10 at epoch 45
 weight_sched = Schedule([22, 44, 65], (1/250.)**(1/3.))
-opt_gdm = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sched,
+opt_gdm = GradientDescentMomentum(0.01/2, 0.9, wdecay=0.0005, schedule=weight_sched,
                                   stochastic_round=args.rounding)
-opt_biases = GradientDescentMomentum(0.02, 0.9, schedule=Schedule([44], 0.1),
+opt_biases = GradientDescentMomentum(0.02/2, 0.9, schedule=Schedule([44], 0.1),
                                      stochastic_round=args.rounding)
 opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 

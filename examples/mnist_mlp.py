@@ -40,7 +40,7 @@ Examples:
 import logging
 
 from neon.callbacks.callbacks import Callbacks
-from neon.data import DataIterator, load_mnist
+from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
@@ -62,9 +62,9 @@ logger.setLevel(args.log_thresh)
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
 
 # setup a training set iterator
-train_set = DataIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
+train_set = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
 # setup a validation data set iterator
-valid_set = DataIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
+valid_set = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
 
 # setup weight initialization function
 init_norm = Gaussian(loc=0.0, scale=0.01)
@@ -83,9 +83,8 @@ optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=arg
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
-
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))

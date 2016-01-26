@@ -142,6 +142,8 @@ class CrossEntropyMulti(Cost):
             scale (float): amount by which to scale the backpropagated error
             usebits (boolean): whether to display costs in bits or nats (default)
         """
+        super(CrossEntropyMulti, self).__init__()
+        self.usebits = usebits
         self.scale = scale
         self.logscale = np.float(1. / np.log(2.0) if usebits else 1.)
 

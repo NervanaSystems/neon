@@ -29,7 +29,8 @@ Usage:
 """
 
 from neon.backends import gen_backend
-from neon.data import Text, load_text
+from neon.data.text import Text
+from neon.data.dataloaders import load_ptb_train, load_ptb_test
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, LSTM, Affine, GRU, LookupTable
 from neon.models import Model
@@ -54,8 +55,8 @@ gradient_clip_norm = 5
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download penn treebank
-train_path = load_text('ptb-train', path=args.data_dir)
-valid_path = load_text('ptb-valid', path=args.data_dir)
+train_path = load_ptb_train(path=args.data_dir)
+valid_path = load_ptb_test(path=args.data_dir)
 
 
 # define a custom function to parse the input into individual tokens, which for
@@ -97,7 +98,7 @@ optimizer = GradientDescentMomentum(1, 0, gradient_clip_norm=gradient_clip_norm,
                                     schedule=learning_rate_sched)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
 
 # train model
 model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

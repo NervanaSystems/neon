@@ -2,12 +2,11 @@ from collections import Counter
 import numpy as np
 import os
 
-from neon import NervanaObject
-from neon.data.datasets import fetch_dataset
-from neon.util.persist import load_obj
+from neon.data.dataiterator import NervanaDataIterator
+from neon.data.datasets import Dataset
 
 
-class ImageCaption(NervanaObject):
+class ImageCaption(NervanaDataIterator):
     """
     This class loads in the sentences and CNN image features for image captioning
     that have been taken from Andrej Karpathy's
@@ -24,6 +23,43 @@ class ImageCaption(NervanaObject):
 
     end_token = '.'
     image_size = 4096  # Hard code VVG feature size
+
+    def __init__(self, path, max_images=-1):
+        """
+        Load vocab and image features. Convert sentences to indices
+
+        Args:
+            path (str): Directory containing sentences and image features.
+            max_images (int): Number of images to load. Set to -1 for max.
+        """
+        super(ImageCaption, self).__init__(name=None)
+
+        self.path = path
+        print 'Reading train images and sentences from %s' % self.path
+        self.read_images('train')
+        self.load_vocab()
+
+        trainSents, trainImgs = [], []
+        for i, img_sent in enumerate(self.iterImageSentencePair()):
+            if len(trainSents) > max_images and max_images > 0:
+                break
+            trainImgs.append(img_sent['image'])
+            sent = [self.end_token] + [x for x in img_sent['sentence']['tokens']
+                                       if x in self.vocab_to_index]
+            trainSents.append(sent[:self.max_sentence_length])
+
+        self.nbatches = len(trainImgs) // self.be.bsz
+        self.ndata = self.nbatches * self.be.bsz
+
+        self.X = np.zeros((len(trainSents), self.max_sentence_length))
+        self.y = np.zeros((len(trainSents), self.max_sentence_length+1))
+        self.images = np.vstack(trainImgs)
+
+        self.sent_length = np.array([len(x)+1 for x in trainSents])
+        self.sent_ends = np.arange(self.max_sentence_length+1)[:, np.newaxis]
+        for sent_idx, sent in enumerate(trainSents):
+            self.X[sent_idx, :len(sent)] = [self.vocab_to_index[word] for word in sent]
+        self.y[:, :-1] = self.X
 
     def load_vocab(self):
         """
@@ -85,45 +121,10 @@ class ImageCaption(NervanaObject):
             split (str): test or train split
         """
         data_path = os.path.join(self.path, 'features.pkl.gz')
+        from neon.util.persist import load_obj
         self.dataset = load_obj(data_path)
         self.sent_data = self.dataset['sents'][split]
         self.features = self.dataset['feats']
-
-    def __init__(self, path, max_images=-1):
-        """
-        Load vocab and image features. Convert sentences to indices
-
-        Args:
-            path (str): Directory containing sentences and image features.
-            max_images (int): Number of images to load. Set to -1 for max.
-        """
-
-        self.path = path
-        print 'Reading train images and sentences from %s' % self.path
-        self.read_images('train')
-        self.load_vocab()
-
-        trainSents, trainImgs = [], []
-        for i, img_sent in enumerate(self.iterImageSentencePair()):
-            if len(trainSents) > max_images and max_images > 0:
-                break
-            trainImgs.append(img_sent['image'])
-            sent = [self.end_token] + [x for x in img_sent['sentence']['tokens']
-                                       if x in self.vocab_to_index]
-            trainSents.append(sent[:self.max_sentence_length])
-
-        self.nbatches = len(trainImgs) // self.be.bsz
-        self.ndata = self.nbatches * self.be.bsz
-
-        self.X = np.zeros((len(trainSents), self.max_sentence_length))
-        self.y = np.zeros((len(trainSents), self.max_sentence_length+1))
-        self.images = np.vstack(trainImgs)
-
-        self.sent_length = np.array([len(x)+1 for x in trainSents])
-        self.sent_ends = np.arange(self.max_sentence_length+1)[:, np.newaxis]
-        for sent_idx, sent in enumerate(trainSents):
-            self.X[sent_idx, :len(sent)] = [self.vocab_to_index[word] for word in sent]
-        self.y[:, :-1] = self.X
 
     def __iter__(self):
         """
@@ -263,7 +264,7 @@ class ImageCaption(NervanaObject):
         owd = os.getcwd()
         os.chdir(self.path)
         if not os.path.exists(bleu_script):
-            fetch_dataset(bleu_script_url, bleu_script, bleu_script, 6e6)
+            Dataset.fetch_dataset(bleu_script_url, bleu_script, bleu_script, 6e6)
         bleu_command = 'perl multi-bleu.perl reference < output'
         print "Executing bleu eval script: ", bleu_command
         os.system(bleu_command)
@@ -341,3 +342,60 @@ class ImageCaptionTest(ImageCaption):
             self.dev_image.set(image_batch)
 
             yield (self.dev_image, self.dev_X), (self.ref_sents[start:end], None)
+
+
+class Flickr8k(Dataset):
+    def __init__(self, path='.', max_images=-1):
+        url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'
+        super(Flickr8k, self).__init__('flickr8k.zip',
+                                       url,
+                                       49165563,
+                                       path=path)
+        self.max_images = max_images
+
+    def gen_iterators(self):
+        data_path = self.load_data()
+        data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
+        data_dict['test'] = ImageCaptionTest(path=data_path)
+        return data_dict
+
+    def load_data(self):
+        return self.load_zip(self.filename, self.size)
+
+
+class Flickr30k(Dataset):
+    def __init__(self, path='.', max_images=-1):
+        url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'
+        super(Flickr30k, self).__init__('flickr30k.zip',
+                                        url,
+                                        49165563,
+                                        path=path)
+        self.max_images = max_images
+
+    def gen_iterators(self):
+        data_path = self.load_data()
+        data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
+        data_dict['test'] = ImageCaptionTest(path=data_path)
+        return data_dict
+
+    def load_data(self):
+        return self.load_zip(self.filename, self.size)
+
+
+class Coco(Dataset):
+    def __init__(self, path='.', max_images=-1):
+        url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'
+        super(Coco, self).__init__('coco.zip',
+                                   url,
+                                   738051031,
+                                   path=path)
+        self.max_images = max_images
+
+    def load_data(self):
+        return self.load_zip(self.filename, self.size)
+
+    def gen_iterators(self):
+        data_path = self.load_data()
+        data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
+        data_dict['test'] = ImageCaptionTest(path=data_path)
+        return data_dict

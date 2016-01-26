@@ -530,12 +530,23 @@ class NervanaCPU(Backend):
         self.hist_idx = 0
         self.hist_map = dict()
 
+    def gen_rng(self, seed=None):
+        self.rng = np.random.RandomState(seed)
+        self.init_rng_state = self.rng_get_state()
+        return self.rng
+
+    def rng_set_state(self, state):
+        self.rng.set_state(state)
+
+    def rng_get_state(self):
+        return self.rng.get_state()
+
     def rng_reset(self):
         """
         Reset the random state to the state where the Backend is first
         initialized.
         """
-        self.rng.set_state(self.init_rng_state)
+        self.rng_set_state(self.init_rng_state)
 
     def execute(self, optree):
         """

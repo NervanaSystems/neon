@@ -424,15 +424,20 @@ class Backend(object):
         compat_mode (str, optional): Flag to match implementation of other
                                      libraries.  Currently only 'caffe' is
                                      supported, defaults to None.
+        deterministic_update (bool, optional): Flag to use deterministic kernels
+                                                where applicable for updates.  This
+                                                may cause a small increase in memory
+                                                usage and slow down.  Only relevant for GPU
+                                                backends.
     """
     def __init__(self, rng_seed=None, default_dtype=np.float32,
-                 compat_mode=None):
+                 compat_mode=None, deterministic_update=False):
         # dtype
         self.default_dtype = default_dtype
 
         # use RandomState instead of seed
-        self.rng = np.random.RandomState(rng_seed)
-        self.init_rng_state = self.rng.get_state()  # for resetting state
+        self.rng_seed = rng_seed
+        self.rng = self.gen_rng(rng_seed)
 
         # batch size
         self.bsz = None
@@ -445,6 +450,8 @@ class Backend(object):
                 raise ValueError('%s mode not supported currently' % compat_mode)
         else:
             self.compat_mode = None
+
+        self.deterministic_update = deterministic_update
 
     def output_dim(self, X, S, padding, strides, pooling=False):
         """
@@ -528,11 +535,47 @@ class Backend(object):
             return self.zeros(bufshape, dtype=dtype, name=name,
                               persist_values=persist_values)
 
+    def gen_rng(self, seed=None):
+        """
+        Setup the random number generator(s) and store the state
+        in self.init_rng_state
+
+        Arguments:
+            seed (int or None): RNG seed, if the seed is None,
+                                then a seed will be randomly chosen
+
+        Returns:
+            np.random.RandomState: numpy RNG
+        """
+        raise NotImplementedError()
+
+    def rng_get_state(self, state):
+        """
+        Get the random number generator state to a specific state
+
+        Returns a tuple since some backends have mulitple RNG states
+        (e.g. on-host and on-device)
+
+        Returns:
+            state(s) (tuple of np.array): array which defines the current
+                                          state of the RNGs
+        """
+        raise NotImplementedError()
+
     def rng_reset(self):
         """
         Reset the random state to the state where the Backend is first
         initialized.
-        usually need to do: self.rng.set_state(self.init_rng_state)
+        """
+        raise NotImplementedError()
+
+    def rng_set_state(self, state):
+        """
+        Set the random number generator state to a specific state
+
+        Arguments:
+            state (np.array): array which is used to define the RNG
+                              state
         """
         raise NotImplementedError()
 

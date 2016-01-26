@@ -14,12 +14,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Small CIFAR10 based convolutional neural network. Showcases the use of cost
-scaling with the fp16 data format.
+Small CIFAR10 based convolutional neural network adapted from neon examples
+for use in serialization testing.
 """
 
 import numpy as np
-from neon.data import ArrayIterator, load_cifar10
+from neon.data import DataIterator, load_cifar10
 from neon.initializers import Uniform
 from neon.layers import Affine, Conv, Pooling, GeneralizedCost
 from neon.models import Model
@@ -39,8 +39,13 @@ num_epochs = args.epochs
 
 (X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
 
-train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
-test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
+Nmax = X_train.shape[0]/args.batch_size
+Nmax *= args.batch_size
+X_train = X_train[0:Nmax, :]
+y_train = y_train[0:Nmax, :]
+
+train = DataIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32), name='train')
+test = DataIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32), name='test')
 
 init_uni = Uniform(low=-0.1, high=0.1)
 if args.datatype in [np.float32, np.float64]:
@@ -64,11 +69,12 @@ if args.datatype in [np.float32, np.float64]:
 elif args.datatype in [np.float16]:
     cost = GeneralizedCost(costfunc=CrossEntropyMulti(scale=cost_scale))
 
-mlp = Model(layers=layers)
+model = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, eval_set=test, **args.callback_args)
+callbacks = Callbacks(model,  eval_set=test, **args.callback_args)
 
-mlp.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+# callbacks = Callbacks.load_callbacks(callbacks.get_description(), model, data=[train, test])
+model.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
-print 'Misclassification error = %.1f%%' % (mlp.eval(test, metric=Misclassification())*100)
+print 'Misclassification error = %.1f%%' % (model.eval(test, metric=Misclassification())*100)

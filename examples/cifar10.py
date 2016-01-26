@@ -17,7 +17,7 @@
 Small CIFAR10 based MLP with fully connected layers.
 """
 
-from neon.data import DataIterator, load_cifar10
+from neon.data import ArrayIterator, load_cifar10
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
@@ -32,8 +32,8 @@ args = parser.parse_args()
 
 (X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
 
-train = DataIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
-test = DataIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
+train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
+test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
 
 init_uni = Uniform(low=-0.1, high=0.1)
 opt_gdm = GradientDescentMomentum(learning_rate=0.01, momentum_coef=0.9)
@@ -47,7 +47,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, eval_set=test, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=test, **args.callback_args)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 

@@ -14,31 +14,40 @@
 # ----------------------------------------------------------------------------
 
 # backend: gpu
-cost: CrossEntropyBinary
 epochs: 10
 batchsize: 128
 
 wt_init: &wt_init
     type: Gaussian
-    loc: 0.0
-    scale: 0.01
+    config:
+        loc: 0.0
+        scale: 0.01
 
 layers:
 -
     type: Affine
-    nout: 100
-    init: *wt_init
-    activation: Rectlin
+    config:
+        nout: 100
+        init: *wt_init
+        activation:
+            type: Rectlin
 -
     type: Affine
-    nout: 10
-    init: *wt_init
-    activation: Logistic
+    config:
+        nout: 10
+        init: *wt_init
+        activation:
+            type: Logistic
+            config:
+                shortcut: True
+
+cost: CrossEntropyBinary
 
 optimizer:
     type: GradientDescentMomentum
-    learning_rate: 0.1
-    momentum_coef: 0.9
+    config:
+        learning_rate: 0.1
+        momentum_coef: 0.9
 
 dataset:
     name: mnist

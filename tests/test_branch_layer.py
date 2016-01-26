@@ -89,7 +89,7 @@ def test_branch_model():
     ref_weight_layers = [l for l in ref_all_layers if l.has_params]
     neon_weight_layers = neon_layer.layers_to_optimize
     for rl, nl in zip(ref_weight_layers, neon_weight_layers):
-        rl.set_params(nl.W.get())
+        rl.set_params({'params': {'W': nl.W.get()}})
 
     # Forward prop
     inp_middle = ref_layers[0].fprop(inp)

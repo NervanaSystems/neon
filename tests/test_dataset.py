@@ -18,7 +18,7 @@ import numpy as np
 import os
 
 from neon import NervanaObject
-from neon.data import DataIterator, load_mnist
+from neon.data import ArrayIterator, load_mnist
 from neon.data.text import Text
 
 logging.basicConfig(level=20)
@@ -28,7 +28,7 @@ logger = logging.getLogger()
 def test_dataset(backend_default, data):
     (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
 
-    train_set = DataIterator(X_train, y_train, nclass=nclass)
+    train_set = ArrayIterator(X_train, y_train, nclass=nclass)
     train_set.be = NervanaObject.be
 
     for i in range(2):

@@ -20,7 +20,7 @@ or when num_epochs has been reached, whichever is first.
 """
 import os
 
-from neon.data import DataIterator, load_mnist
+from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
@@ -34,8 +34,8 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
-train_set = DataIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
-valid_set = DataIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
+train_set = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
+valid_set = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
 
 # weight initialization
 init_norm = Gaussian(loc=0.0, scale=0.01)
@@ -69,7 +69,7 @@ optimizer = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)
 if args.callback_args['eval_freq'] is None:
     args.callback_args['eval_freq'] = 1
 
-callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 callbacks.add_early_stop_callback(stop_func)
 callbacks.add_save_best_state_callback(os.path.join(args.data_dir, "early_stop-best_state.pkl"))
 mlp.fit(train_set,

@@ -20,11 +20,14 @@ import os
 import atexit
 
 from neon import NervanaObject
+from neon.data.datasets import Dataset
+from neon.data.dataiterator import NervanaDataIterator
+
 
 logger = logging.getLogger(__name__)
 
 
-class ImageLoader(NervanaObject):
+class ImageLoader(NervanaDataIterator):
     """
     Encapsulates the data loader library and exposes a backward-compatible API
     to iterate over minibatches of images.
@@ -72,6 +75,7 @@ class ImageLoader(NervanaObject):
                  rgb=True, shuffle=False, set_name='train', subset_pct=100,
                  nlabels=1, macro=True, dtype=np.float32,
                  contrast_range=(100, 100)):
+        super(ImageLoader, self).__init__(name=set_name)
         if not rgb:
             raise ValueError('Non-RGB images are currently not supported')
         self.configure(repo_dir, inner_size, scale_range, do_transforms,
@@ -289,6 +293,27 @@ class ImageLoader(NervanaObject):
                                                    axis=0)
             self.idx = 1 if self.idx == 0 else 0
             yield self.data, self.onehot_labels
+
+
+class I1K(Dataset):
+    def __init__(self, data_dir, inner_size=224, subset_pct=100):
+        self.data_dir = data_dir
+        self.inner_size = inner_size
+        self.subset_pct = subset_pct
+
+    def load_data(self):
+        assert os.path.isdir(self.data_dir)
+
+    def gen_iterators(self):
+        img_set_options = dict(repo_dir=self.data_dir,
+                               inner_size=self.inner_size,
+                               subset_pct=self.subset_pct)
+        train = ImageLoader(set_name='train', do_transforms=False, **img_set_options)
+        val = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
+
+        self.data_dict = {'train': train,
+                          'valid': val}
+        return self.data_dict
 
 
 if __name__ == '__main__':

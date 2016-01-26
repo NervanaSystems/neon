@@ -12,13 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from neon.data.dataiterator import DataIterator
+
+from neon.data.dataiterator import NervanaDataIterator, DataIterator, ArrayIterator 
+from neon.data.datasets import Dataset
+from neon.data.dataloaders import (load_mnist, load_cifar10, load_babi, load_flickr8k,
+                                   load_flickr30k, load_coco, load_i1kmeta, load_text,
+                                   I1Kmeta, load_shakespeare)
+from neon.data.text import Text, Shakespeare, PTB, HutterPrize, IMDB
 from neon.data.batch_writer import BatchWriter, BatchWriterI1K
-from neon.data.text import Text
 from neon.data.imageloader import ImageLoader
 from neon.data.questionanswer import BABI, QA
 from neon.data.speech import Speech
 from neon.data.video import Video
-from neon.data.datasets import (load_text, load_mnist, load_cifar10, load_babi, load_flickr8k,
-                                load_flickr30k, load_coco, load_i1kmeta)
-from neon.data.imagecaption import ImageCaption, ImageCaptionTest
+from neon.data.imagecaption import ImageCaption, ImageCaptionTest, Flickr8k, Flickr30k, Coco
+from neon.data.image import MNIST, CIFAR10

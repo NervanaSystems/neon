@@ -15,9 +15,11 @@
 from collections import OrderedDict
 import logging
 
+from neon import __version__ as __neon_version__
 from neon import NervanaObject
 from neon.transforms import CrossEntropyBinary, Logistic
-from neon.util.persist import load_obj, save_obj
+from neon.util.persist import load_obj, save_obj, load_class
+from neon.util.modeldesc import ModelDescription
 from neon.layers import Sequential, Activation, Tree
 import numpy as np
 
@@ -27,17 +29,19 @@ logger = logging.getLogger(__name__)
 class Model(NervanaObject):
     """
     Basic model class which stores a list of layers describing the model. Can train the layer
-    weights on a dataset, evaluate on a test set and serialize the model.
-    Additional functionality can be added to :func:`fit` through callback functions.
+    weights on a dataset, evaluate on a test set and serialize the mode.
+    Additional functionality can be added to fit through callback functions.
 
     Arguments:
         layers: layer container, or a list of layers (that will be containerized)
         name (str): Model name.  Defaults to "model"
+        dataset (iterator): Data set
+        inference (bool): set to true if model will only be run for inference (fprop only)
         optimizer (Optimizer): Optimizer object which defines the learning rule
                                for updating model parameters (ie DescentMomentum, AdaDelta)
     """
 
-    def __init__(self, layers, name="model", optimizer=None):
+    def __init__(self, layers, dataset=None, inference=False, name="model", optimizer=None):
         super(Model, self).__init__(name)
         self.optimizer = optimizer
         self.params = None  # should be able to remove
@@ -46,17 +50,22 @@ class Model(NervanaObject):
         self.finished = False
         self.initialized = False
         self.cost = None
+        self.inference = inference
+        self.nbatches = 0
+        self.ndata = 0
 
-        # Wrap the list of layers in a Sequential container if a raw list of layers
-        self.layers = layers if type(layers) in (Sequential, Tree) else Sequential(layers)
+        if type(layers) is ModelDescription or type(layers) is dict:
+            # load up the model from a serialized file
+            assert dataset is not None, 'Need data set to initialize model from serialized file'
+            self.deserialize(layers, dataset, weights_only=False)
+        else:
+            # Wrap the list of layers in a Sequential container if a raw list of layers
+            self.layers = layers if type(layers) in (Sequential, Tree) else Sequential(layers)
         self.layers_to_optimize = self.layers.layers_to_optimize
 
     def set_shortcut(self):
-        """
-        Utilize the faster shortcut backprop operation for an appropriately
-        paired cost and last layer activation function.  If such a pairing is
-        not found, this call has no effect.
-        """
+        # infer whether bprop shortcut can be used on final activation
+        # self.cost should be set to run this otherwise do nothing
         lastlayer = self.layers[-1]
         try:
             if self.cost.costfunc.__class__ is CrossEntropyBinary:
@@ -69,33 +78,16 @@ class Model(NervanaObject):
             pass
 
     def initialize(self, dataset, cost=None):
-        """
-        Performs initial setup and device buffer allocation required for each
-        layer.  Generally this will be called as part of the first call to
-        :func:`fit` or :func:`eval`, and subsequent calls will re-use the same
-        buffers.
-
-        Arguments:
-            dataset (iterator): An iterable of minibatches.
-            cost (Cost, optional): The cost function to be minimized (in the
-                                   case of model fitting).
-
-        Notes:
-            You will need to explicitly call initialize prior to subsequent
-            :func:`fit` or :func:`eval` calls if input data, the cost function,
-            or any of the layers change.  For instance if running eval prior to
-            the first fit, the cost will not be initialized during eval since
-            it isn't required.  An explicit :func:`initialize` call alleviates
-            this.
-        """
         if self.initialized:
-            return
+            logger.info('Model.initialize was run more than once')
+
         # Propagate shapes through the layers to configure
         prev_input = dataset
         prev_input = self.layers.configure(prev_input)
 
         if cost is not None:
             cost.initialize(prev_input)
+            self.cost = cost
 
         # Now allocate space
         self.layers.allocate()
@@ -127,8 +119,9 @@ class Model(NervanaObject):
             num_epochs: Number of times to iterate over the dataset.
             callbacks (Callbacks): Defines callbacks to run at the end of each mini-batch / epoch.
         """
-        self.cost = cost
         self.initialize(dataset, cost)
+        self.nbatches = dataset.nbatches
+        self.ndata = dataset.ndata
         # self.set_shortcut()  # infer if bprop shortcut can be used
         self.optimizer = optimizer
         self.total_cost = self.be.empty((1, 1), dtype=np.float32)
@@ -136,6 +129,7 @@ class Model(NervanaObject):
         callbacks.on_train_begin(num_epochs)
 
         while self.epoch_index < num_epochs and not self.finished:
+            self.nbatches = dataset.nbatches
 
             callbacks.on_epoch_begin(self.epoch_index)
 
@@ -255,7 +249,7 @@ class Model(NervanaObject):
 
         return Ypred[:dataset.ndata]
 
-    def get_description(self):
+    def get_description(self, get_weights=False, keep_states=False):
         """
         Gets a description of the model required to reconstruct the model with
         no weights like from a yaml file.
@@ -264,11 +258,20 @@ class Model(NervanaObject):
             dict: Description of each component of the model.
         """
         pdict = dict()
-        pdict['backend'] = 'gpu'
-        pdict['cost'] = self.cost.costfunc.__class__.__name__
-        pdict['layers'] = [l.get_description() for l in self.layers]
+        pdict['neon_version'] = __neon_version__
+        compat_mode = self.be.compat_mode if self.be.compat_mode is not None else 'neon'
+        pdict['backend'] = {'type': self.be.__class__.__name__,
+                            'compat_mode': compat_mode,
+                            'rng_seed': self.be.rng_seed,
+                            'rng_state': self.be.rng_get_state()}
+
+        if self.cost:
+            pdict['cost'] = self.cost.get_description()
         if self.optimizer:
             pdict['optimizer'] = self.optimizer.get_description()
+
+        pdict['model'] = self.layers.get_description(get_weights=get_weights,
+                                                     keep_states=keep_states)
         return pdict
 
     def save_params(self, param_path, keep_states=True):
@@ -280,7 +283,7 @@ class Model(NervanaObject):
             keep_states (bool): Whether to save optimizer states too.
                                 Defaults to True.
         """
-        save_obj(self.serialize(keep_states), param_path)
+        self.serialize(keep_states=keep_states, fn=param_path)
 
     def load_params(self, param_path):
         """
@@ -292,7 +295,7 @@ class Model(NervanaObject):
                               weights and states.
         """
         pdict = load_obj(param_path)
-        self.deserialize(pdict)
+        self.deserialize(pdict, weights_only=True)
         logger.info('Model weights loaded from %s', param_path)
 
     def load_weights(self, weight_path):
@@ -304,43 +307,98 @@ class Model(NervanaObject):
                        'load_params instead')
         self.load_params(weight_path)
 
-    def deserialize(self, params):
+    def deserialize(self, model_dict, data=None, weights_only=True):
         """
         Loads per layer (weights, states) and other model parameters from the
         dictionary passed.
 
         Arguments:
-            params (dict): parameters as returned by serialize().
-        """
-        self.epoch_index = params['epoch_index']
+            model_dict (dict): dictionary describing the model including layers,
+                               cost, optimizers, backend settings, etc.
+                               generated by the serialize function
 
-        param_layers = [l for l in self.layers_to_optimize]
-        param_dict_list = params['layer_params_states']
-        for l, ps in zip(param_layers, param_dict_list):
-            l.set_params(ps['params'])
-            if 'states' in ps:
-                l.set_states(ps['states'])
+            data (NervanaDataIterator): data iterator used to intialize the
+                                        model
+
+            weights_only (bool): if True, then only the weights will be loaded
+                                 into a model in which the layers have already been
+                                 created, otherwise will (re)create the layers from
+                                 the serialzed parameters and set the weights
+        """
+
+        if 'epoch_index' in model_dict:
+            self.epoch_index = model_dict['epoch_index']
+        if 'model' not in model_dict:
+            logger.error('Using old model serialization format. '
+                         'Serialized the model into new format')
+
+            param_layers = [l for l in self.layers_to_optimize]
+            param_dict_list = model_dict['layer_params_states']
+            for l, ps in zip(param_layers, param_dict_list):
+                l.set_params(ps)
+                if 'states' in ps:
+                    l.set_states(ps)
+            return
+
+        if 'backend' in model_dict:
+            if 'compat_mode' in model_dict['backend']:
+                self.be.compat_mode = model_dict['backend']['compat_mode']
+        else:
+            model_dict['backend'] = {}
+
+        # new serialization format
+        if weights_only:
+            self.layers.load_weights(model_dict['model'])
+            return
+
+        typ = model_dict['model']['type']
+        main_container = load_class(typ)
+        self.layers = main_container.gen_class(model_dict['model']['config'])
+
+        cost = None
+        if 'cost' in model_dict:
+            cost_cls = load_class(model_dict['cost']['type'])
+            cost = cost_cls.gen_class(model_dict['cost']['config'])
+
+        if 'optimizer' in model_dict:
+            opt_cls = load_class(model_dict['optimizer']['type'])
+            opt = opt_cls.gen_class(model_dict['optimizer']['config'])
+
+        if self.be.__class__.__name__ == 'NervanaMGPU':
+            assert data is not None, 'Need dataset to init MGPU models'
+
+        if data is not None:
+            self.initialize(data, cost=cost)
+            self.optimizer = opt
+
+        self.layers.load_weights(model_dict['model'])
+
+        if 'rng_state' in model_dict['backend']:
+            self.be.rng_set_state(model_dict['backend']['rng_state'])
 
     # serialize tells how to write out the parameters we've learned so
     # far and associate them with layers. it can ignore layers with no
     # learned parameters. the model stores states to pass to the
     # optimizers.  if we're saving the model out for inference, we
     # don't need to remember states.
-    def serialize(self, keep_states=True):
+    def serialize(self, fn=None, keep_states=True):
         """
         Creates a dictionary storing the layer parameters and epochs complete.
 
         Arguments:
+            fn (str): file to save pkl formatted model dictionary
             keep_states (bool): Whether to save optimizer states.
 
         Returns:
             dict: Model data including layer parameters and epochs complete.
         """
-        pdict = dict()
-        params_states = [l.get_params_serialize(keep_states) for l in self.layers_to_optimize]
-        pdict['layer_params_states'] = params_states
-        # start training again on the next epoch
+
+        # get the model dict with the weights
+        pdict = self.get_description(get_weights=True, keep_states=keep_states)
         pdict['epoch_index'] = self.epoch_index + 1
+        if fn is not None:
+            save_obj(pdict, fn)
+            return
         return pdict
 
     def benchmark(self, dataset, cost, optimizer, niterations=20, nskip=2):

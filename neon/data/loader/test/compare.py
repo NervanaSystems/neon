@@ -26,7 +26,7 @@ python compare.py -e1 -r0 -bcpu -w <place where data lives>
 """
 import os
 import numpy as np
-from neon.data import DataIterator
+from neon.data import ArrayIterator
 from neon.initializers import Uniform
 from neon.layers import Affine, Conv, Pooling, GeneralizedCost
 from neon.models import Model
@@ -135,8 +135,8 @@ def test_iterator():
     parser = NeonArgparser(__doc__)
     args = parser.parse_args()
     (X_train, y_train), (X_test, y_test), nclass = load_cifar10_imgs(path=args.data_dir)
-    train = DataIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
-    test = DataIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
+    train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
+    test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
     return run(args, train, test)
 
 

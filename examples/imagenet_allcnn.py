@@ -36,6 +36,8 @@ from neon.data import ImageLoader
 parser = NeonArgparser(__doc__)
 parser.add_argument('--deconv', action='store_true',
                     help='save visualization data from deconvolution')
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
 
 
@@ -54,7 +56,7 @@ img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        scale_range=256,
                        dtype=args.datatype,
-                       subset_pct=100)
+                       subset_pct=args.subset_pct)
 train = ImageLoader(set_name='train', **img_set_options)
 test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
 
@@ -95,16 +97,16 @@ layers.append(Activation(Softmax()))
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 
-mlp = Model(layers=layers)
+model = Model(layers=layers)
 
 if args.model_file:
     import os
     assert os.path.exists(args.model_file), '%s not found' % args.model_file
-    mlp.load_params(args.model_file)
+    model.load_params(args.model_file)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, eval_set=test, **args.callback_args)
+callbacks = Callbacks(model, eval_set=test, **args.callback_args)
 if args.deconv:
     callbacks.add_deconv_callback(train, test)
 
-mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+model.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

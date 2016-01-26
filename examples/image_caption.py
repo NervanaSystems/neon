@@ -27,7 +27,7 @@ https://github.com/karpathy/neuraltalk
 """
 from neon.backends import gen_backend
 from neon.data import load_flickr8k, ImageCaption, ImageCaptionTest
-from neon.initializers import Uniform, Constant
+from neon.initializers import Uniform, Constant, Array
 from neon.layers import GeneralizedCostMask, LSTM, Affine, Dropout, Sequential, MergeMultistream
 from neon.models import Model
 from neon.optimizers import RMSProp
@@ -54,11 +54,11 @@ train_set = ImageCaption(path=data_path, max_images=-1)
 
 # weight initialization
 init = Uniform(low=-0.08, high=0.08)
-init2 = Constant(val=train_set.be.array(train_set.bias_init))
+init2 = Array(val=train_set.be.array(train_set.bias_init))
 
 # model initialization
 image_path = Sequential([Affine(hidden_size, init, bias=Constant(val=0.0))])
-sent_path = Sequential([Affine(hidden_size, init, linear_name='sent')])
+sent_path = Sequential([Affine(hidden_size, init, name='sent')])
 
 layers = [
     MergeMultistream(layers=[image_path, sent_path], merge="recurrent"),
@@ -79,7 +79,7 @@ if args.callback_args['serialize'] is None:
 
 model = Model(layers=layers)
 
-callbacks = Callbacks(model, train_set, **args.callback_args)
+callbacks = Callbacks(model, **args.callback_args)
 
 opt = RMSProp(decay_rate=0.997, learning_rate=0.0005, epsilon=1e-8, gradient_clip_value=1)
 

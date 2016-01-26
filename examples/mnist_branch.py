@@ -43,7 +43,7 @@ The topology of the network is:
 import logging
 
 from neon.callbacks.callbacks import Callbacks
-from neon.data import DataIterator, load_mnist
+from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine, BranchNode, Multicost, Tree
 from neon.models import Model
@@ -63,9 +63,9 @@ args = parser.parse_args()
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
 
 # setup a training set iterator
-train_set = DataIterator(X_train, y_train, nclass=nclass)
+train_set = ArrayIterator(X_train, y_train, nclass=nclass)
 # setup a validation data set iterator
-valid_set = DataIterator(X_test, y_test, nclass=nclass)
+valid_set = ArrayIterator(X_test, y_test, nclass=nclass)
 
 # setup weight initialization function
 init_norm = Gaussian(loc=0.0, scale=0.01)
@@ -79,20 +79,20 @@ b1 = BranchNode(name="b1")
 b2 = BranchNode(name="b2")
 
 
-p1 = [Affine(nout=100, linear_name="m_l1", **normrelu),
+p1 = [Affine(nout=100, name="m_l1", **normrelu),
       b1,
-      Affine(nout=32, linear_name="m_l2", **normrelu),
-      Affine(nout=16, linear_name="m_l3", **normrelu),
+      Affine(nout=32, name="m_l2", **normrelu),
+      Affine(nout=16, name="m_l3", **normrelu),
       b2,
-      Affine(nout=10, linear_name="m_l4", **normsoft)]
+      Affine(nout=10, name="m_l4", **normsoft)]
 
 p2 = [b1,
-      Affine(nout=16, linear_name="b1_l1", **normrelu),
-      Affine(nout=10, linear_name="b1_l2", **normsigm)]
+      Affine(nout=16, name="b1_l1", **normrelu),
+      Affine(nout=10, name="b1_l2", **normsigm)]
 
 p3 = [b2,
-      Affine(nout=16, linear_name="b2_l1", **normrelu),
-      Affine(nout=10, linear_name="b2_l2", **normsigm)]
+      Affine(nout=16, name="b2_l1", **normrelu),
+      Affine(nout=10, name="b2_l2", **normsigm)]
 
 
 # setup cost function as CrossEntropy
@@ -109,7 +109,7 @@ alphas = [1, 0.25, 0.25]
 mlp = Model(layers=Tree([p1, p2, p3], alphas=alphas))
 
 # setup standard fit callbacks
-callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

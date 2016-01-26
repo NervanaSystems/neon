@@ -647,6 +647,9 @@ class NervanaGPU(Backend):
         TODO: define other keyword parameters!
         """
 
+    # size of the RNG pool on device
+    # currently this is hard wired
+    _RNG_POOL_SIZE = (3*2048*32, 1)
     def __init__(self,
                  rng_seed=None,
                  default_dtype=np.float32,
@@ -656,8 +659,8 @@ class NervanaGPU(Backend):
                  bench=False,
                  hist_bins=64,
                  hist_offset=-48,
-                 compat_mode=None):
-
+                 compat_mode=None, 
+                 deterministic_update=True):
         if default_dtype not in [np.float16, np.float32]:
             raise ValueError('Default data type for nervanagpu '
                              'backend must be float16 or 32')
@@ -671,14 +674,21 @@ class NervanaGPU(Backend):
                 logger.warn('Using 32 bit floating point and setting stochastic '
                             'rounding to %d bits' % stochastic_round)
 
-        # super class init
-        super(NervanaGPU, self).__init__(rng_seed, default_dtype, compat_mode=compat_mode)
-
         # context
         drv.init()
         self.device_type = 1
         self.device_id = device_id if device_id is not None else 0
         self.ctx = drv.Device(device_id).make_context()
+
+        # store the rand pool for each context
+        self.context_rand_state_map = {}  # stores gpu memory reference
+        self.context_rand_state_alive = {}  # set whether randstate is fresh
+
+        # super class init
+        super(NervanaGPU, self).__init__(rng_seed,
+                                         default_dtype,
+                                         compat_mode=compat_mode,
+                                         deterministic_update=deterministic_update)
 
         # log
         logger.info("Initialized NervanaGPU")
@@ -708,9 +718,6 @@ class NervanaGPU(Backend):
         self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
         drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
 
-        # store the rand pool for each context
-        self.context_rand_state_map = {}  # stores gpu memory reference
-        self.context_rand_state_alive = {}  # set whether randstate is fresh
 
         # Fall back to CUDA C kernels on older (pre-Maxwell) GPU generations
         self.compute_capability = drv.Device(self.device_id).compute_capability()
@@ -742,16 +749,118 @@ class NervanaGPU(Backend):
         except:
             pass
 
-    def rng_reset(self):
+    def gen_rng(self, seed=None):
         """
-        Reset the random state to the state where the Backend is first
-        initialized.
+        Generate the random number generator on device and on host
+
+        Arguments:
+            seed (int): random number generator seed
+
+        Returns:
+            seeded numpy RNG
         """
-        self.rng.set_state(self.init_rng_state)
-        for ctx in self.context_rand_state_alive:
+        # generate on host rng
+        self.rng = np.random.RandomState(seed)
+
+        # save the initial state of host rng
+        self.init_rng_state = self.rng.get_state()
+
+        # generate random integers to seed the LSFR
+        # RNGs on the device
+        self.init_rng_state_dev = self._gen_dev_randstate()
+
+        # call below is mainly to set on device RNG states
+        # to self.init_rng_state_dev
+        self.rng_reset()
+
+        # if the current context already has an rng clear it
+        ctx = drv.Context.get_current()
+        if ctx in self.context_rand_state_alive:
             self.context_rand_state_alive[ctx] = False
 
-    def _get_rand_state(self):
+        # generate the on device RNG
+        self._set_rand_state_dev(state=self.init_rng_state_dev)
+        return self.rng
+
+    def _gen_dev_randstate(self):
+        """
+        Generate a list of random uint32 numbers to seed the LFSR
+        states on device
+
+        Returns:
+            np.array: return a vector of uint32 numbers
+        """
+        # will use the numpy rng to generate the states
+        # but want to reset it after this is done
+        state_save = self.rng.get_state()
+
+        # draw _RNG_POOL_SIZE 32 bit ints to seed LFSR on device
+        # lower bound 1 to avoid seeding LFSR with 0
+        rand_init = self.rng.random_integers(1, 2**32 - 1, NervanaGPU._RNG_POOL_SIZE)
+        rand_init = rand_init.astype(np.uint32)
+
+        # put the numpy (on host) RNG back to its state before
+        self.rng.set_state(state_save)
+
+        return rand_init
+
+    def rng_reset(self):
+        """
+        Reset the RNG to the initial state stored in
+        self.init_rng_state and self.init_rng_state_dev
+        for the host and device RNG, respectively.
+        """
+        self.rng_set_state( (self.init_rng_state, self.init_rng_state_dev) )
+
+    def rng_set_state(self, rng_states):
+        """
+        Set the RNG state for both the on device and on host RNGs
+
+        Arguments:
+            rng_states (tuple of np.arrays): tuple with 2 elements
+                                                1) numpy random number state vector
+                                                2) array of uint32 specifying on dev RNG state
+        """
+        assert type(rng_states) is tuple and len(rng_states) == 2
+        self._set_rand_state_dev(state=rng_states[1])
+        self.rng.set_state(rng_states[0])
+
+    def rng_get_state(self):
+        """
+        Return the current state of the on-host and on-device RNGs
+
+        Returns:
+            (np.array, np.array): the on-host and on-device RNG state vectors,
+                                  respectively
+        """
+        dev_state = self._get_rand_state_dev()
+        dev_state_local = np.zeros(NervanaGPU._RNG_POOL_SIZE).astype(np.uint32)
+        drv.memcpy_dtoh(dev_state_local, dev_state)
+        return (self.rng.get_state(), dev_state_local)
+
+    def _set_rand_state_dev(self, state=None):
+        """
+        Set on device RNG states to values given by "state" input.  
+
+        Arguments:
+            state (np.array or None): an array of uint32 values used to 
+                                      set the state of the on device LFSRs.
+                                      if set to None, the state will be created
+                                      randomly
+        """
+        ctx = drv.Context.get_current()
+        if state is None:
+            state = self._gen_dev_randstate()
+        if ctx in self.context_rand_state_map:
+            rand_state = self.context_rand_state_map[ctx]
+        else:
+            rand_state = drv.mem_alloc(state.nbytes)
+            self.context_rand_state_map[ctx] = rand_state
+        drv.memcpy_htod(rand_state, state)
+        self.context_rand_state_alive[ctx] = True
+        return
+
+    def _get_rand_state_dev(self):
         """
         similar to @context_dependent_memoize, with additional ability to reset
         the random pool by `rng_reset`
@@ -762,21 +871,9 @@ class NervanaGPU(Backend):
         to be parameterized ...
         """
         ctx = drv.Context.get_current()
-        if ctx in self.context_rand_state_map and self.context_rand_state_alive[ctx]:
-            return self.context_rand_state_map[ctx]
-        else:
-            # generate random pool from numpy
-            rand_init = self.rng.random_integers(
-                0, 2 ** 32 - 1, (3 * 2048 * 32, 1)).astype(np.uint32)
-            # copy to device
-            if ctx in self.context_rand_state_map:
-                rand_state = self.context_rand_state_map[ctx]
-            else:
-                rand_state = drv.mem_alloc(rand_init.nbytes)
-                self.context_rand_state_map[ctx] = rand_state
-            drv.memcpy_htod(rand_state, rand_init)
-            self.context_rand_state_alive[ctx] = True
-            return rand_state
+        if not (ctx in self.context_rand_state_map and self.context_rand_state_alive[ctx]):
+            self._set_rand_state_dev()
+        return self.context_rand_state_map[ctx]
 
     def _buf_malloc(self, shape):
         """
@@ -993,7 +1090,7 @@ class NervanaGPU(Backend):
 
         # bypass stage creation
         if self._is_simple_stack(stack):
-            return call_compound_kernel(self._get_rand_state(), self.compute_capability, *stack)
+            return call_compound_kernel(self._get_rand_state_dev(), self.compute_capability, *stack)
 
         # create stages and evaluate
         stacks = self._split_to_stacks(optree)
@@ -1004,7 +1101,7 @@ class NervanaGPU(Backend):
                 # evaluate the simple dot
                 self.compound_dot(stack[1], stack[2], stack[0])
             else:
-                call_compound_kernel(self._get_rand_state(), self.compute_capability, *stack)
+                call_compound_kernel(self._get_rand_state_dev(), self.compute_capability, *stack)
 
         return stacks[-1][0]  # TODO: to be removed, used in partial
 
@@ -1424,7 +1521,7 @@ class NervanaGPU(Backend):
             sum_tensor.dtype.str[1:], sum_tensor.rounding > 0)
 
         kernel.prepared_async_call(
-            (shape[0], 1, 1), (32, 1, 1), self.stream, self._get_rand_state(),
+            (shape[0], 1, 1), (32, 1, 1), self.stream, self._get_rand_state_dev(),
             sum_tensor.gpudata, cmp_tensor.gpudata, add_tensor.gpudata,
             cmp_scale, add_scale,
             strides[0], strides[1],
@@ -1436,8 +1533,7 @@ class NervanaGPU(Backend):
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
                    str_d=1, str_h=1, str_w=1,
-                   relu=False, bsum=False,
-                   deterministic_update=False):
+                   relu=False, bsum=False):
         """
         Create a new ConvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -1463,14 +1559,10 @@ class NervanaGPU(Backend):
 
         bsum: calculate the sum along the batchnorm axis for fprop or bprop
               outputs an fp32 tensor of size Kx1
-
-        deterministic_update: avoid use of atomic operations for update
-                              to make it deterministic (GPU only)
-
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
                          pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                         relu, bsum, deterministic_update)
+                         relu, bsum, self.deterministic_update)
 
     def fprop_conv(self, layer, I, F, O, alpha=1.0, beta=0.0, bsum=None, repeat=1):
         assert layer.sizeI == I.size
@@ -1608,8 +1700,7 @@ class NervanaGPU(Backend):
                      R=1, S=1,
                      pad_d=0, pad_h=0, pad_w=0,
                      str_d=1, str_h=1, str_w=1,
-                     relu=False, bsum=False,
-                     deterministic_update=False):
+                     relu=False, bsum=False):
         """
         Create a new DeconvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -1639,12 +1730,10 @@ class NervanaGPU(Backend):
         bsum: calculate the sum along the batchnorm axis for fprop or bprop
               outputs an fp32 tensor of size Kx1
 
-        deterministic_update: eleminate atom adds in the update operation
-                              can slow the kernel down
         """
         return DeconvLayer(self, dtype, N, C, K, P, Q, R, S,
                            pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                           relu, bsum, deterministic_update)
+                           relu, bsum, self.deterministic_update)
 
     def lrn_layer(self, dtype, N, C, D=1, H=1, W=1, J=1):
         """

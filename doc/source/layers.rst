@@ -64,7 +64,6 @@ Dropout Layers
 --------------
 .. autosummary::
    neon.layers.layer.Dropout
-   neon.layers.layer.DropoutBinary
 
 
 LookupTable Layer

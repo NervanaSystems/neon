@@ -14,6 +14,7 @@
 # ----------------------------------------------------------------------------
 
 from neon import NervanaObject
+from neon.util.persist import load_class
 import numpy as np
 
 
@@ -34,6 +35,19 @@ class Optimizer(NervanaObject):
     Optimizers will take a param, update, and state
     will be responsible for keeping track of a schedule
     '''
+    def __init__(self, name=None):
+        super(Optimizer, self).__init__(name=name)
+
+    @classmethod
+    def gen_class(cls, pdict):
+        if 'schedule' in pdict:
+            typ = pdict['schedule']['type']
+            if typ.find('neon.') != 0:
+                typ = 'neon.optimizers.optimizer.' + typ
+            scls = load_class(typ)
+            sched = scls.gen_class(pdict['schedule']['config'])
+            pdict['schedule'] = sched
+        return cls(**pdict)
 
     def optimize(self, layer_list, epoch):
         raise NotImplementedError()
@@ -165,7 +179,7 @@ class GradientDescentMomentum(Optimizer):
 
     def __init__(self, learning_rate, momentum_coef, stochastic_round=False,
                  wdecay=0.0, gradient_clip_norm=None, gradient_clip_value=None,
-                 name="gdm", schedule=Schedule()):
+                 name=None, schedule=Schedule()):
         """
         Arguments:
             learning_rate (float): the multiplicative coefficient of updates
@@ -230,7 +244,7 @@ class RMSProp(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, decay_rate=0.95, learning_rate=2e-3, epsilon=1e-6,
-                 gradient_clip_norm=None, gradient_clip_value=None, name="rmsprop",
+                 gradient_clip_norm=None, gradient_clip_value=None, name=None,
                  schedule=Schedule()):
         """
         Arguments:
@@ -252,6 +266,7 @@ class RMSProp(Optimizer):
         Notes:
             Only constant learning rate is supported currently.
         """
+        super(RMSProp, self).__init__(name=name)
         self.state_list = None
 
         self.epsilon = epsilon
@@ -300,7 +315,7 @@ class Adagrad(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, learning_rate=0.01, epsilon=1e-6,
-                 gradient_clip_norm=None, gradient_clip_value=None, name="adagrad"):
+                 gradient_clip_norm=None, gradient_clip_value=None, name=None):
         """
         Arguments:
             stochastic_round (bool): Set this to True for stochastic rounding.
@@ -318,6 +333,7 @@ class Adagrad(Optimizer):
         Notes:
             Only constant learning rate is supported currently.
         """
+        super(Adagrad, self).__init__(name=name)
         self.state_list = None
         self.epsilon = epsilon
         self.learning_rate = learning_rate
@@ -360,7 +376,7 @@ class Adadelta(Optimizer):
     See Zeiler2012 for instance.
     """
 
-    def __init__(self, stochastic_round=False, decay=0.95, epsilon=1e-6, name="ada"):
+    def __init__(self, stochastic_round=False, decay=0.95, epsilon=1e-6, name=None):
         """
         Args:
             stochastic_round (bool): Set this to True for stochastic rounding.
@@ -464,7 +480,7 @@ class MultiOptimizer(Optimizer):
     A wrapper class for using multiple Optimizers within the same model.
     """
 
-    def __init__(self, optimizer_mapping, name="multiopt"):
+    def __init__(self, optimizer_mapping, name=None):
         """
 
         Args:
@@ -483,6 +499,28 @@ class MultiOptimizer(Optimizer):
             "optimizer in layer type to optimizer mapping"
 
         self.map_list = None
+
+    @classmethod
+    def gen_class(cls, pdict):
+        for key in pdict['optimizer_mapping']:
+            # these should be optimizers
+            typ = pdict['optimizer_mapping'][key]['type']
+            if typ.find('neon.') != 0:
+                typ = 'neon.optimizers.optimizer.' + typ
+            ocls = load_class(typ)
+            if 'config' not in pdict['optimizer_mapping'][key]:
+                pdict['optimizer_mapping'][key]['config'] = {}
+            conf = pdict['optimizer_mapping'][key]['config']
+            pdict['optimizer_mapping'][key] = ocls.gen_class(conf)
+        return cls(**pdict)
+
+    def get_description(self):
+        desc = {'type': self.modulenm}
+        desc['config'] = {'optimizer_mapping': {}}
+        for key in self.optimizer_mapping:
+            opt_desc = self.optimizer_mapping[key].get_description()
+            desc['config']['optimizer_mapping'][key] = opt_desc
+        return desc
 
     def map_optimizers(self, layer_list):
         """
@@ -530,9 +568,3 @@ class MultiOptimizer(Optimizer):
 
         for opt in self.map_list:
             opt.optimize(self.map_list[opt], epoch)
-
-    def get_description(self):
-        desc = {'type': self.__class__.__name__}
-        for key in self.optimizer_mapping:
-            desc[key] = self.optimizer_mapping[key].get_description()
-        return desc

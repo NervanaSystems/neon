@@ -64,16 +64,16 @@ def inception_bare(ref_module, kvals, name="i"):
     if p1[0]:
         for ll, lr in zip(branch1.layers, branch1_ref.layers):
             if ll.has_params:
-                ll.set_params(lr.W.get())
+                ll.set_params({'params': {'W': lr.W.get()}})
 
     for ll, lr in zip(branch2.layers, branch2_ref.layers):
         if ll.has_params:
-            ll.set_params(lr.W.get())
+            ll.set_params({'params': {'W': lr.W.get()}})
 
     if p3[1]:
         for ll, lr in zip(branch3.layers, branch3_ref.layers):
             if ll.has_params:
-                ll.set_params(lr.W.get())
+                ll.set_params({'params': {'W': lr.W.get()}})
 
     return (branch1.layers, branch2.layers, branch3.layers)
 
@@ -127,7 +127,7 @@ def test_branch_model():
     main1_trunk = neon_layer.layers[:8]
     for ll, lo in zip(main2, main1_trunk):
         if ll.has_params:
-            ll.set_params(lo.W.get())
+            ll.set_params({'params': {'W': lo.W.get()}})
         ll.allocate()
         ll.set_deltas([be.iobuf(ll.in_shape)])
     for bb in (b1, b2, b3):
@@ -232,13 +232,13 @@ def test_branch_model_fork():
     main1_trunk = neon_layer.layers[0].layers[:8]
     for ll, lo in zip(main2, main1_trunk):
         if ll.has_params:
-            ll.set_params(lo.W.get())
+            ll.set_params({'params': {'W': lo.W.get()}})
         ll.allocate()
         ll.set_deltas([be.iobuf(ll.in_shape)])
 
     for ll, lo in zip(lbranch2, neon_layer.layers[1].layers[1:]):
         if ll.has_params:
-            ll.set_params(lo.W.get())
+            ll.set_params({'params': {'W': lo.W.get()}})
 
     for bb in (b1, b2, b3, lbranch2):
         for ll in bb:

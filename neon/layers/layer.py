@@ -13,11 +13,15 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import logging
+import numpy as np
 
 from neon import NervanaObject
 from neon.backends import Autodiff
 from neon.backends.backend import Tensor
-import numpy as np
+from neon.util.persist import load_class
+
+import neon.initializers
+import neon.transforms.activation
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +53,7 @@ class Layer(NervanaObject):
             distributed backends (see gen_backend for details).
     """
 
-    def __init__(self, name="layer", parallelism="Unknown"):
+    def __init__(self, name=None, parallelism="Unknown"):
         super(Layer, self).__init__(name)
         self.outputs = None
         self.has_params = False
@@ -64,7 +68,7 @@ class Layer(NervanaObject):
         """
         Format the layer as a printable string.
         """
-        ret = '{} {}'.format(self.__class__.__name__, self.name)
+        ret = '{} {}'.format(self.classnm, self.name)
         return ret
 
     def nested_str(self, level=0):
@@ -146,13 +150,6 @@ class Layer(NervanaObject):
         else:
             self.deltas = None
 
-    @property
-    def classnm(self):
-        """
-        Convenience method for getting the class name
-        """
-        return self.__class__.__name__
-
     def set_next(self, layer):
         self.next_layer = layer
 
@@ -212,17 +209,54 @@ class Layer(NervanaObject):
         if self.has_params:
             return self.get_params()
 
+    def load_weights(self, pdict, inference=False):
+        self.set_params(pdict)
+        if not inference:
+            self.set_states(pdict)
+
+    def set_params(self, pdict):
+        pass
+
+    def set_states(self, pdict):
+        pass
+
+    def get_description(self, **kwargs):
+        """
+        Get layer parameters. All parameters are needed for optimization, but
+        only Weights are serialized.
+
+        Arguments:
+        """
+        return super(Layer, self).get_description(**kwargs)
+
 
 class BranchNode(Layer):
-
     """
     Layer that allows branching.  Used to send outputs to multiple layer pathways.
     Each pathway will get the entire output of the layer preceding the branch node.
     """
+    instances = {}
 
-    def __init__(self, name='branch'):
-        super(BranchNode, self).__init__(name)
-        self.owns_output = False
+    def __new__(cls, name=None):
+        """
+        Branch nodes need to have a unique name,
+        which identifies them.  This method checks
+        to see if the branch node being made has already
+        been created using its name and if so it returns
+        that instance.
+        """
+        if name in cls.instances:
+            return cls.instances[name]
+        else:
+            return Layer.__new__(cls, name=name)
+
+    def __init__(self, name=None):
+        # don't init if this is not a new instance
+        # see __new__ above
+        if name not in BranchNode.instances:
+            BranchNode.instances[name] = self
+            super(BranchNode, self).__init__(name)
+            self.owns_output = False
 
     def fprop(self, inputs=None, inference=False):
 
@@ -284,7 +318,7 @@ class Pooling(Layer):
     """
 
     def __init__(self, fshape, op="max", strides={}, padding={},
-                 name="PoolingLayer"):
+                 name=None):
         super(Pooling, self).__init__(name)
         self.poolparams = {'str_h': None, 'str_w': None, 'str_d': None, 'str_c': None,
                            'pad_h': 0, 'pad_w': 0, 'pad_d': 0, 'pad_c': 0,
@@ -358,17 +392,33 @@ class ParameterLayer(Layer):
         name (str, optional): layer name. Defaults to "ParameterLayer"
     """
 
-    def __init__(self, init=None, name="ParameterLayer",
+    def __init__(self, init=None, name=None,
                  parallelism="Unknown"):
         super(ParameterLayer, self).__init__(name, parallelism)
         self.has_params = True
         self.init = init
         self.W = None
+        self.dW = None
         self.weight_shape = None
         self.batch_sum = None
         self.batch_sum_shape = None
         self.states = []
         self.owns_delta = True
+
+    @classmethod
+    def gen_class(cls, pdict):
+        if 'init' in pdict and pdict['init'] is not None:
+            cname = pdict['init']['type']
+            if cname.find('neon.') == 0:
+                # full path to module stored in pdict
+                icls = load_class(cname)
+            else:
+                # use neon.initializers.initializer
+                assert hasattr(neon.initializers.initializer, cname)
+                icls = getattr(neon.initializers.initializer, cname)
+            init = icls(**pdict['init']['config'])
+            pdict['init'] = init
+        return cls(**pdict)
 
     def allocate(self, shared_outputs=None):
         super(ParameterLayer, self).allocate(shared_outputs)
@@ -391,6 +441,7 @@ class ParameterLayer(Layer):
         parallel, distributed = self.get_param_attrs()
         self.W = self.be.empty(shape, parallel=parallel, distributed=distributed)
         self.dW = self.be.empty_like(self.W)
+        self.states = []
         if isinstance(self.init, Tensor) or isinstance(self.init, np.ndarray):
             self.W[:] = self.init
         else:
@@ -416,6 +467,9 @@ class ParameterLayer(Layer):
         return ((self.W, self.dW), self.states)
 
     def get_params_serialize(self, keep_states=True):
+        return self.get_description(get_weights=True, keep_states=keep_states)
+
+    def get_description(self, get_weights=False, keep_states=True):
         """
         Get layer parameters. All parameters are needed for optimization, but
         only Weights are serialized.
@@ -424,10 +478,11 @@ class ParameterLayer(Layer):
             keep_states (bool): Control whether all parameters are returned
                 or just weights for serialization. Defaults to True.
         """
-        serial_dict = {'params': {'W': self.W.asnumpyarray(),
-                                  'name': self.name}}
-        if keep_states:
-            serial_dict['states'] = [s.asnumpyarray() for s in self.states]
+        serial_dict = super(ParameterLayer, self).get_description()
+        if get_weights:
+            serial_dict['params'] = {'W': self.W.asnumpyarray()}
+            if keep_states:
+                serial_dict['states'] = [s.asnumpyarray() for s in self.states]
         return serial_dict
 
     def set_params(self, pdict):
@@ -439,19 +494,37 @@ class ParameterLayer(Layer):
             pdict (dict, ndarray): dictionary or ndarray with layer parameters
                                    [support for ndarray is DEPRECATED and will be removed]
         """
-        if type(pdict) is dict:
-            for key in pdict:
-                setattr(self, key, pdict[key])
-        else:
-            # for backward compatibility will be deprecated
-            logger.warn('Using old serialization file type, will be deprecated.'
-                        '  Save model into new format')
-            self.W = pdict
-        self.W = self.be.array(self.W)
-        self.dW = self.be.empty_like(self.W)
+        assert type(pdict) is dict
+        for key in pdict['params']:
+            if not hasattr(self, key):
+                setattr(self, key, None)
 
-    def set_states(self, states):
-        self.states = [self.be.array(x) for x in states]
+            attr = getattr(self, key)
+            if type(attr) is Tensor:
+                # this attr has already been allocated
+                # get set the values
+                attr.set(pdict['params'][key])
+            elif type(pdict['params'][key]) is np.ndarray:
+                setattr(self, key, self.be.array(pdict['params'][key]))
+            else:
+                setattr(self, key, pdict['params'][key])
+
+        if self.dW is None:
+            self.dW = self.be.empty_like(self.W)
+
+    def set_states(self, pdict):
+        if 'states' not in pdict:
+            # if states was not serialized then leave
+            # this empty, the optimizer will initialize it
+            self.states = []
+        else:
+            # this needs to be done in two steps for MGPU backend
+            if self.states is None or len(self.states) == 0:
+                self.states = [self.be.zeros_like(self.dW)
+                               for i in range(len(pdict['states']))]
+
+            for ind in range(len(pdict['states'])):
+                self.states[ind].set(pdict['states'][ind])
 
 
 class Convolution(ParameterLayer):
@@ -475,21 +548,20 @@ class Convolution(ParameterLayer):
     """
 
     def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
-                 name="ConvolutionLayer", parallelism="Data",
-                 deterministic_update=False):
+                 name=None, parallelism="Data"):
         super(Convolution, self).__init__(init, name, parallelism)
         self.nglayer = None
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                            'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
-                           'T': 1, 'D': 1, 'bsum': bsum,
-                           'deterministic_update': deterministic_update}  # 3D paramaters
+                           'T': 1, 'D': 1, 'bsum': bsum}  # 3D paramaters
 
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
         self.strides = strides
         self.padding = padding
+        self.bsum = bsum
 
-        if isinstance(fshape, tuple):
+        if isinstance(fshape, tuple) or isinstance(fshape, list):
             fkeys = ('R', 'S', 'K') if len(fshape) == 3 else ('T', 'R', 'S', 'K')
             fshape = {k: x for k, x in zip(fkeys, fshape)}
         if isinstance(strides, int):
@@ -558,7 +630,7 @@ class Deconvolution(ParameterLayer):
     """
 
     def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
-                 name="DeconvolutionLayer"):
+                 name=None):
         super(Deconvolution, self).__init__(init, name)
         self.nglayer = None
         self.deconvparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
@@ -640,7 +712,7 @@ class Linear(ParameterLayer):
         name (str, optional): Layer name. Defaults to "LinearLayer"
     """
 
-    def __init__(self, nout, init, bsum=False, name="LinearLayer"):
+    def __init__(self, nout, init, bsum=False, name=None):
         super(Linear, self).__init__(init, name, "Disabled")
         self.nout = nout
         self.inputs = None
@@ -685,7 +757,7 @@ class Bias(ParameterLayer):
         name (str, optional): Layer name. Defaults to "BiasLayer"
     """
 
-    def __init__(self, init, name="BiasLayer"):
+    def __init__(self, init, name=None):
         super(Bias, self).__init__(init, name)
         self.y = None
         self.owns_output = False
@@ -735,7 +807,7 @@ class Activation(Layer):
         name (str, optional): Layer name. Defaults to "ActivationLayer"
     """
 
-    def __init__(self, transform, name="ActivationLayer"):
+    def __init__(self, transform, name=None):
         super(Activation, self).__init__(name)
         self.transform = transform
         self.owns_output = False
@@ -743,6 +815,24 @@ class Activation(Layer):
     def __str__(self):
         return "Activation Layer '%s': %s" % (
                self.name, self.transform.__class__.__name__)
+
+    @classmethod
+    def gen_class(cls, pdict):
+        assert 'transform' in pdict
+        cname = pdict['transform']['type']
+        if cname.find('neon.') == 0:
+            # full path to module stored in pdict
+            tcls = load_class(cname)
+        else:
+            # use neon.transform.activation
+            assert hasattr(neon.transforms.activation, cname)
+            tcls = getattr(neon.transforms.activation, cname)
+        # many activations have no args
+        if 'config' not in pdict['transform']:
+            pdict['transform']['config'] = {}
+        transf = tcls(**pdict['transform']['config'])
+        pdict['transform'] = transf
+        return cls(**pdict)
 
     def configure(self, in_obj):
         super(Activation, self).configure(in_obj)
@@ -774,7 +864,7 @@ class DataTransform(Layer):
         name (str, optional): Layer name. Defaults to "DataTransformLayer"
     """
 
-    def __init__(self, transform, name="DataTransformLayer"):
+    def __init__(self, transform, name=None):
         super(DataTransform, self).__init__(name)
         self.transform = transform
         self.owns_output = False
@@ -798,7 +888,57 @@ class DataTransform(Layer):
         return None
 
 
-class Affine(list):
+class CompoundLayer(list):
+    """
+    Base class for macro layers.
+    """
+    def __init__(self, bias=None, batch_norm=False, activation=None, name=None):
+        super(CompoundLayer, self).__init__()
+        if batch_norm and (bias is not None):
+            raise AttributeError('Batchnorm and bias cannot be combined')
+        self.activation = activation
+        self.batch_norm = batch_norm
+        self.bias = bias
+        self.base_name = name
+
+    @classmethod
+    def gen_class(cls, pdict):
+        for key, lib in zip(['init', 'bias', 'activation'],
+                            [neon.initializers.initializer,
+                             neon.initializers.initializer,
+                             neon.transforms.activation]):
+            # bias arg is the bias initializer not the layer
+            # activation is the transform not the layer
+            if key in pdict and pdict[key] is not None:
+                cname = pdict[key]['type']
+                if cname.find('neon.') == 0:
+                    icls = load_class(cname)
+                else:
+                    assert hasattr(lib, cname)
+                    icls = getattr(lib, cname)
+                if 'config' not in pdict[key]:
+                    pdict[key]['config'] = {}
+                pdict[key] = icls(**pdict[key]['config'])
+        return cls(**pdict)
+
+    def init_base_name(self):
+        if self.base_name is None:
+            self.base_name = self[-1].name
+
+    def add_postfilter_layers(self):
+        self.init_base_name()
+        if self.bias is not None:
+            name = self.base_name+'_bias'
+            self.append(Bias(init=self.bias, name=name))
+        if self.batch_norm:
+            name = self.base_name+'_bnorm'
+            self.append(BatchNorm(name=name))
+        if self.activation is not None:
+            name = self.base_name + '_' + self.activation.classnm
+            self.append(Activation(transform=self.activation, name=name))
+
+
+class Affine(CompoundLayer):
 
     """
     A linear layer with a learned bias and activation, implemented as a list
@@ -817,26 +957,15 @@ class Affine(list):
 
     """
 
-    def __init__(self, nout, init, bias=None, batch_norm=False, activation=None,
-                 linear_name='LinearLayer', bias_name='BiasLayer',
-                 act_name='ActivationLayer'):
-        list.__init__(self)
-        self.append(Linear(nout, init, bsum=batch_norm, name=linear_name))
-        self.add_postfilter_layers(bias, batch_norm, activation, bias_name, act_name)
-
-    def add_postfilter_layers(self, bias=None, batch_norm=False, activation=None,
-                              bias_name='BiasLayer', act_name='ActivationLayer'):
-        if batch_norm and (bias is not None):
-            raise AttributeError('Batchnorm and bias cannot be combined')
-        if bias is not None:
-            self.append(Bias(init=bias, name=bias_name))
-        if batch_norm:
-            self.append(BatchNorm())
-        if activation is not None:
-            self.append(Activation(transform=activation, name=act_name))
+    def __init__(self, nout, init, bias=None,
+                 batch_norm=False, activation=None, name=None):
+        super(Affine, self).__init__(bias=bias, batch_norm=batch_norm,
+                                     activation=activation, name=name)
+        self.append(Linear(nout, init, bsum=batch_norm, name=name))
+        self.add_postfilter_layers()
 
 
-class Conv(Affine):
+class Conv(CompoundLayer):
 
     """
     A convolutional layer with a learned bias and activation, implemented as a
@@ -863,35 +992,36 @@ class Conv(Affine):
 
     """
 
-    def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
-                 activation=None, conv_name='ConvolutionLayer',
-                 bias_name='BiasLayer', act_name='ActivationLayer',
-                 deterministic_update=False):
-        list.__init__(self)
+    def __init__(self, fshape, init, strides={}, padding={},
+                 bias=None,
+                 batch_norm=False,
+                 activation=None,
+                 name=None):
+        super(Conv, self).__init__(bias=bias, batch_norm=batch_norm,
+                                   activation=activation, name=name)
         self.append(Convolution(fshape=fshape, strides=strides, padding=padding,
-                                init=init, bsum=batch_norm, name=conv_name,
-                                deterministic_update=deterministic_update))
-        self.add_postfilter_layers(bias, batch_norm, activation, bias_name, act_name)
+                                init=init, bsum=batch_norm, name=name))
+        self.add_postfilter_layers()
 
 
-class Deconv(Affine):
+class Deconv(CompoundLayer):
 
     """
     Same as Conv layer, but implements a composite deconvolution layer
     """
 
     def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
-                 activation=None, conv_name='DeconvolutionLayer',
-                 bias_name='BiasLayer', act_name='ActivationLayer'):
-        list.__init__(self)
+                 activation=None, name=None):
+        super(Deconv, self).__init__(bias=bias, batch_norm=batch_norm,
+                                     activation=activation, name=name)
         self.append(Deconvolution(fshape=fshape, strides=strides, padding=padding,
                                   init=init, bsum=batch_norm))
-        self.add_postfilter_layers(bias, batch_norm, activation, bias_name, act_name)
+        self.add_postfilter_layers()
 
 
 class LRN(Layer):
     def __init__(self, depth, alpha=1., beta=0., ascale=1., bpower=1.):
-        super(LRN, self).__init__(name="LRNLayer")
+        super(LRN, self).__init__(name=None)
         self.J = depth
         self.alpha = alpha
         self.beta = beta
@@ -948,7 +1078,7 @@ class Dropout(Layer):
        keep (float): fraction of the inputs that should be stochastically kept.
     """
 
-    def __init__(self, keep=0.5, name="droplayer"):
+    def __init__(self, keep=0.5, name=None):
         super(Dropout, self).__init__(name)
         self.keep = keep
         self.keep_mask = None
@@ -995,32 +1125,6 @@ class Dropout(Layer):
         return self.deltas
 
 
-class DropoutBinary(Dropout):
-    """
-    A dropout layer that does no scaling by keep ratio during training
-
-    Arguments:
-       keep (float): fraction of the inputs that should be stochastically kept.
-
-    NOTE: this class will be deprecated, the Dropout class executes this behavior
-    by default now
-    """
-
-    def __init__(self, keep=0.5, name="dropbinarylayer"):
-        super(DropoutBinary, self).__init__(keep, name)
-        self._train_scaling = 1.0  # override scaling factor to retain binary mask
-        logger.warning('DropoutBinary class will be deprecated, please use '
-                       'Dropout layer instead')
-
-    def __str__(self):
-        return "Dropout Binary Layer '%s': %d inputs and outputs, keep %d%%" % (
-               self.name, self.nout, 100 * self.keep)
-
-    def _fprop_inference(self, inputs):
-        self.outputs[:] = inputs * self.keep
-        return self.outputs
-
-
 class LookupTable(ParameterLayer):
 
     """
@@ -1046,7 +1150,7 @@ class LookupTable(ParameterLayer):
     """
 
     def __init__(self, vocab_size, embedding_dim, init, update=True,
-                 pad_idx=None, name="LookupTableLayer"):
+                 pad_idx=None, name=None):
         super(LookupTable, self).__init__(init, name)
         self.embedding_dim = embedding_dim
         self.vocab_size = vocab_size
@@ -1069,8 +1173,8 @@ class LookupTable(ParameterLayer):
     def allocate(self):
         super(LookupTable, self).allocate()
         if self.inputs is None:
-            self.inputs = self.be.zeros(
-                (1, self.nin * self.be.bsz), dtype=np.int32)  # inputs is np.float32
+            self.inputs = self.be.zeros((1, self.nin * self.be.bsz),
+                                        dtype=np.int32)  # inputs is np.float32
         self.dW[:] = 0
         if self.pad_idx is not None:
             self.W[:, self.pad_idx] = 0
@@ -1106,6 +1210,17 @@ class GeneralizedCost(NervanaObject):
         self.costfunc = costfunc
         self.outputs = None
         self.deltas = None
+
+    @classmethod
+    def gen_class(cls, pdict):
+        typ = pdict['costfunc']['type']
+        if typ.find('neon.transforms') != 0:
+            typ = 'neon.transforms.cost.' + typ
+        ccls = load_class(typ)
+        if 'config' not in pdict['costfunc']:
+            pdict['costfunc']['config'] = {}
+        pdict['costfunc'] = ccls.gen_class(pdict['costfunc']['config'])
+        return cls(**pdict)
 
     def initialize(self, in_obj):
         """
@@ -1189,8 +1304,9 @@ class GeneralizedCostMask(GeneralizedCost):
 
         Arguments:
             inputs (Tensor): Tensor containing input values to be compared to
-                targets
-            targets_mask ((Tensor, Tensor)): Tuple with Tensor target values and Tensor mask
+                             targets
+            targets_mask ((Tensor, Tensor)): Tuple with Tensor target values
+                                             and Tensor mask
 
         Returns:
             Tensor of same shape as the inputs containing their respective
@@ -1219,7 +1335,7 @@ class BatchNorm(Layer):
     .. [Ioffe2015] http://arxiv.org/abs/1502.03167
     """
 
-    def __init__(self, rho=0.9, eps=1e-3, name="BatchNormLayer"):
+    def __init__(self, rho=0.9, eps=1e-3, name=None):
         super(BatchNorm, self).__init__(name)
         self.allparams = None
         self.x = None  # used to point to reshaped view of inputs
@@ -1229,6 +1345,11 @@ class BatchNorm(Layer):
         self.eps = eps
         self.states = [[] for i in range(2)]
         self.relu = False
+        self.beta = None
+        self.gamma = None
+        self.gmean = None
+        self.gvar = None
+        self.states = [[] for i in range(2)]
 
     def __str__(self):
         return "BatchNorm Layer '%s': %d inputs, %d steps, %d feature maps" % (
@@ -1276,6 +1397,7 @@ class BatchNorm(Layer):
         (self.gmean, self.gvar) = self.inf_params
 
         self.allparams = self.params + self.inf_params
+        self.states = [[self.be.zeros_like(gradp)] for gradp in self.grad_params]
         self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
 
     def fprop(self, inputs, inference=False):
@@ -1318,34 +1440,71 @@ class BatchNorm(Layer):
         if not self.deltas:
             self.deltas = error.reshape((self.nfm, -1))
 
-        self.be.compound_bprop_bn(
-            self.deltas, self.grad_gamma, self.grad_beta, self.inputs,
-            self.xsum, self.xvar, self.gamma, self.eps)
-
+        self.be.compound_bprop_bn(self.deltas, self.grad_gamma, self.grad_beta,
+                                  self.inputs, self.xsum, self.xvar, self.gamma,
+                                  self.eps)
         return error
 
     def get_params(self):
         return self.plist
 
     def get_params_serialize(self, keep_states=True):
-        serial_dict = {'params': [p.asnumpyarray() for p in self.allparams]}
-        if keep_states:
-            serial_dict['states'] = [[s.asnumpyarray() for s in slist] for slist in self.states]
+        return self.get_description(get_weights=True, keep_states=keep_states)
+
+    def get_description(self, get_weights=False, keep_states=True):
+        """
+        Get layer parameters.
+
+        Arguments:
+            get_weights (bool): Control whether all parameters are returned or
+                                just weights for serialization. Defaults to True.
+            keep_states (bool): Controls whether the states should be returned
+        """
+        serial_dict = super(BatchNorm, self).get_description()
+        if get_weights:
+            serial_dict['params'] = {}
+            for key in ['beta', 'gamma', 'gmean', 'gvar']:
+                serial_dict['params'][key] = getattr(self, key).get()
+
+            if keep_states:
+                serial_dict['states'] = [[s.get() for s in slist] for slist in self.states]
         return serial_dict
 
-    def set_params(self, allparams):
-        self.allparams = [self.be.array(x) for x in allparams]
-        self.params = self.allparams[:2]
-        self.inf_params = self.allparams[2:]
-        self.grad_params = [self.be.zeros_like(p) for p in self.params]
+    def set_params(self, pdict):
+        if type(pdict['params']) is dict:
+            for key in pdict['params']:
+                if isinstance(getattr(self, key), Tensor):
+                    getattr(self, key).set(pdict['params'][key])
+                else:
+                    setattr(self, key, self.be.array(pdict['params'][key]))
 
-        (self.beta, self.gamma) = self.params
+            self.params = [self.beta, self.gamma]
+            self.inf_params = [self.gmean, self.gvar]
+            self.allparams = self.params + self.inf_params
+        else:
+            logger.error('Using old serialization format.  This will be'
+                         ' deprecated in future release. Resave serialized file'
+                         ' using current format')
+
+            self.allparams = [self.be.array(x) for x in pdict['params']]
+            self.params = self.allparams[:2]
+            self.inf_params = self.allparams[2:]
+            (self.beta, self.gamma) = self.params
+            (self.gmean, self.gvar) = self.inf_params
+
+        self.grad_params = [self.be.zeros_like(p) for p in self.params]
         (self.grad_beta, self.grad_gamma) = self.grad_params
-        (self.gmean, self.gvar) = self.inf_params
+
         self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
 
-    def set_states(self, states):
-        self.states = [[self.be.array(x) for x in slist] for slist in states]
+    def set_states(self, pdict):
+        states = pdict['states']
+        if np.sum([len(state) for state in self.states]) == 0:
+            self.states = [[self.be.array(x) for x in slist] for slist in states]
+        else:
+            states = pdict['states']
+            [[x.set(states[i][j]) for j, x in enumerate(s)] for i, s in enumerate(self.states)]
+        self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
 
 
 class BatchNormAutodiff(BatchNorm):
@@ -1354,7 +1513,7 @@ class BatchNormAutodiff(BatchNorm):
     An example to use autodiff in batchnorm.
     """
 
-    def __init__(self, rho=0.99, eps=1e-6, name="BatchNormAutodiffLayer"):
+    def __init__(self, rho=0.99, eps=1e-6, name=None):
         super(BatchNormAutodiff, self).__init__(rho, eps, name)
 
     def get_forward_optree(self):

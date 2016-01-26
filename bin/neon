@@ -46,8 +46,7 @@ import sys
 import yaml
 
 from neon.backends import gen_backend
-from neon.data.dataiterator import DataIterator
-from neon.data.datasets import load_dataset
+import neon.data
 from neon.util.argparser import NeonArgparser
 from neon.util.yaml_parse import create_objects
 from neon.callbacks.callbacks import Callbacks
@@ -108,23 +107,24 @@ def load_data(data_dir="."):
         tuple: Contains data iterator objects for training and test datasets.
     """
 
-    if root_yaml['dataset']['name'] == 'i1k':
+    if root_yaml['dataset']['name'].upper() == 'I1K':
         # we are using an ImageLoader type dataset:
         from neon.data import ImageLoader
         try:
-            train = ImageLoader(repo_dir=data_dir, inner_size=224, set_name='train')
-            test = ImageLoader(repo_dir=data_dir, inner_size=224, set_name='validation',
-                               do_transforms=False)
+            train = ImageLoader(repo_dir=data_dir, inner_size=224, scale_range=(256, 384),
+                                set_name='train', shuffle=True, do_transforms=True)
+            test = ImageLoader(repo_dir=data_dir, inner_size=224, scale_range=(256, 256),
+                               set_name='validation', do_transforms=False)
         except (OSError, IOError, ValueError) as err:
             print err
             sys.exit(0)
     else:
         if 'dataset' not in root_yaml:
             raise ValueError('dataset not specified in configuration file')
-        (X_train, y_train), (X_test, y_test), nclass = load_dataset(path=data_dir,
-                                                                    **root_yaml['dataset'])
-        train = DataIterator(X_train, y_train, nclass=nclass)
-        test = DataIterator(X_test, y_test, nclass=nclass)
+        dataset = getattr(neon.data, root_yaml['dataset']['name'].upper())()
+        dataiters = dataset.gen_iterators()
+        train = dataiters['train']
+        test = dataiters['valid']
     return train, test
 
 
@@ -145,6 +145,6 @@ if __name__ == "__main__":
         model.load_params(args.model_file)
     train, test = load_data(data_dir=args.data_dir)
     # configure callbacks
-    callbacks = Callbacks(model, train, eval_set=test, **args.callback_args)
+    callbacks = Callbacks(model, eval_set=test, **args.callback_args)
 
     model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost, callbacks=callbacks)

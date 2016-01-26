@@ -57,6 +57,7 @@ class Recurrent(ParameterLayer):
         self.x = None
         self.in_deltas = None
         self.nout = output_size
+        self.output_size = output_size
         self.h_nout = output_size
         self.activation = activation
         self.outputs = None

@@ -27,7 +27,7 @@ from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
-from neon.data import DataIterator, load_cifar10
+from neon.data import ArrayIterator, load_cifar10
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
 
@@ -48,8 +48,8 @@ num_epochs = args.epochs
                                                             whiten=True)
 
 # really 10 classes, pad to nearest power of 2 to match conv output
-train_set = DataIterator(X_train, y_train, nclass=16, lshape=(3, 32, 32))
-valid_set = DataIterator(X_test, y_test, nclass=16, lshape=(3, 32, 32))
+train_set = ArrayIterator(X_train, y_train, nclass=16, lshape=(3, 32, 32))
+valid_set = ArrayIterator(X_test, y_test, nclass=16, lshape=(3, 32, 32))
 
 init_uni = Gaussian(scale=0.05)
 opt_gdm = GradientDescentMomentum(learning_rate=float(args.learning_rate), momentum_coef=0.9,
@@ -86,11 +86,10 @@ if args.model_file:
     mlp.load_params(args.model_file)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 
 if args.deconv:
     callbacks.add_deconv_callback(train_set, valid_set)
-
 
 mlp.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))

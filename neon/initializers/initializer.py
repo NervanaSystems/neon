@@ -16,6 +16,7 @@
 import numpy as np
 
 from neon import NervanaObject
+from neon.backends.backend import Tensor
 
 
 class Initializer(NervanaObject):
@@ -39,6 +40,24 @@ class Constant(Initializer):
 
     def fill(self, param):
         param[:] = self.val
+
+
+class Array(Constant):
+    """
+    A class for initializing parameter tensors with values specified
+    in an array of the same size.
+
+    Same functionality as Constant except serialization needs to dump
+    tensor values into np array
+
+    Args:
+        vals (ndarray or tensor, optional): The values to assign to the tensor elements
+    """
+    def get_description(self):
+        desc = super(Array, self).get_description()
+        if isinstance(desc['config']['val'], Tensor):
+            desc['config']['val'] = desc['config']['val'].get()
+        return desc
 
 
 class Uniform(Initializer):

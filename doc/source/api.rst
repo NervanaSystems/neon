@@ -73,13 +73,13 @@ API
    :toctree: generated/
    :nosignatures:
 
-   neon.data.dataiterator.DataIterator
+   neon.data.dataiterator.NervanaDataIterator
+   neon.data.dataiterator.ArrayIterator
    neon.data.imageloader.ImageLoader
    neon.data.imagecaption.ImageCaption
    neon.data.datasets.load_cifar10
    neon.data.datasets.load_mnist
    neon.data.datasets.load_text
-   neon.data.datasets.load_dataset
    neon.data.text.Text
 
 

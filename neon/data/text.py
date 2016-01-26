@@ -16,17 +16,78 @@
 Defines text datatset handling.
 """
 
+import logging
 import numpy as np
+from os.path import splitext
 
-from neon import NervanaObject
-import cPickle
+from neon.data.dataiterator import NervanaDataIterator, ArrayIterator
+from neon.data.datasets import Dataset
+from neon.data.text_preprocessing import pad_sentences, pad_data
 
 
-class Text(NervanaObject):
+logger = logging.getLogger(__name__)
 
+
+class Text(NervanaDataIterator):
     """
     This class defines methods for loading and iterating over text datasets.
     """
+
+    def __init__(self, time_steps, path, vocab=None, tokenizer=None,
+                 onehot_input=True):
+        """
+        Construct a text dataset object.
+
+        Args:
+            time_steps (int) : Length of a sequence.
+            path (str) : Path to text file.
+            vocab (python.set) : A set of unique tokens.
+            tokenizer (object) : Tokenizer object.
+            onehot_input (boolean): One-hot representation of input
+        """
+        super(Text, self).__init__(name=None)
+        # figure out how to remove seq_length from the dataloader
+        self.seq_length = time_steps
+        self.onehot_input = onehot_input
+        self.batch_index = 0
+
+        text = open(path).read()
+        tokens = self.get_tokens(text, tokenizer)
+
+        # make this a static method
+        extra_tokens = len(tokens) % (self.be.bsz * time_steps)
+        if extra_tokens:
+            tokens = tokens[:-extra_tokens]
+        self.nbatches = len(tokens) / (self.be.bsz * time_steps)
+        self.ndata = self.nbatches * self.be.bsz  # no leftovers
+
+        self.vocab = sorted(self.get_vocab(tokens, vocab))
+        self.nclass = len(self.vocab)
+
+        # vocab dicts
+        self.token_to_index = dict((t, i) for i, t in enumerate(self.vocab))
+        self.index_to_token = dict((i, t) for i, t in enumerate(self.vocab))
+
+        # map tokens to indices
+        X = np.asarray([self.token_to_index[t] for t in tokens], dtype=np.uint32)
+        y = np.concatenate((X[1:], X[:1]))
+
+        # reshape to preserve sentence continuity across batches
+        self.X = X.reshape(self.be.bsz, self.nbatches, time_steps)
+        self.y = y.reshape(self.be.bsz, self.nbatches, time_steps)
+
+        # stuff below this comment needs to be cleaned up and commented
+        self.nout = len(self.vocab)
+        if self.onehot_input:
+            self.shape = (self.nout, time_steps)
+            self.dev_X = self.be.iobuf((self.nout, time_steps))
+        else:
+            self.shape = (time_steps, 1)
+            self.dev_X = self.be.iobuf(time_steps, dtype=np.int32)
+
+        self.dev_y = self.be.iobuf((self.nout, time_steps))
+        self.dev_lbl = self.be.iobuf(time_steps, dtype=np.int32)
+        self.dev_lblflat = self.dev_lbl.reshape((1, -1))
 
     @staticmethod
     def create_valid_file(path, valid_split=0.1):
@@ -43,7 +104,6 @@ class Text(NervanaObject):
         text = open(path).read()
 
         # create train and valid paths
-        from os.path import splitext
         filename, ext = splitext(path)
         train_path = filename + '_train' + ext
         valid_path = filename + '_valid' + ext
@@ -102,60 +162,26 @@ class Text(NervanaObject):
 
     @staticmethod
     def pad_sentences(sentences, sentence_length=None, dtype=np.int32, pad_val=0.):
-        lengths = [len(sent) for sent in sentences]
-
-        nsamples = len(sentences)
-        if sentence_length is None:
-            sentence_length = np.max(lengths)
-
-        X = (np.ones((nsamples, sentence_length)) * pad_val).astype(dtype=np.int32)
-        for i, sent in enumerate(sentences):
-            trunc = sent[-sentence_length:]
-            X[i, -len(trunc):] = trunc
-        return X
+        logger.error('pad_sentances in the Text class is deprecated.  This function'
+                     'is now in neon.data.text_preprocessing.')
+        return pad_sentences(sentences,
+                             sentence_length=sentence_length,
+                             dtype=dtype,
+                             pad_val=pad_val)
 
     @staticmethod
     def pad_data(path, vocab_size=20000, sentence_length=100, oov=2,
                  start=1, index_from=3, seed=113, test_split=0.2):
-
-        f = open(path, 'rb')
-        X, y = cPickle.load(f)
-        f.close()
-
-        np.random.seed(seed)
-        np.random.shuffle(X)
-        np.random.seed(seed)
-        np.random.shuffle(y)
-
-        if start is not None:
-            X = [[start] + [w + index_from for w in x] for x in X]
-        else:
-            X = [[w + index_from for w in x] for x in X]
-
-        if not vocab_size:
-            vocab_size = max([max(x) for x in X])
-
-        # by convention, use 2 as OOV word
-        # reserve 'index_from' (=3 by default) characters: 0 (padding), 1
-        # (start), 2 (OOV)
-        if oov is not None:
-            X = [[oov if w >= vocab_size else w for w in x] for x in X]
-
-        X_train = X[:int(len(X)*(1-test_split))]
-        y_train = y[:int(len(X)*(1-test_split))]
-
-        X_test = X[int(len(X)*(1-test_split)):]
-        y_test = y[int(len(X)*(1-test_split)):]
-
-        X_train = Text.pad_sentences(X_train, sentence_length=sentence_length)
-        y_train = np.array(y_train).reshape((len(y_train), 1))
-
-        X_test = Text.pad_sentences(X_test, sentence_length=sentence_length)
-        y_test = np.array(y_test).reshape((len(y_test), 1))
-
-        nclass = 1 + max(np.max(y_train), np.max(y_test))
-
-        return (X_train, y_train), (X_test, y_test), nclass
+        logger.error('pad_data in the Text class is deprecated.  This function'
+                     'is now in neon.data.text_preprocessing')
+        return pad_data(path,
+                        vocab_size=vocab_size,
+                        sentence_length=sentence_length,
+                        oov=oov,
+                        start=start,
+                        index_from=index_from,
+                        seed=seed,
+                        test_split=test_split)
 
     def reset(self):
         """
@@ -165,61 +191,6 @@ class Text(NervanaObject):
         Not necessary when ndata is divisible by batch size
         """
         pass
-
-    def __init__(self, time_steps, path, vocab=None, tokenizer=None,
-                 onehot_input=True):
-        """
-        Construct a text dataset object.
-
-        Args:
-            time_steps (int) : Length of a sequence.
-            path (str) : Path to text file.
-            vocab (python.set) : A set of unique tokens.
-            tokenizer (object) : Tokenizer object.
-            onehot_input (boolean): One-hot representation of input
-        """
-        # figure out how to remove seq_length from the dataloader
-        self.seq_length = time_steps
-        self.onehot_input = onehot_input
-        self.batch_index = 0
-
-        text = open(path).read()
-        tokens = self.get_tokens(text, tokenizer)
-
-        # make this a static method
-        extra_tokens = len(tokens) % (self.be.bsz * time_steps)
-        if extra_tokens:
-            tokens = tokens[:-extra_tokens]
-        self.nbatches = len(tokens) / (self.be.bsz * time_steps)
-        self.ndata = self.nbatches * self.be.bsz  # no leftovers
-
-        self.vocab = sorted(self.get_vocab(tokens, vocab))
-        self.nclass = len(self.vocab)
-
-        # vocab dicts
-        self.token_to_index = dict((t, i) for i, t in enumerate(self.vocab))
-        self.index_to_token = dict((i, t) for i, t in enumerate(self.vocab))
-
-        # map tokens to indices
-        X = np.asarray([self.token_to_index[t] for t in tokens], dtype=np.uint32)
-        y = np.concatenate((X[1:], X[:1]))
-
-        # reshape to preserve sentence continuity across batches
-        self.X = X.reshape(self.be.bsz, self.nbatches, time_steps)
-        self.y = y.reshape(self.be.bsz, self.nbatches, time_steps)
-
-        # stuff below this comment needs to be cleaned up and commented
-        self.nout = len(self.vocab)
-        if self.onehot_input:
-            self.shape = (self.nout, time_steps)
-            self.dev_X = self.be.iobuf((self.nout, time_steps))
-        else:
-            self.shape = (time_steps, 1)
-            self.dev_X = self.be.iobuf(time_steps, dtype=np.int32)
-
-        self.dev_y = self.be.iobuf((self.nout, time_steps))
-        self.dev_lbl = self.be.iobuf(time_steps, dtype=np.int32)
-        self.dev_lblflat = self.dev_lbl.reshape((1, -1))
 
     def __iter__(self):
         """
@@ -245,3 +216,135 @@ class Text(NervanaObject):
             self.batch_index += 1
 
             yield self.dev_X, self.dev_y
+
+
+class Shakespeare(Dataset):
+    def __init__(self, timesteps, path='.'):
+        url = 'http://cs.stanford.edu/people/karpathy/char-rnn'
+        super(Shakespeare, self).__init__('shakespeare_input.txt',
+                                          url,
+                                          4573338,
+                                          path=path)
+        self.timesteps = timesteps
+
+    def load_data(self):
+        self.filepath = self.load_zip(self.filename, self.size)
+        return self.filepath
+
+    def gen_iterators(self):
+        self.load_data()
+        train_path, valid_path = Text.create_valid_file(self.filepath)
+        self.data_dict = {}
+        self.data_dict['train'] = Text(self.timesteps, train_path)
+        vocab = self.data_dict['train'].vocab
+        self.data_dict['valid'] = Text(self.timesteps, valid_path, vocab=vocab)
+        return self.data_dict
+
+
+class PTB(Dataset):
+    '''
+    Penn Tree Bank data set
+
+    Arguments:
+        timesteps (int): number of timesteps to embed the data
+        onehot_input (bool):
+        tokenizer (str): name of the tokenizer function within this
+                         class to use on the data
+    '''
+    def __init__(self, timesteps, path='.',
+                 onehot_input=True,
+                 tokenizer=None):
+        url = 'https://raw.githubusercontent.com/wojzaremba/lstm/master/data'
+        self.filemap = {'train': 5101618,
+                        'test': 449945,
+                        'valid': 399782}
+        keys = self.filemap.keys()
+        filenames = [self.gen_filename(phase) for phase in keys]
+        sizes = [self.filemap[phase] for phase in keys]
+        super(PTB, self).__init__(filenames,
+                                  url,
+                                  sizes,
+                                  path=path)
+        self.timesteps = timesteps
+        self.onehot_input = onehot_input
+        self.tokenizer = tokenizer
+        if tokenizer is not None:
+            assert hasattr(self, self.tokenizer)
+            self.tokenizer_func = getattr(self, self.tokenizer)
+        else:
+            self.tokenizer_func = None
+
+    @staticmethod
+    def newline_tokenizer(s):
+        # replace newlines with '<eos>' so that
+        # the newlines count as words
+        return s.replace('\n', '<eos>').split()
+
+    @staticmethod
+    def gen_filename(phase):
+        return 'ptb.%s.txt' % phase
+
+    def load_data(self):
+        self.file_paths = {}
+        for phase in self.filemap:
+            fn = self.gen_filename(phase)
+            size = self.filemap[phase]
+            self.file_paths[phase] = self.load_zip(fn, size)
+        return self.file_paths
+
+    def gen_iterators(self):
+        self.load_data()
+
+        self.data_dict = {}
+        self.vocab = None
+        for phase in ['train', 'test', 'valid']:
+            file_path = self.file_paths[phase]
+            self.data_dict[phase] = Text(self.timesteps,
+                                         file_path,
+                                         tokenizer=self.tokenizer_func,
+                                         onehot_input=self.onehot_input,
+                                         vocab=self.vocab)
+            if self.vocab is None:
+                self.vocab = self.data_dict['train'].vocab
+        return self.data_dict
+
+
+class HutterPrize(Dataset):
+    def __init__(self, path='.'):
+        super(HutterPrize, self).__init__('enwik8.zip',
+                                          'http://mattmahoney.net/dc',
+                                          35012219,
+                                          path=path)
+
+    def load_data(self):
+        self.filepath = self.load_zip(self.filename, self.size)
+        return self.filepath
+
+
+class IMDB(Dataset):
+    def __init__(self, vocab_size, sentence_length, path='.'):
+        url = 'https://s3.amazonaws.com/text-datasets'
+        super(IMDB, self).__init__('imdb.pkl',
+                                   url,
+                                   33213513,
+                                   path=path)
+        self.vocab_size = vocab_size
+        self.sentence_length = sentence_length
+        self.filepath = None
+
+    def load_data(self):
+        self.filepath = self.load_zip(self.filename, self.size)
+        return self.filepath
+
+    def gen_iterators(self):
+        if self.filepath is None:
+            self.load_data()
+
+        data = pad_data(self.filepath, vocab_size=self.vocab_size,
+                        sentence_length=self.sentence_length)
+        (X_train, y_train), (X_test, y_test), nclass = data
+
+        self.data_dict = {'nclass': nclass}
+        self.data_dict['train'] = ArrayIterator(X_train, y_train, nclass=2)
+        self.data_dict['test'] = ArrayIterator(X_test, y_test, nclass=2)
+        return self.data_dict

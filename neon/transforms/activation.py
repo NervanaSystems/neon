@@ -16,7 +16,7 @@ from neon.transforms.transform import Transform
 
 
 class Identity(Transform):
-    def __init__(self, name='identity'):
+    def __init__(self, name=None):
         super(Identity, self).__init__(name)
 
     def __call__(self, x):
@@ -32,7 +32,7 @@ class Rectlin(Transform):
     Can optionally set a slope which will make this a Leaky ReLu
     Computes the function f(x) = max(0, x)
     """
-    def __init__(self, slope=0, name='relu'):
+    def __init__(self, slope=0, name=None):
         super(Rectlin, self).__init__(name)
         self.slope = slope
 
@@ -47,7 +47,7 @@ class Explin(Transform):
     """
     ELU activation function (Clevert, Unterthiner and Hochreiter, ICLR 2016 submission)
     """
-    def __init__(self, alpha=1.0, name='elu'):
+    def __init__(self, alpha=1.0, name=None):
         super(Explin, self).__init__(name)
         self.alpha = alpha
 
@@ -62,7 +62,7 @@ class Normalizer(Transform):
     """
     Normalize inputs by a fixed divisor
     """
-    def __init__(self, name='normalizer', divisor=128.):
+    def __init__(self, name=None, divisor=128.):
         super(Normalizer, self).__init__(name)
         self.divisor = divisor
 
@@ -78,7 +78,7 @@ class Softmax(Transform):
     SoftMax activation function.
     Computes the function f(x_k) = exp(x_k) / sum_i(exp(x_i))
     """
-    def __init__(self, name='softmax', epsilon=2**-23):
+    def __init__(self, name=None, epsilon=2**-23):
         super(Softmax, self).__init__(name)
         self.epsilon = epsilon
 
@@ -96,7 +96,7 @@ class Tanh(Transform):
     Hyperbolic tangent activation function.
     Computes the function f(x) = (1 - exp(-2x))  / (1 + exp(-2x))
     """
-    def __init__(self, name='tanh'):
+    def __init__(self, name=None):
         super(Tanh, self).__init__(name)
 
     def __call__(self, x):
@@ -111,7 +111,7 @@ class Logistic(Transform):
     Logistic sigmoid activation function.
     Computes the function f(x) = 1  / (1 + exp(-x))
     """
-    def __init__(self, shortcut=False):
+    def __init__(self, name=None, shortcut=False):
         """Initialize Logistic based on whether shortcut is True or False
 
         Args:
@@ -119,7 +119,7 @@ class Logistic(Transform):
                              if False, actual derivative is returned in bprop
 
         """
-        super(Logistic, self).__init__(name='logistic')
+        super(Logistic, self).__init__(name=name)
 
         self.set_shortcut(shortcut)
 

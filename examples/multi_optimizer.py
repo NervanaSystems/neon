@@ -18,7 +18,7 @@ Example highlighting the ability to mix different optimizers in different
 layers, or different components of the same layer.
 """
 
-from neon.data import DataIterator, load_mnist
+from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Gaussian, Constant
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
@@ -32,8 +32,8 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(args.data_dir)
-train_set = DataIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
-valid_set = DataIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
+train_set = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
+valid_set = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
 
 # weight initialization
 init_norm = Gaussian(loc=0.0, scale=0.01)
@@ -44,7 +44,7 @@ layers.append(Affine(nout=100, init=init_norm, bias=Constant(0),
                      activation=Rectlin()))
 layers.append(Affine(nout=10, init=init_norm, bias=Constant(0),
                      activation=Logistic(shortcut=True),
-                     linear_name='special_linear'))
+                     name='special_linear'))
 
 cost = GeneralizedCost(costfunc=CrossEntropyBinary())
 mlp = Model(layers=layers)
@@ -60,6 +60,6 @@ opt = MultiOptimizer({'default': optimizer_one,
                       'special_linear': optimizer_two})
 
 # configure callbacks
-callbacks = Callbacks(mlp, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 
 mlp.fit(train_set, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

@@ -26,7 +26,7 @@ import numpy as np
 
 from neon.backends import gen_backend
 from neon.data import Text
-from neon.data import load_text
+from neon.data.dataloaders import load_shakespeare
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, LSTM, Affine
 from neon.models import Model
@@ -59,7 +59,7 @@ gradient_clip_value = 5
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download shakespeare text
-data_path = load_text('shakespeare', path=args.data_dir)
+data_path = load_shakespeare(path=args.data_dir)
 train_path, valid_path = Text.create_valid_file(data_path)
 
 # load data and parse on character-level
@@ -81,7 +81,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 optimizer = RMSProp(gradient_clip_value=gradient_clip_value, stochastic_round=args.rounding)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
 
 # fit and validate
 model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

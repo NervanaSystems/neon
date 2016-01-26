@@ -1,7 +1,23 @@
+# ----------------------------------------------------------------------------
+# Copyright 2014 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 import numpy as np
-from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform, Convolution
-from neon import NervanaObject
 from operator import add
+
+from neon import NervanaObject
+from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform, Convolution
+from neon.util.persist import load_class
 
 
 def flatten(item):
@@ -14,12 +30,10 @@ def flatten(item):
 
 
 class LayerContainer(Layer):
-
     """
     Layer containers are a generic class that are used to encapsulate groups of layers and
     provide methods for propagating through the constituent layers, allocating memory
     """
-
     @property
     def layers_to_optimize(self):
         lto = []
@@ -32,9 +46,50 @@ class LayerContainer(Layer):
 
     def nested_str(self, level=0):
         padstr = '\n' + '  '*level
-        ss = '  ' * level + self.__class__.__name__ + padstr
+        ss = '  ' * level + self.classnm + padstr
         ss += padstr.join([l.nested_str(level+1) for l in self.layers])
         return ss
+
+    @classmethod
+    def gen_class(cls, pdict):
+        layers = []
+        for layer in pdict['layers']:
+            typ = layer['type']
+            if typ.find(__name__) != -1:
+                # this is a sequential layer
+                ccls = load_class(typ)
+            elif typ in globals():
+                # this may occur if full path not given
+                # be careful here because globals has stuff from outside this module
+                ccls = globals()[typ]
+            else:
+                # look in neon.layers.layer
+                if typ.find('neon.layers.layer') == -1:
+                    typ = 'neon.layers.layer.' + typ
+                ccls = load_class(typ)
+            layers.append(ccls.gen_class(layer['config']))
+
+        # layers is special in that there may be parameters
+        # serialzed which will be used elsewhere
+        lsave = pdict.pop('layers')
+        new_cls = cls(layers=layers, **pdict)
+        pdict['layers'] = lsave
+        return new_cls
+
+    def get_description(self, get_weights=False, keep_states=False):
+        desc = super(LayerContainer, self).get_description(skip=['layers'])
+        desc['container'] = True
+        desc['config']['layers'] = []
+        for layer in self.layers:
+            desc['config']['layers'].append(layer.get_description(get_weights=get_weights,
+                                                                  keep_states=keep_states))
+        self._desc = desc
+        return desc
+
+    def load_weights(self, pdict, inference=False):
+        assert len(pdict['config']['layers']) == len(self.layers)
+        for branch, bdict in zip(self.layers, pdict['config']['layers']):
+            branch.load_weights(bdict, inference=inference)
 
 
 class Sequential(LayerContainer):
@@ -42,10 +97,10 @@ class Sequential(LayerContainer):
     Layer container that encapsulates a simple linear pathway of layers.
 
     Arguments:
-        layers (list): List of objects which can be either a list of layers (including layer
-                       containers).
+        layers (list): List of objects which can be either a list of layers
+                       (including layer containers).
     """
-    def __init__(self, layers, name='sequential'):
+    def __init__(self, layers, name=None):
         super(Sequential, self).__init__(name)
 
         self.layers = [l for l in flatten(layers)]
@@ -113,10 +168,6 @@ class Sequential(LayerContainer):
             else:
                 error = l.bprop(error)
         return self._layers[0].deltas
-
-    def get_description(self):
-        desc = super(Sequential, self).get_description()
-        return desc
 
     def get_terminal(self):
         terminal = self.layers[-1].get_terminal()
@@ -228,7 +279,8 @@ class Tree(LayerContainer):
                                         backpropagating error.
     """
 
-    def __init__(self, layers, name='tree', alphas=None):
+    def __init__(self, layers, name=None, alphas=None):
+        super(Tree, self).__init__(name=name)
         self.layers = []
         for l in layers:
             if isinstance(l, Sequential):
@@ -256,7 +308,7 @@ class Tree(LayerContainer):
         self.betas.reverse()
 
     def nested_str(self, level=0):
-        ss = self.__class__.__name__ + '\n'
+        ss = self.classnm + '\n'
         ss += '\n'.join([l.nested_str(level+1) for l in self.layers])
         return ss
 
@@ -308,10 +360,9 @@ class MergeBroadcast(LayerContainer):
                                          backpropagated errors
         name (str): Container name.  Defaults to "MergeBroadcast"
     """
-    def __init__(self, layers, merge, alphas=None, name='MergeBroadcast'):
+    def __init__(self, layers, merge, alphas=None, name=None):
         """
-
-
+        TODO add DOCSTRING
         """
         super(MergeBroadcast, self).__init__(name)
 
@@ -337,10 +388,11 @@ class MergeBroadcast(LayerContainer):
         assert self.merge in ("recurrent", "depth", "stack")
         self.error_views = None
         self.owns_output = True
+        self.outputs = None
 
     def __str__(self):
         ss = '\n\t'.join([str(l) for l in self.layers])
-        ss = '\t' + self.__class__.__name__ + '\n\t' + ss
+        ss = '\t' + self.classnm + '\n\t' + ss
         return ss
 
     def get_partitions(self, x, slices):
@@ -374,7 +426,8 @@ class MergeBroadcast(LayerContainer):
         return self
 
     def allocate(self, shared_outputs=None):
-        self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
+        if self.outputs is None:
+            self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
         self.output_views = self.get_partitions(self.outputs, self.slices)
         for l, out_view in zip(self.layers, self.output_views):
             l.allocate(shared_outputs=out_view)
@@ -437,7 +490,7 @@ class MergeMultistream(MergeBroadcast):
     Merging multiple input sources via concatenation.  This container is similar to MergeBroadcast
     except that it receives different streams of input directly from a dataset.
     """
-    def __init__(self, layers, merge, name='multistream'):
+    def __init__(self, layers, merge, name=None):
         super(MergeMultistream, self).__init__(layers, merge=merge, name=name)
 
     def configure(self, in_obj):
@@ -494,6 +547,18 @@ class Multicost(NervanaObject):
         self.inputs = None
         self.costfunc = costs[0].costfunc  # For displaying during callbacks
 
+    @classmethod
+    def gen_class(cls, pdict):
+        costs = []
+        for cost in pdict['costs']:
+            typ = cost['type']
+            if typ.find('neon.') == -1:
+                typ = 'neon.layers.layer.' + typ
+            ccls = load_class(typ)
+            costs.append(ccls.gen_class(cost['config']))
+        pdict['costs'] = costs
+        return cls(**pdict)
+
     def initialize(self, in_obj):
         assert hasattr(in_obj, 'layers'), "MultiCost must be passed a layer container"
         terminals = in_obj.get_terminal()
@@ -507,6 +572,15 @@ class Multicost(NervanaObject):
     @property
     def outputs(self):
         return self.costs[0].outputs
+
+    def get_description(self, **kwargs):
+        desc = super(Multicost, self).get_description()
+        costs = desc['config'].pop('costs')
+        desc['config']['costs'] = []
+        for cost in costs:
+            desc['config']['costs'].append(cost.get_description())
+        self._desc = desc
+        return desc
 
     def get_cost(self, inputs, targets):
         """

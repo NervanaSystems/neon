@@ -157,7 +157,8 @@ class NeonArgparser(configargparse.ArgumentParser):
         be_grp.add_argument('--caffe', action='store_true',
                             help='match caffe when computing conv and pool layer output '
                                  'sizes and dropout implementation')
-
+        be_grp.add_argument('--deterministic', action='store_true',
+                            help='Use deterministic kernels where applicable')
         return
 
     def add_yaml_arg(self):

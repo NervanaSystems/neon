@@ -23,13 +23,6 @@ Usage:
 Then look at the PNG plots generated.
 
 """
-
-try:
-    import matplotlib.pyplot as plt
-except ImportError:
-    print 'matplotlib needs to be installed manually to generate plots needed for this example'
-    raise ImportError()
-
 import numpy as np
 import math
 from neon.backends import gen_backend
@@ -41,6 +34,15 @@ from neon.transforms import Logistic, Tanh, Identity, MeanSquared
 from neon.callbacks.callbacks import Callbacks
 from neon import NervanaObject
 from neon.util.argparser import NeonArgparser, extract_valid_args
+
+
+do_plots = True
+try:
+    import matplotlib.pyplot as plt
+except ImportError:
+    print('matplotlib needs to be installed manually to generate plots needed '
+          'for this example.  Skipping plot generation')
+    do_plots = False
 
 
 def rolling_window(a, lag):
@@ -280,7 +282,7 @@ if __name__ == '__main__':
     cost = GeneralizedCost(MeanSquared())
     optimizer = RMSProp(stochastic_round=args.rounding)
 
-    callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
+    callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
 
     # fit model
     model.fit(train_set,
@@ -302,19 +304,20 @@ if __name__ == '__main__':
 
     print 'terr = %g, verr = %g' % (terr, verr)
 
-    plt.figure()
-    plt.plot(train_output[:, 0], train_output[:, 1], 'bo', label='prediction')
-    plt.plot(train_target[:, 0], train_target[:, 1], 'r.', label='target')
-    plt.legend()
-    plt.title('Neon on training set')
-    plt.savefig('neon_series_training_output.png')
+    if do_plots:
+        plt.figure()
+        plt.plot(train_output[:, 0], train_output[:, 1], 'bo', label='prediction')
+        plt.plot(train_target[:, 0], train_target[:, 1], 'r.', label='target')
+        plt.legend()
+        plt.title('Neon on training set')
+        plt.savefig('neon_series_training_output.png')
 
-    plt.figure()
-    plt.plot(valid_output[:, 0], valid_output[:, 1], 'bo', label='prediction')
-    plt.plot(valid_target[:, 0], valid_target[:, 1], 'r.', label='target')
-    plt.legend()
-    plt.title('Neon on validatation set')
-    plt.savefig('neon_series_validation_output.png')
+        plt.figure()
+        plt.plot(valid_output[:, 0], valid_output[:, 1], 'bo', label='prediction')
+        plt.plot(valid_target[:, 0], valid_target[:, 1], 'r.', label='target')
+        plt.legend()
+        plt.title('Neon on validatation set')
+        plt.savefig('neon_series_validation_output.png')
 
     # =====================generate sequence ==================================
     # when generating sequence, set sequence length to 1, since it doesn't make a difference
@@ -353,16 +356,18 @@ if __name__ == '__main__':
         y = model_new.fprop(x, inference=False)
 
     output_seq = np.vstack([seed, output.T])
-    plt.figure()
-    plt.plot(output_seq[:, 0], output_seq[:, 1], 'b.-', label='generated sequence')
-    plt.plot(seed[:, 0], seed[:, 1], 'r.', label='seed sequence')
-    plt.legend()
-    plt.title('neon generated sequence')
-    plt.savefig('neon_generated_sequence_2d.png')
 
-    plt.figure()
-    plt.plot(output_seq, 'b.-', label='generated sequence')
-    plt.plot(seed, 'r.', label='seed sequence')
-    plt.legend()
-    plt.title('neon generated sequence')
-    plt.savefig('neon_generated_sequence.png')
+    if do_plots:
+        plt.figure()
+        plt.plot(output_seq[:, 0], output_seq[:, 1], 'b.-', label='generated sequence')
+        plt.plot(seed[:, 0], seed[:, 1], 'r.', label='seed sequence')
+        plt.legend()
+        plt.title('neon generated sequence')
+        plt.savefig('neon_generated_sequence_2d.png')
+
+        plt.figure()
+        plt.plot(output_seq, 'b.-', label='generated sequence')
+        plt.plot(seed, 'r.', label='seed sequence')
+        plt.legend()
+        plt.title('neon generated sequence')
+        plt.savefig('neon_generated_sequence.png')

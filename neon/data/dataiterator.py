@@ -22,15 +22,34 @@ from neon import NervanaObject
 logger = logging.getLogger(__name__)
 
 
-class DataIterator(NervanaObject):
+class NervanaDataIterator(NervanaObject):
+    """
+    Abstract class for data iterators.
+
+    For serialization, any data iterator should inherit from this class
+    """
+    def __init__(self, name=None):
+        super(NervanaDataIterator, self).__init__(name)
+
+    def nbatches(self):
+        raise NotImplemented()
+
+    def reset(self):
+        raise NotImplemented()
+
+    def __iter__(self):
+        raise NotImplemented()
+
+
+class ArrayIterator(NervanaDataIterator):
 
     """
     This generic class defines an interface to iterate over minibatches of
-    data that has been preloaded into memory. This may be used when the
-    entire dataset is small enough to fit within memory.
+    data that has been preloaded into memory in the form of numpy arrays.
+    This may be used when the entire dataset is small enough to fit within memory.
     """
 
-    def __init__(self, X, y=None, nclass=None, lshape=None, make_onehot=True):
+    def __init__(self, X, y=None, nclass=None, lshape=None, make_onehot=True, name=None):
         """
         Implements loading of given data into backend tensor objects. If the
         backend is specific to an accelarator device, the data is copied over
@@ -53,9 +72,11 @@ class DataIterator(NervanaObject):
 
         """
         # Treat singletons like list so that iteration follows same syntax
+        super(ArrayIterator, self).__init__(name=name)
         X = X if isinstance(X, list) else [X]
         self.ndata = len(X[0])
         self.start = 0
+        self.nclass = nclass
 
         # on device tensor with full dataset
         self.Xdev = [self.be.array(x) for x in X]
@@ -135,6 +156,18 @@ class DataIterator(NervanaObject):
             yield (inputs, targets)
 
 
+class DataIterator(ArrayIterator):
+    """
+    This class has been renamed to ArrayIterator and deprecated.
+    This is just a place holder until the class is removed.  Please
+    use the ArrayIterator class.
+    """
+    def __init__(self, *args, **kwargs):
+        logger.error('DataIterator class has been deprecated and renamed'
+                     '"ArrayIterator" please use that name.')
+        super(DataIterator, self).__init__(*args, **kwargs)
+
+
 if __name__ == '__main__':
     from neon.data import load_mnist
     (X_train, y_train), (X_test, y_test) = load_mnist()
@@ -144,7 +177,7 @@ if __name__ == '__main__':
 
     NervanaObject.be = ng
     ng.bsz = 128
-    train_set = DataIterator(
+    train_set = ArrayIterator(
         [X_test[:1000], X_test[:1000]], y_test[:1000], nclass=10)
     for i in range(3):
         for bidx, (X_batch, y_batch) in enumerate(train_set):

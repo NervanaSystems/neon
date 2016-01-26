@@ -25,7 +25,9 @@ $ python examples/imdb_lstm.py -b gpu -e 2 -eval 1 -r 0
 """
 
 from neon.backends import gen_backend
-from neon.data import DataIterator, Text, load_text
+from neon.data.dataloaders import load_imdb
+from neon.data.dataiterator import ArrayIterator
+from neon.data.text_preprocessing import pad_data
 from neon.initializers import Uniform, GlorotUniform
 from neon.layers import GeneralizedCost, LSTM, Affine, Dropout, LookupTable, RecurrentSum
 from neon.models import Model
@@ -51,17 +53,18 @@ reset_cells = True
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # make dataset
-path = load_text('imdb', path=args.data_dir)
-(X_train, y_train), (X_test, y_test), nclass = Text.pad_data(
-    path, vocab_size=vocab_size, sentence_length=sentence_length)
+path = load_imdb(path=args.data_dir)
+(X_train, y_train), (X_test, y_test), nclass = pad_data(path,
+                                                        vocab_size=vocab_size,
+                                                        sentence_length=sentence_length)
 
 print "Vocab size - ", vocab_size
 print "Sentence Length - ", sentence_length
 print "# of train sentences", X_train.shape[0]
 print "# of test sentence", X_test.shape[0]
 
-train_set = DataIterator(X_train, y_train, nclass=2)
-valid_set = DataIterator(X_test, y_test, nclass=2)
+train_set = ArrayIterator(X_train, y_train, nclass=2)
+valid_set = ArrayIterator(X_test, y_test, nclass=2)
 
 # weight initialization
 uni = Uniform(low=-0.1/embedding_dim, high=0.1/embedding_dim)
@@ -81,7 +84,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 optimizer = Adagrad(learning_rate=0.01, gradient_clip_value=gradient_clip_value)
 
 # configure callbacks
-callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
 
 # train model
 model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)

@@ -23,6 +23,7 @@ except ImportError:
     print("ERROR: Version information not found.  Ensure you have built "
           "the software.\n    From the top level dir issue: 'make'")
     sys.exit(1)
+from copy import deepcopy
 import inspect
 import logging
 
@@ -36,7 +37,7 @@ def get_args(func):
     """
     args, varargs, keywords, defaults = inspect.getargspec(func)
 
-    defaults = list(reversed(defaults))
+    defaults = list(reversed(defaults)) if defaults is not None else []
     args = list(reversed(args))
 
     while len(defaults) != len(args):
@@ -57,20 +58,47 @@ class NervanaObject(object):
         name (str, optional): The name assigned to a given instance.
     """
     be = None
+    __counter = 0
 
     def __init__(self, name=None):
+        if name is None:
+            name = self.classnm + '_' + str(self.__counter)
         self.name = name
         self._desc = None
+        type(self).__counter += 1
 
-    def get_description(self):
-        # shortcut that makes aliases work
-        if self._desc:
-            return self._desc
+    @classmethod
+    def gen_class(cls, pdict):
+        return cls(**pdict)
 
-        desc = {}
+    def __del__(self):
+        type(self).__counter -= 1
+
+    @property
+    def classnm(self):
+        """
+        Convenience method for getting the class name
+        """
+        return self.__class__.__name__
+
+    @property
+    def modulenm(self):
+        """
+        Convenience method for getting the full module path
+        """
+        return self.__class__.__module__ + '.' + self.__class__.__name__
+
+    def get_description(self, skip=[], **kwargs):
+        if type(skip) is not list:
+            skip = list(skip)
+        else:
+            skip = deepcopy(skip)
+        skip.append('self')
+
+        config = {}
         defaults = get_args(self.__init__)
         for arg in defaults:
-            if arg == 'self':
+            if arg in skip:
                 continue
 
             # all args need to go in the __dict__ so we can read
@@ -80,12 +108,12 @@ class NervanaObject(object):
             if arg in self.__dict__:
                 if self.__dict__[arg] != defaults[arg]:
                     if isinstance(self.__dict__[arg], NervanaObject):
-                        desc[arg] = self.__dict__[arg].get_description()
+                        config[arg] = self.__dict__[arg].get_description()
                     else:
-                        desc[arg] = self.__dict__[arg]
+                        config[arg] = self.__dict__[arg]
             else:
                 logger.warning("can't describe argument '{}' to {}".format(arg, self))
 
-        desc['type'] = self.__class__.__name__
+        desc = {'type': self.modulenm, 'config': config}
         self._desc = desc
         return desc

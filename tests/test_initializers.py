@@ -19,7 +19,7 @@ import itertools as itt
 import numpy as np
 
 from neon import NervanaObject
-from neon.initializers.initializer import Constant, Uniform, Gaussian, GlorotUniform
+from neon.initializers.initializer import Array, Constant, Uniform, Gaussian, GlorotUniform
 
 
 def pytest_generate_tests(metafunc):
@@ -44,6 +44,20 @@ def test_constant(backend_default, args):
     for elt in flat:
         assert elt == const_arg
 
+    return
+
+
+def test_array(backend_default, args):
+    be = NervanaObject.be
+    dim1, dim2 = args
+    shape = (dim1, dim2)
+
+    Wloc = be.array(np.arange(shape[0]*shape[1]).reshape(shape))
+    Wdev = be.empty(shape)
+
+    init = Array(Wdev)
+    init.fill(Wloc)
+    assert np.all(np.equal(Wdev.get(), Wloc.get()))
     return
 
 

@@ -18,162 +18,168 @@ cost: CrossEntropyMulti
 epochs: 10
 batchsize: 128
 
-
 wt_init: &wt_init1
     type: Gaussian
-    scale: 0.01
+    config:
+        scale: 0.01
 
 wt_init: &wt_init1b
     type: Gaussian
-    scale: 0.03
+    config:
+        scale: 0.03
 
 b_init: &b_init0
     type: Constant
-    val: 0
+    config:
+        val: 0
 
 b_init: &b_init1
     type: Constant
-    val: 1
+    config:
+        val: 1
 
 b_init: &b_init7
     type: Constant
-    val: -7
+    config:
+        val: -7
 
+relu: &relu_act
+    type: Rectlin
 
 layers:
 -
     type: Conv # Convolution + Bias + BN + Activation
-    conv_name: conv1
-    act_name: relu1
-    bias_name: conv1b
-    fshape: [11, 11, 64]
-    strides: 4
-    padding: 3
-    init: *wt_init1
-    bias: *b_init0
-    activation: Rectlin
+    config:
+        name: conv1
+        fshape: [11, 11, 64]
+        strides: 4
+        padding: 3
+        init: *wt_init1
+        bias: *b_init0
+        activation: *relu_act
 -
     type: Pooling
-    name: pool1
-    fshape: 3
-    strides: 2
+    config:
+        name: pool1
+        fshape: 3
+        strides: 2
 -
     type: Conv
-    conv_name: conv2
-    act_name: relu2
-    bias_name: conv2b
-    fshape: [5, 5, 192]
-    padding: 2
-    init: *wt_init1
-    bias: *b_init1
-    activation: Rectlin
+    config:
+        name: conv2
+        fshape: [5, 5, 192]
+        padding: 2
+        init: *wt_init1
+        bias: *b_init1
+        activation: *relu_act
 -
     type: Pooling
-    name: pool2
-    fshape: 3
-    strides: 2
+    config:
+        name: pool2
+        fshape: 3
+        strides: 2
 -
     type: Conv
-    conv_name: conv3
-    act_name: relu3
-    bias_name: conv3b
-    fshape: [3, 3, 384]
-    padding: 1
-    init: *wt_init1b
-    bias: *b_init0
-    activation: Rectlin
+    config:
+        name: conv3
+        fshape: [3, 3, 384]
+        padding: 1
+        init: *wt_init1b
+        bias: *b_init0
+        activation: *relu_act
 -
     type: Conv
-    conv_name: conv4
-    act_name: relu4
-    bias_name: conv4b
-    fshape: [3, 3, 256]
-    padding: 1
-    init: *wt_init1b
-    bias: *b_init1
-    activation: Rectlin
+    config:
+        name: conv4
+        fshape: [3, 3, 256]
+        padding: 1
+        init: *wt_init1b
+        bias: *b_init1
+        activation: *relu_act
 -
     type: Conv
-    conv_name: conv5
-    act_name: relu5
-    bias_name: conv5b
-    fshape: [3, 3, 256]
-    padding: 1
-    init: *wt_init1b
-    bias: *b_init1
-    activation: Rectlin
+    config:
+        name: conv5
+        fshape: [3, 3, 256]
+        padding: 1
+        init: *wt_init1b
+        bias: *b_init1
+        activation: *relu_act
 -
     type: Pooling
-    name: pool5
-    fshape: 3
-    strides: 2
+    config:
+        name: pool5
+        fshape: 3
+        strides: 2
 -
     type: Affine
-    linear_name: fc6
-    act_name: relu6
-    bias_name: fc6b
-    nout: 4096
-    init: *wt_init1
-    bias: *b_init1
-    activation: Rectlin
+    config:
+        name: fc6
+        nout: 4096
+        init: *wt_init1
+        bias: *b_init1
+        activation: *relu_act
 -
-    type: DropoutBinary
-    name: drop6
-    keep: 0.5
--
-    type: Affine
-    linear_name: fc7
-    act_name: relu7
-    bias_name: fc7b
-    nout: 4096
-    init: *wt_init1
-    bias: *b_init1
-    activation: Rectlin
--
-    type: DropoutBinary
-    name: drop7
-    keep: 0.5
+    type: Dropout
+    config:
+        name: drop6
+        keep: 0.5
 -
     type: Affine
-    linear_name: fc8
-    act_name: prob
-    bias_name: fc8b
-    nout: 1000
-    init: *wt_init1
-    bias: *b_init7
-    activation: Softmax
-
+    config:
+        name: fc7
+        nout: 4096
+        init: *wt_init1
+        bias: *b_init1
+        activation: *relu_act
+-
+    type: Dropout
+    config:
+        name: drop7
+        keep: 0.5
+-
+    type: Affine
+    config:
+        name: fc8
+        nout: 1000
+        init: *wt_init1
+        bias: *b_init7
+        activation:
+            type: Softmax
 
 schedule: &sched1
     type: Schedule
-    step_config: [22, 44, 65]
-    change: 0.15874
+    config:
+        step_config: [22, 44, 65]
+        change: 0.15874
 
 schedule: &sched2
     type: Schedule
-    step_config: 44
-    change: 0.1
-
+    config:
+        step_config: 44
+        change: 0.1
 
 opt_gdm: &opt_gdm
     type: GradientDescentMomentum
-    learning_rate: 0.01
-    momentum_coef: 0.9
-    wdecay: 0.0005
-    schedule: *sched1
+    config:
+        learning_rate: 0.01
+        momentum_coef: 0.9
+        wdecay: 0.0005
+        schedule: *sched1
 
 opt_biases: &opt_biases
     type: GradientDescentMomentum
-    learning_rate: 0.02
-    momentum_coef: 0.9
-    schedule: *sched2
-
+    config:
+        learning_rate: 0.02
+        momentum_coef: 0.9
+        schedule: *sched2
 
 optimizer:
     type: MultiOptimizer
-    default: *opt_gdm
-    Bias: *opt_biases
-
+    config:
+        optimizer_mapping:
+            default: *opt_gdm
+            Bias: *opt_biases
 
 dataset:
     name: i1k

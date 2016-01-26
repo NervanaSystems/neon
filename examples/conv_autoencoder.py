@@ -20,7 +20,7 @@ Convolutional autoencoder example network for MNIST data set
 
 import numpy as np
 
-from neon.data import DataIterator, load_mnist
+from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Uniform
 from neon.layers import Conv, Pooling, GeneralizedCost, Deconv
 from neon.models import Model
@@ -37,7 +37,7 @@ args = parser.parse_args()
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
 
 # Set input and target to X_train
-train = DataIterator(X_train, lshape=(1, 28, 28))
+train = ArrayIterator(X_train, lshape=(1, 28, 28))
 
 # Initialize the weights and the learning rule
 init_uni = Uniform(low=-0.1, high=0.1)
@@ -55,15 +55,14 @@ layers = [Conv((4, 4, 8), init=init_uni, activation=Rectlin()),
 # Define the cost
 cost = GeneralizedCost(costfunc=SumSquared())
 
-mlp = Model(layers=layers)
-# Fit the model
+model = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, **args.callback_args)
+callbacks = Callbacks(model, **args.callback_args)
 
-mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+# Fit the model
+model.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
-print mlp.layers.layers[-1]
 # Plot the reconstructed digits
 try:
     from matplotlib import pyplot, cm
@@ -73,7 +72,7 @@ try:
     test = np.zeros((28*nrows, 28*ncols))
     idxs = [(row, col) for row in range(nrows) for col in range(ncols)]
     for row, col in idxs:
-        im = mlp.layers.layers[-1].outputs.get()[:, fi].reshape((28, 28))
+        im = model.layers.layers[-1].outputs.get()[:, fi].reshape((28, 28))
         test[28*row:28*(row+1):, 28*col:28*(col+1)] = im
         fi = fi + 1
     pyplot.matshow(test, cmap=cm.gray)

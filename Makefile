@@ -70,6 +70,8 @@ endif
 
 # arguments to running examples
 EXAMPLE_ARGS := -e1
+# additional args for examples using ImageLoader
+EXAMPLE_IMG_ARGS := -w ~/nervana/data/I1K/imageset_batches_dw --subset_pct=5
 
 # this variable controls where we publish Sphinx docs to
 DOC_DIR := doc
@@ -90,9 +92,9 @@ KERNEL_BUILDER_CLEAN_OPTS := --clean
 DATA_LOADER := neon/data/loader
 
 .PHONY: default env maxas kernels sysinstall sysinstall_nodeps neon_install \
-	      sysdeps sysuninstall clean_py clean_maxas clean_so clean_kernels \
-	      clean test coverage style lint check doc html release examples \
-	      serialize_check $(DATA_LOADER)
+	    sysdeps sysuninstall clean_py clean_maxas clean_so clean_kernels \
+	    clean test coverage style lint check doc html release examples \
+	    serialize_check
 
 default: env
 
@@ -222,8 +224,14 @@ examples: env
 	@. $(ACTIVATE); \
 		for fn in `ls -1 examples/*.py examples/*/train.py`; \
 		do \
-		    echo "Running $$fn $(EXAMPLE_ARGS)"; \
-		    python $$fn $(EXAMPLE_ARGS); \
+		    args=$(EXAMPLE_ARGS); \
+			grep -q 'ImageLoader' $$fn; \
+			if [ $$? -eq 0 ]; \
+			then \
+			    args="$${args} $(EXAMPLE_IMG_ARGS)"; \
+			fi; \
+		    echo "Running $$fn $$args"; \
+		    python $$fn $$args; \
 			if [ $$? -ne 0 ]; \
 	        then \
 	            exit 1; \

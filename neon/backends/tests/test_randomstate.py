@@ -14,6 +14,8 @@
 # ----------------------------------------------------------------------------
 # pylint: skip-file
 
+import numpy as np
+
 from neon.backends import gen_backend
 from neon.backends.tests.utils import assert_tensors_allclose
 
@@ -37,9 +39,6 @@ def test_gpu_randomstate():
 
     # run 2, using reset
     be.rng_reset()
-
-    for ctx in be.context_rand_state_alive:
-        assert be.context_rand_state_alive[ctx] is False
 
     a[:] = be.rand()
     y0 = a.get()
@@ -106,3 +105,38 @@ def test_cpu_randomstate():
     assert_tensors_allclose([x0, x1], [y0, y1], rtol=0., atol=0.)
     assert_tensors_allclose([x0, x1], [z0, z1], rtol=0., atol=0.)
     del(be)
+
+
+def test_rng_funcs(backend_default):
+    # like the tests above but also tests the rng_get_state and rng_set_state funcs
+    be = backend_default
+
+    # keep sz*sz*batch_size < 3*2048*32 (NervanaGPU._RNG_POOL_SIZE
+    sz = 32
+    x = be.zeros((sz, sz))
+
+    # use binary mask to test rng resetting
+
+    be.make_binary_mask(out=x)
+    x1 = x.get().copy()
+    r1 = be.rng_get_state()
+
+    be.make_binary_mask(out=x)
+    x2 = x.get().copy()
+
+    # there should be infinitesmial chance for x1 to equal x2
+    # this assert is to make sure the rng is doing something
+    assert np.max(np.abs(x2-x1)) > 0
+
+    be.rng_reset()
+    be.make_binary_mask(out=x)
+    x1_2 = x.get().copy()
+
+    assert np.max(np.abs(x1-x1_2)) == 0.0
+
+    be.rng_reset()
+    be.rng_set_state(r1)
+    be.make_binary_mask(out=x)
+    x2_2 = x.get().copy()
+
+    assert np.max(np.abs(x2-x2_2)) == 0.0

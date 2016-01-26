@@ -32,6 +32,8 @@ from neon.callbacks.callbacks import Callbacks
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args(gen_be=False)
 
 # hyperparameters
@@ -49,7 +51,7 @@ img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        scale_range=(256, 384),
                        dtype=args.datatype,
-                       subset_pct=100)
+                       subset_pct=args.subset_pct)
 train = ImageLoader(set_name='train', **img_set_options)
 test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
 
@@ -83,7 +85,7 @@ mlp = Model(layers=layers)
 
 # configure callbacks
 valmetric = TopKMisclassification(k=5)
-callbacks = Callbacks(mlp, train, eval_set=test, metric=valmetric, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=test, metric=valmetric, **args.callback_args)
 
 # create learning rate schedules and optimizers
 weight_sched = Schedule(range(14, 75, 15), 0.1)

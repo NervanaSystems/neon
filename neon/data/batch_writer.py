@@ -26,7 +26,6 @@ import tarfile
 import ctypes as ct
 
 from neon.util.compat import range
-from neon.util.argparser import NeonArgparser
 
 logger = logging.getLogger(__name__)
 
@@ -347,6 +346,7 @@ class BatchWriterCIFAR10(BatchWriterI1K):
 
 
 if __name__ == "__main__":
+    from neon.util.argparser import NeonArgparser
     parser = NeonArgparser(__doc__)
     parser.add_argument('--set_type', help='(i1k|cifar10|directory)', required=True,
                         choices=['i1k', 'cifar10', 'directory'])

@@ -84,7 +84,7 @@ valid_set = QA(*babi.test)
 model = create_model(babi.vocab_size, args.rlayer_type)
 
 # setup callbacks
-callbacks = Callbacks(model, train_set, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
 
 # train model
 model.fit(train_set,

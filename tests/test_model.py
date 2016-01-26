@@ -16,7 +16,7 @@
 import numpy as np
 import os
 from neon.backends import gen_backend
-from neon.data import DataIterator, load_mnist, load_text, Text
+from neon.data import ArrayIterator, load_mnist, load_text, Text
 from neon.initializers import Gaussian, Constant
 from neon.layers import GeneralizedCost, Affine
 from neon.layers import Dropout, Conv, Pooling, Sequential, MergeMultistream, Recurrent
@@ -49,7 +49,7 @@ def test_model_get_outputs_rnn(backend_default, data):
 
 def test_model_get_outputs(backend_default):
     (X_train, y_train), (X_test, y_test), nclass = load_mnist()
-    train_set = DataIterator(X_train[:backend_default.bsz * 3])
+    train_set = ArrayIterator(X_train[:backend_default.bsz * 3])
 
     init_norm = Gaussian(loc=0.0, scale=0.1)
 
@@ -71,7 +71,7 @@ def test_model_get_outputs(backend_default):
 def test_model_serialize(backend_default, data):
     (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
 
-    train_set = DataIterator(
+    train_set = ArrayIterator(
         [X_train, X_train], y_train, nclass=nclass, lshape=(1, 28, 28))
 
     init_norm = Gaussian(loc=0.0, scale=0.01)

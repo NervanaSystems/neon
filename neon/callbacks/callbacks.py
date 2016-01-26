@@ -12,17 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from collections import deque
+import h5py
+import inspect
+import logging
+import numpy as np
 import os
 import sys
-import logging
-import h5py
-from collections import deque
-from neon import NervanaObject
-from neon.util.persist import save_obj
-from timeit import default_timer
-from neon.layers import Convolution
 import time
-import numpy as np
+from timeit import default_timer
+import weakref
+
+from neon import NervanaObject
+from neon.data import NervanaDataIterator
+from neon.util.persist import load_obj, save_obj, load_class
+from neon.layers import Convolution
 logger = logging.getLogger(__name__)
 
 
@@ -35,84 +39,119 @@ class Callbacks(NervanaObject):
         callbacks (list): Ordered set of Callback objects to be run.
     """
 
-    def __init__(self, model, train_set,
+    def __init__(self, model,
                  output_file=None,
                  eval_freq=None,
                  progress_bar=True,
-                 epochs=None,
                  save_path=None,
                  serialize=0,
                  history=1,
                  model_file=None,
                  eval_set=None,
-                 metric=None):
+                 metric=None, **kwargs):
         """
         Create a callbacks container with the default callbacks.
 
         Arguments:
             model (Model): the model object
-            train_set (DataIterator): the training dataset
             output_file (string, optional): path to save callback data to
             eval_freq (int, optional): how often (in epochs) to run evaluation
             progress_bar (bool): control whether a progress bar
             callback is created.  Defaults to True.
-            epochs (int): how many epochs the model will train for (default: None)
             save_path (string): file path to save model snapshots (default: None)
             serialize (int): serialize model every N epochs (default: 0)
             history (int): number of checkpoint files to retain (default: 1)
             model_file(string, optional): file to load weights (serialized model) from
-            eval_set (DataIterator, optional): the dataset upon which to evaluate loss
+            eval_set (NervanaDataIterator, optional): the dataset upon which to evaluate loss
                                                or metric
             metric (Metric, optional):  metric to evaluate
-       """
+        """
+        # once the deprecated args are removed the kwargs will also be removed
+        # as well as the code below
+        for ky in kwargs:
+            if ky in ['train_set', 'epochs']:
+                logger.warning("Deprecation warning.  Callbacks class no longer "
+                               "accepts %s as a parameter.  This argument will "
+                               "be removed soon update your code.", ky)
+            else:
+                raise TypeError('Callbacks got an unexpected keyword argument %s' % ky)
+
+        super(Callbacks, self).__init__(name=None)
         self.callbacks = list()
         self.epoch_marker = 0
+        self.output_file = output_file
         if output_file is None:
             if hasattr(self, 'callback_data'):
                 del self.callback_data
-            self.callback_data = h5py.File("no_file", driver='core', backing_store=False)
+            # self.name sould give a unique filename
+            self.callback_data = h5py.File(self.name, driver='core', backing_store=False)
         else:
             if os.path.isfile(output_file):
                 logger.warn("Overwriting output file %s", output_file)
                 os.remove(output_file)
             self.callback_data = h5py.File(output_file, "w")
 
+        self.model = weakref.ref(model)
+
         if model_file:
             model.load_params(model_file)
 
-        self.model = model
-        self.train_set = train_set
-
-        self.add_callback(TrainCostCallback(self.callback_data, self.model))
+        self.add_callback(TrainCostCallback())
 
         if progress_bar:
-            self.add_callback(ProgressBarCallback(self.callback_data, model, train_set))
+            self.add_callback(ProgressBarCallback())
 
         if eval_freq:
             if not eval_set:
-                err_msg = 'Evaluation frequency specified but no eval set provided`!'
+                err_msg = 'Evaluation frequency specified but no eval set provided!'
                 logger.exception(err_msg)
                 raise ValueError(err_msg)
 
-            ecb = LossCallback(self.callback_data, model, eval_set, eval_freq)
+            ecb = LossCallback(eval_set, eval_freq)
             self.add_callback(ecb, insert_pos=0)
             if metric:
-                ecb = MetricCallback(self.callback_data, model, eval_set, metric, eval_freq)
+                ecb = MetricCallback(eval_set, metric, eval_freq)
                 self.add_callback(ecb, insert_pos=None)
 
         if save_path:
             serialize_interval = serialize if serialize > 1 else 1
-            checkpoint_schedule = range(0, epochs, serialize_interval)
-            if not checkpoint_schedule:
-                err_msg = 'For %d epochs and schedule %d, model will not be serialized' % (
-                          epochs, serialize)
-                logger.exception(err_msg)
-                raise ValueError(err_msg)
-            scb = SerializeModelCallback(model, save_path, checkpoint_schedule, history)
+            scb = SerializeModelCallback(save_path, serialize_interval, history)
             self.add_callback(scb)
 
-        self.add_callback(TrainLoggerCallback(self.callback_data, model))
-        self.add_callback(RunTimerCallback(self.callback_data, model))
+        self.add_callback(TrainLoggerCallback())
+        self.add_callback(RunTimerCallback())
+
+    def __del__(self):
+        try:
+            self.callback_data.close()
+        except:
+            pass
+
+    def serialize(self):
+        return self.get_description()
+
+    def get_description(self):
+        # serialize callabck configuration
+        cdict = {}
+        cdict['epoch_marker'] = self.epoch_marker
+        cdict['output_file'] = self.output_file
+
+        cdict['callbacks'] = []
+        for callback in self.callbacks:
+            cdict['callbacks'].append(callback.get_description())
+        return cdict
+
+    @classmethod
+    def load_callbacks(cls, cdict, model, data=[]):
+        if type(cdict) is str:
+            cdict = load_obj(cdict)
+        callbacks = cls(model, output_file=cdict['output_file'])
+        callbacks.epoch_marker = cdict['epoch_marker']
+        callbacks.callbacks = []
+        for cb in cdict['callbacks']:
+            module = load_class(cb['type'])
+            callbacks.callbacks.append(module(**cb['config']))
+        return callbacks
 
     def add_deconv_callback(self, train_set, valid_set, max_fm=16, dataset_pct=25):
         """
@@ -120,11 +159,10 @@ class Callbacks(NervanaObject):
         visualization.
 
         Arguments:
-            train_set (DataIterator): the train dataset to use
-            valid_set (DataIterator): the validation dataset to use
+            train_set (NervanaDataIterator): the train dataset to use
+            valid_set (NervanaDataIterator): the validation dataset to use
         """
-        self.add_callback(DeconvCallback(self.callback_data, self.model,
-                                         train_set, valid_set,
+        self.add_callback(DeconvCallback(train_set, valid_set,
                                          max_fm=max_fm, dataset_pct=dataset_pct))
 
     def add_save_best_state_callback(self, path):
@@ -134,7 +172,7 @@ class Callbacks(NervanaObject):
         Arguments:
             path (string): where to save the best model state.
         """
-        self.add_callback(SaveBestStateCallback(self.callback_data, self.model, path))
+        self.add_callback(SaveBestStateCallback(path))
 
     def add_early_stop_callback(self, stop_func):
         """
@@ -143,11 +181,10 @@ class Callbacks(NervanaObject):
         Arguments:
             stop_func (function): function to determine when to stop.
         """
-        self.add_callback(EarlyStopCallback(self.callback_data, self.model, stop_func))
+        self.add_callback(EarlyStopCallback(stop_func))
 
     def add_hist_callback(self, plot_per_mini=False):
-        self.callbacks.append(HistCallback(self.callback_data, self.model,
-                              plot_per_mini=plot_per_mini))
+        self.callbacks.append(HistCallback(plot_per_mini=plot_per_mini))
 
     def add_callback(self, callback, insert_pos=None):
         """
@@ -172,7 +209,7 @@ class Callbacks(NervanaObject):
         # data iterator wraps around to avoid partial minibatches
         # callbacks producing per-minibatch data need a way to preallocate buffers
         config = self.callback_data.create_group('config')
-        total_minibatches = -((-self.train_set.ndata * epochs) // self.be.bsz)
+        total_minibatches = -((-self.model().ndata * epochs) // self.be.bsz)
         config.attrs['total_minibatches'] = total_minibatches
         config.attrs['total_epochs'] = epochs
 
@@ -180,14 +217,14 @@ class Callbacks(NervanaObject):
         time_markers.create_dataset("minibatch", (epochs,))
 
         for c in self.callbacks:
-            c.on_train_begin(epochs)
+            c.on_train_begin(self.callback_data, self.model(), epochs)
 
     def on_train_end(self):
         """
         Call all registered callbacks' on_train_end functions
         """
         for c in self.callbacks:
-            c.on_train_end()
+            c.on_train_end(self.callback_data, self.model())
 
         self.callback_data.close()
 
@@ -199,8 +236,8 @@ class Callbacks(NervanaObject):
             epoch (int): index of epoch that is beginning
         """
         for c in self.callbacks:
-            if c.should_fire(epoch, c.epoch_freq):
-                c.on_epoch_begin(epoch)
+            if c.should_fire(self.callback_data, self.model(), epoch, c.epoch_freq):
+                c.on_epoch_begin(self.callback_data, self.model(), epoch)
 
     def on_epoch_end(self, epoch):
         """
@@ -210,8 +247,8 @@ class Callbacks(NervanaObject):
             epoch (int): index of epoch that is ending
         """
         for c in self.callbacks:
-            if c.should_fire(epoch, c.epoch_freq):
-                c.on_epoch_end(epoch)
+            if c.should_fire(self.callback_data, self.model(), epoch, c.epoch_freq):
+                c.on_epoch_end(self.callback_data, self.model(), epoch)
 
         self.epoch_marker += self.epoch_minibatches
         self.callback_data['time_markers/minibatch'][epoch] = self.epoch_marker
@@ -228,8 +265,8 @@ class Callbacks(NervanaObject):
             minibatch (int): index of minibatch that is beginning
         """
         for c in self.callbacks:
-            if c.should_fire(minibatch, c.minibatch_freq):
-                c.on_minibatch_begin(epoch, minibatch)
+            if c.should_fire(self.callback_data, self.model(), minibatch, c.minibatch_freq):
+                c.on_minibatch_begin(self.callback_data, self.model(), epoch, minibatch)
 
     def on_minibatch_end(self, epoch, minibatch):
         """
@@ -240,8 +277,8 @@ class Callbacks(NervanaObject):
             minibatch (int): index of minibatch that is ending
         """
         for c in self.callbacks:
-            if c.should_fire(minibatch, c.minibatch_freq):
-                c.on_minibatch_end(epoch, minibatch)
+            if c.should_fire(self.callback_data, self.model(), minibatch, c.minibatch_freq):
+                c.on_minibatch_end(self.callback_data, self.model(), epoch, minibatch)
 
         # keep track of the number of mb per epoch, since they vary
         self.epoch_minibatches = minibatch + 1
@@ -264,62 +301,94 @@ class Callback(NervanaObject):
         self.minibatch_freq = minibatch_freq
         self.costnm = None
 
-    def on_train_begin(self, epochs):
+    def get_description(self):
+        keys = inspect.getargspec(self.__init__)[0]
+        keys.remove('self')
+
+        skip = []
+        for key in keys:
+            if isinstance(getattr(self, key), NervanaDataIterator):
+                # data iterator inputs are serialized serpartely
+                skip.append(key)
+        pdict = super(Callback, self).get_description(skip=skip)
+        for datap in skip:
+            pdict['config'][datap] = {'type': 'Data', 'name': getattr(self, datap).name}
+        return pdict
+
+    def on_train_begin(self, callback_data, model, epochs):
         """
         Called when training is about to begin
+
+        Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
         """
         pass
 
-    def on_train_end(self):
+    def on_train_end(self, callback_data, model):
         """
         Called when training is about to end
+
+        Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
         """
         pass
 
-    def on_epoch_begin(self, epoch):
+    def on_epoch_begin(self, callback_data, model, epoch):
         """
         Called when an epoch is about to begin
 
         Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
             epoch (int): index of epoch that is beginning
         """
         pass
 
-    def on_epoch_end(self, epoch):
+    def on_epoch_end(self, callback_data, model, epoch):
         """
         Called when an epoch is about to end
 
         Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
             epoch (int): index of epoch that is ending
         """
         pass
 
-    def on_minibatch_begin(self, epoch, minibatch):
+    def on_minibatch_begin(self, callback_data, model, epoch, minibatch):
         """
         Called when a minibatch is about to begin
 
         Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
             epoch (int): index of current epoch
             minibatch (int): index of minibatch that is begininning
         """
         pass
 
-    def on_minibatch_end(self, epoch, minibatch):
+    def on_minibatch_end(self, callback_data, model, epoch, minibatch):
         """
         Called when a minibatch is about to end
 
         Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
             epoch (int): index of current epoch
             minibatch (int): index of minibatch that is ending
         """
         pass
 
-    def should_fire(self, time, freq):
+    def should_fire(self, callback_data, model, time, freq):
         """
         Helper function for determining if a callback should do work at a given
         interval.
 
         Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
             time (int): current time, in an arbitrary unit
             freq (int, list, None): firing frequency, in multiples of the unit used
                                     for time, or a list of times, or None (never fire)
@@ -329,15 +398,17 @@ class Callback(NervanaObject):
             return True
         return False
 
-    def _get_cached_epoch_loss(self, epoch, label):
+    def _get_cached_epoch_loss(self, callback_data, model, epoch, label):
         """
         Helper function that checks if there exists a loss with a given label at a certain
-        epoch index.  Depends on a LossCallback to have previously computed the loss and stored
-        in self.callback_data.  Does not actually do any computation.
+        epoch index.  Depends on a LossCallback to have previously computed the loss and
+        stored in callback_data.  Does not actually do any computation.
 
         Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
             epoch (int): epoch index to check
-            label (str): label under which to find cached loss in self.callback_data
+            label (str): label under which to find cached loss in callback_data
 
         Returns:
             dict containing loss cost value, timing information, and display information
@@ -345,16 +416,16 @@ class Callback(NervanaObject):
 
         if self.costnm is None:
             self.costnm = "Loss"  # default costname to display if we can't resolve cost function
-            if hasattr(self, 'model') and self.model.cost:
-                self.costnm = self.model.cost.costfunc.__class__.__name__ + " " + self.costnm
+            if model.cost:
+                self.costnm = model.cost.costfunc.__class__.__name__ + " " + self.costnm
         cost_key = 'cost/' + label
         time_key = 'time/' + label
-        if cost_key not in self.callback_data:
+        if cost_key not in callback_data:
             return None
-        eval_freq = self.callback_data[cost_key].attrs['epoch_freq']
+        eval_freq = callback_data[cost_key].attrs['epoch_freq']
         if (epoch + 1) % eval_freq == 0:
-            return dict(cost=self.callback_data[cost_key][epoch/eval_freq],
-                        time=self.callback_data[time_key][epoch/eval_freq],
+            return dict(cost=callback_data[cost_key][epoch/eval_freq],
+                        time=callback_data[time_key][epoch/eval_freq],
                         costnm=self.costnm)
 
 
@@ -364,7 +435,6 @@ class SerializeModelCallback(Callback):
     Callback for serializing the state of the model.
 
     Arguments:
-        model (Model): model object
         save_path (str): where to save the model dataset
         epoch_freq (int, optional): how often (in epochs) to serialize the
                                    model.  If not specified, we default to
@@ -375,20 +445,19 @@ class SerializeModelCallback(Callback):
                                  <save_path>_<epoch>.
     """
 
-    def __init__(self, model, save_path, epoch_freq=1, history=1):
+    def __init__(self, save_path, epoch_freq=1, history=1):
         super(SerializeModelCallback, self).__init__(epoch_freq=epoch_freq)
-        self.model = model
         self.save_path = save_path
         self.history = history
         self.checkpoint_files = deque()
 
-    def on_epoch_end(self, epoch):
+    def on_epoch_end(self, callback_data, model, epoch):
         if self.history > 1:
-            self.save_history(epoch)
+            self.save_history(epoch, model)
         else:
-            save_obj(self.model.serialize(keep_states=True), self.save_path)
+            save_obj(model.serialize(keep_states=True), self.save_path)
 
-    def save_history(self, epoch):
+    def save_history(self, epoch, model):
         # if history > 1, this function will save the last N checkpoints
         # where N is equal to self.history.  The files will have the form
         # of save_path with the epoch added to the filename before the ext
@@ -406,7 +475,7 @@ class SerializeModelCallback(Callback):
         save_path = '%s_%d%s' % (path_split[0], epoch, path_split[1])
         # add the current file to the deque
         self.checkpoint_files.append(save_path)
-        save_obj(self.model.serialize(keep_states=True), save_path)
+        save_obj(model.serialize(keep_states=True), save_path)
 
         # maintain a symlink pointing to the latest model params
         try:
@@ -421,60 +490,47 @@ class SerializeModelCallback(Callback):
 class RunTimerCallback(Callback):
     """
     Callback which tracks the total training time
-
-    Arguments:
-        callback_data (HDF5 dataset): shared data between callbacks
-        model (Model): model object
-
     """
-    def __init__(self, callback_data, model):
+    def __init__(self):
         super(RunTimerCallback, self).__init__()
-        self.callback_data = callback_data
 
-    def on_train_begin(self, epochs):
-        timing = self.callback_data.create_group("time/train")
+    def on_train_begin(self, callback_data, model, epochs):
+        timing = callback_data.create_group("time/train")
         timing.create_dataset("start_time", (1,), dtype='float64')
         timing.create_dataset("end_time", (1,), dtype='float64')
         timing['start_time'][0] = time.time()
         timing['start_time'].attrs['units'] = 'seconds'
 
-    def on_train_end(self):
-        self.callback_data['time/train/end_time'][0] = time.time()
-        self.callback_data['time/train/end_time'].attrs['units'] = 'seconds'
+    def on_train_end(self, callback_data, model):
+        callback_data['time/train/end_time'][0] = time.time()
+        callback_data['time/train/end_time'].attrs['units'] = 'seconds'
 
 
 class TrainCostCallback(Callback):
     """
     Callback for computing average training cost periodically during training.
-
-    Arguments:
-        callback_data (HDF5 dataset): shared data between callbacks
-        model (Model): model object
-
     """
-    def __init__(self, callback_data, model, wsz=10):
+    def __init__(self, wsz=10):
         super(TrainCostCallback, self).__init__(epoch_freq=1)
-        self.model = model
-        self.callback_data = callback_data
         self.wsz = wsz
 
-    def on_train_begin(self, epochs):
+    def on_train_begin(self, callback_data, model, epochs):
         # preallocate space for the number of minibatches in the whole run
-        points = self.callback_data['config'].attrs['total_minibatches']
-        self.callback_data.create_dataset("cost/train", (points,))
+        points = callback_data['config'].attrs['total_minibatches']
+        callback_data.create_dataset("cost/train", (points,))
 
         # make sure our window size is less than or equal to total number of minibatches
         self.wsz = min(points, self.wsz)
         self.cost_history = deque([], maxlen=self.wsz)
 
         # clue in the data reader to use the 'minibatch' time_markers
-        self.callback_data['cost/train'].attrs['time_markers'] = 'minibatch'
+        callback_data['cost/train'].attrs['time_markers'] = 'minibatch'
 
-    def on_minibatch_end(self, epoch, minibatch):
-        self.cost_history.append(self.model.cost.cost.get())
+    def on_minibatch_end(self, callback_data, model, epoch, minibatch):
+        self.cost_history.append(model.cost.cost.get())
         mean_cost = sum(self.cost_history) / len(self.cost_history)
-        mbstart = self.callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
-        self.callback_data['cost/train'][mbstart + minibatch] = mean_cost
+        mbstart = callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+        callback_data['cost/train'][mbstart + minibatch] = mean_cost
 
 
 class LossCallback(Callback):
@@ -483,70 +539,72 @@ class LossCallback(Callback):
     Callback for calculating the loss on a given dataset periodically during training.
 
     Arguments:
-        callback_data (HDF5 dataset): shared data between callbacks
-        model (Model): model object
-        eval_set (DataIterator): dataset to evaluate
+        eval_set (NervanaDataIterator): dataset to evaluate
         epoch_freq (int, optional): how often (in epochs) to log info.
                                     Defaults to every 1 epoch.
     """
 
-    def __init__(self, callback_data, model, eval_set, epoch_freq=1):
+    def __init__(self, eval_set, epoch_freq=1):
         super(LossCallback, self).__init__(epoch_freq=epoch_freq)
-        self.model = model
         self.eval_set = eval_set
         self.loss = self.be.zeros((1, 1), dtype=np.float32)
-        self.callback_data = callback_data
 
-    def on_train_begin(self, epochs):
-        self.callback_data.create_dataset("cost/loss", (epochs/self.epoch_freq,))
-        self.callback_data.create_dataset("time/loss", (epochs/self.epoch_freq,))
-        self.callback_data["cost/loss"].attrs['time_markers'] = 'epoch_freq'
-        self.callback_data["cost/loss"].attrs['epoch_freq'] = self.epoch_freq
+    def on_train_begin(self, callback_data, model, epochs):
+        callback_data.create_dataset("cost/loss", (epochs/self.epoch_freq,))
+        callback_data.create_dataset("time/loss", (epochs/self.epoch_freq,))
+        callback_data["cost/loss"].attrs['time_markers'] = 'epoch_freq'
+        callback_data["cost/loss"].attrs['epoch_freq'] = self.epoch_freq
 
-    def on_epoch_end(self, epoch):
+    def on_epoch_end(self, callback_data, model, epoch):
         start_loss = default_timer()
         nprocessed = 0
         self.loss[:] = 0
         self.eval_set.reset()
         for x, t in self.eval_set:
-            x = self.model.fprop(x, inference=True)
+            x = model.fprop(x, inference=True)
             bsz = min(self.eval_set.ndata - nprocessed, self.be.bsz)
-            self.model.cost.get_cost(x, t)
+            model.cost.get_cost(x, t)
             nsteps = x.shape[1] / self.be.bsz
-            costbuf = self.model.cost.outputs[:, :bsz*nsteps]
+            costbuf = model.cost.outputs[:, :bsz*nsteps]
             nprocessed += bsz
             self.loss[:] = self.loss + self.be.sum(costbuf, axis=1)/nsteps
             mean_cost = float(self.loss.get() / nprocessed)
-        self.callback_data["time/loss"][epoch/self.epoch_freq] = (default_timer() - start_loss)
-        self.callback_data["cost/loss"][epoch/self.epoch_freq] = mean_cost
+        callback_data["time/loss"][epoch/self.epoch_freq] = (default_timer() - start_loss)
+        callback_data["cost/loss"][epoch/self.epoch_freq] = mean_cost
 
 
 class MetricCallback(Callback):
-    def __init__(self, callback_data, model, eval_set, metric, epoch_freq=1):
+    """
+    Callback for calculating a metric on a given dataset periodically during training.
+    Arguments:
+        eval_set (NervanaDataIterator): dataset to evaluate
+        metric (Metric): metric to evaluate
+        epoch_freq (int, optional): how often (in epochs) to log info.
+                                    Defaults to every 1 epoch.
+    """
+    def __init__(self, eval_set, metric, epoch_freq=1):
         super(MetricCallback, self).__init__(epoch_freq=epoch_freq)
-        self.callback_data = callback_data
-        self.model = model
         self.eval_set = eval_set
         self.metric = metric
         self.metric_cnt = len(self.metric.metric_names)
         self.metric_desc = ", ".join(self.metric.metric_names)
 
-    def on_train_begin(self, epochs):
-        self.callback_data.create_group("metrics")
+    def on_train_begin(self, callback_data, model, epochs):
+        callback_data.create_group("metrics")
         for met in self.metric.metric_names:
             group_name = "metrics/%s" % met
-            self.callback_data.create_dataset(group_name, (epochs/self.epoch_freq,))
-            self.callback_data[group_name].attrs['time_markers'] = 'epoch_freq'
-            self.callback_data[group_name].attrs['epoch_freq'] = self.epoch_freq
+            callback_data.create_dataset(group_name, (epochs/self.epoch_freq,))
+            callback_data[group_name].attrs['time_markers'] = 'epoch_freq'
+            callback_data[group_name].attrs['epoch_freq'] = self.epoch_freq
 
-    def on_epoch_end(self, epoch):
+    def on_epoch_end(self, callback_data, model, epoch):
         if (epoch + 1) % self.epoch_freq == 0:
             self.eval_set.reset()
-            stats = self.model.eval(self.eval_set, metric=self.metric)
+            stats = model.eval(self.eval_set, metric=self.metric)
             logger.info('%s: %s', self.metric_desc, ", ".join(map(str, stats.flatten())))
 
             for ind, met in enumerate(self.metric.metric_names):
-                self.callback_data["metrics/%s" % met][epoch/self.epoch_freq] = stats[ind]
+                callback_data["metrics/%s" % met][epoch/self.epoch_freq] = stats[ind]
 
 
 class MultiLabelStatsCallback(Callback):
@@ -558,8 +616,7 @@ class MultiLabelStatsCallback(Callback):
     values of the classification task.
 
     Arguments:
-        model (Model): model object
-        eval_set (DataIterator): dataset to evaluate
+        eval_set (NervanaDataIterator): dataset to evaluate
         labels (list): the list of class names (order must be the same as
                        the rows of the target)
         metric (Metric): An instantiated performance metric like
@@ -568,15 +625,14 @@ class MultiLabelStatsCallback(Callback):
                                     Defaults to every 1 epoch.
     """
 
-    def __init__(self, model, eval_set, labels, metric, epoch_freq=1):
+    def __init__(self, eval_set, labels, metric, epoch_freq=1):
         super(MultiLabelStatsCallback, self).__init__(epoch_freq=epoch_freq)
-        self.model = model
         self.eval_set = eval_set
         self.metric = metric
         self.labels = labels
         self.metric_desc = ", ".join(self.metric.metric_names)
 
-    def on_epoch_end(self, epoch):
+    def on_epoch_end(self, callback_data, model, epoch):
         if (epoch + 1) % self.epoch_freq == 0:
             self.eval_set.reset()
 
@@ -585,7 +641,7 @@ class MultiLabelStatsCallback(Callback):
             # Calculate the metric values
             nbatch = 0
             for x, t in self.eval_set:
-                x = self.model.fprop(x, inference=True)
+                x = model.fprop(x, inference=True)
 
                 self.metric(x, t)
                 running_stats += self.metric.outputs.get()
@@ -611,41 +667,40 @@ class HistCallback(Callback):
     flag. Histograms are stored to the hdf5 output file and can be visualized
     using the nvis tool.
     """
-    def __init__(self, callback_data, model, plot_per_mini):
+    def __init__(self, plot_per_mini):
         super(HistCallback, self).__init__(epoch_freq=1, minibatch_freq=1)
-        self.callback_data = callback_data
         self.plot_per_mini = plot_per_mini
-        self.model = model
 
-    def on_train_begin(self, epochs):
-        self.minibatches = self.callback_data['config'].attrs['total_minibatches']
+    def on_train_begin(self, callback_data, model, epochs):
+        self.minibatches = callback_data['config'].attrs['total_minibatches']
 
-        hist_grp = self.callback_data.create_group("hist")
+        hist_grp = callback_data.create_group("hist")
         hist_grp.attrs['bins'] = self.be.hist_bins
         hist_grp.attrs['offset'] = self.be.hist_offset
         hist_grp.attrs['time_markers'] = 'minibatch' if self.plot_per_mini else 'epoch'
         hist_grp.attrs['time_steps'] = self.minibatches if self.plot_per_mini else epochs
 
-    def on_minibatch_end(self, epoch, minibatch):
+    def on_minibatch_end(self, callback_data, model, epoch, minibatch):
         if self.plot_per_mini:
             prev_epochs_minibatches = 0
             if epoch > 0:
-                prev_epochs_minibatches = self.callback_data['time_markers/minibatch'][epoch-1]
+                prev_epochs_minibatches = callback_data['time_markers/minibatch'][epoch-1]
 
             timestamp = prev_epochs_minibatches + minibatch
-            self._save_hist_data(timestamp)
+            self._save_hist_data(callback_data, model, timestamp)
 
-    def on_epoch_end(self, epoch):
+    def on_epoch_end(self, callback_data, model, epoch):
         if not self.plot_per_mini:
-            self._save_hist_data(epoch)
+            self._save_hist_data(callback_data, model, epoch)
 
-    def _save_hist_data(self, timestamp):
-        for l_i, l in enumerate(self.model.layers.layers):
+    def _save_hist_data(self, callback_data, model, timestamp):
+        # TODO: generalize this for container layers
+        for l_i, l in enumerate(model.layers.layers):
             if hasattr(l, 'W'):
                 name = "%s_%d_W" % (l.name, l_i)
                 l.W.hist(name)
 
-        hist_grp = self.callback_data['hist']
+        hist_grp = callback_data['hist']
         points = hist_grp.attrs['time_steps']
         hdata, hmap = self.be.dump_hist_data()
         hdata = hdata.get()
@@ -677,36 +732,28 @@ def get_progress_string(tag, epoch, minibatch, nbatches, cost, time,
 
 
 class ProgressBarCallback(Callback):
-
     """
     Callback providing a live updating console based progress bar.
-
-    Arguments:
-        model (Model): model object
-        dataset (DataIterator): dataset object
     """
 
-    def __init__(self, callback_data, model, dataset, epoch_freq=1,
+    def __init__(self, epoch_freq=1,
                  minibatch_freq=1, update_thresh_s=0.1):
         super(ProgressBarCallback, self).__init__(epoch_freq=epoch_freq,
                                                   minibatch_freq=minibatch_freq)
-        self.model = model
-        self.dataset = dataset
-        self.callback_data = callback_data
         self.update_thresh_s = update_thresh_s
         self._last_strlen = 0
 
-    def on_epoch_begin(self, epoch):
+    def on_epoch_begin(self, callback_data, model, epoch):
         self.start_epoch = self.last_update = default_timer()
-        self.nbatches = self.dataset.nbatches
+        self.nbatches = model.nbatches
 
-    def on_minibatch_end(self, epoch, minibatch):
+    def on_minibatch_end(self, callback_data, model, epoch, minibatch):
         now = default_timer()
         mb_complete = minibatch + 1
         if (now - self.last_update > self.update_thresh_s or mb_complete == self.nbatches):
             self.last_update = now
-            mbstart = self.callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
-            train_cost = self.callback_data['cost/train'][mbstart + minibatch]
+            mbstart = callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+            train_cost = callback_data['cost/train'][mbstart + minibatch]
 
             progress_string = get_progress_string("Train", epoch, mb_complete, self.nbatches,
                                                   train_cost, now - self.start_epoch)
@@ -717,8 +764,8 @@ class ProgressBarCallback(Callback):
             self._last_strlen = len(progress_string)
             sys.stdout.flush()
 
-    def on_epoch_end(self, epoch):
-        _eil = self._get_cached_epoch_loss(epoch, 'loss')
+    def on_epoch_end(self, callback_data, model, epoch):
+        _eil = self._get_cached_epoch_loss(callback_data, model, epoch, 'loss')
         if _eil:
             progress_string = " [%s %.2f, %.2fs]" % (_eil['costnm'], _eil['cost'], _eil['time'])
             sys.stdout.write(progress_string.encode('utf-8'))
@@ -732,8 +779,6 @@ class TrainLoggerCallback(Callback):
     Callback for logging training progress.
 
     Arguments:
-        model (Model): model object
-
         epoch_freq (int, optional): how often (in epochs) to log training info.
                                     Defaults to every 1 epoch.
         minibatch_freq (int, optional): how often (in minibatches) to log
@@ -741,25 +786,23 @@ class TrainLoggerCallback(Callback):
                                         epoch boundaries.  Defaults to None.
     """
 
-    def __init__(self, callback_data, model, epoch_freq=1, minibatch_freq=None):
-        self.callback_data = callback_data
-        self.model = model
+    def __init__(self, epoch_freq=1, minibatch_freq=None):
         super(TrainLoggerCallback, self).__init__(epoch_freq=epoch_freq,
                                                   minibatch_freq=minibatch_freq)
         self.epoch_freq = epoch_freq
         self.minibatch_freq = minibatch_freq
 
-    def on_train_begin(self, epochs):
-        logger.info("Model:\n%s", self.model)
+    def on_train_begin(self, callback_data, model, epochs):
+        logger.info("Model:\n%s", model)
 
-    def on_minibatch_end(self, epoch, minibatch):
-        mbstart = self.callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
-        train_cost = self.callback_data['cost/train'][mbstart + minibatch]
+    def on_minibatch_end(self,  callback_data, model, epoch, minibatch):
+        mbstart = callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+        train_cost = callback_data['cost/train'][mbstart + minibatch]
         logger.info("Epoch %d Minibatch %d complete. Train cost: %f", epoch, minibatch, train_cost)
 
-    def on_epoch_end(self, epoch):
-        _eil = self._get_cached_epoch_loss(epoch, 'loss')
-        log_str = "Epoch %d complete.  Train Cost %f." % (epoch, self.model.total_cost.get())
+    def on_epoch_end(self, callback_data, model, epoch):
+        _eil = self._get_cached_epoch_loss(callback_data, model, epoch, 'loss')
+        log_str = "Epoch %d complete.  Train Cost %f." % (epoch, model.total_cost.get())
         log_str += "  Eval Cost %f" % _eil['cost'] if _eil else ""
         logger.info(log_str)
 
@@ -770,24 +813,21 @@ class SaveBestStateCallback(Callback):
     Callback for saving the best model state so far.
 
     Arguments:
-        callback_data
-        model (Model): model object
         path (str): repeatedly write the best model parameters seen so far to the
                     filesystem path specified.
     """
 
-    def __init__(self, callback_data, model, path):
+    def __init__(self, path):
         super(SaveBestStateCallback, self).__init__(epoch_freq=1)
-        self.callback_data = callback_data
-        self.model = model
         self.best_path = path
         self.best_cost = None
 
-    def on_epoch_end(self, epoch):
-        _eil = self._get_cached_epoch_loss(epoch, 'loss')
+    def on_epoch_end(self, callback_data, model, epoch):
+        _eil = self._get_cached_epoch_loss(callback_data, model, epoch, 'loss')
         if _eil:
             if _eil['cost'] < self.best_cost or self.best_cost is None:
-                save_obj(self.model.serialize(keep_states=True), self.best_path)
+                # TODO: switch this to a general seralization op
+                save_obj(model.serialize(keep_states=True), self.best_path)
                 self.best_cost = _eil['cost']
 
 
@@ -797,27 +837,23 @@ class EarlyStopCallback(Callback):
     Callback for stopping training when a threshold has been triggered.
 
     Arguments:
-        model (Model): model object
-        callback_data:
         stop_func (Function): Takes a function that receives a tuple (State, Val[t])
                               of the current state and the validation error at this time
                               and returns a tuple (State', Bool) that returns the updated
                               state and an indication of whether to stop training.
     """
 
-    def __init__(self, callback_data, model, stop_func):
+    def __init__(self, stop_func):
         super(EarlyStopCallback, self).__init__(epoch_freq=1)
-        self.callback_data = callback_data
-        self.model = model
         self.stop_func = stop_func
         self.stop_state = None  # state needed for the stop func
 
-    def on_epoch_end(self, epoch):
-        _eil = self._get_cached_epoch_loss(epoch, 'loss')
+    def on_epoch_end(self, callback_data, model, epoch):
+        _eil = self._get_cached_epoch_loss(callback_data, model, epoch, 'loss')
         if _eil:
             self.stop_state, finished = self.stop_func(self.stop_state, _eil['cost'])
             if finished:
-                self.model.finished = True
+                model.finished = True
                 logger.warn('Early stopping function triggered: mean_cost %f.' % (_eil['cost']))
 
 
@@ -828,9 +864,7 @@ class DeconvCallback(Callback):
     used for visualization purposes via nvis.
 
     Arguments:
-        model (Model): model object
-        callback_data (HDF5 dataset): shared data between callbacks
-        train_set (DataIterator): the training dataset
+        train_set (NervanaDataIterator): the training dataset
         max_fm (int, optional): Maximum number of feature maps to visualize per
                                 layer.  Defaults to 16.
         dataset_pct (float, optional): Initial portion of validation dataset to
@@ -841,12 +875,10 @@ class DeconvCallback(Callback):
 
     .. [Springenberg2014] http://arxiv.org/abs/1412.6806
     """
-    def __init__(self, callback_data, model, train_set, valid_set, max_fm=16, dataset_pct=25):
+    def __init__(self, train_set, valid_set, max_fm=16, dataset_pct=25):
         super(DeconvCallback, self).__init__(epoch_freq=1)
-        self.model = model
         self.train_set = train_set
         self.valid_set = valid_set
-        self.callback_data = callback_data
         self.max_fm = max_fm
         self.dataset_pct = dataset_pct
         self.name = "Guided Bprop"
@@ -860,8 +892,9 @@ class DeconvCallback(Callback):
         sys.stdout.write('\r' + progress_string.encode('utf-8'))
         sys.stdout.flush()
 
-    def on_train_end(self):
-        layers = self.model.layers.layers
+    def on_train_end(self, callback_data, model):
+        # TODO: generalize for more complex topologies
+        layers = model.layers.layers
         self.raw_img_cache = dict()
         self.raw_img_key = dict()
         C, H, W = layers[0].in_shape
@@ -873,7 +906,7 @@ class DeconvCallback(Callback):
                 K = lyr.convparams['K']
                 num_fm = min(K, self.max_fm)
 
-                lyr_data = self.callback_data.create_group("deconv/max_act/{0:04}".format(l))
+                lyr_data = callback_data.create_group("deconv/max_act/{0:04}".format(l))
                 lyr_data.create_dataset("batch_img", (num_fm, 2), dtype='uint16')
                 lyr_data.create_dataset("fm_loc", (num_fm, 1), dtype='int16')
                 lyr_data.create_dataset("vis", (num_fm, H, W, C), dtype='uint8')
@@ -889,9 +922,9 @@ class DeconvCallback(Callback):
             if batch_ind > num_sampled_batches:
                 break
 
-            imgs_to_store = self.get_layer_acts(x, batch_ind)
+            imgs_to_store = self.get_layer_acts(callback_data, model, x, batch_ind)
 
-            self.store_images(batch_ind, imgs_to_store, x, C, H, W)
+            self.store_images(callback_data, batch_ind, imgs_to_store, x, C, H, W)
 
             self._progress_update("Find Max Act Imgs", batch_ind,
                                   num_sampled_batches, "batches",
@@ -907,7 +940,7 @@ class DeconvCallback(Callback):
             if isinstance(layers[layer_ind], Convolution):
                 num_fm, act_h, act_w = layers[layer_ind].out_shape
                 act_size = act_h * act_w
-                self.visualize_layer(num_fm, act_size, layer_ind)
+                self.visualize_layer(callback_data, model, num_fm, act_size, layer_ind)
             self._progress_update("Compute " + self.name, i,
                                   len(layers), "layers",
                                   time.time() - t_start)
@@ -932,11 +965,11 @@ class DeconvCallback(Callback):
             img_255 *= 255.
         return img_255
 
-    def store_images(self, batch_ind, imgs_to_store, img_batch_data, C, H, W):
+    def store_images(self, callback_data, batch_ind, imgs_to_store, img_batch_data, C, H, W):
         n_imgs = len(imgs_to_store)
         if n_imgs:
             img_data = img_batch_data[:, imgs_to_store].get()
-            img_store = self.callback_data.create_group('deconv/img/batch_'+str(batch_ind))
+            img_store = callback_data.create_group('deconv/img/batch_'+str(batch_ind))
 
             # Store uint8 HWC formatted data for plotting
             img_hwc8 = img_store.create_dataset("HWC_uint8", (H, W, C, n_imgs),
@@ -955,10 +988,10 @@ class DeconvCallback(Callback):
                 img_store.attrs[str(img_idx)] = i
                 self.raw_img_key[batch_ind][img_idx] = i
 
-    def get_layer_acts(self, x, batch_ind):
+    def get_layer_acts(self, callback_data, model, x, batch_ind):
         imgs_to_store = set()
 
-        for l, lyr in enumerate(self.model.layers.layers, 0):
+        for l, lyr in enumerate(model.layers.layers, 0):
             x = lyr.fprop(x, inference=True)
 
             if not isinstance(lyr, Convolution):
@@ -968,7 +1001,7 @@ class DeconvCallback(Callback):
             fm_argmax = self.be.zeros((num_fm, 1), dtype=np.int32)
             maxact_idx = self.be.array(np.arange(num_fm) * H * W * self.be.bsz, dtype=np.int32)
 
-            act_data = self.callback_data["deconv/max_act/{0:04}".format(l)]
+            act_data = callback_data["deconv/max_act/{0:04}".format(l)]
 
             all_acts = lyr.outputs.reshape((num_fm, H * W * self.be.bsz))
             all_acts_flat = lyr.outputs.reshape((num_fm * H * W * self.be.bsz))
@@ -993,10 +1026,9 @@ class DeconvCallback(Callback):
 
         return list(imgs_to_store)
 
-    def visualize_layer(self, num_fm, act_size, layer_ind):
-        model = self.model
+    def visualize_layer(self, callback_data, model, num_fm, act_size, layer_ind):
         be = model.be
-        act_data = self.callback_data["deconv/max_act/{0:04}".format(layer_ind)]
+        act_data = callback_data["deconv/max_act/{0:04}".format(layer_ind)]
         layers = model.layers.layers
 
         # Loop to visualize every feature map
