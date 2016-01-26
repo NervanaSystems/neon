@@ -89,7 +89,7 @@ class CIFAR10(Dataset):
 
     Arguments:
         path (str): local path to copy data files
-        normailize (bool): flag to normalize data
+        normalize (bool): flag to normalize data
         whiten (bool): flag to apply whitening transform
         pad_classes (bool): flag to pad out class count to 16
                             for compatibility with conv layers on GPU
