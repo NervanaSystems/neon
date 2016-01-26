@@ -332,11 +332,8 @@ class Tree(LayerContainer):
 
     def fprop(self, inputs, inference=False):
         x = self.layers[0].fprop(inputs, inference)
-        if inference:
-            return x
-        else:
-            out = [x] + [l.fprop(None) for l in self.layers[1:]]
-            return out
+        out = [x] + [l.fprop(None) for l in self.layers[1:]]
+        return out
 
     def bprop(self, error):
         for l, e, a, b in reversed(zip(self.layers, error, self.alphas, self.betas)):
@@ -525,6 +522,136 @@ class MergeMultistream(MergeBroadcast):
             self.error_views = self.get_partitions(error, self.slices)
         for l, e in zip(self.layers, self.error_views):
             l.bprop(e)
+
+
+class RoiPooling(Sequential):
+    """
+    It uses max pooling to convert the features inside any ROI into a small
+    feature map with a fixed spatial extend of H x W, where H and W are layer
+    parameters indepdendent of any particular ROI.
+    Each ROI is defined as a 4-tuple as (xmin, ymin, xmax, ymax)
+
+    ROIPooling is applied independently to each feature map channel, as in standard
+    max pooling.
+
+    It is constructed as a layer container, in order to interface with dataset
+    directly. And it will process the image from the dataset through the contained
+    layers (usually ImageNet CNN layers), and combine the ROIs from the dataset
+    with the feature maps output from CNN layers.
+    """
+
+    def __init__(self, layers, HW=(7, 7), scale=0.0625, name="RoiPoolingLayer"):
+        if layers:
+            super(RoiPooling, self).__init__(layers, name=name)
+        self.roi_H, self.roi_W = HW
+        self.spatial_scale = scale  # 0.0625 is 1/16
+        # it has its own output buffer besides being a container
+        self.owns_output = True
+        self.owns_delta = True
+        self.img = None
+        self.rois = None
+        self.rois_per_image = 64
+        self.rois_per_batch = self.be.bsz * 64
+
+    def nested_str(self, level=0):
+        ss = self.__class__.__name__ + '\n'
+        return ss
+
+    def configure(self, in_obj):
+        """
+        Must receive a list of shapes for configurations
+        Need both the layer container and roi dataset to configure shapes
+        'in_obj' will include be [image_shape, roi_shape] (e.g [(3, 600, 1000), 5])
+        """
+        # configure to get the shape of feature map
+        self.prev_layer = None
+
+        if not isinstance(in_obj, list):
+            assert hasattr(in_obj, 'shape') and isinstance(in_obj.shape, list)
+            # make sure the in_obj has information on rois_per_image,
+            # if it is a dataset
+            assert hasattr(in_obj, 'rois_per_image')
+            self.rois_per_image = in_obj.rois_per_image
+            assert hasattr(in_obj, 'rois_per_batch')
+            self.rois_per_batch = in_obj.rois_per_batch
+
+            in_obj = in_obj.shape
+
+        assert isinstance(
+            in_obj, list), "ROI pool layer must have interpretable input shapes"
+
+        # configure all the image network layers, so self.layers has feature map shape
+        # using which to get output shape
+
+        in_obj_img = in_obj[0]
+        self.in_shape_img = in_obj_img  # the previous sequential in shape
+
+        if self.layers:
+            for l in self.layers:
+                in_obj_img = l.configure(in_obj_img)
+            self.in_shape = in_obj_img.out_shape  # ROI layer in shape
+            (self.fm_channel, self.fm_height, self.fm_width) = self.in_shape
+            # make the out_shape as a tuple, as if the roi_per_image a
+            # time_step dimension
+            self.out_shape = (
+                self.fm_channel * self.roi_H * self.roi_W, self.rois_per_image)
+            self.fm_reshape_shape = (
+                self.fm_channel, self.fm_height * self.fm_width, self.be.bsz)
+            self.error_in_reshape = (self.fm_channel, -1)
+        return self
+
+    def allocate(self, shared_outputs=None):
+        super(RoiPooling, self).allocate(shared_outputs)
+        self.owns_output = True
+        self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
+        self.error = self.be.iobuf(self.in_shape)
+        self.max_idx = self.be.iobuf(self.out_shape, dtype=np.int32)
+
+    def set_deltas(self, delta_buffers):
+        self.allocate_deltas()
+
+    def init_buffers(self, inputs):
+        """
+        Initialize buffers for images and ROIs
+        """
+        assert len(inputs) == 2, "inputs must contain both images and ROIs"
+        if self.img is None or self.img is not inputs[0]:
+            self.img = inputs[0]
+            self.rois = inputs[1]
+            assert self.rois.shape[1] == 5, "ROI entry must be 5-value tuple"
+
+    def fprop(self, inputs, inference=False):
+
+        self.init_buffers(inputs)
+
+        self.outputs.fill(0)
+        self.max_idx.fill(0)
+
+        # fprop the input images
+        self.fm = super(RoiPooling, self).fprop(self.img, inference)
+
+        # fprop through the roipooling layer
+        self.be.roipooling_fprop(self.fm, self.rois, self.outputs, self.max_idx,
+                                 self.rois_per_batch, self.fm_channel, self.fm_height,
+                                 self.fm_width, self.roi_H, self.roi_W, self.spatial_scale)
+
+        return self.outputs
+
+    def bprop(self, error, alpha=1.0, beta=0.0):
+
+        self.error.fill(0)
+
+        # # bprop through the roipooling layer
+        self.be.roipooling_bprop(error, self.rois, self.error, self.max_idx,
+                                 self.rois_per_batch, self.fm_channel, self.fm_height,
+                                 self.fm_width, self.roi_H, self.roi_W, self.spatial_scale)
+
+        # bprop back through the imagenet layer container
+        self.deltas = super(RoiPooling, self).bprop(self.error, alpha, beta)
+
+    def get_terminal(self):
+        terminals = [l.get_terminal() for l in self.layers]
+        return terminals
 
 
 class Multicost(NervanaObject):

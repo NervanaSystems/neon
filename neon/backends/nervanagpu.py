@@ -29,7 +29,7 @@ from math import log
 from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
-from neon.backends.kernels.cuda import pooling
+from neon.backends.kernels.cuda import pooling, roipooling
 from scikits.cuda import cublas
 
 _none_slice = slice(None, None, None)
@@ -1951,6 +1951,76 @@ class NervanaGPU(Backend):
             end.synchronize()
             msecs = end.time_since(start) / repeat
             print("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
+
+
+    def roipooling_fprop(self, I, rois, O, argmax, roi_count, fm_channel, fm_height, fm_width,
+                            pooled_height, pooled_width, spatial_scale):
+        """
+        Function to perform fprop of ROIPooling
+
+        Arguments:
+            I (Tensor): (C, H, W, N)
+            rois (Tensor): (ROIs, 5)
+            O (Tensor): (C, pooled_height, pooled_width, roi_count)
+            argmax (Tensor): (C, pooled_height, pooled_width, roi_count)
+        """
+        thread = 1024
+        assert roi_count == rois.shape[0]
+        assert roi_count == O.shape[-1] == argmax.shape[-1]
+
+        count = fm_channel * pooled_height * pooled_width * roi_count
+        assert count == O.size == argmax.size
+        assert argmax.dtype == np.int32
+
+        def get_blocks(N, thread):
+            return (N + thread - 1) / thread
+
+        layer_dtype = I.dtype
+
+        kernel = roipooling.map_string2func("fprop_roipooling", layer_dtype.str[1:])
+
+        params = [(get_blocks(count, thread), 1, 1), (thread, 1, 1), self.stream,
+                    count, roi_count, self.bsz, fm_channel, fm_height, fm_width,
+                    pooled_height, pooled_width, I.gpudata,
+                    rois.gpudata, O.gpudata, argmax.gpudata,
+                    spatial_scale]
+
+        kernel.prepared_async_call(*params)
+
+    def roipooling_bprop(self, I, rois, O, argmax, roi_count, fm_channel, fm_height, fm_width,
+                            pooled_height, pooled_width, spatial_scale):
+        """
+        Function to perform bprop of ROIPooling
+
+        Arguments:
+            I (Tensor): input errors (C, pooled_height, pooled_width, roi_count)
+            argmax (Tensor): max args from the fprp (C, pooled_height, pooled_width, roi_count)
+            rois (Tensor): (ROIs, 5)
+            O (Tensor): output deltas (C, H, W, N)
+        """
+
+        thread = 1024
+        assert roi_count == rois.shape[0]
+        # assert roi_count == I.shape[-1] == argmax.shape[-1]
+
+        count = fm_channel * fm_height * fm_width * self.bsz
+        assert count == O.size
+        assert argmax.dtype == np.int32
+
+        def get_blocks(N, thread):
+            return (N + thread - 1) / thread
+
+        layer_dtype = I.dtype
+
+        kernel = roipooling.map_string2func("bprop_roipooling", layer_dtype.str[1:])
+
+        params = [(get_blocks(count, thread), 1, 1), (thread, 1, 1), self.stream,
+                    count, roi_count, self.bsz, fm_channel, fm_height, fm_width, 
+                    pooled_height, pooled_width, I.gpudata,
+                    rois.gpudata, O.gpudata, argmax.gpudata,
+                    spatial_scale]
+
+        kernel.prepared_async_call(*params)
 
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,

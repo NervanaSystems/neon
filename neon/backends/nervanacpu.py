@@ -1409,6 +1409,138 @@ class NervanaCPU(Backend):
                             raise NotImplementedError
                         array_delta[patch_in] = sliceB.reshape((clen, dlen, hlen, wlen, N))
 
+    def _roipooling_slice(self, h, stride, H, roi_offset):
+        """
+        slicing for ROIPooling along one dimension
+        h: is the index on the pooled map (output index)
+        stride:
+        H: the max of the input map
+        roi_offset: how far hstart is from 0
+        """
+        hstart = int(np.floor(float(h) * stride))
+        hend = int(np.ceil(float(h+1) * stride))
+
+        hstart = min(max(hstart + roi_offset, 0), H)
+        hend = min(max(hend + roi_offset, 0), H)
+
+        return slice(hstart, hend), hend-hstart
+
+    def roipooling_fprop(self, I, rois, O, argmax, roi_count, C, H, W,
+                         pooled_height, pooled_width, spatial_scale):
+        """
+        Function to perform fprop of ROIPooling
+
+        Arguments:
+            I (Tensor): (C, H, W, N)
+            rois (Tensor): (ROIs, 5)
+            O (Tensor): (C, pooled_height, pooled_width, roi_count)
+            argmax (Tensor): (C, pooled_height, pooled_width, roi_count)
+        """
+        assert I.size == C * H * W * self.bsz,\
+            "ROIPooling input feature map size do not match"
+        assert O.size == argmax.size == C * pooled_height * pooled_width * roi_count,\
+            "ROIPooling output shape do not match"
+
+        assert rois.shape[1] == 5, "ROIs should be on the row dimension"
+        assert rois.shape[0] == roi_count, "ROIs do not match with roi count"
+
+        array_fm = I.get().reshape(C, H, W, self.bsz)
+        array_rois = rois.get()
+        array_O = O.get().reshape(C, pooled_height, pooled_width, roi_count)
+
+        array_argmax = argmax.get().reshape(C, pooled_height, pooled_width, roi_count)
+        array_O[:] = 0
+        array_argmax[:] = -1
+
+        # combine the feature map with ROIs
+        for b_id in xrange(roi_count):
+            [idx, xmin, ymin, xmax, ymax] = array_rois[b_id]
+            xmin = int(round(xmin * spatial_scale))
+            xmax = int(round(xmax * spatial_scale))
+            ymin = int(round(ymin * spatial_scale))
+            ymax = int(round(ymax * spatial_scale))
+            roi_width = max(xmax - xmin + 1, 1)
+            roi_height = max(ymax - ymin + 1, 1)
+
+            stride_h = float(roi_height)/float(pooled_height)
+            stride_w = float(roi_width)/float(pooled_width)
+
+            for h_out in xrange(pooled_height):
+                sliceh, lenh = self._roipooling_slice(h_out, stride_h, H, ymin)
+                if sliceh.stop <= sliceh.start:
+                    continue
+                for w_out in xrange(pooled_width):
+                    slicew, lenw = self._roipooling_slice(w_out, stride_w, W, xmin)
+                    if slicew.stop <= slicew.start:
+                        continue
+                    else:
+                        array_I = array_fm[:, sliceh, slicew, int(idx)].reshape(C, -1)
+                        array_O[:, h_out, w_out, b_id] = np.max(array_I, axis=1)
+
+                        # get the max idx respect to feature_maps coordinates
+                        max_idx_slice = np.unravel_index(np.argmax(array_I, axis=1), (lenh, lenw))
+                        max_idx_slice_h = max_idx_slice[0] + sliceh.start
+                        max_idx_slice_w = max_idx_slice[1] + slicew.start
+                        max_idx_slice = max_idx_slice_h * W + max_idx_slice_w
+                        array_argmax[:, h_out, w_out, b_id] = max_idx_slice
+
+    def roipooling_bprop(self, I, rois, O, argmax, roi_count, C, H, W,
+                         pooled_height, pooled_width, spatial_scale):
+        """
+        Function to perform bprop of ROIPooling
+
+        Arguments:
+            I (Tensor): input errors (C, pooled_height, pooled_width, roi_count)
+            argmax (Tensor): max args from the fprp (C, pooled_height, pooled_width, roi_count)
+            rois (Tensor): (ROIs, 5)
+            O (Tensor): output deltas (C, H, W, N)
+        """
+        assert I.size == argmax.size == C * pooled_height * pooled_width * roi_count,\
+            "ROIPooling bprop input size do not match"
+        assert O.size == C * H * W * self.bsz,\
+            "ROIPooling bprop output size do not match"
+
+        assert rois.shape[1] == 5, "ROIs should be on the row dimension"
+        assert rois.shape[0] == roi_count, "ROIs do not match with roi count"
+
+        array_E = I.get().reshape(C, pooled_height, pooled_width, roi_count)
+        array_rois = rois.get()
+        array_delta = O.get().reshape(C, H, W, self.bsz)
+        array_argmax = argmax.get().reshape(C, pooled_height, pooled_width, roi_count)
+        array_delta[:] = 0
+
+        for b_id in xrange(roi_count):
+            [idx, xmin, ymin, xmax, ymax] = array_rois[b_id]
+            xmin = int(round(xmin * spatial_scale))
+            xmax = int(round(xmax * spatial_scale))
+            ymin = int(round(ymin * spatial_scale))
+            ymax = int(round(ymax * spatial_scale))
+            roi_width = max(xmax - xmin + 1, 1)
+            roi_height = max(ymax - ymin + 1, 1)
+
+            stride_h = float(roi_height)/float(pooled_height)
+            stride_w = float(roi_width)/float(pooled_width)
+
+            # iterate all the w, h (from feature map) that fall into this ROIs
+            for w in range(xmin, xmax+1):
+                for h in range(ymin, ymax+1):
+                    phstart = int(np.floor(float(h - ymin) / stride_h))
+                    phend = int(np.ceil(float(h - ymin + 1) / stride_h))
+                    pwstart = int(np.floor(float(w - xmin) / stride_w))
+                    pwend = int(np.ceil(float(w - xmin + 1) / stride_w))
+
+                    phstart = min(max(phstart, 0), pooled_height)
+                    phend = min(max(phend, 0), pooled_height)
+                    pwstart = min(max(pwstart, 0), pooled_width)
+                    pwend = min(max(pwend, 0), pooled_width)
+
+                    for ph in range(phstart, phend):
+                        for pw in range(pwstart, pwend):
+                            max_idx_tmp = array_argmax[:, ph, pw, b_id]
+                            for c in range(C):
+                                if max_idx_tmp[c] == (h * W + w):
+                                    array_delta[c, h, w, int(idx)] += array_E[c, ph, pw, b_id]
+
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho, relu):
         """
         Function to perform batch normalization forward pass. Included
