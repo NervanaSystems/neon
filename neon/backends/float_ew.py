@@ -841,25 +841,21 @@ def call_compound_kernel(rand_state, compute_capability, *args):
                         kernel_args.append(max(rounding, 1))
 
                     # speed up deep reduction by using more than 32 threads
-                    # if reduction and not argminmax:
-                    #     if red_depth >= 4096:
-                    #         threads = 1024
-                    #     elif red_depth >= 2048:
-                    #         threads = 512
-                    #     elif red_depth >= 1024:
-                    #         threads = 256
-                    #     elif red_depth >= 512:
-                    #         threads = 128
-                    #     elif red_depth >= 256:
-                    #         threads = 64
-                    # TODO: The above code can lead to a race condition.
-                    # Temporary workaround while investigating further:
-                    if red_depth > 32:
-                            threads = 64
-
-                    # speed up deep broadcast by using more than 32 threads
-                    elif not (reduction or transpose) and max_shape[1] >= 512:
-                        threads = 256
+                    if not argminmax:
+                        if reduction:
+                            if red_depth >= 4096:
+                                threads = 1024
+                            elif red_depth >= 2048:
+                                threads = 512
+                            elif red_depth >= 1024:
+                                threads = 256
+                            elif red_depth >= 512:
+                                threads = 128
+                            elif red_depth >= 256:
+                                threads = 64
+                        # speed up deep broadcast by using more than 32 threads
+                        elif not (reduction or transpose) and max_shape[1] >= 512:
+                            threads = 256
 
                     type_args.append((op_name, op_cnt, rounding > 0, threads))
 

@@ -98,6 +98,8 @@ _stage_template = {
     {{
         %(share2_red{0})s
 
+        __syncthreads(); // Seems to be required to prevent a race condition.
+
         #pragma unroll
         for (int i = 16; i > 0; i >>= 1)
             %(shfl_red{0})s
