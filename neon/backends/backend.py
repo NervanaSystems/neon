@@ -557,8 +557,8 @@ class Backend(object):
         (e.g. on-host and on-device)
 
         Returns:
-            state(s) (tuple of np.array): array which defines the current
-                                          state of the RNGs
+            tuple: array of numpy ndarray which defines the current
+                   state of the RNGs
         """
         raise NotImplementedError()
 

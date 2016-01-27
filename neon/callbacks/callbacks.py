@@ -575,7 +575,9 @@ class LossCallback(Callback):
 
 class MetricCallback(Callback):
     """
-    Callback for calculating a metric on a given dataset periodically during training.
+    Callback for calculating a metric on a given dataset periodically during
+    training.
+
     Arguments:
         eval_set (NervanaDataIterator): dataset to evaluate
         metric (Metric): metric to evaluate
