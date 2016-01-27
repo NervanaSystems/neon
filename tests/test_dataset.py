@@ -22,7 +22,7 @@ from neon.data import ArrayIterator, load_mnist
 from neon.data.text import Text
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
-from neon.data import Pascal_voc
+from neon.data import PASCALVOC
 
 logging.basicConfig(level=20)
 logger = logging.getLogger()
@@ -113,9 +113,9 @@ if __name__ == '__main__':
     n_mb = None
     img_per_batch = 2
     rois_per_img = 64
-    train_set = Pascal_voc('trainval', '2007', path=args.data_dir, output_type=0,
-                           n_mb=n_mb, img_per_batch=img_per_batch,
-                           rois_per_img=rois_per_img, rois_random_sample=False)
+    train_set = PASCALVOC('trainval', '2007', path=args.data_dir, output_type=0,
+                          n_mb=n_mb, img_per_batch=img_per_batch,
+                          rois_per_img=rois_per_img, rois_random_sample=False)
 
     # load reference data
     import pickle

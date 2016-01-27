@@ -211,9 +211,10 @@ class Model(NervanaObject):
             x = self.fprop(x, inference=True)
 
             # This logic is for handling partial batch sizes at the end of the dataset
+            nsteps = x.shape[1] / self.be.bsz if len(x) == 1 else x[0].shape[1] / self.be.bsz
             bsz = min(dataset.ndata - nprocessed, self.be.bsz)
-            running_error += metric(x, t, calcrange=slice(0, bsz)) * bsz
-            nprocessed += bsz
+            running_error += metric(x, t, calcrange=slice(0, nsteps * bsz)) * nsteps * bsz
+            nprocessed += bsz * nsteps
         running_error /= nprocessed
         return running_error
 

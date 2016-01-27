@@ -100,7 +100,7 @@ class Layer(NervanaObject):
                 self.parallelism = in_obj.parallelism
         else:
             self.prev_layer = None
-            if isinstance(in_obj, tuple) or isinstance(in_obj, int):
+            if isinstance(in_obj, (tuple, int, list)):
                 self.in_shape = in_obj  # input is a shape tuple or int directly
             elif isinstance(in_obj, Tensor):
                 self.in_shape = (in_obj.shape[0], in_obj.shape[1] / self.be.bsz)

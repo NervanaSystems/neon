@@ -190,7 +190,7 @@ class Text(NervanaDataIterator):
         but don't want to wrap around for the last uneven minibatch
         Not necessary when ndata is divisible by batch size
         """
-        pass
+        self.batch_index = 0
 
     def __iter__(self):
         """

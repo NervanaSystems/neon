@@ -18,6 +18,7 @@ Defines PASCAL_VOC datatset handling.
 import numpy as np
 import os
 import xml.dom.minidom as minidom
+import tarfile
 from PIL import Image
 
 from neon import NervanaObject

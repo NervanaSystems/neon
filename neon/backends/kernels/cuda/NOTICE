@@ -1,0 +1,15 @@
+This directory uses the open sourced code in the following file:
+
+# ----------------------------------------------------------------------------
+roipooling.py
+# ----------------------------------------------------------------------------
+# Fast R-CNN
+# Copyright (c) 2015 Microsoft
+# Licensed under The MIT License [see fast-rcnn/LICENSE for details]
+# Written by Ross Girshick
+# ----------------------------------------------------------------------------
+The CUDA-C code for fprop and bprop inside roipooling.py are adapted from the Fast-RCNN model. 
+The source can be found at:
+https://github.com/rbgirshick/caffe-fast-rcnn/blob/fast-rcnn/src/caffe/layers/roi_pooling_layer.cu
+
+

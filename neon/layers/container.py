@@ -538,9 +538,16 @@ class RoiPooling(Sequential):
     directly. And it will process the image from the dataset through the contained
     layers (usually ImageNet CNN layers), and combine the ROIs from the dataset
     with the feature maps output from CNN layers.
+
+    The RoiPooling container processes images with preset batch size. While after
+    the ROI pooling, the minibatch is extended into batch_size * rois_per_image
+    examples in each minibatch.
+    The output shape (out_shape) is a tuple - (batch_size, rois_per_image), then
+    the following layers will allocate buffers accordingly.
     """
 
-    def __init__(self, layers, HW=(7, 7), scale=0.0625, name="RoiPoolingLayer"):
+    def __init__(self, layers, bprop_enabled=False, HW=(7, 7),
+                 scale=0.0625, name="RoiPoolingLayer"):
         if layers:
             super(RoiPooling, self).__init__(layers, name=name)
         self.roi_H, self.roi_W = HW
@@ -552,6 +559,7 @@ class RoiPooling(Sequential):
         self.rois = None
         self.rois_per_image = 64
         self.rois_per_batch = self.be.bsz * 64
+        self.bprop_enabled = bprop_enabled
 
     def nested_str(self, level=0):
         ss = self.__class__.__name__ + '\n'
@@ -641,10 +649,11 @@ class RoiPooling(Sequential):
 
         self.error.fill(0)
 
-        # # bprop through the roipooling layer
-        self.be.roipooling_bprop(error, self.rois, self.error, self.max_idx,
-                                 self.rois_per_batch, self.fm_channel, self.fm_height,
-                                 self.fm_width, self.roi_H, self.roi_W, self.spatial_scale)
+        if self.bprop_enabled:
+            # # bprop through the roipooling layer
+            self.be.roipooling_bprop(error, self.rois, self.error, self.max_idx,
+                                     self.rois_per_batch, self.fm_channel, self.fm_height,
+                                     self.fm_width, self.roi_H, self.roi_W, self.spatial_scale)
 
         # bprop back through the imagenet layer container
         self.deltas = super(RoiPooling, self).bprop(self.error, alpha, beta)
