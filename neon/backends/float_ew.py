@@ -843,16 +843,20 @@ def call_compound_kernel(rand_state, compute_capability, *args):
                     # speed up deep reduction by using more than 32 threads
                     if not argminmax:
                         if reduction:
-                            if red_depth >= 4096:
-                                threads = 1024
-                            elif red_depth >= 2048:
-                                threads = 512
-                            elif red_depth >= 1024:
-                                threads = 256
-                            elif red_depth >= 512:
-                                threads = 128
-                            elif red_depth >= 256:
+                            if red_depth >= 256:
                                 threads = 64
+
+                            # Try to bring this code back after figuring out race conditions
+                            # if red_depth >= 4096:
+                            #     threads = 1024
+                            # elif red_depth >= 2048:
+                            #     threads = 512
+                            # elif red_depth >= 1024:
+                            #     threads = 256
+                            # elif red_depth >= 512:
+                            #     threads = 128
+                            # elif red_depth >= 256:
+                            #     threads = 64
                         # speed up deep broadcast by using more than 32 threads
                         elif not (reduction or transpose) and max_shape[1] >= 512:
                             threads = 256
