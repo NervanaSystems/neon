@@ -547,11 +547,12 @@ class RoiPooling(Sequential):
     """
 
     def __init__(self, layers, bprop_enabled=False, HW=(7, 7),
-                 scale=0.0625, name="RoiPoolingLayer"):
+                 spatial_scale=0.0625, name=None):
         if layers:
             super(RoiPooling, self).__init__(layers, name=name)
-        self.roi_H, self.roi_W = HW
-        self.spatial_scale = scale  # 0.0625 is 1/16
+        self.HW = HW
+        self.roi_H, self.roi_W = self.HW
+        self.spatial_scale = spatial_scale  # 0.0625 is 1/16
         # it has its own output buffer besides being a container
         self.owns_output = True
         self.owns_delta = True
@@ -560,6 +561,7 @@ class RoiPooling(Sequential):
         self.rois_per_image = 64
         self.rois_per_batch = self.be.bsz * 64
         self.bprop_enabled = bprop_enabled
+        print "\nROIPooling backpropagation enabled: {}".format(bprop_enabled)
 
     def nested_str(self, level=0):
         ss = self.__class__.__name__ + '\n'

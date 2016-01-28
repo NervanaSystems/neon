@@ -21,7 +21,6 @@ import xml.dom.minidom as minidom
 import tarfile
 from PIL import Image
 
-from neon import NervanaObject
 from neon.data.datasets import Dataset
 from neon.util.persist import save_obj
 from neon.util.persist import load_obj
@@ -266,7 +265,6 @@ class PASCALVOC(Dataset):
         the MAT files available from
         http://www.cs.berkeley.edu/~rbg/fast-rcnn-data/selective_search_data.tgz
         """
-
         dataset = 'selective-search' if year is None else '-'.join([dataset, year])
         voc = dataset_meta[dataset]
         workdir, filepath, datadir = self._valid_path_append(path, '', voc['file'], voc['subdir'])
@@ -456,9 +454,9 @@ class PASCALVOC(Dataset):
 
     def load_pascal_roi_selectivesearch(self):
         """
-        Load the pre-computed selective search data on PASCAL VOC in MAT file
+        Load the pre-computed selective search data on PASCAL VOC in pickle file
 
-        The MAT file contains images and rp:
+        The pickle file contains images and rp:
             images: image indices for the dataset (Img, 1)
                     name in string is in images[i][0][0]
             rp: all the proposed ROIs for each image (Img, 1)

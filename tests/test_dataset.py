@@ -16,6 +16,7 @@
 import logging
 import numpy as np
 import os
+import pickle
 
 from neon import NervanaObject
 from neon.data import ArrayIterator, load_mnist
@@ -23,6 +24,7 @@ from neon.data.text import Text
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.data import PASCALVOC
+from neon.data.datasets import Dataset
 
 logging.basicConfig(level=20)
 logger = logging.getLogger()
@@ -99,6 +101,60 @@ def test_text(backend_default):
     os.remove(valid_path)
 
 
+def test_pascalvoc(backend_default, data):
+    url = 'https://s3-us-west-1.amazonaws.com/nervana-pascal-voc-data'
+    filename = 'pascal_data_ref.pkl'
+    size = 423982870
+
+    workdir, filepath = Dataset._valid_path_append(data, '', filename)
+    if not os.path.exists(filepath):
+        Dataset.fetch_dataset(url, filename, filepath, size)
+
+    with open(filepath, 'rb') as handle:
+        neon_data_ref = pickle.loads(handle.read())
+
+    n_mb = neon_data_ref['n_mb']
+    img_per_batch = neon_data_ref['img_per_batch']
+    rois_per_img = neon_data_ref['rois_per_img']
+    dataset = neon_data_ref['dataset']
+    year = neon_data_ref['year']
+    output_type = neon_data_ref['output_type']
+    rois_random_sample = neon_data_ref['rois_random_sample']
+    shuffle = neon_data_ref['shuffle']
+
+    train_set = PASCALVOC(dataset, year, path=data, output_type=output_type, n_mb=n_mb,
+                          img_per_batch=img_per_batch, rois_per_img=rois_per_img,
+                          rois_random_sample=rois_random_sample, shuffle=shuffle)
+
+    # X_batch[0]: image - (3e6, 2)
+    # X_batch[1]: ROIs - (128, 5)
+    # Y_batch[0]: labels - (21, 128)
+    # Y_batch[1][0]: bbtarget - (84, 128)
+    # Y_batch[1][1]: bb mask - (84, 128)
+    for mb_i, (X_batch, y_batch) in enumerate(train_set):
+
+        image_neon = X_batch[0].get()
+        image_ref = neon_data_ref['X_batch_img'][mb_i]
+
+        rois_neon = X_batch[1].get()
+        rois_ref = neon_data_ref['X_batch_rois'][mb_i]
+
+        label_neon = y_batch[0].get()
+        label_ref = neon_data_ref['y_batch_label'][mb_i]
+
+        bbtarget_neon = y_batch[1][0].get()
+        bbtarget_ref = neon_data_ref['y_batch_bbtarget'][mb_i]
+
+        mask_neon = y_batch[1][1].get()
+        mask_ref = neon_data_ref['y_batch_mask'][mb_i]
+
+        assert np.allclose(image_neon, image_ref, atol=1e-5, rtol=0)
+        assert np.allclose(rois_neon, rois_ref, atol=1e-5, rtol=0)
+        assert np.allclose(label_neon, label_ref, atol=1e-5, rtol=0)
+        assert np.allclose(bbtarget_neon, bbtarget_ref, atol=1e-5, rtol=0)
+        assert np.allclose(mask_neon, mask_ref, atol=1e-5, rtol=0)
+
+
 if __name__ == '__main__':
 
     # setup backend
@@ -108,46 +164,4 @@ if __name__ == '__main__':
 
     # setup backend
     be = gen_backend(**extract_valid_args(args, gen_backend))
-
-    # setup dataset
-    n_mb = None
-    img_per_batch = 2
-    rois_per_img = 64
-    train_set = PASCALVOC('trainval', '2007', path=args.data_dir, output_type=0,
-                          n_mb=n_mb, img_per_batch=img_per_batch,
-                          rois_per_img=rois_per_img, rois_random_sample=False)
-
-    # load reference data
-    import pickle
-    with open('/home/users/yinyin/nervana/data/frcn_pascal_data_30.pkl', 'rb') as handle:
-        blobs_caffe = pickle.loads(handle.read())
-
-    # X_batch[0]: image - (3e6, 2)
-    # X_batch[1]: ROIs - (128, 5)
-    # Y_batch[0]: labels - (21, 128)
-    # Y_batch[1][0]: bbtarget - (84, 128)
-    # Y_batch[1][1]: bb mask - (84, 128)
-    for mb_i, (X_batch, y_batch) in enumerate(train_set):
-        if mb_i > 30-1:
-            break
-        else:
-            print mb_i
-
-        # image won't match
-        image_caffe = blobs_caffe[mb_i]['data'].transpose(1, 2, 3, 0)
-        image_neon = X_batch[0].get().reshape(3, 1000, 1000, 2)
-        image_neon = image_neon[:, :image_caffe.shape[1], :image_caffe.shape[2], :]
-
-        # labels: caffe uses indices, neon uses one-hot
-        label_caffe = blobs_caffe[mb_i]['labels']
-        label_neon = y_batch[0].get().argmax(0)
-
-        print np.abs((image_neon-image_caffe)).max()
-        print np.abs((image_neon-image_caffe)).mean()
-        assert np.allclose(label_neon, label_caffe, atol=1e-5)
-        assert np.allclose(
-            X_batch[1].get(), blobs_caffe[mb_i]['rois'], atol=1e-5)
-        assert np.allclose(
-            y_batch[1][0].T.get(), blobs_caffe[mb_i]['bbox_targets'], atol=1e-5)
-        assert np.allclose(
-            y_batch[1][1].T.get(), blobs_caffe[mb_i]['bbox_loss_weights'], atol=1e-5)
+    test_pascalvoc(be, args.data_dir)

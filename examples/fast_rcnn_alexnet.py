@@ -47,7 +47,7 @@ import os
 
 from neon.backends import gen_backend
 from neon.data import PASCALVOC
-from neon.data.dataloaders import fetch_dataset
+from neon.data.datasets import Dataset
 from neon.initializers import Gaussian, Constant
 from neon.transforms import (Rectlin, Softmax, Identity, CrossEntropyMulti,
                              SmoothL1Loss, ObjectDetection)
@@ -63,16 +63,18 @@ from neon.util.persist import load_obj
 
 # functions
 
-def load_imagenet_weights(model):
+def load_imagenet_weights(model, path):
     # load a pre-trained Alexnet from Neon model zoo to the local
     url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/'
     filename = 'alexnet.p'
     size = 488808400
-    if not os.path.exists(filename):
-        fetch_dataset(url, filename, filename, size)
+
+    workdir, filepath = Dataset._valid_path_append(path, '', filename)
+    if not os.path.exists(filepath):
+        Dataset.fetch_dataset(url, filename, filepath, size)
 
     print 'De-serializing the pre-trained Alexnet using ImageNet I1K ...'
-    pdict = load_obj(filename)
+    pdict = load_obj(filepath)
 
     param_layers = [l for l in model.layers_to_optimize]
     param_dict_list = pdict['layer_params_states']
@@ -80,9 +82,9 @@ def load_imagenet_weights(model):
     for layer, ps in zip(param_layers, param_dict_list):
         i = i+1
         print i, layer.name
-        layer.set_params(ps['params'])
+        layer.set_params(ps)
         if 'states' in ps:
-            layer.set_states(ps['states'])
+            layer.set_states(ps)
         if i == 10:
             print 'Only load the pre-trained weights up to conv5 layer of Alexnet'
             break
@@ -122,7 +124,7 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # setup training dataset
 train_set = PASCALVOC('trainval', '2007', path=args.data_dir, output_type=0,
-                       n_mb=n_mb, img_per_batch=img_per_batch, rois_per_img=rois_per_img)
+                      n_mb=n_mb, img_per_batch=img_per_batch, rois_per_img=rois_per_img)
 
 # setup layers
 
@@ -182,14 +184,16 @@ optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b})
 
 model = Model(layers=Tree([frcn_layers, bb_layers]))
 
-load_imagenet_weights(model)
+# if training a new model, seed the Alexnet conv layers with pre-trained weights
+# otherwise, just load the model file
+if args.model_file is None:
+    load_imagenet_weights(model, args.data_dir)
 
 cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),
                         GeneralizedCostMask(costfunc=SmoothL1Loss())],
                  weights=[1, 1])
 
-
-callbacks = Callbacks(model, train_set, **args.callback_args)
+callbacks = Callbacks(model, **args.callback_args)
 
 model.fit(train_set, optimizer=optimizer,
           num_epochs=num_epochs, cost=cost, callbacks=callbacks)

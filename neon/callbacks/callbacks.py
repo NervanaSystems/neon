@@ -564,7 +564,8 @@ class LossCallback(Callback):
             x = model.fprop(x, inference=True)
             bsz = min(self.eval_set.ndata - nprocessed, self.be.bsz)
             model.cost.get_cost(x, t)
-            nsteps = x.shape[1] / self.be.bsz if len(x) == 1 else x[0].shape[1] / self.be.bsz
+            nsteps = x.shape[1] / self.be.bsz if not isinstance(x, list) else \
+                x[0].shape[1] / self.be.bsz
             costbuf = model.cost.outputs[:, :bsz*nsteps]
             nprocessed += bsz
             self.loss[:] = self.loss + self.be.sum(costbuf, axis=1)/nsteps
