@@ -322,7 +322,10 @@ __global__ void spool_fprop_avg(
             jrst += 32;
         }
 
-        rcpWindowSize = 1.0f / (float)window_size;
+        if(tid == 0)
+        {
+            rcpWindowSize = 1.0f / (float)window_size;
+        }
     }
     __syncthreads();
 
@@ -459,7 +462,10 @@ __global__ void spool_fprop_lrn(
             jrst += 32;
         }
 
-        rcpWindowSize = 1.0f / (float)window_size;
+        if(tid == 0)
+        {
+            rcpWindowSize = 1.0f / (float)window_size;
+        }
     }
     __syncthreads();
 
@@ -925,8 +931,11 @@ __global__ void spool_bprop_avg(
             lut[jrst] = in_bounds ? sliceI : -1;
             jrst += 32;
         }
-        rcpWindowSize = 1.0f / (float)window_size;
 
+        if(tid == 0)
+        {
+            rcpWindowSize = 1.0f / (float)window_size;
+        }
     }
     __syncthreads();
 

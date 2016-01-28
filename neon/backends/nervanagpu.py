@@ -1327,9 +1327,7 @@ class NervanaGPU(Backend):
         assert A.dtype.type == B.dtype.type == C.dtype.type
 
         if self.use_cudac_kernels:
-            for r in range(repeat):
-                self.cublas_dot(A=A, B=B, C=C, alpha=alpha, beta=beta)
-            return C
+            raise NotImplementedError("batched_dot is not implemented for Kepler.")
 
         flags = 0
         if relu:
@@ -2227,7 +2225,32 @@ class NervanaGPU(Backend):
         k = A.shape[1]
 
         # Swap A and B to map from C order to Fortran
-        cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha, B.gpudata, ldb, A.gpudata, lda, beta, C.gpudata, ldc)
+        if A.dtype == np.float32:
+            cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha, B.gpudata,
+                               ldb, A.gpudata, lda, beta, C.gpudata, ldc)
+        elif A.dtype == np.float16:
+            #fp16 gemm not supported by cublas until 7.5, so do conversion
+            A_temp = self._buf_malloc((A.shape[0], A.shape[1] * 2))
+            B_temp = self._buf_malloc((B.shape[0], B.shape[1] * 2))
+            C_temp = self._buf_malloc((C.shape[0], C.shape[1] * 2))
+
+            A_fp32 = GPUTensor(self, A.shape, dtype=np.float32, gpudata=A_temp.gpudata,
+                               strides=A.strides, is_trans=A.is_trans)
+            B_fp32 = GPUTensor(self, B.shape, dtype=np.float32, gpudata=B_temp.gpudata,
+                               strides=B.strides, is_trans=B.is_trans)
+            C_fp32 = GPUTensor(self, C.shape, dtype=np.float32, gpudata=C_temp.gpudata,
+                               strides=C.strides, is_trans=C.is_trans)
+
+            A_fp32[:] = A
+            B_fp32[:] = B
+            C_fp32[:] = C
+            cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha, B_fp32.gpudata,
+                               ldb, A_fp32.gpudata, lda, beta, C_fp32.gpudata, ldc)
+            C[:] = C_fp32
+
+            self._buf_free()
+        else:
+            raise TypeError("Unsupported type for cublas gemm")
 
     def init_mark(self):
         """

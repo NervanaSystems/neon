@@ -293,7 +293,7 @@ __global__ void conv_%(operation)s(
     int c, rs;
     _idiv_fast(CRS - threadIdx.y - 1, lut_size_local, reciprocal, c, rs);
 
-    int2 lut_entry = lookup_table[rs];
+    int2 lut_entry = ((threadIdx.y & 7) >= crs) ? make_int2(0, 0) : lookup_table[rs];
     %(a_name)s_data[threadIdx.y][threadIdx.x].f4 =
         ((threadIdx.y & 7) >= crs) ? make_float4(0, 0, 0, 0) :
         I[(c * input_channel_size)  + lut_entry.x].f4;
@@ -374,9 +374,21 @@ __global__ void conv_%(operation)s(
         {
             if(filter_id < K)
             {
+                int out_index = (filter_id * output_filter_size) + output_pixel + image_id;
                 %(bsum_code)s
-                O[(filter_id * output_filter_size) + output_pixel + image_id].f4 =
-                    result[q_offset].f4;
+
+                Matrix cur_value = {0};
+                if(beta > 0.0f)
+                {
+                    cur_value.f4 = O[out_index].f4;
+                }
+
+                result[q_offset].f[0] = (result[q_offset].f[0] * alpha) + (cur_value.f[0] * beta);
+                result[q_offset].f[1] = (result[q_offset].f[1] * alpha) + (cur_value.f[1] * beta);
+                result[q_offset].f[2] = (result[q_offset].f[2] * alpha) + (cur_value.f[2] * beta);
+                result[q_offset].f[3] = (result[q_offset].f[3] * alpha) + (cur_value.f[3] * beta);
+
+                O[out_index].f4 = result[q_offset].f4;
             }
             filter_id++;
         }
