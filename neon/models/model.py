@@ -80,7 +80,7 @@ class Model(NervanaObject):
 
     def initialize(self, dataset, cost=None):
         if self.initialized:
-            logger.info('Model.initialize was run more than once')
+            return
 
         # Propagate shapes through the layers to configure
         prev_input = dataset

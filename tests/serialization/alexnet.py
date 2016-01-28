@@ -40,8 +40,10 @@ img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        dtype=args.datatype,
                        subset_pct=0.09990891117239205)
-train = ImageLoader(set_name='train', do_transforms=False, **img_set_options)
-test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
+train = ImageLoader(set_name='train', scale_range=(256, 256), shuffle=False,
+                    do_transforms=False, **img_set_options)
+test = ImageLoader(set_name='validation', scale_range=(256, 384), shuffle=False,
+                   do_transforms=False, **img_set_options)
 
 layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01), bias=Constant(0),
                activation=Rectlin(), padding=3, strides=4),
@@ -65,9 +67,9 @@ model = Model(layers=layers)
 
 # drop weights LR by 1/250**(1/3) at epochs (23, 45, 66), drop bias LR by 1/10 at epoch 45
 weight_sched = Schedule([22, 44, 65], (1/250.)**(1/3.))
-opt_gdm = GradientDescentMomentum(0.01/2, 0.9, wdecay=0.0005, schedule=weight_sched,
+opt_gdm = GradientDescentMomentum(0.01/10, 0.9, wdecay=0.0005, schedule=weight_sched,
                                   stochastic_round=args.rounding)
-opt_biases = GradientDescentMomentum(0.02/2, 0.9, schedule=Schedule([44], 0.1),
+opt_biases = GradientDescentMomentum(0.02/10, 0.9, schedule=Schedule([44], 0.1),
                                      stochastic_round=args.rounding)
 opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 

@@ -40,6 +40,7 @@ class Callbacks(NervanaObject):
     """
 
     def __init__(self, model,
+                 train_set=None,
                  output_file=None,
                  eval_freq=None,
                  progress_bar=True,
@@ -48,7 +49,7 @@ class Callbacks(NervanaObject):
                  history=1,
                  model_file=None,
                  eval_set=None,
-                 metric=None, **kwargs):
+                 metric=None):
         """
         Create a callbacks container with the default callbacks.
 
@@ -68,13 +69,11 @@ class Callbacks(NervanaObject):
         """
         # once the deprecated args are removed the kwargs will also be removed
         # as well as the code below
-        for ky in kwargs:
-            if ky in ['train_set', 'epochs']:
-                logger.warning("Deprecation warning.  Callbacks class no longer "
-                               "accepts %s as a parameter.  This argument will "
-                               "be removed soon update your code.", ky)
-            else:
-                raise TypeError('Callbacks got an unexpected keyword argument %s' % ky)
+        # epochs had to be completely remove since it is often passed by argparser args
+        if train_set is not None:
+            logger.warning("Deprecation warning.  Callbacks class no longer "
+                           "accepts train_set as a parameter.  This argument will "
+                           "be removed soon update your code.")
 
         super(Callbacks, self).__init__(name=None)
         self.callbacks = list()

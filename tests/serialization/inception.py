@@ -49,18 +49,17 @@ be = gen_backend(backend=args.backend,
                  device_id=0,
                  deterministic_update=True)
 
-data_dir = '/usr/local/data/I1K/imageset_batches_dw'
+data_dir = '/usr/local/data/I1K/macrobatches'
 
 assert os.path.isdir(data_dir), 'Data dir is missing'
 
 # subset pct is set to make sure that every epoch has the same mb count
-train = ImageLoader(repo_dir=data_dir,
-                    inner_size=224,
-                    set_name='train',
-                    do_transforms=False,
-                    subset_pct=0.09990891117239205)
-
-train.init_batch_provider()
+img_set_options = dict(repo_dir=data_dir,
+                       inner_size=224,
+                       dtype=np.float32,
+                       subset_pct=0.09990891117239205)
+train = ImageLoader(set_name='train', scale_range=(256, 256), shuffle=False,
+                    do_transforms=False, **img_set_options)
 
 init1 = Xavier(local=False)
 initx = Xavier(local=True)
@@ -162,10 +161,23 @@ train.reset()
 for im, l in train:
     break
 train.exit_batch_provider()
+with open('im1.pkl', 'w') as fid:
+    pickle.dump((im.get(), l.get()), fid)
+im_save = im.get().copy()
+if args.resume:
+    with open('im1.pkl', 'r') as fid:
+        (im2, l2) = pickle.load(fid)
+    im.set(im2)
+    l.set(l2)
 
 # run fprop and bprop on this minibatch save the results
 out_fprop = model.fprop(im)
 out_fprop_save = [x.get() for x in out_fprop]
+im.set(im_save)
+out_fprop = model.fprop(im)
+out_fprop_save2 = [x.get() for x in out_fprop]
+for x, y in zip(out_fprop_save, out_fprop_save2):
+    assert np.max(np.abs(x-y)) == 0.0, '2 fprop iterations do not match'
 
 # run fit fot 1 minibatch
 # have to do this by hand
@@ -193,9 +205,11 @@ else:
 
     # and post extra training fprops
     for x, y in zip(run1[1], out_fprop_save2):
-        assert np.max(np.abs(x-y)) == 0.0, 'Deserialized training not matching serialized training'
+        if np.max(np.abs(x-y)) != 0.0:
+            print np.max(np.abs(x-y))
+            raise ValueError('Deserialized training not matching serialized training')
 
     # see if the single epoch of optimization had any real effect
     for x, y in zip(out_fprop_save, out_fprop_save2):
-        assert np.max(np.abs(x-y)) > 0.0, 'Training had no effect on mdoel'
+        assert np.max(np.abs(x-y)) > 0.0, 'Training had no effect on model'
     print 'passed'

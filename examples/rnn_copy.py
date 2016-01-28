@@ -49,7 +49,7 @@ init = Uniform(low=-0.08, high=0.08)
 
 output_size = 8
 N = 120  # number of memory locations
-M = 8    # size of a memory location
+M = 8  # size of a memory location
 
 # model initialization
 layers = [

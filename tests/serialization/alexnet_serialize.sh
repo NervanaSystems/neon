@@ -14,19 +14,18 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-"""
-Shell script to execute alexnet model serialization test
 
-Runs the model on the GPU backend for 4 epochs, serializing at every epoch.  Then
-the run is continued for 1 epoch using the serialized file at epoch 3 to initialize
-the model.  The output of both runs are compared.
-"""
+# Shell script to execute alexnet model serialization test
+#
+# Runs the model on the GPU backend for 4 epochs, serializing at every epoch.  Then
+# the run is continued for 1 epoch using the serialized file at epoch 3 to initialize
+# the model.  The output of both runs are compared.
 
 python tests/serialization/alexnet.py -b gpu -s alexnet_run1.prm --serialize 1 -e 3 \
-        -H 2 -r 1 -w /usr/local/data/I1K/imageset_batches_dw/ --determin
+        -H 2 -r 1 -w /usr/local/data/I1K/macrobatches/ --determin
 
 python tests/serialization/alexnet.py -b gpu -s alexnet_run2.prm --serialize 1 \
-        -e 3 -H 2 -r 1 -w /usr/local/data/I1K/imageset_batches_dw/ \
+        -e 3 -H 2 -r 1 -w /usr/local/data/I1K/macrobatches/ \
         --model_file alexnet_run1_1.prm --determin
 
 python tests/serialization/compare_models.py alexnet_run1_2.prm alexnet_run2_2.prm
