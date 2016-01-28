@@ -106,7 +106,6 @@ def pytest_generate_tests(metafunc):
     ]
 
     D_H_W = [
-        (1, 7, 7),
         (3, 7, 7),
         (3, 5, 5),
     ]
@@ -228,7 +227,7 @@ def test_conv_layer(fargs_tests):
 
 if __name__ == '__main__':
 
-    fargs = [(128, 1, 16),
+    fargs = [(128, 64, 16),
              (1, 16, 16),
              (1, 3, 3)]
 
