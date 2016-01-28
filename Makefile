@@ -94,7 +94,7 @@ DATA_LOADER := neon/data/loader
 .PHONY: default env maxas kernels sysinstall sysinstall_nodeps neon_install \
 	    sysdeps sysuninstall clean_py clean_maxas clean_so clean_kernels \
 	    clean test coverage style lint check doc html release examples \
-	    serialize_check
+	    serialize_check $(DATA_LOADER)
 
 default: env
 
