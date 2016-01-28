@@ -106,6 +106,7 @@ def pytest_generate_tests(metafunc):
     ]
 
     D_H_W = [
+        (1, 7, 7),
         (3, 7, 7),
         (3, 5, 5),
     ]
@@ -218,7 +219,7 @@ def test_conv_layer(fargs_tests):
             ("bprop", ngB, ncB.reshape(dimI), cpuB[:-1, :].reshape(dimI), W),
             ("update", ngU, ncU.reshape(dimF), cpuU.reshape(dimF), S)):
 
-        print op
+        print(op)
         assert np.allclose(ngA.get(), cpuA, rtol=0, atol=1e-4)
         assert np.allclose(ncA.get(), cpuA, rtol=0, atol=1e-4)
 
@@ -227,8 +228,8 @@ def test_conv_layer(fargs_tests):
 
 if __name__ == '__main__':
 
-    fargs = [(64, 64, 64),
-             (3, 5, 5),
+    fargs = [(128, 1, 16),
+             (1, 16, 16),
              (1, 3, 3)]
 
     test_conv_layer(fargs)
