@@ -25,7 +25,7 @@ from neon.optimizers import RMSProp
 from neon.transforms import Tanh, CrossEntropyBinary, Logistic
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
-from neon.data import Ticker, CopyTask, RepeatCopyTask, PrioritySortTask
+from neon.data import Ticker, CopyTask
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -34,7 +34,7 @@ args = parser.parse_args()
 batch_size = 128
 seq_len_max = 5
 repeat_count_max = 2
-vec_size    = 8
+vec_size = 8
 
 # these hyperparameters are from the paper
 hidden_size = 100
@@ -47,9 +47,9 @@ train_set = Ticker(ticker_task)
 # weight initialization
 init = Uniform(low=-0.08, high=0.08)
 
-output_size = 8 
-N = 120 # number of memory locations
-M = 8   # size of a memory location
+output_size = 8
+N = 120  # number of memory locations
+M = 8    # size of a memory location
 
 # model initialization
 layers = [

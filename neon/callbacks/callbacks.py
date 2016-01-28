@@ -184,7 +184,6 @@ class Callbacks(NervanaObject):
             """
             self.callbacks.append(WatchTickerCallback(self.model, valid))
 
-
     def add_early_stop_callback(self, stop_func):
         """
         Convenience function to create and add an early stopping callback.
@@ -1090,6 +1089,7 @@ class DeconvCallback(Callback):
             activation = activation.asnumpyarray().reshape((C, H, W, be.bsz))
             activation = np.transpose(activation, (1, 2, 0, 3))
             act_data['vis'][fm] = self.scale_to_rgb(activation[:, :, :, 0])
+
 
 class WatchTickerCallback(Callback):
 
