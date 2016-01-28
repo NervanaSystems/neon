@@ -2313,3 +2313,18 @@ class OpTreeNode(tuple):
 
     def __neg__(self):
         return self.build("neg", self, None)
+
+
+class Block(object):
+    """
+    Simple class that identifies different elements of the computation required
+    to train or run inference on neural networks.
+
+    Attributes:
+        epoch: start of a particular training epoch
+        minibatch: start processing of a particular mini-batched data partition
+        fprop: start of forward propagation call for a particular minibatch
+        bprop: start of backward propagation call for a particular minibatch
+        update: start of parameter update call for a particular minibatch
+    """
+    epoch, minibatch, fprop, bprop, update = range(5)

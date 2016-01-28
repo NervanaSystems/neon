@@ -17,6 +17,7 @@ import logging
 
 from neon import __version__ as __neon_version__
 from neon import NervanaObject
+from neon.backends.backend import Block
 from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.util.modeldesc import ModelDescription
@@ -153,6 +154,7 @@ class Model(NervanaObject):
         # iterate through minibatches of the dataset
         for mb_idx, (x, t) in enumerate(dataset):
             callbacks.on_minibatch_begin(epoch, mb_idx)
+            self.be.begin(Block.minibatch, mb_idx)
 
             x = self.fprop(x)
 
@@ -165,6 +167,7 @@ class Model(NervanaObject):
             self.bprop(delta)
             self.optimizer.optimize(self.layers_to_optimize, epoch=epoch)
 
+            self.be.end(Block.minibatch, mb_idx)
             callbacks.on_minibatch_end(epoch, mb_idx)
 
         # now we divide total cost by the number of batches,
