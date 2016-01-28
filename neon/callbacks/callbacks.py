@@ -24,7 +24,7 @@ from timeit import default_timer
 import weakref
 
 from neon import NervanaObject
-from neon.data import NervanaDataIterator
+from neon.data import NervanaDataIterator, Ticker
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.layers import Convolution
 logger = logging.getLogger(__name__)
@@ -173,6 +173,17 @@ class Callbacks(NervanaObject):
             path (string): where to save the best model state.
         """
         self.add_callback(SaveBestStateCallback(path))
+
+    def add_watch_ticker_callback(self, valid):
+            """
+            Convenience function to create and add a watch ticker callback
+
+            Arguments:
+                valid (dataset): the validation set to use
+                    For a ticker dataset, this can be the training set if desired.
+            """
+            self.callbacks.append(WatchTickerCallback(self.model, valid))
+
 
     def add_early_stop_callback(self, stop_func):
         """
@@ -1079,3 +1090,56 @@ class DeconvCallback(Callback):
             activation = activation.asnumpyarray().reshape((C, H, W, be.bsz))
             activation = np.transpose(activation, (1, 2, 0, 3))
             act_data['vis'][fm] = self.scale_to_rgb(activation[:, :, :, 0])
+
+class WatchTickerCallback(Callback):
+
+    """
+    Callback that examines a single input, output pair using a validation set.
+    This only works with ticker datasets - it wouldn't make much sense to
+    use it with an image or a video or something.
+
+    Arguments:
+        model (Model): model object
+        valid_set (DataIterator): Validation dataset to process
+        epoch_freq (int, optional): how often (in epochs) to examine a pair.
+                                    Defaults to every 1 epoch.
+    """
+
+    def __init__(self, model, valid_set, epoch_freq=1):
+        super(WatchTickerCallback, self).__init__(epoch_freq=epoch_freq)
+        self.model = model
+        self.valid_set = valid_set
+
+        if not isinstance(valid_set, Ticker):
+            raise ValueError('valid set must be a Ticker object')
+
+    def on_epoch_end(self, callback_data, model, epoch):
+
+        for batch_index, (x, t) in enumerate(self.valid_set, 1):
+            y = model.fprop(x, inference=True)
+
+            # So that wider tensors don't wrap around
+            np.set_printoptions(formatter={'float': '{: 0.1f}'.format},
+                                linewidth=150)
+
+            # Assume all sequences in minibatch have same length, then:
+            # pull the mask buffer to host from device
+            # get the list of all its columns that were nonzero
+            # take the maximum of those, which is the total number of timesteps
+            # divide by batch size to get time steps in one sequence for this minibatch
+            # add 1 for indexing purposes
+            columns = 1 + (np.max(t[1].get().nonzero()[1]) / self.be.bsz)
+
+            # Print out the name and pretty version of each of X, y, and mask
+            for name, item in zip(["Inputs", "Outputs", "Targets"],
+                                  [x, y, t[0]]):
+
+                print name
+
+                # Only get the first sequence in the minibatch
+                # There is no bias here - sequences are randomly generated
+                printable = item.get()[:, ::self.be.bsz]
+                print printable[:, :columns]
+
+            # Only do this for one minibatch - it's a diagnostic tool, not a log
+            break

@@ -22,6 +22,7 @@ from neon.data.text import Text, Shakespeare, PTB, HutterPrize, IMDB
 from neon.data.batch_writer import BatchWriter, BatchWriterI1K
 from neon.data.imageloader import ImageLoader
 from neon.data.questionanswer import BABI, QA
+from neon.data.ticker import Ticker, CopyTask, RepeatCopyTask, PrioritySortTask
 from neon.data.speech import Speech
 from neon.data.video import Video
 from neon.data.imagecaption import ImageCaption, ImageCaptionTest, Flickr8k, Flickr30k, Coco
