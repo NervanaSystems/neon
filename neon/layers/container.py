@@ -70,7 +70,7 @@ class LayerContainer(Layer):
             layers.append(ccls.gen_class(layer['config']))
 
         # layers is special in that there may be parameters
-        # serialzed which will be used elsewhere
+        # serialized which will be used elsewhere
         lsave = pdict.pop('layers')
         new_cls = cls(layers=layers, **pdict)
         pdict['layers'] = lsave
@@ -197,13 +197,25 @@ class ResidualModule(LayerContainer):
     def __init__(self, layers, projection=None, name='residual'):
         super(ResidualModule, self).__init__(name)
 
-        self.layers = [Sequential([l for l in flatten(layers)])]
+        if isinstance(layers, Sequential):
+            self.layers = [layers]
+        elif isinstance(layers, list):
+            if isinstance(layers[0], Sequential):
+                self.layers = layers
+            else:
+                self.layers = [Sequential(layers)]
+        elif isinstance(layers, Layer):
+            self.layers = [Sequential([layers])]
+        else:
+            ValueError("Incompatible element for ResidualModule container")
+
         convlayers = [l for l in self.layers[0].layers if type(l) is Convolution]
         nofm = convlayers[-1].convparams['K']
         skip_stride = convlayers[-2].convparams['str_h']
 
         self.owns_output = True
         self.error_views = None
+        self.projection = projection
         if projection is not None:
             self.skip_layer = Convolution((1, 1, nofm), init=projection, strides=skip_stride)
             if projection.name != "Identity":
@@ -229,6 +241,21 @@ class ResidualModule(LayerContainer):
         if self.skip_layer is not None:
             self.skip_layer.configure(in_obj)
         return self
+
+    # deserialization is not yet automated for this
+    @classmethod
+    def gen_class(cls, pdict):
+        key = 'projection'
+        if pdict.get(key, None) is not None:
+            config = pdict[key].get('config', {})
+            pdict[key] = load_class(pdict[key]['type']).gen_class(config)
+        return super(ResidualModule, cls).gen_class(pdict)
+
+    def nested_str(self, level=0):
+        ss = super(ResidualModule, self).nested_str(level)
+        if self.skip_layer is not None:
+            ss += '\n' + '  '*level + self.skip_layer.nested_str(level+1)
+        return ss
 
     def allocate(self, shared_outputs=None):
         self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
