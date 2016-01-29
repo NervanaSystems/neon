@@ -38,8 +38,8 @@ from neon.data import load_cifar10, ImageLoader, BatchWriter
 from PIL import Image
 from glob import glob
 
-trainimgs = 'trainimgs'
-testimgs = 'testimgs'
+trainimgs = 'train'
+testimgs = 'test'
 
 
 def process_dataset(data, labels, inputpath, leafdir):

@@ -13,7 +13,11 @@
  limitations under the License.
 */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <string.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <libgen.h>
 
@@ -33,20 +37,171 @@
 
 using std::string;
 using std::ifstream;
+using std::ios;
 using std::stringstream;
 using std::vector;
 
 typedef std::pair<std::unique_ptr<ByteVect>,std::unique_ptr<ByteVect>> DataPair;
 
+#define INDEX_FILE_NAME "index.csv"
+
+class IndexElement {
+public:
+    IndexElement() {
+    }
+
+public:
+    string                      _fileName;
+    vector<string>              _targets;
+};
+
+class Index {
+public:
+    Index() {}
+
+    virtual ~Index() {
+        for (auto elem : _elements) {
+            delete elem;
+        }
+    }
+
+    void addElement(string& line) {
+        IndexElement* elem = new IndexElement();
+        std::istringstream ss(line);
+        string token;
+        std::getline(ss, token, ',');
+        elem->_fileName = token;
+        while (std::getline(ss, token, ',')) {
+            elem->_targets.push_back(token);
+        }
+
+        // For now, restrict to a single target.
+        assert(elem->_targets.size() == 1);
+        _elements.push_back(elem);
+    }
+
+    IndexElement* operator[] (int idx) {
+        return _elements[idx];
+    }
+
+    uint size() {
+        return _elements.size();
+    }
+
+    void shuffle() {
+        std::srand(0);
+        std::random_shuffle(_elements.begin(), _elements.end());
+    }
+
+public:
+    vector<IndexElement*>       _elements;
+};
+
 class Reader {
 public:
     virtual ~Reader() {};
-    virtual int read(CharBuffer* data, CharBuffer* labels) = 0;
+    virtual int read(CharBuffer* data, CharBuffer* targets) = 0;
     virtual int reset() = 0;
+
     // For unit testing.
-    virtual void readAll(CharBuffer* data, CharBuffer* labels) = 0;
-    virtual int totalDataSize() = 0;
-    virtual int totalTargetsSize() = 0;
+    virtual int readAll(CharBuffer* data, CharBuffer* targets) {
+        return 0;
+    }
+
+    virtual int totalDataSize() {
+        return 0;
+    }
+
+    virtual int totalTargetsSize() {
+        return 0;
+    }
+};
+
+class FileReader : public Reader {
+public:
+    FileReader(int batchSize, char* repoDir, bool shuffle)
+    : Reader(), _batchSize(batchSize), _repoDir(repoDir), _shuffle(shuffle),
+      _itemIdx(0), _itemCount(0) {
+        _ifs.exceptions(_ifs.failbit);
+        loadIndex();
+    }
+
+    virtual ~FileReader() {
+    }
+
+    int read(CharBuffer* data, CharBuffer* targets) {
+        for (int i = 0; i < _batchSize; ++i) {
+            IndexElement* elem = _index[_itemIdx];
+            // Read datum.
+            string path = _repoDir + '/' + elem->_fileName;
+            struct stat stats;
+            int result = stat(path.c_str(), &stats);
+            if (result == -1) {
+                printf("Could not stat %s\n", path.c_str());
+                return -1;
+            }
+            off_t size = stats.st_size;
+            if (data->getSize() < (data->getLevel() + size)) {
+                // TODO: Make buffers resizable.
+                printf("Buffer too small for %s\n", path.c_str());
+                return -1;
+            }
+            _ifs.open(path, ios::binary);
+            _ifs.read(data->getCurrent(), size);
+            _ifs.close();
+            data->pushItem(size);
+            // Read targets.
+            // Limit to a single integer target for now.
+            if (targets->getSize() < (targets->getLevel() + sizeof(int))) {
+                printf("Buffer too small for %s target\n", path.c_str());
+                return -1;
+            }
+            int target = atoi(elem->_targets[0].c_str());
+            memcpy(targets->getCurrent(), &target, sizeof(int));
+            targets->pushItem(sizeof(int));
+            if (++_itemIdx == _itemCount) {
+                // Wrap around.
+                reset();
+            }
+
+        }
+        return 0;
+    }
+
+    int reset() {
+        _itemIdx = 0;
+        return 0;
+    }
+
+private:
+    void loadIndex() {
+        string indexFile = _repoDir + '/' + INDEX_FILE_NAME;
+        ifstream ifs(indexFile);
+        if (!ifs) {
+            printf("Could not open %s\n", indexFile.c_str());
+            throw std::ios_base::failure("Could not open file\n");
+        }
+
+        string line;
+        while (std::getline(ifs, line)) {
+            _index.addElement(line);
+        }
+
+        if (_shuffle == true) {
+            _index.shuffle();
+        }
+
+        _itemCount = _index.size();
+    }
+
+private:
+    int                         _batchSize;
+    string                      _repoDir;
+    bool                        _shuffle;
+    Index                       _index;
+    uint                        _itemIdx;
+    uint                        _itemCount;
+    ifstream                    _ifs;
 };
 
 class MacrobatchReader : public Reader {
@@ -64,15 +219,15 @@ public:
         close();
     }
 
-    int read(CharBuffer* data, CharBuffer* labels) {
+    int read(CharBuffer* data, CharBuffer* targets) {
         int offset = 0;
         while (offset < _batchSize) {
             int count = _batchSize - offset;
             int result;
             if (_shuffle) {
-                result = readShuffle(data, labels, count);
+                result = readShuffle(data, targets, count);
             } else {
-                result = read(data, labels, count);
+                result = read(data, targets, count);
             }
             if (result == -1) {
                 return -1;
@@ -114,12 +269,13 @@ public:
     }
 
     // For unit testing.
-    void readAll(CharBuffer* data, CharBuffer* labels) {
-        readExact(data, labels, _itemsLeft);
+    int readAll(CharBuffer* data, CharBuffer* targets) {
+        readExact(data, targets, _itemsLeft);
+        return _itemsLeft;
     }
 
 private:
-    int read(CharBuffer* data, CharBuffer* labels, int count) {
+    int read(CharBuffer* data, CharBuffer* targets, int count) {
         if (_itemsLeft == 0) {
             next();
         }
@@ -127,11 +283,11 @@ private:
         int realCount = std::min(count, _itemsLeft);
         if (_itemIdx + realCount >= _itemCount) {
             realCount = _itemCount - _itemIdx;
-            readExact(data, labels, realCount);
+            readExact(data, targets, realCount);
             reset();
             return realCount;
         }
-        readExact(data, labels, realCount);
+        readExact(data, targets, realCount);
         return realCount;
     }
 
@@ -156,7 +312,7 @@ private:
         return 0;
     }
 
-    int readShuffle(CharBuffer* data, CharBuffer* labels, int count) {
+    int readShuffle(CharBuffer* data, CharBuffer* targets, int count) {
         while ((int) _shuffleQueue.size() < count) {
             replenishQueue(count);
         }
@@ -164,26 +320,26 @@ private:
         for (int i=0; i<count; ++i) {
             auto ee = std::move(_shuffleQueue.at(0));
             int dataSize = ee.first->size();
-            int labelSize = ee.second->size();
+            int targetSize = ee.second->size();
             memcpy(data->getCurrent(), &(*ee.first)[0], dataSize);
-            memcpy(labels->getCurrent(), &(*ee.second)[0], labelSize);
+            memcpy(targets->getCurrent(), &(*ee.second)[0], targetSize);
             data->pushItem(dataSize);
-            labels->pushItem(labelSize);
+            targets->pushItem(targetSize);
             _shuffleQueue.pop_front();
         }
         return count;
     }
 
-    void readExact(CharBuffer* data, CharBuffer* labels, int count) {
+    void readExact(CharBuffer* data, CharBuffer* targets, int count) {
         assert(count <= _itemsLeft);
         for (int i = 0; i < count; ++i) {
             uint        dataSize;
-            uint        labelSize;
+            uint        targetSize;
             _batchFile.readItem(data->getCurrent(),
-                                labels->getCurrent(),
-                                &dataSize, &labelSize);
+                                targets->getCurrent(),
+                                &dataSize, &targetSize);
             data->pushItem(dataSize);
-            labels->pushItem(labelSize);
+            targets->pushItem(targetSize);
         }
         _itemsLeft -= count;
         _itemIdx += count;
@@ -222,84 +378,4 @@ private:
     BatchFile                   _batchFile;
     bool                        _shuffle;
     std::deque<DataPair>        _shuffleQueue;
-};
-
-class ImageFileReader : public Reader {
-public:
-    ImageFileReader(string listFile, int itemCount, int batchSize, int outerSize,
-                    bool shuffle=false)
-    : Reader(), _listFile(listFile), _itemIdx(0), _itemCount(itemCount),
-      _batchSize(batchSize), _outerSize(outerSize),
-      _shuffle(shuffle) {
-
-        _error = readFileLines(_listFile, _fileNames);
-        _rootPath = _listFile.c_str();
-        _rootPath = dirname((char*) _rootPath.c_str());
-    }
-
-    int read(CharBuffer* data, CharBuffer* labels) {
-        if (_error != 0) {
-            return _error;
-        }
-        if (_shuffle) {
-            printf("Shuffling not supported yet\n");
-            return -1;
-        }
-        vector<uchar> buf;
-        vector<int> param = {CV_IMWRITE_JPEG_QUALITY, 95};
-        for (int i = 0; i < _batchSize; ++i) {
-            string path = _rootPath + '/' + _fileNames[_itemIdx];
-            cv::Mat src = cv::imread(path);
-            if (src.data == 0) {
-                printf("Could not open %s\n", path.c_str());
-                return -1;
-            }
-            cv::Mat dst(_outerSize, _outerSize, CV_8UC3);
-            cv::resize(src, dst, dst.size());
-
-            cv::imencode(".jpg", dst, buf, param);
-            int imageSize = buf.size();
-            memcpy(data->getCurrent(), &buf[0], imageSize);
-            data->pushItem(imageSize);
-            memset(labels->getCurrent(), 0, sizeof(int));
-            labels->pushItem(sizeof(int));
-
-            if (++_itemIdx == _itemCount) {
-                // Wrap around.
-                reset();
-            }
-
-        }
-        return 0;
-    }
-
-    int reset() {
-        _itemIdx = 0;
-        _error = 0;
-        return 0;
-    }
-
-    // For unit testing.
-    virtual void readAll(CharBuffer* data, CharBuffer* labels) {
-        assert(0);
-    };
-
-    int totalDataSize() {
-        return 0;
-    }
-
-    int totalTargetsSize() {
-        return 0;
-    }
-
-private:
-    string                      _listFile;
-    string                      _rootPath;
-    vector<string>              _fileNames;
-    uint                        _itemIdx;
-    uint                        _itemCount;
-    int                         _batchSize;
-    int                         _outerSize;
-    int                         _error;
-    bool                        _shuffle;
 };

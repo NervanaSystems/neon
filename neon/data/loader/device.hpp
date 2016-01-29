@@ -42,7 +42,7 @@ public:
 class CpuParams : public DeviceParams {
 public:
     char*                       _data[2];
-    char*                       _labels[2];
+    char*                       _targets[2];
 };
 
 #if HASGPU
@@ -66,17 +66,17 @@ void check(T err, T sval, const char* const func,
 class GpuParams : public DeviceParams {
 public:
     CUdeviceptr                 _data[2];
-    CUdeviceptr                 _labels[2];
+    CUdeviceptr                 _targets[2];
 };
 
 class Gpu : public Device {
 public:
-    Gpu(int id, int dataSize, int labelSize)
+    Gpu(int id, int dataSize, int targetSize)
     : Device(GPU), _alloc(true), _id(id) {
         init();
         for (int i = 0; i < 2; i++) {
             checkDriverErrors(cuMemAlloc(&_data[i], dataSize));
-            checkDriverErrors(cuMemAlloc(&_labels[i], labelSize));
+            checkDriverErrors(cuMemAlloc(&_targets[i], targetSize));
         }
     }
 
@@ -85,7 +85,7 @@ public:
         GpuParams* gpuParams = reinterpret_cast<GpuParams*>(params);
         for (int i = 0; i < 2; i++) {
             _data[i] = gpuParams->_data[i];
-            _labels[i] = gpuParams->_labels[i];
+            _targets[i] = gpuParams->_targets[i];
         }
     }
 
@@ -93,7 +93,7 @@ public:
         if (_alloc == true) {
             for (int i = 0; i < 2; i++) {
                 cuMemFree(_data[i]);
-                cuMemFree(_labels[i]);
+                cuMemFree(_targets[i]);
             }
         }
     }
@@ -112,16 +112,16 @@ public:
         return copy(_data[idx], data, size);
     }
 
-    int copyLabels(int idx, char* labels, int size) {
-        return copy(_labels[idx], labels, size);
+    int copyLabels(int idx, char* targets, int size) {
+        return copy(_targets[idx], targets, size);
     }
 
     int copyDataBack(int idx, char* data, int size) {
         return copyBack(data, _data[idx], size);
     }
 
-    int copyLabelsBack(int idx, char* labels, int size) {
-        return copyBack(labels, _labels[idx], size);
+    int copyLabelsBack(int idx, char* targets, int size) {
+        return copyBack(targets, _targets[idx], size);
     }
 
 private:
@@ -145,7 +145,7 @@ private:
 
 private:
     CUdeviceptr                 _data[2];
-    CUdeviceptr                 _labels[2];
+    CUdeviceptr                 _targets[2];
     bool                        _alloc;
     int                         _id;
 };
@@ -153,12 +153,12 @@ private:
 
 class Cpu : public Device {
 public:
-    Cpu(int id, int dataSize, int labelSize)
+    Cpu(int id, int dataSize, int targetSize)
     : Device(CPU), _alloc(true) {
         init();
         for (int i = 0; i < 2; i++) {
             _data[i] = new char[dataSize];
-            _labels[i] = new char[labelSize];
+            _targets[i] = new char[targetSize];
         }
     }
 
@@ -167,7 +167,7 @@ public:
         CpuParams* cpuParams = reinterpret_cast<CpuParams*>(params);
         for (int i = 0; i < 2; i++) {
             _data[i] = cpuParams->_data[i];
-            _labels[i] = cpuParams->_labels[i];
+            _targets[i] = cpuParams->_targets[i];
         }
     }
 
@@ -175,7 +175,7 @@ public:
         if (_alloc == true) {
             for (int i = 0; i < 2; i++) {
                 delete[] _data[i];
-                delete[] _labels[i];
+                delete[] _targets[i];
             }
         }
     }
@@ -189,8 +189,8 @@ public:
         return 0;
     }
 
-    int copyLabels(int idx, char* labels, int size) {
-        memcpy(_labels[idx], labels, size);
+    int copyLabels(int idx, char* targets, int size) {
+        memcpy(_targets[idx], targets, size);
         return 0;
     }
 
@@ -199,13 +199,13 @@ public:
         return 0;
     }
 
-    int copyLabelsBack(int idx, char* labels, int size) {
-        memcpy(labels, _labels[idx], size);
+    int copyLabelsBack(int idx, char* targets, int size) {
+        memcpy(targets, _targets[idx], size);
         return 0;
     }
 
 private:
     char*                       _data[2];
-    char*                       _labels[2];
+    char*                       _targets[2];
     bool                        _alloc;
 };

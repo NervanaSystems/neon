@@ -121,17 +121,17 @@ public:
         return _cur;
     }
 
-    int getSize() {
+    uint getSize() {
         return _size;
     }
 
-    int getIndex() {
-        return _cur - _data;
+    uint getLevel() {
+        return (_cur - _data) * sizeof(T);
     }
 
 public:
     T*                          _data;
-    int                         _size;
+    uint                        _size;
 
 protected:
     T*                          _cur;
@@ -146,12 +146,12 @@ typedef pair<CharBuffer*, CharBuffer*>                  BufferPair;
 
 class BufferPool {
 public:
-    BufferPool(int dataSize, int labelSize, bool pinned = false, int count = 2)
+    BufferPool(int dataSize, int targetSize, bool pinned = false, int count = 2)
     : _count(count), _used(0), _readPos(0), _writePos(0) {
         for (int i = 0; i < count; i++) {
             CharBuffer* dataBuffer = new CharBuffer(dataSize, pinned);
-            CharBuffer* labelBuffer = new CharBuffer(labelSize, pinned);
-            _bufs.push_back(make_pair(dataBuffer, labelBuffer));
+            CharBuffer* targetBuffer = new CharBuffer(targetSize, pinned);
+            _bufs.push_back(make_pair(dataBuffer, targetBuffer));
         }
     }
 

@@ -15,73 +15,33 @@
 
 extern "C" {
 
-    extern void* start(int inner_size,
-                       bool center, bool flip, bool rgb,
-                       int scale_min, int scale_max,
-                       int contrast_min, int contrast_max,
-                       int rotate_min, int rotate_max,
-                       int aspect_ratio,
-                       int minibatch_size,
-                       char* filename, int macro_start,
-                       uint num_data, uint num_labels, bool macro,
-                       bool shuffle, int read_max_size, int label_size,
-                       DeviceParams* params) {
-        static_assert(sizeof(int) == 4, "int is not 4 bytes");
-        try {
-            int nchannels = (rgb == true) ? 3 : 1;
-            int item_max_size = nchannels*inner_size*inner_size;
-            // These objects will get freed in the destructor of Loader.
-            Device* device;
-#if HASGPU
-            if (params->_type == CPU) {
-                device = new Cpu(params);
-            } else {
-                device = new Gpu(params);
-            }
-#else
-            assert(params->_type == CPU);
-            device = new Cpu(params);
-#endif
-            Reader*     reader;
-            if (macro == true) {
-                reader = new MacrobatchReader(filename, macro_start,
-                                              num_data, minibatch_size, shuffle);
-            } else {
-                reader = new ImageFileReader(filename, num_data,
-                                             minibatch_size, inner_size);
-            }
-            AugmentationParams* agp = new AugmentationParams(inner_size, center, flip, rgb,
-                                                             /* Scale Params */
-                                                             scale_min, scale_max,
-                                                             /* Contrast Params */
-                                                             contrast_min, contrast_max,
-                                                             /* Rotate Params (ignored) */
-                                                             rotate_min, rotate_max,
-                                                             /* Aspect Ratio Param */
-                                                             aspect_ratio);
+extern void* start(int batchSize, char* repoDir, bool shuffle,
+                   int datumSize, int targetSize,
+                   MediaParams* mediaParams, DeviceParams* deviceParams) {
+    static_assert(sizeof(int) == 4, "int is not 4 bytes");
+    try {
+        Loader* loader = new Loader(batchSize, repoDir, shuffle,
+                                    datumSize, targetSize,
+                                    mediaParams, deviceParams);
+        int result = loader->start();
+        if (result != 0) {
+            printf("Could not start data loader. Error %d", result);
+            delete loader;
+            exit(-1);
+        }
+        return reinterpret_cast<void*>(loader);
+    } catch(std::exception& ex) {
+        printf("Exception at %s:%d %s\n", __FILE__, __LINE__, ex.what());
+        return 0;
+    }
+}
 
-            Decoder* decoder = new ImageDecoder(agp);
-            Loader* loader = new Loader(minibatch_size, read_max_size,
-                                        item_max_size, label_size,
-                                        num_labels, device,
-                                        reader, decoder);
-            int result = loader->start();
-            if (result != 0) {
-                printf("Could not start data loader. Error %d", result);
-                delete loader;
-                exit(-1);
-            }
-            return reinterpret_cast<void*>(loader);
-        } catch(...) {
-            return 0;
-      }
-  }
-
-  extern int next(Loader* loader) {
+extern int next(Loader* loader) {
     try {
         loader->next();
         return 0;
-    } catch(...) {
+    } catch(std::exception& ex) {
+        printf("Exception at %s:%d %s\n", __FILE__, __LINE__, ex.what());
         return -1;
     }
 }
@@ -89,7 +49,8 @@ extern "C" {
 extern int reset(Loader* loader) {
     try {
         return loader->reset();
-    } catch(...) {
+    } catch(std::exception& ex) {
+        printf("Exception at %s:%d %s\n", __FILE__, __LINE__, ex.what());
         return -1;
     }
 }
@@ -99,44 +60,44 @@ extern int stop(Loader* loader) {
         loader->stop();
         delete loader;
         return 0;
-    } catch(...) {
+    } catch(std::exception& ex) {
+        printf("Exception at %s:%d %s\n", __FILE__, __LINE__, ex.what());
         return -1;
     }
 }
 
-
-extern void write_batch(char *outfile, const int num_data,
-                        char **jpgfiles, uint32_t *labels,
+extern void write_batch(char *outfile, const int numData,
+                        char **jpgfiles, uint32_t *targets,
                         int maxDim) {
-    if (num_data == 0) {
+    if (numData == 0) {
         return;
     }
     BatchFile bf;
     bf.openForWrite(outfile, "imgclass");
-    for (int i=0; i<num_data; i++) {
+    for (int i=0; i<numData; i++) {
         ByteVect inp;
         readFileBytes(jpgfiles[i], inp);
         if (maxDim != 0) {
             resizeInput(inp, maxDim);  // from decoder.hpp
         }
         ByteVect tgt(sizeof(uint32_t));
-        memcpy(&tgt[0], &(labels[i]), sizeof(uint32_t));
+        memcpy(&tgt[0], &(targets[i]), sizeof(uint32_t));
         bf.writeItem(inp, tgt);
     }
     bf.close();
 }
 
-extern void write_raw(char *outfile, const int num_data,
+extern void write_raw(char *outfile, const int numData,
                   char **jpgdata, uint32_t *jpglens,
-                  uint32_t *labels) {
-    if (num_data == 0) {
+                  uint32_t *targets) {
+    if (numData == 0) {
         return;
     }
     BatchFile bf;
     uint32_t tgtSize = sizeof(uint32_t);
     bf.openForWrite(outfile, "imgclass");
-    for (int i=0; i<num_data; i++) {
-        bf.writeItem(jpgdata[i], (char *) &labels[i], &jpglens[i], &tgtSize);
+    for (int i=0; i<numData; i++) {
+        bf.writeItem(jpgdata[i], (char *) &targets[i], &jpglens[i], &tgtSize);
     }
     bf.close();
 }

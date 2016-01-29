@@ -52,23 +52,52 @@ void resizeInput(vector<char> &jpgdata, int maxDim){
     return;
 }
 
-class AugmentationParams {
+enum MediaType {
+    IMAGE = 0,
+    VIDEO = 1,
+    AUDIO = 2,
+    TEXT = 3,
+};
+
+class MediaParams {
 public:
-    AugmentationParams(int innerSize,
-                       bool center, bool flip, bool rgb,
-                       int scaleMin, int scaleMax,
-                       int contrastMin, int contrastMax,
-                       int rotateMin, int rotateMax,
-                       int aspectRatio)
-    : _rngSeed(0), _innerSize(innerSize, innerSize),
+    MediaParams(int mtype) : _mtype(mtype) {
+    }
+
+public:
+    int                         _mtype;
+};
+
+class ImageParams : public MediaParams {
+public:
+    ImageParams(int innerSize, bool center, bool flip, bool rgb,
+                int scaleMin, int scaleMax,
+                int contrastMin, int contrastMax,
+                int rotateMin, int rotateMax)
+    : MediaParams(IMAGE), _rngSeed(0), _innerSize(innerSize, innerSize),
       _center(center), _flip(flip), _rgb(rgb),
       _scaleMin(scaleMin), _scaleMax(scaleMax),
       _contrastMin(contrastMin), _contrastMax(contrastMax),
       _rotateMin(rotateMin), _rotateMax(rotateMax), _aspectRatio(aspectRatio) {
     }
 
-    AugmentationParams()
-    : AugmentationParams(224, true, false, true, 256, 256, 0, 0, 0, 0, 0){}
+    ImageParams()
+    : ImageParams(224, true, false, true, 256, 256, 0, 0, 0, 0) {}
+
+    virtual ~ImageParams() {};
+
+    void dump() {
+        printf("inner size %dx%d\n", _innerSize.height, _innerSize.width);
+        printf("center %d\n", _center);
+        printf("flip %d\n", _flip);
+        printf("rgb %d\n", _rgb);
+        printf("scale min %d\n", _scaleMin);
+        printf("scale max %d\n", _scaleMax);
+        printf("contrast min %d\n", _contrastMin);
+        printf("contrast max %d\n", _contrastMax);
+        printf("rotate min %d\n", _rotateMin);
+        printf("rotate max %d\n", _rotateMax);
+    }
 
     bool doRandomFlip() {
         return _flip && (rand_r(&(_rngSeed)) % 2 == 0);
@@ -85,11 +114,10 @@ public:
     }
 
     float getRandomContrast() {
-        if (_contrastMin == _contrastMax)
+        if (_contrastMin == _contrastMax) {
             return 0;
-        else {
-            return (_contrastMin + (rand_r(&(_rngSeed)) % (_contrastMax - _contrastMin))) / 100.0;
         }
+        return (_contrastMin + (rand_r(&(_rngSeed)) % (_contrastMax - _contrastMin))) / 100.0;
     }
 
     // adjust the square cropSize to be an inner rectangle
@@ -127,8 +155,6 @@ public:
         return;
     }
 
-    virtual ~AugmentationParams() {};
-
     const Size2i &getSize() {
         return _innerSize;
     }
@@ -144,20 +170,37 @@ protected:
     int                         _aspectRatio;
 };
 
+class VideoParams : public MediaParams {
+public:
+    int                         _dummy;
+};
+
+class AudioParams : public MediaParams {
+public:
+    int                         _dummy;
+};
+
+class TextParams : public MediaParams {
+public:
+    int                         _dummy;
+};
+
 class Decoder {
 public:
     virtual ~Decoder() {};
     virtual void decode(char* item, int itemSize, char* buf) = 0;
+
+    static Decoder* create(MediaParams* params);
 };
 
 class ImageDecoder : public Decoder {
 public:
-    ImageDecoder(AugmentationParams *augParams)
-    : _augParams(augParams) {
+    ImageDecoder(ImageParams *params)
+    : _params(params) {
     }
 
     virtual ~ImageDecoder() {
-        delete _augParams;
+        delete _params;
     }
 
     void save_binary(char *filn, char* item, int itemSize, char* buf) {
@@ -171,9 +214,9 @@ public:
         Mat image = Mat(1, itemSize, CV_8UC3, item);
         Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
         Rect cropBox;
-        _augParams->getRandomCrop(decodedImage.size(), &cropBox);
+        _params->getRandomCrop(decodedImage.size(), &cropBox);
         auto cropArea = cropBox.area();
-        auto innerSize = _augParams->getSize();
+        auto innerSize = _params->getSize();
 
         Mat croppedImage = decodedImage(cropBox);
         // This would be more efficient, but we should allocate separate bufs for each thread
@@ -188,14 +231,14 @@ public:
         Mat flippedImage;
         Mat *finalImage;
 
-        if (_augParams->doRandomFlip()) {
+        if (_params->doRandomFlip()) {
             cv::flip(resizedImage, flippedImage, 1);
             finalImage = &flippedImage;
         } else {
             finalImage = &resizedImage;
         }
         Mat newImage;
-        float alpha = _augParams->getRandomContrast();
+        float alpha = _params->getRandomContrast();
         if (alpha) {
             finalImage->convertTo(newImage, -1, alpha);
             finalImage = &newImage;
@@ -210,5 +253,57 @@ public:
     }
 
 private:
-    AugmentationParams*         _augParams;
+    ImageParams*                _params;
 };
+
+class VideoDecoder : public Decoder {
+public:
+    VideoDecoder(VideoParams *params)
+    : _params(params) {
+    }
+
+    void decode(char* item, int itemSize, char* buf) {}
+
+private:
+    VideoParams*                _params;
+};
+
+class AudioDecoder : public Decoder {
+public:
+    AudioDecoder(AudioParams *params)
+    : _params(params) {
+    }
+
+    void decode(char* item, int itemSize, char* buf) {}
+
+private:
+    AudioParams*                _params;
+};
+
+class TextDecoder : public Decoder {
+public:
+    TextDecoder(TextParams *params)
+    : _params(params) {
+    }
+
+    void decode(char* item, int itemSize, char* buf) {}
+
+private:
+    TextParams*                 _params;
+};
+
+Decoder* Decoder::create(MediaParams* params) {
+    switch (params->_mtype) {
+    case IMAGE:
+        return new ImageDecoder(reinterpret_cast<ImageParams*>(params));
+    case VIDEO:
+        return new VideoDecoder(reinterpret_cast<VideoParams*>(params));
+    case AUDIO:
+        return new AudioDecoder(reinterpret_cast<AudioParams*>(params));
+    case TEXT:
+        return new TextDecoder(reinterpret_cast<TextParams*>(params));
+    default:
+        throw std::runtime_error("Unknown media type\n");
+    }
+    return 0;
+}
