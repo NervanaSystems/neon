@@ -47,8 +47,8 @@ def pytest_generate_tests(metafunc):
     if 'fargs' in metafunc.fixturenames:
         fargs = []
         bsz_rng = [2]
-        roi_num_rng = [64]
-        img_fm_c_rng = [128]
+        roi_num_rng = [2]
+        img_fm_c_rng = [2]
         img_fm_h_rng = [62]
         img_fm_w_rng = [62]
         roi_size_rng = [6]
@@ -337,9 +337,9 @@ def test_roipooling_bprop_ref(backend_default, rois=None, inputs=None, outputs_f
 if __name__ == '__main__':
 
     bsz = 2
-    be = gen_backend(backend='cpu', batch_size=bsz, compat_mode='caffe')
+    be = gen_backend(backend='gpu', batch_size=bsz, compat_mode='caffe')
 
     # compare using random data
-    fargs = (64, 128, 62, 62, 6, bsz)
+    fargs = (2, 2, 62, 62, 6, bsz)
     test_roipooling_fprop_random(be, fargs)
     test_roipooling_bprop_random(be, fargs)

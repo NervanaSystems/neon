@@ -47,8 +47,8 @@ def test_model_get_outputs_rnn(backend_default, data):
         data_set.ndata, data_set.seq_length, data_set.nclass)
 
 
-def test_model_get_outputs(backend_default):
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
+def test_model_get_outputs(backend_default, data):
+    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
     train_set = ArrayIterator(X_train[:backend_default.bsz * 3])
 
     init_norm = Gaussian(loc=0.0, scale=0.1)
