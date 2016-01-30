@@ -232,6 +232,12 @@ class NeonArgparser(configargparse.ArgumentParser):
         stderrlog = logging.StreamHandler()
         stderrlog.setFormatter(fmtr)
 
+        # expand any user directories in paths
+        for path in ['data_dir', 'save_path', 'model_file', 'output_file',
+                     'logfile']:
+            if getattr(args, path):
+                setattr(args, path, os.path.expanduser(getattr(args, path)))
+
         if args.logfile:
             # add log to file as well
             filelog = RotatingFileHandler(filename=args.logfile, mode='w',

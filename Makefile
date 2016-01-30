@@ -68,11 +68,6 @@ else
 	TEST_DIRS := $(TEST_DIRS) neon/backends/tests/
 endif
 
-# arguments to running examples
-EXAMPLE_ARGS := -e1
-# additional args for examples using ImageLoader
-EXAMPLE_IMG_ARGS := -w ~/nervana/data/I1K/imageset_batches_dw --subset_pct=5
-
 # this variable controls where we publish Sphinx docs to
 DOC_DIR := doc
 DOC_PUB_RELEASE_PATH := $(DOC_PUB_PATH)/$(RELEASE)
@@ -221,22 +216,7 @@ test: env
 
 examples: env
 	@echo "Running all examples..."
-	@. $(ACTIVATE); \
-		for fn in `ls -1 examples/*.py examples/*/train.py`; \
-		do \
-		    args=$(EXAMPLE_ARGS); \
-			grep -q 'ImageLoader' $$fn; \
-			if [ $$? -eq 0 ]; \
-			then \
-			    args="$${args} $(EXAMPLE_IMG_ARGS)"; \
-			fi; \
-		    echo "Running $$fn $$args"; \
-		    python $$fn $$args; \
-			if [ $$? -ne 0 ]; \
-	        then \
-	            exit 1; \
-			fi; \
-		done;
+	@. $(ACTIVATE); tests/run_examples.py
 	@echo
 
 serialize_check: env

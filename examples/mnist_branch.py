@@ -39,9 +39,6 @@ The topology of the network is:
  data
 
 """
-
-import logging
-
 from neon.callbacks.callbacks import Callbacks
 from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Gaussian
@@ -114,6 +111,7 @@ callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
-logging.getLogger('neon').info("Misclassification error = %.1f%%",
-                               (mlp.eval(valid_set, metric=Misclassification())*100))
-print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
+# TODO: introduce Multicost metric support.  The line below currently failes
+# since the Misclassification metric expects a single Tensor not a list of
+# Tensors
+# print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
