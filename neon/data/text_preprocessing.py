@@ -18,6 +18,24 @@ Defines text datatset preprocessing routines
 
 import cPickle
 import numpy as np
+import re
+
+
+def clean_string(string):
+    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
+    string = re.sub(r"\'s", " \'s", string)
+    string = re.sub(r"\'ve", " \'ve", string)
+    string = re.sub(r"n\'t", " n\'t", string)
+    string = re.sub(r"\'re", " \'re", string)
+    string = re.sub(r"\'d", " \'d", string)
+    string = re.sub(r"\'ll", " \'ll", string)
+    string = re.sub(r",", " , ", string)
+    string = re.sub(r"!", " ! ", string)
+    string = re.sub(r"\(", " \( ", string)
+    string = re.sub(r"\)", " \) ", string)
+    string = re.sub(r"\?", " \? ", string)
+    string = re.sub(r"\s{2,}", " ", string)
+    return string.strip().lower()
 
 
 def pad_sentences(sentences, sentence_length=None, dtype=np.int32, pad_val=0.):
@@ -75,3 +93,32 @@ def pad_data(path, vocab_size=20000, sentence_length=100, oov=2,
     nclass = 1 + max(np.max(y_train), np.max(y_test))
 
     return (X_train, y_train), (X_test, y_test), nclass
+
+
+def get_paddedXY(X, y, vocab_size=20000, sentence_length=100, oov=2,
+                 start=1, index_from=3, seed=113, shuffle=True):
+
+    if shuffle:
+        np.random.seed(seed)
+        np.random.shuffle(X)
+        np.random.seed(seed)
+        np.random.shuffle(y)
+
+    if start is not None:
+        X = [[start] + [w + index_from for w in x] for x in X]
+    else:
+        X = [[w + index_from for w in x] for x in X]
+
+    if not vocab_size:
+        vocab_size = max([max(x) for x in X])
+
+    # word ids - pad (0), start (1), oov (2)
+    if oov is not None:
+        X = [[oov if w >= vocab_size else w for w in x] for x in X]
+    else:
+        X = [[w for w in x if w < vocab_size] for x in X]
+
+    X = pad_sentences(X, sentence_length=sentence_length)
+    y = np.array(y, dtype=np.int32).reshape((len(y), 1))
+
+    return X, y

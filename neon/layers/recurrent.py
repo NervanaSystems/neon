@@ -52,7 +52,7 @@ class Recurrent(ParameterLayer):
     """
 
     def __init__(self, output_size, init, init_inner=None, activation=None,
-                 reset_cells=False, name="RecurrentLayer"):
+                 reset_cells=False, name=None):
         super(Recurrent, self).__init__(init, name)
         self.x = None
         self.in_deltas = None
@@ -261,7 +261,7 @@ class LSTM(Recurrent):
         b (Tensor): Biases (out size * 4 , 1)
     """
     def __init__(self, output_size, init, init_inner=None, activation=None,
-                 gate_activation=None, reset_cells=False, name="LstmLayer"):
+                 gate_activation=None, reset_cells=False, name=None):
         super(LSTM, self).__init__(output_size, init, init_inner,
                                    activation, reset_cells, name)
         self.gate_activation = gate_activation
@@ -460,7 +460,7 @@ class GRU(Recurrent):
     """
 
     def __init__(self, output_size, init, init_inner=None, activation=None,
-                 gate_activation=None, reset_cells=False, name="GruLayer"):
+                 gate_activation=None, reset_cells=False, name=None):
         super(GRU, self).__init__(output_size, init, init_inner,
                                   activation, reset_cells, name)
         self.gate_activation = gate_activation
@@ -757,7 +757,8 @@ class BiRNN(ParameterLayer):
         b (Tensor): Biases on output units (output_size, 1)
     """
 
-    def __init__(self, output_size, init, activation, split_inputs=False, name="BiRNNLayer"):
+    def __init__(self, output_size, init, activation, reset_cells=False,
+                 split_inputs=False, name=None):
         super(BiRNN, self).__init__(init, name)
         self.in_deltas_f = None
         self.in_deltas_b = None
@@ -768,6 +769,7 @@ class BiRNN(ParameterLayer):
         self.W_input = None
         self.ngates = 1
         self.split_inputs = split_inputs
+        self.reset_cells = reset_cells
 
     def __str__(self):
         if self.split_inputs:
@@ -934,6 +936,10 @@ class BiRNN(ParameterLayer):
         """
         self.init_buffers(inputs)
 
+        if self.reset_cells:
+            self.h_f[-1][:] = 0
+            self.h_b[0][:] = 0
+
         # recurrent layer needs a h_prev buffer for bprop
         self.h_prev_bprop = [None] + self.h_f[:-1]
         self.h_next_bprop = self.h_b[1:] + [None]
@@ -1037,7 +1043,7 @@ class BiLSTM(BiRNN):
     """
 
     def __init__(self, output_size, init, activation, gate_activation,
-                 reset_cells=False, split_inputs=False, name="BiLstmLayer"):
+                 reset_cells=False, split_inputs=False, name=None):
         super(BiLSTM, self).__init__(
             output_size, init, activation, split_inputs, name)
         self.gate_activation = gate_activation
@@ -1295,14 +1301,14 @@ class DeepBiRNN(list):
 
     """
 
-    def __init__(self, nout, init, activation, depth=1):
+    def __init__(self, nout, init, activation, reset_cells=False, depth=1):
         list.__init__(self)
         if depth <= 0:
             raise ValueError("Depth is <= 0.")
 
-        self.append(BiRNN(nout, init, activation, split_inputs=False))
+        self.append(BiRNN(nout, init, activation, reset_cells, split_inputs=False))
         for i in range(depth-1):
-            self.append(BiRNN(nout, init, activation, split_inputs=True))
+            self.append(BiRNN(nout, init, activation, reset_cells, split_inputs=True))
 
 
 class DeepBiLSTM(list):

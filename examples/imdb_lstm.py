@@ -19,7 +19,7 @@ Example that trains an LSTM or GRU networks for sentiment analysis
 Reference:
    See J.Li et al, EMNLP2015 - http://arxiv.org/pdf/1503.00185v5.pdf
 
-$ python examples/imdb_lstm.py -b gpu -e 2 -eval 1 -r 0
+$ python examples/imdb_lstm.py -e 2 -eval 1 --rlayer_type lstm
 
 
 """
@@ -29,7 +29,8 @@ from neon.data.dataloaders import load_imdb
 from neon.data.dataiterator import ArrayIterator
 from neon.data.text_preprocessing import pad_data
 from neon.initializers import Uniform, GlorotUniform
-from neon.layers import GeneralizedCost, LSTM, Affine, Dropout, LookupTable, RecurrentSum
+from neon.layers import (GeneralizedCost, LSTM, Affine, Dropout, LookupTable,
+                         RecurrentSum, Recurrent, DeepBiLSTM, DeepBiRNN)
 from neon.models import Model
 from neon.optimizers import Adagrad
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti, Accuracy
@@ -38,13 +39,17 @@ from neon.util.argparser import NeonArgparser, extract_valid_args
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
+parser.add_argument('--rlayer_type', default='lstm',
+                    choices=['bilstm', 'lstm', 'birnn', 'rnn'],
+                    help='type of recurrent layer to use (lstm, bilstm, rnn, birnn)')
+
 args = parser.parse_args(gen_be=False)
 
 # hyperparameters from the reference
 args.batch_size = 128
 gradient_clip_value = 15
 vocab_size = 20000
-sentence_length = 100
+sentence_length = 128
 embedding_dim = 128
 hidden_size = 128
 reset_cells = True
@@ -70,9 +75,21 @@ valid_set = ArrayIterator(X_test, y_test, nclass=2)
 uni = Uniform(low=-0.1/embedding_dim, high=0.1/embedding_dim)
 g_uni = GlorotUniform()
 
+if args.rlayer_type == 'lstm':
+    rlayer = LSTM(hidden_size, g_uni, activation=Tanh(),
+                  gate_activation=Logistic(), reset_cells=True)
+elif args.rlayer_type == 'bilstm':
+    rlayer = DeepBiLSTM(hidden_size, g_uni, activation=Tanh(), depth=1,
+                        gate_activation=Logistic(), reset_cells=True)
+elif args.rlayer_type == 'rnn':
+    rlayer = Recurrent(hidden_size, g_uni, activation=Tanh(), reset_cells=True)
+elif args.rlayer_type == 'birnn':
+    rlayer = DeepBiRNN(hidden_size, g_uni, activation=Tanh(), depth=1, reset_cells=True)
+
+
 layers = [
     LookupTable(vocab_size=vocab_size, embedding_dim=embedding_dim, init=uni),
-    LSTM(hidden_size, init=g_uni, activation=Tanh(), gate_activation=Logistic(), reset_cells=True),
+    rlayer,
     RecurrentSum(),
     Dropout(keep=0.5),
     Affine(2, g_uni, bias=g_uni, activation=Softmax())
@@ -90,5 +107,5 @@ callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
 model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 # eval model
-print "Test  Accuracy - ", 100 * model.eval(valid_set, metric=Accuracy())
 print "Train Accuracy - ", 100 * model.eval(train_set, metric=Accuracy())
+print "Test  Accuracy - ", 100 * model.eval(valid_set, metric=Accuracy())
