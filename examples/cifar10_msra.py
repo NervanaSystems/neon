@@ -57,10 +57,13 @@ parser.add_argument('--network', default='plain', choices=['plain', 'resnet'],
                     help='type of network to create (plain or resnet)')
 parser.add_argument('--depth', type=int, default=9,
                     help='depth of each stage (network depth will be 6n+2)')
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
 
 # setup data provider
-imgset_options = dict(inner_size=32, scale_range=40, repo_dir=args.data_dir)
+imgset_options = dict(inner_size=32, scale_range=40, repo_dir=args.data_dir,
+                      subset_pct=args.subset_pct)
 train = ImageLoader(set_name='train', shuffle=True, do_transforms=True, **imgset_options)
 test = ImageLoader(set_name='validation', shuffle=False, do_transforms=False, **imgset_options)
 
@@ -97,7 +100,7 @@ opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=Schedule([90, 13
 
 # configure callbacks
 valmetric = Misclassification()
-callbacks = Callbacks(model, train, eval_set=test, metric=valmetric, **args.callback_args)
+callbacks = Callbacks(model, eval_set=test, metric=valmetric, **args.callback_args)
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 
 model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
