@@ -45,7 +45,7 @@ from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine, BranchNode, Multicost, Tree
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
-from neon.transforms import Rectlin, Logistic, Misclassification, Softmax
+from neon.transforms import Rectlin, Logistic, Softmax
 from neon.transforms import CrossEntropyBinary, CrossEntropyMulti
 from neon.util.argparser import NeonArgparser
 
@@ -111,7 +111,7 @@ callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 # run fit
 mlp.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
-# TODO: introduce Multicost metric support.  The line below currently failes
+# TODO: introduce Multicost metric support.  The line below currently fails
 # since the Misclassification metric expects a single Tensor not a list of
 # Tensors
 # print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
