@@ -5,7 +5,9 @@ Deep Learning framework and achieves the [fastest performance](https://github.co
 We have designed it with the following
 functionality in mind:
 
-* Support for commonly used models and examples: convnets, MLPs, RNNs, LSTMs, autoencoders
+* Support for commonly used models and examples: convnets, MLPs, RNNs, LSTMs,
+  autoencoders.  You can find many pre-trained implementations of these in our
+  [model zoo](https://github.com/NervanaSystems/neon/wiki/Model-Zoo)
 * Tight integration with nervanagpu kernels for fp16 and fp32 ([benchmarks](https://github.com/soumith/convnet-benchmarks)) on Maxwell GPUs
 	* 3s/macrobatch (3072 images) on AlexNet on Titan X (Full run on 1 GPU ~ 32 hrs)
 	* Fast image captioning model (~200x faster than CPU based NeuralTalk)
@@ -87,6 +89,7 @@ For other questions and discussions please:
    [neon-users](https://groups.google.com/forum/?hl=en#!forum/neon-users)
    Google group
 
+
 ## Machine learning OPerations (MOP) Layer
 
 The [MOP](http://neon.nervanasys.com/docs/latest/ml_operational_layer.html)
@@ -105,9 +108,8 @@ such as [theano](https://github.com/Theano/Theano),
 [torch](https://github.com/torch/torch7), and
 [caffe](https://github.com/BVLC/caffe) to interface with the Nervana Engine.
 
+
 ## License
 
 We are releasing [neon](https://github.com/NervanaSystems/neon) under an open source
 [Apache 2.0](https://www.apache.org/licenses/LICENSE-2.0) License. We welcome you to [contact us](mailto:info@nervanasys.com) with your use cases.
-
-

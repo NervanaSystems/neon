@@ -25,16 +25,22 @@ ease of use while delivering the highest performance.
 
 Features include:
 
-* Support for commonly used models including convnets, RNNs, LSTMs, and autoencoders
+* Support for commonly used models including convnets, RNNs, LSTMs, and
+  autoencoders.  You can find many pre-trained implementations of these in our
+  `model zoo`_
 * Tight integration with our `state-of-the-art`_ GPU kernel library
 * 3s/macrobatch (3072 images) on AlexNet on Titan X (Full run on 1 GPU ~ 32 hrs)
+* Basic automatic differentiation support
+* Framework for visualization
 * Swappable hardware backends: write code once and deploy on CPUs, GPUs, or Nervana hardware
 
 New features in this release:
 
-* Fast image captioning model (matches CPU based NeuralTalk while ~200x faster)
-* Basic automatic differentiation support
-* A framework for visualization
+* Kepler GPU support
+* New data loader and serialization formats
+* Greatly expanded `model zoo`_ now featuring deep residual nets for image
+  classification, fast-RCNN for object localization, C3D video action
+  recognition.
 * and `many more`_.
 
 We use neon internally at Nervana to solve our `customers' problems`_
@@ -46,6 +52,7 @@ roles. Apply here_!
 .. _nervana: http://nervanasys.com
 .. |neo| replace:: neon
 .. _neo: https://github.com/nervanasystems/neon
+.. _model zoo: https://github.com/NervanaSystems/neon/wiki/Model-Zoo
 .. _state-of-the-art: https://github.com/soumith/convnet-benchmarks
 .. _customers' problems: http://www.nervanasys.com/products
 .. _here: http://www.nervanasys.com/careers

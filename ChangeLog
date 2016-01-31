@@ -11,7 +11,7 @@
 * deep residual nets implementation and example
 * expanded model zoo
 * Ticker dataset and copy, repeat copy tasks
-* autodiff transport support [#173]
+* autodiff transpose support [#173]
 * numerous bug fixes and documentation updates.
 
 ## v1.1.5 (2016-01-13):
