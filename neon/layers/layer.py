@@ -335,6 +335,8 @@ class Pooling(Layer):
         elif isinstance(fshape, tuple):
             fkeys = ('R', 'S') if len(fshape) == 2 else ('T', 'R', 'S')
             fshape = {k: x for k, x in zip(fkeys, fshape)}
+        elif fshape == 'all':
+            fshape = dict(R=None, S=None)
         if isinstance(strides, int):
             strides = {'str_h': strides, 'str_w': strides}
         if isinstance(padding, int):
@@ -357,6 +359,9 @@ class Pooling(Layer):
             shapedict = {k: x for k, x in zip(ikeys, self.in_shape)}
             shapedict['N'] = self.be.bsz
             self.poolparams.update(shapedict)
+            if self.poolparams['R'] is None:
+                self.poolparams['R'] = shapedict['H']
+                self.poolparams['S'] = shapedict['W']
             self.nglayer = self.be.pool_layer(self.be.default_dtype, **self.poolparams)
             (K, M, P, Q, N) = self.nglayer.dimO
             self.out_shape = (K, M, P, Q) if len(self.in_shape) == 4 else (K, P, Q)
