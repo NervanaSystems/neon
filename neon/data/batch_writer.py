@@ -304,6 +304,45 @@ class BatchWriterI1K(BatchWriter):
                     f.write('{},{}\n'.format(*tup))
 
 
+class BatchWriterCSV(BatchWriter):
+
+    def post_init(self):
+        self.imgs, self.labels = dict(), dict()
+        # check that the needed csv files exist
+        for setn in ('train', 'val'):
+            infile = os.path.join(self.image_dir, setn + '_file.csv.gz')
+            if not os.path.exists(infile):
+                raise IOError(infile + " not found.  This needs to be created prior to running"
+                              "BatchWriter with CSV option")
+            self.imgs[setn], self.labels[setn] = self.parse_file_list(infile)
+
+        self.validation_pct = None
+
+        self.train_nrec = len(self.imgs['train'])
+        self.val_nrec = len(self.imgs['val'])
+
+        self.train_start = 0
+        self.val_start = -(-self.train_nrec // self.macro_size)
+        self.pixel_mean = [104.41227722, 119.21331787, 126.80609131]
+
+    def parse_file_list(self, infile):
+        lines = np.loadtxt(infile, delimiter=',', dtype={'names': ('fname', 'l_id'),
+                                                         'formats': (object, 'i4')})
+        imfiles = [l[0] if l[0][0] == '/' else os.path.join(self.image_dir, l[0]) for l in lines]
+        labels = {'l_id': [l[1] for l in lines]}
+        self.nclass = {'l_id': (max(labels['l_id']) + 1)}
+        return imfiles, labels
+
+    def run(self):
+        if not os.path.exists(self.out_dir):
+            os.makedirs(self.out_dir)
+        print("Writing train macrobatches")
+        self.write_batches(self.train_start, self.labels['train'], self.imgs['train'])
+        print("Writing validation macrobatches")
+        self.write_batches(self.val_start, self.labels['val'], self.imgs['val'])
+        self.save_meta()
+
+
 class BatchWriterCIFAR10(BatchWriterI1K):
 
     def post_init(self):
@@ -349,8 +388,8 @@ class BatchWriterCIFAR10(BatchWriterI1K):
 if __name__ == "__main__":
     from neon.util.argparser import NeonArgparser
     parser = NeonArgparser(__doc__)
-    parser.add_argument('--set_type', help='(i1k|cifar10|directory)', required=True,
-                        choices=['i1k', 'cifar10', 'directory'])
+    parser.add_argument('--set_type', help='(i1k|cifar10|directory|csv)', required=True,
+                        choices=['i1k', 'cifar10', 'directory', 'csv'])
     parser.add_argument('--image_dir', help='Directory to find images', default=None)
     parser.add_argument('--target_size', type=int, default=0,
                         help='Size in pixels to scale shortest side DOWN to (0 means no scaling)')
@@ -370,6 +409,9 @@ if __name__ == "__main__":
         bw = BatchWriterCIFAR10(out_dir=args.data_dir, image_dir=args.image_dir,
                                 target_size=args.target_size, macro_size=args.macro_size,
                                 file_pattern="*.png")
+    elif args.set_type == 'csv':
+        bw = BatchWriterCSV(out_dir=args.data_dir, image_dir=args.image_dir,
+                            target_size=args.target_size, macro_size=args.macro_size)
     else:
         bw = BatchWriter(out_dir=args.data_dir, image_dir=args.image_dir,
                          target_size=args.target_size, macro_size=args.macro_size,

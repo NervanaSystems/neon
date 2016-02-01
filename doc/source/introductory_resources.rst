@@ -275,7 +275,7 @@ files which we refer to as "macrobatches".  Macrobatches are simply archive file
 together many data files (jpegs) to take advantage of disk locality.  The container for these
 macrobatches is designed to be compatible with the `GNU tool cpio
 <http://www.gnu.org/software/cpio/manual/cpio.html>`_.  The ``neon.util.batch_writer.py``
-illustrates how to generate macrobatch datasets from three types of raw image sources:
+illustrates how to generate macrobatch datasets from four types of raw image sources:
 
 1.  General Directory Structure
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -381,6 +381,34 @@ feature map size and pad the border with the means of that image along each chan
 Because CIFAR images are so small, we have found that JPEG encoding of the images can negatively
 impact the accuracy of classification algorithms, so in this case we use lossless PNG encoding as
 the format to dump into the macrobatches.
+
+4.  CSV Manifest file
+~~~~~~~~~~~~~~~~~~~~~
+
+This option allows the user to provide train and validation `csv.gz` files, each containing files and
+label indexes.  The two required files are `train_file.csv.gz` and `val_file.csv.gz`.  They should
+each be formatted to contain one record per line, the filename, then the label index as below:
+
+::
+
+    <some_path1>/<img_1>.<ext>,<label_idx1>
+    <some_path2>/<img_2>.<ext>,<label_idx2>
+    ...
+    <some_pathN>/<img_N>.<ext>,<label_idxN>
+
+Note that the train file is not shuffled as batches are created, so the user should take care to
+shuffle the lines when creating `train_file.csv.gz`.
+
+If `<some_path1>` is not specified as a fully qualified path (i.e. starts with '/'), then the path
+will be assumed to be relative to the location of the csv file.
+
+The batch writer can then be invoked by calling:
+
+.. code-block:: bash
+
+    python neon/data/batch_writer.py  --data_dir /usr/local/data/macrobatch_out \
+                                      --image_dir /location/of/csv_files \
+                                      --set_type csv
 
 Metafile
 ~~~~~~~~
