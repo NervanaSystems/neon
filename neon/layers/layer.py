@@ -141,7 +141,7 @@ class Layer(NervanaObject):
             self.owns_delta = True
 
         if self.owns_delta and self.prev_layer:
-            if type(self.prev_layer) is BranchNode:
+            if type(self.prev_layer) in (BranchNode, ColorNoise):
                 self.deltas = self.prev_layer.deltas
             else:
                 self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0],
@@ -887,6 +887,87 @@ class DataTransform(Layer):
     def fprop(self, inputs, inference=False):
         self.outputs = self.inputs = inputs
         self.outputs[:] = self.transform(self.inputs)
+        return self.outputs
+
+    def bprop(self, *args):
+        return None
+
+
+class ColorNoise(Layer):
+
+    """
+    Implements colorspace noise perturbation as described in:
+    Krizhevsky et. al., "ImageNet Classification with Deep Convolutional Neural Networks"
+
+    The colorpca and colorstd values are relatively robust across different imagesets.
+    We use values provided by Krizhevsky in cuda-convnet2, but given a set of images in the
+    numpy ndarray "imgdata" (N x H x W x C), where N is the number images, H and W are the image
+    dimensions, and C is the number of channels (3 in this case), the required values can be
+    computed using:
+
+    >> imgdata = imgdata.reshape(N*H*W, C).T
+    >> colorstd, colorpca = np.linalg.eig(np.cov(imgdata))
+    >> colorstd = np.sqrt(colorstd)
+
+    where imgdata is a 3 x (HWN) matrix, such that the first, second, third row are all of the
+    blue, green, and red pixel values in your dataset, respectively.
+
+    Arguments:
+        colorpca (list, optional): 9 element list containing the eigenvector components of
+                                   the BGR pixel covariance matrix.
+        colorstd (list, optional): 3 element list containing the sqrt of eigenvalues of the
+                                   BGR pixel covariance matrix.
+        noise_coeff (float, optional): standard deviation of gaussian noise used to
+                                       perturb the color channels.  Defaults to 0.1
+        name (str, optional): Layer name. Defaults to "ColorNoiseLayer"
+    """
+
+    def __init__(self, colorpca=None, colorstd=None, noise_coeff=0.1, name="ColorNoiseLayer"):
+        super(ColorNoise, self).__init__(name)
+        self.x = None  # used to point to reshaped view of inputs
+        self.noise_buf = None
+        # Assume that colorpca is BGR component column eigvectors
+        if colorpca is None:
+            colorpca = [[ 0.39731118,  0.70119634, -0.59200296],
+                        [-0.81698062, -0.02354167, -0.5761844 ],
+                        [ 0.41795513, -0.71257945, -0.56351045]]
+        colorpca = np.array(colorpca).reshape(3, 3).astype(np.float32)
+
+        if colorstd is None:
+            colorstd = [19.72083305, 37.09388853, 121.78006099]
+        colorstd = np.array(colorstd).reshape(1, 3).astype(np.float32)
+
+        self.colorpca = colorpca * colorstd * noise_coeff
+        self.noise_coeff = noise_coeff
+        self.noise_norm = 1.0 / (1.0 + self.noise_coeff)
+
+    def __str__(self):
+        return "ColorNoise Layer '%s': %d feature maps" % (self.name, self.nfm)
+
+    def configure(self, in_obj):
+        super(ColorNoise, self).configure(in_obj)
+        self.out_shape = self.in_shape
+        try:
+            self.nfm, self.H, self.W = self.in_shape
+            self.HW = self.H * self.W
+        except:
+            raise AttributeError('ColorNoise can only be used with layer providing CHW')
+        return self
+
+    def allocate(self, shared_outputs=None):
+        super(ColorNoise, self).allocate(shared_outputs)
+        self.noise_buf = self.be.empty((self.nfm, self.be.bsz))  # C x N
+        # This is an expanding matrix for broadcast along the HW dimensions
+        self.bmat = self.be.array(np.tile(self.colorpca, (1, self.HW)).reshape(-1, self.nfm))
+
+    def fprop(self, inputs, inference=False):
+        self.outputs = inputs
+        if inference:
+            return self.outputs
+        # Populate with noise having std 1 (noise_coeff is absorbed into self.bmat)
+        self.be.fill_normal(self.noise_buf)
+        self.be.compound_dot(A=self.bmat, B=self.noise_buf, C=self.outputs,
+                             alpha=self.noise_norm, beta=self.noise_norm)
         return self.outputs
 
     def bprop(self, *args):

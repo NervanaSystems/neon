@@ -548,6 +548,17 @@ class NervanaCPU(Backend):
         """
         self.rng_set_state(self.init_rng_state)
 
+    def fill_normal(self, ary, mean=0, stdv=1):
+        """
+        Fill ary with normally distributed random numbers
+
+        Arguments:
+            ary (Tensor): Tensor to fill with random values
+            mean (float): Mean value. Default 0
+            stdv (float): standard deviation value.  Default 1
+        """
+        ary[:] = np.random.standard_normal(ary.shape) * stdv + mean
+
     def execute(self, optree):
         """
         Arguments:

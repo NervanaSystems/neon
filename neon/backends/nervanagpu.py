@@ -21,6 +21,8 @@ import numpy as np
 import pycuda.driver as drv
 import logging
 from pycuda.tools import context_dependent_memoize
+from pycuda.curandom import MRG32k3aRandomNumberGenerator as rng_mrg
+from pycuda.gpuarray import GPUArray as p_gpuarray
 from struct import unpack_from
 from pytools import memoize_method
 from functools import wraps
@@ -659,7 +661,7 @@ class NervanaGPU(Backend):
                  bench=False,
                  hist_bins=64,
                  hist_offset=-48,
-                 compat_mode=None, 
+                 compat_mode=None,
                  deterministic_update=True):
         if default_dtype not in [np.float16, np.float32]:
             raise ValueError('Default data type for nervanagpu '
@@ -718,7 +720,6 @@ class NervanaGPU(Backend):
         self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
         drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
 
-
         # Fall back to CUDA C kernels on older (pre-Maxwell) GPU generations
         self.compute_capability = drv.Device(self.device_id).compute_capability()
         if self.compute_capability[0] < 5:
@@ -762,6 +763,8 @@ class NervanaGPU(Backend):
         # generate on host rng
         self.rng = np.random.RandomState(seed)
 
+        # this RNG is for handling normally distributed numbers on device
+        self.pcg = rng_mrg()
         # save the initial state of host rng
         self.init_rng_state = self.rng.get_state()
 
@@ -840,10 +843,10 @@ class NervanaGPU(Backend):
 
     def _set_rand_state_dev(self, state=None):
         """
-        Set on device RNG states to values given by "state" input.  
+        Set on device RNG states to values given by "state" input.
 
         Arguments:
-            state (np.array or None): an array of uint32 values used to 
+            state (np.array or None): an array of uint32 values used to
                                       set the state of the on device LFSRs.
                                       if set to None, the state will be created
                                       randomly
@@ -859,6 +862,14 @@ class NervanaGPU(Backend):
         drv.memcpy_htod(rand_state, state)
         self.context_rand_state_alive[ctx] = True
         return
+
+    def fill_normal(self, ary, mean=0, stdv=1):
+        """
+        Fills ary with gaussian noise with given mean and std dev.
+        """
+        self.pcg.fill_normal(p_gpuarray(ary.shape, ary.dtype, gpudata=ary.gpudata))
+        if not all([mean==0, stdv==1]):
+            ary[:] = ary * stdv + mean
 
     def _get_rand_state_dev(self):
         """
