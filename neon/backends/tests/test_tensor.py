@@ -19,9 +19,11 @@ Test of basic math operations on the Tensors and compare with numpy results
 The Tensor types includes GPU and CPU Tensors
 """
 
-from neon.backends import gen_backend
 import numpy as np
 import itertools as itt
+from neon.backends.nervanagpu import NervanaGPU
+from neon.backends.nervanacpu import NervanaCPU
+from neon.backends.tests.utils import assert_tensors_allclose
 
 
 def init_helper(lib, inA, inB, dtype):
@@ -63,12 +65,12 @@ def compare_helper(op, inA, inB, dtype):
     numpy_result = numpy_result.astype(dtype)
 
     if dtype in (np.float32, np.float16):
-        gpu = gen_backend(backend='gpu', datatype=dtype)
+        gpu = NervanaGPU(default_dtype=dtype)
         nervanaGPU_result = math_helper(gpu, op, inA, inB, dtype=dtype)
         nervanaGPU_result = nervanaGPU_result.get()
         np.allclose(numpy_result, nervanaGPU_result, rtol=0, atol=1e-5)
 
-    cpu = gen_backend(backend='cpu', datatype=dtype)
+    cpu = NervanaCPU(default_dtype=dtype)
     nervanaCPU_result = math_helper(cpu, op, inA, inB, dtype=dtype)
     nervanaCPU_result = nervanaCPU_result.get()
     np.allclose(numpy_result, nervanaCPU_result, rtol=0, atol=1e-5)
@@ -113,3 +115,30 @@ def test_math(fargs_tests):
     compare_helper('>=', randA, randB, dtype)
     compare_helper('<', randA, randB, dtype)
     compare_helper('<=', randA, randB, dtype)
+
+
+def test_slicing(fargs_tests):
+    dims, dtype = fargs_tests
+
+    gpu = NervanaGPU(default_dtype=dtype)
+    cpu = NervanaCPU(default_dtype=dtype)
+
+    array_np = np.random.uniform(-1, 1, dims).astype(dtype)
+    array_ng = gpu.array(array_np, dtype=dtype)
+    array_nc = cpu.array(array_np, dtype=dtype)
+
+    assert_tensors_allclose(array_ng[0], array_nc[0], rtol=0, atol=1e-3)
+    assert_tensors_allclose(array_ng[-1], array_nc[-1], rtol=0, atol=1e-3)
+    assert_tensors_allclose(array_ng[0, :], array_nc[0, :], rtol=0, atol=1e-3)
+    assert_tensors_allclose(array_ng[0:], array_nc[0:], rtol=0, atol=1e-3)
+    assert_tensors_allclose(array_ng[:-1], array_nc[:-1], rtol=0, atol=1e-3)
+    assert_tensors_allclose(array_ng[:, 0], array_nc[:, 0], rtol=0, atol=1e-3)
+    assert_tensors_allclose(array_ng[:, 0:1], array_nc[:, 0:1], rtol=0, atol=1e-3)
+    assert_tensors_allclose(array_ng[-1, 0:], array_nc[-1:, 0:], rtol=0, atol=1e-3)
+
+    array_ng[0] = 0
+    array_nc[0] = 0
+
+    assert_tensors_allclose(array_ng, array_nc, rtol=0, atol=1e-3)
+
+    del(gpu)

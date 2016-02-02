@@ -92,7 +92,7 @@ h5f = h5py.File(fname_h5, 'r')
 reviews, h5train, h5valid = h5f['reviews'], h5f['train'], h5f['valid']
 ntrain, nvalid, nclass = reviews.attrs[
     'ntrain'], reviews.attrs['nvalid'], reviews.attrs['nclass']
-    
+
 
 # make train dataset
 Xy = h5train[:ntrain]

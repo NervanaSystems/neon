@@ -17,8 +17,8 @@ from neon.layers.layer import ParameterLayer, Layer
 
 def get_steps(x, shape):
     """
-    Convert a (vocab_size, steps * batch_size) array
-    into a [(vocab_size, batch_size)] * steps list of views
+    Convert a (feature_size, steps * batch_size) array
+    into a [(feature_size, batch_size)] * steps list of views
     """
     steps = shape[1]
     if x is None:
@@ -42,6 +42,8 @@ class Recurrent(ParameterLayer):
                                             parameters.  If absent, will default to using same
                                             initializer provided to init.
         activation (Transform): Activation function for the input modulation
+        reset_cells (bool): default to be False to make the layer stateful,
+                            set to True to be stateless
 
     Attributes:
         W_input (Tensor): weights from inputs to output units
@@ -94,7 +96,8 @@ class Recurrent(ParameterLayer):
     def init_buffers(self, inputs):
         """
         Initialize buffers for recurrent internal units and outputs.
-        Buffers are initialized as 2D tensors with second dimension being steps * batch_size
+        Buffers are initialized as 2D tensors with second dimension being steps * batch_size.
+        The second dimension is ordered as [s1b1, s1b2, ..., s1bn, s2b1, s2b2, ..., s2bn, ...]
         A list of views are created on the buffer for easy manipulation of data
         related to a certain time step
 
@@ -161,11 +164,11 @@ class Recurrent(ParameterLayer):
         Arguments:
             inputs (Tensor): input to the model for each time step of
                              unrolling for each input in minibatch
-                             shape: (vocab_size * steps, batch_size)
+                             shape: (feature_size, sequence_length * batch_size)
                              where:
 
-                             * vocab_size: input size
-                             * steps: degree of model unrolling
+                             * feature_size: input size
+                             * sequence_length: degree of model unrolling
                              * batch_size: number of inputs in each mini-batch
 
             inference (bool, optional): Set to true if you are running
@@ -176,7 +179,7 @@ class Recurrent(ParameterLayer):
         Returns:
             Tensor: layer output activations for each time step of
                 unrolling and for each input in the minibatch
-                shape: (output_size * steps, batch_size)
+                shape: (output_size, sequence_length * batch_size)
         """
         self.init_buffers(inputs)
 
@@ -200,12 +203,12 @@ class Recurrent(ParameterLayer):
         Arguments:
             deltas (Tensor): tensors containing the errors for
                 each step of model unrolling.
-                shape: (output_size, * steps, batch_size)
+                shape: (output_size, sequence_length * batch_size)
 
         Returns:
             Tensor: back propagated errors for each step of time unrolling
                 for each mini-batch element
-                shape: (input_size * steps, batch_size)
+                shape: (input_size, sequence_length * batch_size)
         """
         self.dW[:] = 0
 
@@ -250,6 +253,8 @@ class LSTM(Recurrent):
                                             initializer provided to init.
         activation (Transform): Activation function for the input modulation
         gate_activation (Transform): Activation function for the gates
+        reset_cells (bool): default to be False to make the layer stateful,
+                            set to True to be stateless
 
     Attributes:
         x (Tensor): input data as 2D tensor. The dimension is
@@ -316,7 +321,8 @@ class LSTM(Recurrent):
 
         Arguments:
             inputs (Tensor): input data as 2D tensors, then being converted into a
-                             list of 2D slices
+                             list of 2D slices. The dimension is
+                             (input_size, sequence_length * batch_size)
 
         Returns:
             Tensor: LSTM output for each model time step
@@ -350,19 +356,18 @@ class LSTM(Recurrent):
         calculate the update on model parmas
 
         Arguments:
-            deltas (list[Tensor]): error tensors for each time step
-                of unrolling
-            do_acts (bool, optional): Carry out activations.  Defaults to True
+            deltas (Tensor): tensors containing the errors for
+                             each step of model unrolling.
+                shape: (output_size, sequence_length * batch_size)
 
         Attributes:
             dW_input (Tensor): input weight gradients
             dW_recur (Tensor): revursive weight gradients
             db (Tensor): bias gradients
 
-
         Returns:
             Tensor: Backpropagated errors for each time step
-                of model unrolling
+                    of model unrolling
         """
         self.c_delta_buffer[:] = 0
         self.dW[:] = 0
@@ -439,9 +444,11 @@ class GRU(Recurrent):
                                             initializer provided to init.
         activation (Transform): Activiation function for the input modulation
         gate_activation (Transform): Activation function for the gates
+        reset_cells (bool): default to be False to make the layer stateful,
+                            set to True to be stateless
 
     Attributes:
-        x (Tensor): Input data tensor (seq len, inp size, batch size)
+        x (Tensor): Input data tensor (input_size, sequence_length * batch_size)
         W_input (Tensor): Weights on the input units
             (out size * 3, input size)
         W_recur (Tensor): Weights on the recursive inputs
@@ -539,7 +546,8 @@ class GRU(Recurrent):
             inputs with an element for each time step of model unrolling.
 
         Arguments:
-            inputs (Tensor): input data as 3D tensors, then converted into a list of 2D tensors
+            inputs (Tensor): input data as 3D tensors, then converted into a list of 2D tensors.
+                              The dimension is (input_size, sequence_length * batch_size)
 
         Returns:
             Tensor: GRU output for each model time step
@@ -655,7 +663,7 @@ class RecurrentOutput(Layer):
             self.name, self.nin, self.nsteps, self.nin)
 
     def configure(self, in_obj):
-        super(RecurrentOutput, self).configure(in_obj)  # gives self.in_shape
+        super(RecurrentOutput, self).configure(in_obj)
         (self.nin, self.nsteps) = self.in_shape
         self.out_shape = (self.nin, 1)
         return self
@@ -691,7 +699,7 @@ class RecurrentSum(RecurrentOutput):
     A layer that sums over the recurrent layer outputs over time
     """
     def configure(self, in_obj):
-        super(RecurrentSum, self).configure(in_obj)  # gives self.in_shape
+        super(RecurrentSum, self).configure(in_obj)
         self.sumscale = 1.
         return self
 
@@ -714,7 +722,7 @@ class RecurrentMean(RecurrentSum):
     A layer that gets the averaged recurrent layer outputs over time
     """
     def configure(self, in_obj):
-        super(RecurrentMean, self).configure(in_obj)  # gives self.in_shape
+        super(RecurrentMean, self).configure(in_obj)
         self.sumscale = 1. / self.nsteps
         return self
 
@@ -747,7 +755,14 @@ class BiRNN(ParameterLayer):
     Arguments:
         output_size (int): Number of hidden/output units
         init (Initializer): Function for initializing the model parameters
+        init_inner (Initializer, optional): Function for initializing the model's recurrent
+                                            parameters.  If absent, will default to using same
+                                            initializer provided to init.
         activation (Transform): Activation function for the input modulation
+        reset_cells (bool): default to be False to make the layer stateful,
+                            set to True to be stateless.
+        split_inputs (bool): to expect the input coming from the same source of separate
+                             sources
 
     Attributes:
         W_input (Tensor): weights from inputs to output units
@@ -757,19 +772,21 @@ class BiRNN(ParameterLayer):
         b (Tensor): Biases on output units (output_size, 1)
     """
 
-    def __init__(self, output_size, init, activation, reset_cells=False,
-                 split_inputs=False, name=None):
+    def __init__(self, output_size, init, init_inner=None, activation=None,
+                 reset_cells=False, split_inputs=False, name=None):
         super(BiRNN, self).__init__(init, name)
         self.in_deltas_f = None
         self.in_deltas_b = None
         self.nout = output_size
         self.h_nout = output_size
+        self.output_size = output_size
         self.activation = activation
         self.h_buffer = None
         self.W_input = None
         self.ngates = 1
         self.split_inputs = split_inputs
         self.reset_cells = reset_cells
+        self.init_inner = init_inner
 
     def __str__(self):
         if self.split_inputs:
@@ -872,10 +889,13 @@ class BiRNN(ParameterLayer):
         (nout, nin) = (self.o_shape[0], self.i_shape[0])
         self.g_nout = self.ngates * nout
         Wshape = (2*(nin+nout+1), self.g_nout)
+        doFill = False
+
         # Weights: input, recurrent, bias
         if self.W is None:
             self.W = self.be.empty(Wshape)
             self.dW = self.be.zeros_like(self.W)
+            doFill = True
         else:
             # Deserialized weights and empty grad
             assert self.W.shape == Wshape
@@ -901,14 +921,20 @@ class BiRNN(ParameterLayer):
 
         self.db_f = self.dW[-2:-1].reshape(self.b_f.shape)
         self.db_b = self.dW[-1:].reshape(self.b_b.shape)
-        weights = (self.W_input_f, self.W_input_b,
-                   self.W_recur_f, self.W_recur_b)
 
-        # initialize the baises to zero
-        self.b_f[:] = 0
-        self.b_b[:] = 0
-        for w in weights:
-            self.init.fill(w)
+        if doFill:
+            gatelist = [g * nout for g in range(0, self.ngates + 1)]
+            for wtnm in ('W_input_f', 'W_input_b', 'W_recur_f', 'W_recur_b'):
+                wtmat = getattr(self, wtnm)
+                if 'W_recur' in wtnm and self.init_inner is not None:
+                    initfunc = self.init_inner
+                else:
+                    initfunc = self.init
+
+                for gb, ge in zip(gatelist[:-1], gatelist[1:]):
+                    initfunc.fill(wtmat[gb:ge])
+            self.b_f.fill(0.)
+            self.b_b.fill(0.)
 
     def fprop(self, inputs, inference=False):
         """
@@ -917,11 +943,11 @@ class BiRNN(ParameterLayer):
         Arguments:
             inputs (Tensor): input to the model for each time step of
                              unrolling for each input in minibatch
-                             shape: (vocab_size * steps, batch_size)
+                             shape: (feature_size, sequence_length * batch_size)
                              where:
 
-                             * vocab_size: input size
-                             * steps: degree of model unrolling
+                             * feature_size: input size
+                             * sequence_length: degree of model unrolling
                              * batch_size: number of inputs in each mini-batch
 
             inference (bool, optional): Set to true if you are running
@@ -932,7 +958,7 @@ class BiRNN(ParameterLayer):
         Returns:
             Tensor: layer output activations for each time step of
                 unrolling and for each input in the minibatch
-                shape: (output_size * steps, batch_size)
+                shape: (output_size, sequence_length * batch_size)
         """
         self.init_buffers(inputs)
 
@@ -957,17 +983,17 @@ class BiRNN(ParameterLayer):
 
     def bprop(self, error, alpha=1.0, beta=1.0):
         """
-        Backward propagation of errors through recurrent layer.
+        Backward propagation of errors through bi-directional recurrent layer.
 
         Arguments:
             deltas (Tensor): tensors containing the errors for
                 each step of model unrolling.
-                shape: (output_size, * steps, batch_size)
+                shape: (output_size, sequence_length * batch_size)
 
         Returns:
             Tensor: back propagated errors for each step of time unrolling
                 for each mini-batch element
-                shape: (input_size * steps, batch_size)
+                shape: (input_size, sequence_length * batch_size)
         """
         self.dW[:] = 0
 
@@ -1029,8 +1055,15 @@ class BiLSTM(BiRNN):
     Arguments:
         output_size (int): Number of hidden/output units
         init (Initializer): Function for initializing the model parameters
+        init_inner (Initializer, optional): Function for initializing the model's recurrent
+                                            parameters.  If absent, will default to using same
+                                            initializer provided to init.
         activation (Transform): Activation function for the input modulation
         gate_activation (Transform): Activation function for the gates
+        reset_cells (bool): default to be False to make the layer stateful,
+                            set to True to be stateless.
+        split_inputs (bool): to expect the input coming from the same source of separate
+                             sources
 
     Attributes:
         x (Tensor): input data as 2D tensor. The dimension is
@@ -1042,10 +1075,10 @@ class BiLSTM(BiRNN):
         b (Tensor): Biases (out size * 4 , 1)
     """
 
-    def __init__(self, output_size, init, activation, gate_activation,
-                 reset_cells=False, split_inputs=False, name=None):
+    def __init__(self, output_size, init, init_inner=None, activation=None,
+                 gate_activation=None, reset_cells=False, split_inputs=False, name=None):
         super(BiLSTM, self).__init__(
-            output_size, init, activation, split_inputs, name)
+            output_size, init, init_inner, activation, split_inputs, name)
         self.gate_activation = gate_activation
         self.ngates = 4  # Input, Output, Forget, Cell
         self.reset_cells = reset_cells
@@ -1111,19 +1144,6 @@ class BiLSTM(BiRNN):
         self.o_delta = [gate[o1:o2] for gate in self.ifog_delta]
         self.g_delta = [gate[g1:g2] for gate in self.ifog_delta]
         self.bufs_to_reset.append(self.c_buffer)
-
-    def init_params(self, shape):
-        super(BiLSTM, self).init_params(shape)
-        (i1, i2) = (0, self.nout)
-        (f1, f2) = (self.nout, self.nout * 2)
-        (o1, o2) = (self.nout * 2, self.nout * 3)
-        (g1, g2) = (self.nout * 3, self.nout * 4)
-
-        ranges = [(i1, i2), (f1, f2), (o1, o2), (g1, g2)]
-        weights = [
-            self.W_input_f, self.W_input_b, self.W_recur_f, self.W_recur_b]
-        for ((r1, r2), weight) in zip(ranges, weights):
-            self.init.fill(weight[r1:r2])
 
     def fprop(self, inputs, inference=False):
         """
@@ -1297,18 +1317,20 @@ class DeepBiRNN(list):
         nout (int, tuple): Desired size or shape of layer output
         init (Initializer): Initializer object to use for initializing weights
         activation (Transform): Activation function for the input modulation
+        reset_cells (bool): default to be False to make the layer stateful,
+                            set to True to be stateless.
         depth(int, optional): Number of layers of BiRNN
 
     """
 
-    def __init__(self, nout, init, activation, reset_cells=False, depth=1):
+    def __init__(self, nout, init, init_inner=None, activation=None, reset_cells=False, depth=1):
         list.__init__(self)
         if depth <= 0:
             raise ValueError("Depth is <= 0.")
 
-        self.append(BiRNN(nout, init, activation, reset_cells, split_inputs=False))
+        self.append(BiRNN(nout, init, init_inner, activation, reset_cells, split_inputs=False))
         for i in range(depth-1):
-            self.append(BiRNN(nout, init, activation, reset_cells, split_inputs=True))
+            self.append(BiRNN(nout, init, init_inner, activation, reset_cells, split_inputs=True))
 
 
 class DeepBiLSTM(list):
@@ -1320,16 +1342,21 @@ class DeepBiLSTM(list):
         nout (int, tuple): Desired size or shape of layer output
         init (Initializer): Initializer object to use for initializing weights
         activation (Transform): Activation function for the input modulation
+        reset_cells (bool): default to be False to make the layer stateful,
+                            set to True to be stateless.
         depth(int, optional): Number of layers of BiRNN
 
     """
 
-    def __init__(self, nout, init, activation, gate_activation, reset_cells=False, depth=1):
+    def __init__(self, nout, init, init_inner=None, activation=None, gate_activation=None,
+                 reset_cells=False, depth=1):
         list.__init__(self)
         if depth <= 0:
             raise ValueError("Depth is <= 0.")
         self.append(
-            BiLSTM(nout, init, activation, gate_activation, reset_cells, split_inputs=False))
+            BiLSTM(nout, init, init_inner, activation, gate_activation,
+                   reset_cells, split_inputs=False))
         for i in range(depth-1):
             self.append(
-                BiLSTM(nout, init, activation, gate_activation, reset_cells, split_inputs=True))
+                BiLSTM(nout, init, init_inner, activation, gate_activation,
+                       reset_cells, split_inputs=True))

@@ -16,7 +16,8 @@
 import numpy as np
 import os
 from neon.backends import gen_backend
-from neon.data import ArrayIterator, load_mnist, load_text, Text
+from neon.data import ArrayIterator, load_mnist, Text
+from neon.data.dataloaders import load_ptb_test
 from neon.initializers import Gaussian, Constant
 from neon.layers import GeneralizedCost, Affine
 from neon.layers import Dropout, Conv, Pooling, Sequential, MergeMultistream, Recurrent
@@ -27,8 +28,7 @@ from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 
 def test_model_get_outputs_rnn(backend_default, data):
 
-    data_path = load_text('ptb-valid', path=data)
-
+    data_path = load_ptb_test(path=data)
     data_set = Text(time_steps=50, path=data_path)
 
     # weight initialization
@@ -45,6 +45,15 @@ def test_model_get_outputs_rnn(backend_default, data):
 
     assert output.shape == (
         data_set.ndata, data_set.seq_length, data_set.nclass)
+
+    # since the init are all constant and model is un-trained:
+    # along the feature dim, the values should be all the same
+    assert np.allclose(output[0, 0], output[0, 0, 0], rtol=0, atol=1e-5)
+    assert np.allclose(output[0, 1], output[0, 1, 0], rtol=0, atol=1e-5)
+
+    # along the time dim, the values should be increasing:
+    assert np.alltrue(output[0, 2] > output[0, 1])
+    assert np.alltrue(output[0, 1] > output[0, 0])
 
 
 def test_model_get_outputs(backend_default, data):

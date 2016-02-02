@@ -124,7 +124,7 @@ def get_paddedXY(X, y, vocab_size=20000, sentence_length=100, oov=2,
     return X, y
 
 
-def get_google_word2vec_W(fname, vocab, vocab_size=50000, index_from=3, verbose=1):
+def get_google_word2vec_W(fname, vocab, vocab_size=50000, index_from=3):
     f = open(fname, 'rb')
     header = f.readline()
     vocab1_size, embedding_dim = map(int, header.split())
@@ -150,9 +150,7 @@ def get_google_word2vec_W(fname, vocab, vocab_size=50000, index_from=3, verbose=
                 found_words[wrd_id] = 1
         else:
             f.read(binary_len)
-    if verbose:
-        print "# words with word2vec embeddings - {0}".format(len(found_words))
-        print "Initializing with random vectors for remaining words"
+
     cnt = 0
     for wrd_id in range(vocab_size):
         if wrd_id not in found_words:
