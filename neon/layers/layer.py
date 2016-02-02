@@ -928,9 +928,9 @@ class ColorNoise(Layer):
         self.noise_buf = None
         # Assume that colorpca is BGR component column eigvectors
         if colorpca is None:
-            colorpca = [[ 0.39731118,  0.70119634, -0.59200296],
-                        [-0.81698062, -0.02354167, -0.5761844 ],
-                        [ 0.41795513, -0.71257945, -0.56351045]]
+            colorpca = [[0.39731118,  0.70119634, -0.59200296],
+                        [-0.81698062, -0.02354167, -0.5761844],
+                        [0.41795513, -0.71257945, -0.56351045]]
         colorpca = np.array(colorpca).reshape(3, 3).astype(np.float32)
 
         if colorstd is None:

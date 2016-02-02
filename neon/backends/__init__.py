@@ -110,6 +110,9 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                              "available exclusively through the Nervana cloud."
                              " Please contact info@nervanasys.com for details.")
                 raise
+    elif backend == 'argon':
+        from argon.neon_backend.ar_backend import ArBackend
+        be = ArBackend(rng_seed=rng_seed, default_dtype=datatype)
     else:
         raise ValueError("backend must be one of ('cpu', 'gpu', 'mgpu')")
 

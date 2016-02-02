@@ -125,7 +125,7 @@ class NeonArgparser(configargparse.ArgumentParser):
                             help='number of checkpoint files to retain')
 
         be_grp = self.add_argument_group('backend')
-        be_grp.add_argument('-b', '--backend', choices=['cpu', 'gpu', 'mgpu'],
+        be_grp.add_argument('-b', '--backend', choices=['cpu', 'gpu', 'mgpu', 'argon'],
                             default='gpu' if get_compute_capability() >= 3.0
                                     else 'cpu',
                             help='backend type. Multi-GPU support is a premium '
