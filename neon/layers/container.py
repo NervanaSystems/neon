@@ -146,7 +146,7 @@ class Sequential(LayerContainer):
             in_sizes = [np.prod(l.in_shape) for l in self.layers[1:]]
             if in_sizes:
                 self.global_deltas = [self.be.iobuf(
-                    max(in_sizes), parallelism="Data") for _ in range(ndelta_bufs)]
+                    max(in_sizes), parallelism=self.parallelism) for _ in range(ndelta_bufs)]
             else:
                 self.global_deltas = None
         else:
@@ -258,7 +258,8 @@ class ResidualModule(LayerContainer):
         return ss
 
     def allocate(self, shared_outputs=None):
-        self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
+        self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs,
+                                     parallelism=self.parallelism)
         self.layers[0].allocate(self.outputs)
         if self.skip_layer is not None:
             self.skip_layer.allocate(self.outputs)
@@ -269,7 +270,8 @@ class ResidualModule(LayerContainer):
         self.layers[0].layers[0].set_deltas(delta_buffers[0:1])
         if self.skip_layer is not None:
             self.skip_layer.set_deltas(delta_buffers[0:1])
-        self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
+        self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0],
+                                    parallelism=self.parallelism)
         delta_buffers.reverse()
 
     def fprop(self, inputs, inference=False):
@@ -451,7 +453,8 @@ class MergeBroadcast(LayerContainer):
 
     def allocate(self, shared_outputs=None):
         if self.outputs is None:
-            self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
+            self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs,
+                                         parallelism=self.parallelism)
         self.output_views = self.get_partitions(self.outputs, self.slices)
         for l, out_view in zip(self.layers, self.output_views):
             l.allocate(shared_outputs=out_view)
@@ -464,9 +467,11 @@ class MergeBroadcast(LayerContainer):
 
         # Special case if originating from a branch node
         if type(self.prev_layer) is BranchNode:
-            self.deltas = self.be.iobuf(self.in_shape, shared=self.prev_layer.deltas)
+            self.deltas = self.be.iobuf(self.in_shape, shared=self.prev_layer.deltas,
+                                        parallelism=self.parallelism)
         else:
-            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
+            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0],
+                                        parallelism=self.parallelism)
             delta_buffers.reverse()
 
     def _configure_merge(self):
