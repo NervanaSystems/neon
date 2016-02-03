@@ -119,11 +119,12 @@ public:
 
 class FileReader : public Reader {
 public:
-    FileReader(int batchSize, char* repoDir, bool shuffle)
+    FileReader(int* itemCount, int batchSize, char* repoDir, bool shuffle)
     : Reader(), _batchSize(batchSize), _repoDir(repoDir), _shuffle(shuffle),
       _itemIdx(0), _itemCount(0) {
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
+        *itemCount = _itemCount;
     }
 
     virtual ~FileReader() {

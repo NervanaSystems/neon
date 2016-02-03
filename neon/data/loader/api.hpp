@@ -15,12 +15,12 @@
 
 extern "C" {
 
-extern void* start(int batchSize, char* repoDir, bool shuffle,
+extern void* start(int* itemCount, int batchSize, char* repoDir, bool shuffle,
                    int datumSize, int targetSize,
                    MediaParams* mediaParams, DeviceParams* deviceParams) {
     static_assert(sizeof(int) == 4, "int is not 4 bytes");
     try {
-        Loader* loader = new Loader(batchSize, repoDir, shuffle,
+        Loader* loader = new Loader(itemCount, batchSize, repoDir, shuffle,
                                     datumSize, targetSize,
                                     mediaParams, deviceParams);
         int result = loader->start();

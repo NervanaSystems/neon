@@ -18,16 +18,10 @@
 #include <fstream>
 #include <vector>
 
-#include <opencv2/core/core.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
+#include "media.hpp"
 
 using std::ofstream;
 using std::vector;
-using cv::Mat;
-using cv::Rect;
-using cv::Point2i;
-using cv::Size2i;
 
 void resizeInput(vector<char> &jpgdata, int maxDim){
     // Takes the buffer containing encoded jpg, determines if its shortest dimension
@@ -184,126 +178,3 @@ class TextParams : public MediaParams {
 public:
     int                         _dummy;
 };
-
-class Decoder {
-public:
-    virtual ~Decoder() {};
-    virtual void decode(char* item, int itemSize, char* buf) = 0;
-
-    static Decoder* create(MediaParams* params);
-};
-
-class ImageDecoder : public Decoder {
-public:
-    ImageDecoder(ImageParams *params)
-    : _params(params) {
-    }
-
-    virtual ~ImageDecoder() {
-        delete _params;
-    }
-
-    void save_binary(char *filn, char* item, int itemSize, char* buf) {
-        ofstream file(filn, ofstream::out | ofstream::binary);
-        file.write((char*)(&itemSize), sizeof(int));
-        file.write((char*)item, itemSize);
-        printf("wrote %s\n", filn);
-    }
-
-    void decode(char* item, int itemSize, char* buf) {
-        Mat image = Mat(1, itemSize, CV_8UC3, item);
-        Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
-        Rect cropBox;
-        _params->getRandomCrop(decodedImage.size(), &cropBox);
-        auto cropArea = cropBox.area();
-        auto innerSize = _params->getSize();
-
-        Mat croppedImage = decodedImage(cropBox);
-        // This would be more efficient, but we should allocate separate bufs for each thread
-        // Mat resizedImage = Mat(innerSize, CV_8UC3, _scratchbuf);
-        Mat resizedImage;
-        if (innerSize.width == cropBox.width && innerSize.height == cropBox.height) {
-            resizedImage = croppedImage;
-        } else {
-            int interp_method = cropArea > innerSize.area() ? CV_INTER_AREA : CV_INTER_CUBIC;
-            cv::resize(croppedImage, resizedImage, innerSize, 0, 0, interp_method);
-        }
-        Mat flippedImage;
-        Mat *finalImage;
-
-        if (_params->doRandomFlip()) {
-            cv::flip(resizedImage, flippedImage, 1);
-            finalImage = &flippedImage;
-        } else {
-            finalImage = &resizedImage;
-        }
-        Mat newImage;
-        float alpha = _params->getRandomContrast();
-        if (alpha) {
-            finalImage->convertTo(newImage, -1, alpha);
-            finalImage = &newImage;
-        }
-
-        Mat ch_b(innerSize, CV_8U, buf + innerSize.area()*0);
-        Mat ch_g(innerSize, CV_8U, buf + innerSize.area()*1);
-        Mat ch_r(innerSize, CV_8U, buf + innerSize.area()*2);
-
-        Mat channels[3] = {ch_b, ch_g, ch_r};
-        cv::split(*finalImage, channels);
-    }
-
-private:
-    ImageParams*                _params;
-};
-
-class VideoDecoder : public Decoder {
-public:
-    VideoDecoder(VideoParams *params)
-    : _params(params) {
-    }
-
-    void decode(char* item, int itemSize, char* buf) {}
-
-private:
-    VideoParams*                _params;
-};
-
-class AudioDecoder : public Decoder {
-public:
-    AudioDecoder(AudioParams *params)
-    : _params(params) {
-    }
-
-    void decode(char* item, int itemSize, char* buf) {}
-
-private:
-    AudioParams*                _params;
-};
-
-class TextDecoder : public Decoder {
-public:
-    TextDecoder(TextParams *params)
-    : _params(params) {
-    }
-
-    void decode(char* item, int itemSize, char* buf) {}
-
-private:
-    TextParams*                 _params;
-};
-
-Decoder* Decoder::create(MediaParams* params) {
-    switch (params->_mtype) {
-    case IMAGE:
-        return new ImageDecoder(reinterpret_cast<ImageParams*>(params));
-    case VIDEO:
-        return new VideoDecoder(reinterpret_cast<VideoParams*>(params));
-    case AUDIO:
-        return new AudioDecoder(reinterpret_cast<AudioParams*>(params));
-    case TEXT:
-        return new TextDecoder(reinterpret_cast<TextParams*>(params));
-    default:
-        throw std::runtime_error("Unknown media type\n");
-    }
-    return 0;
-}

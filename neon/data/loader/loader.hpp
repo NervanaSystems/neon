@@ -350,7 +350,7 @@ private:
 
 class Loader {
 public:
-    Loader(int batchSize, char* repoDir, bool shuffle,
+    Loader(int* itemCount, int batchSize, char* repoDir, bool shuffle,
            int datumSize, int targetSize,
            MediaParams* mediaParams, DeviceParams* deviceParams)
     : _first(true),
@@ -371,7 +371,7 @@ public:
             //_reader = new MacrobatchReader(filename, macro_start,
             //                              numData, minibatch_size, shuffle);
         } else {
-            _reader = new FileReader(batchSize, repoDir, shuffle);
+            _reader = new FileReader(itemCount, batchSize, repoDir, shuffle);
         }
 
         _decoder = Decoder::create(mediaParams);

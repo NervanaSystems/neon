@@ -20,49 +20,9 @@ import os
 import atexit
 
 from neon import NervanaObject
+from media import MediaParams
 
 logger = logging.getLogger(__name__)
-
-
-class MediaType:
-    image = 0
-    video = 1
-    audio = 2
-    text = 3
-
-
-class MediaParams(ct.Structure):
-    _fields_ = [('mtype', ct.c_int)]
-
-
-class ImageParams(MediaParams):
-    def __init__(self, **kwargs):
-        super(ImageParams, self).__init__(mtype=MediaType.image,**kwargs)
-
-    _fields_ = [('inner_size', ct.c_int),
-                ('center', ct.c_bool),
-                ('flip', ct.c_bool),
-                ('rgb', ct.c_bool),
-                ('scale_min', ct.c_int),
-                ('scale_max', ct.c_int),
-                ('contrast_min', ct.c_int),
-                ('contrast_max', ct.c_int),
-                ('rotate_min', ct.c_int),
-                ('rotate_max', ct.c_int)]
-
-
-class VideoParams(MediaParams):
-    def __init__(self, **kwargs):
-        super(VideoParams, self).__init__(mtype=MediaType.video, **kwargs)
-
-    _fields_ = [('dummy', ct.c_int)]
-
-
-class AudioParams(MediaParams):
-    def __init__(self, **kwargs):
-        super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
-
-    _fields_ = [('dummy', ct.c_int)]
 
 
 DataBufferPair = (ct.c_void_p) * 2
@@ -83,12 +43,14 @@ class DataLoader(NervanaObject):
     def __init__(self, repo_dir, shuffle, media_params,
                  datum_size, target_size,
                  datum_dtype=np.float32, target_dtype=np.float32):
+        self.itemCount = ct.c_int(0)
         self.bsz = self.be.bsz
         self.buffer_id = 0
         self.start_idx = 0
         self.repo_dir = repo_dir
         self.shuffle = shuffle
         self.media_params = media_params
+        self.shape = media_params.get_shape()
         self.datum_size = datum_size
         self.target_size = target_size
         self.datum_dtype = datum_dtype
@@ -129,14 +91,15 @@ class DataLoader(NervanaObject):
         Launch background threads for loading the data.
         """
         # Limited to a single integer label for now
-        assert np.dtype(self.target_dtype).itemsize == 4 
-        datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize 
-        target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize 
+        assert np.dtype(self.target_dtype).itemsize == 4
+        datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
+        target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
         self.loader = self.loaderlib.start(
-            self.bsz, self.repo_dir, self.shuffle,
+            ct.byref(self.itemCount), self.bsz, ct.c_char_p(self.repo_dir), self.shuffle,
             datum_nbytes, target_nbytes,
             ct.POINTER(MediaParams)(self.media_params),
             ct.POINTER(DeviceParams)(self.device_params))
+        self.ndata = self.itemCount.value
         if self.loader is None:
             raise RuntimeError('Failed to start data loader.')
 
