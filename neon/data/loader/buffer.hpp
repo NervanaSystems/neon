@@ -106,7 +106,7 @@ public:
     }
 
     T* getItem(int index, int& len) {
-        if (index >= _items.size()) {
+        if (index >= (int) _items.size()) {
             return 0;
         }
         len = _lens[index];

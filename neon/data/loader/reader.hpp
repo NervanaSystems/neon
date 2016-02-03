@@ -157,7 +157,10 @@ private:
     }
 
     int readShuffle(CharBuffer* data, CharBuffer* labels, int count) {
-        replenishQueue(count);
+        while ((int) _shuffleQueue.size() < count) {
+            replenishQueue(count);
+        }
+
         for (int i=0; i<count; ++i) {
             auto ee = std::move(_shuffleQueue.at(0));
             int dataSize = ee.first->size();

@@ -23,7 +23,7 @@ CC := g++
 OPENCVPKG := $(shell pkg-config --list-all | grep -e '^opencv' | cut -d' ' -f1)
 
 ifeq ($(LDIR),)
-	LDIR := -L$(shell dirname `pkg-config opencv --libs-only-other | cut -f' ' -f1`)
+	LDIR := -L$(shell dirname `pkg-config opencv --libs-only-other | cut -d' ' -f1`)
 endif
 
 ifeq ($(USEGPU), true)
