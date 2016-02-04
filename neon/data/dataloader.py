@@ -25,13 +25,12 @@ from media import MediaParams
 logger = logging.getLogger(__name__)
 
 
-DataBufferPair = (ct.c_void_p) * 2
-TargetsBufferPair = (ct.c_void_p) * 2
+BufferPair = (ct.c_void_p) * 2
 class DeviceParams(ct.Structure):
     _fields_ = [('type', ct.c_int),
                 ('id', ct.c_int),
-                ('data', DataBufferPair),
-                ('targets', TargetsBufferPair)]
+                ('data', BufferPair),
+                ('targets', BufferPair)]
 
 
 class DataLoader(NervanaObject):
@@ -42,12 +41,17 @@ class DataLoader(NervanaObject):
 
     def __init__(self, repo_dir, shuffle, media_params,
                  datum_size, target_size,
-                 datum_dtype=np.float32, target_dtype=np.float32):
-        self.itemCount = ct.c_int(0)
+                 datum_dtype=np.float32, target_dtype=np.float32,
+                 onehot=False, nclasses=None):
+        if os.path.exists(repo_dir) == False:
+            raise IOError('Directory not found: %s' % repo_dir)
+        if onehot is True and nclasses is None:
+            raise ValueError('nclasses must be specified for one-hot labels')
+        self.repo_dir = repo_dir
+        self.item_count = ct.c_int(0)
         self.bsz = self.be.bsz
         self.buffer_id = 0
         self.start_idx = 0
-        self.repo_dir = repo_dir
         self.shuffle = shuffle
         self.media_params = media_params
         self.shape = media_params.get_shape()
@@ -55,6 +59,8 @@ class DataLoader(NervanaObject):
         self.target_size = target_size
         self.datum_dtype = datum_dtype
         self.target_dtype = target_dtype
+        self.onehot = onehot
+        self.nclasses = nclasses
         self.load_library()
         self.alloc()
         self.start()
@@ -70,17 +76,37 @@ class DataLoader(NervanaObject):
         self.loaderlib.reset.argtypes = [ct.c_void_p]
 
     def alloc(self):
-        self.data = [self.be.iobuf(self.datum_size, dtype=self.datum_dtype) for i in range(2)]
-        self.targets = [self.be.iobuf(self.target_size, dtype=self.target_dtype) for i in range(2)]
-        if self.be.device_type == 0:
-            data_buffers = [self.data[i].get().ctypes.data_as(ct.c_void_p) for i in range(2)]
-            targets_buffers = [self.targets[i].get().ctypes.data_as(ct.c_void_p) for i in range(2)]
+
+        def double_buf(dim0, dtype):
+            return [self.be.iobuf(dim0=dim0, dtype=dtype) for _ in range(2)]
+
+        def host_convert(buffers, idx):
+            return buffers[idx].get().ctypes.data_as(ct.c_void_p)
+
+        def device_convert(buffers, idx):
+            return ct.cast(int(buffers[idx].gpudata), ct.c_void_p)
+
+        def ct_convert(buffers):
+            if self.be.device_type == 0:
+                return BufferPair(host_convert(buffers, 0),
+                                  host_convert(buffers, 1))
+            return BufferPair(device_convert(buffers, 0),
+                              device_convert(buffers, 1))
+
+        self.data = double_buf(self.datum_size, self.datum_dtype)
+        self.targets = double_buf(self.target_size, self.target_dtype)
+        self.device_params = DeviceParams(self.be.device_type,
+                                          self.be.device_id,
+                                          ct_convert(self.data),
+                                          ct_convert(self.targets))
+        if self.onehot:
+            self.onehot_labels = self.be.iobuf(self.nclasses,
+                                               dtype=self.be.default_dtype)
+        if self.datum_dtype == self.be.default_dtype:
+            self.backend_data = None
         else:
-            data_buffers = [ct.cast(int(self.data[i].gpudata), ct.c_void_p) for i in range(2)]
-            targets_buffers = [ct.cast(int(self.targets[i].gpudata), ct.c_void_p) for i in range(2)]
-        self.device_params = DeviceParams(self.be.device_type, self.be.device_id,
-                                          DataBufferPair(data_buffers[0], data_buffers[1]),
-                                          TargetsBufferPair(targets_buffers[0], targets_buffers[1]))
+            self.backend_data = self.be.iobuf(self.datum_size,
+                                              dtype=self.be.default_dtype)
 
     @property
     def nbatches(self):
@@ -90,16 +116,17 @@ class DataLoader(NervanaObject):
         """
         Launch background threads for loading the data.
         """
-        # Limited to a single integer label for now
+        # Limited to a single integer label for now.
         assert np.dtype(self.target_dtype).itemsize == 4
         datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
         target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
         self.loader = self.loaderlib.start(
-            ct.byref(self.itemCount), self.bsz, ct.c_char_p(self.repo_dir), self.shuffle,
+            ct.byref(self.item_count), self.bsz,
+            ct.c_char_p(self.repo_dir), self.shuffle,
             datum_nbytes, target_nbytes,
             ct.POINTER(MediaParams)(self.media_params),
             ct.POINTER(DeviceParams)(self.device_params))
-        self.ndata = self.itemCount.value
+        self.ndata = self.item_count.value
         if self.loader is None:
             raise RuntimeError('Failed to start data loader.')
 
@@ -123,5 +150,21 @@ class DataLoader(NervanaObject):
             if end == self.ndata:
                 self.start_idx = self.bsz - (self.ndata - start)
             self.loaderlib.next(self.loader)
+
+            if self.backend_data is None:
+                data = self.data[self.buffer_id]
+            else:
+                # Convert data to the required precision.
+                self.backend_data[:] = self.data[self.buffer_id]
+                data = self.backend_data
+
+            if self.onehot:
+                # Convert labels to one-hot encoding.
+                self.onehot_labels[:] = self.be.onehot(
+                    self.targets[self.buffer_id], axis=0)
+                targets = self.onehot_labels
+            else:
+                targets = self.targets[self.buffer_id]
+
             self.buffer_id = 1 if self.buffer_id == 0 else 0
-            yield self.data[self.buffer_id], self.targets[self.buffer_id]
+            yield data, targets

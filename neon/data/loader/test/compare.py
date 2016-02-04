@@ -34,7 +34,7 @@ from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Misclassification, Rectlin, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
-from neon.data import load_cifar10, ImageLoader, BatchWriter
+from neon.data import load_cifar10, DataLoader, ImageParams, BatchWriter
 from PIL import Image
 from glob import glob
 
@@ -149,12 +149,20 @@ def test_loader():
     test_dir = os.path.join(args.data_dir, 'macrotest')
     write_batches(args, train_dir, trainimgs, 0)
     write_batches(args, test_dir, testimgs, 1)
-    train = ImageLoader(set_name='train', do_transforms=False, inner_size=32,
-                        scale_range=(32, 32), repo_dir=train_dir)
-    test = ImageLoader(set_name='validation', do_transforms=False, inner_size=32,
-                       scale_range=(32, 32), repo_dir=test_dir)
+
+    # TODO: test macrobatch reading.
+    params = ImageParams(channel_count=3, height=32, width=32)
+    train = DataLoader(repo_dir=os.path.join(args.data_dir, 'train'),
+                       shuffle=True, media_params=params,
+                       datum_size=3*32*32, target_size=1,
+                       datum_dtype=np.uint8, target_dtype=np.int32,
+                       onehot=True, nclasses=10)
+    test = DataLoader(repo_dir=os.path.join(args.data_dir, 'test'),
+                      shuffle=False, media_params=params,
+                      datum_size=3*32*32, target_size=1,
+                      datum_dtype=np.uint8, target_dtype=np.int32,
+                      onehot=True, nclasses=10)
     err = run(args, train, test)
     return err
-
 
 assert test_iterator() == test_loader()

@@ -390,8 +390,8 @@ public:
     int start() {
         _first = true;
         try {
-            // TODO: Read buffers could be smaller because we are
-            // usually reading compressed data.
+            // TODO: Read buffers could be smaller because we
+            // usually deal with compressed data.
             _readBufs = new BufferPool(_batchSize * _datumSize,
                                        _batchSize * _targetSize);
             _readPool = new ReadThreadPool(*_readBufs, _reader);

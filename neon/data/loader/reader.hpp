@@ -193,6 +193,9 @@ private:
         }
 
         _itemCount = _index.size();
+        if (_itemCount == 0) {
+            throw std::runtime_error("Could not load index\n");
+        }
     }
 
 private:

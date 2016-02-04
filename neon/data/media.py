@@ -13,6 +13,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+"""
+This must be kept in sync with loader/media.hpp.
+"""
+
 import ctypes as ct
 
 class MediaType:
