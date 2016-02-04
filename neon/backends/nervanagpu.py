@@ -2024,7 +2024,7 @@ class NervanaGPU(Backend):
         kernel = roipooling.map_string2func("bprop_roipooling", layer_dtype.str[1:])
 
         params = [(get_blocks(count, thread), 1, 1), (thread, 1, 1), self.stream,
-                    count, roi_count, self.bsz, fm_channel, fm_height, fm_width, 
+                    count, roi_count, self.bsz, fm_channel, fm_height, fm_width,
                     pooled_height, pooled_width, I.gpudata,
                     rois.gpudata, O.gpudata, argmax.gpudata,
                     spatial_scale]
@@ -2033,7 +2033,7 @@ class NervanaGPU(Backend):
 
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
-                          relu=False, threads=None, repeat=1):
+                          accumbeta=0.0, relu=False, threads=None, repeat=1):
         """
         Function to perform compound kernel call for batch normalization
         forward pass.
@@ -2049,6 +2049,7 @@ class NervanaGPU(Backend):
             y (Tensor): normalized output
             eps (float): constant for numerical stability
             rho (float): exponential window averaging constant
+            accumbeta (float): value to scale output by before accumulating
             relu (bool): Compuound ReLU activation in kernel
             threads (int): Number of GPU threads
             repeat (int): Repeats for benchmarking
@@ -2071,7 +2072,7 @@ class NervanaGPU(Backend):
         params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
                   y.gpudata, xvar.gpudata, gmean.gpudata, gvar.gpudata,
                   x.gpudata, xsum.gpudata, gmean.gpudata, gvar.gpudata,
-                  gamma.gpudata, beta.gpudata, eps, rho, N, relu]
+                  gamma.gpudata, beta.gpudata, eps, rho, accumbeta, N, relu]
 
         from neon.backends.float_ew import _get_bn_fprop_kernel
 

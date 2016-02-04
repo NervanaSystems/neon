@@ -16,7 +16,7 @@ import numpy as np
 from operator import add
 
 from neon import NervanaObject
-from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform, Convolution
+from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform
 from neon.util.persist import load_class
 
 
@@ -41,6 +41,8 @@ class LayerContainer(Layer):
             if isinstance(l, LayerContainer):
                 lto += l.layers_to_optimize
             elif l.has_params:
+                if hasattr(l, 'init') and l.init.name == "Identity":
+                    continue
                 lto.append(l)
         return lto
 
@@ -138,7 +140,7 @@ class Sequential(LayerContainer):
 
     def allocate_deltas(self, global_deltas=None):
         def needs_extra_delta(ll):
-            return True if type(ll) in (MergeBroadcast, ResidualModule) else False
+            return True if issubclass(ll.__class__, Broadcast) else False
 
         if not global_deltas:
             # See if we have any inception-ish layers:
@@ -155,10 +157,16 @@ class Sequential(LayerContainer):
         for l in self.layers:
             l.set_deltas(self.global_deltas)
 
-    def fprop(self, inputs, inference=False):
+    def fprop(self, inputs, inference=False, beta=0.0):
+        """
+        TODO:  Handle final layers that don't own their own outputs (bias, activation)
+        """
         x = inputs
         for l in self.layers:
-            x = l.fprop(x, inference)
+            if l is self.layers[-1] and beta != 0:
+                x = l.fprop(x, inference, beta=beta)
+            else:
+                x = l.fprop(x, inference)
         return x
 
     def bprop(self, error, alpha=1.0, beta=0.0):
@@ -172,127 +180,6 @@ class Sequential(LayerContainer):
     def get_terminal(self):
         terminal = self.layers[-1].get_terminal()
         return terminal
-
-
-class ResidualModule(LayerContainer):
-    """
-    Layer that encapsulates a sequential plus a residual skip branch, optionally
-    containing a projection
-
-    Arguments:
-        layers (list): List of objects which can be either a list of layers (including layer
-                       containers).
-        projection (Initializer, optional): If a valid Initializer is supplied, then the skip
-                                            layer will perform a 1x1 convolution with
-                                            appropriate striding to match the size and shape
-                                            of the output of the main branch.  The default is
-                                            None, which means that the input to the module will
-                                            be added directly to the output of the main branch
-                                            with no projection applied.  NB:  IdentityInit are
-                                            treated differently from regular Initializers in
-                                            that the projection is applied, but those Identity
-                                            weights are never updated.
-
-    """
-    def __init__(self, layers, projection=None, name='residual'):
-        super(ResidualModule, self).__init__(name)
-
-        if isinstance(layers, Sequential):
-            self.layers = [layers]
-        elif isinstance(layers, list):
-            if isinstance(layers[0], Sequential):
-                self.layers = layers
-            else:
-                self.layers = [Sequential(layers)]
-        elif isinstance(layers, Layer):
-            self.layers = [Sequential([layers])]
-        else:
-            ValueError("Incompatible element for ResidualModule container")
-
-        convlayers = [l for l in self.layers[0].layers if type(l) is Convolution]
-        nofm = convlayers[-1].convparams['K']
-        skip_stride = convlayers[-2].convparams['str_h']
-
-        self.owns_output = True
-        self.error_views = None
-        self.projection = projection
-        if projection is not None:
-            self.skip_layer = Convolution((1, 1, nofm), init=projection, strides=skip_stride)
-            if projection.name != "Identity":
-                self.layers.append(self.skip_layer)
-        else:
-            self.skip_layer = None
-
-    def configure(self, in_obj):
-        """
-        sets shape based parameters of this layer given an input tuple or int
-        or input layer
-
-        Arguments:
-            in_obj (int, tuple, Layer or Tensor or dataset): object that provides shape
-                                                             information for layer
-
-        Returns:
-            (tuple): shape of output data
-        """
-        super(ResidualModule, self).configure(in_obj)
-        self.layers[0].configure(in_obj)
-        self.out_shape = self.layers[0].out_shape
-        if self.skip_layer is not None:
-            self.skip_layer.configure(in_obj)
-        return self
-
-    # deserialization is not yet automated for this
-    @classmethod
-    def gen_class(cls, pdict):
-        key = 'projection'
-        if pdict.get(key, None) is not None:
-            config = pdict[key].get('config', {})
-            pdict[key] = load_class(pdict[key]['type']).gen_class(config)
-        return super(ResidualModule, cls).gen_class(pdict)
-
-    def nested_str(self, level=0):
-        ss = super(ResidualModule, self).nested_str(level)
-        if self.skip_layer is not None:
-            ss += '\n' + '  '*level + self.skip_layer.nested_str(level+1)
-        return ss
-
-    def allocate(self, shared_outputs=None):
-        self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs,
-                                     parallelism=self.parallelism)
-        self.layers[0].allocate(self.outputs)
-        if self.skip_layer is not None:
-            self.skip_layer.allocate(self.outputs)
-
-    def set_deltas(self, delta_buffers):
-        assert len(delta_buffers) == 4, "Need extra delta buffer pool for residual layers"
-        self.layers[0].allocate_deltas(delta_buffers[1:3])
-        self.layers[0].layers[0].set_deltas(delta_buffers[0:1])
-        if self.skip_layer is not None:
-            self.skip_layer.set_deltas(delta_buffers[0:1])
-        self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0],
-                                    parallelism=self.parallelism)
-        delta_buffers.reverse()
-
-    def fprop(self, inputs, inference=False):
-        self.inputs = inputs
-        self.layers[0].fprop(inputs, inference)
-        if self.skip_layer is not None:
-            self.skip_layer.fprop(inputs, inference, beta=1.0)
-        else:
-            self.outputs[:] = self.outputs + inputs
-        return self.outputs
-
-    def bprop(self, error, alpha=1.0, beta=0.0):
-        if self.skip_layer is not None:
-            self.skip_layer.bprop(error, alpha=alpha)
-        else:
-            self.deltas[:] = error
-        self.layers[0].bprop(error, alpha=alpha, beta=1.0)
-        return self.deltas
-
-    def get_terminal(self):
-        return self.layers[0].get_terminal()
 
 
 class Tree(LayerContainer):
@@ -372,7 +259,101 @@ class Tree(LayerContainer):
         return [l.get_terminal() for l in self.layers]
 
 
-class MergeBroadcast(LayerContainer):
+class Broadcast(LayerContainer):
+    def __init__(self, layers, name=None):
+        super(Broadcast, self).__init__(name)
+        # Input list of layers converts:
+        #   lists to Sequential container
+        #   singleton layers to Sequential containers of 1
+        #   leaves Sequentials alone
+        self.layers = []
+        for l in layers:
+            if isinstance(l, Sequential):
+                self.layers.append(l)
+            elif isinstance(l, list):
+                self.layers.append(Sequential(l))
+            elif isinstance(l, Layer):
+                self.layers.append(Sequential([l]))
+            else:
+                ValueError("Incompatible element for " + self.__class__.__name__ + " Layer")
+        self.owns_output = True
+        self.outputs = None
+
+    def __str__(self):
+        ss = '\n\t'.join([str(l) for l in self.layers])
+        ss = '\t' + self.classnm + '\n\t' + ss
+        return ss
+
+    def configure(self, in_obj):
+        """
+        sets shape based parameters of this layer given an input tuple or int
+        or input layer
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor or dataset): object that provides shape
+                                                             information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
+        super(Broadcast, self).configure(in_obj)
+
+        # Receiving from single source -- distribute to branches
+        for l in self.layers:
+            l.configure(in_obj)
+        self._configure_merge()
+        return self
+
+    def set_deltas(self, delta_buffers):
+        assert len(delta_buffers) == 4, "Need extra delta buffer pool for broadcast layers"
+        for l in self.layers:
+            l.allocate_deltas(delta_buffers[1:3])
+            l.layers[0].set_deltas(delta_buffers[0:1])
+
+        # Special case if originating from a branch node
+        if type(self.prev_layer) is BranchNode:
+            self.deltas = self.be.iobuf(self.in_shape, shared=self.prev_layer.deltas,
+                                        parallelism=self.parallelism)
+        else:
+            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0],
+                                        parallelism=self.parallelism)
+            delta_buffers.reverse()
+
+    def get_terminal(self):
+        terminals = [l.get_terminal() for l in self.layers]
+        return terminals
+
+
+class MergeSum(Broadcast):
+
+    def allocate(self, shared_outputs=None):
+        if self.outputs is None:
+            self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs,
+                                         parallelism=self.parallelism)
+        for l in self.layers:
+            l.allocate(shared_outputs=self.outputs)
+
+    def _configure_merge(self):
+        """
+        Helper function for configuring output shape
+        """
+        out_shapes = [l.out_shape for l in self.layers]
+        self.out_shape = out_shapes[0]
+
+    def fprop(self, inputs, inference=False):
+        for l in self.layers:
+            beta = 0 if l is self.layers[0] else 1
+            l.fprop(inputs, inference, beta=beta)
+        return self.outputs
+
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        for l in reversed(self.layers):
+            b = beta if l is self.layers[-1] else 1
+            l.bprop(error, alpha=alpha, beta=b)
+        return self.deltas
+
+
+class MergeBroadcast(Broadcast):
     """
     Branches a single incoming layer or object (broadcast) into multiple output paths that are
     then combined again (merged)
@@ -390,22 +371,8 @@ class MergeBroadcast(LayerContainer):
         """
         TODO add DOCSTRING
         """
-        super(MergeBroadcast, self).__init__(name)
+        super(MergeBroadcast, self).__init__(layers, name)
 
-        # Input list of layers converts:
-        #   lists to Sequential container
-        #   singleton layers to Sequential containers of 1
-        #   leaves Sequentials alone
-        self.layers = []
-        for l in layers:
-            if isinstance(l, Sequential):
-                self.layers.append(l)
-            elif isinstance(l, list):
-                self.layers.append(Sequential(l))
-            elif isinstance(l, Layer):
-                self.layers.append(Sequential([l]))
-            else:
-                ValueError("Incompatible element for MergeBroadcast Layer")
         self.betas = [1.0 for _ in self.layers]
         self.betas[-1] = 0.0
         self.alphas = [1.0 for _ in self.layers] if alphas is None else alphas
@@ -413,13 +380,6 @@ class MergeBroadcast(LayerContainer):
         self.merge = merge  # How this MergeBroadcast gets merged
         assert self.merge in ("recurrent", "depth", "stack")
         self.error_views = None
-        self.owns_output = True
-        self.outputs = None
-
-    def __str__(self):
-        ss = '\n\t'.join([str(l) for l in self.layers])
-        ss = '\t' + self.classnm + '\n\t' + ss
-        return ss
 
     def get_partitions(self, x, slices):
         """
@@ -431,26 +391,6 @@ class MergeBroadcast(LayerContainer):
         else:
             return [x[sl] for sl in slices]
 
-    def configure(self, in_obj):
-        """
-        sets shape based parameters of this layer given an input tuple or int
-        or input layer
-
-        Arguments:
-            in_obj (int, tuple, Layer or Tensor or dataset): object that provides shape
-                                                             information for layer
-
-        Returns:
-            (tuple): shape of output data
-        """
-        super(MergeBroadcast, self).configure(in_obj)
-
-        # Receiving from single source -- distribute to branches
-        for l in self.layers:
-            l.configure(in_obj)
-        self._configure_merge()
-        return self
-
     def allocate(self, shared_outputs=None):
         if self.outputs is None:
             self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs,
@@ -458,21 +398,6 @@ class MergeBroadcast(LayerContainer):
         self.output_views = self.get_partitions(self.outputs, self.slices)
         for l, out_view in zip(self.layers, self.output_views):
             l.allocate(shared_outputs=out_view)
-
-    def set_deltas(self, delta_buffers):
-        assert len(delta_buffers) == 4, "Need extra delta buffer pool for merge broadcast layers"
-        for l in self.layers:
-            l.allocate_deltas(delta_buffers[1:3])
-            l.layers[0].set_deltas(delta_buffers[0:1])
-
-        # Special case if originating from a branch node
-        if type(self.prev_layer) is BranchNode:
-            self.deltas = self.be.iobuf(self.in_shape, shared=self.prev_layer.deltas,
-                                        parallelism=self.parallelism)
-        else:
-            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0],
-                                        parallelism=self.parallelism)
-            delta_buffers.reverse()
 
     def _configure_merge(self):
         """
@@ -508,10 +433,6 @@ class MergeBroadcast(LayerContainer):
         for l, e, a, b in reversed(zip(self.layers, self.error_views, self.alphas, self.betas)):
             l.bprop(e, alpha=a*alpha, beta=b)
         return self.deltas
-
-    def get_terminal(self):
-        terminals = [l.get_terminal() for l in self.layers]
-        return terminals
 
 
 class MergeMultistream(MergeBroadcast):

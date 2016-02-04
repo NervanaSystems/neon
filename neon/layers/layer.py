@@ -297,6 +297,46 @@ class BranchNode(Layer):
         pass
 
 
+class SkipNode(Layer):
+    """
+    Layer that allows pass-through
+    """
+
+    def __init__(self, name=None):
+        super(SkipNode, self).__init__(name)
+        self.owns_delta = True
+
+    def fprop(self, inputs=None, inference=False, beta=0):
+        """
+        Passes output from preceding layer on without modification
+        """
+        self.outputs[:] = self.outputs * beta + inputs
+        return self.outputs
+
+    def configure(self, in_obj):
+        """
+        sets shape based parameters of this layer given an input tuple or int
+        or input layer
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
+        super(SkipNode, self).configure(in_obj)
+        self.out_shape = self.in_shape
+        return self
+
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Skip nodes just pass back what they got
+        """
+        self.deltas[:] = self.deltas * beta + alpha * error
+        return self.deltas
+
+
 class Pooling(Layer):
 
     """
@@ -374,9 +414,9 @@ class Pooling(Layer):
         else:
             self.argmax = None
 
-    def fprop(self, inputs, inference=False):
+    def fprop(self, inputs, inference=False, beta=0.0):
         self.inputs = inputs
-        self.be.fprop_pool(self.nglayer, inputs, self.outputs, self.argmax)
+        self.be.fprop_pool(self.nglayer, inputs, self.outputs, self.argmax, beta=beta)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
@@ -1489,7 +1529,7 @@ class BatchNorm(Layer):
         self.states = [[self.be.zeros_like(gradp)] for gradp in self.grad_params]
         self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
 
-    def fprop(self, inputs, inference=False):
+    def fprop(self, inputs, inference=False, beta=0.0):
         """
         Normalize inputs (x) over batch mean and variance.
         xhat = (x - xmean) / xvar
@@ -1503,23 +1543,23 @@ class BatchNorm(Layer):
             self.inputs = inputs.reshape((self.nfm, -1))
 
         if inference:
-            return self._fprop_inference(self.inputs)
+            return self._fprop_inference(self.inputs, beta)
 
         if self.compute_batch_sum:
             self.xsum[:] = self.be.sum(self.inputs, axis=1)
 
         self.be.compound_fprop_bn(
             self.inputs, self.xsum, self.xvar, self.gmean, self.gvar,
-            self.gamma, self.beta, self.outputs, self.eps, self.rho, self.relu)
+            self.gamma, self.beta, self.outputs, self.eps, self.rho, beta, self.relu)
 
         return self.outputs
 
-    def _fprop_inference(self, inputs):
+    def _fprop_inference(self, inputs, beta=0.0):
         """
         Apply one linear transformation that captures normalization, gamma scaling and beta shift.
         """
         xhat = (inputs - self.gmean) / self.be.sqrt(self.gvar + self.eps)  # Op-tree only
-        self.y[:] = xhat * self.gamma + self.beta
+        self.y[:] = self.y * beta + xhat * self.gamma + self.beta
         return self.outputs
 
     def bprop(self, error):

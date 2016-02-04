@@ -69,7 +69,7 @@ __global__ void batchnorm_fprop (
     %(type)s* y_out, %(type)s* xvar_out, %(type)s* gmean_out, %(type)s* gvar_out,
     const %(type)s* x_in, const float* xsum_in, const %(type)s* gmean_in,
     const %(type)s* gvar_in, const %(type)s* gamma_in, const %(type)s* beta_in,
-    const float eps, const float rho, const int N, const int relu)
+    const float eps, const float rho, const float accumbeta, const int N, const int relu)
 {
     %(share)s
 
@@ -150,10 +150,20 @@ __global__ void batchnorm_fprop (
         %(y1_out)s
         %(y2_out)s
         %(y3_out)s
-        if (i >= -THREADS*0) *(y_out + THREADS*0) = y0_val;
-        if (i >= -THREADS*1) *(y_out + THREADS*1) = y1_val;
-        if (i >= -THREADS*2) *(y_out + THREADS*2) = y2_val;
-                             *(y_out + THREADS*3) = y3_val;
+        if (accumbeta == 0.0)
+        {
+            if (i >= -THREADS*0) *(y_out + THREADS*0) = y0_val;
+            if (i >= -THREADS*1) *(y_out + THREADS*1) = y1_val;
+            if (i >= -THREADS*2) *(y_out + THREADS*2) = y2_val;
+                                 *(y_out + THREADS*3) = y3_val;
+        }
+        else
+        {
+            if (i >= -THREADS*0) *(y_out + THREADS*0) = y_out[THREADS*0] * accumbeta + y0_val;
+            if (i >= -THREADS*1) *(y_out + THREADS*1) = y_out[THREADS*1] * accumbeta + y1_val;
+            if (i >= -THREADS*2) *(y_out + THREADS*2) = y_out[THREADS*2] * accumbeta + y2_val;
+                                 *(y_out + THREADS*3) = y_out[THREADS*3] * accumbeta + y3_val;
+        }
         y_out -= THREADS*4;
     }
 }
@@ -183,7 +193,7 @@ __global__ void batchnorm_fprop (
     }
     module = SourceModule(code, options=["--use_fast_math"])
     kernel = module.get_function("batchnorm_fprop")
-    kernel.prepare("PPPPPPPPPPffII")
+    kernel.prepare("PPPPPPPPPPfffII")
     kernel.name = "batchnorm_fprop"
     return kernel
 
