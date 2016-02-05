@@ -20,6 +20,7 @@ extern "C" {
                        int scale_min, int scale_max,
                        int contrast_min, int contrast_max,
                        int rotate_min, int rotate_max,
+                       int aspect_ratio,
                        int minibatch_size,
                        char* filename, int macro_start,
                        uint num_data, uint num_labels, bool macro,
@@ -55,7 +56,9 @@ extern "C" {
                                                              /* Contrast Params */
                                                              contrast_min, contrast_max,
                                                              /* Rotate Params (ignored) */
-                                                             rotate_min, rotate_max);
+                                                             rotate_min, rotate_max,
+                                                             /* Aspect Ratio Param */
+                                                             aspect_ratio);
 
             Decoder* decoder = new ImageDecoder(agp);
             Loader* loader = new Loader(minibatch_size, read_max_size,

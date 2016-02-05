@@ -58,16 +58,17 @@ public:
                        bool center, bool flip, bool rgb,
                        int scaleMin, int scaleMax,
                        int contrastMin, int contrastMax,
-                       int rotateMin, int rotateMax)
+                       int rotateMin, int rotateMax,
+                       int aspectRatio)
     : _rngSeed(0), _innerSize(innerSize, innerSize),
       _center(center), _flip(flip), _rgb(rgb),
       _scaleMin(scaleMin), _scaleMax(scaleMax),
       _contrastMin(contrastMin), _contrastMax(contrastMax),
-      _rotateMin(rotateMin), _rotateMax(rotateMax) {
+      _rotateMin(rotateMin), _rotateMax(rotateMax), _aspectRatio(aspectRatio) {
     }
 
     AugmentationParams()
-    : AugmentationParams(224, true, false, true, 256, 256, 0, 0, 0, 0){}
+    : AugmentationParams(224, true, false, true, 256, 256, 0, 0, 0, 0, 0){}
 
     bool doRandomFlip() {
         return _flip && (rand_r(&(_rngSeed)) % 2 == 0);
@@ -91,6 +92,18 @@ public:
         }
     }
 
+    // adjust the square cropSize to be an inner rectangle
+    void getRandomAspectRatio(Size2i &cropSize) {
+        int ratio = (101 + (rand_r(&(_rngSeed)) % (_aspectRatio - 100)));
+        float ratio_f = 100.0 / (float) ratio;
+        int orientation = rand_r(&(_rngSeed)) % 2;
+        if (orientation) {
+            cropSize.height *= ratio_f;
+        } else {
+            cropSize.width *= ratio_f;
+        }
+    }
+
     void getRandomCrop(const Size2i &inputSize, Rect* cropBox) {
         // Use the entire squashed image (Caffe style evaluation)
         if (_scaleMin == 0) {
@@ -103,6 +116,9 @@ public:
         float scaleFactor = std::min(inputSize.width, inputSize.height) / (float) scaleSize;
         Point2i corner;
         Size2i cropSize(_innerSize.height * scaleFactor, _innerSize.width * scaleFactor);
+        if (_aspectRatio > 100) {
+            getRandomAspectRatio(cropSize);
+        }
         randomCorner(inputSize - cropSize, &corner);
         cropBox->width = cropSize.width;
         cropBox->height = cropSize.height;
@@ -125,6 +141,7 @@ protected:
     int                         _scaleMin, _scaleMax;
     int                         _contrastMin, _contrastMax;
     int                         _rotateMin, _rotateMax;
+    int                         _aspectRatio;
 };
 
 class Decoder {

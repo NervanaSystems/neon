@@ -14,7 +14,8 @@ int main (int argc, char **argv) {
     AugmentationParams *agp = new AugmentationParams(224, false, true, true,
         256, 256,   // Scale Params
         75, 125,    // Contrast params
-        0, 0);      // Rotation params
+        0, 0,       // Rotation params
+        0);         // Aspect Ratio
     if (argc < 3)
         return -1;
 

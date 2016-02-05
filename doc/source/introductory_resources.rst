@@ -564,7 +564,20 @@ image.
                             shuffle=True,
                             do_transforms=True)
 
-6. Scale the original image so that the short side is ``100`` pixels, *do not* perform a horizontal
+6. Same as 5, but also randomly stretch the image horizontally or vertically (direction is also
+   randomly determined) by a factor between 1 and 1.25.
+
+.. code-block:: python
+
+    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
+                            inner_size=80,
+                            scale_range=(100, 200),
+                            contrast_range=(75, 125),
+                            aspect_ratio=125,
+                            shuffle=True,
+                            do_transforms=True)
+
+7. Scale the original image so that the short side is ``100`` pixels, *do not* perform a horizontal
    reflection, *do not* adjust contrast, crop the *center* ``80x80`` region from the resulting
    image, and *do not* shuffle the order in which images are returned
 
@@ -577,7 +590,7 @@ image.
                             shuffle=True,
                             do_transforms=False)  # Overrides all randomness
 
-7. Force the original image to be scaled so that the entire image fits into a ``100x100`` region,
+8. Force the original image to be scaled so that the entire image fits into a ``100x100`` region,
    regardless of aspect ratio distortion, and perform random horizontal reflections.
 
 .. code-block:: python
@@ -587,7 +600,7 @@ image.
                             scale_range=0,  # Force scaling to match inner_size
                             do_transforms=True)
 
-8. Typical setup for imagenet training.  Randomly select a ``224x224`` crop of an image randomly
+9. Typical setup for imagenet training.  Randomly select a ``224x224`` crop of an image randomly
    scaled so that its shortest side is between ``256`` and ``480``, randomly flipped, shuffled.
    For testing, scale to various scales and take the whole image so that convolutional inference
    can be performed.

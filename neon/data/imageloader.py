@@ -69,18 +69,27 @@ class ImageLoader(NervanaDataIterator):
                                           randomly vary the contrast of the image.  No contrast
                                           variation is applied if contrast_min == contrast_max.
                                           Defaults to (100, 100).
+        aspect_ratio (int, optional): if non-zero, then this will be interpreted as a pct to
+                                      to randomly stretch the image in either horizontal or
+                                      vertical direction by some amount between 100 and
+                                      aspect_ratio.  For example, aspect_ratio = 133 implies that
+                                      the square crop will be stretched in the horizontal or
+                                      vertical direction (randomly determined) by some range
+                                      between 1.0 and 1.33 (4/3).  If set to <= 100, or
+                                      do_transforms is False, no random stretching will occur.
+                                      Defaults to 0.
     """
 
     def __init__(self, repo_dir, inner_size, scale_range, do_transforms=True,
                  rgb=True, shuffle=False, set_name='train', subset_pct=100,
                  nlabels=1, macro=True, dtype=np.float32,
-                 contrast_range=(100, 100)):
+                 contrast_range=(100, 100), aspect_ratio=0):
         super(ImageLoader, self).__init__(name=set_name)
         if not rgb:
             raise ValueError('Non-RGB images are currently not supported')
         self.configure(repo_dir, inner_size, scale_range, do_transforms,
                        rgb, shuffle, set_name, subset_pct, macro,
-                       contrast_range)
+                       contrast_range, aspect_ratio)
         libpath = os.path.dirname(os.path.realpath(__file__))
         try:
             self.loaderlib = ct.cdll.LoadLibrary(
@@ -119,7 +128,7 @@ class ImageLoader(NervanaDataIterator):
 
     def configure(self, repo_dir, inner_size, scale_range, do_transforms,
                   rgb, shuffle, set_name, subset_pct, macro,
-                  contrast_range):
+                  contrast_range, aspect_ratio):
         """
         Set up all dataset config options.
         """
@@ -139,8 +148,13 @@ class ImageLoader(NervanaDataIterator):
         self.center = not do_transforms
         self.flip = do_transforms
         self.contrast_range = contrast_range if do_transforms else (100, 100)
+        self.aspect_ratio = aspect_ratio if do_transforms else 0
         if not do_transforms:
             self.scale_range = (self.scale_range[0], self.scale_range[0])
+        if do_transforms:
+            assert (self.aspect_ratio == 0 or self.aspect_ratio > 100), (
+                'bad value for aspect_ratio augmentation')
+
         self.shuffle = shuffle if do_transforms else False
 
         self.rgb = rgb
@@ -251,6 +265,7 @@ class ImageLoader(NervanaDataIterator):
                                            ct.c_int(self.contrast_range[0]),
                                            ct.c_int(self.contrast_range[1]),
                                            ct.c_int(0), ct.c_int(0),  # ignored rotation params
+                                           ct.c_int(self.aspect_ratio),
                                            ct.c_int(self.minibatch_size),
                                            ct.c_char_p(self.filename),
                                            ct.c_int(self.macro_start),

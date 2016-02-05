@@ -44,7 +44,7 @@
 
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Kaiming, IdentityInit
-from neon.layers import Conv, Pooling, GeneralizedCost, Activation
+from neon.layers import Conv, Pooling, GeneralizedCost, Activation, Affine
 from neon.layers import MergeSum, SkipNode
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
@@ -63,8 +63,8 @@ parser.add_argument('--subset_pct', type=float, default=100,
 args = parser.parse_args()
 
 # setup data provider
-imgset_options = dict(inner_size=32, scale_range=40, repo_dir=args.data_dir,
-                      subset_pct=args.subset_pct)
+imgset_options = dict(inner_size=32, scale_range=40, aspect_ratio=110,
+                      repo_dir=args.data_dir, subset_pct=args.subset_pct)
 train = ImageLoader(set_name='train', shuffle=True, do_transforms=True, **imgset_options)
 test = ImageLoader(set_name='validation', shuffle=False, do_transforms=False, **imgset_options)
 
@@ -85,7 +85,7 @@ def module_factory(nfm, stride=1):
                 Conv(**conv_params(3, nfm, relu=False))]
     sidepath = [SkipNode() if stride == 1 else Conv(**id_params(nfm))]
 
-    module = [MergeSum([sidepath, mainpath]),
+    module = [MergeSum([mainpath, sidepath]),
               Activation(Rectlin())]
     return module
 
@@ -98,9 +98,8 @@ strides = [1] + [1 if cur == prev else 2 for cur, prev in zip(nfms[1:], nfms[:-1
 layers = [Conv(**conv_params(3, 16))]
 for nfm, stride in zip(nfms, strides):
     layers.append(module_factory(nfm, stride))
-layers.append(Pooling(all, op='avg'))
-layers.append(Conv(**conv_params(1, train.nclass, relu=False, batch_norm=False)))
-layers.append(Activation(Softmax()))
+layers.append(Pooling('all', op='avg'))
+layers.append(Affine(10, init=Kaiming(local=False), batch_norm=True, activation=Softmax()))
 
 model = Model(layers=layers)
 opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=Schedule([90, 135], 0.1))
