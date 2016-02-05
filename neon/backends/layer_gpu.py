@@ -18,13 +18,19 @@ but they also cache all the computed params for complex layers.
 TODO: clean up merge with CPU layers
 TODO: remove any non-param caching code, neon layers should replace benchmark code.
 """
+import logging
 import numpy as np
 import pycuda.driver as drv
 from neon.backends import kernel_specs
+from neon.backends import convolution
 from pycuda.tools import context_dependent_memoize
 from operator import mul
 from math import ceil
 import sys
+
+
+logger = logging.getLogger(__name__)
+
 
 if sys.version_info >= (3, 0):
     from functools import reduce
@@ -353,22 +359,9 @@ class ConvLayer(Layer):
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
                  str_d=1, str_h=1, str_w=1,
-                 relu=False, bsum=False,
-                 deterministic_update=False):
+                 relu=False, bsum=False):
 
         super(ConvLayer, self).__init__(lib, dtype, N, np.float32)
-
-        vec_size = 4 if self.dtype.itemsize == 4 else 8
-
-        assert N % 32 == 0, "N dim must be multiple of 32"
-        assert K % vec_size == 0, "K dim must be multiple of %d" % vec_size
-
-        if self.dtype.type is np.float16:
-            clss = "hconv"
-        elif self.dtype.type is np.float32:
-            clss = "sconv"
-        else:
-            raise TypeError("Type not supported.")
 
         # Compute the output spatial dimensions
         M = lib.output_dim(D, T, pad_d, str_d)
@@ -405,212 +398,71 @@ class ConvLayer(Layer):
         self.sizeO  = reduce(mul, self.dimO, 1)
         self.nOut   = reduce(mul, self.MPQ, 1) * K
 
-        # precompute some multiplications for fast constant memory access
-        HW    = H*W
-        DHW   = D*HW
-        WN    = W*N
-        HWN   = H*WN
-        DHWN  = D*HWN
-        RS    = R*S
-        RST   = T*RS
-        CRST  = C*RST
-        CRSTK = K*CRST
-        KRST  = K*RST
-        PQ    = P*Q
-        PQM   = M*PQ
-        QN    = Q*N
-        PQN   = P*QN
-        MPQN  = M*PQN
-
-        if CRST > 2**16:
-            assert CRST  < 2**16, "Integer division is faster with 16bit numerators"
-
-        # precompute the magic numbers and shift amounts for integer division
-        magic_HW    = _magic64(HW)
-        magic_W     = _magic64(W)
-        magic_PQ    = _magic64(PQ)
-        magic_Q     = _magic64(Q)
-        magic_RST   = _magic32(CRST, RST)
-        magic_RS    = _magic32(RST+32, RS)
-        magic_S     = _magic32(RS+32, S)
-        magic_str_w = _magic32(W + S, str_w)
-        magic_str_h = _magic32(H + R, str_h)
-        magic_str_d = _magic32(D + T, str_d)
-
         # flop count for benchmarking
-        self.flops = PQM * K * N * CRST * 2.0
+        self.flops = P*Q*M*K*N*C*R*S*T * 2.0
 
-        tile_N   = 128 if N > 64 else 64
-        grid_N   = _grid_dim(tile_N, N)
-        tiles_CK = (128, 64, 32) if tile_N == 128 else (128, 64)
-
-        ####### FPROP ###########
+        ####### Cuda C ###########
         if lib.use_cudac_kernels:
+
             #3D conv not supported yet
             if T > 1 or D > 1:
                 raise ValueError("3D Convolution not supported by CUDA C kernels.")
-            self.fprop_kernels = [["fprop",
-                                   (PQ * (-(-N // 32)), (-(-K // 32)), 1), (8, 8, 1),
-                                   _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
-                                            str_w, str_h, pad_w, pad_h,
-                                            HWN // 4, KRST // 4, PQN // 4,
-                                            PQ, 0, 0,
-                                            magic_PQ, magic_Q, magic_S])]]
+
+            self.fprop_kernels = convolution.FpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                                                       pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
+            # TODO small C bprop?
+            self.bprop_kernels = convolution.BpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                                                       pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
+            self.updat_kernels = convolution.UpdateCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                                                        pad_d, pad_h, pad_w, str_d, str_h, str_w) 
+            
+        ####### Winograd ###########
+        elif lib.have_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
+            from winograd.convolution import FpropWinograd, BpropWinograd, UpdateWinograd
+
+            if N >= 64 and C < 8 or not lib.have_winograd:
+                self.fprop_kernels = convolution.FpropDirect(
+                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
+            else:
+                self.fprop_kernels = FpropWinograd(
+                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+
+            self.bprop_kernels = BpropWinograd(
+                lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+
+            if N >=32 and C < 8 or not lib.have_winograd:
+                self.updat_kernels = convolution.UpdateDirect(
+                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
+            else:
+                self.updat_kernels = UpdateWinograd(
+                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
+
+        ####### Direct ###########
         else:
-            self.fprop_kernels = kernel_specs.xprop_conv_kernels(
-                clss, "fprop", "K", tile_N, grid_N, K, tiles_CK, PQM, RST,
-                _flatten([N, K, D, H, W, WN, HWN, DHWN,
-                          C, KRST, RST, RS, magic_RS, S, magic_S,
-                          pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                          Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ]))
+            vec_size = 4 if self.dtype.itemsize == 4 else 8
 
-        # shared lookup table size
-        self.fprop_lut_size = RST * 4 * 2
+            self.fprop_kernels = convolution.FpropDirect(
+                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                 pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
 
-        ####### BPROP ###########
-        if C < 16 or C % vec_size != 0:
-            # special kernel for deconv into first layer
-            kernel_name = "%s_bprop_C1_N64" % clss
-
-            if lib.use_cudac_kernels:
-                self.bprop_kernels = [["bprop",
-                                       (HW * (-(-N // 32)), -(-C // 32), 1), (8, 8, 1),
-                                       _flatten([K, M, P, Q, N, T, R, S, C, D, H, W,
-                                                str_w, str_h, pad_w, pad_h,
-                                                PQN // 4, CRST // 4, HWN // 4,
-                                                HW, 0, 0,
-                                                magic_HW, magic_W, magic_S])]]
+            if C % vec_size == 0:
+                self.bprop_kernels = convolution.BpropDirect(
+                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
             else:
-                grid  = (PQM, _grid_dim(32, CRST), _grid_dim(64, N))
-                block = (32, 1, 1)
-                self.bprop_kernels = [[kernel_name, grid, block, 0, _flatten([
-                    N, K, D, H, W, WN, HWN, DHWN,
-                    C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
-                    pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                    Q, PQ, QN, PQN, MPQN, magic_Q, magic_PQ,
-                    CRST*8*self.dtype.itemsize, MPQN*8*self.dtype.itemsize])]]
+                # special kernel for deconv into first layer
+                self.bprop_kernels = convolution.BpropDirectSmallC(
+                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-            # generate the kernel args for transpose CRST,K => K,CRST
-            self.shuffle_args = [CRST, K]
-            gridX   = (K    >> 5) + (K    & 31 != 0)
-            gridY   = (CRST >> 5) + (CRST & 31 != 0)
-            self.shuffle_grid   = (gridX, gridY, 1)
-            self.shuffle_block  = (32, 8, 1)
-            self.bprop_zero     = self.sizeI * self.dtype.itemsize
-            self.bprop_lut_size = 0
+            self.updat_kernels = convolution.UpdateDirect(
+                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                 pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-        else:
+        logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
 
-            if lib.use_cudac_kernels:
-                self.bprop_kernels = [["bprop",
-                                       (HW * (-(-N // 32)), -(-C // 32), 1), (8, 8, 1),
-                                       _flatten([K, M, P, Q, N, T, R, S, C, D, H, W,
-                                                str_w, str_h, pad_w, pad_h,
-                                                PQN // 4, CRST // 4, HWN // 4,
-                                                HW, 0, 0,
-                                                magic_HW, magic_W, magic_S])]]
-            else:
-                self.bprop_kernels = kernel_specs.xprop_conv_kernels(
-                    clss, "bprop", "C", tile_N, grid_N, C, tiles_CK, DHW, RST, _flatten([
-                        N, C, M, P, Q, QN, PQN, MPQN,
-                        K, CRST, RST, RS, magic_RS, S, magic_S,
-                        pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                        W, HW, WN, HWN, DHWN, magic_W, magic_HW,
-                        R, T, magic_str_w, magic_str_h, magic_str_d]))
-
-            # generate the kernel args for dim shuffling CRSTK => KRSTC
-            self.shuffle_args = _flatten([
-                RST*K, RS*K, S*K, K,
-                RST*C, RS*C, S*C, C,
-                RS, magic_RS, S, magic_S])
-            gridX = (K >> 5) + (K & 31 != 0)
-            gridY = (C >> 5) + (C & 31 != 0)
-            self.shuffle_grid   = (gridX, gridY, RST)
-            self.shuffle_block  = (32, 8, 1)
-            self.bprop_zero     = 0
-            self.bprop_lut_size = RST * 4 * 2
-
-        # for k in self.fprop_kernels: print k
-        # for k in self.bprop_kernels: print k
-        # exit()
-
-        ####### UPDATE ###########
-
-        grid_C   = _grid_dim(128, CRST)
-        sm_count = _get_sm_count()
-
-        # in float32 for big feature_map layers the smaller tile is actually faster
-        # so restrict tile selection to just that.
-        if lib.use_cudac_kernels:
-            if deterministic_update:
-                grid_P = 1
-                grid_Q = 1
-                self.determ = CRSTK
-            else:
-                grid_P = P
-                grid_Q = Q
-                self.determ = 0
-
-            pq_blocks = grid_P * grid_Q
-            magic_PQ = _magic64(pq_blocks)
-            magic_Q = _magic64(grid_Q)
-
-            self.updat_kernels = [["update",
-                                   (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1), (8, 32, 1),
-                                   _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
-                                            str_w, str_h, pad_w, pad_h,
-                                            HWN // 4, KRST // 4, PQN // 4,
-                                            PQ, grid_P, grid_Q,
-                                            magic_PQ, magic_Q, magic_S])]]
-        else:
-            if self.dtype.type is np.float32 and PQ > 56*56:
-                K_tiles = (64,)
-            else:
-                K_tiles = (128, 64)
-
-            if deterministic_update:
-                determ = "D"
-                if K <= 64:
-                    K_tiles = (64,)
-                else:
-                    K_tiles = K_tiles[0:1]
-                self.determ = CRSTK
-            else:
-                determ = ""
-                self.determ = 0
-
-
-            self.updat_kernels = []
-            for tile_K, grid_K, offset_K in kernel_specs.K_partitions(K, K_tiles):
-
-                kernel_name = "%s_updat%s_C128_K%d" % (clss, determ, tile_K)
-                base_blocks = M*grid_C*grid_K
-
-                grid_P, grid_Q, threads = kernel_specs.update_grid(kernel_name, base_blocks, P, Q, sm_count)
-                # print grid_P, grid_Q
-
-                grid_PQ   = grid_P * grid_Q
-                magic_PQu = _magic64(grid_PQ)
-                magic_Qu  = _magic64(grid_Q)
-
-                block = (threads, 1, 1)
-                if RST > 1:
-                    grid = (M*grid_PQ, grid_C, grid_K)
-                else:
-                    grid = (grid_C, grid_K, M*grid_PQ)
-
-                self.determ *= M*grid_PQ
-                self.determ_shape = (M*grid_PQ, CRSTK)
-
-                self.updat_kernels.append([kernel_name, grid, block, offset_K, _flatten([
-                    N, K, D, H, W, WN, HWN, DHWN,
-                    C, CRST, RST, magic_RST, RS, magic_RS, S, magic_S,
-                    pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                    P, Q, PQ, QN, PQN, MPQN, magic_Qu, magic_PQu,
-                    grid_P, grid_Q, grid_PQ, CRSTK])])
-
-        # for k in self.updat_kernels: print k
-        # exit()
 
     def init_activations(self, fprop_out=None):
 
@@ -659,9 +511,8 @@ class ConvLayer(Layer):
         return self.bprop_out
 
     def __str__(self):
-        return ("ConvLayer: NCK: (%d, %d, %d) DHW:%s TRS:%s MPQ:%s" %
-                (self.N, self.C, self.K, self.DHW, self.TRS, self.MPQ))
-
+        return ("ConvLayer: NCK: (%3d, %3d, %3d) HW:%s" %
+                (self.N, self.C, self.K, self.DHW[1:3]))
 
 # Add Deconv class
 class DeconvLayer(ConvLayer):
@@ -695,8 +546,7 @@ class DeconvLayer(ConvLayer):
                  R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
                  str_d=1, str_h=1, str_w=1,
-                 relu=False, bsum=False,
-                 deterministic_update=False):
+                 relu=False, bsum=False):
 
         # Set T and D to be consts.
         D = T = 1
@@ -712,7 +562,7 @@ class DeconvLayer(ConvLayer):
             T, R, S,
             pad_d, pad_h, pad_w,
             str_d, str_h, str_w,
-            relu, bsum, deterministic_update)
+            relu, bsum)
 
         self.nOut = reduce(mul, self.DHW, 1) * C
         self.H = H
@@ -827,71 +677,163 @@ class PoolLayer(Layer):
         RST  = T*RS
         JRST = J*RST
         QN   = Q*N
-        PM   = P*M
         PQN  = P*QN
         MPQN = M*PQN
 
-        assert JRST <= N or N >= 32, "Edge case not currently implemented"
         assert JRST+32 < 2**16, "Integer division is faster with 16bit numerators"
+
+        sb_large = {
+            #SB  shlP maskP shrP shlQ maskQ shrQ maskN shrN
+            1  : (0,   0x00, 0,   0,   0x00, 0,   0xfff, 32), # 1x1  nnnnn
+            2  : (0,   0x00, 0,   1,   0x10, 4,   0x00f,  4), # 1x2  xnnnn
+            4  : (0,   0x00, 0,   2,   0x18, 3,   0x007,  3), # 1x4  xxnnn
+            8  : (0,   0x00, 0,   3,   0x1c, 2,   0x003,  2), # 1x8  xxxnn
+            16 : (0,   0x00, 0,   4,   0x1e, 1,   0x001,  1), # 1x16 xxxxn
+            32 : (0,   0x00, 0,   5,   0x1f, 0,   0x000,  0), # 1x32 xxxxx
+        }
+        sb_medium = {
+            #SB  shlP maskP shrP shlQ maskQ shrQ maskN shrN
+            8  : (1,   0x10, 4,   2,   0x0c, 2,   0x003,  2), # 2x4  yxxnn
+            16 : (1,   0x10, 4,   3,   0x0e, 1,   0x001,  1), # 2x8  yxxxn
+            32 : (1,   0x10, 4,   4,   0x0f, 0,   0x000,  0), # 2x16 yxxxx
+        }
+        sb_small = {
+            #SB  shlP maskP shrP shlQ maskQ shrQ maskN shrN
+            16 : (2,   0x18, 3,   2,   0x06, 1,   0x001,  1), # 4x4  yyxxn
+            32 : (2,   0x18, 3,   3,   0x07, 0,   0x000,  0), # 4x8  yyxxx
+        }
+
+        if N == 1:
+            super_block = 0
+        elif N < 32:
+            super_block = len(bin(N-1))-2
+        else:
+            super_block = 5
+        super_block = 1 << (5 - super_block)
+
+        # try to minimize the zero overlap in the superblock
+        # but maximize the x dim of the superblock for more contiguous memory access
+        if super_block < 8 or Q > 64:
+            sb_params = sb_large.get(super_block)
+        elif super_block < 16 or Q > 32:
+            sb_params = sb_medium.get(super_block)
+        else:
+            sb_params = sb_small.get(super_block)
+
+        supP = _ceil_div(P, 1 << sb_params[0])
+        supQ = _ceil_div(Q, 1 << sb_params[3])
 
         # precompute the magic numbers and shift amounts for integer division
         magic_RST = _magic32(JRST+32, RST)
         magic_RS  = _magic32(RST+32, RS)
         magic_S   = _magic32(RS+32, S)
-        magic_P   = _magic32(PM, P)
+        magic_P   = _magic32(M*supP, supP)
 
         fprop_name = "fprop_" + op
         bprop_name = "bprop_" + op
 
-        self.fprop_kernel = [fprop_name, (Q, PM, K), (N, 1, 1), _flatten([
+        threads = 32 if super_block > 1 else N
+
+        self.fprop_kernel = [fprop_name, (supQ, supP*M, K), (threads, 1, 1), _flatten([
             N, W, H, D, C, WN, HWN, DHWN,
             P, Q, magic_P, QN, PQN, MPQN,
             pad_c, pad_d, pad_h, pad_w,
             str_c, str_d, str_h, str_w,
-            S, RS, RST, JRST, magic_S, magic_RS, magic_RST])]
+            S, RS, RST, JRST, magic_S, magic_RS, magic_RST,
+            supP, supQ, sb_params ])]
 
         lut_size = JRST
         if lut_size % 4 != 0:
             lut_size += 4 - lut_size % 4
 
-        self.bprop_lut_size = self.fprop_lut_size = lut_size * 4
+        self.bprop_lut_size = self.fprop_lut_size = super_block * lut_size * 4
 
         if self.overlap > 0:
 
             # we have a special kernel to handle the overlapping avg pooling
             bprop_name += "_overlap"
 
-            magic_H     = _magic32(DH, H)
             magic_str_w = _magic32(W + S, str_w)
             magic_str_h = _magic32(H + R, str_h)
             magic_str_d = _magic32(D + T, str_d)
             magic_str_c = _magic32(C + J, str_c)
 
-            self.bprop_kernel = [bprop_name, (W, DH, C), (N, 1, 1), _flatten([
-                N, W, H, D, C, WN, HWN, DHWN, magic_H,
-                pad_w, pad_h, pad_d, pad_c,
-                str_w, str_h, str_d, str_c,
-                magic_str_w, magic_str_h, magic_str_d, magic_str_c,
-                S, R, T, J, RS, RST, JRST, magic_S, magic_RS, magic_RST,
-                Q, P, M, K, QN, PQN, MPQN])]
+            if super_block > 1:
 
-            self.bprop_lut_size *= 2
+                bprop_name += "_smallN"
+
+                if super_block < 8 or W > 64:
+                    sb_params = sb_large.get(super_block)
+                elif super_block < 16 or W > 32:
+                    sb_params = sb_medium.get(super_block)
+                else:
+                    sb_params = sb_small.get(super_block)
+
+                supH = _ceil_div(H, 1 << sb_params[0])
+                supW = _ceil_div(W, 1 << sb_params[3])
+
+                magic_H = _magic32(D*supH, supH)
+
+                maxLutSize = \
+                    _ceil_div(S, str_w) * \
+                    _ceil_div(R, str_h) * \
+                    _ceil_div(T, str_d) * \
+                    _ceil_div(J, str_c)
+
+                print (supW, D*supH, C), sb_params, maxLutSize
+
+                self.bprop_kernel = [bprop_name, (supW, D*supH, C), (threads, 1, 1), _flatten([
+                    N, W, H, D, C, WN, HWN, DHWN, magic_H,
+                    pad_w, pad_h, pad_d, pad_c,
+                    str_w, str_h, str_d, str_c,
+                    magic_str_w, magic_str_h, magic_str_d, magic_str_c,
+                    S, R, T, J, RS, RST, JRST, magic_S, magic_RS, magic_RST,
+                    Q, P, M, K, QN, PQN, MPQN,
+                    supH, supW, sb_params, maxLutSize])]
+
+                lut_size = maxLutSize
+                if lut_size % 4 != 0:
+                    lut_size += 4 - lut_size % 4
+
+                self.bprop_lut_size = super_block * lut_size * 4 * 2
+
+            else:
+
+                # The overlap kernel can be much more efficient if we aren't doing superblocking
+                magic_H = _magic32(DH, H)
+
+                self.bprop_kernel = [bprop_name, (W, DH, C), (threads, 1, 1), _flatten([
+                    N, W, H, D, C, WN, HWN, DHWN, magic_H,
+                    pad_w, pad_h, pad_d, pad_c,
+                    str_w, str_h, str_d, str_c,
+                    magic_str_w, magic_str_h, magic_str_d, magic_str_c,
+                    S, R, T, J, RS, RST, JRST, magic_S, magic_RS, magic_RST,
+                    Q, P, M, K, QN, PQN, MPQN])]
+
+                self.bprop_lut_size = lut_size * 4 * 2
         else:
-            self.bprop_kernel = [bprop_name, (Q, PM, K), (N, 1, 1), _flatten([
+            self.bprop_kernel = [bprop_name, (supQ, supP*M, K), (threads, 1, 1), _flatten([
                 N, W, H, D, C, WN, HWN, DHWN,
                 P, Q, magic_P, QN, PQN, MPQN,
                 pad_c, pad_d, pad_h, pad_w,
                 str_c, str_d, str_h, str_w,
-                S, RS, RST, JRST, magic_S, magic_RS, magic_RST])]
+                S, RS, RST, JRST, magic_S, magic_RS, magic_RST,
+                supP, supQ, sb_params])]
+
+    def init_activations(self, fprop_out=None):
+
+        super(PoolLayer, self).init_activations(fprop_out)
+
+        self.argmax = self.lib.empty(self.dimO, dtype=np.uint8)
 
     def fprop(self, fprop_in, scale_weights=0):
         """ Used for benchmarking only"""
         fprop_in = super(PoolLayer, self).fprop(fprop_in)
-        self.lib.fprop_pool(self, fprop_in, self.fprop_out)
+        self.lib.fprop_pool(self, fprop_in, self.fprop_out, argmax=self.argmax)
         return self.fprop_out
 
     def bprop(self, bprop_in, beta=0):
-        self.lib.bprop_pool(self, self.fprop_in, bprop_in, self.bprop_out)
+        self.lib.bprop_pool(self, bprop_in, self.bprop_out, argmax=self.argmax)
         return self.bprop_out
 
     def __str__(self):
@@ -1153,15 +1095,11 @@ class BatchNorm(Layer):
         pass
 
 
-def _grid_dim(tile_size, dim_size):
-    return dim_size // tile_size + (dim_size % tile_size != 0)
-
 
 # Magic numbers and shift amounts for integer division
 # Suitable for when nmax*magic fits in 32 bits
 # Shamelessly pulled directly from:
 # http://www.hackersdelight.org/hdcodetxt/magicgu.py.txt
-
 def _magic32(nmax, d):
     nc = ((nmax + 1) // d) * d - 1
     nbits = len(bin(nmax)) - 2
@@ -1174,8 +1112,6 @@ def _magic32(nmax, d):
 # Magic numbers and shift amounts for integer division
 # Suitable for when nmax*magic fits in 64 bits and the shift
 # lops off the lower 32 bits
-
-
 def _magic64(d):
     # 3 is a special case that only ends up in the high bits
     # if the nmax is 0xffffffff
@@ -1188,12 +1124,12 @@ def _magic64(d):
     return (magic, shift)
 
 # flatten a nested list of lists or values
-
-
 def _flatten(lst):
     return sum(([x] if not isinstance(x, (list, tuple))
                 else _flatten(x) for x in lst), [])
 
+def _ceil_div(x, y):
+    return -(-x // y)
 
 @context_dependent_memoize
 def _get_sm_count():

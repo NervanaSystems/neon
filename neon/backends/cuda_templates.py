@@ -37,6 +37,7 @@ Templates for cuda kernels:
     _reduction_ops:        sum, max, min, argmax, argmin
 """
 
+# RAND_POOL_SIZE set to 65536 == 2048 * 32
 
 _ew_template = r"""
 
@@ -382,11 +383,15 @@ __device__ __forceinline__ float max_abs(int max_abs, int val)
 _ew_types = {
     "f4": {
         "type": "float",
+        "type4": "float4",
         "cvt": "",
+        "cvt_out": "",
     },
     "f2": {
         "type": "unsigned short",
+        "type4": "ushort4",
         "cvt": "fp16_to_fp32",
+        "cvt_out": "fp32_to_fp16",
     },
     "i4": {
         "type": "int",
@@ -505,7 +510,7 @@ _ew_strings = {
         },
         "nearest": {
             "f2": "unsigned short {0}   = fp32_to_fp16({1});",
-            "u4": "unsigned int {0}      = fp32_to_uint32({1});",
+            "u4": "unsigned int {0}     = fp32_to_uint32({1});",
             "u2": "unsigned short {0}   = fp32_to_uint16({1});",
             "u1": "unsigned char {0}    = fp32_to_uint8({1});",
             "i4": "int {0}              = fp32_to_int32({1});",

@@ -31,7 +31,7 @@ from neon.backends.util.check_gpu import get_device_count
 def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
                 max_devices=get_device_count(), compat_mode=None, 
-                deterministic_update=True):
+                deterministic_update=False, deterministic=True):
     """
     Construct and return a backend instance of the appropriate type based on
     the arguments given. With no parameters, a single CPU core, float32
@@ -60,6 +60,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
         compat_mode (str, optional): if this is set to 'caffe' then the conv and pooling
                                      layer output sizes will match that of caffe as will
                                      the dropout layer implementation
+        deterministic (bool, optional): if set to true, all operations will be done deterministically.
 
     Returns:
         Backend: newly constructed backend instance of the specifed type.
@@ -77,6 +78,10 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
         # at exit from python force cleanup of backend only register this function once, will use
         # NervanaObject.be instead of a global
         atexit.register(cleanup_backend)
+
+    if deterministic_update:
+       deterministic = True 
+       logger.warning("--deterministic_update is deprecated in favor of --deterministic")
 
     if backend == 'cpu' or backend is None:
         from neon.backends.nervanacpu import NervanaCPU
@@ -96,7 +101,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                             stochastic_round=stochastic_round,
                             device_id=device_id,
                             compat_mode=compat_mode, 
-                            deterministic_update=deterministic_update)
+                            deterministic=deterministic)
         else:
             try:
                 from mgpu.nervanamgpu import NervanaMGPU
@@ -104,7 +109,9 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 be = NervanaMGPU(rng_seed=rng_seed,
                                  default_dtype=datatype,
                                  stochastic_round=stochastic_round,
-                                 num_devices=max_devices)
+                                 num_devices=max_devices,
+                                 compat_mode=compat_mode,
+                                 deterministic=deterministic)
             except ImportError:
                 logger.error("Multi-GPU support is a premium feature "
                              "available exclusively through the Nervana cloud."

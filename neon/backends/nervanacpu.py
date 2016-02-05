@@ -933,7 +933,7 @@ class NervanaCPU(Backend):
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
                    str_d=1, str_h=1, str_w=1,
-                   bsum=False, deterministic_update=False):
+                   bsum=False):
         """
         Create a new ConvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -958,8 +958,6 @@ class NervanaCPU(Backend):
         bsum: calculate the sum along the batchnorm axis for fprop or bprop
               outputs an fp32 tensor of size Kx1
 
-        deterministic_update: avoid use of atomic operations for update
-                              to make it deterministic (GPU only)
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
                          pad_d, pad_h, pad_w, str_d, str_h, str_w)

@@ -656,13 +656,12 @@ class NervanaGPU(Backend):
                  rng_seed=None,
                  default_dtype=np.float32,
                  stochastic_round=False,
-                 scratch_size=9 * 1024 * 1024,
+                 deterministic=True,
                  device_id=0,
                  bench=False,
                  hist_bins=64,
                  hist_offset=-48,
-                 compat_mode=None,
-                 deterministic_update=True):
+                 compat_mode=None):
         if default_dtype not in [np.float16, np.float32]:
             raise ValueError('Default data type for nervanagpu '
                              'backend must be float16 or 32')
@@ -690,7 +689,7 @@ class NervanaGPU(Backend):
         super(NervanaGPU, self).__init__(rng_seed,
                                          default_dtype,
                                          compat_mode=compat_mode,
-                                         deterministic_update=deterministic_update)
+                                         deterministic=deterministic)
 
         # log
         logger.info("Initialized NervanaGPU")
@@ -704,12 +703,14 @@ class NervanaGPU(Backend):
             stochastic_round = 0
 
         # attributes
-        self.scratch_size = scratch_size
+        self.deterministic = deterministic
+        self.scratch_size = 0
         self.round_mode = stochastic_round
         self.bench = bench
         self.stream = None
         self.buf = {}
         self.buf_active = {}
+        self.warmup = False
 
         # store histograms for batched memcpy
         self.hist_bins = hist_bins
@@ -734,21 +735,43 @@ class NervanaGPU(Backend):
         else:
             self.use_cudac_kernels = False
 
+        try:
+            from winograd.convolution import FpropWinograd, BpropWinograd, UpdateWinograd
+            logger.debug("Imported winograd kernels")
+            self.have_winograd = True
+        except ImportError:
+            self.have_winograd = False
+
+
     def scratch_buffer(self, size, offset=0):
 
-        if offset & 255 != 0:
-            offset += 256 - (offset & 255)
+        if offset & 127 != 0:
+            offset += 128 - (offset & 127)
 
         if size + offset > self.scratch_size:
-            raise RuntimeError("nervanagpu.scratch_size is too small for this operation.")
+            raise RuntimeError("nervanagpu.scratch_size(%d) is too small for this operation." % self.scratch_size)
 
-        return int(_get_scratch_data(self.scratch_size)) + offset * 4
+        return int(_get_scratch_data(self.scratch_size)) + offset
+
+    def set_scratch_size(self, *args):
+
+        total_size = 0
+        for size in args:
+            if size & 127 != 0:
+                size += 128 - (size & 127)
+            total_size += size
+
+        if total_size > self.scratch_size:
+            self.scratch_size = total_size
 
     def __del__(self):
         try:
             self.ctx.detach()
         except:
             pass
+
+    def get_events(self):
+        return _get_events()
 
     def gen_rng(self, seed=None):
         """
@@ -797,9 +820,12 @@ class NervanaGPU(Backend):
         # but want to reset it after this is done
         state_save = self.rng.get_state()
 
+        # smaller number for 32bit systems
+        maxexp = 32 if sys.maxint > 2**32 else 30
+
         # draw _RNG_POOL_SIZE 32 bit ints to seed LFSR on device
         # lower bound 1 to avoid seeding LFSR with 0
-        rand_init = self.rng.random_integers(1, 2**32 - 1, NervanaGPU._RNG_POOL_SIZE)
+        rand_init = self.rng.random_integers(1, 2**maxexp - 1, NervanaGPU._RNG_POOL_SIZE)
         rand_init = rand_init.astype(np.uint32)
 
         # put the numpy (on host) RNG back to its state before
@@ -1284,13 +1310,12 @@ class NervanaGPU(Backend):
 
         gridA = m // sizeA + (m % sizeA != 0)
         gridB = n // sizeB + (n % sizeB != 0)
-        threads = 256 if size == "128x128" else 128
 
-        k_vec = 4 if sizeA == 32 or sizeB == 32 else 16
+        k_vec = 8 if sizeA == 32 or sizeB == 32 else 16
 
         if (op == "tn" and m % 4 == 0 and n % 4 == 0 or
-                op == "nn" and k % k_vec == 0 and n % 4 == 0 or
-                op == "nt" and k % k_vec == 0):
+            op == "nn" and k % k_vec == 0 and n % 4 == 0 or
+            op == "nt" and k % k_vec == 0 and n % 4 == 0):
             op += "_vec"
 
         # nt and nn are more efficient with k%16==0
@@ -1307,7 +1332,7 @@ class NervanaGPU(Backend):
 
         kernel = kernel_specs.get_kernel("_".join((clss, op, size)))
         params = [
-            (1, gridA, gridB), (threads, 1, 1), self.stream,
+            (1, gridA, gridB), (kernel.threads, 1, 1), self.stream,
             C.gpudata, A.gpudata, B.gpudata, alpha, beta, flags,
             lda, ldb, ldc, m, n, k,
             0, 0, 0, 0]
@@ -1330,7 +1355,7 @@ class NervanaGPU(Backend):
             msecs = end.time_since(start) / repeat
             gflops = (m * n * k * 2.0) / (msecs * 1000000.0)
             print("%7.3f msecs %4.0f gflops (%s_%s: %d,%d,%d) size:%s grid:(%d,%d)" %
-                  (msecs, gflops, clss, op, m, n, k, size, gridA, gridB))
+                 (msecs, gflops, clss, op, m, n, k, size, gridA, gridB))
             if repeat > 1:
                 return gflops
         if bsum is not None:
@@ -1574,134 +1599,58 @@ class NervanaGPU(Backend):
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
                          pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                         relu, bsum, self.deterministic_update)
+                         relu, bsum)
 
     def fprop_conv(self, layer, I, F, O, alpha=1.0, beta=0.0, bsum=None, repeat=1):
         assert layer.sizeI == I.size
         assert layer.sizeF == F.size
         assert layer.sizeO == O.size
 
-        return self._execute_conv(
-            layer, "fprop", layer.fprop_kernels, layer.fprop_lut_size,
-            I, F, O, alpha, beta, bsum, 0, repeat)
+        layer.fprop_kernels.bind_params(I, F, O, alpha, beta, bsum)
+
+        return self._execute_conv("fprop", layer, layer.fprop_kernels, repeat)
 
     def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, beta=0.0, bsum=None, repeat=1):
         assert layer.sizeF == F.size
         assert layer.sizeO == E.size
         assert layer.sizeI == grad_I.size
 
-        return self._execute_conv(
-            layer, "bprop", layer.bprop_kernels, layer.bprop_lut_size,
-            E, F, grad_I, alpha, beta, bsum, layer.bprop_zero, repeat)
+        layer.bprop_kernels.bind_params(E, F, grad_I, alpha, beta, bsum)
+
+        return self._execute_conv("bprop", layer, layer.bprop_kernels, repeat)
 
     def update_conv(self, layer, I, E, grad_F, alpha=1.0, repeat=1):
         assert layer.sizeI == I.size
         assert layer.sizeO == E.size
         assert layer.sizeF == grad_F.size
 
-        return self._execute_conv(
-            layer, "updat", layer.updat_kernels, 0,
-            I, E, grad_F, alpha, 0.0, None, layer.sizeF*4, repeat)
+        layer.updat_kernels.bind_params(I, E, grad_F, alpha)
 
-    def _execute_conv(self, layer, op, kernel_list, shared,
-                      A, B, C, alpha, beta, bsum, zero, repeat):
+        return self._execute_conv("updat", layer, layer.updat_kernels, repeat)
 
-        assert A.dtype == B.dtype
-
-        flags = 0
-        if layer.relu:
-            flags |= 2
-        if layer.bsum and bsum is not None:
-            flags |= 4
-            batch_sum_data = bsum.gpudata
-        else:
-            batch_sum_data = 0
-
-        A_gpudata      = A.gpudata
-        B_gpudata      = B.gpudata
-        C_gpudata      = C.gpudata
-
-        shuffle_kernel = None
-        convert_type   = False
-        reduce_shape   = False
-
-        # Disable two step deterministic update when CUDA C kernels are used
-        if layer.determ and self.use_cudac_kernels:
-            determ_size = 0
-        else:
-            determ_size = layer.determ
-
-        from neon.backends.float_ew import _get_transpose_kernel, _get_shuffle_kernel, _fp_convert
-
-        if op == "bprop":
-            B_gpudata = self.scratch_buffer(B.size)
-            if zero:
-                shuffle_kernel = _get_transpose_kernel(B.dtype.str[1:])
-                if beta:
-                    zero = False # let atomic adds accumulate on top
-                    if beta != 1.0:
-                        C[:] = C * beta # pre-apply beta
-            else:
-                shuffle_kernel = _get_shuffle_kernel(B.dtype.str[1:])
-            shuffle_args = [layer.shuffle_grid, layer.shuffle_block, self.stream,
-                            B_gpudata, B.gpudata] + layer.shuffle_args
-
-        elif op == "updat" and (C.dtype.type is not np.float32 or determ_size):
-            C_gpudata    = self.scratch_buffer(determ_size or C.size)
-            convert_type = "f4"
-            if determ_size:
-                zero = False
-                reduce_shape = layer.determ_shape
-
-        kernels = []
-        for kernel in kernel_list:
-            if self.use_cudac_kernels:
-                from neon.backends.kernels.cuda.convolution import _get_conv_kernel
-
-                kernels.append([
-                    _get_conv_kernel(A.dtype.str[1:], layer.TRS[1] * layer.TRS[2],
-                                     (flags & 4) == 4, kernel[0], layer.K < 32),
-                    kernel[1], kernel[2], self.stream, alpha, beta, A_gpudata, B_gpudata,
-                    C_gpudata, batch_sum_data] + kernel[3])
-            else:
-                kernels.append([
-                    kernel_specs.get_kernel(kernel[0]), kernel[1], kernel[2], self.stream,
-                    batch_sum_data, C_gpudata, A_gpudata, B_gpudata, alpha, beta, flags,
-                    kernel[3]] + kernel[4])
-
+    def _execute_conv(self, op, layer, kernels, repeat):
         # Warmup
         if repeat > 1:
-            for r in range(max(repeat // 10, 1)):
-                for kernel in kernels:
-                    kernel[0].prepared_async_call(*kernel[1:], shared_size=shared)
+            kernels.execute(max(repeat // 10, 1), unbind=False)
 
         if self.bench or repeat > 1:
             start, end = _get_events()
             start.record(stream=self.stream)
 
-        for r in range(repeat):
-            if zero:
-                drv.memset_d8_async(C_gpudata, 0, zero, self.stream)
+        kernels.execute(repeat)
 
-            if batch_sum_data:
-                drv.memset_d32_async(batch_sum_data, 0, bsum.size, self.stream)
-
-            if shuffle_kernel:
-                shuffle_kernel.prepared_async_call(*shuffle_args)
-
-            for kernel in kernels:
-                kernel[0].prepared_async_call(*kernel[1:], shared_size=shared)
-
-            if convert_type:
-                _fp_convert(C_gpudata, convert_type, C, reduce_shape,
-                            self.compute_capability)
+#        TODO not sure if this part is needed for cuda kernels?
+#        if convert_type:
+#            _fp_convert(C_gpudata, convert_type, C, reduce_shape,
+#                        self.compute_capability)
 
         if self.bench or repeat > 1:
             end.record(stream=self.stream)
             end.synchronize()
             msecs  = end.time_since(start) / repeat
             gflops = layer.flops / (msecs * 1000000.0)
-            print("%7.3f msecs %4.0f gflops %6.0f (%s: %s)" %
+            #if layer.TRS[2] == 3:
+            print("%7.3f msecs %5.0f gflops %6.0f (%s: %s)" %
                   (msecs, gflops, layer.flops/1000000.0, op, layer))
             return msecs, gflops
         return 0, 0
@@ -1745,7 +1694,7 @@ class NervanaGPU(Backend):
         """
         return DeconvLayer(self, dtype, N, C, K, P, Q, R, S,
                            pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                           relu, bsum, self.deterministic_update)
+                           relu, bsum)
 
     def lrn_layer(self, dtype, N, C, D=1, H=1, W=1, J=1):
         """
@@ -1962,7 +1911,7 @@ class NervanaGPU(Backend):
             end.record(self.stream)
             end.synchronize()
             msecs = end.time_since(start) / repeat
-            print("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
+            print("%7.3f msecs (%s)" % (msecs, layer))
 
 
     def roipooling_fprop(self, I, rois, O, argmax, roi_count, fm_channel, fm_height, fm_width,
@@ -2144,8 +2093,7 @@ class NervanaGPU(Backend):
                   (msecs, bandwidth, kernel.name, blocks, N, threads, occup))
 
 
-    def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0,
-                           deterministic=True):
+    def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0):
         """
         Backward propagate lookup table layer.
 
@@ -2158,7 +2106,6 @@ class NervanaGPU(Backend):
             pad_idx (integer):
             alpha (float):
             beta (float):
-            deterministic (boolean): Chooses between deterministic and non-deterministic kernels.
         """
         from neon.backends.float_ew import (_get_lut_bprop_kernel,
                                             _get_sorting_kernel)
@@ -2168,7 +2115,7 @@ class NervanaGPU(Backend):
         if pad_idx is None:
             pad_idx = int(-1)
 
-        if deterministic:
+        if self.deterministic:
             index_buffer = self.empty((error.shape[1],), dtype=np.int32)
             offset_buffer = self.empty((error.shape[1],), dtype=np.int32)
             word_counts = self.zeros((max(512, vocab_size) + 512,), dtype=np.int32)
@@ -2314,7 +2261,7 @@ def _contiguous_strides(shape):
 
 @context_dependent_memoize
 def _get_scratch_data(scratch_size):
-    return drv.mem_alloc(scratch_size * 4)
+    return drv.mem_alloc(scratch_size)
 
 
 @context_dependent_memoize

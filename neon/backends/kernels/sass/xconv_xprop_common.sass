@@ -370,13 +370,7 @@ LUT_LOOP:
 --:-:-:-:1      ISETP.GE.AND  P4, PT, x, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND  P5, PT, y, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND  P6, PT, z, RZ, P6;
-// s = S - s - 1
-// r = R - r - 1
-// t = T - t - 1
 // rst_prime = t*RS + r*S + s
---:-:-:-:1      IADD3 s, -s, param_S, -one;
---:-:-:-:1      IADD3 r, -r, param_R, -one;
---:-:-:-:1      IADD3 t, -t, param_T, -one;
 --:-:-:-:1      XMAD  rst_prime, r, param_S,  s;
 --:-:-:-:1      XMAD  rst_prime, t, param_RS, rst_prime;
 // x_prime = x / str_w
