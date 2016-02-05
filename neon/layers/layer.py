@@ -547,7 +547,7 @@ class ParameterLayer(Layer):
                 setattr(self, key, None)
 
             attr = getattr(self, key)
-            if type(attr) is Tensor:
+            if isinstance(attr, Tensor):
                 # this attr has already been allocated
                 # get set the values
                 attr.set(pdict['params'][key])

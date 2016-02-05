@@ -92,8 +92,7 @@ class Callbacks(NervanaObject):
 
         self.model = weakref.ref(model)
 
-        if model_file:
-            model.load_params(model_file)
+        self.model_file = model_file
 
         self.add_callback(TrainCostCallback())
 
@@ -224,6 +223,8 @@ class Callbacks(NervanaObject):
 
         time_markers = self.callback_data.create_group("time_markers")
         time_markers.create_dataset("minibatch", (epochs,))
+        if self.model_file:
+            self.model().load_params(self.model_file)
 
         for c in self.callbacks:
             c.on_train_begin(self.callback_data, self.model(), epochs)
