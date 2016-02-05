@@ -1,5 +1,15 @@
 # ChangeLog
 
+## v1.2.1 (2016-02-05):
+
+### Modifications
+
+* New MergeSum, Colornoise layers
+* support for aspect_ratio scaling augmentation
+* updated IMDB sentiment analysis example
+* generic CSV batchwriter
+* various build and deserialization bugfixes, doc updates
+
 ## v1.2.0 (2016-01-29):
 
 ### Modifications
