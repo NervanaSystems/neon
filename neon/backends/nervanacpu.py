@@ -1312,7 +1312,7 @@ class NervanaCPU(Backend):
         return PoolLayer(self, dtype, op, N, C, D, H, W, J, T, R, S,
                          pad_c, pad_d, pad_h, pad_w, str_c, str_d, str_h, str_w)
 
-    def fprop_pool(self, layer, I, O, argmax=None):
+    def fprop_pool(self, layer, I, O, argmax=None, beta=0.0):
         """
         Forward propagate pooling layer.
 
@@ -1356,12 +1356,14 @@ class NervanaCPU(Backend):
                         sliceI = array_I[sliceC, sliceD, sliceH, sliceW, :].reshape(-1, N)
                         if op == "max":
                             array_argmax[k, m, p, q, :] = np.argmax(sliceI, axis=0)
-                            array_O[k, m, p, q, :] = np.max(sliceI, axis=0)
+                            array_O[k, m, p, q, :] = array_O[k, m, p, q, :] * beta + \
+                                np.max(sliceI, axis=0)
                         elif op == "avg":
-                            array_O[k, m, p, q, :] = np.mean(sliceI, axis=0)
+                            array_O[k, m, p, q, :] = array_O[k, m, p, q, :] * beta + \
+                                np.mean(sliceI, axis=0)
                         elif op == "l2":
-                            array_O[k, m, p, q, :] = np.sqrt(np.sum(
-                                np.square(sliceI), axis=0))
+                            array_O[k, m, p, q, :] = array_O[k, m, p, q, :] * beta + \
+                                np.sqrt(np.sum(np.square(sliceI), axis=0))
 
     def bprop_pool(self, layer, I, O, argmax=None, alpha=1.0, beta=0.0):
         """
@@ -1552,7 +1554,8 @@ class NervanaCPU(Backend):
                                 if max_idx_tmp[c] == (h * W + w):
                                     array_delta[c, h, w, int(idx)] += array_E[c, ph, pw, b_id]
 
-    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho, relu):
+    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
+                          accumbeta=0.0, relu=False):
         """
         Function to perform batch normalization forward pass. Included
         for API compatibility with GPU compound kernel call.
