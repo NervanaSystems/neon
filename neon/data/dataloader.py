@@ -21,11 +21,14 @@ import atexit
 
 from neon import NervanaObject
 from media import MediaParams
+from indexer import Indexer
 
 logger = logging.getLogger(__name__)
 
 
 BufferPair = (ct.c_void_p) * 2
+
+
 class DeviceParams(ct.Structure):
     _fields_ = [('type', ct.c_int),
                 ('id', ct.c_int),
@@ -43,7 +46,7 @@ class DataLoader(NervanaObject):
                  datum_size, target_size,
                  datum_dtype=np.float32, target_dtype=np.float32,
                  onehot=False, nclasses=None):
-        if os.path.exists(repo_dir) == False:
+        if not os.path.exists(repo_dir):
             raise IOError('Directory not found: %s' % repo_dir)
         if onehot is True and nclasses is None:
             raise ValueError('nclasses must be specified for one-hot labels')
@@ -117,7 +120,10 @@ class DataLoader(NervanaObject):
         Launch background threads for loading the data.
         """
         # Limited to a single integer label for now.
+        assert self.target_size == 1
         assert np.dtype(self.target_dtype).itemsize == 4
+        indexer = Indexer(self.repo_dir)
+        indexer.run()
         datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
         target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
         self.loader = self.loaderlib.start(

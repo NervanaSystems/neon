@@ -245,6 +245,8 @@ protected:
             }
             // At this point, we have decoded data for the whole minibatch.
             BufferPair& outBuf = _out.getForWrite();
+            // TODO: The transpose operation needs to be aware of the
+            // underlying data type's size.
             Matrix<char>::transpose(outBuf.first->_data,
                                     _batchSize, _datumSize);
             // Copy to device.
@@ -357,23 +359,8 @@ public:
       _batchSize(batchSize), _datumSize(datumSize), _targetSize(targetSize),
       _readBufs(0), _decodeBufs(0), _readPool(0), _decodePool(0),
       _device(0), _reader(0), _decoder(0) {
-#if HASGPU
-        if (deviceParams->_type == CPU) {
-            _device = new Cpu(deviceParams);
-        } else {
-            _device = new Gpu(deviceParams);
-        }
-#else
-        assert(deviceParams->_type == CPU);
-        _device = new Cpu(deviceParams);
-#endif
-        if (false == true) { // XXX
-            //_reader = new MacrobatchReader(filename, macro_start,
-            //                              numData, minibatch_size, shuffle);
-        } else {
-            _reader = new FileReader(itemCount, batchSize, repoDir, shuffle);
-        }
-
+        _device = Device::create(deviceParams);
+        _reader = Reader::create(itemCount, batchSize, repoDir, shuffle);
         _decoder = Decoder::create(mediaParams);
     }
 

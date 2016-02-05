@@ -19,6 +19,12 @@
 
 enum DeviceType { CPU=0, GPU=1 };
 
+class DeviceParams {
+public:
+    int                         _type;
+    int                         _id;
+};
+
 class Device {
 public:
     Device(int type) : _type(type) {}
@@ -29,20 +35,10 @@ public:
     virtual int copyDataBack(int idx, char* data, int size) = 0;
     virtual int copyLabelsBack(int idx, char* data, int size) = 0;
 
+    static Device* create(DeviceParams* params);
+
 public:
     int                         _type;
-};
-
-class DeviceParams {
-public:
-    int                         _type;
-    int                         _id;
-};
-
-class CpuParams : public DeviceParams {
-public:
-    char*                       _data[2];
-    char*                       _targets[2];
 };
 
 #if HASGPU
@@ -63,6 +59,12 @@ void check(T err, T sval, const char* const func,
     throw runtime_error("CUDA error\n");
 }
 
+class CpuParams : public DeviceParams {
+public:
+    char*                       _data[2];
+    char*                       _targets[2];
+};
+
 class GpuParams : public DeviceParams {
 public:
     CUdeviceptr                 _data[2];
@@ -80,16 +82,15 @@ public:
         }
     }
 
-    Gpu(DeviceParams* params)
+    Gpu(GpuParams* params)
     : Device(GPU), _alloc(false), _id(params->_id) {
-        GpuParams* gpuParams = reinterpret_cast<GpuParams*>(params);
         for (int i = 0; i < 2; i++) {
-            _data[i] = gpuParams->_data[i];
-            _targets[i] = gpuParams->_targets[i];
+            _data[i] = params->_data[i];
+            _targets[i] = params->_targets[i];
         }
     }
 
-    ~Gpu() {
+    virtual ~Gpu() {
         if (_alloc == true) {
             for (int i = 0; i < 2; i++) {
                 cuMemFree(_data[i]);
@@ -162,16 +163,15 @@ public:
         }
     }
 
-    Cpu(DeviceParams* params)
+    Cpu(CpuParams* params)
     : Device(CPU), _alloc(false) {
-        CpuParams* cpuParams = reinterpret_cast<CpuParams*>(params);
         for (int i = 0; i < 2; i++) {
-            _data[i] = cpuParams->_data[i];
-            _targets[i] = cpuParams->_targets[i];
+            _data[i] = params->_data[i];
+            _targets[i] = params->_targets[i];
         }
     }
 
-    ~Cpu() {
+    virtual ~Cpu() {
         if (_alloc == true) {
             for (int i = 0; i < 2; i++) {
                 delete[] _data[i];
@@ -209,3 +209,15 @@ private:
     char*                       _targets[2];
     bool                        _alloc;
 };
+
+Device* Device::create(DeviceParams* params) {
+#if HASGPU
+    if (params->_type == CPU) {
+        return new Cpu(reinterpret_cast<CpuParams*>(params));
+    }
+    return new Gpu(reinterpret_cast<GpuParams*>(params));
+#else
+    assert(deviceParams->_type == CPU);
+    return new Cpu(reinterpret_cast<CpuParams*>(params));
+#endif
+}

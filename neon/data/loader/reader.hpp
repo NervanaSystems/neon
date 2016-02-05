@@ -115,6 +115,9 @@ public:
     virtual int totalTargetsSize() {
         return 0;
     }
+
+    static Reader* create(int* itemCount, int batchSize, char* repoDir,
+                          bool shuffle);
 };
 
 class FileReader : public Reader {
@@ -125,9 +128,6 @@ public:
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
-    }
-
-    virtual ~FileReader() {
     }
 
     int read(CharBuffer* data, CharBuffer* targets) {
@@ -383,3 +383,9 @@ private:
     bool                        _shuffle;
     std::deque<DataPair>        _shuffleQueue;
 };
+
+Reader* Reader::create(int* itemCount, int batchSize, char* repoDir,
+                       bool shuffle) {
+    // TODO: macrobatch reader.
+    return new FileReader(itemCount, batchSize, repoDir, shuffle);
+}

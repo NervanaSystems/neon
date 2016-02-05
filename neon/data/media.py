@@ -19,6 +19,7 @@ This must be kept in sync with loader/media.hpp.
 
 import ctypes as ct
 
+
 class MediaType:
     image = 0
     video = 1
@@ -53,7 +54,7 @@ class ImageParams(MediaParams):
 
     def __init__(self, **kwargs):
         for key in kwargs:
-            if hasattr(self, (key)) == False:
+            if not hasattr(self, (key)):
                 raise ValueError('Unknown argument %s' % key)
         for key, value in self._defaults_.iteritems():
             setattr(self, key, value)
