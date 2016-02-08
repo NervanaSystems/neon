@@ -19,7 +19,7 @@ functionality in mind:
 [New features](https://github.com/NervanaSystems/neon/blob/master/ChangeLog) in latest release.
 
 We use neon internally at Nervana to solve our customers' problems across many
-[domains](http://www.nervanasys.com/products/). We are hiring across several
+[domains](http://www.nervanasys.com/solutions/). We are hiring across several
 roles. Apply [here](http://www.nervanasys.com/careers/)!
 
 
