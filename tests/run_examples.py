@@ -16,8 +16,11 @@ BASE_DATA_DIR = '~/nervana/data'
 I1K_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'I1K/macrobatches')
 CIFAR_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'CIFAR10/macrobatches')
 
-FILES_TO_SKIP = ['timeseries_lstm.py', 'vgg_bn.py', 'fast_rcnn_alexnet.py']
-ADD_I1K_BATCH_DIR = ['alexnet.py', 'imagenet_allcnn.py', 'vgg_bn.py']
+# skip examples that won't fit on a single GTX970 (ci1 box)
+FILES_TO_SKIP = ['timeseries_lstm.py', 'vgg_bn.py', 'fast_rcnn_alexnet.py',
+                 'i1k_msra.py']
+ADD_I1K_BATCH_DIR = ['alexnet.py', 'imagenet_allcnn.py', 'vgg_bn.py',
+                     'i1k_msra.py']
 ADD_CIFAR_BATCH_DIR = ['cifar10_msra.py']
 ADD_SUBSET_PCT = ADD_I1K_BATCH_DIR + ADD_CIFAR_BATCH_DIR
 
@@ -44,7 +47,7 @@ for ex in examples:
     print(ex)
     ex_bn = os.path.basename(ex)
     if ex_bn in FILES_TO_SKIP:
-        print('Skipping this example')
+        print('Skipping this example\n\n')
         continue
     cmdargs = "-e {} -b {} --no_progress_bar -s {} {}".format(
             NUM_EPOCHS, BACKEND, os.path.splitext(ex_bn)[0] + '.prm',

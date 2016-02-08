@@ -37,6 +37,8 @@ parser.add_argument('--depth', type=int, default=0,
                     help='network configuration')
 parser.add_argument('--bottleneck', action="store_true",
                     help="use bottleneck modules compared to double 3x3 modules")
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
 
 if args.depth in (0, 18):
@@ -57,7 +59,7 @@ else:
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        dtype=args.datatype,
-                       subset_pct=100)
+                       subset_pct=args.subset_pct)
 train = ImageLoader(set_name='train', scale_range=(256, 480), shuffle=True, **img_set_options)
 test = ImageLoader(set_name='validation', scale_range=0, do_transforms=False, **img_set_options)
 
