@@ -1210,7 +1210,7 @@ class NervanaCPU(Backend):
 
         for k in range(K):
             sliceC, _ = layer.kSlice[k]
-            _ascale = ascale / (sliceC.stop - sliceC.start)  # valid window size
+            _ascale = ascale / J
             for m in range(M):
                 sliceD, _ = layer.mSlice[m]
                 for p in range(P):

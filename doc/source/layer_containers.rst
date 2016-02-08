@@ -118,7 +118,7 @@ MergeMultistream
 ----------------
 
 ``MergeMultistream`` containers are special cases of the ``MergeBroadcast`` container, except that
-they originate from the input provided to the model, by ``DataIterator``, for example.  Instead of
+they originate from the input provided to the model, by ``ArrayIterator``, for example.  Instead of
 broadcasting from an input layer to their internal ``Sequential`` pathways, each pathway gets its
 own input, that is unpacked from the input object.  One scenario may be if the data source provides
 a ``tuple`` of ``Tensors``, with each ``Tensor`` meant as input to each pathway (stream).

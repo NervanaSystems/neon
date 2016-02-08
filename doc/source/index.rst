@@ -54,7 +54,7 @@ roles. Apply here_!
 .. _neo: https://github.com/nervanasystems/neon
 .. _model zoo: https://github.com/NervanaSystems/neon/wiki/Model-Zoo
 .. _state-of-the-art: https://github.com/soumith/convnet-benchmarks
-.. _customers' problems: http://www.nervanasys.com/products
+.. _customers' problems: http://www.nervanasys.com/solutions
 .. _here: http://www.nervanasys.com/careers
 .. _highest performance: https://github.com/soumith/convnet-benchmarks
 .. _many more: https://github.com/NervanaSystems/neon/blob/master/ChangeLog

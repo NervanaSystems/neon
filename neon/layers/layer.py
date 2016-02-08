@@ -1148,9 +1148,10 @@ class Deconv(CompoundLayer):
 
 
 class LRN(Layer):
-    def __init__(self, depth, alpha=1., beta=0., ascale=1., bpower=1.):
-        super(LRN, self).__init__(name=None)
+    def __init__(self, depth, alpha=1., beta=0., ascale=1., bpower=1., name=None):
+        super(LRN, self).__init__(name=name)
         self.J = depth
+        self.depth = depth  # needed for serialization
         self.alpha = alpha
         self.beta = beta
         self.ascale = ascale
