@@ -62,17 +62,19 @@ class ModelDescription(dict):
         '''
         if regex is not None:
             regex = re.compile(regex)
-        self.print_layers(self['model'], field, regex=regex)
+        return self.find_layers(self['model']['config'], field, regex=regex)
 
     @staticmethod
-    def print_layers(layers, field, regex=None):
+    def find_layers(layers, field, regex=None):
+        matches = []
         for l in layers['layers']:
             if field in l['config']:
                 value = l['config'][field]
                 if regex is None or regex.match(value):
-                    print value
-            if type(l) is dict and 'layers' in l:
-                ModelDescription.print_layers(l, field, regex=regex)
+                    matches.append(value)
+            if type(l) is dict and 'layers' in l['config']:
+                matches.extend(ModelDescription.find_layers(l['config'], field, regex=regex))
+        return matches
 
     def getlayer(self, layer_name):
         """
@@ -84,15 +86,15 @@ class ModelDescription(dict):
         Returns:
             dict: Layer config dictionary
         """
-        return self.find_by_name(self['model'], layer_name)
+        return self.find_by_name(self['model']['config'], layer_name)
 
     @staticmethod
     def find_by_name(layers, layer_name):
         for l in layers['layers']:
-            if l['config']['name'] == layer_name:
-                return l
-            if type(l) is dict and 'layers' in l:
-                val = ModelDescription.find_by_name(l, layer_name)
+            if 'name' in l['config'] and l['config']['name'] == layer_name:
+                    return l
+            if type(l) is dict and 'config' in l and 'layers' in l['config']:
+                val = ModelDescription.find_by_name(l['config'], layer_name)
                 if val is not None:
                     return val
 

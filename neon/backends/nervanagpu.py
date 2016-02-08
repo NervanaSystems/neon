@@ -1842,7 +1842,7 @@ class NervanaGPU(Backend):
 
         assert I.dtype == O.dtype
         A_data = denom.gpudata if denom is not None else 0
-        kernel = pooling.map_string2func(kernel_args[0], layer.dtype.str[1:])
+        kernel = pooling.map_string2func(kernel_args[0], layer.dtype.str[1:], self.compute_capability)
 
         flags = 0
         params = [kernel_args[1], kernel_args[2], self.stream,

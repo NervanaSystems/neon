@@ -42,8 +42,8 @@ CIFAR10 can be fetched in the following manner:
 
     from neon.data import load_cifar10
     (X_train, y_train), (X_test, y_test), nclass = load_cifar10()
-    train = DataIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
-    test = DataIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
+    train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
+    test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
 
 
 ImageCaption
@@ -143,7 +143,7 @@ like (with random pixel and label values).
 
 .. code-block:: python
 
-    from neon.data import DataIterator
+    from neon.data import ArrayIterator
 
     """
     X is the input features and y is the labels.
@@ -163,7 +163,7 @@ like (with random pixel and label values).
     We set lshape to (3,32,32), to represent the 32x32 image with 3 channels
     """
 
-    train = DataIterator(X=X, y=y, nclass=10, lshape=(3,32,32))
+    train = ArrayIterator(X=X, y=y, nclass=10, lshape=(3,32,32))
 
 Note: You can pass in any data, as long as it is specified as above. Image
 data must specify an lshape - (number of input channels, input height, input

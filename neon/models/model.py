@@ -366,6 +366,7 @@ class Model(NervanaObject):
             cost_cls = load_class(model_dict['cost']['type'])
             cost = cost_cls.gen_class(model_dict['cost']['config'])
 
+        opt = None
         if 'optimizer' in model_dict:
             opt_cls = load_class(model_dict['optimizer']['type'])
             opt = opt_cls.gen_class(model_dict['optimizer']['config'])
@@ -375,7 +376,8 @@ class Model(NervanaObject):
 
         if data is not None:
             self.initialize(data, cost=cost)
-            self.optimizer = opt
+            if opt is not None:
+                self.optimizer = opt
 
         self.layers.load_weights(model_dict['model'])
 

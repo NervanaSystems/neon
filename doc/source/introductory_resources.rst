@@ -124,19 +124,19 @@ Loading a Dataset
 
 To load the MNIST dataset, the :py:func:`load_mnist` function is included
 with the ``neon/data/datasets.py`` utility. The data is set up on the
-GPU as a :py:class:`DataIterator<neon.data.dataiterator.DataIterator>`, which
+GPU as a :py:class:`ArrayIterator<neon.data.dataiterator.ArrayIterator>`, which
 provides an interface to iterate over mini-batches after pre-loading them into
 device memory.
 
 .. code-block:: python
 
-    from neon.data import DataIterator, load_mnist
+    from neon.data import ArrayIterator, load_mnist
     # split into train and tests sets
     (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
     # setup training set iterator
-    train_set = DataIterator(X_train, y_train, nclass=nclass)
+    train_set = ArrayIterator(X_train, y_train, nclass=nclass)
     # setup test set iterator
-    test_set = DataIterator(X_test, y_test, nclass=nclass)
+    test_set = ArrayIterator(X_test, y_test, nclass=nclass)
 
 
 See :doc:`datasets`  to learn how to load the other datasets or add your own.
@@ -362,7 +362,7 @@ speed up the batch_writing process.
 
 The CIFAR10 dataset is provided as a pickled set of numpy arrays containing the uncompressed pixel
 buffers of each image.  This dataset is small enough to easily fit in host memory.  However, using
-the :py:class:`DataIterator<neon.data.dataiterator.DataIterator>` module is limited in that it does
+the :py:class:`ArrayIterator<neon.data.dataiterator.ArrayIterator>` module is limited in that it does
 not allow for random flipping, cropping, or shuffling.  We therefore added the ability to write out
 CIFAR10 data as macrobatches so that the ImageLoader module could be used with this command:
 

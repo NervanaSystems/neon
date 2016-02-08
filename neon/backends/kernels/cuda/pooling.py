@@ -464,7 +464,8 @@ __global__ void spool_fprop_lrn(
 
         if(tid == 0)
         {
-            rcpWindowSize = 1.0f / (float)window_size;
+            //rcpWindowSize = 1.0f / (float)window_size;
+            rcpWindowSize = (float)RST/(float)JRST;
         }
     }
     __syncthreads();
