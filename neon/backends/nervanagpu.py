@@ -1191,6 +1191,9 @@ class NervanaGPU(Backend):
         if self.use_cudac_kernels:
             for r in range(repeat):
                 self.cublas_dot(A=A, B=B, C=C, alpha=alpha, beta=beta)
+
+            if bsum is not None:
+                bsum[:] = self.sum(C, 1)
             return C
 
         # one dimention must be contiguous
