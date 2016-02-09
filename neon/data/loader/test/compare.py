@@ -38,8 +38,8 @@ from neon.data import load_cifar10, DataLoader, ImageParams, BatchWriter
 from PIL import Image
 from glob import glob
 
-trainimgs = 'train'
-testimgs = 'test'
+traindir = 'train'
+testdir = 'test'
 
 
 def process_dataset(data, labels, inputpath, leafdir):
@@ -60,8 +60,8 @@ def process_dataset(data, labels, inputpath, leafdir):
 def process(inputpath):
     (X_train, y_train), (X_test, y_test), nclass = load_cifar10(inputpath,
                                                                 normalize=False)
-    process_dataset(X_train, y_train, inputpath, trainimgs)
-    process_dataset(X_test, y_test, inputpath, testimgs)
+    process_dataset(X_train, y_train, inputpath, traindir)
+    process_dataset(X_test, y_test, inputpath, testdir)
 
 
 def load_dataset(basepath, datadir, shuffle):
@@ -94,8 +94,8 @@ def load_dataset(basepath, datadir, shuffle):
 
 
 def load_cifar10_imgs(path):
-    (X_train, y_train) = load_dataset(path, trainimgs, shuffle=True)
-    (X_test, y_test) = load_dataset(path, testimgs, shuffle=False)
+    (X_train, y_train) = load_dataset(path, traindir, shuffle=True)
+    (X_test, y_test) = load_dataset(path, testdir, shuffle=False)
     return (X_train, y_train), (X_test, y_test), 10
 
 
@@ -123,7 +123,7 @@ def run(args, train, test):
               Affine(nout=10, init=init_uni, activation=Softmax())]
     cost = GeneralizedCost(costfunc=CrossEntropyMulti())
     mlp = Model(layers=layers)
-    callbacks = Callbacks(mlp, train, eval_set=test, **args.callback_args)
+    callbacks = Callbacks(mlp, eval_set=test, **args.callback_args)
     mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
     err = mlp.eval(test, metric=Misclassification())*100
     print('Misclassification error = %.2f%%' % err)
@@ -145,23 +145,19 @@ def test_loader():
     parser = NeonArgparser(__doc__)
     args = parser.parse_args()
 
-    train_dir = os.path.join(args.data_dir, 'macrotrain')
-    test_dir = os.path.join(args.data_dir, 'macrotest')
-    write_batches(args, train_dir, trainimgs, 0)
-    write_batches(args, test_dir, testimgs, 1)
+    train_path = os.path.join(args.data_dir, traindir + '-ingested')
+    test_path = os.path.join(args.data_dir, testdir + '-ingested')
+    write_batches(args, train_path, traindir, 0)
+    write_batches(args, test_path, testdir, 1)
 
-    # TODO: test macrobatch reading.
     params = ImageParams(channel_count=3, height=32, width=32)
+    common = dict(media_params=params, datum_size=3*32*32, target_size=1,
+                  datum_dtype=np.uint8, target_dtype=np.int32,
+                  onehot=True, nclasses=10)
     train = DataLoader(repo_dir=os.path.join(args.data_dir, 'train'),
-                       shuffle=True, media_params=params,
-                       datum_size=3*32*32, target_size=1,
-                       datum_dtype=np.uint8, target_dtype=np.int32,
-                       onehot=True, nclasses=10)
+                       shuffle=True, **common)
     test = DataLoader(repo_dir=os.path.join(args.data_dir, 'test'),
-                      shuffle=False, media_params=params,
-                      datum_size=3*32*32, target_size=1,
-                      datum_dtype=np.uint8, target_dtype=np.int32,
-                      onehot=True, nclasses=10)
+                      shuffle=False, **common)
     err = run(args, train, test)
     return err
 

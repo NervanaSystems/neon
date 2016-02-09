@@ -86,8 +86,8 @@ class BatchWriter(object):
         self.validation_pct = validation_pct
         self.train_file = os.path.join(self.out_dir, 'train_file.csv.gz')
         self.val_file = os.path.join(self.out_dir, 'val_file.csv.gz')
-        self.batch_prefix = 'macrobatch_'
-        self.meta_file = os.path.join(self.out_dir, self.batch_prefix + 'meta')
+        self.batch_prefix = 'archive-'
+        self.meta_file = os.path.join(self.out_dir, self.batch_prefix + 'meta.csv')
         self.pixel_mean = pixel_mean
         self.item_max_size = 25000  # reasonable default max image size
         self.post_init()
@@ -177,15 +177,9 @@ class BatchWriter(object):
 
     def save_meta(self):
         with open(self.meta_file, 'w') as f:
-            for settype in ('train', 'val'):
-                f.write('%s_start %d\n' % (settype, getattr(self, settype + '_start')))
-                f.write('%s_nrec %d\n' % (settype, getattr(self, settype + '_nrec')))
-            f.write('nclass %d\n' % (self.nclass['l_id']))
-            f.write('item_max_size %d\n' % (self.item_max_size))
-            f.write('label_size %d\n' % (4))
-            f.write('R_mean      %f\n' % self.pixel_mean[0])
-            f.write('G_mean      %f\n' % self.pixel_mean[1])
-            f.write('B_mean      %f\n' % self.pixel_mean[2])
+            nrec = self.train_nrec + self.val_nrec
+            f.write('nrec,%d\n' % nrec)
+            # TODO: fill in rest of metadata.
 
     def run(self):
         self.write_csv_files()

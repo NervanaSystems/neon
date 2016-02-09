@@ -29,6 +29,7 @@
 #include <sstream>
 #include <fstream>
 #include <vector>
+#include <map>
 #include <memory>
 #include <deque>
 #include <random>
@@ -40,10 +41,14 @@ using std::ifstream;
 using std::ios;
 using std::stringstream;
 using std::vector;
+using std::map;
 
 typedef std::pair<std::unique_ptr<ByteVect>,std::unique_ptr<ByteVect>> DataPair;
 
-#define INDEX_FILE_NAME "index.csv"
+#define INDEX_FILE_NAME     "index.csv"
+#define ARCHIVE_DIR_SUFFIX  "-ingested"
+#define ARCHIVE_FILE_PREFIX "archive-"
+#define META_FILE_NAME      "archive-meta.csv"
 
 class IndexElement {
 public:
@@ -97,8 +102,34 @@ public:
     vector<IndexElement*>       _elements;
 };
 
+class Metadata {
+public:
+    void addElement(string& line) {
+        std::istringstream ss(line);
+        string key, val;
+        std::getline(ss, key, ',');
+        std::getline(ss, val, ',');
+        _map[key] = val;
+    }
+
+    int getItemCount() {
+        if (_map.count("nrec") == 0) {
+            throw std::runtime_error("Error in metadata\n");
+        }
+        return atoi(_map["nrec"].c_str());
+    }
+
+private:
+    map<string, string>         _map;
+};
+
 class Reader {
 public:
+    Reader(int batchSize, string& repoDir, bool shuffle)
+    : _batchSize(batchSize), _repoDir(repoDir), _shuffle(shuffle),
+      _itemCount(0)  {
+    }
+
     virtual ~Reader() {};
     virtual int read(CharBuffer* data, CharBuffer* targets) = 0;
     virtual int reset() = 0;
@@ -118,13 +149,20 @@ public:
 
     static Reader* create(int* itemCount, int batchSize, char* repoDir,
                           bool shuffle);
+
+protected:
+    // Number of items to read at a time.
+    int                         _batchSize;
+    string                      _repoDir;
+    bool                        _shuffle;
+    // Total number of items.
+    int                         _itemCount;
 };
 
 class FileReader : public Reader {
 public:
-    FileReader(int* itemCount, int batchSize, char* repoDir, bool shuffle)
-    : Reader(), _batchSize(batchSize), _repoDir(repoDir), _shuffle(shuffle),
-      _itemIdx(0), _itemCount(0) {
+    FileReader(int* itemCount, int batchSize, string& repoDir, bool shuffle)
+    : Reader(batchSize, repoDir, shuffle), _itemIdx(0) {
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
@@ -199,27 +237,23 @@ private:
     }
 
 private:
-    int                         _batchSize;
-    string                      _repoDir;
-    bool                        _shuffle;
     Index                       _index;
-    uint                        _itemIdx;
-    uint                        _itemCount;
+    int                         _itemIdx;
     ifstream                    _ifs;
 };
 
-class MacrobatchReader : public Reader {
+class ArchiveReader : public Reader {
 public:
-    MacrobatchReader(string pathPrefix, int startFileIdx,
-                     int itemCount, int batchSize, bool shuffle=false)
-    : Reader(), _pathPrefix(pathPrefix), _startFileIdx(startFileIdx),
-      _fileIdx(startFileIdx), _itemIdx(0), _itemCount(itemCount),
-      _batchSize(batchSize), _itemsLeft(0), _shuffle(shuffle) {
-        static_assert(sizeof(int) == 4, "int is not 4 bytes");
+    ArchiveReader(int* itemCount, int batchSize, string& repoDir,
+                  bool shuffle=false)
+    : Reader(batchSize, repoDir, shuffle),
+      _fileIdx(0), _itemIdx(0), _itemsLeft(0) {
+        loadMetadata();
+        *itemCount = _itemCount;
         open();
     }
 
-    virtual ~MacrobatchReader() {
+    virtual ~ArchiveReader() {
         close();
     }
 
@@ -246,7 +280,7 @@ public:
 
     int reset() {
         close();
-        _fileIdx = _startFileIdx;
+        _fileIdx = 0;
         _itemIdx = 0;
         open();
         return 0;
@@ -279,6 +313,25 @@ public:
     }
 
 private:
+    void loadMetadata() {
+        string metaFile = _repoDir + '/' + META_FILE_NAME;
+        ifstream ifs(metaFile);
+        if (!ifs) {
+            printf("Could not open %s\n", metaFile.c_str());
+            throw std::ios_base::failure("Could not open file\n");
+        }
+
+        string line;
+        while (std::getline(ifs, line)) {
+            _metadata.addElement(line);
+        }
+
+        _itemCount = _metadata.getItemCount();
+        if (_itemCount <= 0) {
+            throw std::runtime_error("Error in metadata\n");
+        }
+    }
+
     int read(CharBuffer* data, CharBuffer* targets, int count) {
         if (_itemsLeft == 0) {
             next();
@@ -357,7 +410,8 @@ private:
 
     void open() {
         stringstream fileName;
-        fileName << _pathPrefix << _fileIdx << ".cpio";
+        fileName << _repoDir << '/' << ARCHIVE_FILE_PREFIX
+                 << _fileIdx << ".cpio";
         _batchFile.openForRead(fileName.str());
         _itemsLeft = _batchFile.itemCount();
     }
@@ -367,25 +421,28 @@ private:
     }
 
 private:
-    string                      _pathPrefix;
-    int                         _startFileIdx;
-    // Index of current macrobatch file.
+    // Index of current archive file.
     int                         _fileIdx;
     // Index of current item.
-    uint                        _itemIdx;
-    // Total number of items to read.
-    uint                        _itemCount;
-    // Number of items to read at a time.
-    int                         _batchSize;
-    // Number of items left in the current macrobatch.
+    int                         _itemIdx;
+    // Number of items left in the current archive.
     int                         _itemsLeft;
     BatchFile                   _batchFile;
-    bool                        _shuffle;
+    Metadata                    _metadata;
     std::deque<DataPair>        _shuffleQueue;
 };
 
 Reader* Reader::create(int* itemCount, int batchSize, char* repoDir,
                        bool shuffle) {
-    // TODO: macrobatch reader.
-    return new FileReader(itemCount, batchSize, repoDir, shuffle);
+    string archiveDir(repoDir);
+    archiveDir += ARCHIVE_DIR_SUFFIX;
+    struct stat stats;
+    int result = stat(archiveDir.c_str(), &stats);
+    if (result == 0) {
+        return new ArchiveReader(itemCount, batchSize, archiveDir, shuffle);
+    }
+
+    // Archive directory not found. Read individual files.
+    string dir(repoDir);
+    return new FileReader(itemCount, batchSize, dir, shuffle);
 }

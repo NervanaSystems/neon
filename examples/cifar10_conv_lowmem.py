@@ -59,7 +59,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 mlp = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, train, eval_set=test, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=test, **args.callback_args)
 
 mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
