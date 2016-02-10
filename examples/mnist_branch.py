@@ -42,11 +42,11 @@ The topology of the network is:
 from neon.callbacks.callbacks import Callbacks
 from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Gaussian
-from neon.layers import GeneralizedCost, Affine, BranchNode, Multicost, Tree
+from neon.layers import GeneralizedCost, Affine, BranchNode, Multicost, SingleOutputTree
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, Softmax
-from neon.transforms import CrossEntropyBinary, CrossEntropyMulti
+from neon.transforms import CrossEntropyBinary, CrossEntropyMulti, Misclassification
 from neon.util.argparser import NeonArgparser
 
 
@@ -103,7 +103,7 @@ optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=arg
 
 # initialize model object
 alphas = [1, 0.25, 0.25]
-mlp = Model(layers=Tree([p1, p2, p3], alphas=alphas))
+mlp = Model(layers=SingleOutputTree([p1, p2, p3], alphas=alphas))
 
 # setup standard fit callbacks
 callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
@@ -114,4 +114,4 @@ mlp.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callb
 # TODO: introduce Multicost metric support.  The line below currently fails
 # since the Misclassification metric expects a single Tensor not a list of
 # Tensors
-# print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
+print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))

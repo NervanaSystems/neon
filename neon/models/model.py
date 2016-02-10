@@ -21,7 +21,7 @@ from neon.backends.backend import Block
 from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.util.modeldesc import ModelDescription
-from neon.layers import Sequential, Activation, Tree
+from neon.layers import Sequential, Activation, Tree, SingleOutputTree
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -61,7 +61,10 @@ class Model(NervanaObject):
             self.deserialize(layers, dataset, weights_only=False)
         else:
             # Wrap the list of layers in a Sequential container if a raw list of layers
-            self.layers = layers if type(layers) in (Sequential, Tree) else Sequential(layers)
+            if type(layers) in (Sequential, Tree, SingleOutputTree):
+                self.layers = layers
+            else:
+                self.layers = Sequential(layers)
         self.layers_to_optimize = self.layers.layers_to_optimize
 
     def set_shortcut(self):

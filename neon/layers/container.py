@@ -259,6 +259,21 @@ class Tree(LayerContainer):
         return [l.get_terminal() for l in self.layers]
 
 
+class SingleOutputTree(Tree):
+    """
+    Subclass of the Tree container which returns only
+    the output of the main branch (branch index 0) during
+    inference.
+    """
+    def fprop(self, inputs, inference=False):
+        x = self.layers[0].fprop(inputs, inference)
+        if inference:
+            return x
+        else:
+            out = [x] + [l.fprop(None) for l in self.layers[1:]]
+            return out
+
+
 class Broadcast(LayerContainer):
     def __init__(self, layers, name=None):
         super(Broadcast, self).__init__(name)
