@@ -483,17 +483,22 @@ class Model(NervanaObject):
                     break
 
         # print results
-        header = ['Func', 'Mean', 'Median', 'Min', 'Max', 'Units']
+        header = ('Func', 'Mean', 'Median', 'Min', 'Max', 'Units')
+        stats = tuple(stat.lower() for stat in header[1:-1])
 
         fmt_titles = '| {:^11} '*len(header) + '|'
-        fmt_nums = '| {func:<11} ' + '|  {:<10.5g} '*(len(header)-2) + '| {units:^11} |'
+        fmt_nums = '| {func:<11} ' + '|  {%s:<10.5g} '*len(stats) % (stats) + '| {units:^11} |'
 
         head_str = fmt_titles.format(*header)
         sep = '-'*len(head_str)
         head_str = sep + '\n' + head_str + '\n' + sep
         print(head_str)
-        for ky in times:
-            timesu = np.array(times[ky][nskip:])  # in ms
-            stats = [np.mean(timesu), np.median(timesu), np.min(timesu), np.max(timesu)]
-            print(fmt_nums.format(*stats, units='msec', func=ky))
+        out_stats = {}
+        for step in times:
+            timesu = np.array(times[step][nskip:])  # in ms
+            out_stats[step] = {}
+            for stat in stats:
+                out_stats[step][stat] = getattr(np, stat)(timesu)
+            print(fmt_nums.format(units='msec', func=step, **out_stats[step]))
         print(sep)
+        return out_stats
