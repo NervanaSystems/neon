@@ -651,7 +651,8 @@ class Convolution(ParameterLayer):
 
     def bprop(self, error, alpha=1.0, beta=0.0):
         if self.deltas:
-            self.be.bprop_conv(self.nglayer, self.W, error, self.deltas, alpha=alpha, beta=beta)
+            self.be.bprop_conv(self.nglayer, self.W, error, self.deltas,
+                               alpha=alpha, beta=beta, bsum=self.batch_sum)
         self.be.update_conv(self.nglayer, self.inputs, error, self.dW)
         return self.deltas
 

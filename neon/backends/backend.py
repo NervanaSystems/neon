@@ -424,14 +424,14 @@ class Backend(object):
         compat_mode (str, optional): Flag to match implementation of other
                                      libraries.  Currently only 'caffe' is
                                      supported, defaults to None.
-        deterministic_update (bool, optional): Flag to use deterministic kernels
-                                                where applicable for updates.  This
-                                                may cause a small increase in memory
-                                                usage and slow down.  Only relevant for GPU
-                                                backends.
+        deterministic(bool, optional): Flag to use deterministic kernels
+                                       where applicable.  This
+                                       may cause a small increase in memory
+                                       usage and slow down.  Only relevant for GPU
+                                       backends.
     """
     def __init__(self, rng_seed=None, default_dtype=np.float32,
-                 compat_mode=None, deterministic_update=False):
+                 compat_mode=None, deterministic=False):
         # dtype
         self.default_dtype = default_dtype
 
@@ -451,7 +451,7 @@ class Backend(object):
         else:
             self.compat_mode = None
 
-        self.deterministic_update = deterministic_update
+        self.deterministic = deterministic
 
     def output_dim(self, X, S, padding, strides, pooling=False):
         """
@@ -1695,7 +1695,7 @@ class Backend(object):
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
                    str_d=1, str_h=1, str_w=1,
-                   relu=False, bsum=False, deterministic_update=False):
+                   relu=False, bsum=False):
         """
         Create a new ConvLayer parameter object.
         This is then passed as an argument to all the convolution operations.
@@ -1736,11 +1736,6 @@ class Backend(object):
             bsum (bool, optional): calculate the sum along the batchnorm axis
                                    for fprop or bprop.  Outputs an fp32 tensor
                                    of size Kx1.  Defaults to False.
-
-            deterministic_update (bool, optional): eleminate atomic adds in the
-                                                   update operation.  Increases
-                                                   reproducibility but runs
-                                                   slower.  Defaults to False.
         """
         raise NotImplementedError()
 

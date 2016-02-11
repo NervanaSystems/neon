@@ -51,8 +51,6 @@ from neon.backends.cuda_batchnorm import (_get_bn_fprop_kernel,
 from neon.backends.kernels.cuda.lookuptable import (_get_lut_bprop_kernel,
                                                     _get_sorting_kernel)
 
-# RAND_POOL_SIZE set to 65536 == 2048 * 32
-
 
 def _build_tree(type_args):
     """
@@ -912,7 +910,7 @@ def call_compound_kernel(rand_state, compute_capability, *args):
     shared = threads * 4 if reduction and threads > 32 else 0
 
     if out.backend.bench > 1:
-        repeat = out.backend.bench
+        repeat = 1 #out.backend.bench
         start, end = ng._get_events()
         start.record(out.backend.stream)
     else:
@@ -936,182 +934,11 @@ def call_compound_kernel(rand_state, compute_capability, *args):
 
     return out
 
-def _fp_convert(src_data, src_type, dest_tensor, reduce_shape, compute_capability):
-
-    if reduce_shape:
-
-        #print reduce_shape
-
-        kernel = _get_reduce_kernel(dest_tensor.dtype.str[1:], compute_capability)
-        blocks = (reduce_shape[1] >> 5) + ((reduce_shape[1] & 31) != 0)
-        kernel.prepared_async_call((blocks, 1, 1), (32, 1, 1),
-                                   dest_tensor.backend.stream,
-                                   dest_tensor.gpudata,
-                                   src_data,
-                                   reduce_shape[1],
-                                   reduce_shape[0]*reduce_shape[1])
-
-    else:
-        # quick wrapper to convert raw fp32 scratch data to a destination tensor
-        shape, strides = _get_fast_ew_dims(dest_tensor.size)
-        kernel_args = [0,
-                       dest_tensor.gpudata, strides[0], strides[1],
-                       src_data, strides[0], strides[1],
-                       shape[1]]
-
-        kernel = _get_compound_kernel((
-            (ng.GPUTensor, 0, dest_tensor.dtype.str[1:], 0, False),
-            (ng.GPUTensor, 1, src_type, 0, False),
-            ('assign', 0, False, 32)), compute_capability)
-        kernel.prepared_async_call((shape[0], 1, 1),
-                                   (32, 1, 1),
-                                   dest_tensor.backend.stream,
-                                   *kernel_args)
-
-# fast axis=0 reduction kernel used for deterministic update
-@context_dependent_memoize
-def _get_reduce_kernel(dtype, compute_capability):
-
-    _reduce_kernel = r"""
-%(common)s
-
-__global__ void reduce(%(type)s* out, const float* in, int CRSTK, int PQCRSTK)
-{
-    int offset = blockIdx.x * 32 + threadIdx.x;
-
-    if (offset < CRSTK)
-    {
-        float sum = 0.0f;
-        for (int i = offset; i < PQCRSTK; i += CRSTK)
-        {
-            sum += __ldg(in + i);
-        }
-        out[offset] = %(cvt_out)s(sum);
-    }
-}
-"""
-    template_vals = {
-        "common" : _common_round["nearest"].get(dtype, ""),
-        "type"   : _ew_types[dtype]["type"],
-    }
-    if dtype == "f2":
-        template_vals["cvt_out"] = "fp32_to_fp16"
-    elif dtype == "f4":
-        template_vals["cvt_out"] = ""
-    elif dtype == "x2":
-        template_vals["cvt_out"] = "fp32_to_int16"
-    else:
-        raise TypeError("Missing reduction type")
-
-    if (compute_capability[0] == 3 and compute_capability[1] < 5) or compute_capability[0] < 3:
-        template_vals["common"].append(_common_kepler)
-
-    code = _reduce_kernel % template_vals
-    module = SourceModule(code)
-    kernel = module.get_function("reduce")
-    kernel.prepare("PPII")
-    return kernel
-
-
-_transpose_kernel = r"""
-__global__ void transpose(%(type)s* out, const %(type)s* in, int rows, int cols)
-{
-    __shared__ %(type)s tile[32][33];
-
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-    int bx = blockIdx.x;
-    int by = blockIdx.y;
-    int gx = bx * 32 + tx;
-    int gy = by * 32 + ty;
-
-    for (int j = 0; j < 32; j += 8)
-    {
-        int gy8 = gy + j;
-        if (gy8 < rows && gx < cols)
-            tile[ty + j][tx] = in[gy8*cols + gx];
-    }
-    __syncthreads();
-
-    gx = by * 32 + tx;
-    gy = bx * 32 + ty;
-
-    for (int j = 0; j < 32; j += 8)
-    {
-        int gy8 = gy + j;
-        if (gy8 < cols && gx < rows)
-            out[gy8*rows + gx] = tile[tx][ty + j];
-    }
-}
-"""
-
 
 @context_dependent_memoize
-def _get_transpose_kernel(dtype):
+def _get_compensated_sum_kernel(dtype, rounding):
 
-    code = _transpose_kernel % _ew_types[dtype]
-    module = SourceModule(code)
-    kernel = module.get_function("transpose")
-    kernel.prepare("PPII")
-    return kernel
-
-
-_shuffle_kernel = r"""
-__global__ void dimShuffle(
-    %(type)s* out, const %(type)s* in,
-    int TRSK, int RSK, int SK, int K,
-    int TRSC, int RSC, int SC, int C,
-    int RS, int magic_RS, int shift_RS,
-    int S,  int magic_S,  int shift_S)
-{
-    __shared__ %(type)s tile[32][33];
-
-    int tx  = threadIdx.x;
-    int ty  = threadIdx.y;
-    int bk  = blockIdx.x;
-    int bc  = blockIdx.y;
-    int trs = blockIdx.z;
-
-    int k  = bk * 32 + tx;
-    int c  = bc * 32 + ty;
-
-    int t  = magic_RS * trs; t >>= shift_RS;
-    int rs = trs - t*RS;
-
-    int r = magic_S * rs; r >>= shift_S;
-    int s = rs - r*S;
-
-    for (int j = 0; j < 32; j += 8)
-    {
-        int cj = c + j;
-        if (cj < C && k < K)
-            tile[ty + j][tx] = in[ cj*TRSK + t*RSK + r*SK + s*K + k ];
-    }
-    __syncthreads();
-
-    k = bk * 32 + ty;
-    c = bc * 32 + tx;
-
-    for (int i = 0; i < 32; i += 8)
-    {
-        int ki = k + i;
-        if (ki < K && c < C)
-            out[ ki*TRSC + t*RSC + r*SC + s*C + c ] = tile[tx][ty + i];
-    }
-}
-"""
-
-
-@context_dependent_memoize
-def _get_shuffle_kernel(dtype):
-
-    code = _shuffle_kernel % _ew_types[dtype]
-    module = SourceModule(code)
-    kernel = module.get_function("dimShuffle")
-    kernel.prepare("PPIIIIIIIIIIIIII")
-    return kernel
-
-_compensated_sum = r"""
+    _compensated_sum = r"""
 
 %(common)s
 
@@ -1164,11 +991,6 @@ __global__ void compensated_sum(unsigned* rand_state,
     %(finish)s
 }
 """
-
-
-@context_dependent_memoize
-def _get_compensated_sum_kernel(dtype, rounding):
-
     template_vals = dict()
     for key in ("common", "inits", "finish"):
         template_vals[key] = ""
@@ -1329,3 +1151,4 @@ def _compute_hist(tensor, hist, nbins=64, offset=-48):
     kernel_args = [hist, tensor.gpudata, strides, size]
     hist_kern = _get_hist_kernel(tensor.dtype.str, nbins, offset)
     hist_kern.prepared_call((blocks, 1, 1), (threads, 1, 1), *kernel_args)
+

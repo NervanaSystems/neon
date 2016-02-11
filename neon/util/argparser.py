@@ -321,7 +321,8 @@ class NeonArgparser(configargparse.ArgumentParser):
                         batch_size=args.batch_size,
                         datatype=args.datatype,
                         max_devices=args.max_devices,
-                        compat_mode=args.compat_mode)
+                        compat_mode=args.compat_mode,
+                        deterministic=args.deterministic)
 
         # display what command line / config options were set (and from where)
         logger.info(self.format_values())
