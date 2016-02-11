@@ -25,7 +25,6 @@ from neon.data.media import ImageParams, ImageIngestParams, VideoParams
 from neon.data.imageloader import ImageLoader
 from neon.data.questionanswer import BABI, QA
 from neon.data.ticker import Ticker, CopyTask, RepeatCopyTask, PrioritySortTask
-from neon.data.speech import Speech
 from neon.data.video import Video
 from neon.data.imagecaption import ImageCaption, ImageCaptionTest, Flickr8k, Flickr30k, Coco
 from neon.data.image import MNIST, CIFAR10

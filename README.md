@@ -1,5 +1,8 @@
 # neon
 
+**This is an unsupported branch of neon.** Please switch to neon master branch for the officially released library.
+
+
 [neon](https://github.com/NervanaSystems/neon) is Nervana's Python based
 Deep Learning framework and achieves the [fastest performance](https://github.com/soumith/convnet-benchmarks) on modern deep neural networks such as AlexNet, VGG and GoogLeNet. Designed for ease-of-use and extensibility.
 

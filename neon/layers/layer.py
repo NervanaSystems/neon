@@ -781,6 +781,13 @@ class Linear(ParameterLayer):
         return self
 
     def fprop(self, inputs, inference=False, beta=0.0):
+        revert = False
+        try:
+            if inputs.ptype == 'fragment':
+                revert = True
+                self.be.gather_errors(inputs)
+        except:
+            pass
 
         self.inputs = inputs
         if self.actual_bsz is None and self.actual_seq_len is None:
@@ -795,13 +802,24 @@ class Linear(ParameterLayer):
                                  C=self.outputs[:, :bsz * steps],
                                  beta=beta,
                                  bsum=self.batch_sum)
+        if revert:
+            inputs.swap_shadow()
 
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
+        revert = False
+        try:
+            if error.ptype == 'fragment':
+                revert = True
+                self.be.gather_errors(error)
+        except:
+            pass
         if self.deltas:
             self.be.compound_dot(A=self.W.T, B=error, C=self.deltas, alpha=alpha, beta=beta)
         self.be.compound_dot(A=error, B=self.inputs.T, C=self.dW)
+        if revert:
+            error.swap_shadow()
         return self.deltas
 
 
@@ -1236,7 +1254,7 @@ class Dropout(Layer):
     """
 
     def __init__(self, keep=0.5, name=None):
-        super(Dropout, self).__init__(name)
+        super(Dropout, self).__init__(name, "Disabled")
         self.keep = keep
         self.keep_mask = None
         self.caffe_mode = self.be.check_caffe_compat()

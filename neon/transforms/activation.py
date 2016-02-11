@@ -43,6 +43,25 @@ class Rectlin(Transform):
         return self.be.greater(x, 0) + self.slope * self.be.less(x, 0)
 
 
+class Rectlinclip(Transform):
+    """
+    Clipped ReLu activation function
+    Computes the function f(x) = min(max(0, x),cutoff)
+    """
+    def __init__(self, slope=0.01, name=None, xcut=20.0):
+        super(Rectlinclip, self).__init__(name)
+        self.xcut = xcut
+        self.slope = slope
+
+    def __call__(self, x):
+        return self.be.minimum(self.be.maximum(x, 0) + self.slope * self.be.minimum(x, 0),
+                               self.xcut)
+
+    def bprop(self, x):
+        return (self.be.greater(x, 0) + self.slope * self.be.less(x, 0)) *\
+                self.be.greater(self.xcut, x)
+
+
 class Explin(Transform):
     """
     ELU activation function (Clevert, Unterthiner and Hochreiter, ICLR 2016 submission)

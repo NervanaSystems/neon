@@ -1644,6 +1644,87 @@ class NervanaCPU(Backend):
             dW[:, wrd_id] = dW[:, wrd_id] + error[:, j]
         """
 
+    def compound_rnn_unroll_fprop(self, W_recur, h_prev_s, h_ff_s, h_s, bias,
+                                  nout, num_steps, num_used_steps, activation,
+                                  reverse=False):
+        """
+        Time step unrolling portion of recurrent layer fprop.
+
+        Arguments:
+            W_recur (Tensor): Recurrent weight matrix.
+            h_prev_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            h_ff_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            h_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            bias (Tensor): Bias tensor to add at each time step.
+            nout (integer): Number of output units for the layer.
+            num_steps (integer): Total number of time steps in the buffer.
+            num_used_steps (integer): Number of time steps being used for real
+                data.
+            activation (Transform): Activation function for the layer.
+            reverse (boolean): When true, unrolling will iterate over time steps
+                in reverse (for BiRNN).
+        """
+        if num_used_steps is not None and num_used_steps < num_steps:
+            h_s = h_s[:num_used_steps]
+            h_prev_s = h_prev_s[:num_used_steps]
+            h_ff_s = h_ff_s[:num_used_steps]
+
+        if reverse:
+            steps = reversed(zip(h_s, h_prev_s, h_ff_s))
+        else:
+            steps = zip(h_s, h_prev_s, h_ff_s)
+
+        for (h, h_prev, h_ff) in steps:
+            if h_ff is h:
+                self.compound_dot(W_recur, h_prev, h, beta=1.0)
+                h[:] = activation(h + bias)
+            else:
+                self.compound_dot(W_recur, h_prev, h)
+                h[:] = activation(h + h_ff + bias)
+
+    def compound_rnn_unroll_bprop(self, W_recur, delta_prev_s, delta_s, h_s,
+                                  nout, num_steps, num_used_steps, activation,
+                                  reverse=True):
+        """
+        Time step unrolling portion of recurrent layer bprop.
+
+        Arguments:
+            W_recur (Tensor): Recurrent weight matrix.
+            delta_prev_s (Array): Array of per time step input delta tensors.
+                Each element in the array is a single time step view into one
+                tensor containing all of the time steps in sequence.
+            delta_s (Array): Array of per time step input delta tensors.
+                Each element in the array is a single time step view into one
+                tensor containing all of the time steps in sequence.
+            h_s (Tensor): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            nout (integer): Number of output units for the layer.
+            num_steps (integer): Total number of time steps in the buffer.
+            num_used_steps (integer): Number of time steps being used for real
+                data.
+            activation (Transform): Activation function for the layer.
+            reverse (boolean): When true, unrolling will iterate over time steps
+                in reverse (default case for RNN).
+        """
+        if num_used_steps is not None and num_used_steps < num_steps:
+            h_s = h_s[:num_used_steps]
+
+        if reverse:
+            steps = reversed(zip(h_s, delta_s, delta_prev_s))
+        else:
+            steps = zip(h_s, delta_s, delta_prev_s)
+
+        for (hs, in_deltas, prev_in_deltas) in steps:
+            in_deltas[:] = activation.bprop(hs) * in_deltas
+            self.compound_dot(W_recur, in_deltas, prev_in_deltas, beta=1.0)
+
     def _hist_tensor(self, tag):
         """
         Create a tensor the right size for histogram data, with memory allocated

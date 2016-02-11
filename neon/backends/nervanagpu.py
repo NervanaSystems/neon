@@ -1351,7 +1351,6 @@ class NervanaGPU(Backend):
                 A.strides[0] % k_vec == 0 and B.strides[1] % k_vec == 0):
                 op += "_vec"
 
-
         # nt and nn are more efficient with k%16==0
         if C.dtype.type is np.float16:
             clss = "hgemm"
@@ -2199,6 +2198,275 @@ class NervanaGPU(Backend):
             kernel = _get_lut_bprop_kernel(error.dtype.str[1:])
             kernel.prepared_async_call(*params)
 
+    def compound_rnn_unroll_fprop(self, W_recur, h_prev_s, h_ff_s, h_s, bias,
+                                  nout, num_steps, num_used_steps, activation,
+                                  reverse=False):
+        """
+        Time step unrolling portion of recurrent layer fprop.
+
+        Arguments:
+            W_recur (Tensor): Recurrent weight matrix.
+            h_prev_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            h_ff_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            h_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            bias (Tensor): Bias tensor to add at each time step.
+            nout (integer): Number of output units for the layer.
+            num_steps (integer): Total number of time steps in the buffer.
+            num_used_steps (integer): Number of time steps being used for real
+                data.
+            activation (Transform): Activation function for the layer.
+            reverse (boolean): When true, unrolling will iterate over time steps
+                in reverse (for BiRNN).
+        """
+        from neon.transforms.activation import Rectlinclip
+        num_blocks = (h_s[0].shape[0] // 128) * (h_s[0].shape[1] // 32)
+        if isinstance(activation, Rectlinclip) and num_blocks < (4 * _get_sm_count()):
+            if h_s[0].base is not h_ff_s[0].base:
+                h_s[0].base[:] = h_ff_s[0].base
+
+            if num_used_steps is not None and num_used_steps < num_steps:
+                num_steps = num_used_steps
+
+            self.compound_unrolled_gemm(W_recur, h_prev_s[0].base, h_s[0].base,
+                                        bias, nout, nout, self.bsz, num_steps,
+                                        activation, reverse)
+        else:
+            if num_used_steps is not None and num_used_steps < num_steps:
+                h_s = h_s[:num_used_steps]
+                h_prev_s = h_prev_s[:num_used_steps]
+                h_ff_s = h_ff_s[:num_used_steps]
+
+            if reverse:
+                steps = reversed(zip(h_s, h_prev_s, h_ff_s))
+            else:
+                steps = zip(h_s, h_prev_s, h_ff_s)
+
+            for (h, h_prev, h_ff) in steps:
+                if h_ff is h:
+                    self.compound_dot(W_recur, h_prev, h, beta=1.0)
+                    h[:] = activation(h + bias)
+                else:
+                    self.compound_dot(W_recur, h_prev, h)
+                    h[:] = activation(h + h_ff + bias)
+
+    def compound_rnn_unroll_bprop(self, W_recur, delta_prev_s, delta_s, h_s,
+                                  nout, num_steps, num_used_steps, activation,
+                                  reverse=True):
+        """
+        Time step unrolling portion of recurrent layer bprop.
+
+        Arguments:
+            W_recur (Tensor): Recurrent weight matrix.
+            delta_prev_s (Array): Array of per time step input delta tensors.
+                Each element in the array is a single time step view into one
+                tensor containing all of the time steps in sequence.
+            delta_s (Array): Array of per time step input delta tensors.
+                Each element in the array is a single time step view into one
+                tensor containing all of the time steps in sequence.
+            h_s (Tensor): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            nout (integer): Number of output units for the layer.
+            num_steps (integer): Total number of time steps in the buffer.
+            num_used_steps (integer): Number of time steps being used for real
+                data.
+            activation (Transform): Activation function for the layer.
+            reverse (boolean): When true, unrolling will iterate over time steps
+                in reverse (default case for RNN).
+        """
+        from neon.transforms.activation import Rectlinclip
+        num_blocks = (delta_s[0].shape[0] // 128) * (delta_s[0].shape[1] // 32)
+        if isinstance(activation, Rectlinclip) and num_blocks < (4 * _get_sm_count()):
+            # Compute activation bprop for first timestep since there is
+            # no compounded GEMM
+            if reverse:
+                delta_s[-1][:] = activation.bprop(h_s[-1]) * delta_s[-1]
+            else:
+                delta_s[0][:] = activation.bprop(h_s[0]) * delta_s[0]
+
+            if reverse:
+                B = delta_s[0].base[:, self.bsz:]
+                C = delta_s[0].base[:, :-self.bsz]
+                H = h_s[0].base[:, :-self.bsz]
+            else:
+                B = delta_s[0].base[:, :-self.bsz]
+                C = delta_s[0].base[:, self.bsz:]
+                H = h_s[0].base[:, self.bsz:]
+
+            if num_used_steps is not None and num_used_steps < num_steps:
+                num_steps = num_used_steps
+
+            self.compound_unrolled_gemm_bprop(W_recur, B, C, H, nout, nout,
+                                              self.bsz, num_steps - 1,
+                                              activation, reverse)
+        else:
+            if num_used_steps is not None and num_used_steps < num_steps:
+                h_s = h_s[:num_used_steps]
+                h_prev_s = h_prev_s[:num_used_steps]
+                h_ff_s = h_ff_s[:num_used_steps]
+
+            if reverse:
+                steps = reversed(zip(h_s, delta_s, delta_prev_s))
+            else:
+                steps = zip(h_s, delta_s, delta_prev_s)
+
+            for (hs, in_deltas, prev_in_deltas) in steps:
+                in_deltas[:] = activation.bprop(hs) * in_deltas
+                self.compound_dot(W_recur, in_deltas, prev_in_deltas, beta=1.0)
+
+    context_dependent_memoize
+
+    def compound_unrolled_gemm(self, A, B, C, bias, nin, nout, unroll_stride, num_steps, activation,
+                               reverse=False):
+        assert A.dtype.type == B.dtype.type == C.dtype.type
+        from neon.transforms.activation import Rectlinclip
+        assert isinstance(activation, Rectlinclip)
+
+        gpulock = _get_lock_data(4)
+        drv.memset_d32(gpulock, 0, 1)
+
+        # one dimention must be contiguous
+        assert min(A.strides) == 1
+        assert min(B.strides) == 1
+        assert min(C.strides) == 1
+
+        lda = max(A.strides)
+        ldb = max(B.strides)
+        ldc = max(C.strides)
+
+        if A.is_trans:
+            opA = 't'
+            lda *= 8 * A.dtype.itemsize  # saves a kernel register
+        else:
+            opA = 'n'
+
+        if B.is_trans:
+            opB = 't'
+        else:
+            opB = 'n'
+            ldb *= 8 * B.dtype.itemsize  # saves a kernel register
+
+        op = opA + opB
+        # NOTE: Only nn supported now
+        assert op == "nn"
+
+        m = nout
+        n = unroll_stride
+        k = nin
+
+        # NOTE: Only 128x32 supported now
+        sizeA = 128
+        sizeB = 32
+
+        gridA = m // sizeA + (m % sizeA != 0)
+        gridB = n // sizeB + (n % sizeB != 0)
+
+        if op == "nn":
+            if (k % 8 == 0 and n % 4 == 0 and
+                A.strides[0] % 8 == 0 and B.strides[0] % 4 == 0):
+                op += "_vec"
+
+        op = "sgemm_rnn_" + op + '_' + str(sizeA) + 'x' + str(sizeB)
+
+        # Since the kernel uses inter-block synchronization, ensure that we don't
+        # have more blocks than can run concurrently
+        assert (gridA * gridB) < (4 * _get_sm_count())
+
+        if reverse:
+            flags = 4
+        else:
+            flags = 0
+
+        kernel = kernel_specs.get_kernel(op)
+        params = [
+            (1, gridA, gridB), (kernel.threads, 1, 1), self.stream,
+            C.gpudata, A.gpudata, B.gpudata, bias.gpudata, gpulock,
+            1.0, 1.0, activation.xcut, flags,
+            lda, ldb, ldc, m, n, k,
+            0, 0, 0, 0, unroll_stride, unroll_stride, num_steps, gridA * gridB, gridA]
+
+        kernel.prepared_async_call(*params)
+
+    def compound_unrolled_gemm_bprop(self, A, B, C, H, nin, nout, unroll_stride, num_steps, activation,
+                               reverse=False):
+        assert A.dtype.type == B.dtype.type == C.dtype.type
+        from neon.transforms.activation import Rectlinclip
+        assert isinstance(activation, Rectlinclip)
+
+        gpulock = _get_lock_data(4)
+        drv.memset_d32(gpulock, 0, 1)
+
+        # one dimention must be contiguous
+        assert min(A.strides) == 1
+        assert min(B.strides) == 1
+        assert min(C.strides) == 1
+        assert min(H.strides) == 1
+
+        lda = max(A.strides)
+        ldb = max(B.strides)
+        ldc = max(C.strides)
+        ldh = max(H.strides)
+
+        if A.is_trans:
+            opA = 't'
+            lda *= 8 * A.dtype.itemsize  # saves a kernel register
+        else:
+            opA = 'n'
+
+        if B.is_trans:
+            opB = 't'
+        else:
+            opB = 'n'
+            ldb *= 8 * B.dtype.itemsize  # saves a kernel register
+
+        op = opA + opB
+        # NOTE: Only tn supported now
+        assert op == "tn"
+
+        m = nout
+        n = unroll_stride
+        k = nin
+
+        # NOTE: Only 128x32 supported now
+        sizeA = 128
+        sizeB = 32
+
+        gridA = m // sizeA + (m % sizeA != 0)
+        gridB = n // sizeB + (n % sizeB != 0)
+
+        if op == "tn":
+            if (m % 4 == 0 and n % 4 == 0 and
+                A.strides[1] % 4 == 0 and B.strides[0] % 4 == 0):
+                op += "_vec"
+
+        op = "sgemm_rnn_bprop_" + op + '_' + str(sizeA) + 'x' + str(sizeB)
+
+        # Since the kernel uses inter-block synchronization, ensure that we don't
+        # have more blocks than can run concurrently
+        assert (gridA * gridB) < (4 * _get_sm_count())
+
+        if reverse:
+            flags = 4
+        else:
+            flags = 0
+
+        kernel = kernel_specs.get_kernel(op)
+        params = [
+            (1, gridA, gridB), (kernel.threads, 1, 1), self.stream,
+            C.gpudata, A.gpudata, B.gpudata, H.gpudata,
+            gpulock, 1.0, 1.0, activation.xcut, flags,
+            lda, ldb, ldc, ldh, m, n, k,
+            0, 0, 0, 0, unroll_stride, unroll_stride, unroll_stride, num_steps,
+            gridA * gridB, gridA]
+
+        kernel.prepared_async_call(*params)
+
     def cublas_dot(self, A, B, C, alpha=1.0, beta=0.0):
         """
         Matrix multiplication using cublas library. Intended for use on Kepler
@@ -2351,6 +2619,10 @@ def _contiguous_strides(shape):
 @context_dependent_memoize
 def _get_scratch_data(scratch_size):
     return drv.mem_alloc(scratch_size)
+
+@context_dependent_memoize
+def _get_lock_data(lock_size):
+    return drv.mem_alloc(lock_size)
 
 
 @context_dependent_memoize

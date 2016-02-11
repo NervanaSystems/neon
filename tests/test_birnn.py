@@ -17,12 +17,13 @@ Test of the BiRNN layer
 '''
 import itertools as itt
 import numpy as np
+from numpy import concatenate as con
 
 from neon import NervanaObject
 from neon.initializers.initializer import GlorotUniform
-from neon.layers.recurrent import BiRNN, Recurrent, get_steps
+from neon.layers.recurrent import BiRNN, Recurrent, get_steps, BiSum, BiBNRNN
 from neon.transforms import Logistic
-from numpy import concatenate as con
+from tests.utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):
@@ -206,3 +207,93 @@ def test_biRNN_bprop(backend_default, fargs):
     del_rl_s = get_steps(del_rl, in_shape)
     for (x, y) in zip(del_lr_s, reversed(del_rl_s)):
         assert np.allclose(x, y, rtol=0.0, atol=1.0e-5)
+
+
+def test_biSum(backend_default, fargs):
+
+    seq_len, input_size, hidden_size, batch_size = fargs
+    input_size *= 2
+
+    in_shape = (input_size, seq_len)
+    NervanaObject.be.bsz = batch_size
+
+    bisum = BiSum()
+    bisum.configure(in_shape)
+    bisum.prev_layer = True
+
+    bisum.allocate()
+    bisum.set_deltas([bisum.be.iobuf(bisum.in_shape)])
+
+    # inputs
+    inp_np = np.random.random((input_size, seq_len * batch_size))
+    inp_be = bisum.be.array(inp_np)
+
+    # outputs
+    out_be = bisum.fprop(inp_be)
+    del_be = bisum.bprop(out_be)
+
+    out_ref = bisum.be.empty_like(out_be)
+    out_ref[:] = inp_be[:input_size / 2] + inp_be[input_size / 2:]
+    assert out_be.shape[0] * 2 == inp_be.shape[0]
+    assert allclose_with_out(out_be.get(), out_ref.get(), rtol=0.0, atol=1.0e-5)
+
+    assert allclose_with_out(del_be[:input_size / 2].get(), out_be.get(), rtol=0.0, atol=1.0e-5)
+    assert allclose_with_out(del_be[input_size / 2:].get(), out_be.get(), rtol=0.0, atol=1.0e-5)
+
+
+def test_bibn(backend_default, fargs):
+
+    seq_len, input_size, hidden_size, batch_size = fargs
+    in_shape = (input_size, seq_len)
+    NervanaObject.be.bsz = batch_size
+
+    # setup the bi-directional rnn
+    init_glorot = GlorotUniform()
+    birnn = BiBNRNN(hidden_size, activation=Logistic(), init=init_glorot)
+    birnn.configure(in_shape)
+    birnn.prev_layer = True
+    birnn.allocate()
+    birnn.set_deltas([birnn.be.iobuf(birnn.in_shape)])
+
+    # test fprop
+
+    # set the ff buffer
+    inp_np = np.random.random(birnn.h_ff_buffer.shape)
+    inp_be = birnn.be.array(inp_np)
+    birnn.h_ff_buffer[:] = inp_np
+
+    # compare the bn output with calling the backend bn
+    xsum = birnn.be.zeros_like(birnn.xmean)
+    xvar = birnn.be.zeros_like(birnn.xvar)
+    gmean = birnn.be.zeros_like(birnn.gmean)
+    gvar = birnn.be.zeros_like(birnn.gvar)
+    gamma = birnn.be.ones(birnn.gamma.shape)
+    beta = birnn.be.zeros_like(birnn.beta)
+    grad_gamma = birnn.be.zeros_like(gamma)
+    grad_beta = birnn.be.zeros_like(beta)
+    out_ref = birnn.be.zeros_like(birnn.h_ff_buffer)
+
+    xsum[:] = birnn.be.sum(birnn.h_ff_buffer, axis=1)
+    birnn.be.compound_fprop_bn(
+        birnn.h_ff_buffer, xsum, xvar, gmean, gvar,
+        gamma, beta, out_ref, birnn.eps, birnn.rho,
+        accumbeta=0, relu=False)
+
+    # call the bibnrnn layer fprop_bn
+    out_bn = birnn._fprop_bn(birnn.h_ff_buffer, inference=False)
+
+    assert allclose_with_out(out_bn.get(), out_ref.get(), rtol=0.0, atol=1.0e-5)
+
+    # test bprop
+    err_np = np.random.random(birnn.h_ff_buffer.shape)
+    err_be = birnn.be.array(err_np)
+
+    err_out_ref = birnn.be.empty_like(err_be)
+    birnn.be.compound_bprop_bn(err_out_ref, grad_gamma, grad_beta,
+                               err_be,
+                               inp_be, xsum, xvar, gamma,
+                               birnn.eps)
+
+    err_out_bn = birnn._bprop_bn(err_be, out_bn)
+
+    assert allclose_with_out(err_out_bn.get(), err_out_ref.get(), rtol=0.0, atol=1.0e-5)
