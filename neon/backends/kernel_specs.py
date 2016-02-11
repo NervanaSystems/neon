@@ -32,7 +32,6 @@ pre_dir   = get_cache_dir(['kernels', 'pre'])
 cubin_dir = get_cache_dir(['kernels', 'cubin'])
 dump_dir  = get_cache_dir(['kernels', 'dump'])
 
-
 kernels = {
     "sconv_direct_fprop_128x128": {"threads": 256, "sass": "sconv_xprop_X128_N128", "params": "fprop",  "share": "128*8*2 + 128*8*2 + 10", "args": {"prop": "f"}},
     "sconv_direct_bprop_128x128": {"threads": 256, "sass": "sconv_xprop_X128_N128", "params": "bprop",  "share": "128*8*2 + 128*8*2 + 10", "args": {"prop": "b"}},

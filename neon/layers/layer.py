@@ -997,6 +997,8 @@ class Linear(ParameterLayer):
                                  C=self.outputs[:, :bsz * steps],
                                  beta=beta,
                                  bsum=self.batch_sum)
+        if revert:
+            inputs.swap_shadow()
 
         return self.outputs
 
@@ -1017,6 +1019,8 @@ class Linear(ParameterLayer):
         if self.deltas:
             self.be.compound_dot(A=self.W.T, B=error, C=self.deltas, alpha=alpha, beta=beta)
         self.be.compound_dot(A=error, B=self.inputs.T, C=self.dW)
+        if revert:
+            error.swap_shadow()
         return self.deltas
 
 
@@ -1497,7 +1501,7 @@ class Dropout(Layer):
     """
 
     def __init__(self, keep=0.5, name=None):
-        super(Dropout, self).__init__(name)
+        super(Dropout, self).__init__(name, "Disabled")
         self.keep = keep
         self.keep_mask = None
         self.caffe_mode = self.be.check_caffe_compat()

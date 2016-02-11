@@ -44,8 +44,8 @@ from neon.util.argparser import NeonArgparser, extract_valid_args
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 parser.add_argument('--rlayer_type', default='lstm',
-                    choices=['bilstm', 'lstm', 'birnn', 'rnn'],
-                    help='type of recurrent layer to use (lstm, bilstm, rnn, birnn)')
+                    choices=['bilstm', 'lstm', 'birnn', 'bibnrnn', 'rnn'],
+                    help='type of recurrent layer to use (lstm, bilstm, rnn, birnn, bibnrnn)')
 
 args = parser.parse_args(gen_be=False)
 

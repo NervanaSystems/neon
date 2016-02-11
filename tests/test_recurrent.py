@@ -305,3 +305,14 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
 
     del rnn
     return (grads_est, deltas_neon)
+
+
+if __name__ == '__main__':
+
+    bsz = 1
+    be = gen_backend(backend='gpu', batch_size=bsz)
+
+    fargs = (30, 5, 10, bsz)
+
+    # test_ref_compare_ones(be, fargs)
+    test_ref_compare_rand(be, fargs)
