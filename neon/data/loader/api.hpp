@@ -97,7 +97,7 @@ extern void write_raw(char *outfile, const int numData,
     uint32_t tgtSize = sizeof(uint32_t);
     bf.openForWrite(outfile, "imgclass");
     for (int i=0; i<numData; i++) {
-        bf.writeItem(jpgdata[i], (char *) &targets[i], &jpglens[i], &tgtSize);
+        bf.writeItem(jpgdata[i], (char *) &targets[i], jpglens[i], tgtSize);
     }
     bf.close();
 }

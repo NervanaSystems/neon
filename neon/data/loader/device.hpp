@@ -25,6 +25,12 @@ public:
     int                         _id;
 };
 
+class CpuParams : public DeviceParams {
+public:
+    char*                       _data[2];
+    char*                       _targets[2];
+};
+
 class Device {
 public:
     Device(int type) : _type(type) {}
@@ -56,14 +62,8 @@ void check(T err, T sval, const char* const func,
         return;
     }
     printf("CUDA error %d at: %s:%d\n", err, file, line);
-    throw runtime_error("CUDA error\n");
+    throw std::runtime_error("CUDA error\n");
 }
-
-class CpuParams : public DeviceParams {
-public:
-    char*                       _data[2];
-    char*                       _targets[2];
-};
 
 class GpuParams : public DeviceParams {
 public:
@@ -217,7 +217,7 @@ Device* Device::create(DeviceParams* params) {
     }
     return new Gpu(reinterpret_cast<GpuParams*>(params));
 #else
-    assert(deviceParams->_type == CPU);
+    assert(params->_type == CPU);
     return new Cpu(reinterpret_cast<CpuParams*>(params));
 #endif
 }

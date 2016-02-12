@@ -16,85 +16,16 @@
 #include <assert.h>
 
 #include <vector>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
 #include <cstdio>
 #include <iostream>
 #include <chrono>
 #include <utility>
 #include <algorithm>
 
-#include "reader.hpp"
+#include "archive.hpp"
 #include "decoder.hpp"
 #include "matrix.hpp"
 #include "device.hpp"
-
-using std::thread;
-using std::mutex;
-using std::condition_variable;
-using std::unique_lock;
-using std::lock_guard;
-
-class ThreadPool {
-public:
-    explicit ThreadPool(int count)
-    : _count(count), _done(false) {
-        _stopped = new bool[count];
-        for (int i = 0; i < count; i++) {
-            _stopped[i] = false;
-        }
-    }
-
-    virtual ~ThreadPool() {
-        for (auto t : _threads) {
-            t->join();
-            delete t;
-        }
-        delete[] _stopped;
-    }
-
-    virtual void start() {
-        for (int i = 0; i < _count; i++) {
-            _threads.push_back(new thread(&ThreadPool::run, this, i));
-        }
-    }
-
-    virtual void stop() {
-        _done = true;
-    }
-
-    bool stopped() {
-        for (int i = 0; i < _count; i++) {
-            if (_stopped[i] == false) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    void join() {
-        for (auto t : _threads) {
-            t->join();
-        }
-    }
-
-protected:
-    virtual void work(int id) = 0;
-
-    void run(int id) {
-        while (_done == false) {
-            work(id);
-        }
-        _stopped[id] = true;
-    }
-
-protected:
-    int                         _count;
-    vector<thread*>             _threads;
-    bool                        _done;
-    bool*                       _stopped;
-};
 
 class DecodeThreadPool : public ThreadPool {
 public:
@@ -315,9 +246,9 @@ private:
     Decoder*                    _decoder;
 };
 
-class ReadThreadPool : public ThreadPool {
+class ReadThread: public ThreadPool {
 public:
-    ReadThreadPool(BufferPool& out, Reader* reader)
+    ReadThread(BufferPool& out, Reader* reader)
     : ThreadPool(1), _out(out), _reader(reader) {
         assert(_count == 1);
     }
@@ -334,7 +265,7 @@ protected:
             while (_out.full() == true) {
                 _out.waitForNonFull(lock);
             }
-            BufferPair bufPair = _out.getForWrite();
+            BufferPair& bufPair = _out.getForWrite();
             int result = _reader->read(bufPair.first, bufPair.second);
             if (result == -1) {
                 _done = true;
@@ -357,7 +288,7 @@ public:
            MediaParams* mediaParams, DeviceParams* deviceParams)
     : _first(true),
       _batchSize(batchSize), _datumSize(datumSize), _targetSize(targetSize),
-      _readBufs(0), _decodeBufs(0), _readPool(0), _decodePool(0),
+      _readBufs(0), _decodeBufs(0), _readThread(0), _decodeThreads(0),
       _device(0), _reader(0), _decoder(0) {
         _device = Device::create(deviceParams);
         _reader = Reader::create(itemCount, batchSize, repoDir, shuffle);
@@ -366,9 +297,9 @@ public:
 
     virtual ~Loader() {
         delete _readBufs;
-        delete _readPool;
+        delete _readThread;
         delete _decodeBufs;
-        delete _decodePool;
+        delete _decodeThreads;
         delete _device;
         delete _reader;
         delete _decoder;
@@ -381,7 +312,7 @@ public:
             // usually deal with compressed data.
             _readBufs = new BufferPool(_batchSize * _datumSize,
                                        _batchSize * _targetSize);
-            _readPool = new ReadThreadPool(*_readBufs, _reader);
+            _readThread = new ReadThread(*_readBufs, _reader);
             bool pinned = (_device->_type != CPU);
             _decodeBufs = new BufferPool(_batchSize * _datumSize,
                                          _batchSize * _targetSize, pinned);
@@ -389,20 +320,20 @@ public:
             int itemsPerThread = (_batchSize - 1) /  numCores + 1;
             int threadCount =  (_batchSize - 1) / itemsPerThread + 1;
             threadCount = std::min(threadCount, _batchSize);
-            _decodePool = new DecodeThreadPool(threadCount,
+            _decodeThreads = new DecodeThreadPool(threadCount,
                     _batchSize, _datumSize, _targetSize,
                     *_readBufs, *_decodeBufs, _device, _decoder);
         } catch(std::bad_alloc&) {
             return -1;
         }
-        _decodePool->start();
-        _readPool->start();
+        _decodeThreads->start();
+        _readThread->start();
         return 0;
     }
 
     void stop() {
-        _readPool->stop();
-        while (_readPool->stopped() == false) {
+        _readThread->stop();
+        while (_readThread->stopped() == false) {
             std::this_thread::yield();
             drain();
         }
@@ -410,16 +341,18 @@ public:
                (_readBufs->empty() == false)) {
             drain();
         }
-        _decodePool->stop();
-
+        _decodeThreads->stop();
+        while (_decodeThreads->stopped() == false) {
+            std::this_thread::yield();
+        }
         delete _readBufs;
-        delete _readPool;
+        delete _readThread;
         delete _decodeBufs;
-        delete _decodePool;
+        delete _decodeThreads;
         _readBufs = 0;
-        _readPool = 0;
+        _readThread = 0;
         _decodeBufs = 0;
-        _decodePool = 0;
+        _decodeThreads = 0;
     }
 
     int reset() {
@@ -480,8 +413,8 @@ private:
     int                         _targetSize;
     BufferPool*                 _readBufs;
     BufferPool*                 _decodeBufs;
-    ReadThreadPool*             _readPool;
-    DecodeThreadPool*           _decodePool;
+    ReadThread*                 _readThread;
+    DecodeThreadPool*           _decodeThreads;
     Device*                     _device;
     Reader*                     _reader;
     Decoder*                    _decoder;

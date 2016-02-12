@@ -103,7 +103,7 @@ int test(const char* pathPrefix, int batchSize, int datumSize,
     // Peek into macrobatch to check the size of the file.
     int macrobatchSize;
     {
-        MacrobatchReader reader(pathPrefix, 0, 0, 0);
+        ArchiveReader reader(pathPrefix, 0, 0, 0);
         macrobatchSize = reader.itemCount();
     }
 
@@ -112,9 +112,9 @@ int test(const char* pathPrefix, int batchSize, int datumSize,
                macrobatchSize, batchSize);
         return -1;
     }
-    Reader* reader = new MacrobatchReader(pathPrefix, 0,
-                                          macrobatchCount * macrobatchSize,
-                                          batchSize);
+    Reader* reader = new ArchiveReader(pathPrefix, 0,
+                                       macrobatchCount * macrobatchSize,
+                                       batchSize);
     ImageParams* params = new ImageParams();
     Decoder* decoder = Decoder::create(params);
     Loader loader(batchSize, datumSize, targetSize,

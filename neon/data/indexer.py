@@ -27,7 +27,7 @@ class Indexer(NervanaObject):
         self.pattern = pattern
 
     def run(self):
-        archive_dir = self.path + '-archive'
+        archive_dir = self.path + '-ingested'
         if os.path.exists(archive_dir):
             return
         index_file = os.path.join(self.path, 'index.csv')

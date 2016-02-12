@@ -19,11 +19,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
-#include <libgen.h>
-
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
 
 #include <string>
 #include <sstream>
@@ -33,8 +28,8 @@
 #include <memory>
 #include <deque>
 #include <random>
+
 #include "buffer.hpp"
-#include "batchfile.hpp"
 
 using std::string;
 using std::ifstream;
@@ -43,12 +38,11 @@ using std::stringstream;
 using std::vector;
 using std::map;
 
-typedef std::pair<std::unique_ptr<ByteVect>,std::unique_ptr<ByteVect>> DataPair;
-
 #define INDEX_FILE_NAME     "index.csv"
 #define ARCHIVE_DIR_SUFFIX  "-ingested"
 #define ARCHIVE_FILE_PREFIX "archive-"
 #define META_FILE_NAME      "archive-meta.csv"
+#define ARCHIVE_ITEM_COUNT  4096
 
 class IndexElement {
 public:
@@ -150,6 +144,11 @@ public:
     static Reader* create(int* itemCount, int batchSize, char* repoDir,
                           bool shuffle);
 
+    static bool exists(const string& fileName) {
+        struct stat stats;
+        return stat(fileName.c_str(), &stats) == 0;
+    }
+
 protected:
     // Number of items to read at a time.
     int                         _batchSize;
@@ -207,18 +206,65 @@ public:
         return 0;
     }
 
+    int next(char** dataBuf, char** targetBuf,
+             int* dataBufLen, int* targetBufLen,
+             int* dataLen, int* targetLen) {
+        if (eos()) {
+            // No more items to read.
+            return 1;
+        }
+        IndexElement* elem = _index[_itemIdx++];
+        // Read the data.
+        string path = _repoDir + '/' + elem->_fileName;
+        struct stat stats;
+        int result = stat(path.c_str(), &stats);
+        if (result == -1) {
+            printf("Could not stat %s\n", path.c_str());
+            return -1;
+        }
+        off_t size = stats.st_size;
+        if (*dataBufLen < size) {
+            // Allocate a bit more than what we need right now.
+            resize(dataBuf, dataBufLen, size + size / 10);
+        }
+        _ifs.open(path, ios::binary);
+        _ifs.read(*dataBuf, size);
+        _ifs.close();
+        *dataLen = size;
+        // Read the targets.
+        // Limit to a single integer for now.
+        if (*targetBufLen < (int) sizeof(int)) {
+            resize(targetBuf, targetBufLen, sizeof(int));
+        }
+        int label = atoi(elem->_targets[0].c_str());
+        memcpy(*targetBuf, &label, sizeof(int));
+        *targetLen = sizeof(int);
+        return 0;
+    }
+
+    bool eos() {
+        return (_itemIdx == _itemCount);
+    }
+
     int reset() {
         _itemIdx = 0;
         return 0;
     }
 
 private:
+    void resize(char** buf, int* len, int newLen) {
+        delete[] *buf;
+        *buf = new char[newLen];
+        *len = newLen;
+    }
+
     void loadIndex() {
         string indexFile = _repoDir + '/' + INDEX_FILE_NAME;
         ifstream ifs(indexFile);
         if (!ifs) {
-            printf("Could not open %s\n", indexFile.c_str());
-            throw std::ios_base::failure("Could not open file\n");
+            stringstream ss;
+            ss << "Could not open " << indexFile;
+            throw std::ios_base::failure(ss.str());
         }
 
         string line;
@@ -241,208 +287,3 @@ private:
     int                         _itemIdx;
     ifstream                    _ifs;
 };
-
-class ArchiveReader : public Reader {
-public:
-    ArchiveReader(int* itemCount, int batchSize, string& repoDir,
-                  bool shuffle=false)
-    : Reader(batchSize, repoDir, shuffle),
-      _fileIdx(0), _itemIdx(0), _itemsLeft(0) {
-        loadMetadata();
-        *itemCount = _itemCount;
-        open();
-    }
-
-    virtual ~ArchiveReader() {
-        close();
-    }
-
-    int read(CharBuffer* data, CharBuffer* targets) {
-        int offset = 0;
-        while (offset < _batchSize) {
-            int count = _batchSize - offset;
-            int result;
-            if (_shuffle) {
-                result = readShuffle(data, targets, count);
-            } else {
-                result = read(data, targets, count);
-            }
-            if (result == -1) {
-                return -1;
-            }
-            offset += result;
-        }
-
-        assert(offset == _batchSize);
-        assert(_itemIdx <= _itemCount);
-        return 0;
-    }
-
-    int reset() {
-        close();
-        _fileIdx = 0;
-        _itemIdx = 0;
-        open();
-        return 0;
-    }
-
-    int itemCount() {
-        return _batchFile.itemCount();
-    }
-
-    int maxDatumSize() {
-        return _batchFile.maxDatumSize();
-    }
-
-    int maxTargetSize() {
-        return _batchFile.maxTargetSize();
-    }
-
-    int totalDataSize() {
-        return _batchFile.totalDataSize();
-    }
-
-    int totalTargetsSize() {
-        return _batchFile.totalTargetsSize();
-    }
-
-    // For unit testing.
-    int readAll(CharBuffer* data, CharBuffer* targets) {
-        readExact(data, targets, _itemsLeft);
-        return _itemsLeft;
-    }
-
-private:
-    void loadMetadata() {
-        string metaFile = _repoDir + '/' + META_FILE_NAME;
-        ifstream ifs(metaFile);
-        if (!ifs) {
-            printf("Could not open %s\n", metaFile.c_str());
-            throw std::ios_base::failure("Could not open file\n");
-        }
-
-        string line;
-        while (std::getline(ifs, line)) {
-            _metadata.addElement(line);
-        }
-
-        _itemCount = _metadata.getItemCount();
-        if (_itemCount <= 0) {
-            throw std::runtime_error("Error in metadata\n");
-        }
-    }
-
-    int read(CharBuffer* data, CharBuffer* targets, int count) {
-        if (_itemsLeft == 0) {
-            next();
-        }
-        assert(_itemsLeft > 0);
-        int realCount = std::min(count, _itemsLeft);
-        if (_itemIdx + realCount >= _itemCount) {
-            realCount = _itemCount - _itemIdx;
-            readExact(data, targets, realCount);
-            reset();
-            return realCount;
-        }
-        readExact(data, targets, realCount);
-        return realCount;
-    }
-
-    int replenishQueue(int count) {
-        // Make sure we have at least count in our queue
-        if ( (int) _shuffleQueue.size() >= count)
-            return 0;
-
-        while (_itemsLeft > 0 && _itemIdx < _itemCount) {
-            DataPair d = _batchFile.readItem();
-            _shuffleQueue.push_back(std::move(d));
-            _itemIdx++;
-            _itemsLeft--;
-        }
-        std::random_device rd;
-        std::shuffle(_shuffleQueue.begin(), _shuffleQueue.end(),
-                     std::mt19937(rd()));
-        if (_itemIdx == _itemCount)
-            reset();
-        else
-            next();
-        return 0;
-    }
-
-    int readShuffle(CharBuffer* data, CharBuffer* targets, int count) {
-        while ((int) _shuffleQueue.size() < count) {
-            replenishQueue(count);
-        }
-
-        for (int i=0; i<count; ++i) {
-            auto ee = std::move(_shuffleQueue.at(0));
-            int dataSize = ee.first->size();
-            int targetSize = ee.second->size();
-            memcpy(data->getCurrent(), &(*ee.first)[0], dataSize);
-            memcpy(targets->getCurrent(), &(*ee.second)[0], targetSize);
-            data->pushItem(dataSize);
-            targets->pushItem(targetSize);
-            _shuffleQueue.pop_front();
-        }
-        return count;
-    }
-
-    void readExact(CharBuffer* data, CharBuffer* targets, int count) {
-        assert(count <= _itemsLeft);
-        for (int i = 0; i < count; ++i) {
-            uint        dataSize;
-            uint        targetSize;
-            _batchFile.readItem(data->getCurrent(),
-                                targets->getCurrent(),
-                                &dataSize, &targetSize);
-            data->pushItem(dataSize);
-            targets->pushItem(targetSize);
-        }
-        _itemsLeft -= count;
-        _itemIdx += count;
-    }
-
-    void next() {
-        close();
-        _fileIdx++;
-        open();
-    }
-
-    void open() {
-        stringstream fileName;
-        fileName << _repoDir << '/' << ARCHIVE_FILE_PREFIX
-                 << _fileIdx << ".cpio";
-        _batchFile.openForRead(fileName.str());
-        _itemsLeft = _batchFile.itemCount();
-    }
-
-    void close() {
-        _batchFile.close();
-    }
-
-private:
-    // Index of current archive file.
-    int                         _fileIdx;
-    // Index of current item.
-    int                         _itemIdx;
-    // Number of items left in the current archive.
-    int                         _itemsLeft;
-    BatchFile                   _batchFile;
-    Metadata                    _metadata;
-    std::deque<DataPair>        _shuffleQueue;
-};
-
-Reader* Reader::create(int* itemCount, int batchSize, char* repoDir,
-                       bool shuffle) {
-    string archiveDir(repoDir);
-    archiveDir += ARCHIVE_DIR_SUFFIX;
-    struct stat stats;
-    int result = stat(archiveDir.c_str(), &stats);
-    if (result == 0) {
-        return new ArchiveReader(itemCount, batchSize, archiveDir, shuffle);
-    }
-
-    // Archive directory not found. Read individual files.
-    string dir(repoDir);
-    return new FileReader(itemCount, batchSize, dir, shuffle);
-}

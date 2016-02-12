@@ -20,6 +20,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <algorithm>
 
 #define FORMAT_VERSION  1
 #define WRITER_VERSION  1
@@ -27,6 +28,7 @@
 #define CPIO_FOOTER     "TRAILER!!!"
 
 using std::string;
+using std::stringstream;
 using std::unique_ptr;
 
 typedef std::vector<string> LineList;
@@ -57,7 +59,7 @@ Each of these items comprises of a cpio header record followed by data.
 
 */
 
-class ifstream : public std::ifstream {
+class IfStream : public std::ifstream {
 public:
     template <typename T>
     void read(T* data) {
@@ -78,7 +80,7 @@ public:
     }
 };
 
-class ofstream : public std::ofstream {
+class OfStream : public std::ofstream {
 public:
     template <typename T>
     void write(T* data) {
@@ -117,7 +119,7 @@ public:
         dst[1] = (ushort) src;
     }
 
-    void read(ifstream& ifs, uint* fileSize) {
+    void read(IfStream& ifs, uint* fileSize) {
         ifs.read(&_magic);
         assert(_magic == 070707);
         ifs.read(&_dev);
@@ -138,7 +140,7 @@ public:
         ifs.readPadding(_namesize);
     }
 
-    void write(ofstream& ofs, uint fileSize, const char* fileName) {
+    void write(OfStream& ofs, uint fileSize, const char* fileName) {
         _namesize = strlen(fileName) + 1;
         ofs.write(&_magic);
         ofs.write(&_dev);
@@ -185,7 +187,7 @@ public:
         memset(_unused, 0, sizeof(_unused));
     }
 
-    void read(ifstream& ifs) {
+    void read(IfStream& ifs) {
         ifs.read(&_magic);
         if (strncmp(_magic, MAGIC_STRING, 4) != 0) {
             throw std::runtime_error("Unrecognized format\n");
@@ -201,7 +203,7 @@ public:
         ifs.read(&_unused);
     }
 
-    void write(ofstream& ofs) {
+    void write(OfStream& ofs) {
         ofs.write((char*) MAGIC_STRING, strlen(MAGIC_STRING));
         ofs.write(&_formatVersion);
         ofs.write(&_writerVersion);
@@ -235,11 +237,11 @@ public:
         memset(_unused, 0, sizeof(_unused));
     }
 
-    void write(ofstream& ofs) {
+    void write(OfStream& ofs) {
         ofs.write(&_unused);
     }
 
-    void read(ifstream& ifs) {
+    void read(IfStream& ifs) {
         ifs.read(&_unused);
     }
 
@@ -254,13 +256,21 @@ public:
         _ofs.exceptions(_ofs.failbit);
     }
 
+    BatchFile(const string& fileName) {
+        openForRead(fileName);
+    }
+
+    BatchFile(const string& fileName, const string& dataType) {
+        openForWrite(fileName, dataType);
+    }
+
     ~BatchFile() {
         close();
     }
 
     void openForRead(const string& fileName) {
         assert(_ifs.is_open() == false);
-        _ifs.open(fileName, ifstream::binary);
+        _ifs.open(fileName, IfStream::binary);
         uint fileSize;
         _recordHeader.read(_ifs, &fileSize);
         assert(fileSize == sizeof(_fileHeader));
@@ -269,11 +279,15 @@ public:
 
     void openForWrite(const string& fileName, const string& dataType) {
         static_assert(sizeof(_fileHeader) == 64, "file header is not 64 bytes");
+        _fileName = fileName;
+        _tempName = fileName + ".tmp";
         assert(_ofs.is_open() == false);
-        _ofs.open(fileName, ofstream::binary);
+        _ofs.open(_tempName, OfStream::binary);
         _recordHeader.write(_ofs, 64, "cpiohdr");
         _fileHeaderOffset = _ofs.tellp();
-        memcpy(_fileHeader._dataType, dataType.c_str(), 8);
+        memset(_fileHeader._dataType, ' ', sizeof(_fileHeader._dataType));
+        memcpy(_fileHeader._dataType, dataType.c_str(),
+               std::min(8, (int) dataType.length()));
         // This will be incomplete until the write on close()
         _fileHeader.write(_ofs);
     }
@@ -293,6 +307,12 @@ public:
             _ofs.seekp(_fileHeaderOffset, _ofs.beg);
             _fileHeader.write(_ofs);
             _ofs.close();
+            int result = rename(_tempName.c_str(), _fileName.c_str());
+            if (result != 0) {
+                stringstream ss;
+                ss << "Could not create " << _fileName;
+                throw std::runtime_error(ss.str());
+            }
         }
     }
 
@@ -322,32 +342,32 @@ public:
     }
 
     void writeItem(char* datum, char* target,
-                   uint* datumSize, uint* targetSize) {
+                   uint datumSize, uint targetSize) {
         char fileName[16];
         // Write the datum.
         sprintf(fileName, "cpiodtm%d",  _fileHeader._itemCount);
-        _recordHeader.write(_ofs, *datumSize, fileName);
-        _ofs.write(datum, *datumSize);
-        _ofs.writePadding(*datumSize);
+        _recordHeader.write(_ofs, datumSize, fileName);
+        _ofs.write(datum, datumSize);
+        _ofs.writePadding(datumSize);
         // Write the target.
         sprintf(fileName, "cpiotgt%d",  _fileHeader._itemCount);
-        _recordHeader.write(_ofs, *targetSize, fileName);
-        _ofs.write(target, *targetSize);
-        _ofs.writePadding(*targetSize);
+        _recordHeader.write(_ofs, targetSize, fileName);
+        _ofs.write(target, targetSize);
+        _ofs.writePadding(targetSize);
 
         _fileHeader._maxDatumSize =
-                std::max(*datumSize, _fileHeader._maxDatumSize);
+                std::max(datumSize, _fileHeader._maxDatumSize);
         _fileHeader._maxTargetSize =
-                std::max(*targetSize, _fileHeader._maxTargetSize);
-        _fileHeader._totalDataSize += *datumSize;
-        _fileHeader._totalTargetsSize += *targetSize;
+                std::max(targetSize, _fileHeader._maxTargetSize);
+        _fileHeader._totalDataSize += datumSize;
+        _fileHeader._totalTargetsSize += targetSize;
         _fileHeader._itemCount++;
     }
 
     void writeItem(ByteVect &datum, ByteVect &target) {
         uint    datumSize = datum.size();
         uint    targetSize = target.size();
-        writeItem(&datum[0], &target[0], &datumSize, &targetSize);
+        writeItem(&datum[0], &target[0], datumSize, targetSize);
     }
 
     int itemCount() {
@@ -371,12 +391,14 @@ public:
     }
 
 private:
-    ifstream                    _ifs;
-    ofstream                    _ofs;
+    IfStream                    _ifs;
+    OfStream                    _ofs;
     BatchFileHeader             _fileHeader;
     BatchFileTrailer            _fileTrailer;
     RecordHeader                _recordHeader;
     int                         _fileHeaderOffset;
+    string                      _fileName;
+    string                      _tempName;
 };
 
 // Some utilities that would be used by batch writers
@@ -397,7 +419,7 @@ int readFileBytes(const string &filn, ByteVect &b) {
 /* Reads in the binary file as a sequence of bytes, resizing
  * the provided byte vector to fit
 */
-    std::ifstream ifs(filn, ifstream::binary);
+    std::ifstream ifs(filn, std::ifstream::binary);
     if (ifs) {
         ifs.seekg (0, ifs.end);
         int length = ifs.tellg();
