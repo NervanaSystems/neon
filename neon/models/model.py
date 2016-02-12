@@ -382,7 +382,12 @@ class Model(NervanaObject):
                 raise RuntimeError('Need dataset to initialize MGPU models')
 
         if 'rng_state' in model_dict['backend']:
-            self.be.rng_set_state(model_dict['backend']['rng_state'])
+            try:
+                self.be.rng_set_state(model_dict['backend']['rng_state'])
+            except ValueError as e:
+                # could come about when switching backend types (ex GPU to CPU)
+                logger.warning("Problems restoring existing RNG state: %s",
+                               str(e))
 
     # serialize tells how to write out the parameters we've learned so
     # far and associate them with layers. it can ignore layers with no
@@ -404,6 +409,8 @@ class Model(NervanaObject):
         # get the model dict with the weights
         pdict = self.get_description(get_weights=True, keep_states=keep_states)
         pdict['epoch_index'] = self.epoch_index + 1
+        if self.initialized:
+            pdict['train_input_shape'] = self.layers.in_shape
         if fn is not None:
             save_obj(pdict, fn)
             return
