@@ -128,6 +128,7 @@ def test_model_serialize(backend_default, data):
     mlp = Model(layers=layers)
     mlp.load_params(tmp_save)
 
+    mlp.initialize(train_set)
     outputs = []
     pdicts = [l.get_params_serialize() for l in mlp.layers_to_optimize]
     for i, (x, t) in enumerate(train_set):

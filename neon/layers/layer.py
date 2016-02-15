@@ -209,9 +209,9 @@ class Layer(NervanaObject):
         if self.has_params:
             return self.get_params()
 
-    def load_weights(self, pdict, inference=False):
+    def load_weights(self, pdict, load_states=True):
         self.set_params(pdict)
-        if not inference:
+        if load_states:
             self.set_states(pdict)
 
     def set_params(self, pdict):

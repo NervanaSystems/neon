@@ -88,10 +88,10 @@ class LayerContainer(Layer):
         self._desc = desc
         return desc
 
-    def load_weights(self, pdict, inference=False):
+    def load_weights(self, pdict, load_states=True):
         assert len(pdict['config']['layers']) == len(self.layers)
         for branch, bdict in zip(self.layers, pdict['config']['layers']):
-            branch.load_weights(bdict, inference=inference)
+            branch.load_weights(bdict, load_states=load_states)
 
 
 class Sequential(LayerContainer):
