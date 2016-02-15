@@ -44,11 +44,12 @@ class Recurrent(ParameterLayer):
         activation (Transform): Activation function for the input modulation
         reset_cells (bool): default to be False to make the layer stateful,
                             set to True to be stateless
+        name (str, optional): name to refer to this layer as.
 
     Attributes:
         W_input (Tensor): weights from inputs to output units
             (input_size, output_size)
-        W_recur (TTensor): weights for recurrent connections
+        W_recur (Tensor): weights for recurrent connections
             (output_size, output_size)
         b (Tensor): Biases on output units (output_size, 1)
     """
@@ -202,8 +203,12 @@ class Recurrent(ParameterLayer):
 
         Arguments:
             deltas (Tensor): tensors containing the errors for
-                each step of model unrolling.
-                shape: (output_size, sequence_length * batch_size)
+                             each step of model unrolling.  Expected 2D shape
+                             is (output_size, sequence_length * batch_size)
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
 
         Returns:
             Tensor: back propagated errors for each step of time unrolling
@@ -255,6 +260,7 @@ class LSTM(Recurrent):
         gate_activation (Transform): Activation function for the gates
         reset_cells (bool): default to be False to make the layer stateful,
                             set to True to be stateless
+        name (str, optional): name to refer to this layer as.
 
     Attributes:
         x (Tensor): input data as 2D tensor. The dimension is
@@ -323,6 +329,10 @@ class LSTM(Recurrent):
             inputs (Tensor): input data as 2D tensors, then being converted into a
                              list of 2D slices. The dimension is
                              (input_size, sequence_length * batch_size)
+            inference (bool, optional): Set to true if you are running
+                                        inference (only care about forward
+                                        propagation without associated backward
+                                        propagation).  Default is False.
 
         Returns:
             Tensor: LSTM output for each model time step
@@ -353,16 +363,21 @@ class LSTM(Recurrent):
     def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
         Backpropagation of errors, output delta for previous layer, and
-        calculate the update on model parmas
+        calculate the update on model params
 
         Arguments:
             deltas (Tensor): tensors containing the errors for
                              each step of model unrolling.
-                shape: (output_size, sequence_length * batch_size)
+                             Expected 2D shape is
+                             (output_size, sequence_length * batch_size)
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
 
         Attributes:
             dW_input (Tensor): input weight gradients
-            dW_recur (Tensor): revursive weight gradients
+            dW_recur (Tensor): recursive weight gradients
             db (Tensor): bias gradients
 
         Returns:
@@ -427,7 +442,7 @@ class GRU(Recurrent):
     - The reset gate (r) decides how much to reset (when r = 0) from the previous activation
     - Activation (h_t) is a linear interpolation (by z) between the previous
         activation (h_t-1) and the new candidate activation ( h_can )
-    - r and z are compuated the same way, using different weights
+    - r and z are computed the same way, using different weights
     - gate activation function and unit activation function are usually different
     - gate activation is usually logistic
     - unit activation is usually tanh
@@ -442,10 +457,11 @@ class GRU(Recurrent):
         init_inner (Initializer, optional): Function for initializing the model's recurrent
                                             parameters.  If absent, will default to using same
                                             initializer provided to init.
-        activation (Transform): Activiation function for the input modulation
+        activation (Transform): Activation function for the input modulation
         gate_activation (Transform): Activation function for the gates
         reset_cells (bool): default to be False to make the layer stateful,
                             set to True to be stateless
+        name (str, optional): name to refer to this layer as.
 
     Attributes:
         x (Tensor): Input data tensor (input_size, sequence_length * batch_size)
@@ -471,7 +487,7 @@ class GRU(Recurrent):
         super(GRU, self).__init__(output_size, init, init_inner,
                                   activation, reset_cells, name)
         self.gate_activation = gate_activation
-        self.ngates = 3  # r, z, hcandidate
+        self.ngates = 3  # r, z, h candidate
 
     def allocate(self, shared_outputs=None):
         super(GRU, self).allocate(shared_outputs)
@@ -548,6 +564,10 @@ class GRU(Recurrent):
         Arguments:
             inputs (Tensor): input data as 3D tensors, then converted into a list of 2D tensors.
                               The dimension is (input_size, sequence_length * batch_size)
+            inference (bool, optional): Set to true if you are running
+                                        inference (only care about forward
+                                        propagation without associated backward
+                                        propagation).  Default is False.
 
         Returns:
             Tensor: GRU output for each model time step
@@ -580,11 +600,15 @@ class GRU(Recurrent):
     def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
         Backpropagation of errors, output delta for previous layer, and calculate the update on
-            model parmas
+            model params
 
         Arguments:
             deltas (Tensor): error tensors for each time step of unrolling
             do_acts (bool, optional): Carry out activations.  Defaults to True
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
 
         Attributes:
             dW_input (Tensor): input weight gradients
@@ -763,11 +787,12 @@ class BiRNN(ParameterLayer):
                             set to True to be stateless.
         split_inputs (bool): to expect the input coming from the same source of separate
                              sources
+        name (str, optional): name to refer to this layer as.
 
     Attributes:
         W_input (Tensor): weights from inputs to output units
             (input_size, output_size)
-        W_recur (TTensor): weights for recurrent connections
+        W_recur (Tensor): weights for recurrent connections
             (output_size, output_size)
         b (Tensor): Biases on output units (output_size, 1)
     """
@@ -989,6 +1014,10 @@ class BiRNN(ParameterLayer):
             deltas (Tensor): tensors containing the errors for
                 each step of model unrolling.
                 shape: (output_size, sequence_length * batch_size)
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
 
         Returns:
             Tensor: back propagated errors for each step of time unrolling
@@ -1012,7 +1041,7 @@ class BiRNN(ParameterLayer):
                     self.next_in_deltas, self.out_delta_b)
 
         self.out_deltas_buffer[:] = 0
-        # errors propogate from right to left
+        # errors propagate from right to left
         for (xs, hs, h_prev, in_deltas,
              prev_in_deltas, out_delta) in reversed(zip(*params_f)):
 
@@ -1028,7 +1057,7 @@ class BiRNN(ParameterLayer):
                 self.be.compound_dot(self.W_input_f.T, in_deltas, out_delta,
                                      alpha=alpha, beta=beta)
 
-        # errors propogate left to right
+        # errors propagate left to right
         for (xs, hs, h_next, in_deltas,
              next_in_deltas, out_delta) in zip(*params_b):
 
@@ -1041,7 +1070,7 @@ class BiRNN(ParameterLayer):
             self.be.compound_dot(in_deltas, xs.T, self.dW_input_b, beta=1.0)
             self.db_b[:] = self.db_b + self.be.sum(in_deltas, axis=1)
             if out_delta:
-                # propogate the errors to same input if split_inputs is False
+                # propagate the errors to same input if split_inputs is False
                 self.be.compound_dot(self.W_input_b.T, in_deltas, out_delta,
                                      alpha=alpha, beta=beta if self.split_inputs else 1.0)
 
@@ -1064,6 +1093,7 @@ class BiLSTM(BiRNN):
                             set to True to be stateless.
         split_inputs (bool): to expect the input coming from the same source of separate
                              sources
+        name (str, optional): name to refer to this layer as.
 
     Attributes:
         x (Tensor): input data as 2D tensor. The dimension is
@@ -1147,11 +1177,17 @@ class BiLSTM(BiRNN):
 
     def fprop(self, inputs, inference=False):
         """
-        Apply the forward pass transformation to the input data.  The input
-            data is a list of inputs with an element for each time step of
-            model unrolling.
+        Apply the forward pass transformation to the input data.
 
-        Returns :
+        Arguments:
+            inputs (list): list of Tensors with one such tensor for each time
+                           step of model unrolling.
+            inference (bool, optional): Set to true if you are running
+                                        inference (only care about forward
+                                        propagation without associated backward
+                                        propagation).  Default is False.
+
+        Returns:
             Tensor: LSTM output for each model time step
         """
         self.init_buffers(inputs)  # calls the BiRNN init_buffers() code
@@ -1195,13 +1231,15 @@ class BiLSTM(BiRNN):
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
         Backpropagation of errors, output delta for previous layer, and
-        calculate the update on model parmas
+        calculate the update on model params
 
         Arguments:
-            deltas (list[Tensor]): error tensors for each time step
-                of unrolling
-            do_acts (bool, optional): Carry out activations.  Defaults to True
-
+            error (list[Tensor]): error tensors for each time step
+                                  of unrolling
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
 
         Returns:
             Tensor: Backpropagated errors for each time step
@@ -1253,7 +1291,7 @@ class BiLSTM(BiRNN):
             o_delta[:] = self.gate_activation.bprop(o) * in_deltas * c_act
             g_delta[:] = self.activation.bprop(g) * c_delta * i
 
-            # bprop the erros to prev_in_delta and c_delta_prev
+            # bprop the errors to prev_in_delta and c_delta_prev
             self.be.compound_dot(
                 self.W_recur_f.T, ifog_delta, prev_in_deltas, beta=1.0)
             if c_delta_prev is not None:
