@@ -23,7 +23,7 @@
 #include <algorithm>
 
 #include "archive.hpp"
-#include "decoder.hpp"
+#include "media.hpp"
 #include "matrix.hpp"
 #include "device.hpp"
 
@@ -32,7 +32,7 @@ public:
     DecodeThreadPool(int count, int batchSize,
                      int datumSize, int targetSize,
                      BufferPool& in, BufferPool& out,
-                     Device* device, Decoder* decoder)
+                     Device* device, Media* media)
     : ThreadPool(count),
       _itemsPerThread((batchSize - 1) / count + 1),
       _in(in), _out(out), _endSignaled(0),
@@ -40,7 +40,7 @@ public:
       _bufferIndex(0), _batchSize(batchSize),
       _datumSize(datumSize),
       _targetSize(targetSize),
-      _device(device), _decoder(decoder) {
+      _device(device), _media(media) {
         assert(_itemsPerThread * count >= _batchSize);
         assert(_itemsPerThread * (count - 1) < _batchSize);
         for (int i = 0; i < count; i++) {
@@ -134,7 +134,7 @@ protected:
             if (item == 0) {
                 return;
             }
-            _decoder->decode(item, itemSize, dataBuf);
+            _media->decode(item, itemSize, dataBuf, _datumSize);
             dataBuf += _datumSize;
         }
 
@@ -243,7 +243,7 @@ private:
     int                         _datumSize;
     int                         _targetSize;
     Device*                     _device;
-    Decoder*                    _decoder;
+    Media*                      _media;
 };
 
 class ReadThread: public ThreadPool {
@@ -289,10 +289,10 @@ public:
     : _first(true),
       _batchSize(batchSize), _datumSize(datumSize), _targetSize(targetSize),
       _readBufs(0), _decodeBufs(0), _readThread(0), _decodeThreads(0),
-      _device(0), _reader(0), _decoder(0) {
+      _device(0), _reader(0), _media(0) {
         _device = Device::create(deviceParams);
         _reader = Reader::create(itemCount, batchSize, repoDir, shuffle);
-        _decoder = Decoder::create(mediaParams);
+        _media = Media::create(mediaParams);
     }
 
     virtual ~Loader() {
@@ -302,7 +302,7 @@ public:
         delete _decodeThreads;
         delete _device;
         delete _reader;
-        delete _decoder;
+        delete _media;
     }
 
     int start() {
@@ -322,7 +322,7 @@ public:
             threadCount = std::min(threadCount, _batchSize);
             _decodeThreads = new DecodeThreadPool(threadCount,
                     _batchSize, _datumSize, _targetSize,
-                    *_readBufs, *_decodeBufs, _device, _decoder);
+                    *_readBufs, *_decodeBufs, _device, _media);
         } catch(std::bad_alloc&) {
             return -1;
         }
@@ -417,5 +417,5 @@ private:
     DecodeThreadPool*           _decodeThreads;
     Device*                     _device;
     Reader*                     _reader;
-    Decoder*                    _decoder;
+    Media*                      _media;
 };

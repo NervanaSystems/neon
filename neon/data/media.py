@@ -21,6 +21,7 @@ import ctypes as ct
 
 
 class MediaType:
+    unknown = -1
     image = 0
     video = 1
     audio = 2

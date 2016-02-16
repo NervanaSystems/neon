@@ -17,6 +17,23 @@
 #include <cstdio>
 
 #include "loader.hpp"
+#include "image.hpp"
+#include "video.hpp"
+#include "audio.hpp"
+
+Media* Media::create(MediaParams* params) {
+    switch (params->_mtype) {
+    case IMAGE:
+        return new Image(reinterpret_cast<ImageParams*>(params));
+    case VIDEO:
+        return new Video(reinterpret_cast<VideoParams*>(params));
+    case AUDIO:
+        return new Audio(reinterpret_cast<AudioParams*>(params));
+    default:
+        throw std::runtime_error("Unknown media type\n");
+    }
+    return 0;
+}
 
 #if STANDALONE
 
@@ -30,7 +47,7 @@ unsigned int sum(char* data, unsigned int len) {
     return result;
 }
 
-int single(Reader* reader, Decoder* decoder, int epochCount,
+int single(Reader* reader, Media* media, int epochCount,
            int macrobatchCount, int macrobatchSize,
            int batchSize, int datumSize, int targetSize) {
     BufferPool* readBufs = new BufferPool(reader->totalDataSize(),
@@ -49,7 +66,7 @@ int single(Reader* reader, Decoder* decoder, int epochCount,
                 int itemSize = 0;
                 char* item = bufPair.first->getItem(j, itemSize);
                 assert(item != 0);
-                decoder->decode(item, itemSize, dataBuf);
+                media->decode(item, itemSize, dataBuf);
                 sm += sum(dataBuf, datumSize);
                 int targetChunkSize = 0;
                 char* targets = bufPair.second->getItem(j, targetChunkSize);
@@ -65,7 +82,7 @@ int single(Reader* reader, Decoder* decoder, int epochCount,
     return sm;
 }
 
-int multi(Loader* loader, Device* device, Reader* reader, Decoder* decoder,
+int multi(Loader* loader, Device* device, Reader* reader, Media* media,
           int epochCount, int macrobatchCount, int macrobatchSize,
           int batchSize, int datumSize, int targetSize) {
     int result = loader->start();
@@ -116,13 +133,13 @@ int test(const char* pathPrefix, int batchSize, int datumSize,
                                        macrobatchCount * macrobatchSize,
                                        batchSize);
     ImageParams* params = new ImageParams();
-    Decoder* decoder = Decoder::create(params);
+    Media* media = Media::create(params);
     Loader loader(batchSize, datumSize, targetSize,
-                  device, reader, decoder);
-    unsigned int multiSum = multi(&loader, device, reader, decoder, epochCount,
+                  device, reader, media);
+    unsigned int multiSum = multi(&loader, device, reader, media, epochCount,
                                   macrobatchCount, macrobatchSize,
                                   batchSize, datumSize, targetSize);
-    unsigned int singleSum = single(reader, decoder, epochCount,
+    unsigned int singleSum = single(reader, media, epochCount,
                                     macrobatchCount, macrobatchSize,
                                     batchSize, datumSize, targetSize);
     printf("sum %u true sum %u\n", multiSum, singleSum);

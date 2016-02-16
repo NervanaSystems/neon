@@ -78,7 +78,7 @@ extern void write_batch(char *outfile, const int numData,
         ByteVect inp;
         readFileBytes(jpgfiles[i], inp);
         if (maxDim != 0) {
-            resizeInput(inp, maxDim);  // from decoder.hpp
+            resizeInput(inp, maxDim);
         }
         ByteVect tgt(sizeof(uint32_t));
         memcpy(&tgt[0], &(targets[i]), sizeof(uint32_t));
