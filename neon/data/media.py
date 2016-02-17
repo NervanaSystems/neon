@@ -36,6 +36,7 @@ class ImageParams(MediaParams):
     _fields_ = [('channel_count', ct.c_int),
                 ('height', ct.c_int),
                 ('width', ct.c_int),
+                ('augment', ct.c_bool),
                 ('center', ct.c_bool),
                 ('flip', ct.c_bool),
                 ('scale_min', ct.c_int),
@@ -43,15 +44,18 @@ class ImageParams(MediaParams):
                 ('contrast_min', ct.c_int),
                 ('contrast_max', ct.c_int),
                 ('rotate_min', ct.c_int),
-                ('rotate_max', ct.c_int)]
-    _defaults_ = {'center': True,
+                ('rotate_max', ct.c_int),
+                ('aspect_ratio', ct.c_int)]
+    _defaults_ = {'augment': False,
+                  'center': True,
                   'flip': False,
                   'scale_min': 0,
                   'scale_max': 0,
                   'contrast_min': 100,
                   'contrast_max': 100,
                   'rotate_min': 0,
-                  'rotate_max': 0}
+                  'rotate_max': 0,
+                  'aspect_ratio': 0}
 
     def __init__(self, **kwargs):
         for key in kwargs:
@@ -60,6 +64,15 @@ class ImageParams(MediaParams):
         for key, value in self._defaults_.iteritems():
             setattr(self, key, value)
         super(ImageParams, self).__init__(mtype=MediaType.image, **kwargs)
+        if self.augment is False:
+            self.check()
+
+    def check(self):
+        for key in self._defaults_:
+            if getattr(self, key) == self._defaults_[key]:
+                continue
+            raise ValueError('Invalid combination: augment=False, %s=%s' % (
+                key, getattr(self, key)))
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)

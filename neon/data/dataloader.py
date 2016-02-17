@@ -42,10 +42,11 @@ class DataLoader(NervanaObject):
     minibatches of generic data.
     """
 
-    def __init__(self, repo_dir, shuffle, media_params,
+    def __init__(self, repo_dir, media_params,
                  datum_size, target_size,
-                 datum_dtype=np.float32, target_dtype=np.float32,
-                 onehot=False, nclasses=None):
+                 shuffle, repeat_shuffle=False,
+                 datum_dtype=np.uint8, target_dtype=np.int32,
+                 onehot=True, nclasses=None, subset_percent=100):
         if not os.path.exists(repo_dir):
             raise IOError('Directory not found: %s' % repo_dir)
         if onehot is True and nclasses is None:
@@ -55,15 +56,17 @@ class DataLoader(NervanaObject):
         self.bsz = self.be.bsz
         self.buffer_id = 0
         self.start_idx = 0
-        self.shuffle = shuffle
         self.media_params = media_params
         self.shape = media_params.get_shape()
         self.datum_size = datum_size
         self.target_size = target_size
+        self.shuffle = shuffle
+        self.repeat_shuffle = repeat_shuffle
         self.datum_dtype = datum_dtype
         self.target_dtype = target_dtype
         self.onehot = onehot
         self.nclasses = nclasses
+        self.subset_percent = subset_percent
         self.load_library()
         self.alloc()
         self.start()
@@ -128,8 +131,10 @@ class DataLoader(NervanaObject):
         target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
         self.loader = self.loaderlib.start(
             ct.byref(self.item_count), self.bsz,
-            ct.c_char_p(self.repo_dir), self.shuffle,
+            ct.c_char_p(self.repo_dir),
+            self.shuffle, self.repeat_shuffle,
             datum_nbytes, target_nbytes,
+            self.subset_percent,
             ct.POINTER(MediaParams)(self.media_params),
             ct.POINTER(DeviceParams)(self.device_params))
         self.ndata = self.item_count.value

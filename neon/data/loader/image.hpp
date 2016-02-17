@@ -34,25 +34,31 @@ using std::vector;
 class ImageParams : public MediaParams {
 public:
     ImageParams(int channelCount, int height, int width,
+                bool augment,
                 bool center, bool flip,
                 int scaleMin, int scaleMax,
                 int contrastMin, int contrastMax,
-                int rotateMin, int rotateMax)
+                int rotateMin, int rotateMax,
+                int aspectRatio)
     : MediaParams(IMAGE),
       _height(height), _width(width),
+      _augment(augment),
       _center(center), _flip(flip),
       _scaleMin(scaleMin), _scaleMax(scaleMax),
       _contrastMin(contrastMin), _contrastMax(contrastMax),
-      _rotateMin(rotateMin), _rotateMax(rotateMax) {
+      _rotateMin(rotateMin), _rotateMax(rotateMax),
+      _aspectRatio(aspectRatio) {
     }
 
     ImageParams()
-    : ImageParams(224, 224, true, false, true, 256, 256, 0, 0, 0, 0) {}
+    : ImageParams(224, 224, false, true, false, true,
+                  256, 256, 0, 0, 0, 0, 0) {}
 
     void dump() {
         MediaParams::dump();
         printf("inner height %d\n", _height);
         printf("inner width %d\n", _width);
+        printf("augment %d\n", _augment);
         printf("center %d\n", _center);
         printf("flip %d\n", _flip);
         printf("scale min %d\n", _scaleMin);
@@ -61,6 +67,7 @@ public:
         printf("contrast max %d\n", _contrastMax);
         printf("rotate min %d\n", _rotateMin);
         printf("rotate max %d\n", _rotateMax);
+        printf("aspect ratio %d\n", _aspectRatio);
     }
 
     bool doRandomFlip(unsigned int& seed) {
@@ -86,6 +93,18 @@ public:
                 (rand_r(&seed) % (_contrastMax - _contrastMin))) / 100.0;
     }
 
+    // adjust the square cropSize to be an inner rectangle
+    void getRandomAspectRatio(unsigned int& seed, Size2i &cropSize) {
+        int ratio = (101 + (rand_r(&seed) % (_aspectRatio - 100)));
+        float ratio_f = 100.0 / (float) ratio;
+        int orientation = rand_r(&(seed)) % 2;
+        if (orientation) {
+            cropSize.height *= ratio_f;
+        } else {
+            cropSize.width *= ratio_f;
+        }
+    }
+
     void getRandomCrop(unsigned int& seed, const Size2i &inputSize,
                        Rect* cropBox) {
         // Use the entire squashed image (Caffe style evaluation)
@@ -101,6 +120,9 @@ public:
                             (float) scaleSize;
         Point2i corner;
         Size2i cropSize(_width * scaleFactor, _height * scaleFactor);
+        if (_aspectRatio > 100) {
+            getRandomAspectRatio(seed, cropSize);
+        }
         getRandomCorner(seed, inputSize - cropSize, &corner);
         cropBox->width = cropSize.width;
         cropBox->height = cropSize.height;
@@ -117,6 +139,7 @@ public:
     int                         _channelCount;
     int                         _height;
     int                         _width;
+    bool                        _augment;
     bool                        _center;
     bool                        _flip;
     // Pixel scale to jitter at (image from which to crop will have
@@ -127,6 +150,7 @@ public:
     int                         _contrastMax;
     int                         _rotateMin;
     int                         _rotateMax;
+    int                         _aspectRatio;
 };
 
 void resizeInput(vector<char> &jpgdata, int maxDim){
@@ -165,6 +189,18 @@ public:
     void decode(char* item, int itemSize, char* buf, int bufSize) {
         Mat image = Mat(1, itemSize, CV_8UC3, item);
         Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
+
+        split(decodedImage, _params->getSize(), buf);
+    }
+
+    void transform(char* item, int itemSize, char* buf, int bufSize) {
+        if (_params->_augment == false) {
+            decode(item, itemSize, buf, bufSize);
+            return;
+        }
+
+        Mat image = Mat(1, itemSize, CV_8UC3, item);
+        Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
         Rect cropBox;
         _params->getRandomCrop(_rngSeed, decodedImage.size(), &cropBox);
         auto cropArea = cropBox.area();
@@ -196,16 +232,7 @@ public:
             finalImage = &newImage;
         }
 
-        Mat ch_b(innerSize, CV_8U, buf + innerSize.area()*0);
-        Mat ch_g(innerSize, CV_8U, buf + innerSize.area()*1);
-        Mat ch_r(innerSize, CV_8U, buf + innerSize.area()*2);
-
-        Mat channels[3] = {ch_b, ch_g, ch_r};
-        cv::split(*finalImage, channels);
-    }
-
-    void modify(char* item, int itemSize, char* buf, int bufSize) {
-
+        split(*finalImage, innerSize, buf);
     }
 
     void save_binary(char *filn, char* item, int itemSize, char* buf) {
@@ -214,6 +241,18 @@ public:
         file.write((char*)item, itemSize);
         printf("wrote %s\n", filn);
     }
+
+private:
+    void split(Mat& img,  Size2i size, char* buf) {
+        // Split into separate channels
+        Mat ch_b(size, CV_8U, buf);
+        Mat ch_g(size, CV_8U, buf + size.area());
+        Mat ch_r(size, CV_8U, buf + size.area() * 2);
+
+        Mat channels[3] = {ch_b, ch_g, ch_r};
+        cv::split(img, channels);
+    }
+
 
 private:
     ImageParams*                _params;

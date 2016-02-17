@@ -68,8 +68,8 @@ private:
 
 class ArchiveWriter : public Writer {
 public:
-    ArchiveWriter(int batchSize, string& repoDir, bool shuffle=false)
-    : _batchSize(batchSize), _repoDir(repoDir), _shuffle(shuffle),
+    ArchiveWriter(int batchSize, const char* repoDir, bool shuffle)
+    : _batchSize(batchSize), _repoDir(repoDir),
       _fileIdx(0), _itemCount(0), _started(false),
       _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0) {
         _archiveDir = _repoDir + ARCHIVE_DIR_SUFFIX;
@@ -161,7 +161,6 @@ private:
 private:
     int                         _batchSize;
     string                      _repoDir;
-    bool                        _shuffle;
     // Index of current archive file.
     int                         _fileIdx;
     // Total number of items in this dataset.
@@ -181,14 +180,15 @@ private:
 
 class ArchiveReader : public Reader {
 public:
-    ArchiveReader(int* itemCount, int batchSize, string& repoDir,
-                  bool shuffle=false, bool contShuffle=false)
-    : Reader(batchSize, repoDir, shuffle),
-      _fileIdx(0), _itemIdx(0), _itemsLeft(0), _contShuffle(contShuffle) {
+    ArchiveReader(int* itemCount, int batchSize, const char* repoDir,
+                  bool shuffle, bool repeatShuffle, int subsetPercent)
+    : Reader(batchSize, repoDir, shuffle, repeatShuffle, subsetPercent),
+      _fileIdx(0), _itemIdx(0), _itemsLeft(0) {
         // Create a writer just in case. It will only be used if archive
         // files are missing or damaged.
-        _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT, repoDir, shuffle);
-        _archiveDir = repoDir + ARCHIVE_DIR_SUFFIX;
+        _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT, repoDir,
+                                           shuffle);
+        _archiveDir = _repoDir + ARCHIVE_DIR_SUFFIX;
         loadMetadata();
         *itemCount = _itemCount;
         open();
@@ -204,7 +204,7 @@ public:
         while (offset < _batchSize) {
             int count = _batchSize - offset;
             int result;
-            if (_contShuffle) {
+            if (_repeatShuffle) {
                 result = readShuffle(data, targets, count);
             } else {
                 result = read(data, targets, count);
@@ -262,8 +262,9 @@ private:
         }
         ifstream ifs(metaFile);
         if (!ifs) {
-            printf("Could not open %s\n", metaFile.c_str());
-            throw std::ios_base::failure("Could not open file\n");
+            stringstream ss;
+            ss << "Could not open " << metaFile;
+            throw std::runtime_error(ss.str());
         }
 
         string line;
@@ -272,8 +273,11 @@ private:
         }
 
         _itemCount = _metadata.getItemCount();
+        _itemCount = (_itemCount * _subsetPercent) / 100;
         if (_itemCount <= 0) {
-            throw std::runtime_error("Error in metadata\n");
+            stringstream ss;
+            ss << "Number of data points is " <<  _itemCount;
+            throw std::runtime_error(ss.str());
         }
     }
 
@@ -380,12 +384,4 @@ private:
     std::deque<DataPair>        _shuffleQueue;
     ArchiveWriter*              _archiveWriter;
     string                      _archiveDir;
-    bool                        _contShuffle;
 };
-
-Reader* Reader::create(int* itemCount, int batchSize, char* repoDir,
-                       bool shuffle) {
-    string archiveDir(repoDir);
-    return new ArchiveReader(itemCount, batchSize, archiveDir, shuffle);
-}
-

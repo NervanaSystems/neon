@@ -36,7 +36,7 @@ public:
     void decode(char* item, int itemSize, char* buf, int bufSize) {
     }
 
-    void modify(char* item, int itemSize, char* buf, int bufSize) {
+    void transform(char* item, int itemSize, char* buf, int bufSize) {
     }
 
 private:

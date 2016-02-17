@@ -127,14 +127,14 @@ protected:
         // write into non-overlapping regions.
         BufferPair& outBuf = _out.getForWrite();
         char* dataBuf = outBuf.first->_data + _dataOffsets[id];
+        // Handle the data.
         for (int i = start; i < end; i++) {
-            // Handle the data.
             int itemSize = 0;
             char* item = _inputBuf->first->getItem(i, itemSize);
             if (item == 0) {
                 return;
             }
-            _media->decode(item, itemSize, dataBuf, _datumSize);
+            _media->transform(item, itemSize, dataBuf, _datumSize);
             dataBuf += _datumSize;
         }
 
@@ -284,15 +284,16 @@ private:
 class Loader {
 public:
     Loader(int* itemCount, int batchSize, char* repoDir, bool shuffle,
-           int datumSize, int targetSize,
+           bool repeatShuffle, int datumSize, int targetSize, int subsetPercent,
            MediaParams* mediaParams, DeviceParams* deviceParams)
     : _first(true),
       _batchSize(batchSize), _datumSize(datumSize), _targetSize(targetSize),
       _readBufs(0), _decodeBufs(0), _readThread(0), _decodeThreads(0),
       _device(0), _reader(0), _media(0) {
         _device = Device::create(deviceParams);
-        _reader = Reader::create(itemCount, batchSize, repoDir, shuffle);
         _media = Media::create(mediaParams);
+        _reader = new ArchiveReader(itemCount, batchSize, repoDir,
+                                    shuffle, repeatShuffle, subsetPercent);
     }
 
     virtual ~Loader() {

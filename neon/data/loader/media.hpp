@@ -13,6 +13,9 @@
  limitations under the License.
 */
 
+
+// This must be kept in sync with ../media.py.
+
 #pragma once
 
 enum MediaType {
@@ -46,7 +49,7 @@ public:
 public:
     virtual void encode(char* item, int itemSize, char* buf, int bufSize) = 0;
     virtual void decode(char* item, int itemSize, char* buf, int bufSize) = 0;
-    virtual void modify(char* item, int itemSize, char* buf, int bufSize) = 0;
+    virtual void transform(char* item, int itemSize, char* buf, int bufSize) = 0;
 
     static Media* create(MediaParams* params);
 };

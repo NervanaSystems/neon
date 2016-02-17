@@ -119,8 +119,11 @@ private:
 
 class Reader {
 public:
-    Reader(int batchSize, string& repoDir, bool shuffle)
-    : _batchSize(batchSize), _repoDir(repoDir), _shuffle(shuffle),
+    Reader(int batchSize, const char* repoDir,
+           bool shuffle, bool repeatShuffle, int subsetPercent)
+    : _batchSize(batchSize), _repoDir(repoDir),
+      _shuffle(shuffle), _repeatShuffle(repeatShuffle),
+      _subsetPercent(subsetPercent),
       _itemCount(0)  {
     }
 
@@ -141,9 +144,6 @@ public:
         return 0;
     }
 
-    static Reader* create(int* itemCount, int batchSize, char* repoDir,
-                          bool shuffle);
-
     static bool exists(const string& fileName) {
         struct stat stats;
         return stat(fileName.c_str(), &stats) == 0;
@@ -154,14 +154,17 @@ protected:
     int                         _batchSize;
     string                      _repoDir;
     bool                        _shuffle;
+    bool                        _repeatShuffle;
+    int                         _subsetPercent;
     // Total number of items.
     int                         _itemCount;
 };
 
 class FileReader : public Reader {
 public:
-    FileReader(int* itemCount, int batchSize, string& repoDir, bool shuffle)
-    : Reader(batchSize, repoDir, shuffle), _itemIdx(0) {
+    FileReader(int* itemCount, int batchSize, const char* repoDir,
+               bool shuffle)
+    : Reader(batchSize, repoDir, shuffle, false, 100), _itemIdx(0) {
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
