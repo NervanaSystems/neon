@@ -13,6 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from neon.layers.layer import ParameterLayer, Layer
+from neon.util.persist import load_class
 
 
 def get_steps(x, shape):
@@ -239,6 +240,14 @@ class Recurrent(ParameterLayer):
                 self.be.compound_dot(self.W_input.T, in_deltas, out_delta, alpha=alpha, beta=beta)
 
         return self.out_deltas_buffer
+
+    def load_weights(self, pdict, load_states=True):
+        super(Recurrent, self).load_weights(pdict, load_states)
+        # Do this for each activation member
+        lcfg = pdict['config']
+        for _act in [x for x in self.__dict__ if 'activation' in x]:
+            _cls, _cfg = lcfg[_act]['type'], lcfg[_act]['config']
+            setattr(self, _act, load_class(_cls).gen_class(_cfg))
 
 
 class LSTM(Recurrent):

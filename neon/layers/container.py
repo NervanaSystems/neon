@@ -57,18 +57,7 @@ class LayerContainer(Layer):
         layers = []
         for layer in pdict['layers']:
             typ = layer['type']
-            if typ.find(__name__) != -1:
-                # this is a sequential layer
-                ccls = load_class(typ)
-            elif typ in globals():
-                # this may occur if full path not given
-                # be careful here because globals has stuff from outside this module
-                ccls = globals()[typ]
-            else:
-                # look in neon.layers.layer
-                if typ.find('neon.layers.layer') == -1:
-                    typ = 'neon.layers.layer.' + typ
-                ccls = load_class(typ)
+            ccls = load_class(typ)
             layers.append(ccls.gen_class(layer['config']))
 
         # layers is special in that there may be parameters
@@ -658,8 +647,6 @@ class Multicost(NervanaObject):
         costs = []
         for cost in pdict['costs']:
             typ = cost['type']
-            if typ.find('neon.') == -1:
-                typ = 'neon.layers.layer.' + typ
             ccls = load_class(typ)
             costs.append(ccls.gen_class(cost['config']))
         pdict['costs'] = costs

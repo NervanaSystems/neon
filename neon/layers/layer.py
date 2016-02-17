@@ -20,8 +20,6 @@ from neon.backends import Autodiff
 from neon.backends.backend import Tensor
 from neon.util.persist import load_class
 
-import neon.initializers
-import neon.transforms.activation
 
 logger = logging.getLogger(__name__)
 
@@ -454,13 +452,7 @@ class ParameterLayer(Layer):
     def gen_class(cls, pdict):
         if 'init' in pdict and pdict['init'] is not None:
             cname = pdict['init']['type']
-            if cname.find('neon.') == 0:
-                # full path to module stored in pdict
-                icls = load_class(cname)
-            else:
-                # use neon.initializers.initializer
-                assert hasattr(neon.initializers.initializer, cname)
-                icls = getattr(neon.initializers.initializer, cname)
+            icls = load_class(cname)
             init = icls(**pdict['init']['config'])
             pdict['init'] = init
         return cls(**pdict)
@@ -868,13 +860,7 @@ class Activation(Layer):
     def gen_class(cls, pdict):
         assert 'transform' in pdict
         cname = pdict['transform']['type']
-        if cname.find('neon.') == 0:
-            # full path to module stored in pdict
-            tcls = load_class(cname)
-        else:
-            # use neon.transform.activation
-            assert hasattr(neon.transforms.activation, cname)
-            tcls = getattr(neon.transforms.activation, cname)
+        tcls = load_class(cname)
         # many activations have no args
         if 'config' not in pdict['transform']:
             pdict['transform']['config'] = {}
@@ -1032,19 +1018,10 @@ class CompoundLayer(list):
 
     @classmethod
     def gen_class(cls, pdict):
-        for key, lib in zip(['init', 'bias', 'activation'],
-                            [neon.initializers.initializer,
-                             neon.initializers.initializer,
-                             neon.transforms.activation]):
-            # bias arg is the bias initializer not the layer
-            # activation is the transform not the layer
+        for key in ['init', 'bias', 'activation']:
             if key in pdict and pdict[key] is not None:
                 cname = pdict[key]['type']
-                if cname.find('neon.') == 0:
-                    icls = load_class(cname)
-                else:
-                    assert hasattr(lib, cname)
-                    icls = getattr(lib, cname)
+                icls = load_class(cname)
                 if 'config' not in pdict[key]:
                     pdict[key]['config'] = {}
                 pdict[key] = icls(**pdict[key]['config'])
@@ -1345,8 +1322,6 @@ class GeneralizedCost(NervanaObject):
     @classmethod
     def gen_class(cls, pdict):
         typ = pdict['costfunc']['type']
-        if typ.find('neon.transforms') != 0:
-            typ = 'neon.transforms.cost.' + typ
         ccls = load_class(typ)
         if 'config' not in pdict['costfunc']:
             pdict['costfunc']['config'] = {}

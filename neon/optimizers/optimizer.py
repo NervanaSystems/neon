@@ -42,8 +42,6 @@ class Optimizer(NervanaObject):
     def gen_class(cls, pdict):
         if 'schedule' in pdict:
             typ = pdict['schedule']['type']
-            if typ.find('neon.') != 0:
-                typ = 'neon.optimizers.optimizer.' + typ
             scls = load_class(typ)
             sched = scls.gen_class(pdict['schedule']['config'])
             pdict['schedule'] = sched
@@ -505,8 +503,6 @@ class MultiOptimizer(Optimizer):
         for key in pdict['optimizer_mapping']:
             # these should be optimizers
             typ = pdict['optimizer_mapping'][key]['type']
-            if typ.find('neon.') != 0:
-                typ = 'neon.optimizers.optimizer.' + typ
             ocls = load_class(typ)
             if 'config' not in pdict['optimizer_mapping'][key]:
                 pdict['optimizer_mapping'][key]['config'] = {}

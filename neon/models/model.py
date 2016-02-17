@@ -361,10 +361,13 @@ class Model(NervanaObject):
 
         typ = model_dict['model']['type']
         main_container = load_class(typ)
-        self.layers = main_container.gen_class(model_dict['model']['config'])
 
-        # new serialization format
+        if not load_states:
+            self.layers = main_container.gen_class(model_dict['model']['config'])
+
         self.layers.load_weights(model_dict['model'], load_states)
+        if load_states:
+            return
 
         cost = None
         if 'cost' in model_dict:

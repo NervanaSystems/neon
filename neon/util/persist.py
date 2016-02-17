@@ -12,8 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import importlib
 import logging
 import os
+import pkgutil
+import sys
 
 from neon.util.compat import pickle
 
@@ -111,19 +114,20 @@ def load_class(ctype):
     parts = class_path.split('.')
     module = '.'.join(parts[:-1])
     try:
-        cls = __import__(module)
-    except ImportError as err:
-        # we allow a shortcut syntax that skips neon
-        # from import path, try again with this prepended
-        if parts[0] != "neon":
-            parts.insert(0, "neon")
-            module = '.'.join(parts[:-1])
-            cls = __import__(module)
-        else:
-            raise err
-    for comp in parts[1:]:
-        cls = getattr(cls, comp)
-    return cls
+        clss = __import__(module)
+        for comp in parts[1:]:
+            clss = getattr(clss, comp)
+        return clss
+    except (ValueError, ImportError) as err:
+        if len(module) == 0:
+            # try to find the module inside neon
+            pkg = sys.modules['neon']
+            prfx = pkg.__name__ + '.'
+            for imptr, nm, _ in pkgutil.iter_modules(pkg.__path__, prefix=prfx):
+                mod = importlib.import_module(nm)
+                if hasattr(mod, ctype):
+                    return getattr(mod, ctype)
+        raise err
 
 
 def serialize(model, callbacks=None, datasets=None, dump_weights=True, keep_states=True):
