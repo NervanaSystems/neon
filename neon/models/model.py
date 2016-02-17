@@ -34,10 +34,13 @@ class Model(NervanaObject):
     Additional functionality can be added to fit through callback functions.
 
     Arguments:
-        layers: layer container, or a list of layers (that will be containerized)
-        name (str): Model name.  Defaults to "model"
+        layers: layer container, or a list of layers (that will be containerized),
+                or a serialized model description
         dataset (iterator): Data set
-        inference (bool): set to true if model will only be run for inference (fprop only)
+        weights_only (bool): set to True if you do not want to recreate layers
+                             and states during deserialized from a serialized model
+                             description.  Defaults to False.
+        name (str): Model name.  Defaults to "model"
         optimizer (Optimizer): Optimizer object which defines the learning rule
                                for updating model parameters (ie DescentMomentum, AdaDelta)
     """
