@@ -277,6 +277,11 @@ __global__ void conv_%(operation)s(
     __syncthreads();
 
     lut_size_local = lut_size;
+    if(lut_size_local == 0)
+    {
+        return;
+    }
+
     output_pixel = (output_pixel * N) >> 2;
 
     //Evaluate gemm with outer product dimensions N, K and inner product CRS
