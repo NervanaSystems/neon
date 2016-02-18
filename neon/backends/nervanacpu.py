@@ -1073,7 +1073,7 @@ class NervanaCPU(Backend):
                         np.dot(slicedF.T, slicedE)
         # If this is the forward pass for deconv, compute bsum here
         if bsum is not None:
-            bsum[:] = self.sum(grad_I.reshape(C, -1), 1)
+            bsum[:] = self.sum(grad_I.reshape(K, -1), 1)
 
     def update_conv(self, layer, I, E, U, alpha=1.0):
         """
