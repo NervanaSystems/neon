@@ -659,6 +659,7 @@ class NervanaGPU(Backend):
                  deterministic=True,
                  device_id=0,
                  bench=False,
+                 scratch_size=0,
                  hist_bins=64,
                  hist_offset=-48,
                  compat_mode=None):
@@ -704,7 +705,8 @@ class NervanaGPU(Backend):
 
         # attributes
         self.deterministic = deterministic
-        self.scratch_size = 0
+        self.scratch_size = scratch_size
+        self.scratch_offset = 0
         self.round_mode = stochastic_round
         self.bench = bench
         self.stream = None
@@ -743,15 +745,30 @@ class NervanaGPU(Backend):
             self.have_winograd = False
 
 
-    def scratch_buffer(self, size, offset=0):
+    def scratch_buffer(self, size):
 
-        if offset & 127 != 0:
-            offset += 128 - (offset & 127)
+        if size & 127 != 0:
+            size += 128 - (size & 127)
 
-        if size + offset > self.scratch_size:
+        if size > self.scratch_size:
             raise RuntimeError("nervanagpu.scratch_size(%d) is too small for this operation." % self.scratch_size)
 
-        return int(_get_scratch_data(self.scratch_size)) + offset
+        self.scratch_offset = size
+
+        return int(_get_scratch_data(self.scratch_size))
+
+    def scratch_buffer_offset(self, size):
+
+        if size & 127 != 0:
+            size += 128 - (size & 127)
+
+        if size + self.scratch_offset > self.scratch_size:
+            raise RuntimeError("nervanagpu.scratch_size(%d) is too small for this operation." % self.scratch_size)
+
+        data = int(_get_scratch_data(self.scratch_size)) + self.scratch_offset
+        self.scratch_offset += size
+
+        return data
 
     def set_scratch_size(self, *args):
 
