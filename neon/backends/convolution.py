@@ -739,6 +739,7 @@ class UpdateDirect(KernelGroup):
         if unbind:
             self.zero_args = self.convert_args = None
             for kernel_params in self.kernels:
+                kernel_params[3:8] = (None,) * 5
 
     def __str__(self):
         return "UpdateDirect " + str([k[0] for k in self.kernels])
