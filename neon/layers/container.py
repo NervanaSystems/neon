@@ -82,6 +82,17 @@ class LayerContainer(Layer):
         for branch, bdict in zip(self.layers, pdict['config']['layers']):
             branch.load_weights(bdict, load_states=load_states)
 
+    def propagate_parallelism(self, p):
+        for l in self.layers:
+            if isinstance(l, LayerContainer):
+                l.parallelism = p
+                l.propagate_parallelism(p)
+                t = l.get_terminal()
+                p = t[0].parallelism if isinstance(t, list) else t.parallelism
+            else:
+                l.parallelism = p if l.parallelism == "Unknown" else l.parallelism
+                p = l.parallelism
+
 
 class Sequential(LayerContainer):
     """

@@ -125,8 +125,7 @@ def test_model_serialize(backend_default, data):
     mlp.save_params(tmp_save, keep_states=True)
 
     # Load model
-    mlp = Model(layers=layers)
-    mlp.load_params(tmp_save)
+    mlp = Model(tmp_save)
 
     mlp.initialize(train_set)
     outputs = []

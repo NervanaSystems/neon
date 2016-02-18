@@ -94,8 +94,6 @@ class Layer(NervanaObject):
         if isinstance(in_obj, Layer):
             self.prev_layer = in_obj
             self.in_shape = in_obj.out_shape
-            if self.parallelism == "Unknown":
-                self.parallelism = in_obj.parallelism
         else:
             self.prev_layer = None
             if isinstance(in_obj, (tuple, int, list)):
@@ -211,6 +209,10 @@ class Layer(NervanaObject):
         self.set_params(pdict)
         if load_states:
             self.set_states(pdict)
+
+    def get_param_attrs(self):
+        return dict(parallel=(self.parallelism in ("Data", "Model")),
+                    distributed=(self.parallelism == "Model"))
 
     def set_params(self, pdict):
         pass
@@ -462,9 +464,8 @@ class ParameterLayer(Layer):
         if self.W is None:
             self.init_params(self.weight_shape)
         if self.batch_sum_shape is not None:
-            parallel, distributed = self.get_param_attrs()
             self.batch_sum = self.be.empty(self.batch_sum_shape, dtype=np.float32,
-                                           parallel=parallel, distributed=distributed)
+                                           **self.get_param_attrs())
 
     def init_params(self, shape):
         """
@@ -475,8 +476,7 @@ class ParameterLayer(Layer):
             shape (int, tuple): shape to allocate for layer parameter
                 buffers.
         """
-        parallel, distributed = self.get_param_attrs()
-        self.W = self.be.empty(shape, parallel=parallel, distributed=distributed)
+        self.W = self.be.empty(shape, **self.get_param_attrs())
         self.dW = self.be.empty_like(self.W)
         self.states = []
 
@@ -485,19 +485,6 @@ class ParameterLayer(Layer):
             self.W[:] = self.init
         else:
             self.init.fill(self.W)
-
-    def get_param_attrs(self):
-        if self.parallelism == "Data":
-            parallel = True
-            distributed = False
-        elif self.parallelism == "Model":
-            parallel = True
-            distributed = True
-        else:
-            parallel = False
-            distributed = False
-
-        return (parallel, distributed)
 
     def get_params(self):
         """
@@ -544,7 +531,7 @@ class ParameterLayer(Layer):
                 # get set the values
                 attr.set(pdict['params'][key])
             elif type(pdict['params'][key]) is np.ndarray:
-                setattr(self, key, self.be.array(pdict['params'][key]))
+                setattr(self, key, self.be.array(pdict['params'][key], **self.get_param_attrs()))
             else:
                 setattr(self, key, pdict['params'][key])
 
@@ -1106,7 +1093,8 @@ class Conv(CompoundLayer):
         super(Conv, self).__init__(bias=bias, batch_norm=batch_norm,
                                    activation=activation, name=name)
         self.append(Convolution(fshape=fshape, strides=strides, padding=padding,
-                                init=init, bsum=batch_norm, name=name))
+                                init=init, bsum=batch_norm,
+                                name=name))
         self.add_postfilter_layers()
 
 
@@ -1482,18 +1470,8 @@ class BatchNorm(Layer):
             self.compute_batch_sum = False
 
     def init_params(self, dim0):
-        if self.parallelism == "Data":
-            parallel = True
-            distributed = False
-        elif self.parallelism == "Model":
-            parallel = True
-            distributed = True
-        else:
-            parallel = False
-            distributed = False
-
-        self.beta = self.be.zeros((dim0, 1), parallel=parallel, distributed=distributed)
-        self.gamma = self.be.ones((dim0, 1), parallel=parallel, distributed=distributed)
+        self.beta = self.be.zeros((dim0, 1), **self.get_param_attrs())
+        self.gamma = self.be.ones((dim0, 1), **self.get_param_attrs())
         self.params = [self.beta, self.gamma]
 
         self.grad_params = [self.be.zeros_like(p) for p in self.params]
@@ -1582,7 +1560,8 @@ class BatchNorm(Layer):
                 if isinstance(getattr(self, key), Tensor):
                     getattr(self, key).set(pdict['params'][key])
                 else:
-                    setattr(self, key, self.be.array(pdict['params'][key]))
+                    setattr(self, key, self.be.array(pdict['params'][key],
+                                                     **self.get_param_attrs()))
 
             self.params = [self.beta, self.gamma]
             self.inf_params = [self.gmean, self.gvar]
@@ -1592,7 +1571,7 @@ class BatchNorm(Layer):
                          ' deprecated in future release. Resave serialized file'
                          ' using current format')
 
-            self.allparams = [self.be.array(x) for x in pdict['params']]
+            self.allparams = [self.be.array(x, **self.get_param_attrs()) for x in pdict['params']]
             self.params = self.allparams[:2]
             self.inf_params = self.allparams[2:]
             (self.beta, self.gamma) = self.params
