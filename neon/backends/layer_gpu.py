@@ -418,8 +418,8 @@ class ConvLayer(Layer):
 
         ####### Winograd ###########
         elif lib.have_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
-            from winograd.convolution import FpropWinograd, BpropWinograd, UpdateWinograd,
-                                             FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4
+            from winograd.convolution import (FpropWinograd, BpropWinograd, UpdateWinograd,
+                                              FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
 
             # Temp for now till we can autotune
             # 4 is always faster except for small N
@@ -430,17 +430,17 @@ class ConvLayer(Layer):
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
             elif winograd == 4:
-                self.fprop_kernels = convolution.FpropWinograd_4x4_3x3(
+                self.fprop_kernels = FpropWinograd_4x4_3x3(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
             else:
-                self.fprop_kernels = convolution.FpropWinograd(
+                self.fprop_kernels = FpropWinograd(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
 
             if winograd == 4:
-                self.bprop_kernels = convolution.BpropWinograd_4x4_3x3(
+                self.bprop_kernels = BpropWinograd_4x4_3x3(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
             else:
-                self.bprop_kernels = convolution.BpropWinograd(
+                self.bprop_kernels = BpropWinograd(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
 
             if N >=32 and C < 8:
@@ -448,10 +448,10 @@ class ConvLayer(Layer):
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w)
             elif winograd == 4:
-                self.updat_kernels = convolution.UpdateWinograd_3x3_4x4(
+                self.updat_kernels = UpdateWinograd_3x3_4x4(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
             else:
-                self.updat_kernels = convolution.UpdateWinograd(
+                self.updat_kernels = UpdateWinograd(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
 
         ####### Direct ###########
