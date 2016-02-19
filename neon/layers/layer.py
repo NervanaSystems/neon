@@ -94,6 +94,8 @@ class Layer(NervanaObject):
         if isinstance(in_obj, Layer):
             self.prev_layer = in_obj
             self.in_shape = in_obj.out_shape
+            if self.parallelism == "Unknown":
+                self.parallelism = in_obj.parallelism
         else:
             self.prev_layer = None
             if isinstance(in_obj, (tuple, int, list)):
@@ -1443,7 +1445,6 @@ class BatchNorm(Layer):
         self.gamma = None
         self.gmean = None
         self.gvar = None
-        self.states = [[] for i in range(2)]
 
     def __str__(self):
         return "BatchNorm Layer '%s': %d inputs, %d steps, %d feature maps" % (
@@ -1481,8 +1482,10 @@ class BatchNorm(Layer):
         (self.gmean, self.gvar) = self.inf_params
 
         self.allparams = self.params + self.inf_params
-        self.states = [[self.be.zeros_like(gradp)] for gradp in self.grad_params]
-        self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
+
+    @property
+    def plist(self):
+        return [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
 
     def fprop(self, inputs, inference=False, beta=0.0):
         """
@@ -1556,12 +1559,11 @@ class BatchNorm(Layer):
 
     def set_params(self, pdict):
         if type(pdict['params']) is dict:
-            for key in pdict['params']:
+            for key, val in pdict['params'].iteritems():
                 if isinstance(getattr(self, key), Tensor):
-                    getattr(self, key).set(pdict['params'][key])
+                    getattr(self, key).set(val)
                 else:
-                    setattr(self, key, self.be.array(pdict['params'][key],
-                                                     **self.get_param_attrs()))
+                    setattr(self, key, self.be.array(val, **self.get_param_attrs()))
 
             self.params = [self.beta, self.gamma]
             self.inf_params = [self.gmean, self.gvar]
@@ -1580,16 +1582,14 @@ class BatchNorm(Layer):
         self.grad_params = [self.be.zeros_like(p) for p in self.params]
         (self.grad_beta, self.grad_gamma) = self.grad_params
 
-        self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
-
     def set_states(self, pdict):
-        states = pdict['states']
-        if np.sum([len(state) for state in self.states]) == 0:
-            self.states = [[self.be.array(x) for x in slist] for slist in states]
+        if not any(self.states):
+            self.states = [[self.be.array(x, **self.get_param_attrs()) for x in slist]
+                           for slist in pdict['states']]
         else:
-            states = pdict['states']
-            [[x.set(states[i][j]) for j, x in enumerate(s)] for i, s in enumerate(self.states)]
-        self.plist = [((p, g), s) for p, g, s in zip(self.params, self.grad_params, self.states)]
+            for dlist, slist in zip(self.states, pdict['states']):
+                for dst, src in zip(dlist, slist):
+                    dst.set(src)
 
 
 class BatchNormAutodiff(BatchNorm):
