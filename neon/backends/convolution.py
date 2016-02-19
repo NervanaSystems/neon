@@ -600,7 +600,7 @@ class BpropDirectSmallC(KernelGroup):
             self.kernel[3:8] = (None,) * 5
 
     def __str__(self):
-        return "BpropDirectSmallC " + str([k[0] for k in self.kernels])
+        return "BpropDirectSmallC " + str(self.kernel[0])
 
 class UpdateDirect(KernelGroup):
 
