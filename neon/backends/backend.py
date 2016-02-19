@@ -535,6 +535,32 @@ class Backend(object):
             return self.zeros(bufshape, dtype=dtype, name=name,
                               persist_values=persist_values)
 
+    def distribute_data(self, tensor, layer_parallelism):
+        """
+        For backends which support distributed training, this will distribute
+        or gather the error or activation tensor depending on the type of
+        parallelism used to distribute the layer computation. Currently
+        this is only supported by multi-GPU in Nervana cloud.
+
+        Arguments:
+            tensor: Tensor containing either activations or errors
+            layer_parallelism: Type of parallelism expected by the layer
+
+        Returns:
+            Tensor which has been altered by this call or None
+        """
+        return None
+
+    def revert_tensor(self, tensor):
+        """
+        Reverts a tensor to its original state after being distributed by
+        distribute_data
+
+        Arguments:
+            tensor: Tensor to be reverted
+        """
+        pass
+
     def gen_rng(self, seed=None):
         """
         Setup the random number generator(s) and store the state

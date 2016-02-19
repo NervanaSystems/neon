@@ -60,6 +60,7 @@ class Layer(NervanaObject):
         self.owns_delta = False
         self.deltas = None
         self.parallelism = parallelism
+        self.revert_list = []
         self.next_layer = None
 
     def __str__(self):
@@ -1330,7 +1331,8 @@ class GeneralizedCost(NervanaObject):
         self.prev_layer = in_obj
         (_, self.nstep) = interpret_in_shape(in_obj.out_shape)
         self.outputs = self.be.iobuf((1, self.nstep))
-        self.deltas = self.be.iobuf(in_obj.out_shape, parallelism="Disabled")
+        self.deltas = self.be.iobuf(in_obj.out_shape,
+                                    parallelism=self.prev_layer.parallelism)
         self.cost = self.be.empty((1, 1))
 
     def get_cost(self, inputs, targets):

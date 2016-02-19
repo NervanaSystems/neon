@@ -128,6 +128,7 @@ class Sequential(LayerContainer):
             if prev_layer is not None:
                 prev_layer.set_next(l)
             prev_layer = l
+        self.parallelism = in_obj.parallelism
         self.out_shape = in_obj.out_shape
         return self
 
@@ -163,18 +164,33 @@ class Sequential(LayerContainer):
         """
         x = inputs
         for l in self.layers:
+            l.revert_list = []
+            altered_tensor = l.be.distribute_data(x, l.parallelism)
+            if altered_tensor and not inference:
+                l.revert_list.append(altered_tensor)
+
             if l is self.layers[-1] and beta != 0:
                 x = l.fprop(x, inference, beta=beta)
             else:
                 x = l.fprop(x, inference)
+
+            if inference and altered_tensor:
+                l.be.revert_tensor(altered_tensor)
         return x
 
     def bprop(self, error, alpha=1.0, beta=0.0):
         for l in reversed(self._layers):
+            altered_tensor = l.be.distribute_data(error, l.parallelism)
+            if altered_tensor:
+                l.revert_list.append(altered_tensor)
+
             if type(l.prev_layer) is BranchNode or l is self._layers[0]:
                 error = l.bprop(error, alpha, beta)
             else:
                 error = l.bprop(error)
+
+            for tensor in l.revert_list:
+                l.be.revert_tensor(tensor)
         return self._layers[0].deltas
 
     def get_terminal(self):
