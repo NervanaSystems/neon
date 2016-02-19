@@ -182,7 +182,7 @@ public:
         if (innerSize.width == cropBox.width && innerSize.height == cropBox.height) {
             resizedImage = croppedImage;
         } else {
-            int interp_method = cropArea < innerSize.area() ? CV_INTER_AREA : CV_INTER_CUBIC;
+            int interp_method = cropArea > innerSize.area() ? CV_INTER_AREA : CV_INTER_CUBIC;
             cv::resize(croppedImage, resizedImage, innerSize, 0, 0, interp_method);
         }
         Mat flippedImage;
