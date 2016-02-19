@@ -17,44 +17,32 @@
 googlenet model for serialzation testing.  script is adapted to only run
 a small number of mini batches.
 """
-import argparse
 import numpy as np
-import os
-import pickle
 
 from neon.layers import Conv, Pooling, MergeBroadcast, BranchNode, Affine, Tree, Dropout
 from neon.layers import GeneralizedCost, Multicost
 from neon.initializers import Constant, Xavier
-from neon.backends import gen_backend
 from neon.optimizers import GradientDescentMomentum, PolySchedule, MultiOptimizer
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti
 from neon.models import Model
 from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks
+from neon.util.argparser import NeonArgparser
+from neon.util.persist import load_obj, save_obj
 
-parser = argparse.ArgumentParser(description='googlenet serialization test')
+# parse the command line arguments
+parser = NeonArgparser(__doc__)
 parser.add_argument('--resume', action='store_true',
                     help='first run without this and then run with so resume from saved file')
-parser.add_argument('--backend', default='gpu')
 args = parser.parse_args()
-
 
 if args.backend == 'mgpu':
     batch_size = 32*8  # for some reason bs 128 does not work with bias layers
 else:
     batch_size = 32
-be = gen_backend(backend=args.backend,
-                 rng_seed=1,
-                 batch_size=batch_size,
-                 device_id=0,
-                 deterministic_update=True)
-
-data_dir = '/usr/local/data/I1K/macrobatches'
-
-assert os.path.isdir(data_dir), 'Data dir is missing'
 
 # subset pct is set to make sure that every epoch has the same mb count
-img_set_options = dict(repo_dir=data_dir,
+img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        dtype=np.float32,
                        subset_pct=0.09990891117239205)
@@ -121,8 +109,15 @@ def aux_branch(bnode, ind):
             Affine(nout=1000, init=init1, activation=Softmax(),
                    bias=Constant(0), name=nm+'classifier')]
 
+
+# setup cost function as CrossEntropy
+cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),
+                        GeneralizedCost(costfunc=CrossEntropyMulti()),
+                        GeneralizedCost(costfunc=CrossEntropyMulti())],
+                 weights=[1, 0., 0.])  # We only want to consider the CE of the main path
+
 if not args.resume:
-    # build the model from strach and run it
+    # build the model from scratch and run it
 
     # Now construct the model
     branch_nodes = [BranchNode(name='branch' + str(i)) for i in range(2)]
@@ -132,16 +127,10 @@ if not args.resume:
 
     model = Model(layers=Tree([main1, aux1, aux2], alphas=[1.0, 0.3, 0.3]))
 
-    # setup cost function as CrossEntropy
-    cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),
-                            GeneralizedCost(costfunc=CrossEntropyMulti()),
-                            GeneralizedCost(costfunc=CrossEntropyMulti())],
-                     weights=[1, 0., 0.])  # We only want to consider the CE of the main path
 else:
     # load up the save model
-    with open('serialize_test_2.pkl', 'r') as fid:
-        pdict = pickle.load(fid)
-    model = Model(layers=pdict, dataset=train)
+    model = Model('serialize_test_2.pkl')
+    model.initialize(train, cost=cost)
 
 # configure callbacks
 callbacks = Callbacks(model, progress_bar=True, output_file='temp1.h5',
@@ -161,17 +150,16 @@ train.reset()
 for im, l in train:
     break
 train.exit_batch_provider()
-with open('im1.pkl', 'w') as fid:
-    pickle.dump((im.get(), l.get()), fid)
+save_obj((im.get(), l.get()), 'im1.pkl')
 im_save = im.get().copy()
 if args.resume:
-    with open('im1.pkl', 'r') as fid:
-        (im2, l2) = pickle.load(fid)
+    (im2, l2) = load_obj('im1.pkl')
     im.set(im2)
     l.set(l2)
 
 # run fprop and bprop on this minibatch save the results
 out_fprop = model.fprop(im)
+
 out_fprop_save = [x.get() for x in out_fprop]
 im.set(im_save)
 out_fprop = model.fprop(im)
@@ -192,12 +180,10 @@ out_fprop = model.fprop(im)
 out_fprop_save2 = [x.get() for x in out_fprop]
 
 if not args.resume:
-    with open('serial_test_out1.pkl', 'w') as fid:
-        pickle.dump([out_fprop_save, out_fprop_save2], fid)
+    save_obj([out_fprop_save, out_fprop_save2], 'serial_test_out1.pkl')
 else:
     # load up the saved file and compare
-    with open('serial_test_out1.pkl', 'r') as fid:
-        run1 = pickle.load(fid)
+    run1 = load_obj('serial_test_out1.pkl')
 
     # compare the initial fprops
     for x, y in zip(run1[0], out_fprop_save):
