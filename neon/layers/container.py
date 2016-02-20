@@ -163,19 +163,27 @@ class Sequential(LayerContainer):
         TODO:  Handle final layers that don't own their own outputs (bias, activation)
         """
         x = inputs
+        if inference:
+            inference_revert_list = []
+
         for l in self.layers:
             l.revert_list = []
             altered_tensor = l.be.distribute_data(x, l.parallelism)
-            if altered_tensor and not inference:
-                l.revert_list.append(altered_tensor)
+            if altered_tensor:
+                if inference:
+                    inference_revert_list.append((l, altered_tensor))
+                else:
+                    l.revert_list.append(altered_tensor)
 
             if l is self.layers[-1] and beta != 0:
                 x = l.fprop(x, inference, beta=beta)
             else:
                 x = l.fprop(x, inference)
 
-            if inference and altered_tensor:
-                l.be.revert_tensor(altered_tensor)
+        if inference:
+            for layer, tensor in inference_revert_list:
+                layer.be.revert_tensor(tensor)
+
         return x
 
     def bprop(self, error, alpha=1.0, beta=0.0):
