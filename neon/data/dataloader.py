@@ -22,6 +22,7 @@ import atexit
 from neon import NervanaObject
 from media import MediaParams
 from indexer import Indexer
+from dataiterator import NervanaDataIterator
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,7 @@ class DeviceParams(ct.Structure):
                 ('targets', BufferPair)]
 
 
-class DataLoader(NervanaObject):
+class DataLoader(NervanaDataIterator):
     """
     Encapsulates the data loader library and exposes an API to iterate over
     minibatches of generic data.
@@ -44,9 +45,10 @@ class DataLoader(NervanaObject):
 
     def __init__(self, repo_dir, media_params,
                  datum_size, target_size,
-                 shuffle, repeat_shuffle=False,
+                 shuffle=False, reshuffle=False,
                  datum_dtype=np.uint8, target_dtype=np.int32,
-                 onehot=True, nclasses=None, subset_percent=100):
+                 onehot=True, nclasses=None, subset_percent=100,
+                 ingest_params=None):
         if not os.path.exists(repo_dir):
             raise IOError('Directory not found: %s' % repo_dir)
         if onehot is True and nclasses is None:
@@ -61,12 +63,13 @@ class DataLoader(NervanaObject):
         self.datum_size = datum_size
         self.target_size = target_size
         self.shuffle = shuffle
-        self.repeat_shuffle = repeat_shuffle
+        self.reshuffle = reshuffle
         self.datum_dtype = datum_dtype
         self.target_dtype = target_dtype
         self.onehot = onehot
         self.nclasses = nclasses
         self.subset_percent = subset_percent
+        self.ingest_params = ingest_params
         self.load_library()
         self.alloc()
         self.start()
@@ -129,14 +132,19 @@ class DataLoader(NervanaObject):
         indexer.run()
         datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
         target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
+        if self.ingest_params is None:
+            ingest_params = None
+        else:
+            ingest_params  = ct.POINTER(MediaParams)(self.ingest_params)
         self.loader = self.loaderlib.start(
             ct.byref(self.item_count), self.bsz,
             ct.c_char_p(self.repo_dir),
-            self.shuffle, self.repeat_shuffle,
+            self.shuffle, self.reshuffle,
             datum_nbytes, target_nbytes,
             self.subset_percent,
             ct.POINTER(MediaParams)(self.media_params),
-            ct.POINTER(DeviceParams)(self.device_params))
+            ct.POINTER(DeviceParams)(self.device_params),
+            ingest_params)
         self.ndata = self.item_count.value
         if self.loader is None:
             raise RuntimeError('Failed to start data loader.')

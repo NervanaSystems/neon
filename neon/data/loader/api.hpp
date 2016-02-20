@@ -15,18 +15,20 @@
 
 extern "C" {
 
-extern void* start(int* itemCount, int batchSize, char* repoDir, bool shuffle,
-                   bool repeatShuffle,
+extern void* start(int* itemCount, int batchSize, char* repoDir,
+                   bool shuffle, bool reshuffle,
                    int datumSize, int targetSize,
                    int subsetPercent,
-                   MediaParams* mediaParams, DeviceParams* deviceParams) {
+                   MediaParams* mediaParams,
+                   DeviceParams* deviceParams,
+                   MediaParams* ingestParams) {
     static_assert(sizeof(int) == 4, "int is not 4 bytes");
     try {
-        Loader* loader = new Loader(itemCount, batchSize, repoDir, shuffle,
-                                    repeatShuffle,
+        Loader* loader = new Loader(itemCount, batchSize, repoDir,
+                                    shuffle, reshuffle,
                                     datumSize, targetSize,
                                     subsetPercent,
-                                    mediaParams, deviceParams);
+                                    mediaParams, deviceParams, ingestParams);
         int result = loader->start();
         if (result != 0) {
             printf("Could not start data loader. Error %d", result);

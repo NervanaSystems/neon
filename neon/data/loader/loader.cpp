@@ -21,10 +21,11 @@
 #include "video.hpp"
 #include "audio.hpp"
 
-Media* Media::create(MediaParams* params) {
+Media* Media::create(MediaParams* params, MediaParams* ingestParams) {
     switch (params->_mtype) {
     case IMAGE:
-        return new Image(reinterpret_cast<ImageParams*>(params));
+        return new Image(reinterpret_cast<ImageParams*>(params),
+                         reinterpret_cast<ImageIngestParams*>(ingestParams));
     case VIDEO:
         return new Video(reinterpret_cast<VideoParams*>(params));
     case AUDIO:

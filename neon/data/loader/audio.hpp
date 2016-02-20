@@ -39,6 +39,9 @@ public:
     void transform(char* item, int itemSize, char* buf, int bufSize) {
     }
 
+    void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
+    }
+
 private:
     AudioParams*                _params;
 };

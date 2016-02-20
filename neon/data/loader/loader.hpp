@@ -283,17 +283,20 @@ private:
 
 class Loader {
 public:
-    Loader(int* itemCount, int batchSize, char* repoDir, bool shuffle,
-           bool repeatShuffle, int datumSize, int targetSize, int subsetPercent,
-           MediaParams* mediaParams, DeviceParams* deviceParams)
+    Loader(int* itemCount, int batchSize, char* repoDir,
+           bool shuffle, bool reshuffle,
+           int datumSize, int targetSize, int subsetPercent,
+           MediaParams* mediaParams,
+           DeviceParams* deviceParams,
+           MediaParams* ingestParams)
     : _first(true),
       _batchSize(batchSize), _datumSize(datumSize), _targetSize(targetSize),
       _readBufs(0), _decodeBufs(0), _readThread(0), _decodeThreads(0),
       _device(0), _reader(0), _media(0) {
         _device = Device::create(deviceParams);
-        _media = Media::create(mediaParams);
+        _media = Media::create(mediaParams, ingestParams);
         _reader = new ArchiveReader(itemCount, batchSize, repoDir,
-                                    shuffle, repeatShuffle, subsetPercent);
+                                    shuffle, reshuffle, subsetPercent, _media);
     }
 
     virtual ~Loader() {

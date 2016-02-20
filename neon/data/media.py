@@ -78,6 +78,23 @@ class ImageParams(MediaParams):
         return (self.channel_count, self.height, self.width)
 
 
+class ImageIngestParams(MediaParams):
+    _fields_ = [('resize_at_ingest', ct.c_bool),
+                ('short_side_min', ct.c_int),
+                ('short_side_max', ct.c_int)]
+    _defaults_ = {'resize_at_ingest': False,
+                  'short_side_min': 0,
+                  'short_side_max': 0}
+
+    def __init__(self, **kwargs):
+        for key in kwargs:
+            if not hasattr(self, (key)):
+                raise ValueError('Unknown argument %s' % key)
+        for key, value in self._defaults_.iteritems():
+            setattr(self, key, value)
+        super(ImageIngestParams, self).__init__(mtype=MediaType.image, **kwargs)
+
+
 class VideoParams(MediaParams):
     _fields_ = [('dummy', ct.c_int)]
 

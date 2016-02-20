@@ -32,6 +32,7 @@
 #include "reader.hpp"
 #include "threadpool.hpp"
 #include "batchfile.hpp"
+#include "media.hpp"
 
 using std::string;
 using std::ifstream;
@@ -68,10 +69,12 @@ private:
 
 class ArchiveWriter : public Writer {
 public:
-    ArchiveWriter(int batchSize, const char* repoDir, bool shuffle)
+    ArchiveWriter(int batchSize, const char* repoDir, bool shuffle,
+                  Media* media)
     : _batchSize(batchSize), _repoDir(repoDir),
       _fileIdx(0), _itemCount(0), _started(false),
-      _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0) {
+      _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0),
+      _media(media) {
         _archiveDir = _repoDir + ARCHIVE_DIR_SUFFIX;
         _writeThread = new WriteThread(this);
         _reader = new FileReader(&_itemCount, 1, repoDir, shuffle);
@@ -123,7 +126,8 @@ public:
             if (result != 0) {
                 return result;
             }
-            // TODO: decode, resize and re-encode.
+            // TODO: make this multithreaded.
+            _media->ingest(&_dataBuf, &_dataBufLen, &dataLen);
             batchFile.writeItem(_dataBuf, _targetBuf,
                                 dataLen, targetLen);
         }
@@ -176,18 +180,20 @@ private:
     int                         _dataBufLen;
     int                         _targetBufLen;
     string                      _archiveDir;
+    Media*                      _media;
 };
 
 class ArchiveReader : public Reader {
 public:
     ArchiveReader(int* itemCount, int batchSize, const char* repoDir,
-                  bool shuffle, bool repeatShuffle, int subsetPercent)
+                  bool shuffle, bool repeatShuffle, int subsetPercent,
+                  Media* media)
     : Reader(batchSize, repoDir, shuffle, repeatShuffle, subsetPercent),
       _fileIdx(0), _itemIdx(0), _itemsLeft(0) {
         // Create a writer just in case. It will only be used if archive
         // files are missing or damaged.
         _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT, repoDir,
-                                           shuffle);
+                                           shuffle, media);
         _archiveDir = _repoDir + ARCHIVE_DIR_SUFFIX;
         loadMetadata();
         *itemCount = _itemCount;

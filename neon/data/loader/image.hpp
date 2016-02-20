@@ -153,6 +153,16 @@ public:
     int                         _aspectRatio;
 };
 
+class ImageIngestParams : public MediaParams {
+public:
+    bool                        _resizeAtIngest;
+    // Minimum value of the short side
+    int                         _sideMin;
+    // Maximum value of the short side
+    int                         _sideMax;
+
+};
+
 void resizeInput(vector<char> &jpgdata, int maxDim){
     // Takes the buffer containing encoded jpg, determines if its shortest dimension
     // is greater than maxDim.  If so, it scales it down so that the shortest dimension
@@ -178,7 +188,8 @@ void resizeInput(vector<char> &jpgdata, int maxDim){
 
 class Image: public Media {
 public:
-    Image(ImageParams *params) : _params(params), _rngSeed(0) {
+    Image(ImageParams *params, ImageIngestParams* ingestParams)
+    : _params(params), _ingestParams(ingestParams), _rngSeed(0) {
         assert(params->_mtype == IMAGE);
     }
 
@@ -213,8 +224,8 @@ public:
         if (innerSize.width == cropBox.width && innerSize.height == cropBox.height) {
             resizedImage = croppedImage;
         } else {
-            int interp_method = cropArea < innerSize.area() ? CV_INTER_AREA : CV_INTER_CUBIC;
-            cv::resize(croppedImage, resizedImage, innerSize, 0, 0, interp_method);
+            int inter = cropArea < innerSize.area() ? CV_INTER_CUBIC : CV_INTER_AREA;
+            cv::resize(croppedImage, resizedImage, innerSize, 0, 0, inter);
         }
         Mat flippedImage;
         Mat *finalImage;
@@ -233,6 +244,72 @@ public:
         }
 
         split(*finalImage, innerSize, buf);
+    }
+
+    void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
+        if (_ingestParams == 0) {
+            return;
+        }
+        if (_ingestParams->_resizeAtIngest == false) {
+            return;
+        }
+        if ((_ingestParams->_sideMin <= 0) && (_ingestParams->_sideMax <= 0)) {
+            throw std::runtime_error("Invalid ingest parameters. Cannot resize.");
+        }
+        if (_ingestParams->_sideMin > _ingestParams->_sideMax) {
+            throw std::runtime_error("Invalid ingest parameters. Cannot resize.");
+        }
+
+        // Decode
+        Mat image = Mat(1, dataLen, CV_8UC3, *dataBuf);
+        Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
+
+        // Resize
+        int width = decodedImage.cols;
+        int height = decodedImage.rows;
+        int shortSide = std::min(width, height);
+        if ((shortSide >= _ingestParams->_sideMin) &&
+            (shortSide <= _ingestParams->_sideMax)) {
+            return;
+        }
+
+        if (width <= height) {
+            if (width < _ingestParams->_sideMin) {
+                height = height * _ingestParams->_sideMin / width;
+                width = _ingestParams->_sideMin;
+            } else if (width > _ingestParams->_sideMax) {
+                height = height * _ingestParams->_sideMax / width;
+                width = _ingestParams->_sideMax;
+            }
+        } else {
+            if (height < _ingestParams->_sideMin) {
+                width = width * _ingestParams->_sideMin / height;
+                height = _ingestParams->_sideMin;
+            } else if (height > _ingestParams->_sideMax) {
+                width = width * _ingestParams->_sideMax / height;
+                height = _ingestParams->_sideMax;
+            }
+        }
+
+        Size2i size(width, height);
+        Mat resizedImage;
+        int inter = decodedImage.size().area() < size.area() ?
+                    CV_INTER_CUBIC : CV_INTER_AREA;
+        cv::resize(decodedImage, resizedImage, size, 0, 0, inter);
+
+        // Re-encode
+        vector<int> param = {CV_IMWRITE_PNG_COMPRESSION, 9};
+        vector<uchar> output;
+        cv::imencode(".png", resizedImage, output, param);
+
+        if (*dataBufLen < (int) output.size()) {
+            delete[] *dataBuf;
+            *dataBuf = new char[output.size()];
+            *dataBufLen = output.size();
+        }
+
+        std::copy(output.begin(), output.end(), *dataBuf);
+        *dataLen = output.size();
     }
 
     void save_binary(char *filn, char* item, int itemSize, char* buf) {
@@ -256,5 +333,6 @@ private:
 
 private:
     ImageParams*                _params;
+    ImageIngestParams*          _ingestParams;
     unsigned int                _rngSeed;
 };
