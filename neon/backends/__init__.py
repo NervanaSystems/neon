@@ -30,7 +30,7 @@ from neon.backends.util.check_gpu import get_device_count
 
 def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
-                max_devices=get_device_count(), compat_mode=None, 
+                max_devices=get_device_count(), compat_mode=None,
                 deterministic_update=False, deterministic=True):
     """
     Construct and return a backend instance of the appropriate type based on
@@ -80,7 +80,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
         atexit.register(cleanup_backend)
 
     if deterministic_update:
-       deterministic = True 
+       deterministic = True
        logger.warning("--deterministic_update is deprecated in favor of --deterministic")
 
     if backend == 'cpu' or backend is None:
@@ -100,7 +100,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
             be = NervanaGPU(rng_seed=rng_seed, default_dtype=datatype,
                             stochastic_round=stochastic_round,
                             device_id=device_id,
-                            compat_mode=compat_mode, 
+                            compat_mode=compat_mode,
                             deterministic=deterministic)
         else:
             try:

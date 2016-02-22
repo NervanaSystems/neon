@@ -341,7 +341,7 @@ if __name__ == '__main__':
     be = gen_backend(backend='gpu', rng_seed=100)
     NervanaObject.be.bsz = 128
 
-    master = ImageLoader(repo_dir=args.data_dir, set_name='train',
+    master = ImageLoader(repo_dir=args.data_dir, set_name='train', scale_range=256,
                          inner_size=224, subset_pct=10)
     t0 = default_timer()
     total_time = 0

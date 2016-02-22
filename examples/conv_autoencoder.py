@@ -48,9 +48,9 @@ layers = [Conv((4, 4, 8), init=init_uni, activation=Rectlin()),
           Pooling(2),
           Conv((4, 4, 32), init=init_uni, activation=Rectlin()),
           Pooling(2),
-          Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=1),
-          Deconv(fshape=(3, 3, 8), init=init_uni, strides=2, padding=1),
-          Deconv(fshape=(4, 4, 1), init=init_uni, strides=2, padding=0)]
+          Deconv(fshape=(4, 4, 8), init=init_uni, activation=Rectlin()),
+          Deconv(fshape=(3, 3, 8), init=init_uni, activation=Rectlin(), strides=2),
+          Deconv(fshape=(2, 2, 1), init=init_uni, strides=2, padding=1)]
 
 # Define the cost
 cost = GeneralizedCost(costfunc=SumSquared())
