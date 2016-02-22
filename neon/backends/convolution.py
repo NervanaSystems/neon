@@ -113,14 +113,14 @@ class FpropDirect(KernelGroup):
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
 
-        tile_N   = 128 if N > 64 else 64
-        grid_N   = _ceil_div(N, tile_N)
-        tile_K   = (128, 64, 32) if tile_N == 128 else (128, 64)
+        tile_N = 128 if N > 64 else 64
+        grid_N = _ceil_div(N, tile_N)
+        tile_K = (128, 64, 32) if tile_N == 128 else (128, 64)
 
         magic_PQ = _magic64(P*Q)
-        magic_Q  = _magic64(Q)
+        magic_Q = _magic64(Q)
         magic_RS = _magic32(R*S*T+32, R*S)
-        magic_S  = _magic32(R*S+32, S)
+        magic_S = _magic32(R*S+32, S)
 
         self.xprop_kernels(
             "fprop", "K", tile_N, grid_N, K, tile_K, P*Q*M, R*S*T,
@@ -130,8 +130,7 @@ class FpropDirect(KernelGroup):
                       Q, P*Q, Q*N, P*Q*N, M*P*Q*N, magic_Q, magic_PQ]))
 
         self.shared = R*S*T * 4 * 2
-        self.flags  = (relu and 2) + (bsum and 4)
-
+        self.flags = (relu and 2) + (bsum and 4)
 
     def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
 
@@ -451,24 +450,24 @@ class BpropDirect(KernelGroup):
         grid_N = _ceil_div(N, tile_N)
         tile_C = (128, 64, 32) if tile_N == 128 else (128, 64)
 
-        magic_HW    = _magic64(H*W)
-        magic_W     = _magic64(W)
-        magic_RS    = _magic32(R*S*T+32, R*S)
-        magic_S     = _magic32(R*S+32, S)
+        magic_HW = _magic64(H*W)
+        magic_W = _magic64(W)
+        magic_RS = _magic32(R*S*T+32, R*S)
+        magic_S = _magic32(R*S+32, S)
         magic_str_w = _magic32(W + S, str_w)
         magic_str_h = _magic32(H + R, str_h)
         magic_str_d = _magic32(D + T, str_d)
 
         self.xprop_kernels(
             "bprop", "C", tile_N, grid_N, C, tile_C, D*H*W, R*S*T,
-            _flatten([ N, C, M, P, Q, Q*N, P*Q*N, M*P*Q*N,
-                       K, C*R*S*T, R*S*T, R*S, magic_RS, S, magic_S,
-                       pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                       W, H*W, W*N, H*W*N, D*H*W*N, magic_W, magic_HW,
-                       R, T, magic_str_w, magic_str_h, magic_str_d ]))
+            _flatten([N, C, M, P, Q, Q*N, P*Q*N, M*P*Q*N,
+                      K, C*R*S*T, R*S*T, R*S, magic_RS, S, magic_S,
+                      pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                      W, H*W, W*N, H*W*N, D*H*W*N, magic_W, magic_HW,
+                      R, T, magic_str_w, magic_str_h, magic_str_d]))
 
         self.shared = R*S*T * 4 * 2
-        self.flags  = (relu and 2) + (bsum and 4)
+        self.flags = (relu and 2) + (bsum and 4)
 
         # generate the kernel args for dim shuffling CTRSK => KTRSC
         shuffle_grid = (_ceil_div(K, 32), _ceil_div(C, 32), R*S*T)
@@ -487,7 +486,7 @@ class BpropDirect(KernelGroup):
 
         bsum_gpudata, flags = self.init_bsum(bsum, flags)
 
-        filter_temp  = self.lib.scratch_buffer(self.shuffle_size)
+        filter_temp = self.lib.scratch_buffer(self.shuffle_size)
 
         self.shuffle_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
 
@@ -519,6 +518,7 @@ class BpropDirect(KernelGroup):
     def __str__(self):
         return "BpropDirect " + str([k[0] for k in self.kernels])
 
+
 class BpropDirectSmallC(KernelGroup):
 
     def __init__(self, lib, dtype,
@@ -533,16 +533,16 @@ class BpropDirectSmallC(KernelGroup):
 
         assert N % 32 == 0, "N dim must be multiple of 32"
 
-        magic_PQ  = _magic64(P*Q)
-        magic_Q   = _magic64(Q)
+        magic_PQ = _magic64(P*Q)
+        magic_Q = _magic64(Q)
         magic_RST = _magic32(C*R*S*T, R*S*T)
-        magic_RS  = _magic32(R*S*T+32, R*S)
-        magic_S   = _magic32(R*S+32, S)
+        magic_RS = _magic32(R*S*T+32, R*S)
+        magic_S = _magic32(R*S+32, S)
 
         # special kernel for deconv into first layer
         kernel_name = "%s_bprop_C1_N64" % self.clss
 
-        grid  = (P*Q*M, _ceil_div(C*R*S*T, 32), _ceil_div(N, 64))
+        grid = (P*Q*M, _ceil_div(C*R*S*T, 32), _ceil_div(N, 64))
         block = (32, 1, 1)
 
         self.kernel = [kernel_name, grid, block, None, None, None, None, None]
@@ -567,13 +567,13 @@ class BpropDirectSmallC(KernelGroup):
         assert I.dtype == F.dtype == O.dtype
 
         if beta and beta != 1.0:
-            O[:] = O * beta # pre-apply beta
+            O[:] = O * beta  # pre-apply beta
 
         self.beta = beta
 
         self.zero_args = [O.gpudata, 0, self.zero, self.lib.stream]
 
-        filter_temp  = self.lib.scratch_buffer(self.shuffle_size)
+        filter_temp = self.lib.scratch_buffer(self.shuffle_size)
 
         self.shuffle_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
 
@@ -602,6 +602,7 @@ class BpropDirectSmallC(KernelGroup):
     def __str__(self):
         return "BpropDirectSmallC " + str(self.kernel[0])
 
+
 class UpdateDirect(KernelGroup):
 
     def __init__(self, lib, dtype,
@@ -616,11 +617,11 @@ class UpdateDirect(KernelGroup):
 
         assert N % 32 == 0, "N dim must be multiple of 32"
 
-        magic_RST   = _magic32(C*R*S*T, R*S*T)
-        magic_RS    = _magic32(R*S*T+32, R*S)
-        magic_S     = _magic32(R*S+32, S)
+        magic_RST = _magic32(C*R*S*T, R*S*T)
+        magic_RS = _magic32(R*S*T+32, R*S)
+        magic_S = _magic32(R*S+32, S)
 
-        grid_C   = _ceil_div(C*R*S*T, 128)
+        grid_C = _ceil_div(C*R*S*T, 128)
         sm_count = _get_sm_count()
 
         # in float32 for big feature_map layers the smaller tile is actually faster
@@ -650,9 +651,9 @@ class UpdateDirect(KernelGroup):
             grid_P, grid_Q, threads = self.update_grid(kernel_name, base_blocks, P, Q, sm_count)
             # print grid_P, grid_Q
 
-            grid_PQ   = grid_P * grid_Q
+            grid_PQ = grid_P * grid_Q
             magic_PQu = _magic64(grid_PQ)
-            magic_Qu  = _magic64(grid_Q)
+            magic_Qu = _magic64(grid_Q)
 
             block = (threads, 1, 1)
             if R*S*T > 1:
@@ -663,7 +664,7 @@ class UpdateDirect(KernelGroup):
             self.determ *= M*grid_PQ
             self.determ_shape = (M*grid_PQ, C*T*R*S*K)
 
-            kernel = [ kernel_name, grid, block, None, None, None, None, None ]
+            kernel = [kernel_name, grid, block, None, None, None, None, None]
             kernel.extend(_flatten([
                 offset_K, N, K, D, H, W, W*N, H*W*N, D*H*W*N,
                 C, C*R*S*T, R*S*T, magic_RST, R*S, magic_RS, S, magic_S,
@@ -677,7 +678,7 @@ class UpdateDirect(KernelGroup):
 
     def update_grid(self, kernel_name, base_blocks, P, Q, SM_count):
 
-        threads   = kernel_specs.kernels[kernel_name]["threads"]
+        threads = kernel_specs.kernels[kernel_name]["threads"]
         occupancy = kernel_specs.kernels[kernel_name]["occupancy"]
 
         # warps per scheduler for one block
@@ -687,9 +688,9 @@ class UpdateDirect(KernelGroup):
         for p in range(1, P+1):
             for q in range(1, Q+1):
 
-                occup  = p*q*base_blocks * occ_per_block
+                occup = p*q*base_blocks * occ_per_block
                 groups = occup / occupancy
-                slots  = ceil(groups)
+                slots = ceil(groups)
 
                 # This is a heuristic that keeps the balance of work accross the SMs
                 # while also maximizing the work that each block does
@@ -701,16 +702,15 @@ class UpdateDirect(KernelGroup):
 
         return (grid[0][0], grid[0][1], threads)
 
-
     def bind_params(self, I, E, O, alpha):
 
         assert I.dtype == E.dtype
 
         if O.dtype.type is not np.float32 or self.determ:
 
-            update_temp  = self.lib.scratch_buffer((self.determ or O.size)*4)
+            update_temp = self.lib.scratch_buffer((self.determ or O.size)*4)
 
-            self.convert_args = [ update_temp, "f4", O, False ]
+            self.convert_args = [update_temp, "f4", O, False]
             if self.determ:
                 self.convert_args[3] = self.determ_shape
         else:
@@ -743,6 +743,7 @@ class UpdateDirect(KernelGroup):
 
     def __str__(self):
         return "UpdateDirect " + str([k[0] for k in self.kernels])
+
 
 # Magic numbers and shift amounts for integer division
 # Suitable for when nmax*magic fits in 32 bits
@@ -778,11 +779,13 @@ def _flatten(lst):
     return sum(([x] if not isinstance(x, (list, tuple))
                 else _flatten(x) for x in lst), [])
 
+
 def _ceil_div(x, y):
     return -(-x // y)
 
+
 def _closest_divisor(val, div, maxdiv=8):
-    return -sorted([(abs(i-div),-i) for i in range(1, maxdiv) if val % i == 0])[0][1]
+    return -sorted([(abs(i-div), -i) for i in range(1, maxdiv) if val % i == 0])[0][1]
 
 
 @context_dependent_memoize
