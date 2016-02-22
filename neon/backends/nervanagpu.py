@@ -2231,6 +2231,47 @@ class NervanaGPU(Backend):
         else:
             raise TypeError("Unsupported type for cublas gemm")
 
+    def copy_transpose(self, a, out, axes=None, repeat=1):
+        """
+        Function to perform a fast copy transpose/dimshuffle operation.
+        Works just like numpy.transpose, but requires an output tensor argument.
+        """
+        assert a.dtype == out.dtype
+        assert a.size == out.size
+        assert a.gpudata != out.gpudata
+
+        if axes is None:
+            axes = tuple(range(len(a.shape)-1,-1,-1))
+        elif type(axes) is not tuple:
+            axes = tuple(axes)
+
+        assert all(out.shape[i]==a.shape[x] for i,x in enumerate(axes))
+
+        from neon.backends.convolution import _get_copy_transpose_kernel
+
+        kernel_data = _get_copy_transpose_kernel(a.dtype.str, a.shape, axes)
+
+        # Warmup
+        if repeat > 1:
+            for r in range(max(repeat // 10, 1)):
+                kernel_data["kernel"].prepared_async_call(kernel_data["grid"], kernel_data["block"],
+                    self.stream, out.gpudata, a.gpudata, *kernel_data["args"])
+
+        if self.bench > 1 or repeat > 1:
+            start, end = _get_events()
+            start.record(self.stream)
+
+        for r in range(repeat):
+            kernel_data["kernel"].prepared_async_call(kernel_data["grid"], kernel_data["block"],
+                self.stream, out.gpudata, a.gpudata, *kernel_data["args"])
+
+        if self.bench > 1 or repeat > 1:
+            end.record(self.stream)
+            end.synchronize()
+            msecs = end.time_since(start) / repeat
+            bandwidth = a.nbytes*2 / (msecs * 1024 * 1024)
+            print("%7.3f msecs %4.0f GBps copy_transpose" % (msecs, bandwidth))
+
     def init_mark(self):
         """
         Generate a timing mark object

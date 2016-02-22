@@ -111,7 +111,7 @@ class ImageLoader(NervanaDataIterator):
 
         # View for subtracting the mean.
         # Find a shape that's fast for ew broadcast
-        image_dim = self.data.reshape((ishape[0],-1)).shape[1]
+        image_dim = self.data.reshape((ishape[0], -1)).shape[1]
         fast_dim = [i for i in range(1, 257) if image_dim % i == 0][-1]
         self.data_view = self.data.reshape((ishape[0], image_dim//fast_dim, fast_dim))
 
