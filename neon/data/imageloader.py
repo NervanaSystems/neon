@@ -22,7 +22,11 @@ import atexit
 from neon import NervanaObject
 from neon.data.datasets import Dataset
 from neon.data.dataiterator import NervanaDataIterator
+from operator import mul
+import sys
 
+if sys.version_info >= (3, 0):
+    from functools import reduce
 
 logger = logging.getLogger(__name__)
 
@@ -109,8 +113,13 @@ class ImageLoader(NervanaDataIterator):
         self.nlabels = nlabels
 
         self.data = self.be.iobuf(self.npix, dtype=dtype)
+
         # View for subtracting the mean.
-        self.data_view = self.data.reshape((ishape[0], -1))
+        # Find a shape that's fast for ew broadcast
+        image_dim = reduce(mul, ishape[1:], 1)
+        fast_dim = [i for i in range(1, 257) if image_dim % i == 0][-1]
+        self.data_view = self.data.reshape((ishape[0], image_dim//fast_dim, fast_dim))
+
         self.buffers = []
         self.labels = []
         for i in range(2):
@@ -301,7 +310,14 @@ class ImageLoader(NervanaDataIterator):
             self.loaderlib.next(self.loader)
             # Separating these steps to avoid possible casting error
             self.data[:] = self.buffers[self.idx]
-            self.data_view[:] = self.data_view - self.mean
+
+            # hack this up for now to get decent performnace on this op
+            # the real fix is 3d broadcast support in ew
+            for c in range(self.data_view.shape[0]):
+                if type(self.mean) is float:
+                    self.data_view[c] = self.data_view[c] - self.mean
+                else:
+                    self.data_view[c] = self.data_view[c] - self.mean[c]
 
             # Expanding out the labels on device
             self.onehot_labels[:] = self.be.onehot(self.labels[self.idx],
