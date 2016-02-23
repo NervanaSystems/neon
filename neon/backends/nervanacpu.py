@@ -915,6 +915,13 @@ class NervanaCPU(Backend):
 
         return C
 
+    def copy_transpose(self, a, out, axes=None, repeat=1):
+        """
+        Function to perform a fast copy transpose/dimshuffle operation.
+        Works just like numpy.transpose, but requires an output tensor argument.
+        """
+        out._tensor[:] = np.transpose(a._tensor, axes).copy()
+
     def make_binary_mask(self, out, keepthresh=0.5):
         """
         Create a binary mask for dropout layers.
