@@ -271,8 +271,6 @@ class PASCALVOC(Dataset):
 
         if not os.path.exists(filepath):
             self.fetch_dataset(voc['url'], voc['file'], filepath, voc['size'])
-
-        if not os.path.exists(datadir):
             with tarfile.open(filepath) as f:
                 f.extractall(workdir)
 

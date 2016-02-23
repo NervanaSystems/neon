@@ -65,7 +65,7 @@ from neon.util.persist import load_obj
 
 def load_imagenet_weights(model, path):
     # load a pre-trained Alexnet from Neon model zoo to the local
-    url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/'
+    url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/alexnet/'
     filename = 'alexnet.p'
     size = 488808400
 
@@ -76,16 +76,14 @@ def load_imagenet_weights(model, path):
     print 'De-serializing the pre-trained Alexnet using ImageNet I1K ...'
     pdict = load_obj(filepath)
 
-    param_layers = [l for l in model.layers_to_optimize]
-    param_dict_list = pdict['layer_params_states']
+    param_layers = [l for l in model.layers.layers[0].layers[0].layers]
+    param_dict_list = pdict['model']['config']['layers']
     i = 0
     for layer, ps in zip(param_layers, param_dict_list):
         i = i+1
         print i, layer.name
-        layer.set_params(ps)
-        if 'states' in ps:
-            layer.set_states(ps)
-        if i == 10:
+        layer.load_weights(ps, load_states=True)
+        if i == 17:
             print 'Only load the pre-trained weights up to conv5 layer of Alexnet'
             break
 
