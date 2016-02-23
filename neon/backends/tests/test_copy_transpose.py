@@ -35,8 +35,6 @@ def test_copy_transpose(shape_dtype_inp):
     axes = [None] + list(itt.permutations(range(ndims), ndims))
     axes.remove(tuple(range(ndims)))
     for be, ax in itt.product([ng, nc], axes):
-        if ax is not None and ax[-1] == ndims - 1:
-            continue
         be_inp = be.array(np_inp, dtype=dtype)
         np_trans = np.transpose(np_inp, axes=ax)
         be_trans = be.zeros(np_trans.shape)
@@ -54,7 +52,7 @@ def pytest_generate_tests(metafunc):
     run sanity tests otherwise.
     """
     # sanity tests
-    shapes = [(64, 56, 28, 16),
+    shapes = [(32, 24, 28, 16),
               (32, 20, 1),
               (16, 4)]
 

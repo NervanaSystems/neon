@@ -2249,21 +2249,21 @@ class NervanaGPU(Backend):
 
         from neon.backends.convolution import _get_copy_transpose_kernel
 
-        kernel_data = _get_copy_transpose_kernel(a.dtype.str, a.shape, axes)
+        kernel = _get_copy_transpose_kernel(a.dtype.str, a.shape, axes)
 
         # Warmup
         if repeat > 1:
             for r in range(max(repeat // 10, 1)):
-                kernel_data["kernel"].prepared_async_call(kernel_data["grid"], kernel_data["block"],
-                    self.stream, out.gpudata, a.gpudata, *kernel_data["args"])
+                kernel.prepared_async_call(kernel.grid, kernel.block,
+                    self.stream, out.gpudata, a.gpudata, *kernel.args)
 
         if self.bench > 1 or repeat > 1:
             start, end = _get_events()
             start.record(self.stream)
 
         for r in range(repeat):
-            kernel_data["kernel"].prepared_async_call(kernel_data["grid"], kernel_data["block"],
-                self.stream, out.gpudata, a.gpudata, *kernel_data["args"])
+            kernel.prepared_async_call(kernel.grid, kernel.block,
+                self.stream, out.gpudata, a.gpudata, *kernel.args)
 
         if self.bench > 1 or repeat > 1:
             end.record(self.stream)

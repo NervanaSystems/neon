@@ -986,7 +986,11 @@ def _get_copy_transpose_kernel(dtype, shape, axes=None):
     src_contig = src[-1]
     dst_contig = dst[-1]
 
-    assert src_contig != dst_contig, "Inner dimension must change (for now)"
+    if src_contig == dst_contig:
+        dst_contig = src[0]
+        shared_tile = False
+    else:
+        shared_tile = True
 
     dim_params = []
     dim_values = []
@@ -1003,26 +1007,36 @@ def _get_copy_transpose_kernel(dtype, shape, axes=None):
 
         if s == dst_contig:
             in_dim_j = "dim_%s" % idx
-        elif idx:
-            in_offset.append("idx_%d*dim_%s" % (s, idx))
-        else:
-            in_offset.append("idx_%d" % s)
 
         if idx:
             dim_params.append("int dim_%s" % idx)
             dim_values.append(val)
+
+            in_offset.append("idx_%d*dim_%s" % (s, idx))
+        else:
+            in_offset.append("idx_%d" % s)
 
     for i, d in enumerate(dst):
 
         idx = "".join(str(x) for x in dst[i+1:])
         val = reduce(mul, (shape[x] for x in dst[i+1:]), 1)
 
-        if d == src_contig:
-            out_dim_j = "dim_%s" % idx
+        if shared_tile:
+            if d == src_contig:
+                out_dim_j = "dim_%s" % idx
+        else:
+            if d == dst_contig:
+                out_dim_j = "dim_%s" % idx
+                dim_dst = "int dim_%s" % d
+                if dim_dst not in dim_params:
+                    dim_params.append(dim_dst)
+                    dim_values.append(shape[d])
 
         if idx:
-            dim_params.append("int dim_%s" % idx)
-            dim_values.append(val)
+            dim = "int dim_%s" % idx
+            if dim not in dim_params:
+                dim_params.append(dim)
+                dim_values.append(val)
 
             out_offset.append("idx_%d*dim_%s" % (d, idx))
         else:
@@ -1058,7 +1072,7 @@ def _get_copy_transpose_kernel(dtype, shape, axes=None):
     params = _flatten([dim_params, magic_params])
     values = _flatten([dim_values, magic_values])
 
-    shuffle_kernel = r"""
+    div64 = r"""
 __device__ __forceinline__ int div64(int value, int magic, int shift)
 {
     // if the divisor is a power of 2 the magic will be 1 and it's just a simple right shift
@@ -1068,14 +1082,19 @@ __device__ __forceinline__ int div64(int value, int magic, int shift)
         ".reg .pred p;\n\t"
         ".reg .u64 res64;\n\t"
         ".reg .u32 lo32, hi32;\n\t"
-        "setp.ne.s32 p, %%2, 1;\n\t"
-        "mul.wide.u32 res64, %%1, %%2;\n\t"
+        "setp.ne.s32 p, %2, 1;\n\t"
+        "mul.wide.u32 res64, %1, %2;\n\t"
         "mov.b64 {lo32, hi32}, res64;\n\t"
-        "selp.u32 hi32, hi32, %%1, p;\n\t"
-        "shr.u32 %%0, hi32, %%3;\n\t"
+        "selp.u32 hi32, hi32, %1, p;\n\t"
+        "shr.u32 %0, hi32, %3;\n\t"
         "}" : "=r"(result) : "r"(value), "r"(magic), "r"(shift));
     return result;
 }
+"""
+
+    if shared_tile:
+        copy_transpose = r"""
+%(common)s
 
 __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
 {
@@ -1091,15 +1110,18 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
     idx_%(src)s = (idx_%(src)s << 5) + tid_x;
     idx_%(dst)s = (idx_%(dst)s << 5) + tid_y;
 
-    int offset = %(in_offset)s;
+    const %(type)s* in00 = in   + %(in_offset)s;
+    const %(type)s* in08 = in00 + %(in_dim_j)s*8;
+    const %(type)s* in16 = in08 + %(in_dim_j)s*8;
+    const %(type)s* in24 = in16 + %(in_dim_j)s*8;
 
-    #pragma unroll
-    for (int j = 0; j < 32; j += 8)
-    {
-        int idx_%(dst)sj = idx_%(dst)s + j;
-        if (idx_%(dst)sj < dim_%(dst)s && idx_%(src)s < dim_%(src)s)
-            tile[tid_y + j][tid_x] = in[idx_%(dst)sj*%(in_dim_j)s + offset];
-    }
+    bool b%(src)s = idx_%(src)s < dim_%(src)s;
+
+    if (idx_%(dst)s +  0 < dim_%(dst)s && b%(src)s) tile[tid_y +  0][tid_x] = *in00;
+    if (idx_%(dst)s +  8 < dim_%(dst)s && b%(src)s) tile[tid_y +  8][tid_x] = *in08;
+    if (idx_%(dst)s + 16 < dim_%(dst)s && b%(src)s) tile[tid_y + 16][tid_x] = *in16;
+    if (idx_%(dst)s + 24 < dim_%(dst)s && b%(src)s) tile[tid_y + 24][tid_x] = *in24;
+
     __syncthreads();
 
     %(type)s val00 = tile[tid_x][tid_y +  0];
@@ -1112,7 +1134,7 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
 
     bool b%(dst)s = idx_%(dst)s < dim_%(dst)s;
 
-    %(type)s* out00 = out + %(out_offset)s;
+    %(type)s* out00 = out   + %(out_offset)s;
     %(type)s* out08 = out00 + %(out_dim_j)s*8;
     %(type)s* out16 = out08 + %(out_dim_j)s*8;
     %(type)s* out24 = out16 + %(out_dim_j)s*8;
@@ -1123,7 +1145,56 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
     if (idx_%(src)s + 24 < dim_%(src)s && b%(dst)s) *out24 = val24;
 }
 """
-    code = shuffle_kernel % dict(
+    else:
+        copy_transpose = r"""
+%(common)s
+
+__global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
+{
+    int tid_x = threadIdx.x;
+    int tid_y = threadIdx.y;
+    int idx_%(blk)s = blockIdx.x;
+    int idx_%(dst)s = blockIdx.y;
+
+    %(magic)s
+
+    idx_%(src)s = (idx_%(src)s << 5) + tid_x;
+    idx_%(dst)s = (idx_%(dst)s << 5) + tid_y;
+
+    bool b%(src)s    = idx_%(src)s      < dim_%(src)s;
+    bool b%(dst)s_00 = idx_%(dst)s +  0 < dim_%(dst)s && b%(src)s;
+    bool b%(dst)s_08 = idx_%(dst)s +  8 < dim_%(dst)s && b%(src)s;
+    bool b%(dst)s_16 = idx_%(dst)s + 16 < dim_%(dst)s && b%(src)s;
+    bool b%(dst)s_24 = idx_%(dst)s + 24 < dim_%(dst)s && b%(src)s;
+
+    %(type)s val00 = 0;
+    %(type)s val08 = 0;
+    %(type)s val16 = 0;
+    %(type)s val24 = 0;
+
+    const %(type)s* in00 = in   + %(in_offset)s;
+    const %(type)s* in08 = in00 + %(in_dim_j)s*8;
+    const %(type)s* in16 = in08 + %(in_dim_j)s*8;
+    const %(type)s* in24 = in16 + %(in_dim_j)s*8;
+
+    if (b%(dst)s_00) val00 = *in00;
+    if (b%(dst)s_08) val08 = *in08;
+    if (b%(dst)s_16) val16 = *in16;
+    if (b%(dst)s_24) val24 = *in24;
+
+    %(type)s* out00 = out   + %(out_offset)s;
+    %(type)s* out08 = out00 + %(out_dim_j)s*8;
+    %(type)s* out16 = out08 + %(out_dim_j)s*8;
+    %(type)s* out24 = out16 + %(out_dim_j)s*8;
+
+    if (b%(dst)s_00) *out00 = val00;
+    if (b%(dst)s_08) *out08 = val08;
+    if (b%(dst)s_16) *out16 = val16;
+    if (b%(dst)s_24) *out24 = val24;
+}
+"""
+    code = copy_transpose % dict(
+        common=div64,
         type=_ew_types[dtype[1:]]["type"],
         params=", ".join(params),
         blk=blk,
@@ -1145,9 +1216,8 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
         if s not in (src_contig, dst_contig):
             grid_x *= grid_shape[s]
 
-    return dict(
-        kernel=kernel,
-        grid=(grid_x, grid_y, 1),
-        block=(32, 8, 1),
-        args=values
-    )
+    kernel.grid = (grid_x, grid_y, 1)
+    kernel.block = (32, 8, 1)
+    kernel.args = values
+
+    return kernel
