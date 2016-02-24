@@ -135,9 +135,9 @@ class ArrayIterator(NervanaDataIterator):
                 self.start = self.be.bsz - bsz
 
             for xbuf, xdev in zip(self.Xbuf, self.Xdev):
-                xbuf[:, :bsz] = xdev[i1:i2].T
+                self.be.copy_transpose(xdev[i1:i2], xbuf[:, :bsz])
                 if self.be.bsz > bsz:
-                    xbuf[:, bsz:] = xdev[:(self.be.bsz - bsz)].T
+                    self.be.copy_transpose(xdev[:(self.be.bsz - bsz)], xbuf[:, bsz:])
 
             if self.ybuf is not None:
                 if self.make_onehot:
@@ -147,9 +147,9 @@ class ArrayIterator(NervanaDataIterator):
                         self.ybuf[:, bsz:] = self.be.onehot(
                             self.ydev[:(self.be.bsz - bsz)], axis=0)
                 else:
-                    self.ybuf[:, :bsz] = self.ydev[i1:i2].T
+                    self.be.copy_transpose(self.ydev[i1:i2], self.ybuf[:, :bsz])
                     if self.be.bsz > bsz:
-                        self.ybuf[:, bsz:] = self.ydev[:(self.be.bsz - bsz)].T
+                        self.be.copy_transpose(self.ydev[:(self.be.bsz - bsz)], self.ybuf[:, bsz:])
 
             inputs = self.Xbuf[0] if len(self.Xbuf) == 1 else self.Xbuf
             targets = self.ybuf if self.ybuf else inputs

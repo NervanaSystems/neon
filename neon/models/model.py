@@ -440,43 +440,36 @@ class Model(NervanaObject):
 
         # iterate through minibatches of the dataset
         times = OrderedDict()
-        for ky in ['fprop', 'bprop', 'update', 'iteration']:
+        for ky in ['fprop', 'bprop', 'iteration']:
             times[ky] = np.full(niterations + nskip, -1.0)
         count = 0
 
-        mb_st = self.be.init_mark()
-        mb_end = self.be.init_mark()
-        evt_st = self.be.init_mark()
-        evt_end = self.be.init_mark()
+        fprop_start = self.be.init_mark()
+        fprop_end = self.be.init_mark()
+        bprop_end = self.be.init_mark()
 
         while count < niterations + nskip:
             dataset.reset()
             for mb_idx, (x, t) in enumerate(dataset):
-                self.be.record_mark(mb_st)
+
+                self.be.record_mark(fprop_start)  # mark start of fprop
 
                 x = self.fprop(x)
                 self.total_cost[:] = self.total_cost + self.cost.get_cost(x, t)
 
-                self.be.record_mark(evt_end)
+                self.be.record_mark(fprop_end)  # mark end of fprop and start of bprop
 
-                times['fprop'][count] = self.be.get_time(mb_st, evt_end)
-
-                self.be.record_mark(evt_st)  # mark bprop start
                 delta = self.cost.get_errors(x, t)
-
                 self.bprop(delta)
-
-                self.be.record_mark(evt_end)  # mark end of bprop
-                times['bprop'][count] = self.be.get_time(evt_st, evt_end)
-
-                self.be.record_mark(evt_st)
                 self.optimizer.optimize(self.layers_to_optimize, epoch=0)
-                self.be.record_mark(evt_end)  # end of update
 
-                times['update'][count] = self.be.get_time(evt_st, evt_end)
+                self.be.record_mark(bprop_end)  # mark end of bprop
 
-                self.be.record_mark(mb_end)
-                times['iteration'][count] = self.be.get_time(mb_st, mb_end)
+                self.be.synchronize_mark(bprop_end)
+
+                times['fprop'][count] = self.be.get_time(fprop_start, fprop_end)
+                times['bprop'][count] = self.be.get_time(fprop_end, bprop_end)
+                times['iteration'][count] = times['fprop'][count] + times['bprop'][count]
 
                 count += 1
                 if count >= niterations + nskip:
