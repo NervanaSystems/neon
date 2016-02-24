@@ -266,7 +266,7 @@ protected:
                 _out.waitForNonFull(lock);
             }
             BufferPair& bufPair = _out.getForWrite();
-            int result = _reader->read(bufPair.first, bufPair.second);
+            int result = _reader->read(bufPair);
             if (result == -1) {
                 _done = true;
                 throw std::runtime_error("Could not read data\n");

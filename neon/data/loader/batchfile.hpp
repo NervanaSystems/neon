@@ -22,6 +22,8 @@
 #include <memory>
 #include <algorithm>
 
+#include "streams.hpp"
+
 #define FORMAT_VERSION  1
 #define WRITER_VERSION  1
 #define MAGIC_STRING    "MACR"
@@ -58,48 +60,6 @@ Individual items are packed into a macrobatch file as follows:
 Each of these items comprises of a cpio header record followed by data.
 
 */
-
-class IfStream : public std::ifstream {
-public:
-    template <typename T>
-    void read(T* data) {
-        read(reinterpret_cast<char*>(data), sizeof(T));
-    }
-
-    void read(char* data, int len) {
-        std::ifstream::read(data, len);
-    }
-
-    void readPadding(uint length) {
-        // Read a byte if length is odd.
-        if (length % 2 == 0) {
-            return;
-        }
-        char byte = 0;
-        read(&byte);
-    }
-};
-
-class OfStream : public std::ofstream {
-public:
-    template <typename T>
-    void write(T* data) {
-        write(reinterpret_cast<char*>(data), sizeof(T));
-    }
-
-    void write(char* data, int len) {
-        std::ofstream::write(data, len);
-    }
-
-    void writePadding(uint length) {
-        // Write a byte if length is odd.
-        if (length % 2 == 0) {
-            return;
-        }
-        char byte = 0;
-        write(&byte);
-    }
-};
 
 class RecordHeader {
 public:
@@ -316,14 +276,15 @@ public:
         }
     }
 
-    void readItem(char* datum, char* target,
-                  uint* datumSize, uint* targetSize) {
-        _recordHeader.read(_ifs, datumSize);
-        _ifs.read(datum, *datumSize);
-        _ifs.readPadding(*datumSize);
-        _recordHeader.read(_ifs, targetSize);
-        _ifs.read(target, *targetSize);
-        _ifs.readPadding(*targetSize);
+    void readItem(BufferPair& buffers) {
+        uint datumSize;
+        uint targetSize;
+        _recordHeader.read(_ifs, &datumSize);
+        buffers.first->read(_ifs, datumSize);
+        _ifs.readPadding(datumSize);
+        _recordHeader.read(_ifs, &targetSize);
+        buffers.second->read(_ifs, targetSize);
+        _ifs.readPadding(targetSize);
     }
 
     DataPair readItem() {

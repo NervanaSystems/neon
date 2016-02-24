@@ -41,6 +41,7 @@ public:
                 int rotateMin, int rotateMax,
                 int aspectRatio)
     : MediaParams(IMAGE),
+      _channelCount(channelCount),
       _height(height), _width(width),
       _augment(augment),
       _center(center), _flip(flip),
@@ -51,7 +52,7 @@ public:
     }
 
     ImageParams()
-    : ImageParams(224, 224, false, true, false, true,
+    : ImageParams(3, 224, 224, false, true, false,
                   256, 256, 0, 0, 0, 0, 0) {}
 
     void dump() {
@@ -194,19 +195,30 @@ public:
     }
 
     void encode(char* item, int itemSize, char* buf, int bufSize) {
-
+        assert(0);
     }
 
     void decode(char* item, int itemSize, char* buf, int bufSize) {
-        Mat image = Mat(1, itemSize, CV_8UC3, item);
-        Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
+        assert(0);
+    }
 
-        split(decodedImage, _params->getSize(), buf);
+    void resize(const Mat& input, Mat& output, const Size2i& size) {
+        int inter = input.size() < size.area() ? CV_INTER_CUBIC : CV_INTER_AREA;
+        cv::resize(input, output, size, 0, 0, inter);
     }
 
     void transform(char* item, int itemSize, char* buf, int bufSize) {
         if (_params->_augment == false) {
-            decode(item, itemSize, buf, bufSize);
+            Mat image = Mat(1, itemSize, CV_8UC3, item);
+            Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
+            Mat resizedImage;
+            if (decodedImage.size() == _params->getSize()) {
+                resizedImage = decodedImage;
+            } else {
+                resize(decodedImage, resizedImage, _params->getSize());
+            }
+
+            split(resizedImage, buf, bufSize);
             return;
         }
 
@@ -224,8 +236,7 @@ public:
         if (innerSize.width == cropBox.width && innerSize.height == cropBox.height) {
             resizedImage = croppedImage;
         } else {
-            int inter = cropArea < innerSize.area() ? CV_INTER_CUBIC : CV_INTER_AREA;
-            cv::resize(croppedImage, resizedImage, innerSize, 0, 0, inter);
+            resize(croppedImage, resizedImage, innerSize);
         }
         Mat flippedImage;
         Mat *finalImage;
@@ -243,7 +254,7 @@ public:
             finalImage = &newImage;
         }
 
-        split(*finalImage, innerSize, buf);
+        split(*finalImage, buf, bufSize);
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
@@ -320,7 +331,11 @@ public:
     }
 
 private:
-    void split(Mat& img,  Size2i size, char* buf) {
+    void split(Mat& img, char* buf, int bufSize) {
+        Size2i size = img.size();
+        if (img.channels() * img.total() > (uint) bufSize) {
+            throw std::runtime_error("Decode failed - buffer too small");
+        }
         // Split into separate channels
         Mat ch_b(size, CV_8U, buf);
         Mat ch_g(size, CV_8U, buf + size.area());

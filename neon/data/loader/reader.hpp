@@ -128,7 +128,7 @@ public:
     }
 
     virtual ~Reader() {};
-    virtual int read(CharBuffer* data, CharBuffer* targets) = 0;
+    virtual int read(BufferPair& buffers) = 0;
     virtual int reset() = 0;
 
     // For unit testing.
@@ -168,6 +168,10 @@ public:
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
+    }
+
+    int read(BufferPair& buffers) {
+        return read(buffers.first, buffers.second);
     }
 
     int read(CharBuffer* data, CharBuffer* targets) {

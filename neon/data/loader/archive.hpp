@@ -124,7 +124,7 @@ public:
                                        &_dataBufLen, &_targetBufLen,
                                        &dataLen, &targetLen);
             if (result != 0) {
-                return result;
+                break;
             }
             // TODO: make this multithreaded.
             _media->ingest(&_dataBuf, &_dataBufLen, &dataLen);
@@ -205,15 +205,15 @@ public:
         close();
     }
 
-    int read(CharBuffer* data, CharBuffer* targets) {
+    int read(BufferPair& buffers) {
         int offset = 0;
         while (offset < _batchSize) {
             int count = _batchSize - offset;
             int result;
             if (_repeatShuffle) {
-                result = readShuffle(data, targets, count);
+                result = readShuffle(buffers, count);
             } else {
-                result = read(data, targets, count);
+                result = read(buffers, count);
             }
             if (result == -1) {
                 return -1;
@@ -255,8 +255,8 @@ public:
     }
 
     // For unit testing.
-    int readAll(CharBuffer* data, CharBuffer* targets) {
-        readExact(data, targets, _itemsLeft);
+    int readAll(BufferPair& buffers) {
+        readExact(buffers, _itemsLeft);
         return _itemsLeft;
     }
 
@@ -287,7 +287,7 @@ private:
         }
     }
 
-    int read(CharBuffer* data, CharBuffer* targets, int count) {
+    int read(BufferPair& buffers, int count) {
         if (_itemsLeft == 0) {
             next();
         }
@@ -295,11 +295,11 @@ private:
         int realCount = std::min(count, _itemsLeft);
         if (_itemIdx + realCount >= _itemCount) {
             realCount = _itemCount - _itemIdx;
-            readExact(data, targets, realCount);
+            readExact(buffers, realCount);
             reset();
             return realCount;
         }
-        readExact(data, targets, realCount);
+        readExact(buffers, realCount);
         return realCount;
     }
 
@@ -324,11 +324,13 @@ private:
         return 0;
     }
 
-    int readShuffle(CharBuffer* data, CharBuffer* targets, int count) {
+    int readShuffle(BufferPair& buffers, int count) {
         while ((int) _shuffleQueue.size() < count) {
             replenishQueue(count);
         }
 
+        CharBuffer* data = buffers.first;
+        CharBuffer* targets = buffers.second;
         for (int i=0; i<count; ++i) {
             auto ee = std::move(_shuffleQueue.at(0));
             int dataSize = ee.first->size();
@@ -342,16 +344,10 @@ private:
         return count;
     }
 
-    void readExact(CharBuffer* data, CharBuffer* targets, int count) {
+    void readExact(BufferPair& buffers, int count) {
         assert(count <= _itemsLeft);
         for (int i = 0; i < count; ++i) {
-            uint        dataSize;
-            uint        targetSize;
-            _batchFile.readItem(data->getCurrent(),
-                                targets->getCurrent(),
-                                &dataSize, &targetSize);
-            data->pushItem(dataSize);
-            targets->pushItem(targetSize);
+            _batchFile.readItem(buffers);
         }
         _itemsLeft -= count;
         _itemIdx += count;

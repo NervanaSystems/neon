@@ -30,12 +30,6 @@ public:
     }
 
 public:
-    void encode(char* item, int itemSize, char* buf, int bufSize) {
-    }
-
-    void decode(char* item, int itemSize, char* buf, int bufSize) {
-    }
-
     void transform(char* item, int itemSize, char* buf, int bufSize) {
     }
 

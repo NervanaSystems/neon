@@ -34,8 +34,8 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 media_params = ImageParams(channel_count=3, height=32, width=32)
-common = dict(media_params=media_params, datum_size=3*32*32, target_size=1,
-              nclasses=10)
+common = dict(media_params=media_params,
+              datum_size=3*32*32, target_size=1, nclasses=10)
 traindir = os.path.join(args.data_dir, 'train')
 testdir = os.path.join(args.data_dir, 'test')
 train = DataLoader(repo_dir=traindir, shuffle=True, **common)
