@@ -2240,6 +2240,8 @@ class NervanaGPU(Backend):
         assert a.size == out.size
         assert a.gpudata != out.gpudata
 
+        assert out.is_contiguous, "Output array in copy_transpose() must be contiguous"
+
         if axes is None:
             axes = tuple(range(len(a.shape)-1,-1,-1))
         elif type(axes) is not tuple:

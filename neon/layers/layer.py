@@ -580,6 +580,7 @@ class Convolution(ParameterLayer):
                  name=None, parallelism="Data"):
         super(Convolution, self).__init__(init, name, parallelism)
         self.nglayer = None
+        bsum = bsum and not self.be.deterministic
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                            'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
                            'T': 1, 'D': 1, 'bsum': bsum}  # 3D paramaters
@@ -746,7 +747,7 @@ class Linear(ParameterLayer):
         super(Linear, self).__init__(init, name, "Disabled")
         self.nout = nout
         self.inputs = None
-        self.bsum = bsum
+        self.bsum = bsum and not self.be.deterministic
 
     def __str__(self):
         return "Linear Layer '%s': %d inputs, %d outputs" % (

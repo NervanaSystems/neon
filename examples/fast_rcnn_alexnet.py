@@ -78,12 +78,10 @@ def load_imagenet_weights(model, path):
 
     param_layers = [l for l in model.layers.layers[0].layers[0].layers]
     param_dict_list = pdict['model']['config']['layers']
-    i = 0
     for layer, ps in zip(param_layers, param_dict_list):
-        i = i+1
-        print i, layer.name
+        print layer.name, ps['config']['name']
         layer.load_weights(ps, load_states=True)
-        if i == 17:
+        if ps['config']['name'] == 'Pooling_2':
             print 'Only load the pre-trained weights up to conv5 layer of Alexnet'
             break
 

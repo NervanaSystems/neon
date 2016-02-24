@@ -75,37 +75,40 @@ class ArrayIterator(NervanaDataIterator):
         super(ArrayIterator, self).__init__(name=name)
         X = X if isinstance(X, list) else [X]
         self.ndata = len(X[0])
+        assert self.ndata >= self.be.bsz
         self.start = 0
         self.nclass = nclass
+        self.ybuf = None
 
-        # on device tensor with full dataset
-        self.Xdev = [self.be.array(x) for x in X]
-        # mini-batch sized buffer
-        self.Xbuf = [self.be.iobuf(x.shape[1]) for x in X]
+        if make_onehot and nclass is None and y is not None:
+            raise AttributeError('Must provide number of classes when creating onehot labels')
 
-        if lshape is not None:
-            self.shape = [lshape for x in X]
-        else:
-            self.shape = [x.shape[1] for x in X]
-
+        # store shape of the input data
+        self.shape = [x.shape[1] if lshape is None else lshape for x in X]
         if len(self.shape) == 1:
             self.shape = self.shape[0]
-
-            # store shape of the input data
             self.lshape = lshape
 
-        assert self.ndata >= self.be.bsz
+        # Helpers to make dataset, minibatch, unpacking function for transpose and onehot
+        def transpose_gen(z):
+            return (self.be.array(z), self.be.iobuf(z.shape[1]),
+                    lambda _in, _out: _in.transpose(_out))
 
-        self.ybuf = None
-        self.make_onehot = make_onehot
+        def onehot_gen(z):
+            return (self.be.array(z.reshape((-1, 1)), dtype=np.int32), self.be.iobuf(nclass),
+                    lambda _in, _out: self.be.onehot(_in, axis=0, out=_out))
+
+        self.Xdev, self.Xbuf, self.unpack_func = zip(*[transpose_gen(x) for x in X])
+
+        # Shallow copies for appending, iterating
+        self.dbuf, self.hbuf = list(self.Xdev), list(self.Xbuf)
+        self.unpack_func = list(self.unpack_func)
+
         if y is not None:
-            if make_onehot:
-                assert nclass is not None
-                self.ydev = self.be.array(y.reshape((-1, 1)), dtype=np.int32)
-                self.ybuf = self.be.iobuf(nclass)
-            else:
-                self.ydev = self.be.array(y)
-                self.ybuf = self.be.iobuf(y.shape[1])
+            self.ydev, self.ybuf, yfunc = onehot_gen(y) if make_onehot else transpose_gen(y)
+            self.dbuf.append(self.ydev)
+            self.hbuf.append(self.ybuf)
+            self.unpack_func.append(yfunc)
 
     @property
     def nbatches(self):
@@ -125,31 +128,20 @@ class ArrayIterator(NervanaDataIterator):
         Defines a generator that can be used to iterate over this dataset.
 
         Yields:
-            tuple: The next minibatch. A minibatch includes both features and
-            labels.
+            tuple: The next minibatch which includes both features and labels.
         """
         for i1 in range(self.start, self.ndata, self.be.bsz):
-            i2 = min(i1 + self.be.bsz, self.ndata)
-            bsz = i2 - i1
-            if i2 == self.ndata:
+            bsz = min(self.be.bsz, self.ndata - i1)
+            islice1, oslice1 = slice(0, bsz), slice(i1, i1 + bsz)
+            islice2, oslice2 = None, None
+            if self.be.bsz > bsz:
+                islice2, oslice2 = slice(bsz, None), slice(0, self.be.bsz - bsz)
                 self.start = self.be.bsz - bsz
 
-            for xbuf, xdev in zip(self.Xbuf, self.Xdev):
-                self.be.copy_transpose(xdev[i1:i2], xbuf[:, :bsz])
-                if self.be.bsz > bsz:
-                    self.be.copy_transpose(xdev[:(self.be.bsz - bsz)], xbuf[:, bsz:])
-
-            if self.ybuf is not None:
-                if self.make_onehot:
-                    self.ybuf[:, :bsz] = self.be.onehot(
-                        self.ydev[i1:i2], axis=0)
-                    if self.be.bsz > bsz:
-                        self.ybuf[:, bsz:] = self.be.onehot(
-                            self.ydev[:(self.be.bsz - bsz)], axis=0)
-                else:
-                    self.be.copy_transpose(self.ydev[i1:i2], self.ybuf[:, :bsz])
-                    if self.be.bsz > bsz:
-                        self.be.copy_transpose(self.ydev[:(self.be.bsz - bsz)], self.ybuf[:, bsz:])
+            for buf, dev, unpack_func in zip(self.hbuf, self.dbuf, self.unpack_func):
+                unpack_func(dev[oslice1], buf[:, islice1])
+                if oslice2:
+                    unpack_func(dev[oslice2], buf[:, islice2])
 
             inputs = self.Xbuf[0] if len(self.Xbuf) == 1 else self.Xbuf
             targets = self.ybuf if self.ybuf else inputs
