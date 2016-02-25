@@ -19,7 +19,6 @@ import numpy as np
 import os
 import atexit
 
-from neon import NervanaObject
 from media import MediaParams
 from indexer import Indexer
 from dataiterator import NervanaDataIterator
@@ -135,7 +134,7 @@ class DataLoader(NervanaDataIterator):
         if self.ingest_params is None:
             ingest_params = None
         else:
-            ingest_params  = ct.POINTER(MediaParams)(self.ingest_params)
+            ingest_params = ct.POINTER(MediaParams)(self.ingest_params)
         self.loader = self.loaderlib.start(
             ct.byref(self.item_count), self.bsz,
             ct.c_char_p(self.repo_dir),

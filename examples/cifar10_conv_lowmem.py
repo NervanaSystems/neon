@@ -19,8 +19,7 @@ on-demand, conserving device memory while not compromising on speed.
 """
 
 import os
-import numpy as np
-from neon.data import DataLoader, ImageParams, ImageIngestParams
+from neon.data import DataLoader, ImageParams
 from neon.initializers import Uniform
 from neon.layers import Affine, Conv, Pooling, GeneralizedCost
 from neon.models import Model

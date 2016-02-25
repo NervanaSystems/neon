@@ -183,7 +183,6 @@ void resizeInput(vector<char> &jpgdata, int maxDim){
     Mat resizedImage;
     cv::resize(decodedImage, resizedImage, Size2i(0, 0), scaleFactor, scaleFactor, CV_INTER_AREA);
     cv::imencode(".jpg", resizedImage, *(reinterpret_cast<vector<uchar>*>(&jpgdata)), param);
-    //    cv::imencode(".jpg", resizedImage, jpgdata, param);
     return;
 }
 
@@ -194,23 +193,10 @@ public:
         assert(params->_mtype == IMAGE);
     }
 
-    void encode(char* item, int itemSize, char* buf, int bufSize) {
-        assert(0);
-    }
-
-    void decode(char* item, int itemSize, char* buf, int bufSize) {
-        assert(0);
-    }
-
-    void resize(const Mat& input, Mat& output, const Size2i& size) {
-        int inter = input.size() < size.area() ? CV_INTER_CUBIC : CV_INTER_AREA;
-        cv::resize(input, output, size, 0, 0, inter);
-    }
-
     void transform(char* item, int itemSize, char* buf, int bufSize) {
+        Mat decodedImage;
+        decode(item, itemSize, &decodedImage);
         if (_params->_augment == false) {
-            Mat image = Mat(1, itemSize, CV_8UC3, item);
-            Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
             Mat resizedImage;
             if (decodedImage.size() == _params->getSize()) {
                 resizedImage = decodedImage;
@@ -222,11 +208,8 @@ public:
             return;
         }
 
-        Mat image = Mat(1, itemSize, CV_8UC3, item);
-        Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
         Rect cropBox;
         _params->getRandomCrop(_rngSeed, decodedImage.size(), &cropBox);
-        auto cropArea = cropBox.area();
         auto innerSize = _params->getSize();
 
         Mat croppedImage = decodedImage(cropBox);
@@ -272,8 +255,8 @@ public:
         }
 
         // Decode
-        Mat image = Mat(1, dataLen, CV_8UC3, *dataBuf);
-        Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
+        Mat decodedImage;
+        decode(*dataBuf, *dataLen, &decodedImage);
 
         // Resize
         int width = decodedImage.cols;
@@ -304,9 +287,7 @@ public:
 
         Size2i size(width, height);
         Mat resizedImage;
-        int inter = decodedImage.size().area() < size.area() ?
-                    CV_INTER_CUBIC : CV_INTER_AREA;
-        cv::resize(decodedImage, resizedImage, size, 0, 0, inter);
+        resize(decodedImage, resizedImage, size);
 
         // Re-encode
         vector<int> param = {CV_IMWRITE_PNG_COMPRESSION, 9};
@@ -331,10 +312,34 @@ public:
     }
 
 private:
+    void decode(char* item, int itemSize, Mat* dst) {
+        if (_params->_channelCount == 1) {
+            Mat image = Mat(1, itemSize, CV_8UC1, item);
+            cv::imdecode(image, CV_LOAD_IMAGE_GRAYSCALE, dst);
+        } else if (_params->_channelCount == 3) {
+            Mat image = Mat(1, itemSize, CV_8UC3, item);
+            cv::imdecode(image, CV_LOAD_IMAGE_COLOR, dst);
+        } else {
+            stringstream ss;
+            ss << "Unsupported number of channels in image: " << _params->_channelCount;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
+    void resize(const Mat& input, Mat& output, const Size2i& size) {
+        int inter = input.size().area() < size.area() ?
+                    CV_INTER_CUBIC : CV_INTER_AREA;
+        cv::resize(input, output, size, 0, 0, inter);
+    }
+
     void split(Mat& img, char* buf, int bufSize) {
         Size2i size = img.size();
         if (img.channels() * img.total() > (uint) bufSize) {
             throw std::runtime_error("Decode failed - buffer too small");
+        }
+        if (img.channels() == 1) {
+            memcpy(buf, img.data, img.total());
+            return;
         }
         // Split into separate channels
         Mat ch_b(size, CV_8U, buf);
