@@ -92,7 +92,7 @@ class ArrayIterator(NervanaDataIterator):
         # Helpers to make dataset, minibatch, unpacking function for transpose and onehot
         def transpose_gen(z):
             return (self.be.array(z), self.be.iobuf(z.shape[1]),
-                    lambda _in, _out: _in.transpose(_out))
+                    lambda _in, _out: self.be.copy_transpose(_in, _out))
 
         def onehot_gen(z):
             return (self.be.array(z.reshape((-1, 1)), dtype=np.int32), self.be.iobuf(nclass),

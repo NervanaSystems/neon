@@ -2240,8 +2240,6 @@ class NervanaGPU(Backend):
         assert a.size == out.size
         assert a.gpudata != out.gpudata
 
-        assert out.is_contiguous, "Output array in copy_transpose() must be contiguous"
-
         if axes is None:
             axes = tuple(range(len(a.shape)-1,-1,-1))
         elif type(axes) is not tuple:
@@ -2253,11 +2251,13 @@ class NervanaGPU(Backend):
 
         kernel = _get_copy_transpose_kernel(a.dtype.str, a.shape, axes)
 
+        args = kernel.args + a.strides + out.strides
+
         # Warmup
         if repeat > 1:
             for r in range(max(repeat // 10, 1)):
                 kernel.prepared_async_call(kernel.grid, kernel.block,
-                    self.stream, out.gpudata, a.gpudata, *kernel.args)
+                    self.stream, out.gpudata, a.gpudata, *args)
 
         if self.bench > 1 or repeat > 1:
             start, end = _get_events()
@@ -2265,7 +2265,7 @@ class NervanaGPU(Backend):
 
         for r in range(repeat):
             kernel.prepared_async_call(kernel.grid, kernel.block,
-                self.stream, out.gpudata, a.gpudata, *kernel.args)
+                self.stream, out.gpudata, a.gpudata, *args)
 
         if self.bench > 1 or repeat > 1:
             end.record(self.stream)

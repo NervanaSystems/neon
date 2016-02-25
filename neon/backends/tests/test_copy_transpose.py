@@ -26,7 +26,6 @@ def test_copy_transpose(shape_dtype_inp):
     """
 
     shape, dtype, (name, inp_gen) = shape_dtype_inp
-    # import pdb; pdb.set_trace()
     ng = NervanaGPU(default_dtype=dtype)
     nc = NervanaCPU(default_dtype=dtype)
     np_inp = inp_gen(shape).astype(dtype)

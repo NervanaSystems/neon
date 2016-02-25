@@ -983,84 +983,50 @@ def _get_copy_transpose_kernel(dtype, shape, axes=None):
     src = range(len(shape))
     dst = list(axes)
 
-    src_contig = src[-1]
-    dst_contig = dst[-1]
+    src_dim = src[-1]
+    dst_dim = dst[-1]
 
-    if src_contig == dst_contig:
-        dst_contig = src[0]
+    # If the inner dim is the same for both, no need for shared memory tile
+    # Then map the outer source dim to the threadIdx.y values
+    if src_dim == dst_dim:
+        dst_dim = src[0]
         shared_tile = False
     else:
         shared_tile = True
 
-    dim_params = []
-    dim_values = []
-    in_offset = []
-    out_offset = []
-    magic_params = []
-    magic_values = []
+    src_offset = []
+    dst_offset = []
+    params = []
+    values = []
     magic = ""
 
-    for i, s in enumerate(src):
+    # add dims for bounds checking
+    for dim in (src_dim, dst_dim):
+        params.append("int dim_%s" % dim)
+        values.append(shape[dim])
 
-        idx = "".join(str(x) for x in src[i+1:])
-        val = reduce(mul, (shape[x] for x in src[i+1:]), 1)
-
-        if s == dst_contig:
-            in_dim_j = "dim_%s" % idx
-
-        if idx:
-            dim_params.append("int dim_%s" % idx)
-            dim_values.append(val)
-
-            in_offset.append("idx_%d*dim_%s" % (s, idx))
-        else:
-            in_offset.append("idx_%d" % s)
-
-    for i, d in enumerate(dst):
-
-        idx = "".join(str(x) for x in dst[i+1:])
-        val = reduce(mul, (shape[x] for x in dst[i+1:]), 1)
-
-        if shared_tile:
-            if d == src_contig:
-                out_dim_j = "dim_%s" % idx
-        else:
-            if d == dst_contig:
-                out_dim_j = "dim_%s" % idx
-                dim_dst = "int dim_%s" % d
-                if dim_dst not in dim_params:
-                    dim_params.append(dim_dst)
-                    dim_values.append(shape[d])
-
-        if idx:
-            dim = "int dim_%s" % idx
-            if dim not in dim_params:
-                dim_params.append(dim)
-                dim_values.append(val)
-
-            out_offset.append("idx_%d*dim_%s" % (d, idx))
-        else:
-            out_offset.append("idx_%d" % d)
-
-    src2 = list(src)
-    src2[dst_contig:dst_contig+1] = ()
-
-    blk = compound_idx = "".join(str(x) for x in src2)
-
+    # collapse src and dst shape by 32
     grid_shape = list(shape)
-    grid_shape[src_contig] = _ceil_div(shape[src_contig], 32)
-    grid_shape[dst_contig] = _ceil_div(shape[dst_contig], 32)
+    grid_shape[src_dim] = _ceil_div(shape[src_dim], 32)
+    grid_shape[dst_dim] = _ceil_div(shape[dst_dim], 32)
 
+    # get a src list without dst dim
+    src2 = [s for s in src if s != dst_dim]
+
+    # get the name of the first compound index
+    blkx_name = compound_idx = "".join(str(x) for x in src2)
+
+    # generate the magic number math to extract all indeces
     while len(src2) > 1:
 
         idx1 = src2[0]
-        src2[0:1] = ()
+        del src2[0]
         idx2 = "".join(str(i) for i in src2)
         div = reduce(mul, (grid_shape[i] for i in src2), 1)
 
-        magic_params.append("int magic_%s, int shift_%s, int div_%s" % (idx2, idx2, idx2))
-        magic_values.append(_magic64(div))
-        magic_values.append(div)
+        params.extend(p % idx2 for p in ("int magic_%s", "int shift_%s", "int div_%s"))
+        values.extend(_magic64(div))
+        values.append(div)
 
         magic += r"""
     int idx_{1} = div64(idx_{0}, magic_{2}, shift_{2});
@@ -1069,8 +1035,16 @@ def _get_copy_transpose_kernel(dtype, shape, axes=None):
 
         compound_idx = idx2
 
-    params = _flatten([dim_params, magic_params])
-    values = _flatten([dim_values, magic_values])
+    # Add params for src strides and generate src offset
+    # The param values will be added externally
+    for s in src:
+        params.append("int src_str_%d" % s)
+        src_offset.append("src_str_%d*idx_%d" % (s, s))
+
+    # Add params for dst strides and generate dst offset
+    for d in dst:
+        params.append("int dst_str_%d" % d)
+        dst_offset.append("dst_str_%d*idx_%d" % (d, d))
 
     div64 = r"""
 __device__ __forceinline__ int div64(int value, int magic, int shift)
@@ -1091,7 +1065,6 @@ __device__ __forceinline__ int div64(int value, int magic, int shift)
     return result;
 }
 """
-
     if shared_tile:
         copy_transpose = r"""
 %(common)s
@@ -1110,10 +1083,10 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
     idx_%(src)s = (idx_%(src)s << 5) + tid_x;
     idx_%(dst)s = (idx_%(dst)s << 5) + tid_y;
 
-    const %(type)s* in00 = in   + %(in_offset)s;
-    const %(type)s* in08 = in00 + %(in_dim_j)s*8;
-    const %(type)s* in16 = in08 + %(in_dim_j)s*8;
-    const %(type)s* in24 = in16 + %(in_dim_j)s*8;
+    const %(type)s* in00 = in   + %(src_offset)s;
+    const %(type)s* in08 = in00 + src_str_%(dst)s*8;
+    const %(type)s* in16 = in08 + src_str_%(dst)s*8;
+    const %(type)s* in24 = in16 + src_str_%(dst)s*8;
 
     bool b%(src)s = idx_%(src)s < dim_%(src)s;
 
@@ -1134,10 +1107,10 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
 
     bool b%(dst)s = idx_%(dst)s < dim_%(dst)s;
 
-    %(type)s* out00 = out   + %(out_offset)s;
-    %(type)s* out08 = out00 + %(out_dim_j)s*8;
-    %(type)s* out16 = out08 + %(out_dim_j)s*8;
-    %(type)s* out24 = out16 + %(out_dim_j)s*8;
+    %(type)s* out00 = out   + %(dst_offset)s;
+    %(type)s* out08 = out00 + dst_str_%(src)s*8;
+    %(type)s* out16 = out08 + dst_str_%(src)s*8;
+    %(type)s* out24 = out16 + dst_str_%(src)s*8;
 
     if (idx_%(src)s +  0 < dim_%(src)s && b%(dst)s) *out00 = val00;
     if (idx_%(src)s +  8 < dim_%(src)s && b%(dst)s) *out08 = val08;
@@ -1172,20 +1145,20 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
     %(type)s val16 = 0;
     %(type)s val24 = 0;
 
-    const %(type)s* in00 = in   + %(in_offset)s;
-    const %(type)s* in08 = in00 + %(in_dim_j)s*8;
-    const %(type)s* in16 = in08 + %(in_dim_j)s*8;
-    const %(type)s* in24 = in16 + %(in_dim_j)s*8;
+    const %(type)s* in00 = in   + %(src_offset)s;
+    const %(type)s* in08 = in00 + src_str_%(dst)s*8;
+    const %(type)s* in16 = in08 + src_str_%(dst)s*8;
+    const %(type)s* in24 = in16 + src_str_%(dst)s*8;
 
     if (b%(dst)s_00) val00 = *in00;
     if (b%(dst)s_08) val08 = *in08;
     if (b%(dst)s_16) val16 = *in16;
     if (b%(dst)s_24) val24 = *in24;
 
-    %(type)s* out00 = out   + %(out_offset)s;
-    %(type)s* out08 = out00 + %(out_dim_j)s*8;
-    %(type)s* out16 = out08 + %(out_dim_j)s*8;
-    %(type)s* out24 = out16 + %(out_dim_j)s*8;
+    %(type)s* out00 = out   + %(dst_offset)s;
+    %(type)s* out08 = out00 + dst_str_%(dst)s*8;
+    %(type)s* out16 = out08 + dst_str_%(dst)s*8;
+    %(type)s* out24 = out16 + dst_str_%(dst)s*8;
 
     if (b%(dst)s_00) *out00 = val00;
     if (b%(dst)s_08) *out08 = val08;
@@ -1197,27 +1170,26 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
         common=div64,
         type=_ew_types[dtype[1:]]["type"],
         params=", ".join(params),
-        blk=blk,
-        src=src_contig,
-        dst=dst_contig,
+        blk=blkx_name,
+        src=src_dim,
+        dst=dst_dim,
         magic=magic,
-        in_offset=" + ".join(in_offset),
-        out_offset=" + ".join(out_offset),
-        in_dim_j=in_dim_j,
-        out_dim_j=out_dim_j
+        src_offset=" + ".join(src_offset),
+        dst_offset=" + ".join(dst_offset)
     )
+    # print code
     module = SourceModule(code)
     kernel = module.get_function("copy_transpose")
-    kernel.prepare("PP" + "I"*len(values))
+    kernel.prepare("PP" + "I"*len(params))
 
-    grid_x = grid_shape[src_contig]
-    grid_y = grid_shape[dst_contig]
+    grid_x = grid_shape[src_dim]
+    grid_y = grid_shape[dst_dim]
     for s in src:
-        if s not in (src_contig, dst_contig):
+        if s not in (src_dim, dst_dim):
             grid_x *= grid_shape[s]
 
     kernel.grid = (grid_x, grid_y, 1)
     kernel.block = (32, 8, 1)
-    kernel.args = values
+    kernel.args = tuple(values)
 
     return kernel
