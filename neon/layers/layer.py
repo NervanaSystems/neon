@@ -747,7 +747,7 @@ class Linear(ParameterLayer):
         super(Linear, self).__init__(init, name, "Disabled")
         self.nout = nout
         self.inputs = None
-        self.bsum = bsum and not self.be.deterministic
+        self.bsum = bsum
 
     def __str__(self):
         return "Linear Layer '%s': %d inputs, %d outputs" % (

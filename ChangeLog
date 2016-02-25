@@ -1,5 +1,18 @@
 # ChangeLog
 
+## v1.2.2 (2106-02-24):
+
+### Modifications
+
+* benchmarking enhancements
+* fast dimshuffle, transpose, other kernel speedups and refactoring
+* batch norm states fix, deterministic updates
+* example fixes for fast rcnn and conv_autoencoder
+* image decoding rescaling method fix
+* deserialization fixes for RNN's, refactoring
+* caffe compatibility fixes
+* documentation updates
+
 ## v1.2.1 (2016-02-05):
 
 ### Modifications
