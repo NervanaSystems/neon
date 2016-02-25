@@ -81,7 +81,7 @@ class ImageLoader(NervanaDataIterator):
 
     def __init__(self, repo_dir, inner_size, scale_range, do_transforms=True,
                  rgb=True, shuffle=False, set_name='train', subset_pct=100,
-                 nlabels=1, macro=True, dtype=np.float32,
+                 nlabels=1, macro=True,
                  contrast_range=(100, 100), aspect_ratio=0):
         super(ImageLoader, self).__init__(name=set_name)
         if not rgb:
@@ -107,7 +107,7 @@ class ImageLoader(NervanaDataIterator):
         self.idx = 0
         self.nlabels = nlabels
 
-        self.data = self.be.iobuf(self.npix, dtype=dtype)
+        self.data = self.be.iobuf(self.npix)
 
         # View for subtracting the mean.
         # Find a shape that's fast for ew broadcast
@@ -120,10 +120,10 @@ class ImageLoader(NervanaDataIterator):
         for i in range(2):
             self.buffers.append(self.be.empty(self.data.shape, dtype=np.uint8))
             self.labels.append(self.be.iobuf(nlabels, dtype=np.int32))
-        self.onehot_labels = self.be.iobuf(self.nclass, dtype=dtype)
+        self.onehot_labels = self.be.iobuf(self.nclass)
 
         if self.global_mean is not None:
-            self.mean = self.be.array(self.global_mean, dtype=dtype)
+            self.mean = self.be.array(self.global_mean)
         else:
             # Just center uint8 values if missing global mean.
             self.mean = 127.

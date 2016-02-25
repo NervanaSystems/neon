@@ -1463,19 +1463,19 @@ class BatchNorm(Layer):
     def allocate(self, shared_outputs=None):
         super(BatchNorm, self).allocate(shared_outputs)
         self.y = self.outputs.reshape((self.nfm, -1))
-        self.xvar = self.be.zeros((self.nfm, 1))
+        self.xvar = self.be.zeros((self.nfm, 1), dtype=np.float32)
         if self.allparams is None:
             self.init_params(self.nfm)
         if self.prev_layer is None or self.prev_layer.batch_sum is None:
-            self.xsum = self.be.zeros((self.nfm, 1))
+            self.xsum = self.be.zeros((self.nfm, 1), dtype=np.float32)
             self.compute_batch_sum = True
         else:
             self.xsum = self.prev_layer.batch_sum
             self.compute_batch_sum = False
 
     def init_params(self, dim0):
-        self.beta = self.be.zeros((dim0, 1), **self.get_param_attrs())
-        self.gamma = self.be.ones((dim0, 1), **self.get_param_attrs())
+        self.beta = self.be.zeros((dim0, 1), dtype=np.float32, **self.get_param_attrs())
+        self.gamma = self.be.ones((dim0, 1), dtype=np.float32, **self.get_param_attrs())
         self.params = [self.beta, self.gamma]
 
         self.grad_params = [self.be.zeros_like(p) for p in self.params]

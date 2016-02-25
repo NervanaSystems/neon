@@ -66,9 +66,9 @@ def _get_bn_fprop_kernel(dtype, threads, compute_capability):
 %(common)s
 
 __global__ void batchnorm_fprop (
-    %(type)s* y_out, %(type)s* xvar_out, %(type)s* gmean_out, %(type)s* gvar_out,
-    const %(type)s* x_in, const float* xsum_in, const %(type)s* gmean_in,
-    const %(type)s* gvar_in, const %(type)s* gamma_in, const %(type)s* beta_in,
+    %(type)s* y_out, float* xvar_out, float* gmean_out, float* gvar_out,
+    const %(type)s* x_in, const float* xsum_in, const float* gmean_in,
+    const float* gvar_in, const float* gamma_in, const float* beta_in,
     const float eps, const float rho, const float accumbeta, const int N, const int relu)
 {
     %(share)s
@@ -94,22 +94,17 @@ __global__ void batchnorm_fprop (
     }
     %(red)s
 
-    float gamma = %(cvt)s(__ldg(gamma_in + bid));
-    float beta  = %(cvt)s(__ldg(beta_in  + bid));
+    float gamma = __ldg(gamma_in + bid);
+    float beta  = __ldg(beta_in  + bid);
 
     if ( tid == 0 )
     {
-        float gmean = %(cvt)s(__ldg(gmean_in + bid));
-        float gvar  = %(cvt)s(__ldg(gvar_in  + bid));
+        float gmean = __ldg(gmean_in + bid);
+        float gvar  = __ldg(gvar_in  + bid);
 
-        gmean = gmean * rho + (1.0f - rho) * xmean;
-        gvar  = gvar  * rho + (1.0f - rho) * xvar;
-        %(xvar_out)s
-        %(gmean_out)s
-        %(gvar_out)s
-        *(xvar_out  + bid) = xvar_val;
-        *(gmean_out + bid) = gmean_val;
-        *(gvar_out  + bid) = gvar_val;
+        *(xvar_out  + bid) = xvar;
+        *(gmean_out + bid) = gmean * rho + (1.0f - rho) * xmean;
+        *(gvar_out  + bid) = gvar  * rho + (1.0f - rho) * xvar;
     }
 
     float xvar_rcp_sqrt = 1.0f / sqrtf(xvar + eps);
@@ -183,9 +178,6 @@ __global__ void batchnorm_fprop (
         "threads"   : threads,
         "type"      : _ew_types[dtype]["type"],
         "cvt"       : _ew_types[dtype]["cvt"],
-        "xvar_out"  : out_code.format("xvar_val",  "xvar"),
-        "gmean_out" : out_code.format("gmean_val", "gmean"),
-        "gvar_out"  : out_code.format("gvar_val",  "gvar"),
         "y0_out"    : out_code.format("y0_val",     "y0"),
         "y1_out"    : out_code.format("y1_val",     "y1"),
         "y2_out"    : out_code.format("y2_val",     "y2"),
@@ -253,9 +245,9 @@ def _get_bn_bprop_kernel(dtype, threads, compute_capability):
 %(common)s
 
 __global__ void batchnorm_bprop (
-    %(type)s* delta_out, %(type)s* grad_gamma_out, %(type)s* grad_beta_out,
+    %(type)s* delta_out, float* grad_gamma_out, float* grad_beta_out,
     const %(type)s* delta_in, const %(type)s* x_in, const float* xsum_in,
-    const %(type)s* xvar_in, const %(type)s* gamma_in,
+    const float* xvar_in, const float* gamma_in,
     const float eps, const int N)
 {
     %(share)s
@@ -269,8 +261,8 @@ __global__ void batchnorm_bprop (
     const %(type)s* d_in0 = delta_in + offset + tid;
 
     float xmean = __ldg(xsum_in  + bid) * rcpN;
-    float xvar  = %(cvt)s(__ldg(xvar_in  + bid));
-    float gamma = %(cvt)s(__ldg(gamma_in + bid));
+    float xvar  = __ldg(xvar_in  + bid);
+    float gamma = __ldg(gamma_in + bid);
 
     float xvar_rcp_sqrt = 1.0f / sqrtf(xvar + eps);
     float grad_gamma    = 0.0f;
@@ -292,10 +284,8 @@ __global__ void batchnorm_bprop (
 
     if ( tid == 0 )
     {
-        %(grad_gamma_out)s
-        %(grad_beta_out)s
-        *(grad_gamma_out + bid) = grad_gamma_val;
-        *(grad_beta_out  + bid) = grad_beta_val;
+        *(grad_gamma_out + bid) = grad_gamma;
+        *(grad_beta_out  + bid) = grad_beta;
     }
 
     int start = N - (THREADS*4 - tid);
@@ -361,8 +351,6 @@ __global__ void batchnorm_bprop (
         "threads"        : threads,
         "type"           : _ew_types[dtype]["type"],
         "cvt"            : _ew_types[dtype]["cvt"],
-        "grad_gamma_out" : out_code.format("grad_gamma_val", "grad_gamma"),
-        "grad_beta_out"  : out_code.format("grad_beta_val",  "grad_beta"),
         "delta0_out"     : out_code.format("delta0_val",     "delta0"),
         "delta1_out"     : out_code.format("delta1_val",     "delta1"),
         "delta2_out"     : out_code.format("delta2_val",     "delta2"),
