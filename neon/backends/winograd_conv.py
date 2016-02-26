@@ -786,7 +786,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
 
     def execute(self, repeat=1, unbind=True):
 
-        image_kernel  = _get_fprop_image_trans_4x4_kernel(self.dtype_str)
+        image_kernel  = _get_xprop_image_trans_4x4_kernel(self.dtype_str)
         filter_kernel = self.filter_func(self.dtype_str)
         kernel        = kernel_specs.get_kernel(self.kernel[0] + self.mode)
 
@@ -1619,7 +1619,7 @@ __global__ void update_image_trans(
 
 
 @context_dependent_memoize
-def _get_fprop_image_trans_4x4_kernel(dtype):
+def _get_xprop_image_trans_4x4_kernel(dtype):
 
     code = r"""
 %(common)s
@@ -1641,7 +1641,7 @@ __device__ __forceinline__ int div64(int value, int magic, int shift)
     return result;
 }
 
-__global__ void fprop_image_trans_4x4(
+__global__ void xprop_image_trans_4x4(
     %(type)s* Out, const %(type)s* In,
     int Y, int X, int N, int pad_y, int pad_x,
     int GXS, int GYS2, int GXS2, int magic_GXS2, int shift_GXS2,
@@ -1707,42 +1707,80 @@ __global__ void fprop_image_trans_4x4(
     }
 
     float T[6][6];
+    float rcp4  = 1.0f/4.0f;
+    float rcp6  = 1.0f/6.0f;
+    float rcp12 = 1.0f/12.0f;
+    float rcp24 = 1.0f/24.0f;
 
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = __fmaf_rn(I[2][i], -4.0f, I[4][i]);
-        float t1 = __fmaf_rn(I[1][i], -4.0f, I[3][i]);
-        float t2 = I[4][i] - I[2][i];
-        float t3 = I[3][i] - I[1][i];
+        float t0 = __fmaf_rn(I[2][i], 4.0f, -I[4][i]) * rcp6;
+        float t1 = __fmaf_rn(I[1][i], 4.0f, -I[3][i]) * rcp6;
+        float t2 = (I[4][i] - I[2][i]) * rcp24;
+        float t3 = (I[3][i] - I[1][i]) * rcp12;
         float t4 = __fmaf_rn(I[2][i], -5.0f, I[4][i]);
         float t5 = __fmaf_rn(I[3][i], -5.0f, I[5][i]);
 
-        T[0][i] = __fmaf_rn(I[0][i], 4.0f, t4);
+        T[0][i] = __fmaf_rn(t4, rcp4, I[0][i]);
         T[1][i] = t0 + t1;
         T[2][i] = t0 - t1;
-        T[3][i] = __fmaf_rn(t3,  2.0f, t2);
-        T[4][i] = __fmaf_rn(t3, -2.0f, t2);
+        T[3][i] = t2 + t3;
+        T[4][i] = t2 - t3;
         T[5][i] = __fmaf_rn(I[1][i], 4.0f, t5);
     }
 
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = __fmaf_rn(T[i][2], -4.0f, T[i][4]);
-        float t1 = __fmaf_rn(T[i][1], -4.0f, T[i][3]);
-        float t2 = T[i][4] - T[i][2];
-        float t3 = T[i][3] - T[i][1];
+        float t0 = __fmaf_rn(T[i][2], 4.0f, -T[i][4]) * rcp6;
+        float t1 = __fmaf_rn(T[i][1], 4.0f, -T[i][3]) * rcp6;
+        float t2 = (T[i][4] - T[i][2]) * rcp24;
+        float t3 = (T[i][3] - T[i][1]) * rcp12;
         float t4 = __fmaf_rn(T[i][2], -5.0f, T[i][4]);
         float t5 = __fmaf_rn(T[i][3], -5.0f, T[i][5]);
 
-        Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(T[i][0], 4.0f, t4));
+        Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(t4, rcp4, T[i][0]));
         Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(t0 + t1);
         Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(t0 - t1);
-        Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(t3,  2.0f, t2));
-        Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(t3, -2.0f, t2));
+        Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(t2 + t3);
+        Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(t2 - t3);
         Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(__fmaf_rn(T[i][1], 4.0f, t5));
     }
+
+    //float T[6][6];
+    //#pragma unroll
+    //for (int i = 0; i < 6; i++)
+    //{
+    //    float t0 = __fmaf_rn(I[2][i], -4.0f, I[4][i]);
+    //    float t1 = __fmaf_rn(I[1][i], -4.0f, I[3][i]);
+    //    float t2 = I[4][i] - I[2][i];
+    //    float t3 = I[3][i] - I[1][i];
+    //    float t4 = __fmaf_rn(I[2][i], -5.0f, I[4][i]);
+    //    float t5 = __fmaf_rn(I[3][i], -5.0f, I[5][i]);
+    //    T[0][i] = __fmaf_rn(I[0][i], 4.0f, t4);
+    //    T[1][i] = t0 + t1;
+    //    T[2][i] = t0 - t1;
+    //    T[3][i] = __fmaf_rn(t3,  2.0f, t2);
+    //    T[4][i] = __fmaf_rn(t3, -2.0f, t2);
+    //    T[5][i] = __fmaf_rn(I[1][i], 4.0f, t5);
+    //}
+    //#pragma unroll
+    //for (int i = 0; i < 6; i++)
+    //{
+    //    float t0 = __fmaf_rn(T[i][2], -4.0f, T[i][4]);
+    //    float t1 = __fmaf_rn(T[i][1], -4.0f, T[i][3]);
+    //    float t2 = T[i][4] - T[i][2];
+    //    float t3 = T[i][3] - T[i][1];
+    //    float t4 = __fmaf_rn(T[i][2], -5.0f, T[i][4]);
+    //    float t5 = __fmaf_rn(T[i][3], -5.0f, T[i][5]);
+    //    Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(T[i][0], 4.0f, t4));
+    //    Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(t0 + t1);
+    //    Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(t0 - t1);
+    //    Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(t3,  2.0f, t2));
+    //    Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(t3, -2.0f, t2));
+    //    Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(__fmaf_rn(T[i][1], 4.0f, t5));
+    //}
 }
 """
     common  = _common_round["nearest"].get(dtype, "")
@@ -1762,7 +1800,7 @@ __global__ void fprop_image_trans_4x4(
     # exit()
 
     module = SourceModule(code)
-    kernel = module.get_function("fprop_image_trans_4x4")
+    kernel = module.get_function("xprop_image_trans_4x4")
     kernel.prepare("PPIIIIIIIIIIIIIIIIIIIIIII")
     return kernel
 
@@ -1811,41 +1849,69 @@ __global__ void fprop_filter_trans_4x4(
     I[2][1] = valid_k ? %(cvt_in)s(__ldg(In + f_r2s1)) : 0.0f;
     I[2][2] = valid_k ? %(cvt_in)s(__ldg(In + f_r2s2)) : 0.0f;
 
-    float rcp4  = 1.0f/4.0f;
-    float rcp6  = 1.0f/6.0f;
-    float rcp12 = 1.0f/12.0f;
-    float rcp24 = 1.0f/24.0f;
+
     float T[6][3];
 
     #pragma unroll
     for (int i = 0; i < 3; i++)
     {
-        float t0 = rcp6 * I[2][i];
-        float t1 = __fmaf_rn(I[0][i], -rcp6, -t0);
-        float t2 = __fmaf_rn(I[0][i], rcp24,  t0);
+        float t0 = I[0][i] + I[2][i];
+        float t1 = __fmaf_rn(I[2][i], 4.0f, I[0][i]);
 
-        T[0][i] = rcp4 * I[0][i];
-        T[1][i] = __fmaf_rn(I[1][i], -rcp6,  t1);
-        T[2][i] = __fmaf_rn(I[1][i],  rcp6,  t1);
-        T[3][i] = __fmaf_rn(I[1][i],  rcp12, t2);
-        T[4][i] = __fmaf_rn(I[1][i], -rcp12, t2);
+        T[0][i] = I[0][i];
+        T[1][i] = t0 + I[1][i];
+        T[2][i] = t0 - I[1][i];
+        T[3][i] = __fmaf_rn(I[1][i],  2.0f, t1);
+        T[4][i] = __fmaf_rn(I[1][i], -2.0f, t1);
         T[5][i] = I[2][i];
     }
 
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = rcp6 * T[i][2];
-        float t1 = __fmaf_rn(T[i][0], -rcp6, -t0);
-        float t2 = __fmaf_rn(T[i][0], rcp24,  t0);
+        float t0 = T[i][0] + T[i][2];
+        float t1 = __fmaf_rn(T[i][2], 4.0f, T[i][0]);
 
-        Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(rcp4 * T[i][0]);
-        Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp6,  t1));
-        Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp6,  t1));
-        Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp12, t2));
-        Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp12, t2));
+        Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(T[i][0]);
+        Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(t0 + T[i][1]);
+        Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(t0 - T[i][1]);
+        Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  2.0f, t1));
+        Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -2.0f, t1));
         Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(T[i][2]);
     }
+
+    //float rcp4  = 1.0f/4.0f;
+    //float rcp6  = 1.0f/6.0f;
+    //float rcp12 = 1.0f/12.0f;
+    //float rcp24 = 1.0f/24.0f;
+    //float T[6][3];
+    //#pragma unroll
+    //for (int i = 0; i < 3; i++)
+    //{
+    //    float t0 = rcp6 * I[2][i];
+    //    float t1 = __fmaf_rn(I[0][i], -rcp6, -t0);
+    //    float t2 = __fmaf_rn(I[0][i], rcp24,  t0);
+    //    T[0][i] = rcp4 * I[0][i];
+    //    T[1][i] = __fmaf_rn(I[1][i], -rcp6,  t1);
+    //    T[2][i] = __fmaf_rn(I[1][i],  rcp6,  t1);
+    //    T[3][i] = __fmaf_rn(I[1][i],  rcp12, t2);
+    //    T[4][i] = __fmaf_rn(I[1][i], -rcp12, t2);
+    //    T[5][i] = I[2][i];
+    //}
+    //#pragma unroll
+    //for (int i = 0; i < 6; i++)
+    //{
+    //    float t0 = rcp6 * T[i][2];
+    //    float t1 = __fmaf_rn(T[i][0], -rcp6, -t0);
+    //    float t2 = __fmaf_rn(T[i][0], rcp24,  t0);
+    //    Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(rcp4 * T[i][0]);
+    //    Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp6,  t1));
+    //    Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp6,  t1));
+    //    Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp12, t2));
+    //    Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp12, t2));
+    //    Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(T[i][2]);
+    //}
+
 }
 """
     common  = _common_round["nearest"].get(dtype, "")
@@ -1916,41 +1982,68 @@ __global__ void bprop_filter_trans_4x4(
     I[2][1] = valid_ck ? %(cvt_in)s(__ldg(F + f_r2s1)) : 0.0f;
     I[2][2] = valid_ck ? %(cvt_in)s(__ldg(F + f_r2s2)) : 0.0f;
 
-    float rcp4  = 1.0f/4.0f;
-    float rcp6  = 1.0f/6.0f;
-    float rcp12 = 1.0f/12.0f;
-    float rcp24 = 1.0f/24.0f;
+
     float T[6][3];
 
     #pragma unroll
     for (int i = 0; i < 3; i++)
     {
-        float t0 = rcp6 * I[2][i];
-        float t1 = __fmaf_rn(I[0][i], -rcp6, -t0);
-        float t2 = __fmaf_rn(I[0][i], rcp24,  t0);
+        float t0 = I[0][i] + I[2][i];
+        float t1 = __fmaf_rn(I[2][i], 4.0f, I[0][i]);
 
-        T[0][i] = rcp4 * I[0][i];
-        T[1][i] = __fmaf_rn(I[1][i], -rcp6,  t1);
-        T[2][i] = __fmaf_rn(I[1][i],  rcp6,  t1);
-        T[3][i] = __fmaf_rn(I[1][i],  rcp12, t2);
-        T[4][i] = __fmaf_rn(I[1][i], -rcp12, t2);
+        T[0][i] = I[0][i];
+        T[1][i] = t0 + I[1][i];
+        T[2][i] = t0 - I[1][i];
+        T[3][i] = __fmaf_rn(I[1][i],  2.0f, t1);
+        T[4][i] = __fmaf_rn(I[1][i], -2.0f, t1);
         T[5][i] = I[2][i];
     }
 
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = rcp6 * T[i][2];
-        float t1 = __fmaf_rn(T[i][0], -rcp6, -t0);
-        float t2 = __fmaf_rn(T[i][0], rcp24,  t0);
+        float t0 = T[i][0] + T[i][2];
+        float t1 = __fmaf_rn(T[i][2], 4.0f, T[i][0]);
 
-        share[ks][cs + 16*(i*6 + 0)] = %(cvt_out)s(rcp4 * T[i][0]);
-        share[ks][cs + 16*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp6,  t1));
-        share[ks][cs + 16*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp6,  t1));
-        share[ks][cs + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp12, t2));
-        share[ks][cs + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp12, t2));
+        share[ks][cs + 16*(i*6 + 0)] = %(cvt_out)s(T[i][0]);
+        share[ks][cs + 16*(i*6 + 1)] = %(cvt_out)s(t0 + T[i][1]);
+        share[ks][cs + 16*(i*6 + 2)] = %(cvt_out)s(t0 - T[i][1]);
+        share[ks][cs + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  2.0f, t1));
+        share[ks][cs + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -2.0f, t1));
         share[ks][cs + 16*(i*6 + 5)] = %(cvt_out)s(T[i][2]);
     }
+
+    //float rcp4  = 1.0f/4.0f;
+    //float rcp6  = 1.0f/6.0f;
+    //float rcp12 = 1.0f/12.0f;
+    //float rcp24 = 1.0f/24.0f;
+    //float T[6][3];
+    //#pragma unroll
+    //for (int i = 0; i < 3; i++)
+    //{
+    //    float t0 = rcp6 * I[2][i];
+    //    float t1 = __fmaf_rn(I[0][i], -rcp6, -t0);
+    //    float t2 = __fmaf_rn(I[0][i], rcp24,  t0);
+    //    T[0][i] = rcp4 * I[0][i];
+    //    T[1][i] = __fmaf_rn(I[1][i], -rcp6,  t1);
+    //    T[2][i] = __fmaf_rn(I[1][i],  rcp6,  t1);
+    //    T[3][i] = __fmaf_rn(I[1][i],  rcp12, t2);
+    //    T[4][i] = __fmaf_rn(I[1][i], -rcp12, t2);
+    //    T[5][i] = I[2][i];
+    //}
+    //#pragma unroll
+    //for (int i = 0; i < 6; i++)
+    //{
+    //    float t0 = rcp6 * T[i][2];
+    //    float t1 = __fmaf_rn(T[i][0], -rcp6, -t0);
+    //    float t2 = __fmaf_rn(T[i][0], rcp24,  t0);
+    //    share[ks][cs + 16*(i*6 + 0)] = %(cvt_out)s(rcp4 * T[i][0]);
+    //    share[ks][cs + 16*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp6,  t1));
+    //    share[ks][cs + 16*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp6,  t1));
+    //    share[ks][cs + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp12, t2));
+    //    share[ks][cs + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp12, t2));
+    //    share[ks][cs + 16*(i*6 + 5)] = %(cvt_out)s(T[i][2]);
+    //}
 
     __syncthreads();
 
