@@ -727,6 +727,7 @@ class NervanaGPU(Backend):
         self.compute_capability = drv.Device(self.device_id).compute_capability()
         if self.compute_capability[0] < 5:
             self.use_cudac_kernels = True
+            self.have_winograd = False
             self.cublas_handle = cublas.cublasCreate()
 
             logger.warn("Neon is highly optimized for Maxwell GPUs. "
@@ -736,13 +737,8 @@ class NervanaGPU(Backend):
                         "info@nervanasys.com")
         else:
             self.use_cudac_kernels = False
-
-        try:
-            from winograd.convolution import FpropWinograd, BpropWinograd, UpdateWinograd
             logger.debug("Imported winograd kernels")
             self.have_winograd = True
-        except ImportError:
-            self.have_winograd = False
 
 
     def scratch_buffer(self, size):
