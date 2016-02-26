@@ -50,7 +50,6 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        scale_range=(256, 384),
-                       dtype=args.datatype,
                        subset_pct=args.subset_pct)
 train = ImageLoader(set_name='train', **img_set_options)
 test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)

@@ -51,7 +51,7 @@ def allclose_with_out(x, y, atol=0.0, rtol=1.0e-5):
               % (np.median(dd), np.min(dd), np.max(dd), atol)
         amax = np.argmax(dd)
         print 'worst case: %e %e' % (x.flat[amax], y.flat[amax])
-        dd = np.abs(np.divide(dd, y))
+        dd = np.minimum(np.abs(dd - atol), 0) / np.abs(y)
         print 'rel errors: %e [%e, %e] Rel Thresh = %e' \
               % (np.median(dd), np.min(dd), np.max(dd), rtol)
         amax = np.argmax(dd)

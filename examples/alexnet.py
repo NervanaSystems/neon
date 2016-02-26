@@ -37,7 +37,6 @@ args = parser.parse_args()
 # setup data provider
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
-                       dtype=args.datatype,
                        subset_pct=args.subset_pct)
 train = ImageLoader(set_name='train', scale_range=(256, 384), shuffle=True, **img_set_options)
 test = ImageLoader(set_name='validation', scale_range=(256, 256), do_transforms=False,

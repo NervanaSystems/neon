@@ -43,8 +43,8 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                                       random number generator of the instantiated backend.
                                       Defaults to None, which doesn't explicitly seed (so each run
                                       will be different)
-        dataype (dtype): Default tensor data type. CPU backend supports np.float64, np.float32 and
-                         np.float16; GPU backend supports np.float32 and np.float16.
+        datatype (dtype): Default tensor data type. CPU backend supports np.float64, np.float32,
+                          and np.float16; GPU backend supports np.float32 and np.float16.
         batch_size (int): Set the size the data batches.
         stochastic_round (int/bool, optional): Set this to True or an integer to implent
                                                stochastic rounding. If this is False rounding will
