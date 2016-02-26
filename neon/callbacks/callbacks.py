@@ -18,6 +18,7 @@ import inspect
 import logging
 import numpy as np
 import os
+import signal
 import sys
 import time
 from timeit import default_timer
@@ -111,6 +112,7 @@ class Callbacks(NervanaObject):
                 ecb = MetricCallback(eval_set, metric, eval_freq)
                 self.add_callback(ecb, insert_pos=None)
 
+        self.save_path = save_path
         if save_path:
             serialize_interval = serialize if serialize > 1 else 1
             scb = SerializeModelCallback(save_path, serialize_interval, history)
@@ -226,6 +228,9 @@ class Callbacks(NervanaObject):
         if self.model_file:
             self.model().load_params(self.model_file)
 
+        # setup an interrupt handler
+        signal.signal(signal.SIGINT, self.on_sigint_catch)
+
         for c in self.callbacks:
             c.on_train_begin(self.callback_data, self.model(), epochs)
 
@@ -233,6 +238,9 @@ class Callbacks(NervanaObject):
         """
         Call all registered callbacks' on_train_end functions
         """
+        # reset the signal handler
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
         for c in self.callbacks:
             c.on_train_end(self.callback_data, self.model())
 
@@ -292,6 +300,24 @@ class Callbacks(NervanaObject):
 
         # keep track of the number of mb per epoch, since they vary
         self.epoch_minibatches = minibatch + 1
+
+    def on_sigint_catch(self, epoch, minibatch):
+        """
+        Callback to handle SIGINT events
+
+        Arguments:
+            epoch (int): index of current epoch
+            minibatch (int): index of minibatch that is ending
+        """
+        # restore the orignal handler
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+
+        # save the model
+        if self.save_path is not None:
+            save_obj(self.model().serialize(keep_states=True), self.save_path)
+            raise KeyboardInterrupt('Checkpoint file saved to {0}'.format(self.save_path))
+        else:
+            raise KeyboardInterrupt
 
 
 class Callback(NervanaObject):
