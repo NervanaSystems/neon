@@ -224,14 +224,17 @@ class GradientDescentMomentum(Optimizer):
 
         for (param, grad), states in param_list:
             param.rounding = self.stochastic_round
-            if len(states) == 0:
+            if len(states) == 0 and self.momentum_coef != 0:
                 states.append(self.be.zeros_like(grad))
             grad = grad / self.be.bsz
             grad = self.clip_gradient_value(grad, self.gradient_clip_value)
 
-            velocity = states[0]
-            velocity[:] = velocity * self.momentum_coef \
-                - lrate * (scale_factor * grad + self.wdecay * param)
+            if self.momentum_coef == 0:
+                velocity = - lrate * (scale_factor * grad + self.wdecay * param)
+            else:
+                velocity = states[0]
+                velocity[:] = velocity * self.momentum_coef \
+                    - lrate * (scale_factor * grad + self.wdecay * param)
             param[:] = param + velocity
 
 
