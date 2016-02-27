@@ -695,7 +695,9 @@ class UpdateWinograd(KernelGroup):
             self.kernel[3:8] = (None,) * 5
 
     def __str__(self):
-        return "UpdateWinograd " + self.kernel[0]
+        N, C, K, H, W, P, Q, pad_h, pad_w = self.params
+        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d)" % (self.kernel[0], N, C, K, H, W)
+
 
 class XpropWinograd_4x4_3x3(KernelGroup):
 
@@ -1155,7 +1157,8 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
             self.delta_args[2:5] = (None,) * 3
 
     def __str__(self):
-        return "UpdateWinograd " + self.kernel[0]
+        N, C, K, H, W, P, Q, pad_h, pad_w = self.params
+        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d)" % (self.kernel[0], N, C, K, H, W)
 
 
 @context_dependent_memoize

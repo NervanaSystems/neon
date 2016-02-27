@@ -422,9 +422,11 @@ class ConvLayer(Layer):
                                        FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
 
             # Temp for now till we can autotune
-            # 4 is always faster except for small N
             # 2 is safer for fp16 without batchnorm
-            winograd = 4 if self.dtype == np.float32 else 2
+            if (dtype == np.float32 and lib.enable_winograd != 2) or lib.enable_winograd == 4:
+                winograd = 4
+            else:
+                winograd = 2
 
             if N >=64 and C < 8:
                 self.fprop_kernels = convolution.FpropDirect(
