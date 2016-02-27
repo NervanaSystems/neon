@@ -16,6 +16,7 @@
 Our GPU based backend interface and tensor data structure.
 """
 
+import os
 import sys
 import numpy as np
 import pycuda.driver as drv
@@ -662,7 +663,9 @@ class NervanaGPU(Backend):
                  scratch_size=0,
                  hist_bins=64,
                  hist_offset=-48,
-                 compat_mode=None):
+                 compat_mode=None,
+                 enable_winograd=True,
+                 cache_dir=os.path.join(os.path.expanduser('~'), 'nervana/cache')):
         if default_dtype not in [np.float16, np.float32]:
             raise ValueError('Default data type for nervanagpu '
                              'backend must be float16 or 32')
@@ -727,7 +730,6 @@ class NervanaGPU(Backend):
         self.compute_capability = drv.Device(self.device_id).compute_capability()
         if self.compute_capability[0] < 5:
             self.use_cudac_kernels = True
-            self.have_winograd = False
             self.cublas_handle = cublas.cublasCreate()
 
             logger.warn("Neon is highly optimized for Maxwell GPUs. "
@@ -737,9 +739,11 @@ class NervanaGPU(Backend):
                         "info@nervanasys.com")
         else:
             self.use_cudac_kernels = False
-            logger.debug("Imported winograd kernels")
-            self.have_winograd = True
 
+        self.enable_winograd = enable_winograd
+        self.cache_dir = cache_dir
+        if not os.path.isdir(self.cache_dir):
+            os.makedirs(self.cache_dir)
 
     def scratch_buffer(self, size):
 

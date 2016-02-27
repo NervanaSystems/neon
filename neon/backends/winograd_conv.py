@@ -15,6 +15,7 @@
 Python code to wrap convolution kernels
 """
 
+import sys
 import logging
 import numpy as np
 import pycuda.driver as drv
@@ -25,8 +26,6 @@ from neon.backends.cuda_templates import _common_round, _common_fp16_to_fp32, _e
 import os.path
 import shelve
 from convolution import KernelGroup, _get_shuffle_kernel, _get_sm_count, _ceil_div, _magic64, _magic32, _flatten, _fp_convert, _closest_divisor
-
-_autotune_db_file = os.path.join(os.path.dirname(__file__), "autotune.db")
 
 
 logger = logging.getLogger(__name__)
@@ -46,6 +45,7 @@ class XpropWinograd(KernelGroup):
 
         self.autotune_key = " ".join(str(x) for x in (op + "_2x2_3x3",
            SMs, dtype.itemsize, N, C, K, H, W, P, Q))
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 10 Tflops on 24 SMs
@@ -69,7 +69,7 @@ class XpropWinograd(KernelGroup):
                     filter_extern = True
                 self.initialized = True
             else:
-                autotune_db = shelve.open(_autotune_db_file)
+                autotune_db = shelve.open(self.autotune_db_file)
 
                 if self.autotune_key in autotune_db:
                     filter_extern = autotune_db[self.autotune_key]
@@ -171,7 +171,7 @@ class XpropWinograd(KernelGroup):
         # for res in results:
         #     print res
 
-        autotune_db = shelve.open(_autotune_db_file)
+        autotune_db = shelve.open(self.autotune_db_file)
         autotune_db[self.autotune_key] = external
         autotune_db.close()
 
@@ -355,6 +355,7 @@ class UpdateWinograd(KernelGroup):
 
         self.autotune_key = [str(x) for x in ("update_3x3_2x2",
            SMs, 0, dtype.itemsize, N, C, K, H, W, P, Q)]
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
 
         self.params = (N, C, K, H, W, P, Q, pad_h, pad_w)
         self.init(self.params)
@@ -387,7 +388,7 @@ class UpdateWinograd(KernelGroup):
         if autotune:
             strideY, strideX, external = autotune
         else:
-            autotune_db  = shelve.open(_autotune_db_file)
+            autotune_db  = shelve.open(self.autotune_db_file)
             autotune_key = " ".join(self.autotune_key)
 
             if autotune_key in autotune_db:
@@ -571,10 +572,16 @@ class UpdateWinograd(KernelGroup):
         small_set = gys * gxs <= 512
 
         results = []
+        sys.stdout.write("Autotune " + str(self))
+        progress = 0
         for threshold in (True, False):
             for external in modes:
                 for strideY in range(1, self.GYS+1):
                     for strideX in range(1, self.GXS+1):
+                        if progress % 32 == 0:
+                            sys.stdout.write('.')
+                            sys.stdout.flush()
+                        progress += 1
 
                         # CRSK copies in determ mode
                         outputs = strideY * strideX
@@ -608,13 +615,14 @@ class UpdateWinograd(KernelGroup):
             # if we got any results, no need to disable the filter
             if len(results) > 0:
                 break
+        sys.stdout.write('\n')
 
         results.sort()
         settings = results[0][1]
         # for res in results[0:10]:
         #     print res
 
-        autotune_db = shelve.open(_autotune_db_file)
+        autotune_db = shelve.open(self.autotune_db_file)
         autotune_db[autotune_key] = settings
 
         # add a copy if this layer has small strides
@@ -867,6 +875,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
 
         self.autotune_key = [str(x) for x in ("update_3x3_4x4",
            SMs, 0, dtype.itemsize, N, C, K, H, W, P, Q)]
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
 
         self.params = (N, C, K, H, W, P, Q, pad_h, pad_w)
         self.init(self.params)
@@ -966,7 +975,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         if autotune:
             strideYXN = autotune
         else:
-            autotune_db  = shelve.open(_autotune_db_file)
+            autotune_db  = shelve.open(self.autotune_db_file)
             autotune_key = " ".join(self.autotune_key)
 
             if autotune_key in autotune_db:
@@ -1032,8 +1041,14 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         small_set   = self.YXN2 < 512
         YXN2        = float(self.YXN2)
         results     = []
+        sys.stdout.write("Autotune " + str(self))
+        progress = 0
         for threshold in (True, False):
             for strideYXN in range(1, self.maxYXN2 + 1):
+                if progress % 32 == 0:
+                    sys.stdout.write('.')
+                    sys.stdout.flush()
+                progress += 1
                 # minimal occupancy filter
                 blocks  = self.blocksCK * strideYXN
                 # gemm loop count filter
@@ -1062,13 +1077,14 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
             # if we got any results, no need to disable the filter
             if len(results) > 0:
                 break
+        sys.stdout.write('\n')
 
         results.sort()
         strideYXN = results[0][1]
         # for res in results[0:10]:
         #     print res
 
-        autotune_db = shelve.open(_autotune_db_file)
+        autotune_db = shelve.open(self.autotune_db_file)
         autotune_db[autotune_key] = strideYXN
 
         # add a copy if this layer has small strides
