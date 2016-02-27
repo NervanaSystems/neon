@@ -1889,7 +1889,7 @@ class Backend(object):
             pad_w (int, optional): amount of zero-padding around the width edge
                                    Defaults to 0.
 
-            str_d (int, optional): factor to step the filters by in the fm
+            str_j (int, optional): factor to step the filters by in the fm
                                    pooling window direction.  Defaults to 1
             str_d (int, optional): factor to step the filters by in the depth
                                    direction.  Defaults to 1
