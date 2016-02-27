@@ -38,12 +38,6 @@ using std::stringstream;
 using std::vector;
 using std::map;
 
-#define INDEX_FILE_NAME     "index.csv"
-#define ARCHIVE_DIR_SUFFIX  "-ingested"
-#define ARCHIVE_FILE_PREFIX "archive-"
-#define META_FILE_NAME      "archive-meta.csv"
-#define ARCHIVE_ITEM_COUNT  4096
-
 class IndexElement {
 public:
     IndexElement() {
@@ -119,10 +113,10 @@ private:
 
 class Reader {
 public:
-    Reader(int batchSize, const char* repoDir,
-           bool shuffle, bool repeatShuffle, int subsetPercent)
-    : _batchSize(batchSize), _repoDir(repoDir),
-      _shuffle(shuffle), _repeatShuffle(repeatShuffle),
+    Reader(int batchSize, const char* repoDir, const char* indexFile,
+           bool shuffle, bool reshuffle, int subsetPercent)
+    : _batchSize(batchSize), _repoDir(repoDir), _indexFile(indexFile),
+      _shuffle(shuffle), _reshuffle(reshuffle),
       _subsetPercent(subsetPercent),
       _itemCount(0)  {
     }
@@ -153,8 +147,9 @@ protected:
     // Number of items to read at a time.
     int                         _batchSize;
     string                      _repoDir;
+    string                      _indexFile;
     bool                        _shuffle;
-    bool                        _repeatShuffle;
+    bool                        _reshuffle;
     int                         _subsetPercent;
     // Total number of items.
     int                         _itemCount;
@@ -162,9 +157,10 @@ protected:
 
 class FileReader : public Reader {
 public:
-    FileReader(int* itemCount, int batchSize, const char* repoDir,
+    FileReader(int* itemCount, int batchSize,
+               const char* repoDir, const char* indexFile,
                bool shuffle)
-    : Reader(batchSize, repoDir, shuffle, false, 100), _itemIdx(0) {
+    : Reader(batchSize, repoDir, indexFile, shuffle, false, 100), _itemIdx(0) {
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
@@ -266,7 +262,7 @@ private:
     }
 
     void loadIndex() {
-        string indexFile = _repoDir + '/' + INDEX_FILE_NAME;
+        string indexFile = _repoDir + '/' + _indexFile;
         ifstream ifs(indexFile);
         if (!ifs) {
             stringstream ss;

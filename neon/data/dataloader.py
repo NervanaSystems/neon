@@ -43,7 +43,8 @@ class DataLoader(NervanaDataIterator):
     """
 
     def __init__(self, repo_dir, media_params,
-                 datum_size, target_size,
+                 target_size,
+                 index_file='index.csv',
                  shuffle=False, reshuffle=False,
                  datum_dtype=np.uint8, target_dtype=np.int32,
                  onehot=True, nclasses=None, subset_percent=100,
@@ -52,6 +53,7 @@ class DataLoader(NervanaDataIterator):
             raise IOError('Directory not found: %s' % repo_dir)
         if onehot is True and nclasses is None:
             raise ValueError('nclasses must be specified for one-hot labels')
+        repo_dir = repo_dir.rstrip('/')
         self.repo_dir = repo_dir
         self.item_count = ct.c_int(0)
         self.bsz = self.be.bsz
@@ -59,8 +61,9 @@ class DataLoader(NervanaDataIterator):
         self.start_idx = 0
         self.media_params = media_params
         self.shape = media_params.get_shape()
-        self.datum_size = datum_size
+        self.datum_size = media_params.datum_size()
         self.target_size = target_size
+        self.index_file = index_file
         self.shuffle = shuffle
         self.reshuffle = reshuffle
         self.datum_dtype = datum_dtype
@@ -127,7 +130,7 @@ class DataLoader(NervanaDataIterator):
         # Limited to a single integer label for now.
         assert self.target_size == 1
         assert np.dtype(self.target_dtype).itemsize == 4
-        indexer = Indexer(self.repo_dir)
+        indexer = Indexer(self.repo_dir, self.index_file)
         indexer.run()
         datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
         target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
@@ -138,6 +141,7 @@ class DataLoader(NervanaDataIterator):
         self.loader = self.loaderlib.start(
             ct.byref(self.item_count), self.bsz,
             ct.c_char_p(self.repo_dir),
+            ct.c_char_p(self.index_file),
             self.shuffle, self.reshuffle,
             datum_nbytes, target_nbytes,
             self.subset_percent,
@@ -162,27 +166,30 @@ class DataLoader(NervanaDataIterator):
         self.start_idx = 0
         self.loaderlib.reset(self.loader)
 
+    def next(self, start):
+        end = min(start + self.bsz, self.ndata)
+        if end == self.ndata:
+            self.start_idx = self.bsz - (self.ndata - start)
+        self.loaderlib.next(self.loader)
+
+        if self.backend_data is None:
+            data = self.data[self.buffer_id]
+        else:
+            # Convert data to the required precision.
+            self.backend_data[:] = self.data[self.buffer_id]
+            data = self.backend_data
+
+        if self.onehot:
+            # Convert labels to one-hot encoding.
+            self.onehot_labels[:] = self.be.onehot(
+                self.targets[self.buffer_id], axis=0)
+            targets = self.onehot_labels
+        else:
+            targets = self.targets[self.buffer_id]
+
+        self.buffer_id = 1 if self.buffer_id == 0 else 0
+        return data, targets
+
     def __iter__(self):
         for start in range(self.start_idx, self.ndata, self.bsz):
-            end = min(start + self.bsz, self.ndata)
-            if end == self.ndata:
-                self.start_idx = self.bsz - (self.ndata - start)
-            self.loaderlib.next(self.loader)
-
-            if self.backend_data is None:
-                data = self.data[self.buffer_id]
-            else:
-                # Convert data to the required precision.
-                self.backend_data[:] = self.data[self.buffer_id]
-                data = self.backend_data
-
-            if self.onehot:
-                # Convert labels to one-hot encoding.
-                self.onehot_labels[:] = self.be.onehot(
-                    self.targets[self.buffer_id], axis=0)
-                targets = self.onehot_labels
-            else:
-                targets = self.targets[self.buffer_id]
-
-            self.buffer_id = 1 if self.buffer_id == 0 else 0
-            yield data, targets
+            yield self.next(start)

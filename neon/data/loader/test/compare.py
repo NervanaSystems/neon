@@ -151,7 +151,7 @@ def test_loader():
     write_batches(args, test_path, testdir, 1)
 
     params = ImageParams(channel_count=3, height=32, width=32)
-    common = dict(media_params=params, datum_size=3*32*32, target_size=1,
+    common = dict(media_params=params, target_size=1,
                   datum_dtype=np.uint8, target_dtype=np.int32,
                   onehot=True, nclasses=10)
     train = DataLoader(repo_dir=os.path.join(args.data_dir, 'train'),

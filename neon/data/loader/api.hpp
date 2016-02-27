@@ -15,7 +15,8 @@
 
 extern "C" {
 
-extern void* start(int* itemCount, int batchSize, char* repoDir,
+extern void* start(int* itemCount, int batchSize,
+                   char* repoDir, char* indexFile,
                    bool shuffle, bool reshuffle,
                    int datumSize, int targetSize,
                    int subsetPercent,
@@ -24,7 +25,8 @@ extern void* start(int* itemCount, int batchSize, char* repoDir,
                    MediaParams* ingestParams) {
     static_assert(sizeof(int) == 4, "int is not 4 bytes");
     try {
-        Loader* loader = new Loader(itemCount, batchSize, repoDir,
+        Loader* loader = new Loader(itemCount, batchSize,
+                                    repoDir, indexFile,
                                     shuffle, reshuffle,
                                     datumSize, targetSize,
                                     subsetPercent,

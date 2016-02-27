@@ -22,24 +22,24 @@ logger = logging.getLogger(__name__)
 
 
 class Indexer(NervanaObject):
-    def __init__(self, path, pattern='*'):
+    def __init__(self, path, index_file, pattern='*'):
         self.path = path
+        self.index_file = os.path.join(path, index_file)
         self.pattern = pattern
 
     def run(self):
         archive_dir = self.path + '-ingested'
         if os.path.exists(archive_dir):
             return
-        index_file = os.path.join(self.path, 'index.csv')
-        if os.path.exists(index_file):
+        if os.path.exists(self.index_file):
             return
-        logger.warning('%s not found. Attempting to create...' % index_file)
+        logger.warning('%s not found. Attempting to create...' % self.index_file)
         assert os.path.exists(self.path)
         subdirs = glob.iglob(os.path.join(self.path, '*'))
         subdirs = filter(lambda x: os.path.isdir(x), subdirs)
         classes = sorted(map(lambda x: os.path.basename(x), subdirs))
         class_map = {key: val for key, val in zip(classes, range(len(classes)))}
-        with open(index_file, 'w') as fd:
+        with open(self.index_file, 'w') as fd:
             for subdir in subdirs:
                 label = class_map[os.path.basename(subdir)]
                 files = glob.iglob(os.path.join(subdir, self.pattern))
@@ -47,4 +47,4 @@ class Indexer(NervanaObject):
                     rel_path = os.path.join(os.path.basename(subdir),
                                             os.path.basename(filename))
                     fd.write(rel_path + ',' + str(label) + '\n')
-        logger.info('Created index file: %s' % index_file)
+        logger.info('Created index file: %s' % self.index_file)

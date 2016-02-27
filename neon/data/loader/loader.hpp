@@ -283,7 +283,8 @@ private:
 
 class Loader {
 public:
-    Loader(int* itemCount, int batchSize, char* repoDir,
+    Loader(int* itemCount, int batchSize,
+           char* repoDir, char* indexFile,
            bool shuffle, bool reshuffle,
            int datumSize, int targetSize, int subsetPercent,
            MediaParams* mediaParams,
@@ -295,7 +296,7 @@ public:
       _device(0), _reader(0), _media(0) {
         _device = Device::create(deviceParams);
         _media = Media::create(mediaParams, ingestParams);
-        _reader = new ArchiveReader(itemCount, batchSize, repoDir,
+        _reader = new ArchiveReader(itemCount, batchSize, repoDir, indexFile,
                                     shuffle, reshuffle, subsetPercent, _media);
     }
 

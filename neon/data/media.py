@@ -17,6 +17,7 @@
 This must be kept in sync with loader/media.hpp.
 """
 
+import numpy as np
 import ctypes as ct
 
 
@@ -30,6 +31,9 @@ class MediaType:
 
 class MediaParams(ct.Structure):
     _fields_ = [('mtype', ct.c_int)]
+
+    def datum_size(self):
+        raise NotImplementedError
 
 
 class ImageParams(MediaParams):
@@ -76,6 +80,9 @@ class ImageParams(MediaParams):
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)
+
+    def datum_size(self):
+        return np.prod(self.get_shape())
 
 
 class ImageIngestParams(MediaParams):

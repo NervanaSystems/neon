@@ -42,6 +42,11 @@ using std::stringstream;
 using std::vector;
 using std::map;
 
+#define ARCHIVE_DIR_SUFFIX  "-ingested"
+#define ARCHIVE_FILE_PREFIX "archive-"
+#define META_FILE_NAME      "archive-meta.csv"
+#define ARCHIVE_ITEM_COUNT  4096
+
 typedef std::pair<std::unique_ptr<ByteVect>,std::unique_ptr<ByteVect>> DataPair;
 
 class Writer {
@@ -69,15 +74,15 @@ private:
 
 class ArchiveWriter : public Writer {
 public:
-    ArchiveWriter(int batchSize, const char* repoDir, bool shuffle,
-                  Media* media)
+    ArchiveWriter(int batchSize, const char* repoDir, const char* indexFile,
+                  bool shuffle, Media* media)
     : _batchSize(batchSize), _repoDir(repoDir),
       _fileIdx(0), _itemCount(0), _started(false),
       _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0),
       _media(media) {
         _archiveDir = _repoDir + ARCHIVE_DIR_SUFFIX;
         _writeThread = new WriteThread(this);
-        _reader = new FileReader(&_itemCount, 1, repoDir, shuffle);
+        _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle);
         if (Reader::exists(_archiveDir) == true) {
             return;
         }
@@ -185,14 +190,17 @@ private:
 
 class ArchiveReader : public Reader {
 public:
-    ArchiveReader(int* itemCount, int batchSize, const char* repoDir,
-                  bool shuffle, bool repeatShuffle, int subsetPercent,
+    ArchiveReader(int* itemCount, int batchSize,
+                  const char* repoDir, const char* indexFile,
+                  bool shuffle, bool reshuffle, int subsetPercent,
                   Media* media)
-    : Reader(batchSize, repoDir, shuffle, repeatShuffle, subsetPercent),
+    : Reader(batchSize, repoDir, indexFile,
+      shuffle, reshuffle, subsetPercent),
       _fileIdx(0), _itemIdx(0), _itemsLeft(0) {
         // Create a writer just in case. It will only be used if archive
         // files are missing or damaged.
-        _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT, repoDir,
+        _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT,
+                                           repoDir, indexFile,
                                            shuffle, media);
         _archiveDir = _repoDir + ARCHIVE_DIR_SUFFIX;
         loadMetadata();
@@ -210,7 +218,7 @@ public:
         while (offset < _batchSize) {
             int count = _batchSize - offset;
             int result;
-            if (_repeatShuffle) {
+            if (_reshuffle) {
                 result = readShuffle(buffers, count);
             } else {
                 result = read(buffers, count);
