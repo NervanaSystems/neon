@@ -5,7 +5,6 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#!/usr/bin/env python
 #      http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
@@ -24,8 +23,8 @@ https://github.com/soumith/convnet-benchmarks
 
 from neon import NervanaObject
 from neon.util.argparser import NeonArgparser
-from neon.initializers import Constant, Gaussian
-from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
+from neon.initializers import Gaussian
+from neon.layers import Conv, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti
 from neon.models import Model
@@ -37,11 +36,12 @@ args = parser.parse_args()
 NervanaObject.be.enable_winograd = 4
 
 # setup data provider
-X_train = np.random.uniform(-1,1,(128, 3*224*224))
-y_train = np.random.uniform(-1,1,(128, 1000))
+X_train = np.random.uniform(-1, 1, (128, 3*224*224))
+y_train = np.random.uniform(-1, 1, (128, 1000))
 train = ArrayIterator(X_train, y_train, nclass=1000, lshape=(3, 224, 224))
 
-layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01), activation=Rectlin(), padding=3, strides=4),
+layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01),
+               activation=Rectlin(), padding=3, strides=4),
           Pooling(3, strides=2),
           Conv((5, 5, 192), init=Gaussian(scale=0.01), activation=Rectlin(), padding=2),
           Pooling(3, strides=2),

@@ -1177,7 +1177,7 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
         src_offset=" + ".join(src_offset),
         dst_offset=" + ".join(dst_offset)
     )
-    #print code
+    # print code
     module = SourceModule(code)
     kernel = module.get_function("copy_transpose")
     kernel.prepare("PP" + "I"*len(params))
