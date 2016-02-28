@@ -219,6 +219,11 @@ examples: env
 	@. $(ACTIVATE); tests/run_examples.py
 	@echo
 
+benchmarks: env
+	@echo "Running all benchmarks..."
+	@. $(ACTIVATE); tests/run_benchmarks.py
+	@echo
+
 serialize_check: env
 	@echo "Running CPU backend test of model serialization"
 	@. $(ACTIVATE); python tests/serialization_check.py -e 10 -b cpu
