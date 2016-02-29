@@ -431,7 +431,7 @@ class Backend(object):
                                        backends.
     """
     def __init__(self, rng_seed=None, default_dtype=np.float32,
-                 compat_mode=None, deterministic=False):
+                 compat_mode=None, deterministic=None):
         # dtype
         self.default_dtype = default_dtype
 
@@ -451,7 +451,10 @@ class Backend(object):
         else:
             self.compat_mode = None
 
-        self.deterministic = deterministic
+        if deterministic is not None:
+            logger.warning('deterministic arg is deprecated in favor of specifying random seed')
+
+        self.deterministic = self.rng_seed is not None
 
     def output_dim(self, X, S, padding, strides, pooling=False):
         """

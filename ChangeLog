@@ -1,6 +1,17 @@
 # ChangeLog
 
-## v1.2.2 (2106-02-24):
+## v1.3.0 (2016-02-29):
+
+### Modifications
+
+* benchmarking scripts
+* winograd kernels and associated autotuning routines
+* deprecation of deterministic argument for backend constructor
+* improve batch norm stability with fp16 backend
+* allow strided support for dimshuffle kernel
+* speed up zero momentum gradient descent
+
+## v1.2.2 (2016-02-24):
 
 ### Modifications
 

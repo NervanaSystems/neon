@@ -657,7 +657,7 @@ class NervanaGPU(Backend):
                  rng_seed=None,
                  default_dtype=np.float32,
                  stochastic_round=False,
-                 deterministic=True,
+                 deterministic=None,
                  device_id=0,
                  bench=False,
                  scratch_size=0,
@@ -707,7 +707,6 @@ class NervanaGPU(Backend):
             stochastic_round = 0
 
         # attributes
-        self.deterministic = deterministic
         self.scratch_size = scratch_size
         self.scratch_offset = 0
         self.round_mode = stochastic_round

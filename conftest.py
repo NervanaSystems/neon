@@ -50,6 +50,8 @@ def backend_default(request):
                      datatype=np.float32,
                      batch_size=128,
                      rng_seed=0)
+    if request.param == 'gpu':
+        be.enable_winograd = 2 if be.enable_winograd else be.enable_winograd
 
     # add a cleanup call - will run after all test in module are done
     def cleanup():

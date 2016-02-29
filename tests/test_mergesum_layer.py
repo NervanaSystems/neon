@@ -80,7 +80,7 @@ def test_proj_upsample():
 
 
 def mergesum_test_config(modfunc, use_stride=1):
-    NervanaObject.be = gen_backend("gpu", batch_size=64)
+    NervanaObject.be = gen_backend("gpu", batch_size=64, rng_seed=0)
     be = NervanaObject.be
     l1 = Conv(**conv_params(3, 16))
     neon_layer = modfunc(16, use_stride)

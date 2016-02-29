@@ -141,19 +141,19 @@ def check_lstm(seq_len, input_size, hidden_size,
     allclose_with_out(lstm.ifog_buffer.get(),
                       IFOGf_ref,
                       rtol=0.0,
-                      atol=1.0e-5)
+                      atol=1.5e-5)
 
     print '====Verifying cell states===='
     allclose_with_out(lstm.c_act_buffer.get(),
                       Ct_ref,
                       rtol=0.0,
-                      atol=1.0e-5)
+                      atol=1.5e-5)
 
     print '====Verifying hidden states===='
     allclose_with_out(lstm.outputs.get(),
                       Hout_ref,
                       rtol=0.0,
-                      atol=1.0e-5)
+                      atol=1.5e-5)
 
     print 'fprop is verified'
 
@@ -182,25 +182,25 @@ def check_lstm(seq_len, input_size, hidden_size,
     assert allclose_with_out(dWrecur_neon,
                              dWrecur_ref.T,
                              rtol=0.0,
-                             atol=1.0e-5)
+                             atol=1.5e-5)
 
     print '====Verifying update on W_input===='
     assert allclose_with_out(dWinput_neon,
                              dWinput_ref.T,
                              rtol=0.0,
-                             atol=1.0e-5)
+                             atol=1.5e-5)
 
     print '====Verifying update on bias===='
     assert allclose_with_out(db_neon.flatten(),
                              db_ref,
                              rtol=0.0,
-                             atol=1.0e-5)
+                             atol=1.5e-5)
 
     print '====Verifying output delta===='
     assert allclose_with_out(lstm.out_deltas_buffer.get(),
                              dX_ref,
                              rtol=0.0,
-                             atol=1.0e-5)
+                             atol=1.5e-5)
 
     print 'bprop is verified'
 

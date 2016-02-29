@@ -312,6 +312,9 @@ class NeonArgparser(configargparse.ArgumentParser):
         else:
             args.compat_mode = None
 
+        if args.deterministic:
+            logger.warn('--deterministic flag is deprecated.  Specify random seed for '
+                        'deterministic behavior.')
         # extended parsers may need to generate backend after argparsing
         if gen_be:
             # generate the backend
@@ -321,8 +324,7 @@ class NeonArgparser(configargparse.ArgumentParser):
                         batch_size=args.batch_size,
                         datatype=args.datatype,
                         max_devices=args.max_devices,
-                        compat_mode=args.compat_mode,
-                        deterministic=args.deterministic)
+                        compat_mode=args.compat_mode)
 
         # display what command line / config options were set (and from where)
         logger.info(self.format_values())

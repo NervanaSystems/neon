@@ -31,7 +31,7 @@ from neon.backends.util.check_gpu import get_device_count
 def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
                 max_devices=get_device_count(), compat_mode=None,
-                deterministic_update=False, deterministic=True,
+                deterministic_update=None, deterministic=None,
                 cache_dir=os.path.join(os.path.expanduser('~'), 'nervana/cache')):
     """
     Construct and return a backend instance of the appropriate type based on
@@ -81,9 +81,10 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
         # NervanaObject.be instead of a global
         atexit.register(cleanup_backend)
 
-    if deterministic_update:
-       deterministic = True
-       logger.warning("--deterministic_update is deprecated in favor of --deterministic")
+    if deterministic_update is not None or deterministic is not None:
+       logger.warning('deterministic_update and deterministic args are deprecated in favor of '
+                      'specifying random seed')
+       deterministic = None
 
     if backend == 'cpu' or backend is None:
         from neon.backends.nervanacpu import NervanaCPU
@@ -115,7 +116,6 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                                  num_devices=max_devices,
                                  compat_mode=compat_mode,
                                  deterministic=deterministic,
-                                 # TODO add cache_dir to mgpu
                                  cache_dir=cache_dir)
             except ImportError:
                 logger.error("Multi-GPU support is a premium feature "
