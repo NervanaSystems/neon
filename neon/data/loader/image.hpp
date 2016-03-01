@@ -34,8 +34,7 @@ using std::vector;
 class ImageParams : public MediaParams {
 public:
     ImageParams(int channelCount, int height, int width,
-                bool augment,
-                bool center, bool flip,
+                bool augment, bool flip,
                 int scaleMin, int scaleMax,
                 int contrastMin, int contrastMax,
                 int rotateMin, int rotateMax,
@@ -43,8 +42,7 @@ public:
     : MediaParams(IMAGE),
       _channelCount(channelCount),
       _height(height), _width(width),
-      _augment(augment),
-      _center(center), _flip(flip),
+      _augment(augment), _flip(flip),
       _scaleMin(scaleMin), _scaleMax(scaleMax),
       _contrastMin(contrastMin), _contrastMax(contrastMax),
       _rotateMin(rotateMin), _rotateMax(rotateMax),
@@ -52,7 +50,7 @@ public:
     }
 
     ImageParams()
-    : ImageParams(3, 224, 224, false, true, false,
+    : ImageParams(3, 224, 224, false, false,
                   256, 256, 0, 0, 0, 0, 0) {}
 
     void dump() {
@@ -60,7 +58,6 @@ public:
         printf("inner height %d\n", _height);
         printf("inner width %d\n", _width);
         printf("augment %d\n", _augment);
-        printf("center %d\n", _center);
         printf("flip %d\n", _flip);
         printf("scale min %d\n", _scaleMin);
         printf("scale max %d\n", _scaleMax);
@@ -77,7 +74,7 @@ public:
 
     void getRandomCorner(unsigned int& seed, const Size2i &border,
                          Point2i* point) {
-        if (!_center) {
+        if (_augment) {
             point->x = rand_r(&seed) % (border.width + 1);
             point->y = rand_r(&seed) % (border.height + 1);
         } else {
@@ -107,6 +104,24 @@ public:
     }
 
     void getRandomCrop(unsigned int& seed, const Size2i &inputSize,
+                       Rect* cropBox) {
+        if ((inputSize.width < _width) || (inputSize.height < _height)) {
+            cropBox->x = cropBox->y = 0;
+            cropBox->width = inputSize.width;
+            cropBox->height = inputSize.height;
+            return;
+        }
+
+        Point2i corner;
+        Size2i cropSize(_width, _height);
+        getRandomCorner(seed, inputSize - cropSize, &corner);
+        cropBox->width = cropSize.width;
+        cropBox->height = cropSize.height;
+        cropBox->x = corner.x;
+        cropBox->y = corner.y;
+    }
+
+    void getRandomScaledCrop(unsigned int& seed, const Size2i &inputSize,
                        Rect* cropBox) {
         // Use the entire squashed image (Caffe style evaluation)
         if (_scaleMin == 0) {
@@ -141,7 +156,6 @@ public:
     int                         _height;
     int                         _width;
     bool                        _augment;
-    bool                        _center;
     bool                        _flip;
     // Pixel scale to jitter at (image from which to crop will have
     // short side in [scaleMin, Max])
@@ -196,25 +210,14 @@ public:
     void transform(char* item, int itemSize, char* buf, int bufSize) {
         Mat decodedImage;
         decode(item, itemSize, &decodedImage);
-        if (_params->_augment == false) {
-            Mat resizedImage;
-            if (decodedImage.size() == _params->getSize()) {
-                resizedImage = decodedImage;
-            } else {
-                resize(decodedImage, resizedImage, _params->getSize());
-            }
-
-            split(resizedImage, buf, bufSize);
-            return;
-        }
 
         Rect cropBox;
         _params->getRandomCrop(_rngSeed, decodedImage.size(), &cropBox);
-        auto innerSize = _params->getSize();
-
         Mat croppedImage = decodedImage(cropBox);
-        // This would be more efficient, but we should allocate separate bufs for each thread
-        // Mat resizedImage = Mat(innerSize, CV_8UC3, _scratchbuf);
+
+        _params->getRandomScaledCrop(_rngSeed, croppedImage.size(), &cropBox);
+        croppedImage = croppedImage(cropBox);
+        auto innerSize = _params->getSize();
         Mat resizedImage;
         if (innerSize.width == cropBox.width && innerSize.height == cropBox.height) {
             resizedImage = croppedImage;

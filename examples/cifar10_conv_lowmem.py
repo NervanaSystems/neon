@@ -32,13 +32,14 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-media_params = ImageParams(channel_count=3, height=32, width=32)
-common = dict(media_params=media_params,
-              target_size=1, nclasses=10)
+shape = dict(channel_count=3, height=30, width=30)
+train_params = ImageParams(augment=True, **shape)
+test_params = ImageParams(**shape)
+common = dict(target_size=1, nclasses=10)
 traindir = os.path.join(args.data_dir, 'train')
 testdir = os.path.join(args.data_dir, 'test')
-train = DataLoader(repo_dir=traindir, shuffle=True, **common)
-test = DataLoader(repo_dir=testdir, shuffle=False, **common)
+train = DataLoader(repo_dir=traindir, media_params=train_params, shuffle=True, **common)
+test = DataLoader(repo_dir=testdir, media_params=test_params, shuffle=False, **common)
 
 init_uni = Uniform(low=-0.1, high=0.1)
 opt_gdm = GradientDescentMomentum(learning_rate=0.01,

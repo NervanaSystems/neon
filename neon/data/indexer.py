@@ -28,7 +28,8 @@ class Indexer(NervanaObject):
         self.pattern = pattern
 
     def run(self):
-        archive_dir = self.path + '-ingested'
+        index_name = os.path.splitext(os.path.basename(self.index_file))[0]
+        archive_dir = self.path + index_name + '-ingested'
         if os.path.exists(archive_dir):
             return
         if os.path.exists(self.index_file):

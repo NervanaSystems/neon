@@ -41,7 +41,6 @@ class ImageParams(MediaParams):
                 ('height', ct.c_int),
                 ('width', ct.c_int),
                 ('augment', ct.c_bool),
-                ('center', ct.c_bool),
                 ('flip', ct.c_bool),
                 ('scale_min', ct.c_int),
                 ('scale_max', ct.c_int),
@@ -51,7 +50,6 @@ class ImageParams(MediaParams):
                 ('rotate_max', ct.c_int),
                 ('aspect_ratio', ct.c_int)]
     _defaults_ = {'augment': False,
-                  'center': True,
                   'flip': False,
                   'scale_min': 0,
                   'scale_max': 0,
