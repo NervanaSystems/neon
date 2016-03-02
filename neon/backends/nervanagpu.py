@@ -2049,12 +2049,14 @@ class NervanaGPU(Backend):
 
         self._execute_bn(kernel, params, repeat, x.nbytes*2, N)
 
-    def compound_bprop_bn(self, delta, grad_gamma, grad_beta, x, xsum, xvar,
+    def compound_bprop_bn(self, delta_out, grad_gamma, grad_beta, delta_in,
+                          x, xsum, xvar,
                           gamma, eps, threads=None, repeat=1):
         """
-        delta (Tensor): Delta buffer
+        delta_out (Tensor): Delta buffer (where to write the output deltas)
         grad_gamma (Tensor): Gradient w.r.t. gamma
         grad_beta (Tensor): Gradient w.r.t. beta
+        delta_in (Tensor): Delta buffer (where to get the input deltas)
         x (Tensor): feedforward input
         xsum (Tensor): Batch sum over PQN dimension
         xvar (Tensor): Batch variance
@@ -2075,7 +2077,7 @@ class NervanaGPU(Backend):
                 threads = 128 if K < 192 else 64
 
         params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
-                  delta.gpudata, grad_gamma.gpudata, grad_beta.gpudata, delta.gpudata,
+                  delta_out.gpudata, grad_gamma.gpudata, grad_beta.gpudata, delta_in.gpudata,
                   x.gpudata, xsum.gpudata, xvar.gpudata, gamma.gpudata, eps, N]
 
         from neon.backends.float_ew import _get_bn_bprop_kernel

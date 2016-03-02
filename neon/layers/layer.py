@@ -1440,6 +1440,8 @@ class BatchNorm(Layer):
         self.x = None  # used to point to reshaped view of inputs
         self.xhat = None
         self.has_params = True
+        self.owns_delta = True
+        self.error_view = None
         self.rho = rho
         self.eps = eps
         self.states = [[] for i in range(2)]
@@ -1467,7 +1469,7 @@ class BatchNorm(Layer):
         self.xvar = self.be.zeros((self.nfm, 1), dtype=self.stats_dtype)
         if self.allparams is None:
             self.init_params(self.nfm)
-        if self.prev_layer is None or self.prev_layer.batch_sum is None:
+        if self.prev_layer in (None, True) or self.prev_layer.batch_sum is None:
             self.xsum = self.be.zeros((self.nfm, 1), dtype=self.stats_dtype)
             self.compute_batch_sum = True
         else:
@@ -1528,13 +1530,14 @@ class BatchNorm(Layer):
         """
         Compute gradients for learning gamma and beta as well as layer weights.
         """
-        if not self.deltas:
-            self.deltas = error.reshape((self.nfm, -1))
+        if not self.error_view:
+            self.error_view = error.reshape((self.nfm, -1))
 
         self.be.compound_bprop_bn(self.deltas, self.grad_gamma, self.grad_beta,
+                                  self.error_view,
                                   self.inputs, self.xsum, self.xvar, self.gamma,
                                   self.eps)
-        return error
+        return self.deltas
 
     def get_params(self):
         return self.plist
