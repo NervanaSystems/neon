@@ -117,7 +117,7 @@ def _get_conv_kernel(dtype, filter_size, bsum, operation, filter_bounds_check=Fa
             {
                 int2 lut_entry;
                 lut_entry.x = (((index_p * W) + index_q) * N) >> 2;
-                lut_entry.y = ((FILTER_SIZE - rs - 1) * K) >> 2;
+                lut_entry.y = (rs * K) >> 2;
 
                 int index = lut_size_local + __popc(threads_in_bounds & mask);
                 lookup_table[index] = lut_entry;
@@ -277,40 +277,73 @@ __global__ void conv_%(operation)s(
     __syncthreads();
 
     lut_size_local = lut_size;
-    if(lut_size_local == 0)
-    {
-        return;
-    }
-
-    output_pixel = (output_pixel * N) >> 2;
-
-    //Evaluate gemm with outer product dimensions N, K and inner product CRS
     Matrix result[REG_TILE_Y] = {0};
-    int CRS = lut_size_local * C;
-
-    //Compute magic numbers for division by lut_size
-    float reciprocal = 1.0f / (float)lut_size_local;
-
-    //Initialize shared mem for first block
-    int crs = CRS %% NUM_ROWS;
-    crs = (crs == 0) ? 8 : crs;
-
-    int c, rs;
-    _idiv_fast(CRS - threadIdx.y - 1, lut_size_local, reciprocal, c, rs);
-
-    int2 lut_entry = ((threadIdx.y & 7) >= crs) ? make_int2(0, 0) : lookup_table[rs];
-    %(a_name)s_data[threadIdx.y][threadIdx.x].f4 =
-        ((threadIdx.y & 7) >= crs) ? make_float4(0, 0, 0, 0) :
-        I[(c * input_channel_size)  + lut_entry.x].f4;
-    %(b_name)s_data[threadIdx.y][threadIdx.x].f4 = %(check_filter_cond)s
-        ((threadIdx.y & 7) >= crs) ? make_float4(0, 0, 0, 0) :
-        F[(c * filter_channel_size) + lut_entry.y].f4;
-
-    //Iterate over entire filter
-    for(crs = CRS - crs - 1; crs > 0; crs -= NUM_ROWS)
+    output_pixel = (output_pixel * N) >> 2;
+    if(lut_size_local > 0)
     {
+        //Evaluate gemm with outer product dimensions N, K and inner product CRS
+        int CRS = lut_size_local * C;
+
+        //Compute magic numbers for division by lut_size
+        float reciprocal = 1.0f / (float)lut_size_local;
+
+        //Initialize shared mem for first block
+        int crs = CRS %% NUM_ROWS;
+        crs = (crs == 0) ? 8 : crs;
+
+        int c, rs;
+        _idiv_fast(CRS - threadIdx.y - 1, lut_size_local, reciprocal, c, rs);
+
+        int2 lut_entry = ((threadIdx.y & 7) >= crs) ? make_int2(0, 0) : lookup_table[rs];
+        %(a_name)s_data[threadIdx.y][threadIdx.x].f4 =
+            ((threadIdx.y & 7) >= crs) ? make_float4(0, 0, 0, 0) :
+            I[(c * input_channel_size)  + lut_entry.x].f4;
+        %(b_name)s_data[threadIdx.y][threadIdx.x].f4 = %(check_filter_cond)s
+            ((threadIdx.y & 7) >= crs) ? make_float4(0, 0, 0, 0) :
+            F[(c * filter_channel_size) + lut_entry.y].f4;
+
+        //Iterate over entire filter
+        for(crs = CRS - crs - 1; crs > 0; crs -= NUM_ROWS)
+        {
+            __syncthreads();
+
+            #pragma unroll
+            for(int i = 0; i < NUM_ROWS; i++)
+            {
+                Matrix load_row;
+                Matrix load_col;
+
+                load_row.f4 = %(a_name)s_data[i][threadIdx.x].f4;
+                load_col.f4 = %(b_name)s_data[i][threadIdx.y].f4;
+
+                //Accumulate product
+                #pragma unroll
+                for(int q_offset = 0; q_offset < REG_TILE_Y; q_offset++)
+                {
+                    #pragma unroll
+                    for(int p_offset = 0; p_offset < REG_TILE_X; p_offset++)
+                    {
+                        result[q_offset].f[p_offset] += (load_row.f[p_offset] *
+                                                         load_col.f[q_offset]);
+                    }
+                }
+            }
+
+            __syncthreads();
+
+            //Load new image data and filter weights
+            _idiv_fast(crs - threadIdx.y, lut_size_local, reciprocal, c, rs);
+
+            lut_entry = lookup_table[rs];
+            %(a_name)s_data[threadIdx.y][threadIdx.x].f4 =
+                I[(c * input_channel_size)  + lut_entry.x].f4;
+            %(b_name)s_data[threadIdx.y][threadIdx.x].f4 =
+                %(check_filter_cond)s F[(c * filter_channel_size) + lut_entry.y].f4;
+        }
+
         __syncthreads();
 
+        //Accumulate product for last iteration
         #pragma unroll
         for(int i = 0; i < NUM_ROWS; i++)
         {
@@ -329,41 +362,6 @@ __global__ void conv_%(operation)s(
                 {
                     result[q_offset].f[p_offset] += (load_row.f[p_offset] * load_col.f[q_offset]);
                 }
-            }
-        }
-
-        __syncthreads();
-
-        //Load new image data and filter weights
-        _idiv_fast(crs - threadIdx.y, lut_size_local, reciprocal, c, rs);
-
-        lut_entry = lookup_table[rs];
-        %(a_name)s_data[threadIdx.y][threadIdx.x].f4 =
-            I[(c * input_channel_size)  + lut_entry.x].f4;
-        %(b_name)s_data[threadIdx.y][threadIdx.x].f4 =
-            %(check_filter_cond)s F[(c * filter_channel_size) + lut_entry.y].f4;
-    }
-
-    __syncthreads();
-
-    //Accumulate product for last iteration
-    #pragma unroll
-    for(int i = 0; i < NUM_ROWS; i++)
-    {
-        Matrix load_row;
-        Matrix load_col;
-
-        load_row.f4 = %(a_name)s_data[i][threadIdx.x].f4;
-        load_col.f4 = %(b_name)s_data[i][threadIdx.y].f4;
-
-        //Accumulate product
-        #pragma unroll
-        for(int q_offset = 0; q_offset < REG_TILE_Y; q_offset++)
-        {
-            #pragma unroll
-            for(int p_offset = 0; p_offset < REG_TILE_X; p_offset++)
-            {
-                result[q_offset].f[p_offset] += (load_row.f[p_offset] * load_col.f[q_offset]);
             }
         }
     }
