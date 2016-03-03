@@ -1090,6 +1090,7 @@ class BiLSTM(BiRNN):
 
     """
     Long Short-Term Memory (LSTM)
+
     Arguments:
         output_size (int): Number of hidden/output units
         init (Initializer): Function for initializing the model parameters
@@ -1108,10 +1109,11 @@ class BiLSTM(BiRNN):
         x (Tensor): input data as 2D tensor. The dimension is
                     (input_size, sequence_length * batch_size)
         W_input (Tensor): Weights on the input units
-            (out size * 4, input size)
+                          (out size * 4, input size)
         W_recur (Tensor): Weights on the recursive inputs
-            (out size * 4, out size)
+                          (out size * 4, out size)
         b (Tensor): Biases (out size * 4 , 1)
+
     """
 
     def __init__(self, output_size, init, init_inner=None, activation=None,
@@ -1251,8 +1253,7 @@ class BiLSTM(BiRNN):
                                     gradient bprop.  Defaults to 0.0
 
         Returns:
-            Tensor: Backpropagated errors for each time step
-                of model unrolling
+            Tensor: Backpropagated errors for each time step of model unrolling
         """
         self.dW[:] = 0
 
@@ -1282,7 +1283,7 @@ class BiLSTM(BiRNN):
                     self.ifog_delta, self.i_delta, self.f_delta, self.o_delta, self.g_delta,
                     self.c_delta, self.c_delta_next, self.c_next_bprop, self.c_act_b)
 
-        """  bprop for forward direction connections . Error flow from right to left """
+        # bprop for forward direction connections . Error flow from right to left
         self.c_delta_buffer[:] = 0
         self.ifog_delta_buffer[:] = 0
         self.ifog_delta_f = None
@@ -1318,7 +1319,7 @@ class BiLSTM(BiRNN):
                 self.W_input_f.T, self.ifog_delta_buffer, self.out_deltas_buffer_f,
                 alpha=alpha, beta=beta)
 
-        """  bprop for backward direction connections. Error flow from left to right """
+        # bprop for backward direction connections. Error flow from left to right
         self.c_delta_buffer[:] = 0
         self.ifog_delta_buffer[:] = 0
         for (in_deltas, next_in_deltas,
