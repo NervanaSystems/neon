@@ -15,7 +15,7 @@
 # ----------------------------------------------------------------------------
 
 SRCS := $(wildcard *.hpp)
-CFLAGS := -Wall -Werror -O3 -std=c++11
+CFLAGS := -Wall -O3 -std=c++11
 INC := $(shell pkg-config --cflags opencv)
 LDIR := $(shell pkg-config --libs-only-L opencv)
 LIBS := $(shell pkg-config --libs-only-l opencv)
