@@ -53,7 +53,7 @@ Let's initialize a |Tensor| of zeros with shape ``(100,100)``.
 
     from neon.backends.backend import Tensor
 
-    myTensor = Tensor.zeros((100, 100))
+    myTensor = be.zeros((100, 100))
 
 There are also other ways of initializing a Tensor:
 

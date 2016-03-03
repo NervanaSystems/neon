@@ -35,7 +35,7 @@ API for specific function definitions.
     :py:mod:`neon.transforms` | Activation functions and Costs/Metrics | :doc:`Costs and Metrics<costs>`
     :py:mod:`neon.callbacks` | Callbacks during model training | :doc:`Callbacks<callbacks>`
     :py:mod:`neon.optimizers` | Learning algorithms | :doc:`Optimizers<optimizers>`
-    :py:mod:`neon.visualizations` | Visualization of training cost and weight histograms | :doc:`Visualizing results<visualizing_results>`
+    :py:mod:`neon.visualizations` | Visualization of training cost and weight histograms | :doc:`Visualizing results<tools>`
     :py:mod:`neon.util` | Utility module |
 
 

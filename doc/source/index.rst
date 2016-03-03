@@ -49,11 +49,9 @@ roles. Apply here_!
 
 .. note::
 
-    This release includes the addition of the Winograd algorithm for faster convolutions
-    for small filter sizes. Winograd is enabled by default, but can be controlled
+    This release includes 3x3 convolution kernels based on the the Winograd minimal filtering algorithm for up to a 2x algorithmic performance gain.  Winograd is enabled by default, but can be controlled
     with the backend setting ``enable_winograd``. When Winograd is enabled, the first time
-    users run a network on the GPU, an autotuning process will compute the best kernel combinations
-    for speed. The results are cached in ``~/nervana/cache`` folder for reuse.
+    users run a network on the GPU, an autotuning process will compute the fastest kernel parameters. The results are cached in ``~/nervana/cache`` folder for reuse.
 
     The backend can also be configured to prefer 2x2 compared to 4x4 transform sizes through the
     ``enable_winograd`` option (0 = disabled (direct convolution), 2 = prefer 2x2, 4 = prefer 4x4).

@@ -41,7 +41,7 @@ Here is a custom layer that multiples the input by two.
 
         # backprop the gradients
         def bprop(self, error):
-            error[:] = 2*self.error
+            error[:] = 2*error
             return error
 
 
@@ -103,40 +103,64 @@ which stores the result in the provided tensor.
 Example layer with autodiff
 ---------------------------
 
-We can put this into action with a layer that applies the logistic
-function and uses |Autodiff| for computing the gradients.
+We can put this into action with a BatchNorm layer that uses Autodiff
 
 .. code-block:: python
 
-    class Logistic(Layer):
-        " A layer that applies the logistic function "
+    class BatchNormAutodiff(BatchNorm):
 
-        # constructor and initialize buffers
-        def __init__(self, name=None):
-            super(Logistic, self).__init__(name)
-            self.fprop_op_tree = None
+        def __init__(self, rho=0.99, eps=1e-6, name=None):
+            super(BatchNormAutodiff, self).__init__(rho, eps, name)
 
-        # configure the layer input and output shapes
-        def configure(self, in_obj):
-            super(Logistic, self).configure(in_obj)
-            self.out_shape = self.in_shape
-            return self
+        def get_forward_optree(self):
+            """
+            Initialize the fprop optree for batchnorm.
+            """
+            # get fprop op-tree
+            xvar = self.be.var(self.x, axis=1)
+            xmean = self.be.mean(self.x, axis=1)
+            xhat = (self.x - xmean) / self.be.sqrt(xvar + self.eps)
+            return xhat * self.gamma + self.beta
 
-        # compute the fprop
-        def fprop(self, inputs, inference):
-            # define and then execute the op-tree
-            self.fprop_op_tree = 1/(self.be.exp(-1*inputs) + 1.0)
-            self.outputs[:] = self.fprop_op_tree
+        def fprop(self, inputs, inference=False):
+            """
+            Compute the actual fprop from op-tree, update the global estimations
+            """
+            if inference:
+                return self._fprop_inference(inputs)
+            self.init_buffers(inputs)
+            if self.allparams is None:
+                self.init_params(self.nfm)
+                self.fprop_op_tree = self.get_forward_optree()
+
+            # the actual f-prop
+            self.y[:] = self.fprop_op_tree
+
+            # for inference
+            self.gmean[:] = (self.gmean * self.rho + (1.0 - self.rho) * self.be.mean(self.x, axis=1))
+            self.gvar[:] = (self.gvar * self.rho + (1.0 - self.rho) * self.be.var(self.x, axis=1))
+
             return self.outputs
 
-        # backprop the gradients
         def bprop(self, error):
-            # generate the autodiff
-            ad = Autodiff(self.fprop_op_tree, self.be)
+            """
+            Use Autodiff.back_prop_grad to back propagate gradients for the
+            corresponding tensors.
+            """
+            if not self.deltas:
+                self.deltas = error.reshape((self.nfm, -1))
 
-            # compute the gradient with autodiff
-            error[:] = ad.get_grad_Tensor(self.fprop_op_tree, self.be, self.outputs)
+            # autodiff will automatically cache and reuse the object
+            # if we know the `error` buffer at init, we can also create the autodiff
+            # object at layer's init
+            ad = Autodiff(self.fprop_op_tree, self.be, next_error=self.deltas)
+
+            # back propagate
+            ad.back_prop_grad([self.x, self.gamma, self.beta],
+                              [self.deltas, self.grad_gamma, self.grad_beta])
+
             return error
+
 
 Layers with parameters
 ----------------------

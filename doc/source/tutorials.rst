@@ -14,7 +14,7 @@ visualizing the results. We recommend reading the section on the neon
 
 * :doc:`Tutorial 4 <creating_new_layers>`: Creating new layers
 * Tutorial 5: Importing new data
-* :doc:`Tutorial 6 <visualizing_results>`: Visualizing the results
+* :doc:`Tutorial 6 <tools>`: Visualizing the results
 
 .. toctree::
    :hidden:
@@ -24,4 +24,4 @@ visualizing the results. We recommend reading the section on the neon
    alexnet.rst
    lstm.rst
    creating_new_layers.rst
-   visualizing_results.rst
+   tools.rst
