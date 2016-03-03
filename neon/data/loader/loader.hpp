@@ -231,7 +231,6 @@ protected:
             }
             {
                 lock_guard<mutex> lock(_mutex);
-                assert(_endSignaled == 0);
                 for (unsigned int i = 0; i < _startSignaled.size(); i++) {
                     _startSignaled[i] = 1;
                 }
