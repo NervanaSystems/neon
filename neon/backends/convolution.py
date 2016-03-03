@@ -297,7 +297,7 @@ class BpropCuda(KernelGroup):
 
         self.shuffle_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
         self.launch_args[2:9] = (self.lib.stream, alpha, beta,
-                                 I.gpudata, F.gpudata, O.gpudata, bsum_gpudata)
+                                 I.gpudata, filter_temp, O.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
 
