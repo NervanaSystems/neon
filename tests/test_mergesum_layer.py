@@ -123,34 +123,34 @@ def mergesum_test_config(modfunc, use_stride=1):
 
     print np.max(np.abs(difference))
     # need to have bsum false for this test to be valid
-    # assert np.max(np.abs(difference)) < 1e-7
+    assert np.max(np.abs(difference)) < 1e-7
     print "Fprop matching"
-
     print "Beginning Back prop"
     erra = np.random.random(neon_out.shape)
     err = be.array(erra)
-    ebr = neon_seq.layers[4].bprop(err)
-    print "Orig Error", ebr.get()[0, :20]
-    ebr = neon_seq.layers[3].bprop(ebr)
 
+    ebr = neon_seq.layers[-1].bprop(err)
+    ebr = neon_seq.layers[-2].bprop(ebr)
     trunk_neon = ebr.get()
 
     err = be.array(erra)
     err[:] = be.greater(be.array(neon_out_ref), 0) * err
 
+    pstart = len(l1)
     eb1 = err
-    for l in reversed(path1.layers[3:]):
+    for l in reversed(path1.layers[pstart:]):
         eb1 = l.bprop(eb1)
     t1 = eb1.get()
 
     err = be.array(erra)
     err[:] = be.greater(be.array(neon_out_ref), 0) * err
+
     eb2 = err
-    for l in reversed(path2.layers[3:]):
+    for l in reversed(path2.layers[pstart:]):
         eb2 = l.bprop(eb2)
     t2 = eb2.get()
 
-    print np.max(np.abs(trunk_neon - (t1 + t2)))
+    assert np.max(np.abs(trunk_neon - (t1 + t2))) < 1e-7
 
 
 if __name__ == '__main__':

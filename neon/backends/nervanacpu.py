@@ -1587,16 +1587,17 @@ class NervanaCPU(Backend):
         outputs = y.reshape(xhat.shape)
         outputs[:] = xhat * gamma + beta
 
-    def compound_bprop_bn(self, delta, grad_gamma, grad_beta, x, xsum, xvar,
+    def compound_bprop_bn(self, delta_out, grad_gamma, grad_beta, delta_in, x, xsum, xvar,
                           gamma, eps):
         """
         Function to perform batch normalization backward pass. Included
         for API compatibility with GPU compound kernel call.
 
         Arguments:
-            delta (Tensor): Delta buffer
+            delta_out (Tensor): Delta buffer to write out to
             grad_gamma (Tensor): Gradient w.r.t. gamma
             grad_beta (Tensor): Gradient w.r.t. beta
+            delta_in (Tensor): Delta buffer to read from (incoming errors)
             x (Tensor): feedforward input
             xsum (Tensor): Batch sum over PQN dimension
             xvar (Tensor): Batch variance
@@ -1604,10 +1605,10 @@ class NervanaCPU(Backend):
             eps (float): constant for numerical stability
         """
         xhat = (x - xsum) / self.sqrt(xvar + eps)
-        grad_gamma[:] = self.sum(xhat * delta, axis=1)
-        grad_beta[:] = self.sum(delta, axis=1)
+        grad_gamma[:] = self.sum(xhat * delta_in, axis=1)
+        grad_beta[:] = self.sum(delta_in, axis=1)
         xtmp = (xhat * grad_gamma + grad_beta) / float(x.shape[1])
-        delta[:] = gamma * (delta - xtmp) / self.sqrt(xvar + eps)
+        delta_out[:] = gamma * (delta_in - xtmp) / self.sqrt(xvar + eps)
 
     def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0):
         """
