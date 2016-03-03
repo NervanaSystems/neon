@@ -1608,7 +1608,7 @@ class NervanaCPU(Backend):
         grad_gamma[:] = self.sum(xhat * delta_in, axis=1)
         grad_beta[:] = self.sum(delta_in, axis=1)
         xtmp = (xhat * grad_gamma + grad_beta) / float(x.shape[1])
-        delta_out[:] = gamma * (delta_in - xtmp) / self.sqrt(xvar + eps)
+        delta_out.reshape(delta_in.shape)[:] = gamma * (delta_in - xtmp) / self.sqrt(xvar + eps)
 
     def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0):
         """

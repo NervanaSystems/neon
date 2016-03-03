@@ -51,7 +51,7 @@ def pytest_generate_tests(metafunc):
     if 'bnargs' in metafunc.fixturenames:
         fargs = []
         if metafunc.config.option.all:
-            n = [2, 4, 8, 10, 64, (16, 16, 3), (14, 14, 1)]
+            n = [2, 4, 8, 10, 64, (3, 16, 16), (1, 14, 14)]
         else:
             n = [2, 4]
 
