@@ -40,6 +40,10 @@ class ThreadPool {
 public:
     explicit ThreadPool(int count)
     : _count(count), _done(false) {
+        _stopped = new bool[count];
+        for (int i = 0; i < count; i++) {
+            _stopped[i] = false;
+        }
     }
 
     virtual ~ThreadPool() {
@@ -47,12 +51,12 @@ public:
             t->join();
             delete t;
         }
+        delete[] _stopped;
     }
 
     virtual void start() {
         for (int i = 0; i < _count; i++) {
             _threads.push_back(new thread(&ThreadPool::run, this, i));
-            _stopped.push_back(false);
         }
     }
 
@@ -89,7 +93,7 @@ protected:
     int                         _count;
     vector<thread*>             _threads;
     bool                        _done;
-    vector<bool>                _stopped;
+    bool*                       _stopped;
 };
 
 class DecodeThreadPool : public ThreadPool {
@@ -101,7 +105,7 @@ public:
     : ThreadPool(count),
       _itemsPerThread((minibatchSize - 1) / count + 1),
       _in(in), _out(out), _endSignaled(0),
-      _manager(0), _managerStopped(false), _inputBuf(0),
+      _manager(0), _stopManager(false), _managerStopped(false), _inputBuf(0),
       _bufferIndex(0), _minibatchSize(minibatchSize),
       _outputItemSize(outputItemSize),
       _labelChunkSize(labelSize * labelCount),
@@ -130,18 +134,26 @@ public:
     virtual void start() {
         for (int i = 0; i < _count; i++) {
             _threads.push_back(new thread(&DecodeThreadPool::run, this, i));
-            _stopped.push_back(false);
         }
         _manager = new thread(&DecodeThreadPool::manage, this);
     }
 
     virtual void stop() {
         ThreadPool::stop();
-        while (_managerStopped == false) {
-            std::this_thread::sleep_for(std::chrono::seconds(0));
+        while (stopped() == false) {
+            std::this_thread::yield();
+            _in.advanceWritePos();
             _in.signalNonEmpty();
         }
-        _started.notify_all();
+
+        _stopManager = true;
+        while (_managerStopped == false) {
+            std::this_thread::yield();
+            _in.advanceWritePos();
+            _in.signalNonEmpty();
+            _endSignaled++;
+            _ended.notify_one();
+        }
     }
 
 protected:
@@ -188,7 +200,9 @@ protected:
             // Handle the data.
             int itemSize = 0;
             char* item = _inputBuf->first->getItem(i, itemSize);
-            assert(item != 0);
+            if (item == 0) {
+                return;
+            }
             _decoder->decode(item, itemSize, dataBuf);
             dataBuf += _outputItemSize;
         }
@@ -251,8 +265,7 @@ protected:
             unique_lock<mutex> lock(_in.getMutex());
             while (_in.empty() == true) {
                 _in.waitForNonEmpty(lock);
-                if (_done == true) {
-                    assert(_in.empty() == true);
+                if (_stopManager == true) {
                     return;
                 }
             }
@@ -267,9 +280,9 @@ protected:
         // Thread function.
         int result = _device->init();
         if (result != 0) {
-            _done = true;
+            _stopManager = true;
         }
-        while (_done == false) {
+        while (_stopManager == false) {
             consume();
         }
         _managerStopped = true;
@@ -285,6 +298,7 @@ private:
     vector<int>                 _startSignaled;
     int                         _endSignaled;
     thread*                     _manager;
+    bool                        _stopManager;
     bool                        _managerStopped;
     BufferPair*                 _inputBuf;
     int                         _bufferIndex;
@@ -399,9 +413,7 @@ public:
             drain();
         }
         _decodePool->stop();
-        while (_decodePool->stopped() == false) {
-            std::this_thread::yield();
-        }
+
         delete _readBufs;
         delete _readPool;
         delete _decodeBufs;
