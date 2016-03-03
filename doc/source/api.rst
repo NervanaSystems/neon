@@ -17,15 +17,48 @@
 API
 ===
 
+This API documentation covers each model within neon. Most modules have a
+corresponding user guide section that introduces the main concepts. See this
+API for specific function definitions.
 
-``neon`` module
----------------
+.. csv-table::
+    :header: "Module API", "Description", "User Guide"
+    :widths: 20, 40, 30
+    :delim: |
 
-.. automodule:: neon
+    :py:mod:`neon` | Holds NervanaObject, the base object available to all other classes |
+    :py:mod:`neon.backends` | Computational backend (CPU or GPU) | :doc:`neon backend<backends>`
+    :py:mod:`neon.data` | Data loading and handling | :doc:`Data loading<loading_data>`, :doc:`Datasets<datasets>`
+    :py:mod:`neon.models` | Model architecture | :doc:`Models<models>`
+    :py:mod:`neon.layers` | Layer objects | :doc:`Layers<layers>`, :doc:`Creating new layers<creating_new_layers>`
+    :py:mod:`neon.initializers` | Weight initializer methods | :doc:`Initializers<initializers>`
+    :py:mod:`neon.transforms` | Activation functions and Costs/Metrics | :doc:`Costs and Metrics<costs>`
+    :py:mod:`neon.callbacks` | Callbacks during model training | :doc:`Callbacks<callbacks>`
+    :py:mod:`neon.optimizers` | Learning algorithms | :doc:`Optimizers<optimizers>`
+    :py:mod:`neon.visualizations` | Visualization of training cost and weight histograms | :doc:`Visualizing results<visualizing_results>`
+    :py:mod:`neon.util` | Utility module |
+
+
+``neon``
+--------
+.. py:module: neon
+
+The base (global) object ``NervanaObject`` contains the attribute ``be``, the reference to the computational
+backend.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   neon.NervanaObject
 
 
 ``neon.backends``
 -----------------
+.. py:module:: neon.backends
+
+This module defines the computational backend of neon, either based on CPU or GPU
+hardware. Included are classes that implement neon's auto-differentation feature.
 
 .. autosummary::
    :toctree: generated/
@@ -45,8 +78,250 @@ API
    neon.backends.autodiff.GradUtil.is_invalid
 
 
+``neon.data``
+-------------
+.. py:module:: neon.data
+
+Data-related classes and methods comprise this module, including methods for loading data
+and iterating through minibatches of data during training.
+
+.. autosummary::
+  :toctree: generated/
+  :nosignatures:
+
+  neon.data.dataiterator.NervanaDataIterator
+  neon.data.dataiterator.ArrayIterator
+  neon.data.imageloader.ImageLoader
+  neon.data.batch_writer.BatchWriter
+
+Dataset objects for storing data from common modalities (e.g. Text), as well as specific stock datasets (e.g. MNIST, CIFAR-10, Penn Treebank) are included.
+
+.. autosummary::
+  :toctree: generated/
+  :nosignatures:
+
+  neon.data.datasets.Dataset
+  neon.data.image.MNIST
+  neon.data.image.CIFAR10
+  neon.data.imagecaption.ImageCaption
+  neon.data.imagecaption.Flickr8k
+  neon.data.imagecaption.Flickr30k
+  neon.data.imagecaption.Coco
+  neon.data.text.Text
+  neon.data.text.Shakespeare
+  neon.data.text.PTB
+  neon.data.text.IMDB
+
+``neon.models``
+---------------
+.. py:module:: neon.models
+
+The Model class stores a list of layers describing the model. Methods are provided
+to train the model weights, perform inference, and save/load the model.
+
+.. autosummary::
+ :toctree: generated/
+ :nosignatures:
+
+ neon.models.model.Model
+
+
+``neon.layers``
+---------------
+.. py:module:: neon.layers
+
+This modules contains class definitions for common neural network layers. Base
+layers from which other layers are subclassed are
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    neon.layers.layer.Layer
+    neon.layers.layer.ParameterLayer
+    neon.layers.layer.CompoundLayer
+
+Common Layers
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    neon.layers.layer.Bias
+    neon.layers.layer.Linear
+    neon.layers.layer.Affine
+    neon.layers.layer.Dropout
+    neon.layers.layer.LookupTable
+    neon.layers.layer.Activation
+    neon.layers.layer.BatchNorm
+    neon.layers.layer.Pooling
+    neon.layers.layer.LRN
+
+Convolutional Layers
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    neon.layers.layer.Convolution
+    neon.layers.layer.Conv
+    neon.layers.layer.Deconvolution
+    neon.layers.layer.Deconv
+
+Recurrent Layers
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    neon.layers.recurrent.Recurrent
+    neon.layers.recurrent.LSTM
+    neon.layers.recurrent.GRU
+    neon.layers.recurrent.BiRNN
+    neon.layers.recurrent.BiLSTM
+    neon.layers.recurrent.DeepBiRNN
+    neon.layers.recurrent.DeepBiLSTM
+    neon.layers.recurrent.RecurrentSum
+    neon.layers.recurrent.RecurrentMean
+    neon.layers.recurrent.RecurrentLast
+
+Containers govern the structure of the model. For a linear cascade of layers,
+the ``Sequential`` container is sufficient. Models that have branching and merging
+should use the other containers.
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    neon.layers.layer.BranchNode
+    neon.layers.layer.SkipNode
+    neon.layers.container.LayerContainer
+    neon.layers.container.Sequential
+    neon.layers.container.Tree
+    neon.layers.container.MergeBroadcast
+    neon.layers.container.MergeMultistream
+
+
+Generic cost layers are implemented in the following classes. Note that these
+classes subclass from `NervanaObject`, not any base layer class.
+
+.. autosummary::
+    :toctree: generated/
+    :nosignatures:
+
+    neon.layers.layer.GeneralizedCost
+    neon.layers.layer.GeneralizedCostMask
+    neon.layers.container.Multicost
+
+
+``neon.initializers``
+---------------------
+.. py:module:: neon.initializers
+
+Layer weights can be initialized with the following approaches
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   neon.initializers.initializer.Initializer
+   neon.initializers.initializer.Array
+   neon.initializers.initializer.Constant
+   neon.initializers.initializer.Gaussian
+   neon.initializers.initializer.IdentityInit
+   neon.initializers.initializer.Uniform
+   neon.initializers.initializer.GlorotUniform
+   neon.initializers.initializer.Kaiming
+   neon.initializers.initializer.Orthonormal
+   neon.initializers.initializer.Xavier
+
+``neon.transforms``
+-------------------
+.. py:module:: neon.transforms
+
+This modules contain activation functions, costs, and metrics.
+
+
+Activation functions
+~~~~~~~~~~~~~~~~~~~~
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   neon.transforms.transform.Transform
+   neon.transforms.activation.Identity
+   neon.transforms.activation.Explin
+   neon.transforms.activation.Rectlin
+   neon.transforms.activation.Softmax
+   neon.transforms.activation.Tanh
+   neon.transforms.activation.Logistic
+   neon.transforms.activation.Normalizer
+
+Costs
+~~~~~
+
+.. autosummary::
+  :toctree: generated/
+  :nosignatures:
+
+  neon.transforms.cost.Cost
+  neon.transforms.cost.CrossEntropyBinary
+  neon.transforms.cost.CrossEntropyMulti
+  neon.transforms.cost.SumSquared
+  neon.transforms.cost.MeanSquared
+  neon.transforms.cost.LogLoss
+
+Metrics
+~~~~~~~
+
+.. autosummary::
+  :toctree: generated/
+  :nosignatures:
+
+  neon.transforms.cost.Metric
+  neon.transforms.cost.Misclassification
+  neon.transforms.cost.TopKMisclassification
+  neon.transforms.cost.Accuracy
+  neon.transforms.cost.PrecisionRecall
+  neon.transforms.cost.ObjectDetection
+
+``neon.optimizers``
+-------------------
+.. py:module:: neon.optimizers
+
+neon implements the following learning algorithms for updating the weights.
+
+.. autosummary::
+   :toctree: generated/
+   :nosignatures:
+
+   neon.optimizers.optimizer.Optimizer
+   neon.optimizers.optimizer.GradientDescentMomentum
+   neon.optimizers.optimizer.RMSProp
+   neon.optimizers.optimizer.Adadelta
+   neon.optimizers.optimizer.Adagrad
+   neon.optimizers.optimizer.Adam
+   neon.optimizers.optimizer.MultiOptimizer
+
+For some optimizers, users can adjust the learning rate over the course of training
+by providing a schedule.
+
+.. autosummary::
+  :toctree: generated/
+  :nosignatures:
+
+  neon.optimizers.optimizer.Schedule
+  neon.optimizers.optimizer.ExpSchedule
+  neon.optimizers.optimizer.PolySchedule
+
 ``neon.callbacks``
 ------------------
+.. py:module:: neon.callbacks
+
+Callbacks are methods that are called at user-defined times during training. They can
+be scheduled to occur at the begining/end of training/minibatch/epoch. Callbacks can
+be used to, for example, periodically report training loss or save weight histograms.
 
 .. autosummary::
    :toctree: generated/
@@ -65,150 +340,11 @@ API
    neon.callbacks.callbacks.EarlyStopCallback
    neon.callbacks.callbacks.DeconvCallback
 
-
-``neon.data``
--------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.data.dataiterator.NervanaDataIterator
-   neon.data.dataiterator.ArrayIterator
-   neon.data.imageloader.ImageLoader
-   neon.data.imagecaption.ImageCaption
-   neon.data.datasets.load_cifar10
-   neon.data.datasets.load_mnist
-   neon.data.datasets.load_text
-   neon.data.text.Text
-
-
-``neon.initializers``
----------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.initializers.initializer.GlorotUniform
-   neon.initializers.initializer.Constant
-   neon.initializers.initializer.Gaussian
-   neon.initializers.initializer.Uniform
-
-
-``neon.layers``
----------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.layers.layer.Layer
-   neon.layers.layer.Pooling
-   neon.layers.layer.ParameterLayer
-   neon.layers.layer.Convolution
-   neon.layers.layer.Deconv
-   neon.layers.layer.Linear
-   neon.layers.layer.Bias
-   neon.layers.layer.Activation
-   neon.layers.layer.Affine
-   neon.layers.layer.Conv
-   neon.layers.layer.Dropout
-   neon.layers.layer.LookupTable
-   neon.layers.layer.GeneralizedCost
-   neon.layers.layer.GeneralizedCostMask
-   neon.layers.layer.BatchNorm
-   neon.layers.recurrent.Recurrent
-   neon.layers.recurrent.LSTM
-   neon.layers.recurrent.GRU
-   neon.layers.recurrent.RecurrentSum
-   neon.layers.recurrent.RecurrentMean
-   neon.layers.recurrent.RecurrentLast
-   neon.layers.container.LayerContainer
-   neon.layers.container.Sequential
-   neon.layers.container.Tree
-   neon.layers.container.MergeBroadcast
-   neon.layers.container.MergeMultistream
-   neon.layers.container.Multicost
-
-
-``neon.models``
----------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.models.model.Model
-
-
-``neon.optimizers``
--------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.optimizers.optimizer.Adadelta
-   neon.optimizers.optimizer.Adagrad
-   neon.optimizers.optimizer.Adam
-   neon.optimizers.optimizer.GradientDescentMomentum
-   neon.optimizers.optimizer.RMSProp
-   neon.optimizers.optimizer.Schedule
-   neon.optimizers.optimizer.ExpSchedule
-   neon.optimizers.optimizer.MultiOptimizer
-
-``neon.activations``
---------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.transforms.activation.Identity
-   neon.transforms.activation.Rectlin
-   neon.transforms.activation.Softmax
-   neon.transforms.activation.Tanh
-   neon.transforms.activation.Logistic
-
-``neon.costs``
---------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.transforms.cost.CrossEntropyBinary
-   neon.transforms.cost.CrossEntropyMulti
-   neon.transforms.cost.SumSquared
-   neon.transforms.cost.MeanSquared
-
-``neon.metrics``
-------------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.transforms.cost.Misclassification
-   neon.transforms.cost.TopKMisclassification
-   neon.transforms.cost.Accuracy
-
-
-``neon.util``
--------------
-
-.. autosummary::
-   :toctree: generated/
-   :nosignatures:
-
-   neon.util.argparser.NeonArgparser
-   neon.util.persist.load_obj
-   neon.util.persist.save_obj
-
-
 ``neon.visualizations``
 -----------------------
+.. py:module:: neon.visualizations
+
+This module generates visualizations using the ``nvis`` command line function.
 
 .. autosummary::
    :toctree: generated/
@@ -219,3 +355,19 @@ API
    neon.visualizations.data.h5_cost_data
    neon.visualizations.figure.x_label
    neon.visualizations.figure.cost_fig
+
+
+``neon.util``
+-------------
+.. py:module:: neon.util
+
+Useful utility functions, including parsing the command line and saving/loading
+of objects.
+
+.. autosummary::
+  :toctree: generated/
+  :nosignatures:
+
+  neon.util.argparser.NeonArgparser
+  neon.util.persist.load_obj
+  neon.util.persist.save_obj

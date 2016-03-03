@@ -16,92 +16,106 @@
 Datasets
 ========
 
+:py:class:`~.Dataset` class is a base class for commonly-used
+datasets. We recommend creating an object class for your dataset that
+handles the loading and preprocessing of the data. Datasets should
+implement :py:meth:`~.Dataset.gen_iterators`, which returns a dictionary data
+iterator used for training and evaluation (see :doc:`Loading
+data <loading_data>`).
+
+Neon provides dataset objects for handling many stock datasets.
+
 MNIST
 -----
-`MNIST <http://yann.lecun.com/exdb/mnist/>`_, is a dataset of handwritten
-digits, consisting of 60,000 training samples and 10,000 test
-samples. Each image is 28x28 greyscale pixels.
+
+`MNIST <http://yann.lecun.com/exdb/mnist/>`__, is a dataset of
+handwritten digits, consisting of 60,000 training samples and 10,000
+test samples. Each image is 28x28 greyscale pixels.
 
 MNIST can be fetched in the following manner:
 
 .. code-block:: python
 
-    from neon.data import load_mnist
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
+    from neon.data import MNIST
 
+    (X_train, y_train), (X_test, y_test), nclass = MNIST().load_data()
+    train_set = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
+    valid_set = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
 
 CIFAR10
 -------
-`CIFAR10  <http://www.cs.toronto.edu/~kriz/cifar.html>`_, is a dataset
-consisting of 50,000 training samples and 10,000 test samples. There are 10
-categories and each sample is a 32x32 RGB color image.
+
+`CIFAR10 <http://www.cs.toronto.edu/~kriz/cifar.html>`__, is a dataset
+consisting of 50,000 training samples and 10,000 test samples. There are
+10 categories and each sample is a 32x32 RGB color image.
 
 CIFAR10 can be fetched in the following manner:
 
 .. code-block:: python
 
-    from neon.data import load_cifar10
-    (X_train, y_train), (X_test, y_test), nclass = load_cifar10()
+    from neon.data import CIFAR10
+    (X_train, y_train), (X_test, y_test), nclass = CIFAR10().load_data()
     train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
     test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
 
-
 ImageCaption
 ------------
-This dataset uses precomputed CNN image features and caption sentences. It
-works with the
-`flickr8k <http://nlp.cs.illinois.edu/HockenmaierGroup/8k-pictures.html>`_,
-`flickr30k <http://shannon.cs.illinois.edu/DenotationGraph/>`_, and
-`COCO <http://mscoco.org/>`_ datasets and uses the VGG image features and
-sentences from http://cs.stanford.edu/people/karpathy/deepimagesent/ which
-have been converted to python .pkl format. These datasets have 5 reference
-sentences per image. For each sentence, the dataset converts each word to its
-1-hot representation so that each input batch of sentences is of dimension
-``(vocab_size, max_sentence_length * batch_size)``.
+
+This dataset uses precomputed CNN image features and caption sentences.
+It works with the flickr8k, flickr30k, and COCO datasets and uses the
+VGG image features and sentences from
+http://cs.stanford.edu/people/karpathy/deepimagesent/ which have been
+converted to python .pkl format. These datasets have 5 reference
+sentences per image. For each sentence, the dataset converts each word
+to its 1-hot representation so that each input batch of sentences is of
+dimension (vocab_size, max_sentence_length * batch_size).
 
 The image caption data can be fetched in the following manner:
 
 .. code-block:: python
 
     # download dataset
-    from neon.data import load_flickr8k
-    data_path = load_flickr8k()  # Other setnames are flickr30k and COCO
+    from neon.data import Flickr8k
+    data_path = Flickr8k.load_data()  # Other setnames are flickr30k and COCO
 
     # load data
     from neon.data import ImageCaption
     train_set = ImageCaption(path=data_path, max_images=-1)
 
 Text
------
-For existing datasets, for example,
-`Penn Treebank <https://www.cis.upenn.edu/~treebank/>`_,
-`Hutter Prize <http://mattmahoney.net/dc/textdata>`_, and
-`Shakespeare <http://cs.stanford.edu/people/karpathy/char-rnn>`_, we have
-metadata built-in to retrieve from online sources and save the file locally.
-Then, a text dataset object can be created from a local path. It allows users
-to use their own local text files easily.  A text dataset can take a
-tokenizer to parse the file. Otherwise, the file will be parsed on a
-character level. It also takes a vocabulary mapping as an input, so the same
-mapping can be used for all training, testing and validation sets.
+----
+
+For existing datasets (e.g. Penn Treebank, Hutter Prize, and
+Shakespeare), we have object classes for loading, and sometimes
+pre-processing, the data. The online source are stroed in the
+``__init__`` method. Some datasets (such as Penn Treebank) also accept a
+tokenizer (string) to parse the file. These datasets use ``gen_iterators()``
+to return a iterator (:py:class:`Text<neon.data.text.Text>`)
 
 .. code-block:: python
 
-    # download Penn Treebank
-    from neon.data import load_text
-    train_path = load_text('ptb-train', path=args.data_dir)
-    valid_path = load_text('ptb-valid', path=args.data_dir)
+    from neon.data import PTB
 
-    # load data and parse on word-level
-    from neon.data import Text
-    train_set = Text(time_steps, train_path, tokenizer=str.split)
-    valid_set = Text(time_steps, valid_path, vocab=train_set.vocab, tokenizer=str.split)
+    # download Penn Treebank and parse at the word level
+    ptb = PTB(tokenizer="str.split")
+    ptb.load_data()
+
+    # create dict of iterators
+    # iters['train'] is an iterator (neon.data.Text) for the training data
+    # iters['test'] is an iterator for the testing data
+    # iters['valid'] is an iterator for the validation data
+    iters = ptb.gen_iterators()
 
 ImageNet
 --------
-The raw images need to be downloaded from ILSVRC as a tar file. The
-``neon.data.batch_writer.py`` script can convert the raw images into binaries.
-``data_dir`` is where the processed batches will be stored, and ``image_dir``
-is where the original tar files are saved.
+
+The raw images need to be downloaded from ILSVRC as a tar file. Because
+the data is too large to fit in memory, the data must be loaded in
+batches (called "macrobatches", see :doc:`Loading data <loading_data>`
+). We first write the macrobatches with the
+``batch_writer.py`` script. ``data_dir`` is where the
+processed batches will be stored, and ``image_dir`` is where the
+original tar files are saved.
 
 .. code-block:: bash
 
@@ -109,20 +123,35 @@ is where the original tar files are saved.
                                       --image_dir /usr/local/data/I1K/imagenet_orig \
                                       --set_type i1k
 
-
-Then an :py:class:`ImageLoader<neon.data.imageloader.ImageLoader>` instance can be
-started to feed images to the model.
+We then create the ImageNet dataset object and get the training data
+iterator, which is of the :py:class:`.ImageLoader` class. :py:class:`.ImageLoader` allows
+for fast loading and feeding of macrobatches to the model.
 
 .. code-block:: python
 
-    from neon.data import ImageLoader
-    train = ImageLoader(repo_dir=args.data_dir, inner_size=224, scale_range=256, set_name='train')
+    from neon.data import I1K
+
+    # create the I1K object
+    i1k = I1K(data_dir = args.data_dir, inner_size=224, subset_pct=100)
+
+    # fetch a dict of iterators
+    # iter['train'] is an iterator (neon.data.ImageLoader) for the training data
+    # iter['val'] is an iterator for the validation data
+    iters = i1k.gen_iterators()
 
 QA and bAbI
 -----------
-A bAbI dataset object can be created by specifying which task and which subset (20 tasks and 4 subsets in bAbI) to retrieve. The object will use built-in metadata to get bAbI data from online sources, save and unzip the files for that task locally, and then vectorize the story-question-answer data. The training and test files are both needed to build a vocabulary set.
 
-A general question&answering container can take the story-question-answer data from a bAbI data object and create a data iterator for training.
+A :py:class:`.bAbI` dataset object can be created by specifying which task and which
+subset (20 tasks and 4 subsets in bAbI) to retrieve. The object will use
+built-in metadata to get bAbI data from online sources, save and unzip
+the files for that task locally, and then vectorize the
+story-question-answer data. The training and test files are both needed
+to build a vocabulary set.
+
+A general question and answering container can take the
+story-question-answer data from a bAbI data object and create a data
+iterator for training.
 
 .. code-block:: python
 
@@ -132,40 +161,3 @@ A general question&answering container can take the story-question-answer data f
     # create a QA iterator
     train_set = QA(*babi.train)
     valid_set = QA(*babi.test)
-
-
-Add a new dataset
-------------------
-
-You can also add your own dataset, where the input and the labels are
-n-dimensional arrays. Here is an example of what adding image data would look
-like (with random pixel and label values).
-
-.. code-block:: python
-
-    from neon.data import ArrayIterator
-
-    """
-    X is the input features and y is the labels.
-    Here, we show how to load in 10,000 images that each have height and width
-    of 32, and 3 channels (R,G,B)
-    The data in X has to be laid out as follows: (# examples, feature size)
-    The labels y have the same first dimension as the number of examples
-    (in the case of an autoencoder, we do not specify y).
-    """
-
-    X = np.random.rand(10000,3072)
-    y = np.random.randint(1,11,10000)
-
-    """
-    We pass the data points and labels X, y to be loaded into the backend
-    We set nclass to 10, for 10 possible labels
-    We set lshape to (3,32,32), to represent the 32x32 image with 3 channels
-    """
-
-    train = ArrayIterator(X=X, y=y, nclass=10, lshape=(3,32,32))
-
-Note: You can pass in any data, as long as it is specified as above. Image
-data must specify an lshape - (number of input channels, input height, input
-width). The tensor layout is (M, N), where M is the flattened lshape, and N
-is the batch size.

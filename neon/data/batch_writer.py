@@ -55,7 +55,7 @@ class BatchWriter(object):
                                            from the input image directories.  Default is None,
                                            which indicates no maximum.
         file_pattern (str, optional): file suffix to use for globbing from the image_dir.
-                                      Default is '*.jpg'
+                                      Default is '.jpg'
         macro_size (int, optional): number of images to include by default in each macrobatch.
                                     Default is 3072.
         pixel_mean (tuple, optional): per pixel mean values to use for saving to metafile.
