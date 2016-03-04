@@ -731,10 +731,11 @@ class NervanaGPU(Backend):
             self.use_cudac_kernels = True
             self.cublas_handle = cublas.cublasCreate()
 
-            logger.warn("Neon is highly optimized for Maxwell GPUs. "
-                        "Please note that you are running on a pre-Maxwell GPU "
-                        "and you might not experience the fastest performance. "
-                        "For faster performance using the Nervana Cloud contact "
+            logger.warn("Neon is highly optimized for Maxwell GPUs. Although "
+                        "you might get speedups over CPUs, note that you are "
+                        "running on a pre-Maxwell GPU and you might not "
+                        "experience the fastest performance. For faster "
+                        "performance consider using the Nervana Cloud contact "
                         "info@nervanasys.com")
         else:
             self.use_cudac_kernels = False
