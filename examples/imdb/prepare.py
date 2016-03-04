@@ -52,7 +52,7 @@ def build_data_train(path='.', filepath='labeledTrainData.tsv', vocab_file=None,
         dt = np.dtype([('y', np.uint8),
                        ('split', np.bool),
                        ('num_words', np.uint16),
-                       # WARNING: vlen=bytes in pythoon 3
+                       # WARNING: vlen=bytes in python 3
                        ('text', h5py.special_dtype(vlen=str))
                        ])
         reviews_text = h5f.create_dataset('reviews', shape=shape, maxshape=maxshape,

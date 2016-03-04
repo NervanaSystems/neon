@@ -21,7 +21,7 @@ that have been stored in pkl format. The model then transforms the image feature
 and sentences to the same hidden dimension size and prepends the image to be the
 first word of the sequence which is then fed to a LSTM.
 
-Referece:
+Reference:
 https://github.com/karpathy/neuraltalk
 
 """

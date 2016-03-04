@@ -197,6 +197,6 @@ model.fit(train_set, optimizer=optimizer,
 
 print 'running eval on the training set...'
 metric_train = model.eval(train_set, metric=ObjectDetection())
-print 'Train: label accuracy - {}%, object deteciton SmoothL1Loss - {}'.format(
+print 'Train: label accuracy - {}%, object detection SmoothL1Loss - {}'.format(
     metric_train[0]*100,
     metric_train[1])

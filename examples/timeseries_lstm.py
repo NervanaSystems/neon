@@ -316,7 +316,7 @@ if __name__ == '__main__':
         plt.plot(valid_output[:, 0], valid_output[:, 1], 'bo', label='prediction')
         plt.plot(valid_target[:, 0], valid_target[:, 1], 'r.', label='target')
         plt.legend()
-        plt.title('Neon on validatation set')
+        plt.title('Neon on validation set')
         plt.savefig('neon_series_validation_output.png')
 
     # =====================generate sequence ==================================
