@@ -735,7 +735,7 @@ class NervanaGPU(Backend):
                         "you might get speedups over CPUs, note that you are "
                         "running on a pre-Maxwell GPU and you might not "
                         "experience the fastest performance. For faster "
-                        "performance consider using the Nervana Cloud contact "
+                        "performance using the Nervana Cloud contact "
                         "info@nervanasys.com")
         else:
             self.use_cudac_kernels = False
