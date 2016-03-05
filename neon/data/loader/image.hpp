@@ -121,6 +121,24 @@ public:
         cropBox->y = corner.y;
     }
 
+    void getRandomAngle(unsigned int& seed, int& angle) {
+        if (_augment == false) {
+            angle = 0;
+            return;
+        }
+
+        if (_rotateMax < _rotateMin) {
+            throw std::runtime_error("Max angle is less than min angle");
+        }
+        if (_rotateMax > 180) {
+            throw std::runtime_error("Invalid max angle");
+        }
+        if (_rotateMin < -180) {
+            throw std::runtime_error("Invalid min angle");
+        }
+        angle = (rand_r(&seed) % (_rotateMax + 1 - _rotateMin)) + _rotateMin;
+    }
+
     void getRandomScaledCrop(unsigned int& seed, const Size2i &inputSize,
                        Rect* cropBox) {
         // Use the entire squashed image (Caffe style evaluation)
@@ -211,9 +229,20 @@ public:
         Mat decodedImage;
         decode(item, itemSize, &decodedImage);
 
+        int angle;
+        _params->getRandomAngle(_rngSeed, angle);
+        Mat rotatedImage;
+        if (angle == 0) {
+            rotatedImage = decodedImage;
+        } else {
+            rotate(decodedImage, rotatedImage, angle);
+        }
+
         Rect cropBox;
-        _params->getRandomCrop(_rngSeed, decodedImage.size(), &cropBox);
-        Mat croppedImage = decodedImage(cropBox);
+        _params->getRandomCrop(_rngSeed, rotatedImage.size(), &cropBox);
+        Mat croppedView = rotatedImage(cropBox);
+        Mat croppedImage;
+        croppedView.copyTo(croppedImage);
 
         _params->getRandomScaledCrop(_rngSeed, croppedImage.size(), &cropBox);
         croppedImage = croppedImage(cropBox);
@@ -327,6 +356,12 @@ private:
             ss << "Unsupported number of channels in image: " << _params->_channelCount;
             throw std::runtime_error(ss.str());
         }
+    }
+
+    void rotate(const Mat& input, Mat& output, int angle) {
+        Point2i pt(input.cols / 2, input.rows / 2);
+        Mat rot = cv::getRotationMatrix2D(pt, angle, 1.0);
+        cv::warpAffine(input, output, rot, input.size());
     }
 
     void resize(const Mat& input, Mat& output, const Size2i& size) {
