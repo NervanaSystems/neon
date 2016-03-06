@@ -32,7 +32,7 @@ information.
 
 ### Installation
 
-* [Local install and dependencies](http://neon.nervanasys.com/docs/latest/user_guide.html#installation)
+* [Local install and dependencies](http://neon.nervanasys.com/docs/latest/installation.html)
 
 ### Quick Install
 
