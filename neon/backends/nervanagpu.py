@@ -2033,7 +2033,7 @@ class NervanaGPU(Backend):
                 threads = 1 << max(5, int(round(log(N, 2))) - 3)
             else:
                 occup = K / (128.0 * _get_sm_count())
-                for t in (32, 64, 128, 256, 512, 1024):
+                for t in (32, 64, 128, 256, 512):
                     if occup * t > 5.0:
                         threads = t
                         break
