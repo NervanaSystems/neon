@@ -2037,6 +2037,8 @@ class NervanaGPU(Backend):
                     if occup * t > 5.0:
                         threads = t
                         break
+        if threads is None:
+            threads = 1024
 
         params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
                   y.gpudata, xvar.gpudata, gmean.gpudata, gvar.gpudata,
