@@ -49,7 +49,7 @@ class XpropWinograd(KernelGroup):
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 10 Tflops on 24 SMs
-        self.warmup = max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1)
+        self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
 
         self.params = (N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
         self.init(self.params)
@@ -366,7 +366,7 @@ class UpdateWinograd(KernelGroup):
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 10 Tflops on 24 SMs
-        self.warmup = max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1)
+        self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
 
 
     def init(self, params, autotune=False):
@@ -762,7 +762,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
             C, K, N, YXk, Xk, k, magic_YXk, magic_Xk, magic_k,
             C*1152, GXS*C*1152, GYS*GXS*C*1152,
             P, Q, Q*N, P*Q*N, N*itemsize, Q*N*itemsize, Q*N*3*itemsize,
-            (P*Q*N - Q*N*3)*itemsize, (P*Q*N*15 - Q*N*3)*itemsize,
+            max(P*Q*N - Q*N*3, 0)*itemsize, (P*Q*N*15 - Q*N*3)*itemsize,
             maskN, shlX, shlY, supX, supY ]))
 
         lib.set_scratch_size(self.image_size, self.filter_size)
@@ -888,7 +888,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 10 Tflops on 24 SMs
-        self.warmup = max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1)
+        self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
 
     def init(self, params, autotune=False):
 
