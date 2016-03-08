@@ -20,7 +20,7 @@ import numpy as np
 from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
 from neon.backends.tests.utils import call_func, gen_backend_tensors
-from neon.backends.tests.utils import assert_tensors_allclose
+from neon.backends.tests.utils import tensors_allclose
 
 
 def get_audiff_gradient(f, be, tensors):
@@ -138,8 +138,7 @@ def test_gradients(backend_tests, custom_args):
     dtype = be.default_dtype
 
     # tensors
-    tensors = gen_backend_tensors([np, be], 5, [dim] * 5,
-                                  [flag] * 5, dtype=dtype)
+    tensors = gen_backend_tensors([np, be], [dim] * 5, [flag] * 5, dtype=dtype)
 
     # compare function value and gradient
     numpy_func_val = call_func(f, np, tensors[0])
@@ -149,10 +148,8 @@ def test_gradients(backend_tests, custom_args):
     autodiff_gradient = ad.get_grad_asnumpyarray(tensors[1])
 
     # TODO: stricter test to fix numerical issues
-    assert_tensors_allclose(numpy_func_val,
-                            backend_func_val, rtol=1e-2, atol=1e-2)
-    assert_tensors_allclose(numerical_gradient,
-                            autodiff_gradient, rtol=1e-02, atol=1e-3)
+    assert tensors_allclose(numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)
+    assert tensors_allclose(numerical_gradient, autodiff_gradient, rtol=1e-02, atol=1e-3)
 
     # cleanup diff tree
     ad.cleanup()

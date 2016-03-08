@@ -15,13 +15,13 @@
 # pylint: skip-file
 
 from neon.backends.backend import Tensor
+from tests.utils import allclose_with_out
 import numpy as np
 
 
 def call_func(f, backend, tensors):
     """
-    Call and evaluate a function with corresponding tensors, returns a numpy
-    array.
+    Call and evaluate a function with corresponding tensors, returns a numpy array.
 
     Arguments:
         f (lambda): Usage f(backend, *tensors)
@@ -40,42 +40,37 @@ def call_func(f, backend, tensors):
         return op_tree_val.get()
 
 
-def assert_tensors_allclose(a_tensors, b_tensors, rtol=0, atol=1e-7,
-                            err_msg=''):
+def tensors_allclose(a_tensors, b_tensors, rtol=0, atol=1e-7):
     """
-    For each backends, calls f with its tensors, and assert the results to be
-    all close.
+    For each backends, calls f with its tensors, and returns the results to
+    allclose.
 
     Arguments:
         a_tensors: list of tensors, or a tensor
         b_tensors: (another) list of tensors, or a tensor
         rtol (float, optional): Relative tolerance.
         atol (float, optional): Absolute tolerance.
-        err_msg (str, optional): The error message to be printed in case of
-                                 failure.
-    Raises:
-        AssertionError: If the tensors of fs is not all close
+    Returns:
+        bool: If the tensors of fs is all close
     """
     # deal with individual tensor
-    if type(a_tensors) is not list:
-        if isinstance(a_tensors, Tensor):
-            a_tensors = a_tensors.asnumpyarray()
-        if isinstance(b_tensors, Tensor):
-            b_tensors = b_tensors.asnumpyarray()
-        np.testing.assert_allclose(a_tensors,  b_tensors, rtol=rtol, atol=atol,
-                                   err_msg=err_msg)
-    else:
-        for a_tensor, b_tensor in zip(a_tensors, b_tensors):
-            if isinstance(a_tensor, Tensor):
-                a_tensor = a_tensor.asnumpyarray()
-            if isinstance(b_tensor, Tensor):
-                b_tensor = b_tensor.asnumpyarray()
-            np.testing.assert_allclose(a_tensor.astype(b_tensor.dtype),  b_tensor,
-                                       rtol=rtol, atol=atol, err_msg=err_msg)
+    if type(a_tensors) is not list and type(b_tensors) is not list:
+        a_tensors = [a_tensors]
+        b_tensors = [b_tensors]
+    results = []
+    for a_tensor, b_tensor in zip(a_tensors, b_tensors):
+        if isinstance(a_tensor, Tensor):
+            a_tensor = a_tensor.asnumpyarray()
+        if isinstance(b_tensor, Tensor):
+            b_tensor = b_tensor.asnumpyarray()
+        results.append(allclose_with_out(a_tensor.astype(b_tensor.dtype),
+                                         b_tensor,
+                                         rtol=rtol, atol=atol))
+
+    return all(results)
 
 
-def assert_funcs_allclose(f, backends, backend_tensors, rtol=0, atol=1e-7,
-                          err_msg=''):
+def funcs_allclose(f, backends, backend_tensors, rtol=0, atol=1e-7):
     """
     For each backends, calls f with its tensors, and assert the results to be
     all close.
@@ -86,11 +81,9 @@ def assert_funcs_allclose(f, backends, backend_tensors, rtol=0, atol=1e-7,
         tensors (list): list of tensors
         rtol (float, optional): Relative tolerance.
         atol (float, optional): Absolute tolerance.
-        err_msg (str, optional): The error message to be printed in case of
-                                 failure.
 
-    Raises:
-        AssertionError: If the results of fs is not close
+    Returns:
+        bool: If the results of fs is close
     """
     # call funcs to get results
     results = []
@@ -98,11 +91,10 @@ def assert_funcs_allclose(f, backends, backend_tensors, rtol=0, atol=1e-7,
         results.append(call_func(f, backend, tensors))
 
     # assert results to be equal
-    assert_tensors_allclose(results, rtol=rtol, atol=atol, err_msg=err_msg)
+    return tensors_allclose(results, rtol=rtol, atol=atol)
 
 
-def gen_backend_tensors(backends, tensor_num, tensor_dims, flags=None,
-                        dtype=np.float32):
+def gen_backend_tensors(backends, tensor_dims, flags=None, dtype=np.float32):
     """
     Generates random number for all backends.
 
@@ -127,7 +119,9 @@ def gen_backend_tensors(backends, tensor_num, tensor_dims, flags=None,
          [CPUTensor, CPUTensor, CPUTensor]]
     """
 
-    assert len(tensor_dims) == tensor_num and len(flags) == tensor_num
+    tensor_num = len(tensor_dims)
+    if flags is not None:
+        assert len(flags) == tensor_num
 
     # init
     backend_tensors = [[] for i in range(tensor_num)]

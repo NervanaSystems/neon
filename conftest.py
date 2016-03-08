@@ -22,15 +22,18 @@ import pytest
 
 from neon.backends import gen_backend
 
-
 def pytest_addoption(parser):
     '''
     Add a --all option to run the full range of parameters for tests generated using the
     pytest test generators
     '''
-    parser.addoption("--all", action="store_true",
-                     help="run all tests")
+    parser.addoption("--all", action="store_true", help="run all tests")
+    parser.addoption("--device_id", type=int, default=0, help="GPU device to use")
     return
+
+@pytest.fixture
+def device_id(request):
+    return request.config.getoption("--device_id")
 
 @pytest.fixture(scope='session')
 def data():
@@ -48,6 +51,7 @@ def backend_default(request):
     '''
     be = gen_backend(backend=request.param,
                      datatype=np.float32,
+                     device_id=request.config.getoption("--device_id"),
                      batch_size=128,
                      rng_seed=0)
     if request.param == 'gpu':
@@ -73,6 +77,7 @@ def backend_cpu64(request):
     '''
     be = gen_backend(backend='cpu',
                      datatype=np.float64,
+                     device_id=request.config.getoption("--device_id"),
                      batch_size=128,
                      rng_seed=0)
 
@@ -103,6 +108,7 @@ def backend_tests(request):
     be = gen_backend(backend=request.param[0],
                      datatype=request.param[1],
                      batch_size=128,
+                     device_id=request.config.getoption("--device_id"),
                      rng_seed=0)
 
     # add a cleanup call - will run after all tests in module are done

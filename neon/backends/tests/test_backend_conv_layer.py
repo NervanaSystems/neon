@@ -26,6 +26,7 @@ from operator import mul
 
 from neon.backends.nervanagpu import NervanaGPU
 from neon.backends.nervanacpu import NervanaCPU
+from tests.utils import allclose_with_out
 from timeit import default_timer
 
 
@@ -120,11 +121,11 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("fargs_tests", fargs)
 
 
-def test_conv_layer(fargs_tests):
+def test_conv_layer(fargs_tests, device_id):
 
     dtype = np.float32
 
-    ng = NervanaGPU(stochastic_round=False, bench=True)
+    ng = NervanaGPU(stochastic_round=False, bench=True, device_id=device_id)
 
     N, C, K = fargs_tests[0]
     D, H, W = fargs_tests[1]
@@ -219,8 +220,8 @@ def test_conv_layer(fargs_tests):
             ("update", ngU, ncU.reshape(dimF), cpuU.reshape(dimF), S)):
 
         print(op)
-        assert np.allclose(ngA.get(), cpuA, rtol=0, atol=1e-4)
-        assert np.allclose(ncA.get(), cpuA, rtol=0, atol=1e-4)
+        assert allclose_with_out(ngA.get(), cpuA, rtol=0, atol=1e-4)
+        assert allclose_with_out(ncA.get(), cpuA, rtol=0, atol=1e-4)
 
     del ng
     del nc

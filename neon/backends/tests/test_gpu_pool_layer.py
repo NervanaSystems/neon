@@ -15,15 +15,17 @@
 
 import numpy as np
 import pycuda.driver as drv
+import pytest
 from neon.backends.nervanagpu import NervanaGPU
 from operator import mul
-from neon.backends.tests.utils import assert_tensors_allclose
+from neon.backends.tests.utils import tensors_allclose
 
 
 np.set_printoptions(threshold=8193, linewidth=600,
                     formatter={'int': lambda x: "%10d" % x, 'float': lambda x: "% .3f" % x})
 
-ng = NervanaGPU(stochastic_round=False, bench=True)
+device_id = pytest.config.getoption("--device_id")
+ng = NervanaGPU(stochastic_round=False, bench=True, device_id=device_id)
 
 print(drv.Context.get_current().get_device().name())
 
@@ -209,16 +211,14 @@ def pool_helper(dtype, ones, cpu, repeat, alpha, beta, ng, pool, config, op):
         maxO = np.absolute(cpuO).max()
         print("difO max: %.6f cpuO max: %5.2f ratio: %.6f" %
               (maxD, maxO, maxD / maxO))
-        assert_tensors_allclose(
-            cpuO, devO, rtol=0, atol=1e-2, err_msg="fprop:" + err_string)
+        assert tensors_allclose(cpuO, devO, rtol=0, atol=1e-2), "fprop:" + err_string
 
         difB = np.absolute(cpuB - devB)
         maxD = difB.max()
         maxB = np.absolute(cpuB).max()
         print("difB max: %.6f cpuB max: %5.2f ratio: %.6f" %
               (maxD, maxB, maxD / maxB))
-        assert_tensors_allclose(
-            cpuB, devB, rtol=0, atol=1e-2, err_msg="bprop:" + err_string)
+        assert tensors_allclose(cpuB, devB, rtol=0, atol=1e-2), "bprop:" + err_string
 
 
 if __name__ == '__main__':

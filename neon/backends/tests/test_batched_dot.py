@@ -24,7 +24,7 @@ import numpy as np
 
 from neon.backends.nervanagpu import NervanaGPU
 from neon.backends.nervanacpu import NervanaCPU
-from neon.backends.tests.utils import assert_tensors_allclose
+from neon.backends.tests.utils import tensors_allclose
 
 size = 32  # size input for GPU - 32, 64, 128, None=auto
 
@@ -71,11 +71,11 @@ def run_batched_dot(lib, I, E, W, X, dtype):
     return devO, devB, devU
 
 
-def test_batched_dot():
+def test_batched_dot(device_id):
     np.set_printoptions(threshold=8192 * 4, linewidth=600,
                         formatter={'int': lambda x: "%2d" % x, 'float': lambda x: "%2.0f" % x})
 
-    ng = NervanaGPU(stochastic_round=False, bench=1)
+    ng = NervanaGPU(stochastic_round=False, bench=1, device_id=device_id)
     nc = NervanaCPU()
 
     dtype = np.float32  # np.float16 or np.float32
@@ -92,12 +92,12 @@ def test_batched_dot():
     npO, npB, npU = run_batched_dot(np, cpuI, cpuE, cpuW, X, dtype)
 
     # set_trace()
-    assert_tensors_allclose(npO, ngO, rtol=0, atol=1e-3)
-    assert_tensors_allclose(npB, ngB, rtol=0, atol=1e-3)
-    assert_tensors_allclose(npU, ngU, rtol=0, atol=1e-3)
+    assert tensors_allclose(npO, ngO, rtol=0, atol=1e-3)
+    assert tensors_allclose(npB, ngB, rtol=0, atol=1e-3)
+    assert tensors_allclose(npU, ngU, rtol=0, atol=1e-3)
 
-    assert_tensors_allclose(npO, ncO, rtol=0, atol=1e-3)
-    assert_tensors_allclose(npB, ncB, rtol=0, atol=1e-3)
-    assert_tensors_allclose(npU, ncU, rtol=0, atol=1e-3)
+    assert tensors_allclose(npO, ncO, rtol=0, atol=1e-3)
+    assert tensors_allclose(npB, ncB, rtol=0, atol=1e-3)
+    assert tensors_allclose(npU, ncU, rtol=0, atol=1e-3)
 
     del(ng)

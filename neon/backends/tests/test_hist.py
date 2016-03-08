@@ -16,7 +16,7 @@ import numpy as np
 import itertools as itt
 from neon.backends.nervanacpu import NervanaCPU
 from neon.backends.nervanagpu import NervanaGPU
-from neon.backends.tests.utils import assert_tensors_allclose
+from neon.backends.tests.utils import tensors_allclose
 from neon.backends.util import check_gpu
 
 
@@ -41,7 +41,7 @@ def ref_hist(inp, nbins=64, offset=-48):
     return np_hist
 
 
-def test_edge_cases():
+def test_edge_cases(device_id):
     """
     Test several edge cases related to min/max bin, and rounding.
 
@@ -50,7 +50,7 @@ def test_edge_cases():
     gpuflag = (check_gpu.get_compute_capability(0) >= 3.0)
     if gpuflag is False:
         raise RuntimeError("Device does not have CUDA compute capability 3.0 or greater")
-    ng = NervanaGPU()
+    ng = NervanaGPU(device_id=device_id)
     nc = NervanaCPU()
     # edge case test
     np_ref = dict()
@@ -65,20 +65,20 @@ def test_edge_cases():
         for be in [ng, nc]:
             be_inp = be.array(inp)
             be_hist = be_inp.hist(tag)
-            assert_tensors_allclose(np_ref[tag], be_hist, err_msg=tag + str(be))
+            assert tensors_allclose(np_ref[tag], be_hist), tag + str(be)
 
     # dump_hist_data test
     for be in [ng, nc]:
         be_hist_data, be_hist_map = be.dump_hist_data()
         for tag, inp in inputs:
             be_data = be_hist_data[be_hist_map[tag]]
-            assert_tensors_allclose(np_ref[tag], be_data, err_msg=tag + str(be))
+            assert tensors_allclose(np_ref[tag], be_data), tag + str(be)
 
     del(ng)
     del(nc)
 
 
-def test_hist(nbin_offset_dim_dtype_inp):
+def test_hist(nbin_offset_dim_dtype_inp, device_id):
     """
     Compare the nervanagpu and nervanacpu hist implementation to the reference
     implementation above.
@@ -93,7 +93,7 @@ def test_hist(nbin_offset_dim_dtype_inp):
     if gpuflag is False:
         raise RuntimeError("Device does not have CUDA compute capability 3.0 or greater")
 
-    ng = NervanaGPU(hist_bins=nbins, hist_offset=offset)
+    ng = NervanaGPU(hist_bins=nbins, hist_offset=offset, device_id=device_id)
     nc = NervanaCPU(hist_bins=nbins, hist_offset=offset)
 
     np_inp = inp_gen(dim).astype(dtype)
@@ -101,7 +101,7 @@ def test_hist(nbin_offset_dim_dtype_inp):
     for be in [ng, nc]:
         be_inp = be.array(np_inp, dtype=dtype)
         be_hist = be_inp.hist(name)
-        assert_tensors_allclose(np_hist, be_hist)
+        assert tensors_allclose(np_hist, be_hist)
     del(ng)
     del(nc)
 

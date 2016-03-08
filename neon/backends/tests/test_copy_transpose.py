@@ -16,17 +16,17 @@ import numpy as np
 import itertools as itt
 from neon.backends.nervanacpu import NervanaCPU
 from neon.backends.nervanagpu import NervanaGPU
-from neon.backends.tests.utils import assert_tensors_allclose
+from neon.backends.tests.utils import tensors_allclose
 
 
-def test_copy_transpose(shape_dtype_inp):
+def test_copy_transpose(shape_dtype_inp, device_id):
     """
     Parameterized test case, uses pytest_generate_test to enumerate dim_dtype_inp
     tuples that drive the test.
     """
 
     shape, dtype, (name, inp_gen) = shape_dtype_inp
-    ng = NervanaGPU(default_dtype=dtype)
+    ng = NervanaGPU(default_dtype=dtype, device_id=device_id)
     nc = NervanaCPU(default_dtype=dtype)
     np_inp = inp_gen(shape).astype(dtype)
     ndims = len(shape)
@@ -38,7 +38,7 @@ def test_copy_transpose(shape_dtype_inp):
         np_trans = np.transpose(np_inp, axes=ax)
         be_trans = be.zeros(np_trans.shape)
         be.copy_transpose(be_inp, be_trans, axes=ax)
-        assert_tensors_allclose(np_trans, be_trans)
+        assert tensors_allclose(np_trans, be_trans)
     del(ng)
     del(nc)
 

@@ -21,6 +21,7 @@ from neon.backends import gen_backend
 from neon.layers import Sequential, Conv, Pooling, MergeBroadcast, Affine
 from neon.initializers.initializer import Gaussian, Constant
 from neon.transforms import Rectlin, Softmax
+from tests.utils import allclose_with_out
 
 init1 = Gaussian(scale=0.01)
 relu = Rectlin()
@@ -91,7 +92,8 @@ def top_branch():
 
 
 def test_branch_model():
-    NervanaObject.be = gen_backend("gpu", batch_size=64)
+    np.random.seed(1)
+    NervanaObject.be = gen_backend("gpu", batch_size=64, rng_seed=1)
     be = NervanaObject.be
     main1 = main_branch()
     i1 = inception([(32,), (32, 32), ('max', 16)])
@@ -158,9 +160,7 @@ def test_branch_model():
         x = ll.fprop(x)
 
     neon_out_ref = x.get()
-    difference = neon_out_ref - neon_out
-    assert np.max(np.abs(difference)) < 1e-7
-    print np.max(np.abs(difference))
+    assert allclose_with_out(neon_out, neon_out_ref, atol=1.0e-7, rtol=1.0e-5)
 
     print "Beginning Back prop"
     erra = np.random.random(neon_out.shape)
@@ -179,9 +179,7 @@ def test_branch_model():
 
     neon_ref_deltas = ref_deltas.get()
 
-    difference = neon_deltas - neon_ref_deltas
-    print np.max(np.abs(difference))
-    assert np.max(np.abs(difference)) < 1e-8
+    assert allclose_with_out(neon_deltas, neon_ref_deltas, atol=1.0e-8, rtol=1.0e-5)
 
 
 def test_branch_model_fork():
@@ -269,15 +267,11 @@ def test_branch_model_fork():
         x = ll.fprop(x)
 
     neon_out_ref = x.get()
-    difference = neon_out_ref - neon_out[0]
-    assert np.max(np.abs(difference)) < 1e-7
-    print np.max(np.abs(difference))
+    assert allclose_with_out(neon_out_ref, neon_out[0], atol=1.0e-7, rtol=1.0e-5)
 
     # Now do second branch
     neon_out_ref2 = branch2.fprop(main2_out).get()
-    difference = neon_out_ref2 - neon_out[1]
-    assert np.max(np.abs(difference)) < 1e-7
-    print np.max(np.abs(difference))
+    assert allclose_with_out(neon_out_ref2, neon_out[1], atol=1.0e-7, rtol=1.0e-5)
 
     print "Beginning Back prop"
     erra = [np.random.random(d.shape) for d in neon_out]
@@ -305,10 +299,7 @@ def test_branch_model_fork():
     ref_deltas[:] = b1[0].deltas + b2[0].deltas + b3[0].deltas + alpha2 * lbranch2[0].deltas
 
     neon_ref_deltas = ref_deltas.get()
-    difference = middle_neon_deltas - neon_ref_deltas
-
-    print np.max(np.abs(difference))
-    assert np.max(np.abs(difference)) < 1e-8
+    assert allclose_with_out(middle_neon_deltas, neon_ref_deltas, atol=1.0e-8, rtol=1.0e-5)
 
     x = ref_deltas
     main2[0].deltas = be.iobuf(inshape)
@@ -317,9 +308,7 @@ def test_branch_model_fork():
         x = ll.bprop(x)
 
     bottom_neon_ref_deltas = main2[1].deltas.get()
-    difference = bottom_neon_deltas - bottom_neon_ref_deltas
-    print np.max(np.abs(difference))
-    assert np.max(np.abs(difference)) < 1e-8
+    assert allclose_with_out(bottom_neon_deltas, bottom_neon_ref_deltas, atol=1.0e-8, rtol=1.0e-5)
 
 
 if __name__ == '__main__':

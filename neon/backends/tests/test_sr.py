@@ -2,12 +2,12 @@ import numpy as np
 from neon.backends import gen_backend
 
 
-def test_sr():
+def test_sr(device_id):
     """
     Performs stochastic rounding with 1 bit mantissa for an addition operation
     and checks that the resulting array is rounded correctly
     """
-    gpu = gen_backend(backend='gpu', stochastic_round=False)
+    gpu = gen_backend(backend='gpu', stochastic_round=False, device_id=device_id)
     n = 10
     A = gpu.ones((n, n), dtype=np.float16)
     B = gpu.ones((n, n), dtype=np.float16)

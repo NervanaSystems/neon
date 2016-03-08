@@ -23,7 +23,7 @@ import numpy as np
 import itertools as itt
 from neon.backends.nervanagpu import NervanaGPU
 from neon.backends.nervanacpu import NervanaCPU
-from neon.backends.tests.utils import assert_tensors_allclose
+from neon.backends.tests.utils import tensors_allclose
 
 
 def init_helper(lib, inA, inB, dtype):
@@ -55,7 +55,7 @@ def math_helper(lib, op, inA, inB, dtype):
     return C
 
 
-def compare_helper(op, inA, inB, dtype):
+def compare_helper(op, inA, inB, dtype, device_id=0):
     numpy_result = math_helper(np, op, inA, inB, dtype=np.float32)
 
     if np.dtype(dtype).kind == 'i' or np.dtype(dtype).kind == 'u':
@@ -65,7 +65,7 @@ def compare_helper(op, inA, inB, dtype):
     numpy_result = numpy_result.astype(dtype)
 
     if dtype in (np.float32, np.float16):
-        gpu = NervanaGPU(default_dtype=dtype)
+        gpu = NervanaGPU(default_dtype=dtype, device_id=device_id)
         nervanaGPU_result = math_helper(gpu, op, inA, inB, dtype=dtype)
         nervanaGPU_result = nervanaGPU_result.get()
         np.allclose(numpy_result, nervanaGPU_result, rtol=0, atol=1e-5)
@@ -101,44 +101,44 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("fargs_tests", fargs)
 
 
-def test_math(fargs_tests):
+def test_math(fargs_tests, device_id):
 
     dims, dtype = fargs_tests
 
     randA = rand_unif(dtype, dims)
     randB = rand_unif(dtype, dims)
 
-    compare_helper('+', randA, randB, dtype)
-    compare_helper('-', randA, randB, dtype)
-    compare_helper('*', randA, randB, dtype)
-    compare_helper('>', randA, randB, dtype)
-    compare_helper('>=', randA, randB, dtype)
-    compare_helper('<', randA, randB, dtype)
-    compare_helper('<=', randA, randB, dtype)
+    compare_helper('+', randA, randB, dtype, device_id=device_id)
+    compare_helper('-', randA, randB, dtype, device_id=device_id)
+    compare_helper('*', randA, randB, dtype, device_id=device_id)
+    compare_helper('>', randA, randB, dtype, device_id=device_id)
+    compare_helper('>=', randA, randB, dtype, device_id=device_id)
+    compare_helper('<', randA, randB, dtype, device_id=device_id)
+    compare_helper('<=', randA, randB, dtype, device_id=device_id)
 
 
-def test_slicing(fargs_tests):
+def test_slicing(fargs_tests, device_id):
     dims, dtype = fargs_tests
 
-    gpu = NervanaGPU(default_dtype=dtype)
+    gpu = NervanaGPU(default_dtype=dtype, device_id=device_id)
     cpu = NervanaCPU(default_dtype=dtype)
 
     array_np = np.random.uniform(-1, 1, dims).astype(dtype)
     array_ng = gpu.array(array_np, dtype=dtype)
     array_nc = cpu.array(array_np, dtype=dtype)
 
-    assert_tensors_allclose(array_ng[0], array_nc[0], rtol=0, atol=1e-3)
-    assert_tensors_allclose(array_ng[-1], array_nc[-1], rtol=0, atol=1e-3)
-    assert_tensors_allclose(array_ng[0, :], array_nc[0, :], rtol=0, atol=1e-3)
-    assert_tensors_allclose(array_ng[0:], array_nc[0:], rtol=0, atol=1e-3)
-    assert_tensors_allclose(array_ng[:-1], array_nc[:-1], rtol=0, atol=1e-3)
-    assert_tensors_allclose(array_ng[:, 0], array_nc[:, 0], rtol=0, atol=1e-3)
-    assert_tensors_allclose(array_ng[:, 0:1], array_nc[:, 0:1], rtol=0, atol=1e-3)
-    assert_tensors_allclose(array_ng[-1, 0:], array_nc[-1:, 0:], rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng[0], array_nc[0], rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng[-1], array_nc[-1], rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng[0, :], array_nc[0, :], rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng[0:], array_nc[0:], rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng[:-1], array_nc[:-1], rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng[:, 0], array_nc[:, 0], rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng[:, 0:1], array_nc[:, 0:1], rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng[-1, 0:], array_nc[-1:, 0:], rtol=0, atol=1e-3)
 
     array_ng[0] = 0
     array_nc[0] = 0
 
-    assert_tensors_allclose(array_ng, array_nc, rtol=0, atol=1e-3)
+    assert tensors_allclose(array_ng, array_nc, rtol=0, atol=1e-3)
 
     del(gpu)

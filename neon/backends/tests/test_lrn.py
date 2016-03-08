@@ -13,18 +13,8 @@
 # limitations under the License.
 
 import numpy as np
-import pycuda.driver as drv
 from neon.backends.nervanagpu import NervanaGPU
 from neon.backends.nervanacpu import NervanaCPU
-
-
-np.set_printoptions(threshold=8193, linewidth=600,
-                    formatter={'int': lambda x: "%10d" % x, 'float': lambda x: "% .3f" % x})
-
-ng = NervanaGPU(stochastic_round=False, bench=True)
-nc = NervanaCPU()
-
-print(drv.Context.get_current().get_device().name())
 
 
 def slicable(dim, pad=0):
@@ -32,9 +22,11 @@ def slicable(dim, pad=0):
     return (dim0, dim[-1])
 
 
-def test_pooling():
+def test_pooling(device_id):
+    ng = NervanaGPU(stochastic_round=False, bench=True, device_id=device_id)
+    nc = NervanaCPU()
     layer_args = dict(dtype=np.float32, N=122, C=16, D=1, H=32, W=32, J=5)
-    pool_test_args = dict(ones=0, cpu=1,
+    pool_test_args = dict(ones=0, cpu=1, ng=ng, nc=nc,
                           alpha=1.0,  # not supported in CPU
                           ascale=1.2,
                           beta=0.0,  # not supported in CPU
@@ -47,7 +39,7 @@ def test_pooling():
 
 
 def lrn_helper(dtype, ones, cpu, alpha, beta, ascale, bpower,
-               ng, layer_g, layer_c, N, C, D, H, W, J):
+               ng, nc, layer_g, layer_c, N, C, D, H, W, J):
 
     dimI = layer_g.dimI
     dimO = layer_g.dimO
@@ -105,36 +97,6 @@ def lrn_helper(dtype, ones, cpu, alpha, beta, ascale, bpower,
     print "GPU bprop"
     print devB.get().reshape(C*D*H*W, N)[0:4, 0:4]
 
-    # import ipdb; ipdb.set_trace()
-    # cpuO *= beta
-    # cpuB *= beta
-
-    #     # drop zero padding
-    #     cpuI = cpuI.reshape(dimI)
-    #     cpuB = cpuB.reshape(dimI)
-
-    #     devA = devA.get().astype(np.int32)
-    #     devO = devO.get().astype(np.float32)
-    #     devB = devB.get().astype(np.float32)
-    #     cpuA = np.empty(dimO, dtype=np.int32)
-
-    #     difA = np.absolute(cpuA - devA)
-
-    #     # np.savetxt("out_cpuB.txt", cpuB.reshape((-1,layer_g.N))[:,0:8], fmt='%5.2f')
-    #     # np.savetxt("out_devB.txt", devB.reshape((-1,layer_g.N))[:,0:8], fmt='%5.2f')
-
-    #     difO = np.absolute(cpuO - devO)
-    #     maxD = difO.max()
-    #     maxO = np.absolute(cpuO).max()
-    #     print("difO max: %.6f cpuO max: %5.2f ratio: %.6f" % (maxD, maxO, maxD / maxO))
-    #     assert_tensors_allclose(cpuO, devO, rtol=0, atol=1e-2, err_msg="fprop:" + err_string)
-
-    #     difB = np.absolute(cpuB - devB)
-    #     maxD = difB.max()
-    #     maxB = np.absolute(cpuB).max()
-    #     print("difB max: %.6f cpuB max: %5.2f ratio: %.6f" % (maxD, maxB, maxD / maxB))
-    #     assert_tensors_allclose(cpuB, devB, rtol=0, atol=1e-2, err_msg="bprop:" + err_string)
-
 
 if __name__ == '__main__':
-    test_pooling()
+    test_pooling(0)

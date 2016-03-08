@@ -19,7 +19,7 @@ import numpy as np
 
 from neon import NervanaObject
 from neon.backends.tests.utils import call_func, gen_backend_tensors
-from neon.backends.tests.utils import assert_tensors_allclose
+from neon.backends.tests.utils import tensors_allclose
 
 
 class TestFuncs():
@@ -83,12 +83,10 @@ def test_vs_numpy(backend_tests, custom_args):
     dtype = be.default_dtype
 
     # tensors
-    tensors = gen_backend_tensors(
-        [np, be], 5, [dim] * 5, [flag] * 5, dtype=dtype)
+    tensors = gen_backend_tensors([np, be], [dim] * 5, [flag] * 5, dtype=dtype)
 
     # compare function value and gradient
     numpy_func_val = call_func(f, np, tensors[0])
     backend_func_val = call_func(f, be, tensors[1])
 
-    assert_tensors_allclose(
-        numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)
+    assert tensors_allclose(numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)

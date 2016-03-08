@@ -570,7 +570,7 @@ __global__ void spool_fprop_lrn(
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_fprop_lrn")
-    kernel.prepare("3P 4f 34I" + ("Pf" if (clss[0] == "x") else ""))
+    kernel.prepare("3P 4f 34I 10I" + ("Pf" if (clss[0] == "x") else ""))  # add superblocking parameter
     return kernel
 
 
@@ -1014,7 +1014,7 @@ __global__ void spool_bprop_avg(
             jrst += inc;
         }
         // TODO confirm kepler OK
-        unsigned int shrN_mask = (shrN < 32) ? max(1, ((1 << shrN) - 1)) : 0xffffffff; 
+        unsigned int shrN_mask = (shrN < 32) ? max(1, ((1 << shrN) - 1)) : 0xffffffff;
         if((tid & shrN_mask) == 0)
             rcpWindowSize[sb] = 1.0f / (float)window_size;
     }
