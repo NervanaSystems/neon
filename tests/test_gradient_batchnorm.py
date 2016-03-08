@@ -26,7 +26,7 @@ from tests.grad_funcs import general_gradient_comp
 
 # add a reset methods to the layer classes
 # this is used to reset the layer so that
-# running fprop and bprop mulitple times
+# running fprop and bprop multiple times
 # produces repeatable results
 # some layers just need the function defined
 class BatchNormWithReset(BatchNorm):

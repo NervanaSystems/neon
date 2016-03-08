@@ -91,7 +91,7 @@ def test_ref_compare_rand(backend_default, refgruargs):
               Gaussian())
 
 
-# compare neon RNN to reference RNN implementstion
+# compare neon RNN to reference RNN implementation
 def check_rnn(seq_len, input_size, hidden_size,
               batch_size, init_func, inp_moms=[0.0, 1.0]):
     # init_func is the initializer for the model params

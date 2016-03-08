@@ -44,7 +44,7 @@ def sweep_epsilon(layer, inp, pert_rng, out_shape=None, lshape=None,
     pert_cnt = int(np.ceil(inpa.size*pert_frac))
     pert_inds = np.random.permutation(inpa.size)[0:pert_cnt]
 
-    layer.be.rng_reset()  # reset to same intial rng state
+    layer.be.rng_reset()  # reset to same initial rng state
 
     min_max_diff = -1.0
     min_max_pert = None
@@ -56,7 +56,7 @@ def sweep_epsilon(layer, inp, pert_rng, out_shape=None, lshape=None,
                                                    loss_scale=loss_scale,
                                                    lshape=lshape,
                                                    pert_inds=pert_inds)
-        layer.be.rng_reset()  # reset to same intial rng state
+        layer.be.rng_reset()  # reset to same initial rng state
         if min_max_diff < 0 or max_abs < min_max_diff:
             min_max_diff = max_abs
             min_max_pert = epsilon

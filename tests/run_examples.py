@@ -34,7 +34,7 @@ if os.getenv("EXECUTOR_NUMBER"):
 if not os.path.isdir('examples'):
     raise IOError('Must run from root dir of none repo')
 
-# check for venv actiavtions
+# check for venv activations
 cmd = 'if [ -z "$VIRTUAL_ENV" ];then exit 1;else exit 0;fi'
 if subp.call(cmd, shell=True) > 0:
     raise IOError('Need to activate the virtualenv')

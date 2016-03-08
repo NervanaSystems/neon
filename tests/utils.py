@@ -23,7 +23,7 @@ import numpy.random as nprnd
 def sparse_rand(shape, frac=0.05, round_up=False):
     # generate an input with sparse activation
     # in the input dimension for LSTM testing
-    # frac is the fraction of the matrix elemetns
+    # frac is the fraction of the matrix elements
     # which will be nonzero. Set round_up to
     # True to get a binary matrix, i.e. elements
     # are either set to 0 or 1

@@ -160,8 +160,8 @@ def test_all_rand(backend_default, allrand_args):
     return
 
 
-# permute mm indicies to change order of computaitons
-# to estimate numerical percision
+# permute mm indicies to change order of computations
+# to estimate numerical precision
 # this is a rough estimate
 def est_mm_prec(A, B, ntrials=1):
     A64 = np.float64(A)
