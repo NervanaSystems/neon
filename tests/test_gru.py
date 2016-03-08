@@ -91,7 +91,7 @@ def test_ref_compare_rand(backend_default, refgruargs):
               Gaussian())
 
 
-# compare neon GRU to reference GRU implementstion
+# compare neon GRU to reference GRU implementation
 def check_gru(seq_len, input_size, hidden_size,
               batch_size, init_func, inp_moms=[0.0, 1.0]):
     # init_func is the initializer for the model params

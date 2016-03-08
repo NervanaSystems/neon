@@ -18,7 +18,7 @@ alexnet model adapted for serialization testing
 
 has subset_pct set so that there are a low number of iterations per epoch
 and no partial minibatches, dropout is turned off for reproducibility on gpu
-and the learning rate is scaled to handle the reduced dropuot percentage.
+and the learning rate is scaled to handle the reduced dropout percentage.
 
 """
 

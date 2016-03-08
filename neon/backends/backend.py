@@ -582,7 +582,7 @@ class Backend(object):
         """
         Get the random number generator state to a specific state
 
-        Returns a tuple since some backends have mulitple RNG states
+        Returns a tuple since some backends have multiple RNG states
         (e.g. on-host and on-device)
 
         Returns:

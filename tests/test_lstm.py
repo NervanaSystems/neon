@@ -93,7 +93,7 @@ def test_ref_compare_rand(backend_default, reflstmargs):
                    Gaussian())
 
 
-# compare neon LSTM to reference LSTM implementstion
+# compare neon LSTM to reference LSTM implementation
 def check_lstm(seq_len, input_size, hidden_size,
                batch_size, init_func, inp_moms=[0.0, 1.0]):
     # init_func is the initializer for the model params

@@ -1,5 +1,5 @@
 """
-This is a reference LSTM numpy implementation adpated from Karpathy's code:
+This is a reference LSTM numpy implementation adapted from Karpathy's code:
 
 The adaptation includes
   - interface to use the same initialization values

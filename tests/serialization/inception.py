@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-googlenet model for serialzation testing.  script is adapted to only run
+googlenet model for serialization testing.  script is adapted to only run
 a small number of mini batches.
 """
 import numpy as np

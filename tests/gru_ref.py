@@ -1,5 +1,5 @@
 """
-This is a Minimal single layer GRU implementation adpated from DoctorTeeth's code:
+This is a Minimal single layer GRU implementation adapted from DoctorTeeth's code:
 https://github.com/DoctorTeeth/gru/blob/master/gru.py
 
 The adaptation includes

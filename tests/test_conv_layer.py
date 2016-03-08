@@ -164,7 +164,7 @@ def test_conv_ones(backend_default, ones_convargs):
 
     # the deltas are more complicated since the matricies are not
     # uniform, going to use the reference code directly here
-    # no tolerence here should be exact
+    # no tolerance here should be exact
     dd = np.abs(ref_layer.berror.T - neon_layer.deltas.get())
     assert np.max(dd) == 0.0
 

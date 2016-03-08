@@ -156,7 +156,7 @@ def test_dconv_ones(backend_default, ones_convargs):
     # check dw from neon layer
     assert np.max(dw) == updates_exp and np.min(dw) == updates_exp
 
-    # no tolerence here should be exact
+    # no tolerance here should be exact
     assert np.max(np.abs(ref_layer.y.T - neon_layer.deltas.get())) == 0.0
 
     return
