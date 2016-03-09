@@ -53,7 +53,9 @@ def pytest_generate_tests(metafunc):
     # sanity tests
     shapes = [(32, 24, 28, 16),
               (32, 20, 1),
-              (16, 4)]
+              (16, 4),
+              (30, 217, 32),
+              ]
 
     dtypes = [np.float32, np.float16]
     inputs = [

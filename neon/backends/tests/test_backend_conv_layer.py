@@ -102,22 +102,32 @@ def pytest_generate_tests(metafunc):
     """
     N_C_K = [
         (64, 64, 64),
-        (128, 64, 64),
-        (32, 128, 128),
+        (32, 1, 128),
     ]
 
     D_H_W = [
-        (3, 7, 7),
-        (3, 5, 5),
+        (3, 7, 58),
+        (3, 13, 68),
     ]
 
     T_R_S = [
         (3, 3, 3),
         (1, 3, 3),
+        (1, 1, 5),
+    ]
+
+    pad_d_h_w = [
+        (0, 1, 1),
+        (0, 0, 1),
+    ]
+
+    str_d_h_w = [
+        (1, 1, 1),
+        (1, 1, 2),
     ]
 
     if 'fargs_tests' in metafunc.fixturenames:
-        fargs = itt.product(N_C_K, D_H_W, T_R_S)
+        fargs = itt.product(N_C_K, D_H_W, T_R_S, pad_d_h_w, str_d_h_w)
         metafunc.parametrize("fargs_tests", fargs)
 
 
@@ -130,9 +140,8 @@ def test_conv_layer(fargs_tests, device_id):
     N, C, K = fargs_tests[0]
     D, H, W = fargs_tests[1]
     T, R, S = fargs_tests[2]
-
-    padding_d, padding_h, padding_w = 0, 1, 1
-    strides_d, strides_h, strides_w = 1, 1, 1
+    padding_d, padding_h, padding_w = fargs_tests[3]
+    strides_d, strides_h, strides_w = fargs_tests[4]
 
     conv_ng = ng.conv_layer(
         dtype,
@@ -220,16 +229,30 @@ def test_conv_layer(fargs_tests, device_id):
             ("update", ngU, ncU.reshape(dimF), cpuU.reshape(dimF), S)):
 
         print(op)
-        assert allclose_with_out(ngA.get(), cpuA, rtol=0, atol=1e-4)
+        ncAnp = ncA.get().astype(np.float32)
+        ngAnp = ngA.get().astype(np.float32)
+        ncdif = cpuA - ncAnp
+        ngdif = cpuA - ngAnp
+        maxval = abs(cpuA).max()
+        ncmaxdif = abs(ncdif).max()
+        ngmaxdif = abs(ngdif).max()
+        ncRatio = ncmaxdif / maxval
+        ngRatio = ngmaxdif / maxval
+
+        assert ncRatio < 1e-5
+        assert ngRatio < 1e-5
         assert allclose_with_out(ncA.get(), cpuA, rtol=0, atol=1e-4)
+        assert allclose_with_out(ngA.get(), cpuA, rtol=0, atol=1e-3)
 
     del ng
     del nc
 
 if __name__ == '__main__':
 
-    fargs = [(128, 64, 16),
-             (1, 16, 16),
-             (1, 3, 3)]
+    fargs = [(32, 1, 1280),     # N, C, K
+             (1, 13, 657),      # D, H, W
+             (1, 1, 11),        # T, R, S
+             (0, 0, 5),         # pad: (0, 0, 5)
+             (1, 1, 2)]         # str: (1, 1, 2)
 
     test_conv_layer(fargs)
