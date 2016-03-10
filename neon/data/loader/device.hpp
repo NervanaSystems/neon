@@ -21,11 +21,23 @@ enum DeviceType { CPU=0, GPU=1 };
 
 class DeviceParams {
 public:
+    DeviceParams(int type, int id) : _type(type), _id(id) {}
+
+public:
     int                         _type;
     int                         _id;
 };
 
 class CpuParams : public DeviceParams {
+public:
+    CpuParams(int type, int id, char* data[2], char* targets[2])
+    : DeviceParams(type, id) {
+        for (int i = 0; i < 2; i++) {
+            _data[i] = data[i];
+            _targets[i] = targets[i];
+        }
+    }
+
 public:
     char*                       _data[2];
     char*                       _targets[2];

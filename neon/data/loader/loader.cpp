@@ -48,101 +48,99 @@ unsigned int sum(char* data, unsigned int len) {
     return result;
 }
 
-int single(Reader* reader, Media* media, int epochCount,
-           int macrobatchCount, int macrobatchSize,
+int single(Loader* loader, int epochCount, int minibatchCount,
            int batchSize, int datumSize, int targetSize) {
-    BufferPool* readBufs = new BufferPool(reader->totalDataSize(),
-                                          reader->totalTargetsSize());
     unsigned int sm = 0;
+    Reader* reader = loader->getReader();
+    Media* media = loader->getMedia();
     char* dataBuf = new char[datumSize];
-    char* targetBuf = new char[macrobatchSize * targetSize];
     memset(dataBuf, 0, datumSize);
-    memset(targetBuf, 0, macrobatchSize * targetSize);
+    CharBuffer dataBuffer(0);
+    CharBuffer targetBuffer(0);
+    BufferPair bufPair = make_pair(&dataBuffer, &targetBuffer);
     for (int epoch = 0; epoch < epochCount; epoch++) {
         reader->reset();
-        for (int i = 0; i < macrobatchCount; i++) {
-            BufferPair bufPair = readBufs->getForWrite();
-            reader->readAll(bufPair.first, bufPair.second);
-            for (int j = 0; j < macrobatchSize; j++) {
+        for (int i = 0; i < minibatchCount; i++) {
+            bufPair.first->reset();
+            bufPair.second->reset();
+            reader->read(bufPair);
+            for (int j = 0; j < batchSize; j++) {
                 int itemSize = 0;
                 char* item = bufPair.first->getItem(j, itemSize);
                 assert(item != 0);
-                media->decode(item, itemSize, dataBuf);
+                media->transform(item, itemSize, dataBuf, datumSize);
                 sm += sum(dataBuf, datumSize);
                 int targetChunkSize = 0;
                 char* targets = bufPair.second->getItem(j, targetChunkSize);
-                targetBuf[j] = *targets;
+                sm += sum(targets, targetSize);
             }
-
-            sm += sum(targetBuf, macrobatchSize * targetSize);
         }
     }
+
     delete[] dataBuf;
-    delete[] targetBuf;
-    delete readBufs;
     return sm;
 }
 
-int multi(Loader* loader, Device* device, Reader* reader, Media* media,
-          int epochCount, int macrobatchCount, int macrobatchSize,
+int multi(Loader* loader, int epochCount, int minibatchCount,
           int batchSize, int datumSize, int targetSize) {
     int result = loader->start();
     assert(result == 0);
-    assert(macrobatchSize % batchSize == 0);
-    int minibatchCount = macrobatchCount * macrobatchSize / batchSize;
     unsigned int sm = 0;
-    char* data = new char[batchSize*datumSize];
-    char* targets = new char[batchSize*targetSize];
-    memset(data, 0, batchSize*datumSize);
-    memset(targets, 0, batchSize*targetSize);
+    int dataSize = batchSize * datumSize;
+    int targetsSize = batchSize * targetSize;
+    char* data = new char[dataSize];
+    char* targets = new char[targetsSize];
+    memset(data, 0, dataSize);
+    memset(targets, 0, targetsSize);
+    Device* device = loader->getDevice();
     for (int epoch = 0; epoch < epochCount; epoch++) {
+        loader->reset();
         for (int i = 0; i < minibatchCount; i++) {
             loader->next();
             int bufIdx = i % 2;
-            device->copyDataBack(bufIdx, data, batchSize * datumSize);
-            device->copyLabelsBack(bufIdx, targets, batchSize * targetSize);
-            sm += sum(data, batchSize * datumSize);
-            sm += sum(targets, batchSize * targetSize);
+            device->copyDataBack(bufIdx, data, dataSize);
+            device->copyLabelsBack(bufIdx, targets, targetsSize);
+            sm += sum(data, dataSize);
+            sm += sum(targets, targetsSize);
         }
     }
+    loader->stop();
     delete[] data;
     delete[] targets;
-    loader->stop();
     return sm;
 }
 
-int test(const char* pathPrefix, int batchSize, int datumSize,
-         int targetSize, Device* device) {
-    int epochCount = 1;
-    int macrobatchCount = 1;
-    stringstream fileName;
-    fileName << pathPrefix << 0;
+int test(char* repoDir, char* indexFile,
+         int batchSize, int nchan, int height, int width) {
+    int datumSize = nchan * height * width;
+    int targetSize = 4;
+    int epochCount = 2;
+    int minibatchCount = 65;
+    int itemCount;
 
-    // Peek into macrobatch to check the size of the file.
-    int macrobatchSize;
-    {
-        ArchiveReader reader(pathPrefix, 0, 0, 0);
-        macrobatchSize = reader.itemCount();
+    ImageParams mediaParams(3, 30, 30, false, false, 0, 0, 0, 0, 0, 0, 0);
+    char* dataBuffer[2];
+    char* targetBuffer[2];
+    for (int i = 0; i < 2; i++) {
+        dataBuffer[i] = new char[batchSize * datumSize];
+        targetBuffer[i] = new char[batchSize * targetSize];
     }
 
-    if (macrobatchSize % batchSize != 0) {
-        printf("Macrobatch size %d is not a multiple of minibatch size %d\n",
-               macrobatchSize, batchSize);
-        return -1;
+    CpuParams deviceParams(0, 0, dataBuffer, targetBuffer);
+    ImageIngestParams ingestParams(false, 0, 0);
+    Loader loader(&itemCount, batchSize, repoDir, indexFile,
+                  false, false, datumSize, targetSize, 100,
+                  &mediaParams, &deviceParams, &ingestParams);
+    unsigned int singleSum = single(&loader, epochCount,
+                                    minibatchCount, batchSize,
+                                    datumSize, targetSize);
+    unsigned int multiSum = multi(&loader, epochCount,
+                                  minibatchCount, batchSize,
+                                  datumSize, targetSize);
+    for (int i = 0; i < 2; i++) {
+        delete[] dataBuffer[i];
+        delete[] targetBuffer[i];
     }
-    Reader* reader = new ArchiveReader(pathPrefix, 0,
-                                       macrobatchCount * macrobatchSize,
-                                       batchSize);
-    ImageParams* params = new ImageParams();
-    Media* media = Media::create(params);
-    Loader loader(batchSize, datumSize, targetSize,
-                  device, reader, media);
-    unsigned int multiSum = multi(&loader, device, reader, media, epochCount,
-                                  macrobatchCount, macrobatchSize,
-                                  batchSize, datumSize, targetSize);
-    unsigned int singleSum = single(reader, media, epochCount,
-                                    macrobatchCount, macrobatchSize,
-                                    batchSize, datumSize, targetSize);
     printf("sum %u true sum %u\n", multiSum, singleSum);
     assert(multiSum == singleSum);
     printf("OK\n");
@@ -150,22 +148,18 @@ int test(const char* pathPrefix, int batchSize, int datumSize,
 }
 
 int main(int argc, char** argv) {
-    int datumSize = 3*224*224;
+    int nchan = 3;
+    int height = 30;
+    int width = 30;
+    int batchSize = 128;
     if (argc < 3) {
-        printf("Usage: %s macrobatch_prefix minibatch_size\n", argv[0]);
+        printf("Usage: %s repo_dir index_file\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    char* pathPrefix = argv[1];
-    int batchSize = atoi(argv[2]);
+    char* repoDir = argv[1];
+    char* indexFile = argv[2];
 
-#if HASGPU
-    Device* gpu = new Gpu(0, batchSize*datumSize,
-                          batchSize*sizeof(int));
-    test(pathPrefix, batchSize, datumSize, 4, gpu);
-#endif
-    Device* cpu = new Cpu(0, batchSize*datumSize,
-                          batchSize*sizeof(int));
-    test(pathPrefix, batchSize, datumSize, 4, cpu);
+    test(repoDir, indexFile, batchSize, nchan, height, width);
 }
 
 #else  // STANDALONE else

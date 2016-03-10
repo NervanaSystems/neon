@@ -125,11 +125,6 @@ public:
     virtual int read(BufferPair& buffers) = 0;
     virtual int reset() = 0;
 
-    // For unit testing.
-    virtual int readAll(CharBuffer* data, CharBuffer* targets) {
-        return 0;
-    }
-
     virtual int totalDataSize() {
         return 0;
     }

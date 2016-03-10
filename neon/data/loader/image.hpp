@@ -188,6 +188,11 @@ public:
 
 class ImageIngestParams : public MediaParams {
 public:
+    ImageIngestParams(bool resizeAtIngest, int sideMin, int sideMax)
+    : MediaParams(IMAGE), _resizeAtIngest(resizeAtIngest),
+      _sideMin(sideMin), _sideMax(sideMax) {}
+
+public:
     bool                        _resizeAtIngest;
     // Minimum value of the short side
     int                         _sideMin;

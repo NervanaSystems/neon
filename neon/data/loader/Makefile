@@ -50,7 +50,7 @@ ifeq (${OPENCVPKG},)
 	$(error opencv not installed.  Unable to build $@)
 endif
 	@echo "Building $@..."
-	$(CC) -o $@ -DSTANDALONE $(GPUFLAG) $(CFLAGS) $< $(INC) $(LDIR) $(LIBS)
+	$(CC) -o $@ -DSTANDALONE $(GPUFLAG) -g -Wall -O0 -std=c++11 $< $(INC) $(LDIR) $(LIBS)
 
 test/decode_test: test/decode_test.cpp $(SRCS)
 ifeq (${OPENCVPKG},)

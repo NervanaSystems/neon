@@ -274,12 +274,6 @@ public:
         return _batchFile.totalTargetsSize();
     }
 
-    // For unit testing.
-    int readAll(BufferPair& buffers) {
-        readExact(buffers, _itemsLeft);
-        return _itemsLeft;
-    }
-
 private:
     void loadMetadata() {
         string metaFile = _archiveDir + '/' + "meta-" + _indexFile;

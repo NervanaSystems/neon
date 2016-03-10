@@ -398,6 +398,18 @@ public:
         }
     }
 
+    Reader* getReader() {
+        return _reader;
+    }
+
+    Media* getMedia() {
+        return _media;
+    }
+
+    Device* getDevice() {
+        return _device;
+    }
+
 private:
     void drain() {
         {
