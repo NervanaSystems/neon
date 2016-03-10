@@ -17,10 +17,10 @@ Convolution layer tests
 """
 import numpy as np
 from neon import NervanaObject
-from neon.backends import gen_backend
 from neon.layers import Sequential, Conv, MergeSum, SkipNode, Activation
 from neon.initializers.initializer import Gaussian, IdentityInit
 from neon.transforms import Rectlin
+from tests.utils import allclose_with_out
 
 init1 = Gaussian(scale=0.01)
 relu = Rectlin()
@@ -67,21 +67,25 @@ def module_factory_copy(ref_module, modfunc, nfm, stride=1, name="i"):
     return (mm[0].layers[0].layers, mm[0].layers[1].layers)
 
 
-def test_skip_noupsample():
-    mergesum_test_config(modfunc=identity_skip, use_stride=1)
-
-
-def test_skip_upsample():
-    mergesum_test_config(modfunc=identity_skip, use_stride=2)
-
-
-def test_proj_upsample():
-    mergesum_test_config(modfunc=projection_skip, use_stride=2)
-
-
-def mergesum_test_config(modfunc, use_stride=1):
-    NervanaObject.be = gen_backend("gpu", batch_size=64, rng_seed=0)
+def test_skip_noupsample(backend_gpu):
     be = NervanaObject.be
+    be.bsz = 64
+    mergesum_test_config(be, modfunc=identity_skip, use_stride=1)
+
+
+def test_skip_upsample(backend_gpu):
+    be = NervanaObject.be
+    be.bsz = 64
+    mergesum_test_config(be, modfunc=identity_skip, use_stride=2)
+
+
+def test_proj_upsample(backend_gpu):
+    be = NervanaObject.be
+    be.bsz = 64
+    mergesum_test_config(be, modfunc=projection_skip, use_stride=2)
+
+
+def mergesum_test_config(be, modfunc, use_stride=1):
     l1 = Conv(**conv_params(3, 16))
     neon_layer = modfunc(16, use_stride)
     inshape = (16, 32, 32)
@@ -115,15 +119,13 @@ def mergesum_test_config(modfunc, use_stride=1):
         ll.allocate()
         ll.allocate_deltas()
 
-    o1 = path1.fprop(inp).get()
-    o2 = path2.fprop(inp).get()
-    # Now relu it
-    neon_out_ref = np.maximum(o1+o2, 0)
-    difference = neon_out_ref - neon_out
+    o1 = path1.fprop(inp)
+    o2 = path2.fprop(inp)
+    neon_out_ref = be.empty_like(o1)
+    neon_out_ref[:] = be.maximum(o1 + o2, 0)
 
-    print np.max(np.abs(difference))
     # need to have bsum false for this test to be valid
-    assert np.max(np.abs(difference)) < 1e-7
+    assert allclose_with_out(neon_out_ref.get(), neon_out, rtol=0)
     print "Fprop matching"
     print "Beginning Back prop"
     erra = np.random.random(neon_out.shape)
@@ -134,23 +136,21 @@ def mergesum_test_config(modfunc, use_stride=1):
     trunk_neon = ebr.get()
 
     err = be.array(erra)
-    err[:] = be.greater(be.array(neon_out_ref), 0) * err
+    err[:] = be.greater(neon_out_ref, 0) * err
 
     pstart = len(l1)
     eb1 = err
     for l in reversed(path1.layers[pstart:]):
         eb1 = l.bprop(eb1)
-    t1 = eb1.get()
-
-    err = be.array(erra)
-    err[:] = be.greater(be.array(neon_out_ref), 0) * err
 
     eb2 = err
     for l in reversed(path2.layers[pstart:]):
         eb2 = l.bprop(eb2)
-    t2 = eb2.get()
 
-    assert np.max(np.abs(trunk_neon - (t1 + t2))) < 1e-7
+    err_ref = be.empty_like(eb1)
+    err_ref[:] = eb1 + eb2
+
+    assert allclose_with_out(err_ref.get(), trunk_neon, rtol=0)
 
 
 if __name__ == '__main__':

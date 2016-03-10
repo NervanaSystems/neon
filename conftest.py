@@ -40,6 +40,16 @@ def data():
    path_to_data = '~/nervana/data/'
    return path_to_data
 
+def get_backend(request, datatype=np.float32):
+    be = gen_backend(backend=request.param,
+                     datatype=datatype,
+                     device_id=request.config.getoption("--device_id"),
+                     batch_size=128,
+                     rng_seed=0)
+    if request.param == 'gpu':
+        be.enable_winograd = 2 if be.enable_winograd else be.enable_winograd
+    return be
+
 @pytest.fixture(scope='module', params=['gpu', 'cpu'])
 def backend_default(request):
     '''
@@ -49,13 +59,7 @@ def backend_default(request):
 
     This fixture is parameterized to run both the cpu and gpu backends for every test
     '''
-    be = gen_backend(backend=request.param,
-                     datatype=np.float32,
-                     device_id=request.config.getoption("--device_id"),
-                     batch_size=128,
-                     rng_seed=0)
-    if request.param == 'gpu':
-        be.enable_winograd = 2 if be.enable_winograd else be.enable_winograd
+    be = get_backend(request)
 
     # add a cleanup call - will run after all test in module are done
     def cleanup():
@@ -67,19 +71,35 @@ def backend_default(request):
     # backend or use the NervanaObject.be global
     return be
 
+@pytest.fixture(scope='module', params=['gpu'])
+def backend_gpu(request):
+    '''
+    Fixture to setup the backend before running a test.  Also registers the teardown function to
+    clean up the backend after a test is done.  This has module scope, so this will be run once
+    for each test in a given test file (module).
 
-@pytest.fixture(scope='module')
+    This fixture is parameterized to run both the cpu and gpu backends for every test
+    '''
+    be = get_backend(request)
+
+    # add a cleanup call - will run after all test in module are done
+    def cleanup():
+        be = request.getfuncargvalue('backend_gpu')
+        del be
+    request.addfinalizer(cleanup)
+
+    # tests using this fixture can access the backend object from
+    # backend or use the NervanaObject.be global
+    return be
+
+@pytest.fixture(scope='module', params=['cpu'])
 def backend_cpu64(request):
     '''
     Fixture that returns a cpu backend using 64 bit dtype.
     For use in tests like gradient checking whihch need higher
     precision
     '''
-    be = gen_backend(backend='cpu',
-                     datatype=np.float64,
-                     device_id=request.config.getoption("--device_id"),
-                     batch_size=128,
-                     rng_seed=0)
+    be = get_backend(request, datatype=np.float64)
 
     # add a cleanup call - will run after all tests in module are done
     def cleanup():
