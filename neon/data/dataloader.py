@@ -42,9 +42,9 @@ class DataLoader(NervanaDataIterator):
     minibatches of generic data.
     """
 
-    def __init__(self, repo_dir, media_params,
-                 target_size,
-                 index_file='index.csv',
+    def __init__(self, set_name, repo_dir,
+                 media_params, target_size,
+                 index_file=None,
                  shuffle=False, reshuffle=False,
                  datum_dtype=np.uint8, target_dtype=np.int32,
                  onehot=True, nclasses=None, subset_percent=100,
@@ -53,8 +53,11 @@ class DataLoader(NervanaDataIterator):
             raise IOError('Directory not found: %s' % repo_dir)
         if onehot is True and nclasses is None:
             raise ValueError('nclasses must be specified for one-hot labels')
-        repo_dir = repo_dir.rstrip('/')
+        self.set_name = set_name
+        repo_dir = os.path.expandvars(os.path.expanduser(repo_dir))
         self.repo_dir = repo_dir
+        self.archive_dir = os.path.join(os.path.split(self.repo_dir)[0],
+                                        set_name + '-ingested')
         self.item_count = ct.c_int(0)
         self.bsz = self.be.bsz
         self.buffer_id = 0
@@ -63,7 +66,14 @@ class DataLoader(NervanaDataIterator):
         self.shape = media_params.get_shape()
         self.datum_size = media_params.datum_size()
         self.target_size = target_size
-        self.index_file = index_file
+        if index_file is None:
+            self.index_file = set_name + '-index.csv'
+        else:
+            self.index_file = index_file
+        if not os.path.isabs(self.index_file):
+            self.index_file = os.path.join(self.repo_dir, self.index_file)
+        self.meta_file = os.path.join(self.archive_dir,
+                                      set_name + '-metadata.csv')
         self.shuffle = shuffle
         self.reshuffle = reshuffle
         self.datum_dtype = datum_dtype
@@ -130,6 +140,9 @@ class DataLoader(NervanaDataIterator):
         # Limited to a single integer label for now.
         assert self.target_size == 1
         assert np.dtype(self.target_dtype).itemsize == 4
+        if not os.path.exists(self.archive_dir):
+            logger.warning('%s not found. Triggering data ingest...' % self.archive_dir)
+            os.makedirs(self.archive_dir)
         indexer = Indexer(self.repo_dir, self.index_file)
         indexer.run()
         datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
@@ -141,7 +154,9 @@ class DataLoader(NervanaDataIterator):
         self.loader = self.loaderlib.start(
             ct.byref(self.item_count), self.bsz,
             ct.c_char_p(self.repo_dir),
+            ct.c_char_p(self.archive_dir),
             ct.c_char_p(self.index_file),
+            ct.c_char_p(self.meta_file),
             self.shuffle, self.reshuffle,
             datum_nbytes, target_nbytes,
             self.subset_percent,

@@ -42,7 +42,6 @@ using std::stringstream;
 using std::vector;
 using std::map;
 
-#define ARCHIVE_DIR_SUFFIX  "-ingested"
 #define ARCHIVE_FILE_PREFIX "archive-"
 #define ARCHIVE_ITEM_COUNT  4096
 
@@ -73,27 +72,21 @@ private:
 
 class ArchiveWriter : public Writer {
 public:
-    ArchiveWriter(int batchSize, const char* repoDir, const char* indexFile,
+    ArchiveWriter(int batchSize, const char* repoDir, const char* archiveDir,
+                  const char* indexFile, const char* metaFile,
                   bool shuffle, Media* media)
-    : _batchSize(batchSize), _repoDir(repoDir),
+    : _batchSize(batchSize),
+      _repoDir(repoDir), _archiveDir(archiveDir),
+      _indexFile(indexFile), _metaFile(metaFile),
       _fileIdx(0), _itemCount(0), _started(false),
       _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0),
-      _indexFile(indexFile), _media(media) {
-        size_t dot = _indexFile.find_last_of(".");
-        string name;
-        if (dot == std::string::npos) {
-            name = _indexFile;
-        } else {
-            name = _indexFile.substr(0, dot);
-        }
-
-        _archiveDir = _repoDir + "-" + name + ARCHIVE_DIR_SUFFIX;
+      _media(media) {
         _writeThread = new WriteThread(this);
         _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle);
         if (Reader::exists(_archiveDir) == true) {
             return;
         }
-        int result = mkdir(_archiveDir.c_str(), 0777);
+        int result = mkdir(_archiveDir.c_str(), 0755);
         if (result != 0) {
             stringstream ss;
             ss << "Could not create " <<  _archiveDir;
@@ -119,10 +112,6 @@ public:
         while (_reader->exists(name) == false) {
             _write.wait(lock);
         }
-    }
-
-    string& getArchiveDir() {
-        return _archiveDir;
     }
 
     int write() {
@@ -164,11 +153,10 @@ private:
     }
 
     void writeMetadata() {
-        string metaFile = _archiveDir + '/' + "meta-" + _indexFile;
-        ofstream ofs(metaFile);
+        ofstream ofs(_metaFile);
         if (!ofs) {
             stringstream ss;
-            ss << "Could not create " <<  metaFile;
+            ss << "Could not create " <<  _metaFile;
             throw std::ios_base::failure(ss.str());
         }
 
@@ -181,6 +169,9 @@ private:
 private:
     int                         _batchSize;
     string                      _repoDir;
+    string                      _archiveDir;
+    string                      _indexFile;
+    string                      _metaFile;
     // Index of current archive file.
     int                         _fileIdx;
     // Total number of items in this dataset.
@@ -195,26 +186,25 @@ private:
     char*                       _targetBuf;
     int                         _dataBufLen;
     int                         _targetBufLen;
-    string                      _archiveDir;
-    string                      _indexFile;
     Media*                      _media;
 };
 
 class ArchiveReader : public Reader {
 public:
     ArchiveReader(int* itemCount, int batchSize,
-                  const char* repoDir, const char* indexFile,
-                  bool shuffle, bool reshuffle, int subsetPercent,
-                  Media* media)
-    : Reader(batchSize, repoDir, indexFile,
-      shuffle, reshuffle, subsetPercent),
-      _fileIdx(0), _itemIdx(0), _itemsLeft(0), _indexFile(indexFile) {
+                  const char* repoDir, const char* archiveDir,
+                  const char* indexFile, const char* metaFile,
+                  bool shuffle, bool reshuffle,
+                  int subsetPercent, Media* media)
+    : Reader(batchSize, repoDir, indexFile, shuffle, reshuffle, subsetPercent),
+      _archiveDir(archiveDir), _indexFile(indexFile), _metaFile(metaFile),
+      _fileIdx(0), _itemIdx(0), _itemsLeft(0) {
         // Create a writer just in case. It will only be used if archive
         // files are missing or damaged.
         _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT,
-                                           repoDir, indexFile,
+                                           repoDir, archiveDir,
+                                           indexFile, metaFile,
                                            shuffle, media);
-        _archiveDir = _archiveWriter->getArchiveDir();
         loadMetadata();
         *itemCount = _itemCount;
         open();
@@ -276,14 +266,13 @@ public:
 
 private:
     void loadMetadata() {
-        string metaFile = _archiveDir + '/' + "meta-" + _indexFile;
-        if (Reader::exists(metaFile) == false) {
-            _archiveWriter->waitFor(metaFile);
+        if (Reader::exists(_metaFile) == false) {
+            _archiveWriter->waitFor(_metaFile);
         }
-        ifstream ifs(metaFile);
+        ifstream ifs(_metaFile);
         if (!ifs) {
             stringstream ss;
-            ss << "Could not open " << metaFile;
+            ss << "Could not open " << _metaFile;
             throw std::runtime_error(ss.str());
         }
 
@@ -389,6 +378,9 @@ private:
     }
 
 private:
+    string                      _archiveDir;
+    string                      _indexFile;
+    string                      _metaFile;
     // Index of current archive file.
     int                         _fileIdx;
     // Index of current item.
@@ -399,6 +391,4 @@ private:
     Metadata                    _metadata;
     std::deque<DataPair>        _shuffleQueue;
     ArchiveWriter*              _archiveWriter;
-    string                      _archiveDir;
-    string                      _indexFile;
 };

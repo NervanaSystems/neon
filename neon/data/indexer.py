@@ -24,14 +24,11 @@ logger = logging.getLogger(__name__)
 class Indexer(NervanaObject):
     def __init__(self, path, index_file, pattern='*'):
         self.path = path
-        self.index_file = os.path.join(path, index_file)
+        assert os.path.isabs(index_file)
+        self.index_file = index_file
         self.pattern = pattern
 
     def run(self):
-        index_name = os.path.splitext(os.path.basename(self.index_file))[0]
-        archive_dir = self.path + index_name + '-ingested'
-        if os.path.exists(archive_dir):
-            return
         if os.path.exists(self.index_file):
             return
         logger.warning('%s not found. Attempting to create...' % self.index_file)
@@ -41,6 +38,7 @@ class Indexer(NervanaObject):
         classes = sorted(map(lambda x: os.path.basename(x), subdirs))
         class_map = {key: val for key, val in zip(classes, range(len(classes)))}
         with open(self.index_file, 'w') as fd:
+            fd.write('filename,label1\n')
             for subdir in subdirs:
                 label = class_map[os.path.basename(subdir)]
                 files = glob.iglob(os.path.join(subdir, self.pattern))

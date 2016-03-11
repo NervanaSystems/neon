@@ -169,7 +169,12 @@ public:
         for (int i = 0; i < _batchSize; ++i) {
             IndexElement* elem = _index[_itemIdx];
             // Read datum.
-            string path = _repoDir + '/' + elem->_fileName;
+            string path;
+            if (elem->_fileName[0] == '/') {
+                path = elem->_fileName;
+            } else {
+                path = _repoDir + '/' + elem->_fileName;
+            }
             struct stat stats;
             int result = stat(path.c_str(), &stats);
             if (result == -1) {
@@ -257,16 +262,21 @@ private:
     }
 
     void loadIndex() {
-        string indexFile = _repoDir + '/' + _indexFile;
-        ifstream ifs(indexFile);
+        ifstream ifs(_indexFile);
         if (!ifs) {
             stringstream ss;
-            ss << "Could not open " << indexFile;
+            ss << "Could not open " << _indexFile;
             throw std::ios_base::failure(ss.str());
         }
 
         string line;
+        // Ignore the header line.
+        std::getline(ifs, line);
         while (std::getline(ifs, line)) {
+            if (line[0] == '#') {
+                // Ignore comments.
+                continue;
+            }
             _index.addElement(line);
         }
 
