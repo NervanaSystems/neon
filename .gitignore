@@ -4,6 +4,7 @@
 *.pkl
 *.prm
 *.so
+*.swo
 *.swp
 .DS_Store
 neon/version.py

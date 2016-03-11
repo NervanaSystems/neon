@@ -509,9 +509,9 @@ class ParameterLayer(Layer):
         """
         serial_dict = super(ParameterLayer, self).get_description()
         if get_weights:
-            serial_dict['params'] = {'W': self.W.asnumpyarray()}
+            serial_dict['params'] = {'W': self.W.get()}
             if keep_states:
-                serial_dict['states'] = [s.asnumpyarray() for s in self.states]
+                serial_dict['states'] = [s.get() for s in self.states]
         return serial_dict
 
     def set_params(self, pdict):

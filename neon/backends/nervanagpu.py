@@ -416,10 +416,9 @@ class GPUTensor(Tensor):
 
     def asnumpyarray(self):
         """
-        asnumpyarray is an alias of get(), needed for MOP compatibility
-
-        Returns:
-            numpy.ndarray: A host numpy array
+        Deprecated. 
+        Scheduled to be removed in 2.0.
+        Use get() instead.
         """
         return self.get()
 

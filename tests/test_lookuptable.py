@@ -68,9 +68,9 @@ def test_lookuptable_zeros_error(backend_default, basic_linargs):
         assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.zeros((nout, nin * batch_size)))
-    layer.bprop(layer.be.array(err)).asnumpyarray()
+    layer.bprop(layer.be.array(err)).get()
 
-    dw = layer.dW.asnumpyarray()
+    dw = layer.dW.get()
     assert np.min(dw) == 0.0 and np.max(dw) == 0.0
 
     return
@@ -99,9 +99,9 @@ def test_lookuptable_ones_error(backend_default, basic_linargs):
         assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.ones((nout, nin * batch_size)))
-    layer.bprop(layer.be.array(err)).asnumpyarray()
+    layer.bprop(layer.be.array(err)).get()
 
-    dw = layer.dW.asnumpyarray()
+    dw = layer.dW.get()
     unqidx, count = np.unique(inp, return_counts=True)
     dw_exp = np.zeros((1, nout))
     for wrd_id, cnt in zip(unqidx, count):
@@ -134,9 +134,9 @@ def test_lookuptable_rand_error(backend_default, basic_linargs):
         assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.random.random((nout, nin * batch_size)))
-    layer.bprop(layer.be.array(err)).asnumpyarray()
+    layer.bprop(layer.be.array(err)).get()
 
-    dw = layer.dW.asnumpyarray()
+    dw = layer.dW.get()
     unqidx, count = np.unique(inp, return_counts=True)
     dw_exp = np.zeros((1, nout))
     for wrd_id, cnt in zip(unqidx, count):

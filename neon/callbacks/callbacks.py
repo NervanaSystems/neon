@@ -1112,7 +1112,7 @@ class DeconvCallback(Callback):
                     activation[:] = be.multiply(layer_below_acts, activation)
 
             C, H, W = layers[0].in_shape
-            activation = activation.asnumpyarray().reshape((C, H, W, be.bsz))
+            activation = activation.get().reshape((C, H, W, be.bsz))
             activation = np.transpose(activation, (1, 2, 0, 3))
             act_data['vis'][fm] = self.scale_to_rgb(activation[:, :, :, 0])
 

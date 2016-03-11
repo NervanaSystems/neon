@@ -70,7 +70,7 @@ Tensor Manipulation
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Tensor.asnumpyarray<.Tensor.asnumpyarray>` |	Convert the tensor to an in host memory numpy.ndarray.
+    :py:meth:`neon.backends.Tensor.get<.Tensor.get>` |	Convert the tensor to an in host memory numpy.ndarray.
     :py:meth:`neon.backends.Tensor.take<.Tensor.take>` | Select a subset of elements from an array across an axis
     :py:meth:`neon.backends.Tensor.__getitem__<.Tensor.__getitem__>` |	Extract a subset view of the items via slice style indexing along each dimension.
     :py:meth:`neon.backends.Tensor.__setitem__<.Tensor.__setitem__>` | Assign the specified value to a subset of elements found via slice style indexing along each dimension.

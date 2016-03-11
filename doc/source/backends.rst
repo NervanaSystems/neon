@@ -87,7 +87,7 @@ memory as a numpy array via
 
 .. code-block:: python
 
-    myNumpyArray = myTensor.asnumpyarray()
+    myNumpyArray = myTensor.get()
 
 The |Tensor| datatype supports all the operations you would expect
 from a multi-dimensional array:

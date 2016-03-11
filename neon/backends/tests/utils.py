@@ -60,9 +60,9 @@ def tensors_allclose(a_tensors, b_tensors, rtol=0, atol=1e-7):
     results = []
     for a_tensor, b_tensor in zip(a_tensors, b_tensors):
         if isinstance(a_tensor, Tensor):
-            a_tensor = a_tensor.asnumpyarray()
+            a_tensor = a_tensor.get()
         if isinstance(b_tensor, Tensor):
-            b_tensor = b_tensor.asnumpyarray()
+            b_tensor = b_tensor.get()
         results.append(allclose_with_out(a_tensor.astype(b_tensor.dtype),
                                          b_tensor,
                                          rtol=rtol, atol=atol))

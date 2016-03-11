@@ -247,15 +247,13 @@ class CPUTensor(Tensor):
         """
         return the array
         """
-        return self._tensor
+        return self._tensor.copy()
 
     def asnumpyarray(self):
         """
-        Convert the CPUTensor to an in host memory `numpy.ndarray`.  A copy of
-        the data may be made depending on where the CPUTensor normally resides.
-
-        Returns:
-            numpy.ndarray view or copy of the CPUTensor data.
+        Deprecated.
+        Scheduled to be removed in 2.0.
+        Use get() instead.
         """
         return self._tensor
 
@@ -397,7 +395,7 @@ class CPUTensor(Tensor):
         bins = np.arange(nbins + 1) + float(offset)
         bins[0] = -float('Inf')
         np_inp_log_abs = np.rint(
-            np.log2(np.abs(self.get().astype(np.float32))))
+            np.log2(np.abs(self._tensor.astype(np.float32))))
         np_hist, edges = np.histogram(np_inp_log_abs, density=False, bins=bins)
         nc_hist = self.backend._hist_tensor(tag)._assign(np_hist)
         return nc_hist
@@ -571,12 +569,12 @@ class NervanaCPU(Backend):
             assert optree[0]['op'] == 'assign'
             assert isinstance(optree[1], Tensor)
             # get the output buffer
-            array_output = optree[1].get()
+            array_output = optree[1]._tensor
 
             # get the output shape and onehot representation length will be on
             # this axis
             numpy_axis = optree[2][0]['axis']
-            numpy_ind0 = optree[2][0]['idx'].get().squeeze()
+            numpy_ind0 = optree[2][0]['idx']._tensor.squeeze()
 
             numpy_ind_len = numpy_ind0.size
             numpy_ind1 = range(numpy_ind_len)
@@ -996,9 +994,9 @@ class NervanaCPU(Backend):
         pad_d, pad_h, pad_w = layer.padding
         str_d, str_h, str_w = layer.strides
 
-        array_I = I.get().reshape(layer.dimI)
-        array_F = F.get().reshape(layer.dimF)
-        array_O = O.get().reshape(layer.dimO)
+        array_I = I._tensor.reshape(layer.dimI)
+        array_F = F._tensor.reshape(layer.dimF)
+        array_O = O._tensor.reshape(layer.dimO)
 
         for m in range(M):
             sliceT, sliceD, _ = layer.mSlice[m]
@@ -1044,9 +1042,9 @@ class NervanaCPU(Backend):
         pad_d, pad_h, pad_w = layer.padding
         str_d, str_h, str_w = layer.strides
 
-        array_F = F.get().reshape(layer.dimF)
-        array_E = E.get().reshape(layer.dimO)
-        array_grad_I = grad_I.get().reshape(layer.dimI)
+        array_F = F._tensor.reshape(layer.dimF)
+        array_E = E._tensor.reshape(layer.dimO)
+        array_grad_I = grad_I._tensor.reshape(layer.dimI)
 
         array_F = np.transpose(array_F, (4, 1, 2, 3, 0)).copy()
 
@@ -1104,9 +1102,9 @@ class NervanaCPU(Backend):
         pad_d, pad_h, pad_w = layer.padding
         str_d, str_h, str_w = layer.strides
 
-        array_I = I.get().reshape(layer.dimI)
-        array_E = E.get().reshape(layer.dimO)
-        array_U = U.get().reshape(layer.dimF)
+        array_I = I._tensor.reshape(layer.dimI)
+        array_E = E._tensor.reshape(layer.dimO)
+        array_U = U._tensor.reshape(layer.dimF)
         array_U.fill(0.)
 
         for m in range(M):
@@ -1208,7 +1206,7 @@ class NervanaCPU(Backend):
         pad_c, pad_d, pad_h, pad_w = layer.padding
         str_c, str_d, str_h, str_w = layer.strides
 
-        array_I = I.get().reshape(layer.dimI)
+        array_I = I._tensor.reshape(layer.dimI)
         array_O = O._tensor.reshape(layer.dimO)  # _tensor to write to
         # although we can calculate directly into O, keeping denom around is useful for bprop
         array_d = denom._tensor.reshape(layer.dimO)  # _tensor to write to
@@ -1252,11 +1250,11 @@ class NervanaCPU(Backend):
         pad_c, pad_d, pad_h, pad_w = layer.padding
         str_c, str_d, str_h, str_w = layer.strides
 
-        array_I = I.get().reshape(layer.dimI)
-        array_E = E.get().reshape(layer.dimO)
-        array_O = O.get().reshape(layer.dimO)
+        array_I = I._tensor.reshape(layer.dimI)
+        array_E = E._tensor.reshape(layer.dimO)
+        array_O = O._tensor.reshape(layer.dimO)
         array_delta = delta._tensor.reshape(layer.dimI)  # write to
-        array_denom = denom.get().reshape(layer.dimO)
+        array_denom = denom._tensor.reshape(layer.dimO)
 
         for k in range(K):
             sliceC, _ = layer.kSlice[k]
@@ -1341,10 +1339,10 @@ class NervanaCPU(Backend):
         pad_c, pad_d, pad_h, pad_w = layer.padding
         str_c, str_d, str_h, str_w = layer.strides
 
-        array_I = I.get().reshape(layer.dimI)
-        array_O = O.get().reshape(layer.dimO)
+        array_I = I._tensor.reshape(layer.dimI)
+        array_O = O._tensor.reshape(layer.dimO)
         if op == "max":
-            array_argmax = argmax.get().reshape(layer.dimO)
+            array_argmax = argmax._tensor.reshape(layer.dimO)
 
         for k in range(K):
             sliceC, _ = layer.kSlice[k]
@@ -1396,12 +1394,12 @@ class NervanaCPU(Backend):
         pad_c, pad_d, pad_h, pad_w = layer.padding
         str_c, str_d, str_h, str_w = layer.strides
 
-        array_E = I.get().reshape(layer.dimO)
+        array_E = I._tensor.reshape(layer.dimO)
         array_E[:] = array_E * alpha
-        array_delta = O.get().reshape(layer.dimI)
+        array_delta = O._tensor.reshape(layer.dimI)
         array_delta[:] = array_delta * beta
         if op == "max":
-            array_argmax = argmax.get().reshape(layer.dimO)
+            array_argmax = argmax._tensor.reshape(layer.dimO)
 
         for k in range(K):
             sliceC, clen = layer.kSlice[k]
@@ -1462,11 +1460,11 @@ class NervanaCPU(Backend):
         assert rois.shape[1] == 5, "ROIs should be on the row dimension"
         assert rois.shape[0] == roi_count, "ROIs do not match with roi count"
 
-        array_fm = I.get().reshape(C, H, W, self.bsz)
-        array_rois = rois.get()
-        array_O = O.get().reshape(C, pooled_height, pooled_width, roi_count)
+        array_fm = I._tensor.reshape(C, H, W, self.bsz)
+        array_rois = rois._tensor
+        array_O = O._tensor.reshape(C, pooled_height, pooled_width, roi_count)
 
-        array_argmax = argmax.get().reshape(C, pooled_height, pooled_width, roi_count)
+        array_argmax = argmax._tensor.reshape(C, pooled_height, pooled_width, roi_count)
         array_O[:] = 0
         array_argmax[:] = -1
 
@@ -1521,10 +1519,10 @@ class NervanaCPU(Backend):
         assert rois.shape[1] == 5, "ROIs should be on the row dimension"
         assert rois.shape[0] == roi_count, "ROIs do not match with roi count"
 
-        array_E = I.get().reshape(C, pooled_height, pooled_width, roi_count)
-        array_rois = rois.get()
-        array_delta = O.get().reshape(C, H, W, self.bsz)
-        array_argmax = argmax.get().reshape(C, pooled_height, pooled_width, roi_count)
+        array_E = I._tensor.reshape(C, pooled_height, pooled_width, roi_count)
+        array_rois = rois._tensor
+        array_delta = O._tensor.reshape(C, H, W, self.bsz)
+        array_argmax = argmax._tensor.reshape(C, pooled_height, pooled_width, roi_count)
         array_delta[:] = 0
 
         for b_id in xrange(roi_count):
@@ -1624,7 +1622,7 @@ class NervanaCPU(Backend):
             alpha (float):
             beta (float):
         """
-        wrd_ids = inputs.get()[0]
+        wrd_ids = inputs._tensor[0]
         unqidx, inv = np.unique(wrd_ids, return_inverse=True)
         groups = [np.where(inv == i) for i in range(len(unqidx))]
 

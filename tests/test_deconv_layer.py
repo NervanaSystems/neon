@@ -97,14 +97,14 @@ def test_dconv_zeros(backend_default, zeros_convargs):
     neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
 
     outa = neon_layer.fprop(inp)
-    out = outa.asnumpyarray()
+    out = outa.get()
     assert np.min(out) == 0.0 and np.max(out) == 0.0
 
     err = dtypeu(np.zeros(outa.shape))
-    deltas = neon_layer.bprop(NervanaObject.be.array(err)).asnumpyarray()
+    deltas = neon_layer.bprop(NervanaObject.be.array(err)).get()
     assert np.min(deltas) == 0.0 and np.max(deltas) == 0.0
 
-    dw = neon_layer.dW.asnumpyarray()
+    dw = neon_layer.dW.get()
     assert np.min(dw) == 0.0 and np.max(dw) == 0.0
     return
 
@@ -129,7 +129,7 @@ def test_dconv_ones(backend_default, ones_convargs):
     neon_layer.prev_layer = True
     neon_layer.allocate()
     neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
-    out = neon_layer.fprop(inp).asnumpyarray()
+    out = neon_layer.fprop(inp).get()
     out_exp_min = nifm
     out_exp_max = fshape * fshape * nifm
     assert np.min(out) == out_exp_min and np.max(out) == out_exp_max
@@ -137,8 +137,8 @@ def test_dconv_ones(backend_default, ones_convargs):
     err = np.ones(out.shape).astype(dtypeu)
 
     # run bprop
-    neon_layer.bprop(NervanaObject.be.array(err)).asnumpyarray()
-    dw = neon_layer.dW.asnumpyarray()
+    neon_layer.bprop(NervanaObject.be.array(err)).get()
+    dw = neon_layer.dW.get()
 
     # generate the reference layer
     ref_layer = DeconvRefLayer(1, batch_size, identity, inshape[0], inshape[1:3],
@@ -195,9 +195,9 @@ def test_dconv_rand(backend_default, rand_convargs):
     neon_layer.prev_layer = True
     neon_layer.allocate()
     neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
-    neon_out = neon_layer.fprop(inp).asnumpyarray()
+    neon_out = neon_layer.fprop(inp).get()
     # pull neon weights into ref layer weights
-    ref_layer.weights = neon_layer.W.asnumpyarray().T
+    ref_layer.weights = neon_layer.W.get().T
     ref_out = np.copy(ref_layer.berror)
 
     # estimate the numerical precision

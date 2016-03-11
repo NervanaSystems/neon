@@ -72,10 +72,10 @@ def test_linear_zeros(backend_default, basic_linargs):
     assert np.min(out) == 0.0 and np.max(out) == 0.0
 
     err = dtypeu(np.zeros((nout, batch_size)))
-    deltas = layer.bprop(layer.be.array(err)).asnumpyarray()
+    deltas = layer.bprop(layer.be.array(err)).get()
     assert np.min(deltas) == 0.0 and np.max(deltas) == 0.0
 
-    dw = layer.dW.asnumpyarray()
+    dw = layer.dW.get()
     assert np.min(dw) == 0.0 and np.max(dw) == 0.0
 
     return
@@ -99,12 +99,12 @@ def test_linear_ones(backend_default, basic_linargs):
     layer.prev_layer = True  # Hack to force delta buffer allocation
     layer.allocate()
     layer.set_deltas([layer.be.iobuf(nin)])
-    out = layer.fprop(inp).asnumpyarray()
-    w = layer.W.asnumpyarray()
+    out = layer.fprop(inp).get()
+    w = layer.W.get()
     sums = np.sum(w, 1).reshape((nout, 1))*np.ones((1, batch_size))
 
     # for larger layers need to estimate numerical precision
-    # atol = est_mm_prec(w, inp.asnumpyarray())
+    # atol = est_mm_prec(w, inp.get())
     assert (np.allclose(sums, out, atol=0.0, rtol=0.0), '%e'
             % np.max(np.abs(out-sums)))
     return
@@ -130,8 +130,8 @@ def test_all_rand(backend_default, allrand_args):
     layer.prev_layer = True  # Hack to force delta buffer allocation
     layer.allocate()
     layer.set_deltas([layer.be.iobuf(nin)])
-    out = layer.fprop(layer.be.array(inp)).asnumpyarray()
-    w = layer.W.asnumpyarray()
+    out = layer.fprop(layer.be.array(inp)).get()
+    w = layer.W.get()
 
     # the expected output using numpy
     out_exp = np.dot(w, inp)
@@ -144,8 +144,8 @@ def test_all_rand(backend_default, allrand_args):
     err = np.random.random((nout, batch_size))
     err = err * (inp_rng[1] - inp_rng[0]) + inp_rng[0]
     err = err.astype(dtypeu)
-    deltas = layer.bprop(layer.be.array(err)).asnumpyarray()
-    dw = layer.dW.asnumpyarray()
+    deltas = layer.bprop(layer.be.array(err)).get()
+    dw = layer.dW.get()
 
     deltas_exp = np.dot(w.T, err)
     atol = 2 * est_mm_prec(w.T, err, ntrials=1)
