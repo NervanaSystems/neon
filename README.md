@@ -63,7 +63,8 @@ or convolutional neural networks below.
 The complete documentation for neon is available
 [here](http://neon.nervanasys.com/docs/latest). Some useful starting points are:
 
-* [Using neon](http://neon.nervanasys.com/docs/latest/user_guide.html)
+* [neon overview](http://neon.nervanasys.com/docs/latest/overview.html)
+* [Tutorials](http://neon.nervanasys.com/docs/latest/tutorials.html)
 * [API](http://neon.nervanasys.com/docs/latest/api.html)
 * [Developing for neon](http://neon.nervanasys.com/docs/latest/developer_guide.html)
 
