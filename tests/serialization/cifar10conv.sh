@@ -20,9 +20,9 @@
 # the run is continued for 1 epoch using the serialized file at epoch 3 to initialize
 # the model.  The output of both runs are compared.
 
-python tests/serialization/cifar10_conv.py -b cpu -s cifar10_run1.prm --serialize 1 -e 4 -r 1 --determin -H 2 -eval 1
-python tests/serialization/cifar10_conv.py -b cpu -s cifar10_run2.prm --serialize 1 -e 4 -r 1 --determin -eval 1 \
-            --model_file cifar10_run1_2.prm 
+python tests/serialization/cifar10_conv.py -s cifar10_run1.prm --serialize 1 -e 4 -r 1 -H 2 -eval 1
+python tests/serialization/cifar10_conv.py -s cifar10_run2.prm --serialize 1 -e 4 -r 1 -eval 1 \
+            --model_file cifar10_run1_2.prm
 
 python tests/serialization/compare_models.py cifar10_run1_3.prm cifar10_run2.prm
 exit $?

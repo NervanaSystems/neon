@@ -19,7 +19,7 @@ for use in serialization testing.
 """
 
 import numpy as np
-from neon.data import DataIterator, load_cifar10
+from neon.data import ArrayIterator, load_cifar10
 from neon.initializers import Uniform
 from neon.layers import Affine, Conv, Pooling, GeneralizedCost
 from neon.models import Model
@@ -44,8 +44,8 @@ Nmax *= args.batch_size
 X_train = X_train[0:Nmax, :]
 y_train = y_train[0:Nmax, :]
 
-train = DataIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32), name='train')
-test = DataIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32), name='test')
+train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32), name='train')
+test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32), name='test')
 
 init_uni = Uniform(low=-0.1, high=0.1)
 if args.datatype in [np.float32, np.float64]:
