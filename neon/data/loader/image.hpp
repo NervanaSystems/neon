@@ -188,12 +188,15 @@ public:
 
 class ImageIngestParams : public MediaParams {
 public:
-    ImageIngestParams(bool resizeAtIngest, int sideMin, int sideMax)
-    : MediaParams(IMAGE), _resizeAtIngest(resizeAtIngest),
+    ImageIngestParams(bool resizeAtIngest, bool lossyEncoding,
+                      int sideMin, int sideMax)
+    : MediaParams(IMAGE),
+      _resizeAtIngest(resizeAtIngest), _lossyEncoding(lossyEncoding),
       _sideMin(sideMin), _sideMax(sideMax) {}
 
 public:
     bool                        _resizeAtIngest;
+    bool                        _lossyEncoding;
     // Minimum value of the short side
     int                         _sideMin;
     // Maximum value of the short side
@@ -327,9 +330,17 @@ public:
         resize(decodedImage, resizedImage, size);
 
         // Re-encode
-        vector<int> param = {CV_IMWRITE_PNG_COMPRESSION, 9};
+        vector<int> param;
+        string ext;
+        if (_ingestParams->_lossyEncoding == true) {
+            param = {CV_IMWRITE_JPEG_QUALITY, 90};
+            ext = ".jpg";
+        } else {
+            param = {CV_IMWRITE_PNG_COMPRESSION, 9};
+            ext = ".png";
+        }
         vector<uchar> output;
-        cv::imencode(".png", resizedImage, output, param);
+        cv::imencode(ext, resizedImage, output, param);
 
         if (*dataBufLen < (int) output.size()) {
             delete[] *dataBuf;

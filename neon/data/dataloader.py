@@ -56,8 +56,8 @@ class DataLoader(NervanaDataIterator):
         self.set_name = set_name
         repo_dir = os.path.expandvars(os.path.expanduser(repo_dir))
         self.repo_dir = repo_dir
-        self.archive_dir = os.path.join(os.path.split(self.repo_dir)[0],
-                                        set_name + '-ingested')
+        parent_dir = os.path.split(repo_dir)[0]
+        self.archive_dir = os.path.join(parent_dir, set_name + '-ingested')
         self.item_count = ct.c_int(0)
         self.bsz = self.be.bsz
         self.buffer_id = 0
@@ -71,16 +71,15 @@ class DataLoader(NervanaDataIterator):
         else:
             self.index_file = index_file
         if not os.path.isabs(self.index_file):
-            self.index_file = os.path.join(self.repo_dir, self.index_file)
-        self.meta_file = os.path.join(self.archive_dir,
-                                      set_name + '-metadata.csv')
+            self.index_file = os.path.join(parent_dir, self.index_file)
+        self.meta_file = os.path.join(parent_dir, set_name + '-metadata.csv')
         self.shuffle = shuffle
         self.reshuffle = reshuffle
         self.datum_dtype = datum_dtype
         self.target_dtype = target_dtype
         self.onehot = onehot
         self.nclasses = nclasses
-        self.subset_percent = subset_percent
+        self.subset_percent = int(subset_percent)
         self.ingest_params = ingest_params
         self.load_library()
         self.alloc()

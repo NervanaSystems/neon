@@ -85,9 +85,11 @@ class ImageParams(MediaParams):
 
 class ImageIngestParams(MediaParams):
     _fields_ = [('resize_at_ingest', ct.c_bool),
+                ('lossy_encoding', ct.c_bool),
                 ('short_side_min', ct.c_int),
                 ('short_side_max', ct.c_int)]
     _defaults_ = {'resize_at_ingest': False,
+                  'lossy_encoding': True,
                   'short_side_min': 0,
                   'short_side_max': 0}
 

@@ -162,50 +162,8 @@ public:
     }
 
     int read(BufferPair& buffers) {
-        return read(buffers.first, buffers.second);
-    }
-
-    int read(CharBuffer* data, CharBuffer* targets) {
-        for (int i = 0; i < _batchSize; ++i) {
-            IndexElement* elem = _index[_itemIdx];
-            // Read datum.
-            string path;
-            if (elem->_fileName[0] == '/') {
-                path = elem->_fileName;
-            } else {
-                path = _repoDir + '/' + elem->_fileName;
-            }
-            struct stat stats;
-            int result = stat(path.c_str(), &stats);
-            if (result == -1) {
-                printf("Could not stat %s\n", path.c_str());
-                return -1;
-            }
-            off_t size = stats.st_size;
-            if (data->getSize() < (data->getLevel() + size)) {
-                // TODO: Make buffers resizable.
-                printf("Buffer too small for %s\n", path.c_str());
-                return -1;
-            }
-            _ifs.open(path, ios::binary);
-            _ifs.read(data->getCurrent(), size);
-            _ifs.close();
-            data->pushItem(size);
-            // Read targets.
-            // Limit to a single integer target for now.
-            if (targets->getSize() < (targets->getLevel() + sizeof(int))) {
-                printf("Buffer too small for %s target\n", path.c_str());
-                return -1;
-            }
-            int target = atoi(elem->_targets[0].c_str());
-            memcpy(targets->getCurrent(), &target, sizeof(int));
-            targets->pushItem(sizeof(int));
-            if (++_itemIdx == _itemCount) {
-                // Wrap around.
-                reset();
-            }
-
-        }
+        // Deprecated
+        assert(0);
         return 0;
     }
 
@@ -218,12 +176,18 @@ public:
         }
         IndexElement* elem = _index[_itemIdx++];
         // Read the data.
-        string path = _repoDir + '/' + elem->_fileName;
+        string path;
+        if (elem->_fileName[0] == '/') {
+            path = elem->_fileName;
+        } else {
+            path = _repoDir + '/' + elem->_fileName;
+        }
         struct stat stats;
         int result = stat(path.c_str(), &stats);
         if (result == -1) {
-            printf("Could not stat %s\n", path.c_str());
-            return -1;
+            stringstream ss;
+            ss << "Could not find " << path;
+            throw std::runtime_error(ss.str());
         }
         off_t size = stats.st_size;
         if (*dataBufLen < size) {
