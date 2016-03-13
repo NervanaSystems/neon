@@ -25,6 +25,8 @@ Reference:
 https://github.com/karpathy/neuraltalk
 
 """
+import os
+
 from neon.backends import gen_backend
 from neon.data import load_flickr8k, ImageCaption, ImageCaptionTest
 from neon.initializers import Uniform, Constant, Array
@@ -70,7 +72,7 @@ layers = [
 cost = GeneralizedCostMask(costfunc=CrossEntropyMulti(usebits=True))
 
 # configure callbacks
-checkpoint_model_path = "~/image_caption2.pickle"
+checkpoint_model_path = "~/image_caption2.pkl"
 if args.callback_args['save_path'] is None:
     args.callback_args['save_path'] = checkpoint_model_path
 
@@ -87,7 +89,8 @@ opt = RMSProp(decay_rate=0.997, learning_rate=0.0005, epsilon=1e-8, gradient_cli
 model.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
 # load model (if exited) and evaluate bleu score on test set
-model.load_params(checkpoint_model_path)
+if os.path.exists(args.callback_args['save_path']):
+    model.load_params(args.callback_args['save_path'])
 test_set = ImageCaptionTest(path=data_path)
 sents, targets = test_set.predict(model)
 test_set.bleu_score(sents, targets)
