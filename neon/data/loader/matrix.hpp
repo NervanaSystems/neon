@@ -21,13 +21,17 @@ template <typename Type>
 class Matrix {
 public:
     static void transpose(Type* data, int height, int width) {
+        int elemType;
         if (sizeof(Type) == 1) {
-            Mat input = Mat(height, width, CV_8UC1, data).clone();
-            Mat output = Mat(width, height, CV_8UC1, data);
-            cv::transpose(input, output);
+            elemType = CV_8UC1;
+        } else if (sizeof(Type) == 4) {
+            width /= 4;
+            elemType = CV_32F;
         } else {
-            printf("Unsupported type in transpose\n");
-            abort();
+            throw std::runtime_error("Unsupported type in transpose\n");
         }
+        Mat input = Mat(height, width, elemType, data).clone();
+        Mat output = Mat(width, height, elemType, data);
+        cv::transpose(input, output);
     }
 };

@@ -178,8 +178,8 @@ protected:
             BufferPair& outBuf = _out.getForWrite();
             // TODO: The transpose operation needs to be aware of the
             // underlying data type's size.
-            Matrix<char>::transpose(outBuf.first->_data,
-                                    _batchSize, _datumSize);
+            Matrix<float>::transpose((float*) outBuf.first->_data,
+                                     _batchSize, _datumSize);
             // Copy to device.
             _device->copyData(_bufferIndex, outBuf.first->_data,
                               outBuf.first->_size);

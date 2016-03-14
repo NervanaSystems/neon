@@ -48,7 +48,12 @@ class ImageParams(MediaParams):
                 ('contrast_max', ct.c_int),
                 ('rotate_min', ct.c_int),
                 ('rotate_max', ct.c_int),
-                ('aspect_ratio', ct.c_int)]
+                ('aspect_ratio', ct.c_int),
+                ('subtract_mean', ct.c_bool),
+                ('red_mean', ct.c_int),
+                ('green_mean', ct.c_int),
+                ('blue_mean', ct.c_int),
+                ('gray_mean', ct.c_int)]
     _defaults_ = {'augment': False,
                   'flip': False,
                   'scale_min': 0,
@@ -57,7 +62,12 @@ class ImageParams(MediaParams):
                   'contrast_max': 100,
                   'rotate_min': 0,
                   'rotate_max': 0,
-                  'aspect_ratio': 0}
+                  'aspect_ratio': 0,
+                  'subtract_mean': True,
+                  'red_mean': 104,
+                  'green_mean': 119,
+                  'blue_mean': 127,
+                  'gray_mean': 127}
 
     def __init__(self, **kwargs):
         for key in kwargs:

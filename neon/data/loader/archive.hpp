@@ -147,12 +147,13 @@ public:
 
 private:
     void start() {
-        writeMetadata();
         _writeThread->start();
         _started = true;
     }
 
     void writeMetadata() {
+        // Deprecated
+        assert(0);
         ofstream ofs(_metaFile);
         if (!ofs) {
             stringstream ss;
@@ -205,8 +206,7 @@ public:
                                            repoDir, archiveDir,
                                            indexFile, metaFile,
                                            shuffle, media);
-        loadMetadata();
-        *itemCount = _itemCount;
+        *itemCount = _itemCount = getCount();
         open();
     }
 
@@ -265,7 +265,39 @@ public:
     }
 
 private:
+    int getCount() {
+        ifstream ifs(_indexFile);
+        if (!ifs) {
+            stringstream ss;
+            ss << "Could not open " << _indexFile;
+            throw std::ios_base::failure(ss.str());
+        }
+
+        string  line;
+        int     count = 0;
+        std::getline(ifs, line);
+        while (std::getline(ifs, line)) {
+            if (line[0] == '#') {
+                continue;
+            }
+            count++;
+        }
+
+        if (_subsetPercent != 100) {
+            count  = (count * _subsetPercent) / 100;
+        }
+        if (count == 0) {
+            stringstream ss;
+            ss << "Index file is empty: " << _indexFile;
+            throw std::runtime_error(ss.str());
+        }
+
+        return count;
+    }
+
     void loadMetadata() {
+        // Deprecated
+        assert(0);
         if (Reader::exists(_metaFile) == false) {
             _archiveWriter->waitFor(_metaFile);
         }

@@ -46,15 +46,15 @@ class DataLoader(NervanaDataIterator):
                  media_params, target_size,
                  index_file=None,
                  shuffle=False, reshuffle=False,
-                 datum_dtype=np.uint8, target_dtype=np.int32,
+                 datum_dtype=np.float32, target_dtype=np.int32,
                  onehot=True, nclasses=None, subset_percent=100,
                  ingest_params=None):
-        if not os.path.exists(repo_dir):
-            raise IOError('Directory not found: %s' % repo_dir)
         if onehot is True and nclasses is None:
             raise ValueError('nclasses must be specified for one-hot labels')
         self.set_name = set_name
         repo_dir = os.path.expandvars(os.path.expanduser(repo_dir))
+        if not os.path.exists(repo_dir):
+            raise IOError('Directory not found: %s' % repo_dir)
         self.repo_dir = repo_dir
         parent_dir = os.path.split(repo_dir)[0]
         self.archive_dir = os.path.join(parent_dir, set_name + '-ingested')

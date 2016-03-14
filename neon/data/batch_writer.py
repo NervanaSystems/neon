@@ -179,11 +179,12 @@ class BatchWriter(object):
             self.item_max_size = max(batch_max_item, self.item_max_size)
 
     def save_meta(self):
+        # Deprecated
+        assert 0
         for filename, nrec in zip([self.train_meta_file, self.val_meta_file],
                                   [self.train_nrec, self.val_nrec]):
             with open(filename, 'w') as fd:
                 fd.write('nrec,%d\n' % nrec)
-                # TODO: fill in rest of metadata.
 
     def run(self):
         self.write_csv_files()
@@ -207,8 +208,6 @@ class BatchWriter(object):
                     self.write_batches(start, labels, imgs, sname)
                 else:
                     print("Skipping %s, file missing" % (sname))
-        # Get the max item size and store it for meta file
-        self.save_meta()
 
 
 class BatchWriterI1K(BatchWriter):
@@ -340,7 +339,6 @@ class BatchWriterCSV(BatchWriter):
             self.write_batches(self.train_start, self.labels['train'], self.imgs['train'], 'train')
             print("Writing validation macrobatches")
             self.write_batches(self.val_start, self.labels['val'], self.imgs['val'], 'val')
-        self.save_meta()
 
 
 class BatchWriterCIFAR10(BatchWriterI1K):

@@ -38,7 +38,9 @@ public:
                 int scaleMin, int scaleMax,
                 int contrastMin, int contrastMax,
                 int rotateMin, int rotateMax,
-                int aspectRatio)
+                int aspectRatio, bool subtractMean,
+                int redMean, int greenMean, int blueMean,
+                int grayMean)
     : MediaParams(IMAGE),
       _channelCount(channelCount),
       _height(height), _width(width),
@@ -46,12 +48,14 @@ public:
       _scaleMin(scaleMin), _scaleMax(scaleMax),
       _contrastMin(contrastMin), _contrastMax(contrastMax),
       _rotateMin(rotateMin), _rotateMax(rotateMax),
-      _aspectRatio(aspectRatio) {
+      _aspectRatio(aspectRatio), _subtractMean(true),
+      _redMean(redMean), _greenMean(greenMean), _blueMean(blueMean),
+      _grayMean(grayMean) {
     }
 
     ImageParams()
     : ImageParams(3, 224, 224, false, false,
-                  256, 256, 0, 0, 0, 0, 0) {}
+                  256, 256, 0, 0, 0, 0, 0, true, 104, 119, 127, 127) {}
 
     void dump() {
         MediaParams::dump();
@@ -184,6 +188,11 @@ public:
     int                         _rotateMin;
     int                         _rotateMax;
     int                         _aspectRatio;
+    bool                        _subtractMean;
+    int                         _redMean;
+    int                         _greenMean;
+    int                         _blueMean;
+    int                         _grayMean;
 };
 
 class ImageIngestParams : public MediaParams {
@@ -392,18 +401,40 @@ private:
             throw std::runtime_error("Decode failed - buffer too small");
         }
         if (img.channels() == 1) {
+            img.convertTo(img, CV_32FC1);
+            subtractMean(img);
             memcpy(buf, img.data, img.total());
             return;
         }
-        // Split into separate channels
-        Mat ch_b(size, CV_8U, buf);
-        Mat ch_g(size, CV_8U, buf + size.area());
-        Mat ch_r(size, CV_8U, buf + size.area() * 2);
 
-        Mat channels[3] = {ch_b, ch_g, ch_r};
+        assert(img.channels() == 3);
+        img.convertTo(img, CV_32FC3);
+
+        // Split into separate channels
+        Mat red(size, CV_32FC1, buf);
+        Mat green(size, CV_32FC1, buf + 4 * size.area());
+        Mat blue(size, CV_32FC1, buf + 4 * 2 * size.area());
+
+        Mat channels[3] = {blue, green, red};
         cv::split(img, channels);
+        subtractMean(red, green, blue);
     }
 
+    void subtractMean(Mat& red, Mat& green, Mat& blue) {
+        if (_params->_subtractMean == false) {
+            return;
+        }
+        red -= _params->_redMean;
+        green -= _params->_greenMean;
+        blue -= _params->_blueMean;
+    }
+
+    void subtractMean(Mat& gray) {
+        if (_params->_subtractMean == false) {
+            return;
+        }
+        gray -= _params->_grayMean;
+    }
 
 private:
     ImageParams*                _params;
