@@ -5,7 +5,7 @@ We present tutorials that cover the implementation of common model
 architectures:
 
 * :doc:`Tutorial 1 <mnist>`: MNIST with multi-layer perceptron (MLP) network
-* :doc:`Tutorial 2 <alexnet>`: Object recognition with a convoluational neural network
+* :doc:`Tutorial 2 <alexnet>`: Object recognition with a convolutional neural network
 * :doc:`Tutorial 3 <lstm>`: Sentiment analysis with a recurrent neural network
 
 In addition, we include several how-to guides for customizing neon and
