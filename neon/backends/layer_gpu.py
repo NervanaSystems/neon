@@ -408,6 +408,9 @@ class ConvLayer(Layer):
             if T > 1 or D > 1:
                 raise ValueError("3D Convolution not supported by CUDA C kernels.")
 
+            if relu:
+                raise ValueError("Compound relu not supported by CUDA C kernels.")
+
             self.fprop_kernels = convolution.FpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                                                        pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
             # TODO small C bprop?
@@ -471,6 +474,9 @@ class ConvLayer(Layer):
                      pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
             else:
                 # special kernel for deconv into first layer
+                if relu or bsum:
+                    raise ValueError("Small C bprop kernels do not support compound relu or bsum")
+
                 self.bprop_kernels = convolution.BpropDirectSmallC(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w)

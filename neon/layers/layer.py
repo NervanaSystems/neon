@@ -635,7 +635,7 @@ class Convolution(ParameterLayer):
     def bprop(self, error, alpha=1.0, beta=0.0):
         if self.deltas:
             self.be.bprop_conv(self.nglayer, self.W, error, self.deltas,
-                               alpha=alpha, beta=beta, bsum=self.batch_sum)
+                               alpha=alpha, beta=beta)
         self.be.update_conv(self.nglayer, self.inputs, error, self.dW)
         return self.deltas
 
@@ -664,6 +664,7 @@ class Deconvolution(ParameterLayer):
                  name=None):
         super(Deconvolution, self).__init__(init, name)
         self.nglayer = None
+        bsum = bsum and not self.be.deterministic
         self.deconvparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                              'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
                              'bsum': bsum}
@@ -672,6 +673,7 @@ class Deconvolution(ParameterLayer):
         self.fshape = fshape
         self.strides = strides
         self.padding = padding
+        self.bsum = bsum
 
         if isinstance(fshape, tuple):
             # fshape[2] should now map to C (nifm)
@@ -717,15 +719,14 @@ class Deconvolution(ParameterLayer):
                            bsum=self.batch_sum)
         return self.outputs
 
-    def bprop(self, error, beta=0.0):
+    def bprop(self, error, alpha=1.0, beta=0.0):
         """
         bprop for deconv is equivalent to fprop for conv.
         fprop_conv takes input and output as "I" and "O".
         for deconv, fprop_conv will take error as input and delta as output
         """
-        assert beta == 0., "beta parameter not supported for deconvolution yet"
         if self.deltas:
-            self.be.fprop_conv(self.nglayer, error, self.W, self.deltas)
+            self.be.fprop_conv(self.nglayer, error, self.W, self.deltas, alpha=alpha, beta=beta)
         self.be.update_conv(self.nglayer, error, self.inputs, self.dW)
         return self.deltas
 

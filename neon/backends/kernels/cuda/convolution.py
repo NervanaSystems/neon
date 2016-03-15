@@ -483,7 +483,7 @@ __global__ void conv_%(operation)s(
                     #pragma unroll
                     for(int q_offset = 0; q_offset < ITEMS_PER_THREAD; q_offset++)
                     {
-                        #pragma unrool
+                        #pragma unroll
                         for(int p_offset = 0; p_offset < ITEMS_PER_THREAD; p_offset++)
                         {
                             result[p_offset].f[q_offset] +=
@@ -537,7 +537,7 @@ __global__ void conv_%(operation)s(
                 #pragma unroll
                 for(int q_offset = 0; q_offset < ITEMS_PER_THREAD; q_offset++)
                 {
-                    #pragma unrool
+                    #pragma unroll
                     for(int p_offset = 0; p_offset < ITEMS_PER_THREAD; p_offset++)
                     {
                         result[p_offset].f[q_offset] +=

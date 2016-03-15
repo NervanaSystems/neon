@@ -246,6 +246,7 @@ class BpropCuda(KernelGroup):
         super(BpropCuda, self).__init__(lib, dtype)
 
         assert N % 32 == 0, "N dim must be multiple of 32"
+        assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
 
         magic_HW = _magic64(H*W)
         magic_W = _magic64(W)
