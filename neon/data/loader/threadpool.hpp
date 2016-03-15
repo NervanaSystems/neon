@@ -35,6 +35,10 @@ class ThreadPool {
 public:
     explicit ThreadPool(int count)
     : _count(count), _done(false) {
+        _stopped = new bool[count];
+        for (int i = 0; i < count; i++) {
+            _stopped[i] = false;
+        }
     }
 
     virtual ~ThreadPool() {
@@ -42,12 +46,12 @@ public:
             t->join();
             delete t;
         }
+        delete[] _stopped;
     }
 
     virtual void start() {
         for (int i = 0; i < _count; i++) {
             _threads.push_back(new thread(&ThreadPool::run, this, i));
-            _stopped.push_back(false);
         }
     }
 
@@ -84,6 +88,5 @@ protected:
     int                         _count;
     vector<thread*>             _threads;
     bool                        _done;
-    vector<bool>                _stopped;
+    bool*                       _stopped;
 };
-

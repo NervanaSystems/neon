@@ -121,6 +121,10 @@ public:
         stringstream    fileName;
         fileName << _archiveDir << '/' << ARCHIVE_FILE_PREFIX
                  << _fileIdx++ << ".cpio";
+
+        if (Reader::exists(fileName.str()) == true) {
+            return 0;
+        }
         BatchFile       batchFile(fileName.str(), "");
         for (int i = 0; i < _batchSize; i++) {
             int dataLen = 0;

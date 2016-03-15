@@ -349,9 +349,7 @@ public:
             drain();
         }
         _decodeThreads->stop();
-        while (_decodeThreads->stopped() == false) {
-            std::this_thread::yield();
-        }
+
         delete _readBufs;
         delete _readThread;
         delete _decodeBufs;

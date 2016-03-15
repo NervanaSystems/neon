@@ -112,13 +112,14 @@ int multi(Loader* loader, int epochCount, int minibatchCount,
 
 int test(char* repoDir, char* indexFile,
          int batchSize, int nchan, int height, int width) {
-    int datumSize = nchan * height * width;
+    int datumSize = 4 * nchan * height * width;
     int targetSize = 4;
     int epochCount = 2;
     int minibatchCount = 65;
     int itemCount;
 
-    ImageParams mediaParams(3, 30, 30, false, false, 0, 0, 0, 0, 0, 0, 0);
+    ImageParams mediaParams(3, 30, 30, false, false, 0, 0, 0, 0, 0, 0, 0,
+                            false, 0, 0, 0, 0);
     char* dataBuffer[2];
     char* targetBuffer[2];
     for (int i = 0; i < 2; i++) {
@@ -126,9 +127,13 @@ int test(char* repoDir, char* indexFile,
         targetBuffer[i] = new char[batchSize * targetSize];
     }
 
+    string archiveDir(repoDir);
+    archiveDir += "-ingest";
+    string metaFile = "";
     CpuParams deviceParams(0, 0, dataBuffer, targetBuffer);
-    ImageIngestParams ingestParams(false, 0, 0);
-    Loader loader(&itemCount, batchSize, repoDir, indexFile,
+    ImageIngestParams ingestParams(false, true, 0, 0);
+    Loader loader(&itemCount, batchSize, repoDir, archiveDir.c_str(),
+                  indexFile, metaFile.c_str(),
                   false, false, datumSize, targetSize, 100,
                   &mediaParams, &deviceParams, &ingestParams);
     unsigned int singleSum = single(&loader, epochCount,

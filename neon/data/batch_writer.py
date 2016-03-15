@@ -122,7 +122,7 @@ class BatchWriter(object):
 
         for ff, ll in zip([self.train_file, self.val_file], [tlines, vlines]):
             with open(ff, 'wb') as f:
-                f.write('filename,l_id\n')
+                f.write('filename,label\n')
                 for tup in ll:
                     f.write('{},{}\n'.format(*tup))
 
@@ -133,11 +133,11 @@ class BatchWriter(object):
         self.val_start = 0
 
     def parse_file_list(self, infile):
-        lines = np.loadtxt(infile, delimiter=',', skiprows=1, dtype={'names': ('fname', 'l_id'),
+        lines = np.loadtxt(infile, delimiter=',', skiprows=1, dtype={'names': ('filename', 'label'),
                                                                      'formats': (object, 'i4')})
         imfiles = [l[0] for l in lines]
-        labels = {'l_id': [l[1] for l in lines]}
-        self.nclass = {'l_id': (max(labels['l_id']) + 1)}
+        labels = {'label': [l[1] for l in lines]}
+        self.nclass = {'label': (max(labels['label']) + 1)}
         return imfiles, labels
 
     def write_individual_batch(self, batch_file, label_batch, jpeg_file_batch):
@@ -161,10 +161,13 @@ class BatchWriter(object):
         imfiles = [imfiles[s:s + self.macro_size] for s in starts]
         labels = [{k: v[s:s + self.macro_size] for k, v in labels.iteritems()} for s in starts]
 
+        archive_dir = os.path.join(self.out_dir, set_name + '-ingested')
+        if not os.path.exists(archive_dir):
+            os.makedirs(archive_dir)
         for i, jpeg_file_batch in enumerate(imfiles):
-            bfile = os.path.join(self.out_dir, set_name + '-ingested',
+            bfile = os.path.join(archive_dir,
                                  '%s%d.cpio' % (self.batch_prefix, offset + i))
-            label_batch = labels[i]['l_id']
+            label_batch = labels[i]['label']
             if os.path.exists(bfile):
                 print("File %s exists, skipping..." % (bfile))
             else:
@@ -194,11 +197,11 @@ class BatchWriter(object):
                 filelist = [self.train_file]
                 startlist = [self.train_start]
             elif self.validation_pct == 1:
-                namelist = ['validation']
+                namelist = ['val']
                 filelist = [self.val_file]
                 startlist = [self.val_start]
             else:
-                namelist = ['train', 'validation']
+                namelist = ['train', 'val']
                 filelist = [self.train_file, self.val_file]
                 startlist = [self.train_start, self.val_start]
             for sname, fname, start in zip(namelist, filelist, startlist):
@@ -297,7 +300,7 @@ class BatchWriterI1K(BatchWriter):
                 np.random.shuffle(flines)
 
             with open(csvfile, 'wb') as f:
-                f.write('filename,l_id\n')
+                f.write('filename,label\n')
                 for tup in flines:
                     f.write('{},{}\n'.format(*tup))
 
@@ -324,11 +327,11 @@ class BatchWriterCSV(BatchWriter):
         self.pixel_mean = [104.41227722, 119.21331787, 126.80609131]
 
     def parse_file_list(self, infile):
-        lines = np.loadtxt(infile, delimiter=',', dtype={'names': ('fname', 'l_id'),
+        lines = np.loadtxt(infile, delimiter=',', dtype={'names': ('filename', 'label'),
                                                          'formats': (object, 'i4')})
         imfiles = [l[0] if l[0][0] == '/' else os.path.join(self.image_dir, l[0]) for l in lines]
-        labels = {'l_id': [l[1] for l in lines]}
-        self.nclass = {'l_id': (max(labels['l_id']) + 1)}
+        labels = {'label': [l[1] for l in lines]}
+        self.nclass = {'label': (max(labels['label']) + 1)}
         return imfiles, labels
 
     def run(self):
