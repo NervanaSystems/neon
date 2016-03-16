@@ -112,7 +112,7 @@ int multi(Loader* loader, int epochCount, int minibatchCount,
 
 int test(char* repoDir, char* indexFile,
          int batchSize, int nchan, int height, int width) {
-    int datumSize = 4 * nchan * height * width;
+    int datumSize = nchan * height * width;
     int targetSize = 4;
     int epochCount = 2;
     int minibatchCount = 65;

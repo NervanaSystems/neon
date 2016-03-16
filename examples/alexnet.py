@@ -37,7 +37,7 @@ args = parser.parse_args()
 
 shape = dict(channel_count=3, height=224, width=224)
 train_params = ImageParams(augment=True, scale_min=256, scale_max=384, **shape)
-test_params = ImageParams(augment=False, **shape)
+test_params = ImageParams(augment=False, scale_min=256, scale_max=256, **shape)
 ingest_params = ImageIngestParams(resize_at_ingest=True,
                                   short_side_min=256, short_side_max=256)
 common = dict(target_size=1, nclasses=1000)

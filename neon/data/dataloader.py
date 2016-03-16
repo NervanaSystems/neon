@@ -46,7 +46,7 @@ class DataLoader(NervanaDataIterator):
                  media_params, target_size,
                  index_file=None,
                  shuffle=False, reshuffle=False,
-                 datum_dtype=np.float32, target_dtype=np.int32,
+                 datum_dtype=np.uint8, target_dtype=np.int32,
                  onehot=True, nclasses=None, subset_percent=100,
                  ingest_params=None):
         if onehot is True and nclasses is None:
@@ -192,6 +192,7 @@ class DataLoader(NervanaDataIterator):
             # Convert data to the required precision.
             self.backend_data[:] = self.data[self.buffer_id]
             data = self.backend_data
+        self.media_params.process(data)
 
         if self.onehot:
             # Convert labels to one-hot encoding.

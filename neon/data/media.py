@@ -35,6 +35,9 @@ class MediaParams(ct.Structure):
     def datum_size(self):
         raise NotImplementedError
 
+    def process(self, data):
+        pass
+
 
 class ImageParams(MediaParams):
     _fields_ = [('channel_count', ct.c_int),
@@ -56,8 +59,8 @@ class ImageParams(MediaParams):
                 ('gray_mean', ct.c_int)]
     _defaults_ = {'augment': False,
                   'flip': False,
-                  'scale_min': 0,
-                  'scale_max': 0,
+                  'scale_min': 256,
+                  'scale_max': 256,
                   'contrast_min': 100,
                   'contrast_max': 100,
                   'rotate_min': 0,
@@ -80,6 +83,7 @@ class ImageParams(MediaParams):
             self.check()
 
     def check(self):
+        assert self.channel_count == 1 or self.channel_count == 3
         for key in self._defaults_:
             if getattr(self, key) == self._defaults_[key]:
                 continue
@@ -91,6 +95,17 @@ class ImageParams(MediaParams):
 
     def datum_size(self):
         return np.prod(self.get_shape())
+
+    def process(self, data):
+        if self.subtract_mean is False:
+            return
+        if self.channel_count == 3:
+            data_view = data.reshape((3, -1))
+            data_view[0] -= self.red_mean
+            data_view[1] -= self.green_mean
+            data_view[2] -= self.blue_mean
+        else:
+            data[:] = data - self.gray_mean
 
 
 class ImageIngestParams(MediaParams):

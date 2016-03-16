@@ -53,10 +53,6 @@ public:
       _grayMean(grayMean) {
     }
 
-    ImageParams()
-    : ImageParams(3, 224, 224, false, false,
-                  256, 256, 0, 0, 0, 0, 0, true, 104, 119, 127, 127) {}
-
     void dump() {
         MediaParams::dump();
         printf("inner height %d\n", _height);
@@ -107,24 +103,6 @@ public:
         }
     }
 
-    void getRandomCrop(unsigned int& seed, const Size2i &inputSize,
-                       Rect* cropBox) {
-        if ((inputSize.width < _width) || (inputSize.height < _height)) {
-            cropBox->x = cropBox->y = 0;
-            cropBox->width = inputSize.width;
-            cropBox->height = inputSize.height;
-            return;
-        }
-
-        Point2i corner;
-        Size2i cropSize(_width, _height);
-        getRandomCorner(seed, inputSize - cropSize, &corner);
-        cropBox->width = cropSize.width;
-        cropBox->height = cropSize.height;
-        cropBox->x = corner.x;
-        cropBox->y = corner.y;
-    }
-
     void getRandomAngle(unsigned int& seed, int& angle) {
         if (_augment == false) {
             angle = 0;
@@ -143,24 +121,25 @@ public:
         angle = (rand_r(&seed) % (_rotateMax + 1 - _rotateMin)) + _rotateMin;
     }
 
-    void getRandomScaledCrop(unsigned int& seed, const Size2i &inputSize,
+    void getRandomCrop(unsigned int& seed, const Size2i &inputSize,
                        Rect* cropBox) {
-        // Use the entire squashed image (Caffe style evaluation)
         if (_scaleMin == 0) {
+            // Use the entire squashed image (Caffe style evaluation)
             cropBox->x = cropBox->y = 0;
             cropBox->width = inputSize.width;
             cropBox->height = inputSize.height;
             return;
         }
+
         int scaleSize = (_scaleMin +
                          (rand_r(&seed) % (_scaleMax + 1 - _scaleMin)));
         float scaleFactor = std::min(inputSize.width, inputSize.height) /
                             (float) scaleSize;
-        Point2i corner;
         Size2i cropSize(_width * scaleFactor, _height * scaleFactor);
         if (_aspectRatio > 100) {
             getRandomAspectRatio(seed, cropSize);
         }
+        Point2i corner;
         getRandomCorner(seed, inputSize - cropSize, &corner);
         cropBox->width = cropSize.width;
         cropBox->height = cropSize.height;
@@ -240,6 +219,7 @@ public:
     Image(ImageParams *params, ImageIngestParams* ingestParams)
     : _params(params), _ingestParams(ingestParams), _rngSeed(0) {
         assert(params->_mtype == IMAGE);
+        assert((params->_channelCount == 1) || (params->_channelCount == 3));
     }
 
     void transform(char* item, int itemSize, char* buf, int bufSize) {
@@ -257,12 +237,7 @@ public:
 
         Rect cropBox;
         _params->getRandomCrop(_rngSeed, rotatedImage.size(), &cropBox);
-        Mat croppedView = rotatedImage(cropBox);
-        Mat croppedImage;
-        croppedView.copyTo(croppedImage);
-
-        _params->getRandomScaledCrop(_rngSeed, croppedImage.size(), &cropBox);
-        croppedImage = croppedImage(cropBox);
+        Mat croppedImage = rotatedImage(cropBox);
         auto innerSize = _params->getSize();
         Mat resizedImage;
         if (innerSize.width == cropBox.width && innerSize.height == cropBox.height) {
@@ -401,26 +376,22 @@ private:
             throw std::runtime_error("Decode failed - buffer too small");
         }
         if (img.channels() == 1) {
-            img.convertTo(img, CV_32FC1);
-            subtractMean(img);
             memcpy(buf, img.data, img.total());
             return;
         }
 
-        assert(img.channels() == 3);
-        img.convertTo(img, CV_32FC3);
-
         // Split into separate channels
-        Mat red(size, CV_32FC1, buf);
-        Mat green(size, CV_32FC1, buf + 4 * size.area());
-        Mat blue(size, CV_32FC1, buf + 4 * 2 * size.area());
+        Mat red(size, CV_8U, buf);
+        Mat green(size, CV_8U, buf + size.area());
+        Mat blue(size, CV_8U, buf + 2 * size.area());
 
         Mat channels[3] = {blue, green, red};
         cv::split(img, channels);
-        subtractMean(red, green, blue);
     }
 
     void subtractMean(Mat& red, Mat& green, Mat& blue) {
+        // Deprecated
+        assert(0);
         if (_params->_subtractMean == false) {
             return;
         }
@@ -430,6 +401,8 @@ private:
     }
 
     void subtractMean(Mat& gray) {
+        // Deprecated
+        assert(0);
         if (_params->_subtractMean == false) {
             return;
         }
