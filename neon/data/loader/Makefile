@@ -20,6 +20,10 @@ INC := $(shell pkg-config --cflags opencv)
 LDIR := $(shell pkg-config --libs-only-L opencv)
 LIBS := $(shell pkg-config --libs-only-l opencv)
 CC := g++
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),FreeBSD)
+	CC := clang++
+endif
 OPENCVPKG := $(shell pkg-config --list-all | grep -e '^opencv' | cut -d' ' -f1)
 
 ifeq ($(LDIR),)
