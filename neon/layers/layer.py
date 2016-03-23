@@ -1048,9 +1048,8 @@ class Affine(CompoundLayer):
         bias (Initializer): an initializer to use for bias parameters
         activation (Transform): a transform object with fprop and bprop
             functions to apply
-        linear_name (str): the name to call the Linear layer. Defaults to 'LinearLayer'.
-        bias_name (str): the name to call the Bias layer. Defautls to 'BiasLayer'.
-        act_name (str): the name to call the Activation layer. Defaults to 'ActivationLayer'.
+        name (str): the root name for the layer, suffixes are automatically
+            generated for the component layers
 
     """
 
@@ -1083,9 +1082,8 @@ class Conv(CompoundLayer):
         bias (Initializer): an initializer to use for bias parameters
         activation (Transform): a transform object with fprop and bprop
             functions to apply
-        conv_name (str): the name to call the Convolutional layer. Defaults to 'ConvolutionLayer'
-        bias_name (str): the name to call the Bias layer. Defaults to 'BiasLayer'
-        act_name (str): the name to call the Activation layer. Defaults to ActivationLayer.
+        name (str): the root name for the layer, suffixes are automatically
+            generated for the component layers
 
     """
 
@@ -1118,6 +1116,28 @@ class Deconv(CompoundLayer):
 
 
 class LRN(Layer):
+
+    """
+    Local Response Normalization layer.  This layer normalizes the output
+    of each pixel/element across channels using the formula:
+
+        output(h,w)_j *= 1.0/[1 + (ascale/N)*sum(x(h,w)_i)**2)]**bpower
+
+    x(h,w)_i is the input element at coordinate (h,w) of the i-th feature map,
+    output(h,w)_j is the corresponding normalized output and the
+    sum is taken over i in the range [j - (depth-1)/2, j + (depth-1)/2]
+
+    Arguments:
+        depth (int): the number of neighboring feature maps to include in
+                     the normalization, depth must be odd and (depth-1)/2
+                     neighbors are included from each side, zeros are added
+                     as needed
+        ascale (float): the normalization scaling factor (see equation above)
+        bpower (float): the normalization exponent (see equation above)
+        name (str): layer name
+
+    """
+
     def __init__(self, depth, alpha=1., beta=0., ascale=1., bpower=1., name=None):
         super(LRN, self).__init__(name=name)
         self.J = depth
