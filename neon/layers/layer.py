@@ -843,6 +843,7 @@ class Activation(Layer):
         super(Activation, self).__init__(name)
         self.transform = transform
         self.owns_output = False
+        self.owns_delta = True
 
     def __str__(self):
         return "Activation Layer '%s': %s" % (
@@ -872,10 +873,8 @@ class Activation(Layer):
         return self.outputs
 
     def bprop(self, error):
-        if not self.deltas:
-            self.deltas = error
-        error[:] = self.transform.bprop(self.outputs) * error
-        return error
+        self.deltas[:] = self.transform.bprop(self.outputs) * error
+        return self.deltas
 
 
 class DataTransform(Layer):
@@ -1471,7 +1470,8 @@ class BatchNorm(Layer):
         if self.allparams is None:
             self.init_params(self.nfm)
         if self.prev_layer in (None, True) or self.prev_layer.batch_sum is None:
-            self.xsum = self.be.zeros((self.nfm, 1), dtype=self.stats_dtype)
+            self.xsum = self.be.zeros((self.nfm, 1), dtype=self.stats_dtype, **self.get_param_attrs())
+            self.xsum.auto_reduce = False
             self.compute_batch_sum = True
         else:
             self.xsum = self.prev_layer.batch_sum

@@ -475,7 +475,7 @@ class ConvLayer(Layer):
             else:
                 # special kernel for deconv into first layer
                 if relu or bsum:
-                    raise ValueError("Small C bprop kernels do not support compound relu or bsum")
+                    logger.warning("Small C bprop kernels do not support compound relu or bsum")
 
                 self.bprop_kernels = convolution.BpropDirectSmallC(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
