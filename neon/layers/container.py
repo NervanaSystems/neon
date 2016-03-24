@@ -128,7 +128,7 @@ class Sequential(LayerContainer):
             if prev_layer is not None:
                 prev_layer.set_next(l)
             prev_layer = l
-        self.parallelism = in_obj.parallelism
+        self.parallelism = config_layers[0].parallelism
         self.out_shape = in_obj.out_shape
         return self
 
