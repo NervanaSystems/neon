@@ -538,6 +538,21 @@ class Backend(object):
             return self.zeros(bufshape, dtype=dtype, name=name,
                               persist_values=persist_values)
 
+    def shared_iobuf_size(self, shape, parallelism):
+        """
+        Computes the backend specific size needed for an iobuf with a specified
+        shape that is meant to be shared between layers.
+
+        Arguments:
+            shape (tuple): Requested iobuf shape
+            parallelism (string): Parallelism of layer requesting this iobuf
+
+        Returns:
+            int: Size of required iobuf
+        """
+        num_dev = 1 if parallelism in ('Data', 'Model') else getattr(self, 'num_dev', 1)
+        return num_dev * np.prod(shape)
+
     def distribute_data(self, tensor, layer_parallelism):
         """
         For backends which support distributed training, this will distribute

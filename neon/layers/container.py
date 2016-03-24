@@ -128,7 +128,7 @@ class Sequential(LayerContainer):
             if prev_layer is not None:
                 prev_layer.set_next(l)
             prev_layer = l
-        self.parallelism = in_obj.parallelism
+        self.parallelism = config_layers[0].parallelism
         self.out_shape = in_obj.out_shape
         return self
 
@@ -143,17 +143,20 @@ class Sequential(LayerContainer):
         def needs_extra_delta(ll):
             return True if issubclass(ll.__class__, Broadcast) else False
 
-        if not global_deltas:
+        self.global_deltas = global_deltas
+
+        if self.global_deltas is None:
             # See if we have any inception-ish layers:
+            max_in_size = 0
+            for l in self.layers[1:]:
+                in_size = self.be.shared_iobuf_size(l.in_shape, l.parallelism)
+                if in_size > max_in_size:
+                    max_in_size = in_size
+
             ndelta_bufs = 4 if any([needs_extra_delta(l) for l in self.layers]) else 2
-            in_sizes = [np.prod(l.in_shape) for l in self.layers[1:]]
-            if in_sizes:
+            if max_in_size != 0:
                 self.global_deltas = [self.be.iobuf(
-                    max(in_sizes), parallelism=self.parallelism) for _ in range(ndelta_bufs)]
-            else:
-                self.global_deltas = None
-        else:
-            self.global_deltas = global_deltas
+                    max_in_size, parallelism="Data") for _ in range(ndelta_bufs)]
 
         for l in self.layers:
             l.set_deltas(self.global_deltas)
