@@ -1121,11 +1121,13 @@ class LRN(Layer):
     Local Response Normalization layer.  This layer normalizes the output
     of each pixel/element across channels using the formula:
 
-        output(h,w)_j *= 1.0/[1 + (ascale/N)*sum(x(h,w)_i)**2)]**bpower
+    .. math::
 
-    x(h,w)_i is the input element at coordinate (h,w) of the i-th feature map,
-    output(h,w)_j is the corresponding normalized output and the
-    sum is taken over i in the range [j - (depth-1)/2, j + (depth-1)/2]
+        output(h,w)_j = \\frac{output(h,w)_j}{(1 + (ascale/N) \sum{x(h,w)_i^2})^{bpower}}
+
+    :math:`x(h,w)_i` is the input element at coordinate :math:`(h,w)` of the i-th feature map,
+    :math:`output(h,w)_j` is the corresponding normalized output and the
+    sum is taken over :math:`i` in the range :math:`[j - (depth-1)/2, j + (depth-1)/2]`
 
     Arguments:
         depth (int): the number of neighboring feature maps to include in

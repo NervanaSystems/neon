@@ -79,7 +79,7 @@ description.
     :py:class:`neon.layers.Dropout<neon.layers.layer.Dropout>` | ``keep=0.5`` | At each ``fprop`` call, retains a random ``keep`` fraction of units
     :py:class:`neon.layers.Pooling<neon.layers.layer.Pooling>` | ``fshape, op, strides,padding`` | Pools over a window ``fshape`` (height, width, num_filters) with the operation ``op`` (either `"max"` or `"avg"`).
     :py:class:`neon.layers.BatchNorm<neon.layers.layer.BatchNorm>` | ``rho=0.9`` | Z-scores each minibatch's input, then scales with :math:`f(z) = \gamma z + \beta`. See `Ioffe, 2015 <http://arxiv.org/abs/1502.03167)>`__
-    :py:class:`neon.layers.LRN<neon.layers.layer.BatchNorm>` | ``alpha=1``, ``beta=0``, ``ascale=1``, ``bpower=1`` | Performs local response normalization (see Section 3.3 in `Krizhevsky, 2012 <http://www.cs.toronto.edu/~fritz/absps/imagenet.pdf>`__
+    :py:class:`neon.layers.LRN<neon.layers.layer.LRN>` | ``alpha=1``, ``beta=0``, ``ascale=1``, ``bpower=1`` | Performs local response normalization (see Section 3.3 in `Krizhevsky, 2012 <http://www.cs.toronto.edu/~fritz/absps/imagenet.pdf>`__
     :py:class:`neon.layers.Activation<neon.layers.layer.Activation>` | ``transform`` | Applies ``transform`` (:py:class:`neon.transforms.Transform<neon.transforms.transform.Transform>`) to the input
     :py:class:`neon.layers.BranchNode<neon.layers.layer.BranchNode>` | | Inserts a branching node (see Layer containers)
     :py:class:`neon.layers.SkipNode<neon.layers.layer.SkipNode>` | | Layer that allows pass-through
