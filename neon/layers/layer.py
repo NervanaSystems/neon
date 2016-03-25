@@ -1469,8 +1469,9 @@ class BatchNorm(Layer):
         self.xvar = self.be.zeros((self.nfm, 1), dtype=self.stats_dtype)
         if self.allparams is None:
             self.init_params(self.nfm)
-        if self.prev_layer in (None, True) or self.prev_layer.batch_sum is None:
-            self.xsum = self.be.zeros((self.nfm, 1), dtype=self.stats_dtype, **self.get_param_attrs())
+        if self.prev_layer in (None, True) or not getattr(self.prev_layer, 'batch_sum', None):
+            self.xsum = self.be.zeros((self.nfm, 1),
+                                      dtype=self.stats_dtype, **self.get_param_attrs())
             self.xsum.auto_reduce = False
             self.compute_batch_sum = True
         else:
@@ -1527,10 +1528,11 @@ class BatchNorm(Layer):
         self.y[:] = self.y * beta + xhat * self.gamma + self.beta
         return self.outputs
 
-    def bprop(self, error):
+    def bprop(self, error, alpha=1.0, beta=0.0):
         """
         Compute gradients for learning gamma and beta as well as layer weights.
         """
+        assert alpha == 1.0 and beta == 0.0
         if not self.error_view:
             self.error_view = error.reshape((self.nfm, -1))
 
