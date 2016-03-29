@@ -602,12 +602,20 @@ class Convolution(ParameterLayer):
             self.convparams.update(d)
 
     def __str__(self):
-        return ("Convolution Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) "
-                "outputs, padding %d, stride %d" %
-                (self.name,
-                 self.in_shape[0], self.in_shape[1], self.in_shape[2],
-                 self.out_shape[0], self.out_shape[1], self.out_shape[2],
-                 self.convparams['pad_h'], self.convparams['str_h']))
+        spatial_dim = len(self.in_shape[1:])
+        spatial_str = "%d x (" + "x".join(("%d",) * spatial_dim) + ")"
+        padstr_str = ",".join(("%d",) * spatial_dim)
+        padstr_dim = ([] if spatial_dim == 2 else ['d']) + ['h', 'w']
+
+        pad_tuple = tuple(self.convparams[k] for k in ['pad_' + d for d in padstr_dim])
+        str_tuple = tuple(self.convparams[k] for k in ['str_' + d for d in padstr_dim])
+
+        fmt_tuple = (self.name,) + self.in_shape + self.out_shape + pad_tuple + str_tuple
+        fmt_string = "Convolution Layer '%s': " + \
+                     spatial_str + " inputs, " + spatial_str + " outputs, " + \
+                     padstr_str + " padding, " + padstr_str + " stride"
+
+        return ((fmt_string % fmt_tuple))
 
     def configure(self, in_obj):
         super(Convolution, self).configure(in_obj)
