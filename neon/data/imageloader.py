@@ -244,14 +244,14 @@ class ImageLoader(NervanaDataIterator):
                         ('data', DataBufferPair),
                         ('labels', LabelBufferPair)]
 
-        if self.be.device_type == 0:
+        if self.be.device_type == 0:  # CPU
             data_buffers = DataBufferPair(
-                self.buffers[0].get().ctypes.data_as(ct.POINTER(ct.c_ubyte)),
-                self.buffers[1].get().ctypes.data_as(ct.POINTER(ct.c_ubyte)))
+                self.buffers[0]._tensor.ctypes.data_as(ct.POINTER(ct.c_ubyte)),
+                self.buffers[1]._tensor.ctypes.data_as(ct.POINTER(ct.c_ubyte)))
             label_buffers = LabelBufferPair(
-                self.labels[0].get().ctypes.data_as(ct.POINTER(ct.c_int)),
-                self.labels[1].get().ctypes.data_as(ct.POINTER(ct.c_int)))
-        else:
+                self.labels[0]._tensor.ctypes.data_as(ct.POINTER(ct.c_int)),
+                self.labels[1]._tensor.ctypes.data_as(ct.POINTER(ct.c_int)))
+        else:  # GPU
             data_buffers = DataBufferPair(
                 ct.cast(int(self.buffers[0].gpudata), ct.POINTER(ct.c_ubyte)),
                 ct.cast(int(self.buffers[1].gpudata), ct.POINTER(ct.c_ubyte)))
