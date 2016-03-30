@@ -97,28 +97,21 @@ class DataLoader(NervanaDataIterator):
 
     def alloc(self):
 
-        def double_buf(dim0, dtype):
+        def alloc_bufs(dim0, dtype):
             return [self.be.iobuf(dim0=dim0, dtype=dtype) for _ in range(2)]
 
-        def host_convert(buffers, idx):
-            return buffers[idx].get().ctypes.data_as(ct.c_void_p)
+        def ct_cast(buffers, idx):
+            return ct.cast(int(buffers[idx].raw()), ct.c_void_p)
 
-        def device_convert(buffers, idx):
-            return ct.cast(int(buffers[idx].gpudata), ct.c_void_p)
+        def cast_bufs(buffers):
+            return BufferPair(ct_cast(buffers, 0), ct_cast(buffers, 1))
 
-        def ct_convert(buffers):
-            if self.be.device_type == 0:
-                return BufferPair(host_convert(buffers, 0),
-                                  host_convert(buffers, 1))
-            return BufferPair(device_convert(buffers, 0),
-                              device_convert(buffers, 1))
-
-        self.data = double_buf(self.datum_size, self.datum_dtype)
-        self.targets = double_buf(self.target_size, self.target_dtype)
+        self.data = alloc_bufs(self.datum_size, self.datum_dtype)
+        self.targets = alloc_bufs(self.target_size, self.target_dtype)
         self.device_params = DeviceParams(self.be.device_type,
                                           self.be.device_id,
-                                          ct_convert(self.data),
-                                          ct_convert(self.targets))
+                                          cast_bufs(self.data),
+                                          cast_bufs(self.targets))
         if self.onehot:
             self.onehot_labels = self.be.iobuf(self.nclasses,
                                                dtype=self.be.default_dtype)

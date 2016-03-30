@@ -249,6 +249,15 @@ class CPUTensor(Tensor):
         """
         return self._tensor.copy()
 
+    def raw(self):
+        """
+        Access the raw buffer.
+
+        Returns:
+            pointer: A device specific pointer
+        """
+        return self._tensor.ctypes.data
+
     def asnumpyarray(self):
         """
         Deprecated.

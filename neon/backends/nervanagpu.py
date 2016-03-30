@@ -414,6 +414,15 @@ class GPUTensor(Tensor):
             drv.memcpy_dtoh_async(ary, ary_d.gpudata, stream)
         return ary
 
+    def raw(self):
+        """
+        Access the raw buffer.
+
+        Returns:
+            pointer: A device specific pointer
+        """
+        return self.gpudata
+
     def asnumpyarray(self):
         """
         Deprecated. 

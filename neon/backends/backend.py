@@ -192,6 +192,15 @@ class Tensor(object):
         """
         raise NotImplementedError()
 
+    def raw(self):
+        """
+        Access the raw buffer.
+
+        Returns:
+            pointer: A device specific pointer
+        """
+        raise NotImplementedError()
+
     def asnumpyarray(self):
         """
         Convert the tensor to an in host memory `numpy.ndarray`.  A copy of the
