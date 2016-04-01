@@ -31,9 +31,11 @@ public:
 
 public:
     void transform(char* item, int itemSize, char* buf, int bufSize) {
+        assert(_params != 0);
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
+        assert(_params != 0);
     }
 
 private:

@@ -42,7 +42,6 @@ using std::stringstream;
 using std::vector;
 using std::map;
 
-#define ARCHIVE_FILE_PREFIX "archive-"
 #define ARCHIVE_ITEM_COUNT  4096
 
 typedef std::pair<std::unique_ptr<ByteVect>,std::unique_ptr<ByteVect>> DataPair;
@@ -74,10 +73,12 @@ class ArchiveWriter : public Writer {
 public:
     ArchiveWriter(int batchSize, const char* repoDir, const char* archiveDir,
                   const char* indexFile, const char* metaFile,
+                  const char* archivePrefix,
                   bool shuffle, Media* media)
     : _batchSize(batchSize),
       _repoDir(repoDir), _archiveDir(archiveDir),
       _indexFile(indexFile), _metaFile(metaFile),
+      _archivePrefix(archivePrefix),
       _fileIdx(0), _itemCount(0), _started(false),
       _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0),
       _media(media) {
@@ -119,7 +120,7 @@ public:
             return 1;
         }
         stringstream    fileName;
-        fileName << _archiveDir << '/' << ARCHIVE_FILE_PREFIX
+        fileName << _archiveDir << '/' << _archivePrefix
                  << _fileIdx++ << ".cpio";
 
         if (Reader::exists(fileName.str()) == true) {
@@ -177,6 +178,7 @@ private:
     string                      _archiveDir;
     string                      _indexFile;
     string                      _metaFile;
+    string                      _archivePrefix;
     // Index of current archive file.
     int                         _fileIdx;
     // Total number of items in this dataset.
@@ -199,18 +201,27 @@ public:
     ArchiveReader(int* itemCount, int batchSize,
                   const char* repoDir, const char* archiveDir,
                   const char* indexFile, const char* metaFile,
+                  const char* archivePrefix,
                   bool shuffle, bool reshuffle,
+                  int startFileIdx,
                   int subsetPercent, Media* media)
     : Reader(batchSize, repoDir, indexFile, shuffle, reshuffle, subsetPercent),
       _archiveDir(archiveDir), _indexFile(indexFile), _metaFile(metaFile),
-      _fileIdx(0), _itemIdx(0), _itemsLeft(0) {
-        // Create a writer just in case. It will only be used if archive
-        // files are missing or damaged.
-        _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT,
-                                           repoDir, archiveDir,
-                                           indexFile, metaFile,
-                                           shuffle, media);
-        *itemCount = _itemCount = getCount();
+      _archivePrefix(archivePrefix),
+      _startFileIdx(startFileIdx),
+      _fileIdx(startFileIdx), _itemIdx(0), _itemsLeft(0), _archiveWriter(0) {
+        if (*itemCount == 0) {
+            *itemCount = getCount();
+            // Create a writer just in case. It will only be used if archive
+            // files are missing or damaged.
+            _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT,
+                                               repoDir, archiveDir,
+                                               indexFile, metaFile,
+                                               archivePrefix,
+                                               shuffle, media);
+        }
+        _itemCount = *itemCount;
+        assert(_itemCount != 0);
         open();
     }
 
@@ -242,7 +253,7 @@ public:
 
     int reset() {
         close();
-        _fileIdx = 0;
+        _fileIdx = _startFileIdx;
         _itemIdx = 0;
         open();
         return 0;
@@ -400,9 +411,9 @@ private:
 
     void open() {
         stringstream ss;
-        ss << _archiveDir << '/' << ARCHIVE_FILE_PREFIX << _fileIdx << ".cpio";
+        ss << _archiveDir << '/' << _archivePrefix << _fileIdx << ".cpio";
         string fileName = ss.str();
-        if (Reader::exists(fileName) == false) {
+        if ((Reader::exists(fileName) == false) && (_archiveWriter != 0)) {
             _archiveWriter->waitFor(fileName);
         }
         _batchFile.openForRead(fileName);
@@ -417,6 +428,8 @@ private:
     string                      _archiveDir;
     string                      _indexFile;
     string                      _metaFile;
+    string                      _archivePrefix;
+    int                         _startFileIdx;
     // Index of current archive file.
     int                         _fileIdx;
     // Index of current item.

@@ -20,6 +20,7 @@ Process macro batches of data in a pipelined fashion.
 import logging
 
 from glob import glob
+import gzip
 import numpy as np
 import os
 import tarfile
@@ -63,7 +64,7 @@ class BatchWriter(object):
 
     def __init__(self, out_dir, image_dir, target_size=256, validation_pct=0.2,
                  class_samples_max=None, file_pattern='*.jpg', macro_size=3072,
-                 pixel_mean=(0, 0, 0), skip_ingest=False):
+                 pixel_mean=(0, 0, 0)):
 
         libpath = os.path.dirname(os.path.realpath(__file__))
         try:
@@ -83,13 +84,11 @@ class BatchWriter(object):
         self.file_pattern = file_pattern
         self.class_samples_max = class_samples_max
         self.validation_pct = validation_pct
-        self.train_file = os.path.join(self.out_dir, 'train-index.csv')
-        self.val_file = os.path.join(self.out_dir, 'val-index.csv')
-        self.batch_prefix = 'archive-'
-        self.train_meta_file = os.path.join(self.out_dir, 'train-metadata.csv')
-        self.val_meta_file = os.path.join(self.out_dir, 'val-metadata.csv')
+        self.train_file = os.path.join(self.out_dir, 'train_file.csv.gz')
+        self.val_file = os.path.join(self.out_dir, 'val_file.csv.gz')
+        self.batch_prefix = 'macrobatch_'
+        self.meta_file = os.path.join(self.out_dir, self.batch_prefix + 'meta')
         self.pixel_mean = pixel_mean
-        self.skip_ingest = skip_ingest
         self.item_max_size = 25000  # reasonable default max image size
         self.post_init()
 
@@ -121,8 +120,8 @@ class BatchWriter(object):
             os.makedirs(self.out_dir)
 
         for ff, ll in zip([self.train_file, self.val_file], [tlines, vlines]):
-            with open(ff, 'wb') as f:
-                f.write('filename,label\n')
+            with gzip.open(ff, 'wb') as f:
+                f.write('filename,l_id\n')
                 for tup in ll:
                     f.write('{},{}\n'.format(*tup))
 
@@ -130,14 +129,14 @@ class BatchWriter(object):
         self.train_start = 0
 
         self.val_nrec = len(vlines)
-        self.val_start = 0
+        self.val_start = -(-self.train_nrec // self.macro_size)
 
     def parse_file_list(self, infile):
-        lines = np.loadtxt(infile, delimiter=',', skiprows=1, dtype={'names': ('filename', 'label'),
+        lines = np.loadtxt(infile, delimiter=',', skiprows=1, dtype={'names': ('fname', 'l_id'),
                                                                      'formats': (object, 'i4')})
         imfiles = [l[0] for l in lines]
-        labels = {'label': [l[1] for l in lines]}
-        self.nclass = {'label': (max(labels['label']) + 1)}
+        labels = {'l_id': [l[1] for l in lines]}
+        self.nclass = {'l_id': (max(labels['l_id']) + 1)}
         return imfiles, labels
 
     def write_individual_batch(self, batch_file, label_batch, jpeg_file_batch):
@@ -154,20 +153,15 @@ class BatchWriter(object):
                                    (ct.c_int * ndata)(*label_batch),
                                    ct.c_int(self.target_size))
 
-    def write_batches(self, offset, labels, imfiles, set_name):
-        assert self.skip_ingest is False
+    def write_batches(self, offset, labels, imfiles):
         npts = -(-len(imfiles) // self.macro_size)
         starts = [i * self.macro_size for i in range(npts)]
         imfiles = [imfiles[s:s + self.macro_size] for s in starts]
         labels = [{k: v[s:s + self.macro_size] for k, v in labels.iteritems()} for s in starts]
 
-        archive_dir = os.path.join(self.out_dir, set_name + '-ingested')
-        if not os.path.exists(archive_dir):
-            os.makedirs(archive_dir)
         for i, jpeg_file_batch in enumerate(imfiles):
-            bfile = os.path.join(archive_dir,
-                                 '%s%d.cpio' % (self.batch_prefix, offset + i))
-            label_batch = labels[i]['label']
+            bfile = os.path.join(self.out_dir, '%s%d.cpio' % (self.batch_prefix, offset + i))
+            label_batch = labels[i]['l_id']
             if os.path.exists(bfile):
                 print("File %s exists, skipping..." % (bfile))
             else:
@@ -182,35 +176,40 @@ class BatchWriter(object):
             self.item_max_size = max(batch_max_item, self.item_max_size)
 
     def save_meta(self):
-        # Deprecated
-        assert 0
-        for filename, nrec in zip([self.train_meta_file, self.val_meta_file],
-                                  [self.train_nrec, self.val_nrec]):
-            with open(filename, 'w') as fd:
-                fd.write('nrec,%d\n' % nrec)
+        with open(self.meta_file, 'w') as f:
+            for settype in ('train', 'val'):
+                f.write('%s_start %d\n' % (settype, getattr(self, settype + '_start')))
+                f.write('%s_nrec %d\n' % (settype, getattr(self, settype + '_nrec')))
+            f.write('nclass %d\n' % (self.nclass['l_id']))
+            f.write('item_max_size %d\n' % (self.item_max_size))
+            f.write('label_size %d\n' % (4))
+            f.write('R_mean      %f\n' % self.pixel_mean[0])
+            f.write('G_mean      %f\n' % self.pixel_mean[1])
+            f.write('B_mean      %f\n' % self.pixel_mean[2])
 
     def run(self):
         self.write_csv_files()
-        if self.skip_ingest is False:
-            if self.validation_pct == 0:
-                namelist = ['train']
-                filelist = [self.train_file]
-                startlist = [self.train_start]
-            elif self.validation_pct == 1:
-                namelist = ['val']
-                filelist = [self.val_file]
-                startlist = [self.val_start]
+        if self.validation_pct == 0:
+            namelist = ['train']
+            filelist = [self.train_file]
+            startlist = [self.train_start]
+        elif self.validation_pct == 1:
+            namelist = ['validation']
+            filelist = [self.val_file]
+            startlist = [self.val_start]
+        else:
+            namelist = ['train', 'validation']
+            filelist = [self.train_file, self.val_file]
+            startlist = [self.train_start, self.val_start]
+        for sname, fname, start in zip(namelist, filelist, startlist):
+            print("Writing %s %s %s" % (sname, fname, start))
+            if fname is not None and os.path.exists(fname):
+                imgs, labels = self.parse_file_list(fname)
+                self.write_batches(start, labels, imgs)
             else:
-                namelist = ['train', 'val']
-                filelist = [self.train_file, self.val_file]
-                startlist = [self.train_start, self.val_start]
-            for sname, fname, start in zip(namelist, filelist, startlist):
-                print("Writing %s %s %s" % (sname, fname, start))
-                if fname is not None and os.path.exists(fname):
-                    imgs, labels = self.parse_file_list(fname)
-                    self.write_batches(start, labels, imgs, sname)
-                else:
-                    print("Skipping %s, file missing" % (sname))
+                print("Skipping %s, file missing" % (sname))
+        # Get the max item size and store it for meta file
+        self.save_meta()
 
 
 class BatchWriterI1K(BatchWriter):
@@ -248,7 +247,7 @@ class BatchWriterI1K(BatchWriter):
         self.train_start = 0
 
         self.val_nrec = 50000
-        self.val_start = 0
+        self.val_start = -(-self.train_nrec // self.macro_size)
         self.pixel_mean = [104.41227722, 119.21331787, 126.80609131]
 
     def extract_images(self, overwrite=False):
@@ -299,8 +298,8 @@ class BatchWriterI1K(BatchWriter):
                 np.random.seed(0)
                 np.random.shuffle(flines)
 
-            with open(csvfile, 'wb') as f:
-                f.write('filename,label\n')
+            with gzip.open(csvfile, 'wb') as f:
+                f.write('filename,l_id\n')
                 for tup in flines:
                     f.write('{},{}\n'.format(*tup))
 
@@ -323,25 +322,25 @@ class BatchWriterCSV(BatchWriter):
         self.val_nrec = len(self.imgs['val'])
 
         self.train_start = 0
-        self.val_start = 0
+        self.val_start = -(-self.train_nrec // self.macro_size)
         self.pixel_mean = [104.41227722, 119.21331787, 126.80609131]
 
     def parse_file_list(self, infile):
-        lines = np.loadtxt(infile, delimiter=',', dtype={'names': ('filename', 'label'),
+        lines = np.loadtxt(infile, delimiter=',', dtype={'names': ('fname', 'l_id'),
                                                          'formats': (object, 'i4')})
         imfiles = [l[0] if l[0][0] == '/' else os.path.join(self.image_dir, l[0]) for l in lines]
-        labels = {'label': [l[1] for l in lines]}
-        self.nclass = {'label': (max(labels['label']) + 1)}
+        labels = {'l_id': [l[1] for l in lines]}
+        self.nclass = {'l_id': (max(labels['l_id']) + 1)}
         return imfiles, labels
 
     def run(self):
-        if self.skip_ingest is False:
-            if not os.path.exists(self.out_dir):
-                os.makedirs(self.out_dir)
-            print("Writing train macrobatches")
-            self.write_batches(self.train_start, self.labels['train'], self.imgs['train'], 'train')
-            print("Writing validation macrobatches")
-            self.write_batches(self.val_start, self.labels['val'], self.imgs['val'], 'val')
+        if not os.path.exists(self.out_dir):
+            os.makedirs(self.out_dir)
+        print("Writing train macrobatches")
+        self.write_batches(self.train_start, self.labels['train'], self.imgs['train'])
+        print("Writing validation macrobatches")
+        self.write_batches(self.val_start, self.labels['val'], self.imgs['val'])
+        self.save_meta()
 
 
 class BatchWriterCIFAR10(BatchWriterI1K):
@@ -356,7 +355,7 @@ class BatchWriterCIFAR10(BatchWriterI1K):
         self.train_start = 0
 
         self.val_nrec = 10000
-        self.val_start = 0
+        self.val_start = -(-self.train_nrec // self.macro_size)
 
     def extract_images(self, overwrite=False):
         from neon.data import load_cifar10
@@ -397,8 +396,6 @@ if __name__ == "__main__":
     parser.add_argument('--macro_size', type=int, default=5000, help='Images per processed batch')
     parser.add_argument('--file_pattern', default='*.jpg', help='Image extension to include in'
                         'directory crawl')
-    parser.add_argument('--skip_ingest', action="store_true",
-                        help="Skip creating archive files - only write index files.")
     args = parser.parse_args()
 
     logger = logging.getLogger(__name__)
@@ -407,18 +404,17 @@ if __name__ == "__main__":
         args.target_size = 256  # (maybe 512 for Simonyan's methodology?)
         bw = BatchWriterI1K(out_dir=args.data_dir, image_dir=args.image_dir,
                             target_size=args.target_size, macro_size=args.macro_size,
-                            file_pattern="*.JPEG", skip_ingest=args.skip_ingest)
+                            file_pattern="*.JPEG")
     elif args.set_type == 'cifar10':
         bw = BatchWriterCIFAR10(out_dir=args.data_dir, image_dir=args.image_dir,
                                 target_size=args.target_size, macro_size=args.macro_size,
-                                file_pattern="*.png", skip_ingest=args.skip_ingest)
+                                file_pattern="*.png")
     elif args.set_type == 'csv':
         bw = BatchWriterCSV(out_dir=args.data_dir, image_dir=args.image_dir,
-                            target_size=args.target_size, macro_size=args.macro_size,
-                            skip_ingest=args.skip_ingest)
+                            target_size=args.target_size, macro_size=args.macro_size)
     else:
         bw = BatchWriter(out_dir=args.data_dir, image_dir=args.image_dir,
                          target_size=args.target_size, macro_size=args.macro_size,
-                         file_pattern=args.file_pattern,
-                         skip_ingest=args.skip_ingest)
+                         file_pattern=args.file_pattern)
+
     bw.run()

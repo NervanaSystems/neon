@@ -55,8 +55,10 @@ class DataLoader(NervanaDataIterator):
         repo_dir = os.path.expandvars(os.path.expanduser(repo_dir))
         if not os.path.exists(repo_dir):
             raise IOError('Directory not found: %s' % repo_dir)
+        self.macro_start = 0
         self.repo_dir = repo_dir
         parent_dir = os.path.split(repo_dir)[0]
+        self.archive_prefix = 'archive-'
         self.archive_dir = os.path.join(parent_dir, set_name + '-ingested')
         self.item_count = ct.c_int(0)
         self.bsz = self.be.bsz
@@ -135,8 +137,9 @@ class DataLoader(NervanaDataIterator):
         if not os.path.exists(self.archive_dir):
             logger.warning('%s not found. Triggering data ingest...' % self.archive_dir)
             os.makedirs(self.archive_dir)
-        indexer = Indexer(self.repo_dir, self.index_file)
-        indexer.run()
+        if self.item_count.value == 0:
+            indexer = Indexer(self.repo_dir, self.index_file)
+            indexer.run()
         datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
         target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
         if self.ingest_params is None:
@@ -149,7 +152,9 @@ class DataLoader(NervanaDataIterator):
             ct.c_char_p(self.archive_dir),
             ct.c_char_p(self.index_file),
             ct.c_char_p(self.meta_file),
+            ct.c_char_p(self.archive_prefix),
             self.shuffle, self.reshuffle,
+            self.macro_start,
             datum_nbytes, target_nbytes,
             self.subset_percent,
             ct.POINTER(MediaParams)(self.media_params),

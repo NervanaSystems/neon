@@ -28,3 +28,4 @@ neon/backends/util/cuda_capability
 neon/backends/kernels/ptx
 neon/backends/kernels/pre
 neon/backends/kernels/dump
+neon/data/loader/loader

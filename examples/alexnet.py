@@ -19,14 +19,13 @@ For running complete alexnet
 alexnet.py -e 90 -eval 1 -s <save-path> -w <path-to-saved-batches>
 """
 
-import os
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Constant, Gaussian
 from neon.layers import Conv, Dropout, Pooling, GeneralizedCost, Affine
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
-from neon.data import DataLoader, ImageParams, ImageIngestParams
+from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks
 
 # parse the command line arguments (generates the backend)
@@ -35,20 +34,13 @@ parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
 
-shape = dict(channel_count=3, height=224, width=224)
-train_params = ImageParams(augment=True, scale_min=256, scale_max=384, **shape)
-test_params = ImageParams(augment=False, scale_min=256, scale_max=256, **shape)
-ingest_params = ImageIngestParams(resize_at_ingest=True,
-                                  short_side_min=256, short_side_max=256)
-common = dict(target_size=1, nclasses=1000)
-traindir = os.path.join(args.data_dir, 'train')
-testdir = os.path.join(args.data_dir, 'val')
 # setup data provider
-train = DataLoader(set_name='train', repo_dir=traindir, media_params=train_params,
-                   shuffle=True, subset_percent=args.subset_pct,
-                   ingest_params=ingest_params, **common)
-test = DataLoader(set_name='val', repo_dir=testdir, media_params=test_params,
-                  shuffle=False, ingest_params=ingest_params, **common)
+img_set_options = dict(repo_dir=args.data_dir,
+                       inner_size=224,
+                       subset_pct=args.subset_pct)
+train = ImageLoader(set_name='train', scale_range=(256, 384), shuffle=True, **img_set_options)
+test = ImageLoader(set_name='validation', scale_range=(256, 256), do_transforms=False,
+                   **img_set_options)
 
 layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01), bias=Constant(0),
                activation=Rectlin(), padding=3, strides=4),
@@ -72,11 +64,11 @@ model = Model(layers=layers)
 
 # drop weights LR by 1/250**(1/3) at epochs (23, 45, 66), drop bias LR by 1/10 at epoch 45
 weight_sched = Schedule([22, 44, 65], (1/250.)**(1/3.))
-opt_weights = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sched,
-                                      stochastic_round=args.rounding)
+opt_gdm = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sched,
+                                  stochastic_round=args.rounding)
 opt_biases = GradientDescentMomentum(0.02, 0.9, schedule=Schedule([44], 0.1),
                                      stochastic_round=args.rounding)
-opt = MultiOptimizer({'default': opt_weights, 'Bias': opt_biases})
+opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
 
 # configure callbacks
 valmetric = TopKMisclassification(k=5)

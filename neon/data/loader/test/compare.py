@@ -151,12 +151,10 @@ def test_loader():
     write_batches(args, test_path, testdir, 1)
 
     params = ImageParams(channel_count=3, height=32, width=32)
-    common = dict(media_params=params, target_size=1,
-                  datum_dtype=np.uint8, target_dtype=np.int32,
-                  onehot=True, nclasses=10)
-    train = DataLoader(repo_dir=os.path.join(args.data_dir, 'train'),
+    common = dict(media_params=params, target_size=1, nclasses=10)
+    train = DataLoader('train', repo_dir=os.path.join(args.data_dir, 'train'),
                        shuffle=True, **common)
-    test = DataLoader(repo_dir=os.path.join(args.data_dir, 'test'),
+    test = DataLoader('test', repo_dir=os.path.join(args.data_dir, 'test'),
                       shuffle=False, **common)
     err = run(args, train, test)
     return err
