@@ -608,6 +608,7 @@ __global__ void spool_bprop_lrn_overlap(
     )
 {
     extern __shared__ int2 lut[];
+    __shared__ float rcpWindowSize;
 
     int tid = threadIdx.x;
 
@@ -696,6 +697,11 @@ __global__ void spool_bprop_lrn_overlap(
             lut[jrst] = entry.data2;
             jrst += 32;
         }
+
+        if(tid == 0)
+        {
+            rcpWindowSize = (float)RST/(float)JRST;
+        }
     }
     __syncthreads();
 
@@ -716,15 +722,15 @@ __global__ void spool_bprop_lrn_overlap(
         entry2.data2 = lut[jrst + 2];
         entry3.data2 = lut[jrst + 3];
 
-        array_delta += (jrst + 0 < JRST && entry0.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry0.data.slice)) * %(cvt)s(__ldg(E + entry0.data.slice)) * %(cvt)s(__ldg(A + entry0.data.slice)) : 0.0f;
-        array_delta += (jrst + 1 < JRST && entry1.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry1.data.slice)) * %(cvt)s(__ldg(E + entry1.data.slice)) * %(cvt)s(__ldg(A + entry1.data.slice)) : 0.0f;
-        array_delta += (jrst + 2 < JRST && entry2.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry2.data.slice)) * %(cvt)s(__ldg(E + entry2.data.slice)) * %(cvt)s(__ldg(A + entry2.data.slice)) : 0.0f;
-        array_delta += (jrst + 3 < JRST && entry3.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry3.data.slice)) * %(cvt)s(__ldg(E + entry3.data.slice)) * %(cvt)s(__ldg(A + entry3.data.slice)) : 0.0f;
+        array_delta += (jrst + 0 < JRST && entry0.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry0.data.slice)) * %(cvt)s(__ldg(E + entry0.data.slice)) / %(cvt)s(__ldg(A + entry0.data.slice)) : 0.0f;
+        array_delta += (jrst + 1 < JRST && entry1.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry1.data.slice)) * %(cvt)s(__ldg(E + entry1.data.slice)) / %(cvt)s(__ldg(A + entry1.data.slice)) : 0.0f;
+        array_delta += (jrst + 2 < JRST && entry2.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry2.data.slice)) * %(cvt)s(__ldg(E + entry2.data.slice)) / %(cvt)s(__ldg(A + entry2.data.slice)) : 0.0f;
+        array_delta += (jrst + 3 < JRST && entry3.data.argmax >= 0) ? %(cvt)s(__ldg(O + entry3.data.slice)) * %(cvt)s(__ldg(E + entry3.data.slice)) / %(cvt)s(__ldg(A + entry3.data.slice)) : 0.0f;
 
         jrst += 4;
     }
 
-    array_delta = -2 * bpower * ascale * __ldg(I) * array_delta + (__ldg(E_out) * powf(__ldg(A_out), -bpower));
+    array_delta = -2 * bpower * ascale * __ldg(I) * array_delta * rcpWindowSize + (__ldg(E_out) * powf(__ldg(A_out), -bpower));
 
     %(type)s temp_out = %(cvt_out)s( %(mul_by_scale)s (array_delta*alpha + delta_val*beta));
     if (!(flags & 1)) {

@@ -1269,9 +1269,9 @@ class NervanaCPU(Backend):
                         _E = array_E[sliceC, sliceD, sliceH, sliceW, :].reshape(-1, N)
                         _den = array_denom[sliceC, sliceD, sliceH, sliceW, :].reshape(-1, N)
                         # temporarily store part of the derivative in here
-                        array_delta[k, m, p, q, :] = np.sum(_O * _E * _den, axis=0)
+                        array_delta[k, m, p, q, :] = np.sum(_O * _E / _den, axis=0)
 
-        array_delta[:] = -2 * bpower * ascale * array_delta * array_I + (
+        array_delta[:] = -2 * bpower * (ascale / float(J)) * array_delta * array_I + (
             array_E * np.power(array_denom, -bpower))
 
     def pool_layer(self, dtype,

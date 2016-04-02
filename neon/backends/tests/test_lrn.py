@@ -73,7 +73,7 @@ def lrn_helper(dtype, ones, cpu, alpha, beta, ascale, bpower,
 
     # layer, I, O, denom, ascale=1, bpower=1
     ng.fprop_lrn(layer_g, devI, devO, devD, alpha, beta, ascale, bpower)  # I, O, denom
-    nc.fprop_lrn(layer_c, cccI, cccO, cccD, ascale, bpower)  # CPU has no alpha, beta
+    nc.fprop_lrn(layer_c, cccI, cccO, cccD, None, None, ascale, bpower)  # CPU has no alpha, beta
 
     print "== denom =="
     print "CPU fprop"
@@ -89,7 +89,7 @@ def lrn_helper(dtype, ones, cpu, alpha, beta, ascale, bpower,
 
     # I, O, E, delta, denom
     ng.bprop_lrn(layer_g, devI, devO, devE, devB, devD, alpha, beta, ascale, bpower)
-    nc.bprop_lrn(layer_c, cccI, cccO, cccE, cccB, cccD, ascale, bpower)
+    nc.bprop_lrn(layer_c, cccI, cccO, cccE, cccB, cccD, None, None, ascale, bpower)
 
     print "== bprop =="
     print "CPU bprop"
