@@ -20,7 +20,6 @@ import os
 import atexit
 
 from media import MediaParams
-from indexer import Indexer
 from dataiterator import NervanaDataIterator
 
 logger = logging.getLogger(__name__)
@@ -137,9 +136,6 @@ class DataLoader(NervanaDataIterator):
         if not os.path.exists(self.archive_dir):
             logger.warning('%s not found. Triggering data ingest...' % self.archive_dir)
             os.makedirs(self.archive_dir)
-        if self.item_count.value == 0:
-            indexer = Indexer(self.repo_dir, self.index_file)
-            indexer.run()
         datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
         target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
         if self.ingest_params is None:

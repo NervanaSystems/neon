@@ -85,7 +85,7 @@ class ImageLoader(DataLoader):
         if do_transforms:
             assert (aspect_ratio == 0 or aspect_ratio > 100), (
                 'bad value for aspect_ratio augmentation')
-        if len(scale_range) == 1:
+        if type(scale_range) == int:
             scale_min = scale_max = scale_range
         else:
             scale_min, scale_max = scale_range

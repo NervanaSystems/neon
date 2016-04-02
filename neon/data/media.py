@@ -59,8 +59,8 @@ class ImageParams(MediaParams):
                 ('gray_mean', ct.c_int)]
     _defaults_ = {'augment': False,
                   'flip': False,
-                  'scale_min': 256,
-                  'scale_max': 256,
+                  'scale_min': 0,
+                  'scale_max': 0,
                   'contrast_min': 100,
                   'contrast_max': 100,
                   'rotate_min': 0,
@@ -79,16 +79,6 @@ class ImageParams(MediaParams):
         for key, value in self._defaults_.iteritems():
             setattr(self, key, value)
         super(ImageParams, self).__init__(mtype=MediaType.image, **kwargs)
-        if self.augment is False:
-            self.check()
-
-    def check(self):
-        assert self.channel_count == 1 or self.channel_count == 3
-        for key in self._defaults_:
-            if getattr(self, key) == self._defaults_[key]:
-                continue
-            raise ValueError('Invalid combination: augment=False, %s=%s' % (
-                key, getattr(self, key)))
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)

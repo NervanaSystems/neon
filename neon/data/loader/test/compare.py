@@ -34,7 +34,8 @@ from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Misclassification, Rectlin, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
-from neon.data import load_cifar10, DataLoader, ImageParams, BatchWriter
+from neon.data import load_cifar10, BatchWriter
+from neon.data import ImageLoader, DataLoader, ImageParams
 from PIL import Image
 from glob import glob
 
@@ -83,13 +84,16 @@ def load_dataset(basepath, datadir, shuffle):
         np.random.seed(0)
         np.random.shuffle(lines)
     for idx in range(len(lines)):
-        im = np.asarray(Image.open(lines[idx][0]))[:, :, ::-1]
+        im = np.asarray(Image.open(lines[idx][0]))
         im = np.transpose(im, axes=[2, 0, 1]).ravel()
         if data is None:
             data = np.empty((len(lines), im.shape[0]), dtype='float32')
             labels = np.empty((len(lines), 1), dtype='int32')
         data[idx] = im
         labels[idx] = lines[idx][1]
+    data_view = data.reshape((data.shape[0], 3, -1))
+    # Subtract mean values of R, G, B
+    data_view -= np.array((104, 119, 127)).reshape((1, 3, 1))
     return (data, labels)
 
 
@@ -131,7 +135,7 @@ def run(args, train, test):
 
 
 def test_iterator():
-    print('Testing iterator based data reader')
+    print('Testing iterator based data loader')
     parser = NeonArgparser(__doc__)
     args = parser.parse_args()
     (X_train, y_train), (X_test, y_test), nclass = load_cifar10_imgs(path=args.data_dir)
@@ -140,8 +144,8 @@ def test_iterator():
     return run(args, train, test)
 
 
-def test_loader():
-    print('Testing image loader')
+def test_generic_loader():
+    print('Testing generic data loader')
     parser = NeonArgparser(__doc__)
     args = parser.parse_args()
 
@@ -153,10 +157,28 @@ def test_loader():
     params = ImageParams(channel_count=3, height=32, width=32)
     common = dict(media_params=params, target_size=1, nclasses=10)
     train = DataLoader('train', repo_dir=os.path.join(args.data_dir, 'train'),
-                       shuffle=True, **common)
+                       **common)
     test = DataLoader('test', repo_dir=os.path.join(args.data_dir, 'test'),
-                      shuffle=False, **common)
+                      **common)
     err = run(args, train, test)
     return err
+
+
+def test_loader():
+    print('Testing image loader')
+    parser = NeonArgparser(__doc__)
+    args = parser.parse_args()
+
+    train_archive = os.path.join(args.data_dir, traindir + '-ingested')
+    test_archive = os.path.join(args.data_dir, testdir + '-ingested')
+    write_batches(args, train_archive, traindir, 0)
+    write_batches(args, test_archive, testdir, 1)
+    train = ImageLoader(set_name='train', do_transforms=False, inner_size=32,
+                        scale_range=0, repo_dir=train_archive)
+    test = ImageLoader(set_name='validation', do_transforms=False, inner_size=32,
+                       scale_range=0, repo_dir=test_archive)
+    err = run(args, train, test)
+    return err
+
 
 assert test_iterator() == test_loader()
