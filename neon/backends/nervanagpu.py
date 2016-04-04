@@ -1329,10 +1329,19 @@ class NervanaGPU(Backend):
 
         k_vec = 8 if sizeA == 32 or sizeB == 32 else 16
 
-        if (op == "tn" and m % 4 == 0 and n % 4 == 0 or
-            op == "nn" and k % k_vec == 0 and n % 4 == 0 or
-            op == "nt" and k % k_vec == 0 and n % 4 == 0):
-            op += "_vec"
+        if op == "tn":
+            if (m % 4 == 0 and n % 4 == 0 and
+                A.strides[1] % 4 == 0 and B.strides[0] % 4 == 0):
+                op += "_vec"
+        elif op == "nn":
+            if (k % k_vec == 0 and n % 4 == 0 and
+                A.strides[0] % k_vec == 0 and B.strides[0] % 4 == 0):
+                op += "_vec"
+        elif op == "nt":
+            if (k % k_vec == 0 and n % 4 == 0 and
+                A.strides[0] % k_vec == 0 and B.strides[1] % k_vec == 0):
+                op += "_vec"
+
 
         # nt and nn are more efficient with k%16==0
         if C.dtype.type is np.float16:
