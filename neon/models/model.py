@@ -168,6 +168,11 @@ class Model(NervanaObject):
             callbacks.on_minibatch_begin(epoch, mb_idx)
             self.be.begin(Block.minibatch, mb_idx)
 
+            if hasattr(dataset, 'actual_seq_len'):
+                self.set_seq_len(dataset.actual_seq_len)
+            if hasattr(dataset, 'actual_bsz'):
+                self.set_batch_size(dataset.actual_bsz)
+
             x = self.fprop(x)
 
             self.total_cost[:] = self.total_cost + self.cost.get_cost(x, t)
@@ -412,6 +417,20 @@ class Model(NervanaObject):
             return
         return pdict
 
+    def set_batch_size(self, N):
+        """
+        Set the actual minibatch, so eventhough the buffers are allocated considering
+        excessive padding, the processing for some layers can be shortened.
+        """
+        return self.layers.set_batch_size(N)
+
+    def set_seq_len(self, S):
+        """
+        Set the actual minibatch, so eventhough the buffers are allocated considering
+        excessive padding, the processing for some layers can be shortened.
+        """
+        return self.layers.set_seq_len(S)
+
     def benchmark(self, dataset, inference=False, cost=None, optimizer=None,
                   niterations=20, nskip=2):
         """
@@ -456,6 +475,11 @@ class Model(NervanaObject):
         while count < niterations + nskip:
             dataset.reset()
             for mb_idx, (x, t) in enumerate(dataset):
+
+                if hasattr(dataset, 'actual_seq_len'):
+                    self.set_seq_len(dataset.actual_seq_len)
+                if hasattr(dataset, 'actual_bsz'):
+                    self.set_batch_size(dataset.actual_bsz)
 
                 self.be.record_mark(fprop_start)  # mark start of fprop
 

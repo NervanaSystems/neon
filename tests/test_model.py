@@ -56,6 +56,22 @@ def test_model_get_outputs_rnn(backend_default, data):
     assert np.alltrue(output[0, 1] > output[0, 0])
 
 
+def test_model_N_S_setter(backend_default):
+
+    # weight initialization
+    init = Constant(0.08)
+
+    # model initialization
+    layers = [
+        Recurrent(150, init, activation=Logistic()),
+        Affine(100, init, bias=init, activation=Rectlin())
+    ]
+
+    model = Model(layers=layers)
+    model.set_batch_size(20)
+    model.set_seq_len(10)
+
+
 def test_model_get_outputs(backend_default, data):
     (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
     train_set = ArrayIterator(X_train[:backend_default.bsz * 3])
@@ -163,4 +179,5 @@ def test_model_serialize(backend_default, data):
 
 if __name__ == '__main__':
     be = gen_backend(backend='gpu', batch_size=50)
-    test_model_get_outputs_rnn(be, '~/nervana/data')
+    test_model_N_S_setter(be)
+    # test_model_get_outputs_rnn(be, '~/nervana/data')

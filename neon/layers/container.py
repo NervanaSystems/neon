@@ -93,6 +93,14 @@ class LayerContainer(Layer):
                 l.parallelism = p if l.parallelism == "Unknown" else l.parallelism
                 p = l.parallelism
 
+    def set_batch_size(self, N):
+        for l in self.layers:
+            l.set_batch_size(N)
+
+    def set_seq_len(self, S):
+        for l in self.layers:
+            l.set_seq_len(S)
+
 
 class Sequential(LayerContainer):
     """
@@ -596,20 +604,20 @@ class RoiPooling(Sequential):
                 in_obj_img = l.configure(in_obj_img)
             self.in_shape = in_obj_img.out_shape  # ROI layer in shape
             (self.fm_channel, self.fm_height, self.fm_width) = self.in_shape
-            # make the out_shape as a tuple, as if the roi_per_image a
-            # time_step dimension
-            self.out_shape = (
-                self.fm_channel * self.roi_H * self.roi_W, self.rois_per_image)
             self.fm_reshape_shape = (
                 self.fm_channel, self.fm_height * self.fm_width, self.be.bsz)
             self.error_in_reshape = (self.fm_channel, -1)
+
+        # make the out_shape as a tuple, as if the roi_per_image a
+        # time_step dimension
+        self.out_shape = (self.fm_channel * self.roi_H * self.roi_W, self.rois_per_image)
         return self
 
     def allocate(self, shared_outputs=None):
         super(RoiPooling, self).allocate(shared_outputs)
         self.owns_output = True
-        self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
         self.error = self.be.iobuf(self.in_shape)
+        self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
         self.max_idx = self.be.iobuf(self.out_shape, dtype=np.int32)
 
     def set_deltas(self, delta_buffers):

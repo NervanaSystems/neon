@@ -62,6 +62,8 @@ class Layer(NervanaObject):
         self.parallelism = parallelism
         self.revert_list = []
         self.next_layer = None
+        self.actual_bsz = None
+        self.actual_seq_len = None
 
     def __str__(self):
         """
@@ -222,6 +224,12 @@ class Layer(NervanaObject):
 
     def set_states(self, pdict):
         pass
+
+    def set_batch_size(self, N):
+        self.actual_bsz = N
+
+    def set_seq_len(self, S):
+        self.actual_seq_len = S
 
     def get_description(self, **kwargs):
         """
@@ -773,9 +781,21 @@ class Linear(ParameterLayer):
         return self
 
     def fprop(self, inputs, inference=False, beta=0.0):
+
         self.inputs = inputs
-        self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs, beta=beta,
-                             bsum=self.batch_sum)
+        if self.actual_bsz is None and self.actual_seq_len is None:
+            self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs, beta=beta,
+                                 bsum=self.batch_sum)
+        else:
+            bsz = self.be.bsz if self.actual_bsz is None else self.actual_bsz
+            steps = self.nsteps if self.actual_seq_len is None else self.actual_seq_len
+
+            self.be.compound_dot(A=self.W,
+                                 B=self.inputs[:, :bsz * steps],
+                                 C=self.outputs[:, :bsz * steps],
+                                 beta=beta,
+                                 bsum=self.batch_sum)
+
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
