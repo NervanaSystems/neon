@@ -906,6 +906,14 @@ class DataTransform(Layer):
         return "DataTransform Layer '%s': %s" % (
                self.name, self.transform.__class__.__name__)
 
+    @classmethod
+    def gen_class(cls, pdict):
+        if pdict.get('transform') is not None:
+            icls = load_class(pdict['transform']['type'])
+            transform = icls(**pdict['transform']['config'])
+            pdict['transform'] = transform
+        return cls(**pdict)
+
     def configure(self, in_obj):
         super(DataTransform, self).configure(in_obj)
         self.out_shape = self.in_shape
