@@ -476,6 +476,10 @@ class Backend(object):
         else:
             # normal neon output size determination
             size = (X - S + 2 * padding)/strides + 1
+
+        if pooling and padding >= S:
+            raise ValueError("Padding dim %d incompatible with filter size %d" % (padding, S))
+
         return size
 
     def set_caffe_compat(self):

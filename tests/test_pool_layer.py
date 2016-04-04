@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Convolution layer tests
+Pooling layer tests
 """
 import itertools as itt
 import numpy as np
@@ -98,7 +98,7 @@ def test_padding(backend_default, poolargs):
 
     NervanaObject.be.bsz = batch_size
 
-    # basic sanity check with 0 weights random inputs
+    # basic sanity check with random inputs
     inshape = (nifm, in_sz, in_sz)
     insize = np.prod(inshape)
     neon_layer = Pooling(fshape=fshape, strides=stride, padding=padding)
