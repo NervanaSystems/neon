@@ -27,7 +27,7 @@ import weakref
 from neon import NervanaObject
 from neon.data import NervanaDataIterator, Ticker
 from neon.util.persist import load_obj, save_obj, load_class
-from neon.layers import Convolution
+from neon.layers import Convolution, BatchNorm
 logger = logging.getLogger(__name__)
 
 
@@ -1115,6 +1115,39 @@ class DeconvCallback(Callback):
             activation = activation.get().reshape((C, H, W, be.bsz))
             activation = np.transpose(activation, (1, 2, 0, 3))
             act_data['vis'][fm] = self.scale_to_rgb(activation[:, :, :, 0])
+
+
+class BatchNormTuneCallback(Callback):
+    """
+    Callback for tuning batch norm parameters with unbiased estimators for global mean and var
+
+    Arguments:
+        tune_set (Dataset):  data set over which to tune parameters (usually a subset of the
+                             training set)
+    """
+    def __init__(self, tune_set, epoch_freq=1):
+        super(BatchNormTuneCallback, self).__init__(epoch_freq=epoch_freq)
+        self.tune_set = tune_set
+        self.bn_layers = None
+
+    def on_epoch_end(self, callback_data, model, epoch):
+        if not self.bn_layers:
+            self.bn_layers = [l for l in model.layers_to_optimize if type(l) is BatchNorm]
+
+        if (epoch + 1) % self.epoch_freq == 0:
+            self.tune_set.reset()
+
+            for batch_idx, (x, t) in enumerate(self.tune_set):
+                for l in self.bn_layers:
+                    l.rho = float(batch_idx) / (batch_idx + 1.)
+                model.fprop(x)
+                model.layers.revert_tensors()
+
+            debiaser = float((batch_idx + 1.0) / batch_idx)
+            for l in self.bn_layers:
+                if getattr(l.gvar, 'is_divergent', False):
+                    l.be.reduce_replicas(l.gvar, False)
+                l.gvar[:] = l.gvar * debiaser
 
 
 class WatchTickerCallback(Callback):
