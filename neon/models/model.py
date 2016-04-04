@@ -412,10 +412,11 @@ class Model(NervanaObject):
             return
         return pdict
 
-    def benchmark(self, dataset, cost, optimizer, niterations=20, nskip=2):
+    def benchmark(self, dataset, inference=False, cost=None, optimizer=None,
+                  niterations=20, nskip=2):
         """
         Measure runtime for computing fprop and bprop seperately, as well as
-        full minibatch run times.
+        full minibatch run times. For inference case, only the fprop
 
         Arguments:
               dataset (iterable): Dataset iterator to perform fit on
@@ -432,6 +433,9 @@ class Model(NervanaObject):
             dictionary with fprop, bprop run times
         """
         # initialize model
+        if inference is False:
+            assert cost is not None and optimizer is not None, "Need cost and optimizer to \
+                                                                benchmark bprop and update"
         self.cost = cost
         self.initialize(dataset, cost)
         self.optimizer = optimizer
@@ -440,7 +444,8 @@ class Model(NervanaObject):
 
         # iterate through minibatches of the dataset
         times = OrderedDict()
-        for ky in ['fprop', 'bprop', 'iteration']:
+        time_keys = ['fprop'] if inference else ['fprop', 'bprop', 'iteration']
+        for ky in time_keys:
             times[ky] = np.full(niterations + nskip, -1.0)
         count = 0
 
@@ -455,21 +460,26 @@ class Model(NervanaObject):
                 self.be.record_mark(fprop_start)  # mark start of fprop
 
                 x = self.fprop(x)
-                self.total_cost[:] = self.total_cost + self.cost.get_cost(x, t)
+
+                if inference is False:
+                    self.total_cost[:] = self.total_cost + self.cost.get_cost(x, t)
 
                 self.be.record_mark(fprop_end)  # mark end of fprop and start of bprop
 
-                delta = self.cost.get_errors(x, t)
-                self.bprop(delta)
-                self.optimizer.optimize(self.layers_to_optimize, epoch=0)
+                if inference is False:
+                    delta = self.cost.get_errors(x, t)
+                    self.bprop(delta)
+                    self.optimizer.optimize(self.layers_to_optimize, epoch=0)
 
-                self.be.record_mark(bprop_end)  # mark end of bprop
-
-                self.be.synchronize_mark(bprop_end)
+                    self.be.record_mark(bprop_end)  # mark end of bprop
+                    self.be.synchronize_mark(bprop_end)
+                else:
+                    self.be.synchronize_mark(fprop_end)
 
                 times['fprop'][count] = self.be.get_time(fprop_start, fprop_end)
-                times['bprop'][count] = self.be.get_time(fprop_end, bprop_end)
-                times['iteration'][count] = times['fprop'][count] + times['bprop'][count]
+                if inference is False:
+                    times['bprop'][count] = self.be.get_time(fprop_end, bprop_end)
+                    times['iteration'][count] = times['fprop'][count] + times['bprop'][count]
 
                 count += 1
                 if count >= niterations + nskip:

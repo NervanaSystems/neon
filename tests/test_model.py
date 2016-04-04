@@ -76,6 +76,9 @@ def test_model_get_outputs(backend_default, data):
     output = mlp.get_outputs(train_set)
     assert np.allclose(output, ref_output)
 
+    # test model benchmark inference
+    mlp.benchmark(train_set, inference=True, niterations=5)
+
 
 def test_model_serialize(backend_default, data):
     (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
