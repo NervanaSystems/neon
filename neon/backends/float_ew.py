@@ -664,6 +664,7 @@ def call_compound_kernel(rand_state, compute_capability, *args):
     argminmax = False
     takeop = False
     axis = 1
+    out_shape = args[0].shape
     for arg in args:
         if type(arg) is dict:
             op_name = arg["op"]
@@ -692,7 +693,7 @@ def call_compound_kernel(rand_state, compute_capability, *args):
         elif isinstance(arg, ng.GPUTensor):
             if len(arg.shape) < 2:
                 broadcast = True
-            elif (len(arg.shape) == 2 and (arg.shape[0] == 1 or arg.shape[1] == 1)):
+            elif len(arg.shape) == 2 and min(arg.shape) == 1 and arg.shape != out_shape:
                 broadcast = True
             elif arg.is_trans:
                 transpose = True
