@@ -27,4 +27,4 @@ from neon.data.speech import Speech
 from neon.data.video import Video
 from neon.data.imagecaption import ImageCaption, ImageCaptionTest, Flickr8k, Flickr30k, Coco
 from neon.data.image import MNIST, CIFAR10
-from neon.data.pascal_voc import PASCALVOC
+from neon.data.pascal_voc import PASCALVOCTrain, PASCALVOCInference

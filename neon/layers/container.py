@@ -543,9 +543,9 @@ class RoiPooling(Sequential):
     with the feature maps output from CNN layers.
 
     The RoiPooling container processes images with preset batch size. While after
-    the ROI pooling, the minibatch is extended into batch_size * rois_per_image
+    the ROI pooling, the minibatch is extended into batch_size * rois_per_img
     examples in each minibatch.
-    The output shape (out_shape) is a tuple - (batch_size, rois_per_image), then
+    The output shape (out_shape) is a tuple - (batch_size, rois_per_img), then
     the following layers will allocate buffers accordingly.
     """
 
@@ -561,10 +561,9 @@ class RoiPooling(Sequential):
         self.owns_delta = True
         self.img = None
         self.rois = None
-        self.rois_per_image = 64
+        self.rois_per_img = 64
         self.rois_per_batch = self.be.bsz * 64
         self.bprop_enabled = bprop_enabled
-        print "\nROIPooling backpropagation enabled: {}".format(bprop_enabled)
 
     def nested_str(self, level=0):
         ss = self.__class__.__name__ + '\n'
@@ -581,10 +580,10 @@ class RoiPooling(Sequential):
 
         if not isinstance(in_obj, list):
             assert hasattr(in_obj, 'shape') and isinstance(in_obj.shape, list)
-            # make sure the in_obj has information on rois_per_image,
+            # make sure the in_obj has information on rois_per_img,
             # if it is a dataset
-            assert hasattr(in_obj, 'rois_per_image')
-            self.rois_per_image = in_obj.rois_per_image
+            assert hasattr(in_obj, 'rois_per_img')
+            self.rois_per_img = in_obj.rois_per_img
             assert hasattr(in_obj, 'rois_per_batch')
             self.rois_per_batch = in_obj.rois_per_batch
 
@@ -610,7 +609,7 @@ class RoiPooling(Sequential):
 
         # make the out_shape as a tuple, as if the roi_per_image a
         # time_step dimension
-        self.out_shape = (self.fm_channel * self.roi_H * self.roi_W, self.rois_per_image)
+        self.out_shape = (self.fm_channel * self.roi_H * self.roi_W, self.rois_per_img)
         return self
 
     def allocate(self, shared_outputs=None):
