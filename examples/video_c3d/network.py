@@ -3,6 +3,7 @@ from neon.layers import Conv, Dropout, Pooling, Affine
 from neon.models import Model
 from neon.transforms import Rectlin, Softmax
 
+
 def create_network():
     # weight initialization
     g1 = Gaussian(scale=0.01)

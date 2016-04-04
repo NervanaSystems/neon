@@ -16,24 +16,20 @@
 Preprocess videos by resizing and splitting videos into clips.
 """
 
-import ctypes as ct
 import cv2
-import gzip
 import logging
 import math
 import numpy as np
 import os
-from multiprocessing import Pool
-
-from neon.data import BatchWriter
-from neon import NervanaObject
-from neon.util.argparser import NeonArgparser
+import configargparse
 
 logger = logging.getLogger(__name__)
 
-class VideoPreprocessor(NervanaObject):
+
+class VideoPreprocessor():
     """
     Utility class for preprocessing videos.
+
 
     Arguments:
         num_frames_per_clip (int): Split videos into clips. Each clip
@@ -78,8 +74,6 @@ class VideoPreprocessor(NervanaObject):
         if not os.path.exists(self.preprocessed_dir):
             os.makedirs(self.preprocessed_dir)
 
-        num_examples = 0
-        clip_sum = 0
         codec = cv2.cv.CV_FOURCC('M', 'J', 'P', 'G')
 
         video = cv2.VideoCapture(video_path)
@@ -152,22 +146,26 @@ class VideoPreprocessor(NervanaObject):
         self.preprocess_list(video_list)
 
 if __name__ == "__main__":
-    parser = NeonArgparser(__doc__)
-    parser.add_argument('--video_dir', help='Root directory of raw video data.')
-    parser.add_argument('--data_split_file', help='Path of two column file indicating'
-                                                  'examples and their corresponding labels'
-                                                  'in a given data split.')
-    parser.add_argument('--class_ind_file', help='Path of two column file mapping integer'
-                                                 'class labels to their canonical names.')
-    parser.add_argument('--preprocessed_dir', help='Output directory of preprocessed clips.')
+    parser = configargparse.ArgParser()
+    parser.add_argument('--video_dir', required=True,
+                        help='Root directory of raw video data.')
+    parser.add_argument('--data_split_file', required=True,
+                        help='Path of two column file indicating'
+                             'examples and their corresponding labels'
+                             'in a given data split.')
+    parser.add_argument('--class_ind_file', required=True,
+                        help='Path of two column file mapping integer'
+                             'class labels to their canonical names.')
+    parser.add_argument('--preprocessed_dir', required=True,
+                        help='Output directory of preprocessed clips.')
     args = parser.parse_args()
 
     logger = logging.getLogger(__name__)
     num_frames_per_clip = 16
     clip_resize_dim = (128, 171)
     vpp = VideoPreprocessor(
-        num_frames_per_clip = num_frames_per_clip,
-        clip_resize_dim = clip_resize_dim,
+        num_frames_per_clip=num_frames_per_clip,
+        clip_resize_dim=clip_resize_dim,
         video_dir=args.video_dir,
         data_split_file=args.data_split_file,
         class_ind_file=args.class_ind_file,

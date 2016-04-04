@@ -32,12 +32,9 @@ Usage:
 
 import os
 import numpy as np
-from neon.data import ArrayIterator
-from neon.initializers import Uniform, Constant, Gaussian
-from neon.layers import Affine, Conv, Pooling, GeneralizedCost, Dropout
-from neon.models import Model
+from neon.layers import GeneralizedCost
 from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
-from neon.transforms import Misclassification, Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification, Accuracy
+from neon.transforms import CrossEntropyMulti, TopKMisclassification, Accuracy
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
 from neon.data import DataLoader, VideoParams, ImageParams
