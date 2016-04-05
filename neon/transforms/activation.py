@@ -139,7 +139,7 @@ class Logistic(Transform):
             self.bprop_func = lambda x: x * (1.0 - x)
 
     def __call__(self, x):
-        return self.be.reciprocal(self.be.exp(-x) + 1.0)
+        return self.be.sig(x)
 
     def bprop(self, y):
         """Returns the derivative of the logistic (sigmoid) function at y (output)
