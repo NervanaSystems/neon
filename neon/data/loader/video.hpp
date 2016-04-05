@@ -26,6 +26,7 @@
 
 extern "C" {
     #include <libavformat/avformat.h>
+    #include <libavutil/imgutils.h>
     #include <libswscale/swscale.h>
 }
 
@@ -89,10 +90,14 @@ public:
 
         AVFrame* pFrameRGB = av_frame_alloc();
         AVPixelFormat pFormat = AV_PIX_FMT_BGR24;
-        int numBytes = avpicture_get_size(pFormat, codecCtx->width, codecCtx->height);
+        int numBytes = av_image_get_buffer_size(pFormat, codecCtx->width, codecCtx->height, 1);
+        // int numBytes = avpicture_get_size(pFormat, codecCtx->width, codecCtx->height);
         uint8_t* buffer = (uint8_t *) av_malloc(numBytes * sizeof(uint8_t));
-        avpicture_fill((AVPicture*) pFrameRGB, buffer, pFormat,
-                       codecCtx->width, codecCtx->height);
+
+        av_image_copy_to_buffer(buffer, numBytes, pFrameRGB->data, pFrameRGB->linesize,
+                         pFormat, codecCtx->width, codecCtx->height, 1);
+        // avpicture_fill((AVPicture*) pFrameRGB, buffer, pFormat,
+        //                codecCtx->width, codecCtx->height);
 
         int numFrames = formatCtx->streams[videoStream]->nb_frames;
         int channelSize = numFrames * _imgSize;
@@ -117,7 +122,7 @@ public:
                 }
                 av_frame_free(&pFrame);
             }
-            av_free_packet(&packet);
+            av_packet_unref(&packet);
         }
 
         free(buffer);
@@ -166,12 +171,16 @@ private:
         );
         sws_scale(
             imgConvertCtx,
-            ((AVPicture*) pFrame)->data,
-            ((AVPicture*) pFrame)->linesize,
+            pFrame->data,
+            pFrame->linesize,
+            // ((AVPicture*) pFrame)->data,
+            // ((AVPicture*) pFrame)->linesize,
             0,
             codecCtx->height,
-            ((AVPicture*) pFrameRGB)->data,
-            ((AVPicture*) pFrameRGB)->linesize
+            pFrameRGB->data,
+            pFrameRGB->linesize
+            // ((AVPicture*) pFrameRGB)->data,
+            // ((AVPicture*) pFrameRGB)->linesize
         );
         sws_freeContext(imgConvertCtx);
     }
