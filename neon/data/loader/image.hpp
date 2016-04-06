@@ -33,6 +33,13 @@ using std::vector;
 
 #pragma once
 
+struct AugParams {
+    Rect cropBox;
+    int angle;
+    float alpha;
+    bool flip;
+};
+
 class ImageParams : public MediaParams {
 public:
     ImageParams(int channelCount, int height, int width,
@@ -227,29 +234,32 @@ public:
     void transform(char* item, int itemSize, char* buf, int bufSize) {
         Mat decodedImage;
         decode(item, itemSize, &decodedImage);
-        getRandomAugParams(decodedImage);
-        transformDecodedImage(decodedImage, buf, bufSize);
+
+        AugParams augParams = getRandomAugParams(decodedImage);
+        transformDecodedImage(decodedImage, buf, bufSize, &augParams);
     }
 
-    void getRandomAugParams(Mat decodedImage) {
-        _params->getRandomCrop(_rngSeed, decodedImage.size(), &_cropBox);
-        _params->getRandomAngle(_rngSeed, _angle);
-        _doFlip = _params->doRandomFlip(_rngSeed);
-        _alpha = _params->getRandomContrast(_rngSeed);
+    AugParams getRandomAugParams(Mat decodedImage) {
+        AugParams augParams;
+        _params->getRandomCrop(_rngSeed, decodedImage.size(), &(augParams.cropBox));
+        _params->getRandomAngle(_rngSeed, augParams.angle);
+        augParams.alpha = _params->getRandomContrast(_rngSeed);
+        augParams.flip = _params->doRandomFlip(_rngSeed);
+        return augParams;
     }
 
-    void transformDecodedImage(Mat decodedImage, char* buf, int bufSize){
+    void transformDecodedImage(Mat decodedImage, char* buf, int bufSize, AugParams* augParams){
         Mat rotatedImage;
-        if (_angle == 0) {
+        if (augParams->angle == 0) {
             rotatedImage = decodedImage;
         } else {
-            rotate(decodedImage, rotatedImage, _angle);
+            rotate(decodedImage, rotatedImage, augParams->angle);
         }
 
-        Mat croppedImage = rotatedImage(_cropBox);
+        Mat croppedImage = rotatedImage(augParams->cropBox);
         auto innerSize = _params->getSize();
         Mat resizedImage;
-        if (innerSize.width == _cropBox.width && innerSize.height == _cropBox.height) {
+        if (innerSize.width == augParams->cropBox.width && innerSize.height == augParams->cropBox.height) {
             resizedImage = croppedImage;
         } else {
             resize(croppedImage, resizedImage, innerSize);
@@ -257,15 +267,15 @@ public:
         Mat flippedImage;
         Mat *finalImage;
 
-        if (_doFlip) {
+        if (augParams->flip) {
             cv::flip(resizedImage, flippedImage, 1);
             finalImage = &flippedImage;
         } else {
             finalImage = &resizedImage;
         }
         Mat newImage;
-        if (_alpha) {
-            finalImage->convertTo(newImage, -1, _alpha);
+        if (augParams->alpha) {
+            finalImage->convertTo(newImage, -1, augParams->alpha);
             finalImage = &newImage;
         }
 
@@ -421,8 +431,4 @@ private:
     ImageParams*                _params;
     ImageIngestParams*          _ingestParams;
     unsigned int                _rngSeed;
-    Rect                        _cropBox;
-    int                         _angle;
-    bool                        _doFlip;
-    float                       _alpha;
 };

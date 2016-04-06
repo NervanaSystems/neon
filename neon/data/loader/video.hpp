@@ -90,14 +90,11 @@ public:
 
         AVFrame* pFrameRGB = av_frame_alloc();
         AVPixelFormat pFormat = AV_PIX_FMT_BGR24;
-        int numBytes = av_image_get_buffer_size(pFormat, codecCtx->width, codecCtx->height, 1);
-        // int numBytes = avpicture_get_size(pFormat, codecCtx->width, codecCtx->height);
-        uint8_t* buffer = (uint8_t *) av_malloc(numBytes * sizeof(uint8_t));
 
-        av_image_copy_to_buffer(buffer, numBytes, pFrameRGB->data, pFrameRGB->linesize,
+        int numBytes = av_image_get_buffer_size(pFormat, codecCtx->width, codecCtx->height, 1);
+        uint8_t* buffer = (uint8_t *) av_malloc(numBytes * sizeof(uint8_t));
+        av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize, buffer,
                          pFormat, codecCtx->width, codecCtx->height, 1);
-        // avpicture_fill((AVPicture*) pFrameRGB, buffer, pFormat,
-        //                codecCtx->width, codecCtx->height);
 
         int numFrames = formatCtx->streams[videoStream]->nb_frames;
         int channelSize = numFrames * _imgSize;
@@ -105,7 +102,7 @@ public:
         int frameFinished;
         AVPacket packet;
         int frameIdx = 0;
-
+        AugParams augParams;
         while (av_read_frame(formatCtx, &packet) >= 0) {
 
             if (packet.stream_index == videoStream) {
@@ -116,7 +113,7 @@ public:
                     _convertFrameFormat(codecCtx, pFormat, pFrame, pFrameRGB);
                     Mat frame(pFrame->height, pFrame->width,
                               CV_8UC3, pFrameRGB->data[0]);
-                    _writeFrameToBuf(frame, buf, frameIdx, channelSize);
+                    _writeFrameToBuf(frame, buf, frameIdx, channelSize, &augParams);
 
                     frameIdx++;
                 }
@@ -148,7 +145,6 @@ private:
         for (int streamIdx = 0; streamIdx < (int) formatCtx->nb_streams; streamIdx++) {
             codecCtx = formatCtx->streams[streamIdx]->codec;
             if (avcodec_get_type(codecCtx->codec_id) == AVMEDIA_TYPE_VIDEO) {
-            // if (codecCtx->coder_type == AVMEDIA_TYPE_VIDEO) {
                 return streamIdx;
             }
         }
@@ -174,25 +170,20 @@ private:
             imgConvertCtx,
             pFrame->data,
             pFrame->linesize,
-            // ((AVPicture*) pFrame)->data,
-            // ((AVPicture*) pFrame)->linesize,
             0,
             codecCtx->height,
             pFrameRGB->data,
             pFrameRGB->linesize
-            // ((AVPicture*) pFrameRGB)->data,
-            // ((AVPicture*) pFrameRGB)->linesize
         );
         sws_freeContext(imgConvertCtx);
     }
 
-    void _writeFrameToBuf(Mat frame, char* buf, int frameIdx, int channelSize) {
+    void _writeFrameToBuf(Mat frame, char* buf, int frameIdx, int channelSize, AugParams* augParams) {
         if (frameIdx == 0) {
-            _imgDecoder->getRandomAugParams(frame);
+            *augParams = _imgDecoder->getRandomAugParams(frame);
         }
-
         char* imageBuf = new char[_decodedSize];
-        _imgDecoder->transformDecodedImage(frame, imageBuf, _decodedSize);
+        _imgDecoder->transformDecodedImage(frame, imageBuf, _decodedSize, augParams);
         Mat decodedBuf = Mat(1, _decodedSize, CV_8U, imageBuf);
 
         for(int c = 0; c < _params->_frameParams._channelCount; c++) {
