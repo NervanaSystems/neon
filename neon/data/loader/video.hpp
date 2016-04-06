@@ -147,7 +147,8 @@ private:
     int _findVideoStream(AVCodecContext* &codecCtx, AVFormatContext* formatCtx) {
         for (int streamIdx = 0; streamIdx < (int) formatCtx->nb_streams; streamIdx++) {
             codecCtx = formatCtx->streams[streamIdx]->codec;
-            if (codecCtx->coder_type == AVMEDIA_TYPE_VIDEO) {
+            if (avcodec_get_type(codecCtx->codec_id) == AVMEDIA_TYPE_VIDEO) {
+            // if (codecCtx->coder_type == AVMEDIA_TYPE_VIDEO) {
                 return streamIdx;
             }
         }
