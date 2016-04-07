@@ -3,7 +3,7 @@
 This is an implementation of [C3D](http://arxiv.org/pdf/1412.0767v4.pdf) trained on the [UCF101](http://crcv.ucf.edu/data/UCF101.php) dataset.
 
 ### Model script
-The model training script [train.py](https://gist.github.com/SNagappan/304446c6c2f7afe29629#file-video_c3d-py) is included below.
+The model training script [train.py](https://gist.github.com/SNagappan/304446c6c2f7afe29629#file-train-py) is included below.
 
 ### Instructions
 The first step is to preprocess the UCF101 dataset using preprocess.py which splits videos into smaller clips. Preprocessed videos need to be created for both the training and test splits.
@@ -23,7 +23,7 @@ python examples/video_c3d/preprocess.py --video_dir ~/data/UCF-101/ --data_split
 
 Once the preprocessed video directories are created for both the training and test splits, the model can be trained with the following:
 ```
-python examples/video_c3d/train.py --data_dir <preprocessed_dir> --epochs 18 --save_path UCF101-C3D.p
+python examples/video_c3d/train.py --data_dir <preprocessed_dir> --batch_size 32 --epochs 18 --save_path UCF101-C3D.p
 ```
 
 ### Trained weights

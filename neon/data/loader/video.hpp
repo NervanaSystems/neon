@@ -113,7 +113,7 @@ public:
                     _convertFrameFormat(codecCtx, pFormat, pFrame, pFrameRGB);
                     Mat frame(pFrame->height, pFrame->width,
                               CV_8UC3, pFrameRGB->data[0]);
-                    _writeFrameToBuf(frame, buf, frameIdx, channelSize, &augParams);
+                    _writeFrameToBuf(frame, buf, frameIdx, channelSize, augParams);
 
                     frameIdx++;
                 }
@@ -132,7 +132,6 @@ public:
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
-
 
     }
 
@@ -166,6 +165,7 @@ private:
             NULL,
             NULL
         );
+
         sws_scale(
             imgConvertCtx,
             pFrame->data,
@@ -178,9 +178,9 @@ private:
         sws_freeContext(imgConvertCtx);
     }
 
-    void _writeFrameToBuf(Mat frame, char* buf, int frameIdx, int channelSize, AugParams* augParams) {
+    void _writeFrameToBuf(Mat frame, char* buf, int frameIdx, int channelSize, AugParams& augParams) {
         if (frameIdx == 0) {
-            *augParams = _imgDecoder->getRandomAugParams(frame);
+            augParams = _imgDecoder->createRandomAugParams(frame);
         }
         char* imageBuf = new char[_decodedSize];
         _imgDecoder->transformDecodedImage(frame, imageBuf, _decodedSize, augParams);

@@ -19,11 +19,14 @@ Preprocess videos by resizing and splitting videos into clips.
 import cv2
 import logging
 import math
-import numpy as np
 import os
 import configargparse
 
 logger = logging.getLogger(__name__)
+
+
+def check_opencv_version(major):
+    return cv2.__version__.startswith(major)
 
 
 class VideoPreprocessor():
@@ -74,13 +77,20 @@ class VideoPreprocessor():
         if not os.path.exists(self.preprocessed_dir):
             os.makedirs(self.preprocessed_dir)
 
-        codec = cv2.cv.CV_FOURCC('M', 'J', 'P', 'G')
+        if check_opencv_version('3.'):
+            codec_func = cv2.VideoWriter_fourcc
+            cap_prop_fps = cv2.CAP_PROP_FPS
+            cap_prop_frame_count = cv2.CAP_PROP_FRAME_COUNT
+        else:
+            codec_func = cv2.cv.CV_FOURCC
+            cap_prop_fps = cv2.cv.CV_CAP_PROP_FPS
+            cap_prop_frame_count = cv2.cv.CV_CAP_PROP_FRAME_COUNT
+
+        codec = codec_func('X', 'V', 'I', 'D')
 
         video = cv2.VideoCapture(video_path)
-        fps = video.get(cv2.cv.CV_CAP_PROP_FPS)
-        if np.isnan(fps) or fps < 1:
-            fps = 30
-        frame_count = video.get(cv2.cv.CV_CAP_PROP_FRAME_COUNT)
+        fps = video.get(cap_prop_fps)
+        frame_count = video.get(cap_prop_frame_count)
         num_clips = math.floor(frame_count/self.num_frames_per_clip)
 
         clip_idx = 0

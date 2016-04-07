@@ -33,12 +33,12 @@ using std::vector;
 
 #pragma once
 
-struct AugParams {
+typedef struct {
     Rect cropBox;
     int angle;
     float alpha;
     bool flip;
-};
+} AugParams;
 
 class ImageParams : public MediaParams {
 public:
@@ -234,12 +234,11 @@ public:
     void transform(char* item, int itemSize, char* buf, int bufSize) {
         Mat decodedImage;
         decode(item, itemSize, &decodedImage);
-
-        AugParams augParams = getRandomAugParams(decodedImage);
-        transformDecodedImage(decodedImage, buf, bufSize, &augParams);
+        AugParams augParams = createRandomAugParams(decodedImage);
+        transformDecodedImage(decodedImage, buf, bufSize, augParams);
     }
 
-    AugParams getRandomAugParams(Mat decodedImage) {
+    AugParams createRandomAugParams(Mat decodedImage) {
         AugParams augParams;
         _params->getRandomCrop(_rngSeed, decodedImage.size(), &(augParams.cropBox));
         _params->getRandomAngle(_rngSeed, augParams.angle);
@@ -248,18 +247,18 @@ public:
         return augParams;
     }
 
-    void transformDecodedImage(Mat decodedImage, char* buf, int bufSize, AugParams* augParams){
+    void transformDecodedImage(Mat decodedImage, char* buf, int bufSize, AugParams &augParams){
         Mat rotatedImage;
-        if (augParams->angle == 0) {
+        if (augParams.angle == 0) {
             rotatedImage = decodedImage;
         } else {
-            rotate(decodedImage, rotatedImage, augParams->angle);
+            rotate(decodedImage, rotatedImage, augParams.angle);
         }
 
-        Mat croppedImage = rotatedImage(augParams->cropBox);
+        Mat croppedImage = rotatedImage(augParams.cropBox);
         auto innerSize = _params->getSize();
         Mat resizedImage;
-        if (innerSize.width == augParams->cropBox.width && innerSize.height == augParams->cropBox.height) {
+        if (innerSize.width == augParams.cropBox.width && innerSize.height == augParams.cropBox.height) {
             resizedImage = croppedImage;
         } else {
             resize(croppedImage, resizedImage, innerSize);
@@ -267,15 +266,15 @@ public:
         Mat flippedImage;
         Mat *finalImage;
 
-        if (augParams->flip) {
+        if (augParams.flip) {
             cv::flip(resizedImage, flippedImage, 1);
             finalImage = &flippedImage;
         } else {
             finalImage = &resizedImage;
         }
         Mat newImage;
-        if (augParams->alpha) {
-            finalImage->convertTo(newImage, -1, augParams->alpha);
+        if (augParams.alpha) {
+            finalImage->convertTo(newImage, -1, augParams.alpha);
             finalImage = &newImage;
         }
 
