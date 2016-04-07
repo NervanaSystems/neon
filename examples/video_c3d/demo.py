@@ -84,7 +84,7 @@ def print_label_on_image(frame, top_labels):
     rect_color = (0, 0, 0)
     text_color = (255, 255, 255)
     font_scale = 0.65
-    thickness = 0.7
+    thickness = 1
     start_pt = (10, 10)
     extra_space = (4, 10)
 

@@ -9,10 +9,10 @@ The model training script [train.py](https://gist.github.com/SNagappan/304446c6c
 The first step is to preprocess the UCF101 dataset using preprocess.py which splits videos into smaller clips. Preprocessed videos need to be created for both the training and test splits.
 
 ```
-python preprocess.py <video_dir> <data_split_file> <class_ind_file> <preprocessed_dir>
+python preprocess.py <video_dir> <data_split_file> <class_ind_file> <preprocessed_dir/split_dir>
 ```
 
-`<video_dir>` is the location of the raw video data, `<data_split_file>` is the name of the training or test split, and `<class_ind_file>` is a text file containing the mapping from class labels to indices. `<preprocessed_dir>` is the output directory of the preprocessed videos.
+`<video_dir>` is the location of the raw video data, `<data_split_file>` is the name of the training or test split, and `<class_ind_file>` is a text file containing the mapping from class labels to indices. `<preprocessed_dir/split_dir>` is the output directory of the preprocessed videos for a given split.
 
 An example of running this program is:
 ```
@@ -24,6 +24,11 @@ python examples/video_c3d/preprocess.py --video_dir ~/data/UCF-101/ --data_split
 Once the preprocessed video directories are created for both the training and test splits, the model can be trained with the following:
 ```
 python examples/video_c3d/train.py --data_dir <preprocessed_dir> --batch_size 32 --epochs 18 --save_path UCF101-C3D.p
+```
+
+After the model converges, the demo can be run which predicts the most probable class for each clip and aggregates them into one output video which displays the class labels and their probabilities.
+```
+python examples/video_c3d/demo.py --data_dir <preprocessed_dir/split_dir> --label_index --model_file UCF101-C3D.p --class_ind_file ~/data/ucfTrainTestlist/classInd.txt
 ```
 
 ### Trained weights
