@@ -86,7 +86,7 @@ class VideoPreprocessor():
             cap_prop_fps = cv2.cv.CV_CAP_PROP_FPS
             cap_prop_frame_count = cv2.cv.CV_CAP_PROP_FRAME_COUNT
 
-        codec = codec_func('X', 'V', 'I', 'D')
+        codec = codec_func('D', 'I', 'V', 'X')
 
         video = cv2.VideoCapture(video_path)
         fps = video.get(cap_prop_fps)

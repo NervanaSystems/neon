@@ -117,7 +117,7 @@ for root, dirs, files in os.walk(os.path.expanduser(args.data_dir)):
     for f in files:
         original_videos.append(os.path.join(root, f))
 
-fourcc = codec_func('X', 'V', 'I', 'D')
+fourcc = codec_func('D', 'I', 'V', 'X')
 vw = cv2.VideoWriter('output.avi', fourcc, 17, (128, 171))
 correct = 0
 batch_num = 0
