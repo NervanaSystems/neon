@@ -21,6 +21,7 @@ import logging
 import math
 import os
 import configargparse
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +87,12 @@ class VideoPreprocessor():
             cap_prop_fps = cv2.cv.CV_CAP_PROP_FPS
             cap_prop_frame_count = cv2.cv.CV_CAP_PROP_FRAME_COUNT
 
-        codec = codec_func('D', 'I', 'V', 'X')
+        codec = codec_func(*'XVID')
 
         video = cv2.VideoCapture(video_path)
         fps = video.get(cap_prop_fps)
+        if np.isnan(fps):
+            fps = 25
         frame_count = video.get(cap_prop_frame_count)
         num_clips = math.floor(frame_count/self.num_frames_per_clip)
 

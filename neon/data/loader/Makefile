@@ -18,8 +18,8 @@ SRCS := $(wildcard *.hpp)
 CFLAGS := -Wall -O3 -std=c++11
 CFLAGSDBG := -g -Wall -O0 -std=c++11
 INC := $(shell pkg-config --cflags opencv)
-LDIR := $(shell pkg-config --libs-only-L opencv libavutil libavformat libavcodec libswscale)
-LIBS := $(shell pkg-config --libs-only-l opencv libavutil libavformat libavcodec libswscale)
+LDIR := $(shell pkg-config --libs-only-L opencv)
+LIBS := $(shell pkg-config --libs-only-l opencv))
 CC := g++
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),FreeBSD)
