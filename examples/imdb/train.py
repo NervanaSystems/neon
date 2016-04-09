@@ -15,7 +15,8 @@
 # ----------------------------------------------------------------------------
 """
   Example that trains LSTM network for sentiment analysis
-  $ python examples/imdb/train.py -e 2 -eval 1 -s imdb.p --vocab_file imdb.vocab
+  $ python examples/imdb/train.py -e 2 -eval 1 -s imdb.pkl --vocab_file imdb.vocab
+    [--use_w2v]
 
   Get the data from Kaggle:
 
@@ -30,7 +31,7 @@
 from prepare import build_data_train
 from neon.backends import gen_backend
 from neon.data import ArrayIterator
-from neon.initializers import Uniform, GlorotUniform
+from neon.initializers import Uniform, GlorotUniform, Array
 from neon.layers import GeneralizedCost, Affine, Dropout, LookupTable, LSTM, RecurrentSum
 from neon.models import Model
 from neon.optimizers import Adagrad
@@ -80,10 +81,11 @@ fname_h5, fname_vocab = build_data_train(filepath=args.review_file,
 if args.use_w2v:
     w2v_file = args.w2v
     vocab, rev_vocab = cPickle.load(open(fname_vocab, 'rb'))
-    init_emb, embedding_dim, _ = get_google_word2vec_W(w2v_file, vocab,
-                                                       vocab_size=vocab_size, index_from=3)
+    init_emb_np, embedding_dim, _ = get_google_word2vec_W(w2v_file, vocab,
+                                                          vocab_size=vocab_size, index_from=3)
     print "Done loading the Word2Vec vectors: embedding size - {}".format(embedding_dim)
     embedding_update = True
+    init_emb = Array(val=be.array(init_emb_np))
 else:
     init_emb = Uniform(-0.1 / embedding_dim, 0.1 / embedding_dim)
 

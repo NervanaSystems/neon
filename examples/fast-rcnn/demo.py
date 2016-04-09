@@ -42,7 +42,6 @@ Notes:
 import os
 import numpy as np
 from PIL import Image
-from neon.backends import gen_backend
 from neon.data.pascal_voc import PASCAL_VOC_CLASSES
 from neon.data import PASCALVOCInference
 from neon.util.argparser import NeonArgparser
