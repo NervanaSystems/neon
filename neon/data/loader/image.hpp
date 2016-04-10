@@ -381,9 +381,9 @@ private:
         }
 
         // Split into separate channels
-        Mat red(size, CV_8U, buf);
+        Mat blue(size, CV_8U, buf);
         Mat green(size, CV_8U, buf + size.area());
-        Mat blue(size, CV_8U, buf + 2 * size.area());
+        Mat red(size, CV_8U, buf + 2 * size.area());
 
         Mat channels[3] = {blue, green, red};
         cv::split(img, channels);

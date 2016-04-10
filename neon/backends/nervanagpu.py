@@ -425,7 +425,7 @@ class GPUTensor(Tensor):
 
     def asnumpyarray(self):
         """
-        Deprecated. 
+        Deprecated.
         Scheduled to be removed in 2.0.
         Use get() instead.
         """
