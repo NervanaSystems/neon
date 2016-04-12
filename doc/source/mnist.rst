@@ -50,7 +50,7 @@ training images ``X_train`` is a numpy array with shape
 
 During training, neon iterates over the training examples to compute the
 gradients. We use the following commands to set up the :py:class:`.ArrayIterator`
-object that we send to the optimzer.
+object that we send to the optimizer.
 
 .. code-block:: python
 
@@ -169,7 +169,7 @@ which is displaying a progress bar for each epoch.
 
     from neon.callbacks.callbacks import Callbacks
 
-    callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
+    callbacks = Callbacks(mlp, eval_set=test_set, **args.callback_args)
 
 Putting it all together
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -206,7 +206,7 @@ Given a set of images such as those contained in the iterable
 
 .. code-block:: python
 
-    results = mlp.get_output(test_set)
+    results = mlp.get_outputs(test_set)
 
 The variable ``results`` is a numpy array with shape
 ``(num_test_examples, num_outputs) = (10000,10)`` with the model
