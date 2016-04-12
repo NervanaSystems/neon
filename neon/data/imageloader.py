@@ -92,7 +92,7 @@ class ImageLoader(DataLoader):
 
         self.repo_dir = repo_dir
         shape = dict(channel_count=3, height=inner_size, width=inner_size)
-        media_params = ImageParams(augment=do_transforms, scale_min=scale_min,
+        media_params = ImageParams(center=not do_transforms, scale_min=scale_min,
                                    scale_max=scale_max,
                                    contrast_min=contrast_range[0],
                                    contrast_max=contrast_range[1],

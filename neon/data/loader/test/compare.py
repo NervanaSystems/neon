@@ -84,7 +84,8 @@ def load_dataset(basepath, datadir, shuffle):
         np.random.seed(0)
         np.random.shuffle(lines)
     for idx in range(len(lines)):
-        im = np.asarray(Image.open(lines[idx][0]))
+        # Convert from RGB to BGR to be consistent with the generic data loader
+        im = np.asarray(Image.open(lines[idx][0]))[:, :, ::-1]
         im = np.transpose(im, axes=[2, 0, 1]).ravel()
         if data is None:
             data = np.empty((len(lines), im.shape[0]), dtype='float32')
@@ -92,8 +93,8 @@ def load_dataset(basepath, datadir, shuffle):
         data[idx] = im
         labels[idx] = lines[idx][1]
     data_view = data.reshape((data.shape[0], 3, -1))
-    # Subtract mean values of R, G, B
-    data_view -= np.array((104, 119, 127)).reshape((1, 3, 1))
+    # Subtract mean values of B, G, R
+    data_view -= np.array((127, 119, 104)).reshape((1, 3, 1))
     return (data, labels)
 
 

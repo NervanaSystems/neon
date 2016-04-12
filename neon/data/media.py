@@ -43,7 +43,7 @@ class ImageParams(MediaParams):
     _fields_ = [('channel_count', ct.c_int),
                 ('height', ct.c_int),
                 ('width', ct.c_int),
-                ('augment', ct.c_bool),
+                ('center', ct.c_bool),
                 ('flip', ct.c_bool),
                 ('scale_min', ct.c_int),
                 ('scale_max', ct.c_int),
@@ -53,11 +53,11 @@ class ImageParams(MediaParams):
                 ('rotate_max', ct.c_int),
                 ('aspect_ratio', ct.c_int),
                 ('subtract_mean', ct.c_bool),
-                ('red_mean', ct.c_int),
-                ('green_mean', ct.c_int),
                 ('blue_mean', ct.c_int),
+                ('green_mean', ct.c_int),
+                ('red_mean', ct.c_int),
                 ('gray_mean', ct.c_int)]
-    _defaults_ = {'augment': False,
+    _defaults_ = {'center': True,
                   'flip': False,
                   'scale_min': 0,
                   'scale_max': 0,
@@ -67,9 +67,9 @@ class ImageParams(MediaParams):
                   'rotate_max': 0,
                   'aspect_ratio': 0,
                   'subtract_mean': True,
-                  'red_mean': 104,
-                  'green_mean': 119,
                   'blue_mean': 127,
+                  'green_mean': 119,
+                  'red_mean': 104,
                   'gray_mean': 127}
 
     def __init__(self, **kwargs):
@@ -91,9 +91,9 @@ class ImageParams(MediaParams):
             return
         if self.channel_count == 3:
             data_view = data.reshape((3, -1))
-            data_view[0] -= self.red_mean
+            data_view[0] -= self.blue_mean
             data_view[1] -= self.green_mean
-            data_view[2] -= self.blue_mean
+            data_view[2] -= self.red_mean
         else:
             data[:] = data - self.gray_mean
 

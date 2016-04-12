@@ -34,7 +34,7 @@ using std::vector;
 class ImageParams : public MediaParams {
 public:
     ImageParams(int channelCount, int height, int width,
-                bool augment, bool flip,
+                bool center, bool flip,
                 int scaleMin, int scaleMax,
                 int contrastMin, int contrastMax,
                 int rotateMin, int rotateMax,
@@ -44,7 +44,7 @@ public:
     : MediaParams(IMAGE),
       _channelCount(channelCount),
       _height(height), _width(width),
-      _augment(augment), _flip(flip),
+      _center(center), _flip(flip),
       _scaleMin(scaleMin), _scaleMax(scaleMax),
       _contrastMin(contrastMin), _contrastMax(contrastMax),
       _rotateMin(rotateMin), _rotateMax(rotateMax),
@@ -57,7 +57,7 @@ public:
         MediaParams::dump();
         printf("inner height %d\n", _height);
         printf("inner width %d\n", _width);
-        printf("augment %d\n", _augment);
+        printf("center %d\n", _center);
         printf("flip %d\n", _flip);
         printf("scale min %d\n", _scaleMin);
         printf("scale max %d\n", _scaleMax);
@@ -74,12 +74,12 @@ public:
 
     void getRandomCorner(unsigned int& seed, const Size2i &border,
                          Point2i* point) {
-        if (_augment) {
-            point->x = rand_r(&seed) % (border.width + 1);
-            point->y = rand_r(&seed) % (border.height + 1);
-        } else {
+        if (_center) {
             point->x = border.width / 2;
             point->y = border.height / 2;
+        } else {
+            point->x = rand_r(&seed) % (border.width + 1);
+            point->y = rand_r(&seed) % (border.height + 1);
         }
     }
 
@@ -104,7 +104,7 @@ public:
     }
 
     void getRandomAngle(unsigned int& seed, int& angle) {
-        if (_augment == false) {
+        if ((_rotateMin == 0) && (_rotateMax == 0)) {
             angle = 0;
             return;
         }
@@ -156,7 +156,7 @@ public:
     int                         _channelCount;
     int                         _height;
     int                         _width;
-    bool                        _augment;
+    bool                        _center;
     bool                        _flip;
     // Pixel scale to jitter at (image from which to crop will have
     // short side in [scaleMin, Max])
