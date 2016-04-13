@@ -23,6 +23,8 @@
 #include <mutex>
 #include <condition_variable>
 
+#include "streams.hpp"
+
 typedef uint8_t uchar;
 using std::vector;
 using std::pair;
@@ -35,42 +37,24 @@ template<typename T>
 class Buffer {
 public:
     explicit Buffer(int size, bool pinned = false)
-    : _size(size), _alloc(true), _pinned(pinned) {
-        if (pinned == true) {
-#if HASGPU
-            CUresult status = cuMemAllocHost((void**)&_data, size * sizeof(T));
-            if (status != CUDA_SUCCESS) {
-                throw std::bad_alloc();
-            }
-#else
-            _data = new T[size];
-#endif
-        } else {
-            _data = new T[size];
-        }
+    : _size(size), _idx(0), _alloc(true), _pinned(pinned) {
+        _data = alloc();
         _cur = _data;
     }
 
     Buffer(T* data, int size)
-    : _data(data), _size(size), _cur(_data), _alloc(false) {
+    : _data(data), _size(size), _cur(_data), _idx(0), _alloc(false) {
     }
 
     virtual ~Buffer() {
         if (_alloc == true) {
-            if (_pinned == true) {
-#if HASGPU
-                cuMemFreeHost(_data);
-#else
-                delete[] _data;
-#endif
-            } else {
-                delete[] _data;
-            }
+            dealloc(_data);
         }
     }
 
     void reset() {
         _cur = _data;
+        _idx = 0;
         _items.clear();
         _lens.clear();
     }
@@ -100,9 +84,10 @@ public:
     }
 
     void pushItem(int len) {
-        _items.push_back(_cur);
+        _items.push_back(_idx);
         _lens.push_back(len);
         _cur += len;
+        _idx += len;
     }
 
     T* getItem(int index, int& len) {
@@ -110,7 +95,7 @@ public:
             return 0;
         }
         len = _lens[index];
-        return _items[index];
+        return _data + _items[index];
     }
 
     int getItemCount() {
@@ -121,21 +106,77 @@ public:
         return _cur;
     }
 
-    int getSize() {
+    uint getSize() {
         return _size;
     }
 
-    int getIndex() {
-        return _cur - _data;
+    uint getLevel() {
+        return _idx;
+    }
+
+    void read(IfStream& ifs, int size) {
+        resizeIfNeeded(size);
+        ifs.read(_cur, size);
+        pushItem(size);
+    }
+
+private:
+    void resizeIfNeeded(int inc) {
+        if (getLevel() + inc > getSize()) {
+            resize(inc);
+        }
+    }
+
+    void resize(int inc) {
+        assert(_alloc == true);
+        _size = getLevel() + inc;
+        // Allocate a bit more to minimize reallocations.
+        _size += _size / 10;
+        T* data = alloc();
+        memcpy(data, _data, getLevel() * sizeof(T));
+        dealloc(_data);
+        _data = data;
+        _cur = _data + _idx;
+    }
+
+    T* alloc() {
+        T*      data;
+        assert(_alloc == true);
+        if (_pinned == true) {
+#if HASGPU
+            CUresult status = cuMemAllocHost((void**)&data, _size * sizeof(T));
+            if (status != CUDA_SUCCESS) {
+                throw std::bad_alloc();
+            }
+#else
+            data = new T[_size];
+#endif
+        } else {
+            data = new T[_size];
+        }
+        return data;
+    }
+
+    void dealloc(T* data) {
+        if (_pinned == true) {
+#if HASGPU
+            cuMemFreeHost(data);
+#else
+            delete[] data;
+#endif
+        } else {
+            delete[] data;
+        }
     }
 
 public:
     T*                          _data;
-    int                         _size;
+    uint                        _size;
 
 protected:
     T*                          _cur;
-    vector<T*>                  _items;
+    int                         _idx;
+    vector<int>                 _items;
     vector<int>                 _lens;
     bool                        _alloc;
     bool                        _pinned;
@@ -146,12 +187,12 @@ typedef pair<CharBuffer*, CharBuffer*>                  BufferPair;
 
 class BufferPool {
 public:
-    BufferPool(int dataSize, int labelSize, bool pinned = false, int count = 2)
+    BufferPool(int dataSize, int targetSize, bool pinned = false, int count = 2)
     : _count(count), _used(0), _readPos(0), _writePos(0) {
         for (int i = 0; i < count; i++) {
             CharBuffer* dataBuffer = new CharBuffer(dataSize, pinned);
-            CharBuffer* labelBuffer = new CharBuffer(labelSize, pinned);
-            _bufs.push_back(make_pair(dataBuffer, labelBuffer));
+            CharBuffer* targetBuffer = new CharBuffer(targetSize, pinned);
+            _bufs.push_back(make_pair(dataBuffer, targetBuffer));
         }
     }
 

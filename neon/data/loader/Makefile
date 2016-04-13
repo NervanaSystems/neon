@@ -16,6 +16,7 @@
 
 SRCS := $(wildcard *.hpp)
 CFLAGS := -Wall -O3 -std=c++11
+CFLAGSDBG := -g -Wall -O0 -std=c++11
 INC := $(shell pkg-config --cflags opencv)
 LDIR := $(shell pkg-config --libs-only-L opencv)
 LIBS := $(shell pkg-config --libs-only-l opencv)
@@ -50,14 +51,14 @@ ifeq (${OPENCVPKG},)
 	$(error opencv not installed.  Unable to build $@)
 endif
 	@echo "Building $@..."
-	$(CC) -o $@ -DSTANDALONE $(GPUFLAG) $(CFLAGS) $< $(INC) $(LDIR) $(LIBS)
+	$(CC) -o $@ -DSTANDALONE $(CFLAGSDBG) $(GPUFLAG) $< $(INC) $(LDIR) $(LIBS)
 
 test/decode_test: test/decode_test.cpp $(SRCS)
 ifeq (${OPENCVPKG},)
 	$(error opencv not installed.  Unable to build $@)
 endif
 	@echo "Building $@..."
-	$(CC) -o $@ -DSTANDALONE $(CFLAGS) $< $(INC) $(LDIR) $(LIBS)
+	$(CC) -o $@ -DSTANDALONE $(CFLAGSDBG) $< $(INC) $(LDIR) $(LIBS)
 
 loader.so: loader.cpp $(SRCS)
 ifeq (${OPENCVPKG},)

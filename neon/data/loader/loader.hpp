@@ -16,109 +16,40 @@
 #include <assert.h>
 
 #include <vector>
-#include <thread>
-#include <mutex>
-#include <condition_variable>
 #include <cstdio>
 #include <iostream>
 #include <chrono>
 #include <utility>
 #include <algorithm>
 
-#include "reader.hpp"
-#include "decoder.hpp"
+#include "archive.hpp"
+#include "media.hpp"
 #include "matrix.hpp"
 #include "device.hpp"
 
-using std::thread;
-using std::mutex;
-using std::condition_variable;
-using std::unique_lock;
-using std::lock_guard;
-
-class ThreadPool {
-public:
-    explicit ThreadPool(int count)
-    : _count(count), _done(false) {
-        _stopped = new bool[count];
-        for (int i = 0; i < count; i++) {
-            _stopped[i] = false;
-        }
-    }
-
-    virtual ~ThreadPool() {
-        for (auto t : _threads) {
-            t->join();
-            delete t;
-        }
-        delete[] _stopped;
-    }
-
-    virtual void start() {
-        for (int i = 0; i < _count; i++) {
-            _threads.push_back(new thread(&ThreadPool::run, this, i));
-        }
-    }
-
-    virtual void stop() {
-        _done = true;
-    }
-
-    bool stopped() {
-        for (int i = 0; i < _count; i++) {
-            if (_stopped[i] == false) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    void join() {
-        for (auto t : _threads) {
-            t->join();
-        }
-    }
-
-protected:
-    virtual void work(int id) = 0;
-
-    void run(int id) {
-        while (_done == false) {
-            work(id);
-        }
-        _stopped[id] = true;
-    }
-
-protected:
-    int                         _count;
-    vector<thread*>             _threads;
-    bool                        _done;
-    bool*                       _stopped;
-};
-
 class DecodeThreadPool : public ThreadPool {
 public:
-    DecodeThreadPool(int count, int minibatchSize,
-                     int outputItemSize, int labelSize, int labelCount,
+    DecodeThreadPool(int count, int batchSize,
+                     int datumSize, int targetSize,
                      BufferPool& in, BufferPool& out,
-                     Device* device, Decoder* decoder)
+                     Device* device, Media* media)
     : ThreadPool(count),
-      _itemsPerThread((minibatchSize - 1) / count + 1),
+      _itemsPerThread((batchSize - 1) / count + 1),
       _in(in), _out(out), _endSignaled(0),
       _manager(0), _stopManager(false), _managerStopped(false), _inputBuf(0),
-      _bufferIndex(0), _minibatchSize(minibatchSize),
-      _outputItemSize(outputItemSize),
-      _labelChunkSize(labelSize * labelCount),
-      _device(device), _decoder(decoder) {
-        assert(_itemsPerThread * count >= _minibatchSize);
-        assert(_itemsPerThread * (count - 1) < _minibatchSize);
+      _bufferIndex(0), _batchSize(batchSize),
+      _datumSize(datumSize),
+      _targetSize(targetSize),
+      _device(device), _media(media) {
+        assert(_itemsPerThread * count >= _batchSize);
+        assert(_itemsPerThread * (count - 1) < _batchSize);
         for (int i = 0; i < count; i++) {
             _startSignaled.push_back(0);
             _startInds.push_back(0);
             _endInds.push_back(0);
             _dataOffsets.push_back(0);
-            _labelOffsets.push_back(0);
-            _labelSpans.push_back(0);
+            _targetOffsets.push_back(0);
+            _targetSpans.push_back(0);
         }
     }
 
@@ -162,13 +93,13 @@ protected:
         _startInds[id] = id * _itemsPerThread;
         int itemCount = _itemsPerThread;
         if (id == _count - 1) {
-            itemCount = _minibatchSize - id * _itemsPerThread;
+            itemCount = _batchSize - id * _itemsPerThread;
         }
 
         _endInds[id] = _startInds[id] + itemCount;
-        _dataOffsets[id] = _startInds[id] * _outputItemSize;
-        _labelOffsets[id] = _startInds[id] * _labelChunkSize;
-        _labelSpans[id] = itemCount * _labelChunkSize;
+        _dataOffsets[id] = _startInds[id] * _datumSize;
+        _targetOffsets[id] = _startInds[id] * _targetSize;
+        _targetSpans[id] = itemCount * _targetSize;
         while (_done == false) {
             work(id);
         }
@@ -196,23 +127,23 @@ protected:
         // write into non-overlapping regions.
         BufferPair& outBuf = _out.getForWrite();
         char* dataBuf = outBuf.first->_data + _dataOffsets[id];
+        // Handle the data.
         for (int i = start; i < end; i++) {
-            // Handle the data.
             int itemSize = 0;
             char* item = _inputBuf->first->getItem(i, itemSize);
             if (item == 0) {
                 return;
             }
-            _decoder->decode(item, itemSize, dataBuf);
-            dataBuf += _outputItemSize;
+            _media->transform(item, itemSize, dataBuf, _datumSize);
+            dataBuf += _datumSize;
         }
 
         // Handle the targets.
-        char* labelDst = outBuf.second->_data + _labelOffsets[id];
-        int labelChunkSize = 0;
-        char* labelSrc = _inputBuf->second->getItem(start, labelChunkSize);
-        assert(labelChunkSize == _labelChunkSize);
-        memcpy(labelDst, labelSrc, _labelSpans[id]);
+        char* targetDst = outBuf.second->_data + _targetOffsets[id];
+        int targetSize = 0;
+        char* targetSrc = _inputBuf->second->getItem(start, targetSize);
+        assert(targetSize == _targetSize);
+        memcpy(targetDst, targetSrc, _targetSpans[id]);
 
         {
             lock_guard<mutex> lock(_mutex);
@@ -245,8 +176,10 @@ protected:
             }
             // At this point, we have decoded data for the whole minibatch.
             BufferPair& outBuf = _out.getForWrite();
+            // TODO: The transpose operation needs to be aware of the
+            // underlying data type's size.
             Matrix<char>::transpose(outBuf.first->_data,
-                                    _minibatchSize, _outputItemSize);
+                                    _batchSize, _datumSize);
             // Copy to device.
             _device->copyData(_bufferIndex, outBuf.first->_data,
                               outBuf.first->_size);
@@ -301,21 +234,21 @@ private:
     bool                        _managerStopped;
     BufferPair*                 _inputBuf;
     int                         _bufferIndex;
-    int                         _minibatchSize;
+    int                         _batchSize;
     vector<int>                 _startInds;
     vector<int>                 _endInds;
     vector<int>                 _dataOffsets;
-    vector<int>                 _labelOffsets;
-    vector<int>                 _labelSpans;
-    int                         _outputItemSize;
-    int                         _labelChunkSize;
+    vector<int>                 _targetOffsets;
+    vector<int>                 _targetSpans;
+    int                         _datumSize;
+    int                         _targetSize;
     Device*                     _device;
-    Decoder*                    _decoder;
+    Media*                      _media;
 };
 
-class ReadThreadPool : public ThreadPool {
+class ReadThread: public ThreadPool {
 public:
-    ReadThreadPool(BufferPool& out, Reader* reader)
+    ReadThread(BufferPool& out, Reader* reader)
     : ThreadPool(1), _out(out), _reader(reader) {
         assert(_count == 1);
     }
@@ -332,8 +265,8 @@ protected:
             while (_out.full() == true) {
                 _out.waitForNonFull(lock);
             }
-            BufferPair bufPair = _out.getForWrite();
-            int result = _reader->read(bufPair.first, bufPair.second);
+            BufferPair& bufPair = _out.getForWrite();
+            int result = _reader->read(bufPair);
             if (result == -1) {
                 _done = true;
                 throw std::runtime_error("Could not read data\n");
@@ -350,60 +283,68 @@ private:
 
 class Loader {
 public:
-    Loader(int minibatchSize, int readMaxSize, int itemMaxSize, int labelSize,
-           int labelCount, Device* device, Reader* reader, Decoder* decoder)
+    Loader(int* itemCount, int batchSize,
+           const char* repoDir, const char* archiveDir,
+           const char* indexFile, const char* metaFile,
+           const char* archivePrefix,
+           bool shuffle, bool reshuffle,
+           int startFileIdx,
+           int datumSize, int targetSize, int subsetPercent,
+           MediaParams* mediaParams,
+           DeviceParams* deviceParams,
+           MediaParams* ingestParams)
     : _first(true),
-      _minibatchSize(minibatchSize),
-      _readMaxSize(readMaxSize), _itemMaxSize(itemMaxSize),
-      _labelSize(labelSize), _labelCount(labelCount),
-      _readBufs(0), _decodeBufs(0),
-      _readPool(0), _decodePool(0),
-      _device(device), _reader(reader), _decoder(decoder) {
+      _batchSize(batchSize), _datumSize(datumSize), _targetSize(targetSize),
+      _readBufs(0), _decodeBufs(0), _readThread(0), _decodeThreads(0),
+      _device(0), _reader(0), _media(0) {
+        _device = Device::create(deviceParams);
+        _media = Media::create(mediaParams, ingestParams);
+        _reader = new ArchiveReader(itemCount, batchSize, repoDir, archiveDir,
+                                    indexFile, metaFile, archivePrefix,
+                                    shuffle, reshuffle,
+                                    startFileIdx,
+                                    subsetPercent, _media);
     }
 
     virtual ~Loader() {
         delete _readBufs;
-        delete _readPool;
+        delete _readThread;
         delete _decodeBufs;
-        delete _decodePool;
+        delete _decodeThreads;
         delete _device;
         delete _reader;
-        delete _decoder;
+        delete _media;
     }
 
     int start() {
         _first = true;
         try {
-            _readBufs =
-                new BufferPool(_minibatchSize * _readMaxSize,
-                               _labelCount * _minibatchSize * _labelSize);
-            _readPool =
-                new ReadThreadPool(*_readBufs, _reader);
+            // TODO: Read buffers could be smaller because we
+            // usually deal with compressed data.
+            _readBufs = new BufferPool(_batchSize * _datumSize,
+                                       _batchSize * _targetSize);
+            _readThread = new ReadThread(*_readBufs, _reader);
             bool pinned = (_device->_type != CPU);
-            _decodeBufs =
-                new BufferPool(_minibatchSize * _itemMaxSize,
-                               _labelCount * _minibatchSize * _labelSize,
-                               pinned);
+            _decodeBufs = new BufferPool(_batchSize * _datumSize,
+                                         _batchSize * _targetSize, pinned);
             int numCores = thread::hardware_concurrency();
-            int itemsPerThread = (_minibatchSize - 1) /  numCores + 1;
-            int threadCount =  (_minibatchSize - 1) / itemsPerThread + 1;
-            threadCount = std::min(threadCount, _minibatchSize);
-            _decodePool =
-                new DecodeThreadPool(threadCount, _minibatchSize, _itemMaxSize,
-                                     _labelSize, _labelCount,
-                                     *_readBufs, *_decodeBufs,
-                                     _device, _decoder);
+            int itemsPerThread = (_batchSize - 1) /  numCores + 1;
+            int threadCount =  (_batchSize - 1) / itemsPerThread + 1;
+            threadCount = std::min(threadCount, _batchSize);
+            _decodeThreads = new DecodeThreadPool(threadCount,
+                    _batchSize, _datumSize, _targetSize,
+                    *_readBufs, *_decodeBufs, _device, _media);
         } catch(std::bad_alloc&) {
             return -1;
         }
-        _decodePool->start();
-        _readPool->start();
+        _decodeThreads->start();
+        _readThread->start();
         return 0;
     }
 
     void stop() {
-        _readPool->stop();
-        while (_readPool->stopped() == false) {
+        _readThread->stop();
+        while (_readThread->stopped() == false) {
             std::this_thread::yield();
             drain();
         }
@@ -411,16 +352,16 @@ public:
                (_readBufs->empty() == false)) {
             drain();
         }
-        _decodePool->stop();
+        _decodeThreads->stop();
 
         delete _readBufs;
-        delete _readPool;
+        delete _readThread;
         delete _decodeBufs;
-        delete _decodePool;
+        delete _decodeThreads;
         _readBufs = 0;
-        _readPool = 0;
+        _readThread = 0;
         _decodeBufs = 0;
-        _decodePool = 0;
+        _decodeThreads = 0;
     }
 
     int reset() {
@@ -430,7 +371,7 @@ public:
         return 0;
     }
 
-    void next(Buffer<char>* dataBuf, Buffer<char>* labelBuf) {
+    void next(Buffer<char>* dataBuf, Buffer<char>* targetsBuf) {
         // Copy minibatch data into the buffers passed in.
         // Only used for testing purposes.
         {
@@ -440,8 +381,8 @@ public:
             }
             Buffer<char>* data = _decodeBufs->getForRead().first;
             memcpy(dataBuf->_data, data->_data, dataBuf->_size);
-            Buffer<char>* labels = _decodeBufs->getForRead().second;
-            memcpy(labelBuf->_data, labels->_data, labelBuf->_size);
+            Buffer<char>* targets = _decodeBufs->getForRead().second;
+            memcpy(targetsBuf->_data, targets->_data, targetsBuf->_size);
             _decodeBufs->advanceReadPos();
         }
         _decodeBufs->signalNonFull();
@@ -461,6 +402,18 @@ public:
         }
     }
 
+    Reader* getReader() {
+        return _reader;
+    }
+
+    Media* getMedia() {
+        return _media;
+    }
+
+    Device* getDevice() {
+        return _device;
+    }
+
 private:
     void drain() {
         {
@@ -476,16 +429,14 @@ private:
 
 private:
     bool                        _first;
-    int                         _minibatchSize;
-    int                         _readMaxSize;
-    int                         _itemMaxSize;
-    int                         _labelSize;
-    int                         _labelCount;
+    int                         _batchSize;
+    int                         _datumSize;
+    int                         _targetSize;
     BufferPool*                 _readBufs;
     BufferPool*                 _decodeBufs;
-    ReadThreadPool*             _readPool;
-    DecodeThreadPool*           _decodePool;
+    ReadThread*                 _readThread;
+    DecodeThreadPool*           _decodeThreads;
     Device*                     _device;
     Reader*                     _reader;
-    Decoder*                    _decoder;
+    Media*                      _media;
 };
