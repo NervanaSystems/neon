@@ -24,6 +24,8 @@ from neon.backends.cuda_templates import _common_round, _ew_types
 from math import ceil
 from operator import mul
 import sys
+import os.path
+import shelve
 
 if sys.version_info >= (3, 0):
     from functools import reduce
@@ -100,72 +102,6 @@ class KernelGroup(object):
             params.extend(args)
 
             self.kernels.append(params)
-
-
-class FpropDirect(KernelGroup):
-
-    def __init__(self, lib, dtype,
-                 N, C, K,
-                 D, H, W,
-                 T, R, S,
-                 M, P, Q,
-                 pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 relu, bsum):
-
-        super(FpropDirect, self).__init__(lib, dtype)
-
-        assert N % 32 == 0, "N dim must be multiple of 32"
-        assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
-
-        tile_N = 128 if N > 64 else 64
-        grid_N = _ceil_div(N, tile_N)
-        tile_K = (128, 64, 32) if tile_N == 128 else (128, 64)
-
-        magic_PQ = _magic64(P*Q)
-        magic_Q = _magic64(Q)
-        magic_RS = _magic32(R*S*T+32, R*S)
-        magic_S = _magic32(R*S+32, S)
-
-        self.xprop_kernels(
-            "fprop", "K", tile_N, grid_N, K, tile_K, P*Q*M, R*S*T,
-            _flatten([N, K, D, H, W, W*N, H*W*N, D*H*W*N,
-                      C, K*R*S*T, R*S*T, R*S, magic_RS, S, magic_S,
-                      pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                      Q, P*Q, Q*N, P*Q*N, M*P*Q*N, magic_Q, magic_PQ]))
-
-        self.shared = R*S*T * 4 * 2
-        self.flags = (relu and 2) + (bsum and 4)
-
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
-
-        assert I.dtype == F.dtype == O.dtype
-
-        bsum_gpudata, flags = self.init_bsum(bsum, flags)
-
-        for kernel in self.kernels:
-            kernel[3:11] = (self.lib.stream, bsum_gpudata, O.gpudata, I.gpudata, F.gpudata,
-                            alpha, beta, flags)
-
-    def execute(self, repeat=1, unbind=True):
-
-        for r in range(repeat):
-
-            if self.bsum_zero:
-                drv.memset_d32_async(*self.bsum_zero)
-
-            for kernel_params in self.kernels:
-                kernel = kernel_specs.get_kernel(kernel_params[0])
-                kernel.prepared_async_call(*kernel_params[1:], shared_size=self.shared)
-
-        if unbind:
-            self.bsum_zero = None
-            for kernel_params in self.kernels:
-                kernel_params[3:11] = (None,) * 8
-
-    def __str__(self):
-        return "FpropDirect " + str([k[0] for k in self.kernels])
-
 
 class FpropCuda(KernelGroup):
 
@@ -437,6 +373,69 @@ class UpdateCuda(KernelGroup):
     def __str__(self):
         return "UpdateCuda"
 
+class FpropDirect(KernelGroup):
+
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w,
+                 relu, bsum):
+
+        super(FpropDirect, self).__init__(lib, dtype)
+
+        assert N % 32 == 0, "N dim must be multiple of 32"
+        assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
+
+        tile_N = 128 if N > 64 else 64
+        grid_N = _ceil_div(N, tile_N)
+        tile_K = (128, 64, 32) if tile_N == 128 else (128, 64)
+
+        magic_PQ = _magic64(P*Q)
+        magic_Q = _magic64(Q)
+        magic_RS = _magic32(R*S*T+32, R*S)
+        magic_S = _magic32(R*S+32, S)
+
+        self.xprop_kernels(
+            "fprop", "K", tile_N, grid_N, K, tile_K, P*Q*M, R*S*T,
+            _flatten([N, K, D, H, W, W*N, H*W*N, D*H*W*N,
+                      C, K*R*S*T, R*S*T, R*S, magic_RS, S, magic_S,
+                      pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                      Q, P*Q, Q*N, P*Q*N, M*P*Q*N, magic_Q, magic_PQ]))
+
+        self.shared = R*S*T * 4 * 2
+        self.flags = (relu and 2) + (bsum and 4)
+
+    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
+
+        assert I.dtype == F.dtype == O.dtype
+
+        bsum_gpudata, flags = self.init_bsum(bsum, flags)
+
+        for kernel in self.kernels:
+            kernel[3:11] = (self.lib.stream, bsum_gpudata, O.gpudata, I.gpudata, F.gpudata,
+                            alpha, beta, flags)
+
+    def execute(self, repeat=1, unbind=True):
+
+        for r in range(repeat):
+
+            if self.bsum_zero:
+                drv.memset_d32_async(*self.bsum_zero)
+
+            for kernel_params in self.kernels:
+                kernel = kernel_specs.get_kernel(kernel_params[0])
+                kernel.prepared_async_call(*kernel_params[1:], shared_size=self.shared)
+
+        if unbind:
+            self.bsum_zero = None
+            for kernel_params in self.kernels:
+                kernel_params[3:11] = (None,) * 8
+
+    def __str__(self):
+        return "FpropDirect " + str([k[0] for k in self.kernels])
 
 class BpropDirect(KernelGroup):
 
@@ -611,6 +610,7 @@ class BpropDirectSmallC(KernelGroup):
         return "BpropDirectSmallC " + str(self.kernel[0])
 
 
+
 class UpdateDirect(KernelGroup):
 
     def __init__(self, lib, dtype,
@@ -752,6 +752,485 @@ class UpdateDirect(KernelGroup):
     def __str__(self):
         return "UpdateDirect " + str([k[0] for k in self.kernels])
 
+class XpropDirect2(KernelGroup):
+
+    def __init__(self, op, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w,
+                 relu):
+
+        super(XpropDirect2, self).__init__(lib, dtype)
+
+        assert N % 4 == 0, "N dim must be multiple of 4"
+
+        for blockN in (32,16,8,4,):
+            if N % blockN == 0:
+                break
+
+        self.params = (N, C, K, D, H, W, T, R, S, M, P, Q,
+                       pad_d, pad_h, pad_w, str_d, str_h, str_w)
+
+        sb_params_in = {
+            #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN, shfN
+            32 : ( 0x000, 0,   0x000, 0,   0x000, 0,    7,   5  ), # 1x1  nnn(nn)
+            16 : ( 0x000, 0,   0x000, 0,   0x102, 1,    3,   4  ), # 1x2  xnn(nn)
+            8  : ( 0x000, 0,   0x102, 1,   0x101, 1,    1,   3  ), # 2x2  yxn(nn)
+            4  : ( 0x000, 0,   0x102, 1,   0x200, 2,    0,   2  ), # 2x4  yxx(nn)
+        }
+        sb_params_out = {
+            #blkN:  supM,  supP,  supQ, supN
+            32 : ( 0x000, 0x000, 0x000, 31 ), # 1x1  nnnnn
+            16 : ( 0x000, 0x000, 0x104, 15 ), # 1x2  xnnnn
+            8  : ( 0x000, 0x104, 0x103,  7 ), # 2x2  yxnnn
+            4  : ( 0x000, 0x104, 0x202,  3 ), # 2x4  yxxnn
+        }
+        superM, shiftM, superP, shiftP, superQ, shiftQ, superN, shiftN = sb_params_in.get(blockN)
+        SuperM, SuperP, SuperQ, SuperN = sb_params_out.get(blockN)
+
+        blockM  = 1 << shiftM
+        blockP  = 1 << shiftP
+        blockQ  = 1 << shiftQ
+        gridM   = _ceil_div(M, blockM)
+        gridP   = _ceil_div(P, blockP)
+        gridQ   = _ceil_div(Q, blockQ)
+        gridN   = _ceil_div(N, blockN)
+        gridK   = _ceil_div(K, 64)
+        gridP2  = max(gridP // 2, 1)
+        gridQ2  = gridQ * 2
+
+        RS       = R * S
+        TRS      = T * RS
+        TRSK     = K * TRS
+        n        = _closest_divisor(gridN, 2)
+        k        = _closest_divisor(gridK, 2)
+        nk       = n * k
+        Qnk      = gridQ2 * nk
+        PQnk     = gridP * gridQ * nk
+
+        magic_PQnk = _magic64(PQnk)
+        magic_Qnk  = _magic64(Qnk)
+        magic_nk   = _magic32(Qnk, nk)
+        magic_k    = _magic32(nk,   k)
+        magic_RS   = _magic32(TRS, RS)
+        magic_S    = _magic32(RS,   S)
+
+        grid = (gridM*gridP*gridQ*nk, gridK//k, gridN//n)
+
+        K1 = "" if K % 4 == 0 else "_K1"
+        SN = "" if N >= 32    else "_SN"
+
+        kernel_name = "%s_direct_%s_64x32%s%s" % (self.clss, op, SN, K1)
+        self.kernel = [kernel_name, grid, (128,1,1), None, None, None, None, None, None, None, None, None]
+        self.kernel.extend(_flatten([
+            C, D, H, W, N, K, M, P, Q,
+            str_d, str_h, str_w, pad_d, pad_h, pad_w,
+            D*H*W*N, H*W*N, W*N, M*P*Q*N, P*Q*N, Q*N,
+            PQnk, Qnk, nk, n, k, magic_PQnk, magic_Qnk, magic_nk, magic_k,
+            max(K-32,0), K*32*dtype.itemsize, TRSK, TRS, RS, S, magic_RS, magic_S, gridP2, gridQ,
+            superM, superP, superQ, superN,
+            shiftM, shiftP, shiftQ, shiftN,
+            SuperM, SuperP, SuperQ, SuperN ]))
+
+        if N >= 32:
+            self.shared = T*R*S * 4 * 2
+        else:
+            self.shared = T*R*S * 4 * (32 >> shiftN)
+        self.relu = relu
+
+    def bind_params(self, I, F, O, alpha, beta, bsum, no_op=0):
+
+        assert I.dtype == F.dtype == O.dtype
+
+        self.compound = ""
+
+        if bsum:
+            bsum_gpudata = bsum.gpudata
+            self.bsum_zero = (bsum_gpudata, 0, bsum.size, self.lib.stream)
+            self.compound = "_bsum"
+        else:
+            bsum_gpudata = 0
+            self.bsum_zero = None
+
+        if beta:
+            self.compound = "_beta"
+
+        if self.relu:
+            self.compound = "_relu"
+
+        if self.trans_size:
+            filter_temp = self.lib.scratch_buffer(self.trans_size)
+            self.trans_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
+        else:
+            filter_temp = F.gpudata
+
+        self.kernel[3:12] = (self.lib.stream, bsum_gpudata, O.gpudata, O.gpudata, I.gpudata, filter_temp,
+                             alpha, beta, no_op)
+
+    def execute(self, repeat=1, unbind=True):
+
+        kernel = kernel_specs.get_kernel(self.kernel[0] + self.compound)
+
+        if self.trans_size:
+            trans_kernel = _get_shuffle_kernel(self.dtype_str)
+
+        for r in range(repeat):
+
+            if self.bsum_zero:
+                drv.memset_d32_async(*self.bsum_zero)
+
+            if self.trans_size:
+                trans_kernel.prepared_async_call(*self.trans_args)
+
+            kernel.prepared_async_call(*self.kernel[1:], shared_size=self.shared)
+
+        if unbind:
+            self.bsum_zero = None
+            self.kernel[3:12] = (None,) * 9
+            if self.trans_size:
+                self.trans_args[2:5] = (None,) * 3
+
+    def __str__(self):
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d) RS:(%d,%d) str:(%d,%d)" % (
+            self.kernel[0], N, C, K, H, W, R, S, str_h, str_w)
+
+class FpropDirect2(XpropDirect2):
+
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w,
+                 relu, bsum):
+
+        self.trans_size = 0
+
+        super(FpropDirect2, self).__init__("fprop", lib, dtype,
+            N, C, K, D, H, W, T, R, S, M, P, Q,
+            pad_d, pad_h, pad_w, str_d, str_h, str_w, relu)
+
+class BpropDirect2(XpropDirect2):
+
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w,
+                 relu, bsum):
+
+        # invert padding
+        pad_d = T - pad_d - 1
+        pad_h = R - pad_h - 1
+        pad_w = S - pad_w - 1
+
+        # Swap C<=>K and DHW<=>MPQ
+        super(BpropDirect2, self).__init__("bprop", lib, dtype,
+            N, K, C, M, P, Q, T, R, S, D, H, W,
+            pad_d, pad_h, pad_w, str_d, str_h, str_w, relu)
+
+        self.kernel.extend(_flatten([
+            _magic32(D + T, str_d),
+            _magic32(H + R, str_h),
+            _magic32(W + S, str_w) ]))
+
+        gridC = _ceil_div(C, 32)
+        gridK = _ceil_div(K, 32)
+
+        self.trans_size = C*T*R*S*K * dtype.itemsize
+        self.trans_args = [(gridK, gridC, T*R*S), (32, 8, 1), None, None, None]
+        self.trans_args.extend(_flatten([
+            T*R*S*K, R*S*K, S*K, K,
+            T*R*S*C, R*S*C, S*C, C,
+            R*S, T, R, S, _magic32(T*R*S, R*S), _magic32(R*S, S)]))
+
+        lib.set_scratch_size(self.trans_size)
+
+class UpdateDirect2(KernelGroup):
+
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w):
+
+        assert N % 4 == 0, "N dim must be multiple of 4"
+
+        super(UpdateDirect2, self).__init__(lib, dtype)
+
+        SMs = _get_sm_count()
+
+        self.autotune_key = " ".join(str(x) for x in (
+            "direct_updat_64x32", SMs, dtype.itemsize, lib.deterministic > 0,
+            N, C, K, D, H, W, T, R, S, M, P, Q ))
+
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
+
+        self.params = (N, C, K, D, H, W, T, R, S, M, P, Q,
+                       pad_d, pad_h, pad_w, str_d, str_h, str_w)
+        self.init(self.params)
+
+        lib.set_scratch_size(self.output_size)
+
+        # allow for .5 seconds worth of warmup when autotuning
+        # assume 5 Tflops on 24 SMs
+        self.warmup = min(max(int(2e12 / (M*P*Q*K*N*C*T*R*S*2.0) * (SMs / 24.0)), 1), 1000)
+
+    def init(self, params, autotune=False):
+
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+         pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+
+        for blockN in (32,16,8,4):
+            if N % blockN == 0:
+                break
+
+        sb_params = {
+            #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN
+            32 : ( 0x000, 0,   0x000, 0,   0x000, 0,   7 ), # 1x1  nnn
+            16 : ( 0x000, 0,   0x000, 0,   0x102, 1,   3 ), # 1x2  xnn
+            8  : ( 0x000, 0,   0x102, 1,   0x101, 1,   1 ), # 2x2  yxn
+            4  : ( 0x000, 0,   0x102, 1,   0x200, 2,   0 ), # 2x4  yxx
+        }
+        superM, shiftM, superP, shiftP, superQ, shiftQ, superN = sb_params.get(blockN)
+
+        blockM  = 1 << shiftM
+        blockP  = 1 << shiftP
+        blockQ  = 1 << shiftQ
+        GM      = _ceil_div(M, blockM)
+        GP      = _ceil_div(P, blockP)
+        GQ      = _ceil_div(Q, blockQ)
+        self.GP = GP
+        self.GQ = GQ
+
+        if autotune:
+            strideP, strideQ = autotune
+        else:
+            autotune_db = shelve.open(self.autotune_db_file)
+
+            if self.autotune_key in autotune_db:
+                strideP, strideQ = autotune_db[self.autotune_key]
+                #print strideP, strideQ, self.autotune_key
+                self.initialized = True
+            else:
+                # prior to autotuning set the maximum for scratch space
+                # memory allocation purposes
+                if GP * GQ > 192:
+                    strideP  = 192
+                    strideQ  = 1
+                else:
+                    strideP  = GP
+                    strideQ  = GQ
+                self.initialized = False
+
+            autotune_db.close()
+
+        # print P, Q, blockP, blockQ
+        # print GP, GQ, strideP, strideQ
+
+        itemsize = self.dtype.itemsize
+        RS       = R * S
+        TRS      = T * RS
+        CTRS     = C * TRS
+        CTRSK    = K * CTRS
+        GK       = _ceil_div(K,    32)
+        GC       = _ceil_div(CTRS, 64)
+        k        = _closest_divisor(GK, 4)
+        c        = _closest_divisor(GC, 2)
+        kc       = k * c
+        Qkc      = strideQ * kc
+        PQkc     = strideP * Qkc
+
+        self.blocksMCK = GM * GK * GC
+
+        magic_TRS  = _magic32(GC * 64,  TRS)
+        magic_RS   = _magic32(TRS, RS)
+        magic_S    = _magic32(RS,   S)
+        magic_PQkc = _magic64(PQkc)
+        magic_Qkc  = _magic64(Qkc)
+        magic_kc   = _magic32(Qkc, kc)
+        magic_c    = _magic32(kc, c)
+
+        loopQ = strideQ * blockQ
+        loopX = loopQ * str_w
+
+        if N > blockN:
+            loopQp = N * (loopQ - 1) * itemsize
+            loopXp = N * (loopX - 1) * itemsize
+            largeN = "_LN"
+        else:
+            loopQp = N * loopQ * itemsize
+            loopXp = N * loopX * itemsize
+            largeN = ""
+
+        # If output grid is 1, don't use atomics.  Kernel is deterministic by default
+        if GM*strideP*strideQ == 1:
+            determ = "_D"
+            self.determ_size  = 0
+            self.determ_shape = False
+            self.zero         = False
+        elif self.lib.deterministic:
+            determ = "_D"
+            self.determ_size  = GM*strideP*strideQ * CTRSK
+            self.determ_shape = (GM*strideP*strideQ, CTRSK)
+            self.zero         = False
+        else:
+            determ = ""
+            self.determ_size  = 0
+            self.determ_shape = False
+            self.zero         = True
+
+        grid = (GM*strideP*strideQ*kc, GC//c, GK//k)
+        #print grid, c, k
+
+        kernel_name = "%s_direct_updat_64x32%s%s" % (self.clss, largeN, determ)
+        self.kernel = [kernel_name, grid, (128,1,1), None, None, None, None, None]
+        self.kernel.extend(_flatten([
+            C, D, H, W, N, K, M, P, Q,
+            str_d, str_h, str_w, pad_d, pad_h, pad_w,
+            D*H*W*N, H*W*N, W*N, M*P*Q*N*16*itemsize, M*P*Q*N, P*Q*N, Q*N,
+            PQkc, Qkc, kc, c, k, magic_PQkc, magic_Qkc, magic_kc, magic_c,
+            CTRSK, CTRS, TRS, RS, S, magic_TRS, magic_RS, magic_S,
+            superM, superP, superQ, superN, shiftM, shiftP, shiftQ,
+            strideP, strideQ, GP, GQ, GP*GQ,
+            loopX, loopXp, loopQ, loopQp, blockN, blockN*itemsize ]))
+
+        self.output_size = (self.determ_size or (self.dtype.type != np.float32 and CTRSK)) * 4
+
+    def autotune(self, I, E, O):
+
+        # print "autotune: ", self.autotune_key
+
+        start, stop = self.lib.get_events()
+
+        # Only need to do warmup once
+        if not self.lib.warmup:
+            self.lib.warmup = True
+            # warmup  with a conservative set of params
+            self.init(self.params, autotune=(min(self.GP,192), 1))
+            self.bind_params(I, E, O, 1.0)
+            self.execute(repeat=self.warmup, unbind=False)
+
+        # we want at least this many blocks
+        block_slots = _get_sm_count()
+        # loops for given size of N
+        loopsN = max(self.params[0] // 32, 1)
+
+        GP = float(self.GP)
+        GQ = float(self.GQ)
+        small_set = GP * GQ <= 512
+
+        results = []
+        sys.stdout.write("Autotune " + str(self))
+        progress = 0
+        for threshold in (True, False):
+            for strideP in range(1, self.GP+1):
+                for strideQ in range(1, self.GQ+1):
+                    if progress % 32 == 0:
+                        sys.stdout.write('.')
+                        sys.stdout.flush()
+                    progress += 1
+
+                    # CTRSK copies in determ mode
+                    outputs = strideP * strideQ
+                    # minimal occupancy filter
+                    blocks = self.blocksMCK * outputs
+                    # gemm loop size filter
+                    depth = (GP / strideP) * (GQ / strideQ) * loopsN
+
+                    filters = strideP >= strideQ and \
+                              outputs <= 192 and \
+                              blocks  >= block_slots and \
+                              depth   >= 8.0
+
+                    # In case we filter out all settings, run though the loops again
+                    # this time looking only at settings that didn't pass.
+                    if small_set or (threshold and filters) or (not threshold and not filters):
+
+                        settings = (strideP, strideQ)
+                        # print settings
+                        self.init(self.params, autotune=settings)
+                        self.bind_params(I, E, O, 1.0)
+                        start.record(stream=self.lib.stream)
+                        self.execute(repeat=2, unbind=False)
+                        stop.record(stream=self.lib.stream)
+                        stop.synchronize()
+                        msecs = stop.time_since(start) / 2.0
+                        results.append((msecs, settings))
+                    # else:
+                    #     print strideP, strideQ, blocks, round(depth,1)
+
+            # if we got any results, no need to disable the filter
+            if len(results) > 0:
+                break
+        sys.stdout.write('\n')
+
+        results.sort()
+        settings = results[0][1]
+        # for res in results[0:10]:
+        #     print res
+        autotune_db = shelve.open(self.autotune_db_file)
+        autotune_db[self.autotune_key] = settings
+        autotune_db.close()
+
+        self.init(self.params, autotune=settings)
+
+    def bind_params(self, I, E, O, alpha):
+
+        assert I.dtype == E.dtype
+
+        if not self.initialized:
+            self.initialized = True
+            self.autotune(I, E, O)
+
+        if O.dtype.type is not np.float32 or self.determ_size:
+            update_temp       = self.lib.scratch_buffer(self.output_size)
+            self.convert_args = [ update_temp, "f4", O, self.determ_shape ]
+        else:
+            update_temp = O.gpudata
+            self.convert_args = False
+
+        if self.zero:
+            self.zero_args = [update_temp, 0, O.size, self.lib.stream]
+
+        self.kernel[3:8] = (self.lib.stream, update_temp, I.gpudata, E.gpudata, alpha)
+
+    def execute(self, repeat=1, unbind=True):
+
+        kernel = kernel_specs.get_kernel(self.kernel[0])
+
+        for r in range(repeat):
+
+            if self.zero:
+                drv.memset_d32_async(*self.zero_args)
+
+            kernel.prepared_async_call(*self.kernel[1:])
+
+            if self.convert_args:
+                _fp_convert(*self.convert_args)
+
+        if unbind:
+            self.zero_args = self.convert_args = None
+            self.kernel[3:8] = (None,) * 5
+
+    def __str__(self):
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d) RS:(%d,%d) str:(%d,%d)" % (
+            self.kernel[0], N, C, K, H, W, R, S, str_h, str_w)
+
+
+
 
 # Magic numbers and shift amounts for integer division
 # Suitable for when nmax*magic fits in 32 bits
@@ -781,6 +1260,25 @@ def _magic64(d):
         shift -= 32
     return (magic, shift)
 
+_div64 = r"""
+__device__ __forceinline__ int div64(int value, int magic, int shift)
+{
+    // if the divisor is a power of 2 the magic will be 1 and it's just a simple right shift
+    // Otherwise multiply by magic and right shift just the high bits
+    int result;
+    asm("{\n\t"
+        ".reg .pred p;\n\t"
+        ".reg .u64 res64;\n\t"
+        ".reg .u32 lo32, hi32;\n\t"
+        "setp.ne.s32 p, %2, 1;\n\t"
+        "mul.wide.u32 res64, %1, %2;\n\t"
+        "mov.b64 {lo32, hi32}, res64;\n\t"
+        "selp.u32 hi32, hi32, %1, p;\n\t"
+        "shr.u32 %0, hi32, %3;\n\t"
+        "}" : "=r"(result) : "r"(value), "r"(magic), "r"(shift));
+    return result;
+}
+"""
 
 # flatten a nested list of lists or values
 def _flatten(lst):
@@ -1049,25 +1547,6 @@ def _get_copy_transpose_kernel(dtype, shape, axes=None):
         params.append("int dst_str_%d" % d)
         dst_offset.append("dst_str_%d*idx_%d" % (d, d))
 
-    div64 = r"""
-__device__ __forceinline__ int div64(int value, int magic, int shift)
-{
-    // if the divisor is a power of 2 the magic will be 1 and it's just a simple right shift
-    // Otherwise multiply by magic and right shift just the high bits
-    int result;
-    asm("{\n\t"
-        ".reg .pred p;\n\t"
-        ".reg .u64 res64;\n\t"
-        ".reg .u32 lo32, hi32;\n\t"
-        "setp.ne.s32 p, %2, 1;\n\t"
-        "mul.wide.u32 res64, %1, %2;\n\t"
-        "mov.b64 {lo32, hi32}, res64;\n\t"
-        "selp.u32 hi32, hi32, %1, p;\n\t"
-        "shr.u32 %0, hi32, %3;\n\t"
-        "}" : "=r"(result) : "r"(value), "r"(magic), "r"(shift));
-    return result;
-}
-"""
     if shared_tile:
         copy_transpose = r"""
 %(common)s
@@ -1170,7 +1649,7 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
 }
 """
     code = copy_transpose % dict(
-        common=div64,
+        common=_div64,
         type=_ew_types[dtype[1:]]["type"],
         params=", ".join(params),
         blk=blkx_name,

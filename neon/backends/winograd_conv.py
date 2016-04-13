@@ -25,7 +25,7 @@ import kernel_specs
 from neon.backends.cuda_templates import _common_round, _common_fp16_to_fp32, _ew_types
 import os.path
 import shelve
-from convolution import KernelGroup, _get_shuffle_kernel, _get_sm_count, _ceil_div, _magic64, _magic32, _flatten, _fp_convert, _closest_divisor
+from convolution import KernelGroup, _get_shuffle_kernel, _get_sm_count, _ceil_div, _magic64, _div64, _magic32, _flatten, _fp_convert, _closest_divisor
 
 
 logger = logging.getLogger(__name__)
@@ -705,12 +705,13 @@ class XpropWinograd_4x4_3x3(KernelGroup):
                  N, C, K,
                  H, W, P, Q,
                  pad_h, pad_w,
-                 relu, bsum):
+                 relu, bsum, external):
 
         super(XpropWinograd_4x4_3x3, self).__init__(lib, dtype)
 
-        itemsize    = self.dtype.itemsize
-        kernel_name = "%s_winograd_4x4_3x3_32x32" % self.clss
+        ext = "_X" if external else ""
+
+        kernel_name = "%s_winograd_4x4_3x3_32x32%s" % (self.clss, ext)
 
         if N == 1:
             shlN = 0
@@ -719,16 +720,18 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         else:
             shlN = 5
 
+        # TODO: explore more superblock shapes here.
         shlY, shlX, maskY, shrY, maskX, shrX, maskN, supY, supX = {
             0 : (4, 5, 0x18, 3, 0x07, 0, 0x00, 0x203, 0x300), # 4x8  yyxxx
             1 : (4, 4, 0x18, 3, 0x06, 1, 0x01, 0x203, 0x201), # 4x4  yyxxn
             2 : (3, 4, 0x10, 4, 0x0c, 2, 0x03, 0x104, 0x202), # 2x4  yxxnn
-           #3 : (3, 3, 0x10, 4, 0x08, 3, 0x07, 0x104, 0x103), # 2x2  yxnnn
-            3 : (2, 4, 0x00, 0, 0x18, 3, 0x07, 0x000, 0x203), # 1x4  xxnnn
+            3 : (3, 3, 0x10, 4, 0x08, 3, 0x07, 0x104, 0x103), # 2x2  yxnnn
+           #3 : (2, 4, 0x00, 0, 0x18, 3, 0x07, 0x000, 0x203), # 1x4  xxnnn
             4 : (2, 3, 0x00, 0, 0x10, 4, 0x0f, 0x000, 0x104), # 1x2  xnnnn
             5 : (2, 2, 0x00, 0, 0x00, 0, 0x1f, 0x000, 0x000), # 1x1  nnnnn
         }.get(shlN)
 
+        itemsize = self.dtype.itemsize
         R, S = 3, 3
         GYS  = _ceil_div(P, 1 << shlY)
         GXS  = _ceil_div(Q, 1 << shlX)
@@ -737,33 +740,52 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         GYS2 = GYS // 2
         GXS2 = GXS  * 2
         k    = _closest_divisor(GK, 4)
-        Xk   = GXS*k
-        YXk  = GYS*Xk
 
-        magic_GXS2 = _magic64(GXS2)
-        magic_YXk  = _magic64(YXk)
-        magic_Xk   = _magic64(Xk)
-        magic_k    = _magic32(Xk, k)
-
-        self.image_size   = itemsize*1152*C*GXS*GYS*GN
-        self.image_args   = [
-            ( GN, GYS*GXS, C ), (32,1,1), None, None, None,
-            H, W, N, pad_h, pad_w,
-            GXS, GYS2, GXS2, magic_GXS2[0], magic_GXS2[1],
-            shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
-            H*W*N, W*N, GYS*GXS*C*1152, GXS*C*1152, C*1152]
+        self.kernel = [
+            kernel_name, (GYS*GXS*k, GK//k, GN), (640, 1, 1), None,
+            None, None, None, None, None, None, None ]
 
         #print GYS, GXS, GYS*GXS*GK*GN, GYS*GXS*GK*GN/24.0, k
 
-        self.kernel = [
-            kernel_name, (GYS*GXS*GK, GN, 1), (640, 1, 1), None,
-            None, None, None, None, None, None, None ]
-        self.kernel.extend( _flatten([
-            C, K, N, YXk, Xk, k, magic_YXk, magic_Xk, magic_k,
-            C*1152, GXS*C*1152, GYS*GXS*C*1152,
-            P, Q, Q*N, P*Q*N, N*itemsize, Q*N*itemsize, Q*N*3*itemsize,
-            max(P*Q*N - Q*N*3, 0)*itemsize, (P*Q*N*15 - Q*N*3)*itemsize,
-            maskN, shlX, shlY, supX, supY ]))
+
+        if external:
+
+            Xk = GXS*k
+
+            magic_GXS2 = _magic64(GXS2)
+            magic_Xk   = _magic64(Xk)
+            magic_k    = _magic32(Xk, k)
+
+            self.image_size   = itemsize*1152*C*GXS*GYS*GN
+            self.image_args   = [
+                ( GN, GYS*GXS, C ), (32,1,1), None, None, None,
+                H, W, N, pad_h, pad_w,
+                GXS, GYS2, GXS2, magic_GXS2[0], magic_GXS2[1],
+                shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
+                H*W*N, W*N, GYS*GXS*C*1152, GXS*C*1152, C*1152]
+
+            self.kernel.extend( _flatten([
+                C, K, N, Xk, k, magic_Xk, magic_k,
+                C*1152, GXS*C*1152, GYS*GXS*C*1152,
+                P, Q, Q*N, P*Q*N, N*itemsize, Q*N*itemsize, Q*N*3*itemsize,
+                max(P*Q*N - Q*N*3, 0)*itemsize, (P*Q*N*15 - Q*N*3)*itemsize,
+                maskN, shlX, shlY, supX, supY ]))
+
+        else:
+            self.image_size = 0
+
+            Xk = GXS2*k
+
+            magic_Xk   = _magic64(Xk)
+            magic_k    = _magic32(Xk, k)
+
+            self.kernel.extend( _flatten([
+                C, K, N, H, W, H*W*N, W*N, GYS2, GXS,
+                Xk, k, magic_Xk, magic_k,
+                P, Q, Q*N, P*Q*N, N*itemsize, Q*N*itemsize, Q*N*3*itemsize,
+                max(P*Q*N - Q*N*3, 0)*itemsize, (P*Q*N*15 - Q*N*3)*itemsize,
+                maskN, shlX, shlY, supX, supY,
+                pad_w, pad_h, R*S*K, R*S*K*2*itemsize, H*W*N*2*itemsize ]))
 
         lib.set_scratch_size(self.image_size, self.filter_size)
 
@@ -785,25 +807,37 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         else:
             self.mode = ""
 
-        image_temp = self.lib.scratch_buffer(self.image_size)
-        self.image_args[2:5] = (self.lib.stream, image_temp, I.gpudata)
+        if self.image_size:
+            image_temp = self.lib.scratch_buffer(self.image_size)
+            self.image_args[2:5] = (self.lib.stream, image_temp, I.gpudata)
+        else:
+            image_temp = I.gpudata
 
-        filter_temp = self.lib.scratch_buffer_offset(self.filter_size)
-        self.filter_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
+        if self.filter_size:
+            filter_temp = self.lib.scratch_buffer_offset(self.filter_size)
+            self.filter_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
+        else:
+            filter_temp = F.gpudata
 
         self.kernel[3:11] = (self.lib.stream, bsum_gpudata, O.gpudata, image_temp, filter_temp,
                              alpha, beta, flags)
 
     def execute(self, repeat=1, unbind=True):
 
-        image_kernel  = _get_xprop_image_trans_4x4_kernel(self.dtype_str)
-        filter_kernel = self.filter_func(self.dtype_str)
-        kernel        = kernel_specs.get_kernel(self.kernel[0] + self.mode)
+        if self.image_size:
+            image_kernel  = _get_xprop_image_trans_4x4_kernel(self.dtype_str)
+
+        if self.filter_size:
+            filter_kernel = self.filter_func(self.dtype_str)
+
+        kernel = kernel_specs.get_kernel(self.kernel[0] + self.mode)
 
         for r in range(repeat):
+            if self.image_size:
+                image_kernel.prepared_async_call(*self.image_args)
 
-            image_kernel.prepared_async_call(*self.image_args)
-            filter_kernel.prepared_async_call(*self.filter_args)
+            if self.filter_size:
+                filter_kernel.prepared_async_call(*self.filter_args)
 
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
@@ -813,8 +847,10 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         if unbind:
             self.bsum_zero = None
             self.kernel[3:11] = (None,) * 8
-            self.image_args[2:5] = (None,) * 3
-            self.filter_args[2:5] = (None,) * 3
+            if self.image_size:
+                self.image_args[2:5]  = (None,) * 3
+            if self.filter_size:
+                self.filter_args[2:5] = (None,) * 3
 
 class FpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
 
@@ -827,14 +863,19 @@ class FpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
         R, S = 3, 3
         GK   = _ceil_div(K, 32)
 
-        self.filter_func = _get_fprop_filter_trans_4x4_kernel
-        self.filter_size = dtype.itemsize*1152*C*GK
-        self.filter_args = [
-            (GK,C,1), (32,1,1), None, None, None,
-            R*S*K, S*K, S*K*2, K, C*1152]
+        external = True
+
+        if external:
+            self.filter_func = _get_fprop_filter_trans_4x4_kernel
+            self.filter_size = dtype.itemsize*1152*C*GK
+            self.filter_args = [
+                (GK,C,1), (32,1,1), None, None, None,
+                R*S*K, S*K, S*K*2, K, C*1152]
+        else:
+            self.filter_size = 0
 
         super(FpropWinograd_4x4_3x3, self).__init__(
-                 lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+                 lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum, external)
 
     def __str__(self):
         return "FpropWinograd " + self.kernel[0]
@@ -849,17 +890,31 @@ class BpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
 
         R, S = 3, 3
         GC32 = _ceil_div(C, 32)
+        GK32 = _ceil_div(K, 32)
         GC16 = _ceil_div(GC32*32, 16)
         GK16 = _ceil_div(K, 16)
 
-        self.filter_func = _get_bprop_filter_trans_4x4_kernel
-        self.filter_size = dtype.itemsize*1152*K*GC32
-        self.filter_args = [
-            (GK16,GC16,1), (256,1,1), None, None, None,
-            R*S*K, S*K, S*K*2, K, C, K*1152]
+        external = True
+
+        if external:
+            self.filter_func = _get_bprop_filter_trans_4x4_kernel
+            self.filter_size = dtype.itemsize*1152*K*GC32
+            self.filter_args = [
+                (GK16,GC16,1), (256,1,1), None, None, None,
+                R*S*K, S*K, S*K*2, K, C, K*1152]
+
+        # plain dim shuffle CRSK => KRSC
+        else:
+            self.filter_func = _get_shuffle_kernel
+            self.filter_size = C*R*S*K * dtype.itemsize
+            self.filter_args = [(GK32, GC32, R*S), (32, 8, 1), None, None, None]
+            self.filter_args.extend(_flatten([
+                R*S*K, R*S*K, S*K, K,
+                R*S*C, R*S*C, S*C, C,
+                R*S, 1, R, S, _magic32(R*S, R*S), _magic32(R*S, S)]))
 
         super(BpropWinograd_4x4_3x3, self).__init__(
-                 lib, dtype, N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, relu, bsum)
+                 lib, dtype, N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, relu, bsum, external)
 
     def __str__(self):
         return "BpropWinograd " + self.kernel[0]
@@ -1430,23 +1485,6 @@ def _get_update_image_trans_kernel(dtype):
 
 %(common)s
 
-__device__ __forceinline__ int div64(int value, int magic, int shift)
-{
-    int result;
-    // if the divisor is a power of two the magic will be 1 and it's just a simple right shift
-    if (magic == 1)
-        result = value >> shift;
-    // Otherwise multiply by magic and right shift just the high bits
-    else
-        asm(".reg .u64 res64;\n\t"
-            ".reg .u32 lo32, hi32;\n\t"
-            "mul.wide.u32 res64, %%1, %%2;\n\t"
-            "mov.b64 {lo32, hi32}, res64;\n\t"
-            "shr.b32 %%0, hi32, %%3;\n\t"
-            : "=r"(result) : "r"(value), "r"(magic), "r"(shift));
-    return result;
-}
-
 __global__ void update_image_trans(
     %(type)s* T, const %(type)s* I,
     int C, int Y, int X, int N, int pad_y, int pad_x,
@@ -1619,7 +1657,7 @@ __global__ void update_image_trans(
     }
 }
 """
-    common  = _common_round["nearest"].get(dtype, "")
+    common  = _common_round["nearest"].get(dtype, "") + _div64
     if dtype == "f2":
         common += _common_fp16_to_fp32
 
@@ -1642,23 +1680,6 @@ def _get_xprop_image_trans_4x4_kernel(dtype):
 
     code = r"""
 %(common)s
-
-__device__ __forceinline__ int div64(int value, int magic, int shift)
-{
-    int result;
-    // if the divisor is a power of two the magic will be 1 and it's just a simple right shift
-    if (magic == 1)
-        result = value >> shift;
-    // Otherwise multiply by magic and right shift just the high bits
-    else
-        asm(".reg .u64 res64;\n\t"
-            ".reg .u32 lo32, hi32;\n\t"
-            "mul.wide.u32 res64, %%1, %%2;\n\t"
-            "mov.b64 {lo32, hi32}, res64;\n\t"
-            "shr.b32 %%0, hi32, %%3;\n\t"
-            : "=r"(result) : "r"(value), "r"(magic), "r"(shift));
-    return result;
-}
 
 __global__ void xprop_image_trans_4x4(
     %(type)s* Out, const %(type)s* In,
@@ -1725,80 +1746,48 @@ __global__ void xprop_image_trans_4x4(
         }
     }
 
-    // float T[6][6];
-    // float rcp4  = 1.0f/4.0f;
-    // float rcp6  = 1.0f/6.0f;
-    // float rcp12 = 1.0f/12.0f;
-    // float rcp24 = 1.0f/24.0f;
-    // #pragma unroll
-    // for (int i = 0; i < 6; i++)
-    // {
-    //     float t0 = __fmaf_rn(I[2][i], 4.0f, -I[4][i]) * rcp6;
-    //     float t1 = __fmaf_rn(I[1][i], 4.0f, -I[3][i]) * rcp6;
-    //     float t2 = (I[4][i] - I[2][i]) * rcp24;
-    //     float t3 = (I[3][i] - I[1][i]) * rcp12;
-    //     float t4 = __fmaf_rn(I[2][i], -5.0f, I[4][i]);
-    //     float t5 = __fmaf_rn(I[3][i], -5.0f, I[5][i]);
-    //     T[0][i] = __fmaf_rn(t4, rcp4, I[0][i]);
-    //     T[1][i] = t0 + t1;
-    //     T[2][i] = t0 - t1;
-    //     T[3][i] = t2 + t3;
-    //     T[4][i] = t2 - t3;
-    //     T[5][i] = __fmaf_rn(I[1][i], 4.0f, t5);
-    // }
-    // #pragma unroll
-    // for (int i = 0; i < 6; i++)
-    // {
-    //     float t0 = __fmaf_rn(T[i][2], 4.0f, -T[i][4]) * rcp6;
-    //     float t1 = __fmaf_rn(T[i][1], 4.0f, -T[i][3]) * rcp6;
-    //     float t2 = (T[i][4] - T[i][2]) * rcp24;
-    //     float t3 = (T[i][3] - T[i][1]) * rcp12;
-    //     float t4 = __fmaf_rn(T[i][2], -5.0f, T[i][4]);
-    //     float t5 = __fmaf_rn(T[i][3], -5.0f, T[i][5]);
-    //     Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(t4, rcp4, T[i][0]));
-    //     Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(t0 + t1);
-    //     Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(t0 - t1);
-    //     Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(t2 + t3);
-    //     Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(t2 - t3);
-    //     Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(__fmaf_rn(T[i][1], 4.0f, t5));
-    // }
-
+    float f1_1025 = 1.1025f;
+    float f2_74   = 2.7400f;
+    float f0_70   = 0.7000f;
+    float f0_49   = 0.4900f;
     float T[6][6];
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = __fmaf_rn(I[2][i], -4.0f, I[4][i]);
-        float t1 = __fmaf_rn(I[1][i], -4.0f, I[3][i]);
-        float t2 = I[4][i] - I[2][i];
-        float t3 = I[3][i] - I[1][i];
-        float t4 = __fmaf_rn(I[2][i], -5.0f, I[4][i]);
-        float t5 = __fmaf_rn(I[3][i], -5.0f, I[5][i]);
-        T[0][i] = __fmaf_rn(I[0][i], 4.0f, t4);
-        T[1][i] = t0 + t1;
-        T[2][i] = t0 - t1;
-        T[3][i] = __fmaf_rn(t3,  2.0f, t2);
-        T[4][i] = __fmaf_rn(t3, -2.0f, t2);
-        T[5][i] = __fmaf_rn(I[1][i], 4.0f, t5);
+        float t0 = __fmaf_rn(I[2][i], -2.25f, I[4][i]);
+        float t1 = __fmaf_rn(I[1][i], -2.25f, I[3][i]);
+        float t2 = __fmaf_rn(I[2][i], -f0_49, I[4][i]);
+        float t3 = __fmaf_rn(I[1][i], -f0_49, I[3][i]);
+        float t4 = __fmaf_rn(I[2][i], -f2_74, I[4][i]);
+        float t5 = __fmaf_rn(I[3][i], -f2_74, I[5][i]);
+
+        T[0][i] = __fmaf_rn(I[0][i], f1_1025, t4);
+        T[1][i] = __fmaf_rn(t1,  f0_70, t0);
+        T[2][i] = __fmaf_rn(t1, -f0_70, t0);
+        T[3][i] = __fmaf_rn(t3,  1.5f,  t2);
+        T[4][i] = __fmaf_rn(t3, -1.5f,  t2);
+        T[5][i] = __fmaf_rn(I[1][i], f1_1025, t5);
     }
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = __fmaf_rn(T[i][2], -4.0f, T[i][4]);
-        float t1 = __fmaf_rn(T[i][1], -4.0f, T[i][3]);
-        float t2 = T[i][4] - T[i][2];
-        float t3 = T[i][3] - T[i][1];
-        float t4 = __fmaf_rn(T[i][2], -5.0f, T[i][4]);
-        float t5 = __fmaf_rn(T[i][3], -5.0f, T[i][5]);
-        Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(T[i][0], 4.0f, t4));
-        Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(t0 + t1);
-        Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(t0 - t1);
-        Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(t3,  2.0f, t2));
-        Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(t3, -2.0f, t2));
-        Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(__fmaf_rn(T[i][1], 4.0f, t5));
+        float t0 = __fmaf_rn(T[i][2], -2.25f, T[i][4]);
+        float t1 = __fmaf_rn(T[i][1], -2.25f, T[i][3]);
+        float t2 = __fmaf_rn(T[i][2], -f0_49, T[i][4]);
+        float t3 = __fmaf_rn(T[i][1], -f0_49, T[i][3]);
+        float t4 = __fmaf_rn(T[i][2], -f2_74, T[i][4]);
+        float t5 = __fmaf_rn(T[i][3], -f2_74, T[i][5]);
+
+        Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(T[i][0], f1_1025, t4));
+        Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(t1,  f0_70, t0));
+        Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(t1, -f0_70, t0));
+        Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(t3,  1.5f, t2));
+        Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(t3, -1.5f, t2));
+        Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(__fmaf_rn(T[i][1], f1_1025, t5));
     }
 }
 """
-    common  = _common_round["nearest"].get(dtype, "")
+    common  = _common_round["nearest"].get(dtype, "") + _div64
     if dtype == "f2":
         common += _common_fp16_to_fp32
 
@@ -1864,65 +1853,39 @@ __global__ void fprop_filter_trans_4x4(
     I[2][1] = valid_k ? %(cvt_in)s(__ldg(In + f_r2s1)) : 0.0f;
     I[2][2] = valid_k ? %(cvt_in)s(__ldg(In + f_r2s2)) : 0.0f;
 
-
-    // float T[6][3];
-    // #pragma unroll
-    // for (int i = 0; i < 3; i++)
-    // {
-    //     float t0 = I[0][i] + I[2][i];
-    //     float t1 = __fmaf_rn(I[2][i], 4.0f, I[0][i]);
-    //     T[0][i] = I[0][i];
-    //     T[1][i] = t0 + I[1][i];
-    //     T[2][i] = t0 - I[1][i];
-    //     T[3][i] = __fmaf_rn(I[1][i],  2.0f, t1);
-    //     T[4][i] = __fmaf_rn(I[1][i], -2.0f, t1);
-    //     T[5][i] = I[2][i];
-    // }
-    // #pragma unroll
-    // for (int i = 0; i < 6; i++)
-    // {
-    //     float t0 = T[i][0] + T[i][2];
-    //     float t1 = __fmaf_rn(T[i][2], 4.0f, T[i][0]);
-    //     Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(T[i][0]);
-    //     Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(t0 + T[i][1]);
-    //     Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(t0 - T[i][1]);
-    //     Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  2.0f, t1));
-    //     Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -2.0f, t1));
-    //     Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(T[i][2]);
-    // }
-
-    float rcp4  = 1.0f/4.0f;
-    float rcp6  = 1.0f/6.0f;
-    float rcp12 = 1.0f/12.0f;
-    float rcp24 = 1.0f/24.0f;
+    float f25_88    =  25.0f /   88.0f;
+    float f25_132   =  25.0f /  132.0f;
+    float f25_198   =  25.0f /  198.0f;
+    float f125_308  = 125.0f /  308.0f;
+    float f400_441  = 400.0f /  441.0f;
+    float f625_1078 = 625.0f / 1078.0f;
     float T[6][3];
     #pragma unroll
     for (int i = 0; i < 3; i++)
     {
-        float t0 = rcp6 * I[2][i];
-        float t1 = __fmaf_rn(I[0][i], -rcp6, -t0);
-        float t2 = __fmaf_rn(I[0][i], rcp24,  t0);
-        T[0][i] = rcp4 * I[0][i];
-        T[1][i] = __fmaf_rn(I[1][i], -rcp6,  t1);
-        T[2][i] = __fmaf_rn(I[1][i],  rcp6,  t1);
-        T[3][i] = __fmaf_rn(I[1][i],  rcp12, t2);
-        T[4][i] = __fmaf_rn(I[1][i], -rcp12, t2);
+        float t0 = f25_88 * I[2][i];
+        float t1 = __fmaf_rn(I[0][i], -f625_1078, -t0);
+        float t2 = __fmaf_rn(I[0][i],  f25_198,    t0);
+        T[0][i] = f400_441 * I[0][i];
+        T[1][i] = __fmaf_rn(I[1][i], -f125_308, t1);
+        T[2][i] = __fmaf_rn(I[1][i],  f125_308, t1);
+        T[3][i] = __fmaf_rn(I[1][i],  f25_132,  t2);
+        T[4][i] = __fmaf_rn(I[1][i], -f25_132,  t2);
         T[5][i] = I[2][i];
     }
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = rcp6 * T[i][2];
-        float t1 = __fmaf_rn(T[i][0], -rcp6, -t0);
-        float t2 = __fmaf_rn(T[i][0], rcp24,  t0);
-        Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(rcp4 * T[i][0]);
-        Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp6,  t1));
-        Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp6,  t1));
-        Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp12, t2));
-        Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp12, t2));
+        float t0 = f25_88 *  T[i][2];
+        float t1 = __fmaf_rn(T[i][0], -f625_1078, -t0);
+        float t2 = __fmaf_rn(T[i][0],  f25_198,    t0);
+        Out[out_offset + 32*(i*6 + 0)] = %(cvt_out)s(f400_441 * T[i][0]);
+        Out[out_offset + 32*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(T[i][1], -f125_308, t1));
+        Out[out_offset + 32*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(T[i][1],  f125_308, t1));
+        Out[out_offset + 32*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  f25_132,  t2));
+        Out[out_offset + 32*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -f25_132,  t2));
         Out[out_offset + 32*(i*6 + 5)] = %(cvt_out)s(T[i][2]);
     }
-
 }
 """
     common  = _common_round["nearest"].get(dtype, "")
@@ -1993,65 +1956,39 @@ __global__ void bprop_filter_trans_4x4(
     I[2][1] = valid_ck ? %(cvt_in)s(__ldg(F + f_r2s1)) : 0.0f;
     I[2][2] = valid_ck ? %(cvt_in)s(__ldg(F + f_r2s2)) : 0.0f;
 
-
-    // float T[6][3];
-    // #pragma unroll
-    // for (int i = 0; i < 3; i++)
-    // {
-    //     float t0 = I[0][i] + I[2][i];
-    //     float t1 = __fmaf_rn(I[2][i], 4.0f, I[0][i]);
-    //     T[0][i] = I[0][i];
-    //     T[1][i] = t0 + I[1][i];
-    //     T[2][i] = t0 - I[1][i];
-    //     T[3][i] = __fmaf_rn(I[1][i],  2.0f, t1);
-    //     T[4][i] = __fmaf_rn(I[1][i], -2.0f, t1);
-    //     T[5][i] = I[2][i];
-    // }
-    // #pragma unroll
-    // for (int i = 0; i < 6; i++)
-    // {
-    //     float t0 = T[i][0] + T[i][2];
-    //     float t1 = __fmaf_rn(T[i][2], 4.0f, T[i][0]);
-    //     share[ks][cs + 16*(i*6 + 0)] = %(cvt_out)s(T[i][0]);
-    //     share[ks][cs + 16*(i*6 + 1)] = %(cvt_out)s(t0 + T[i][1]);
-    //     share[ks][cs + 16*(i*6 + 2)] = %(cvt_out)s(t0 - T[i][1]);
-    //     share[ks][cs + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  2.0f, t1));
-    //     share[ks][cs + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -2.0f, t1));
-    //     share[ks][cs + 16*(i*6 + 5)] = %(cvt_out)s(T[i][2]);
-    // }
-
-    float rcp4  = 1.0f/4.0f;
-    float rcp6  = 1.0f/6.0f;
-    float rcp12 = 1.0f/12.0f;
-    float rcp24 = 1.0f/24.0f;
+    float f25_88    =  25.0f /   88.0f;
+    float f25_132   =  25.0f /  132.0f;
+    float f25_198   =  25.0f /  198.0f;
+    float f125_308  = 125.0f /  308.0f;
+    float f400_441  = 400.0f /  441.0f;
+    float f625_1078 = 625.0f / 1078.0f;
     float T[6][3];
     #pragma unroll
     for (int i = 0; i < 3; i++)
     {
-        float t0 = rcp6 * I[2][i];
-        float t1 = __fmaf_rn(I[0][i], -rcp6, -t0);
-        float t2 = __fmaf_rn(I[0][i], rcp24,  t0);
-        T[0][i] = rcp4 * I[0][i];
-        T[1][i] = __fmaf_rn(I[1][i], -rcp6,  t1);
-        T[2][i] = __fmaf_rn(I[1][i],  rcp6,  t1);
-        T[3][i] = __fmaf_rn(I[1][i],  rcp12, t2);
-        T[4][i] = __fmaf_rn(I[1][i], -rcp12, t2);
+        float t0 = f25_88 * I[2][i];
+        float t1 = __fmaf_rn(I[0][i], -f625_1078, -t0);
+        float t2 = __fmaf_rn(I[0][i],  f25_198,    t0);
+        T[0][i] = f400_441 * I[0][i];
+        T[1][i] = __fmaf_rn(I[1][i], -f125_308, t1);
+        T[2][i] = __fmaf_rn(I[1][i],  f125_308, t1);
+        T[3][i] = __fmaf_rn(I[1][i],  f25_132,  t2);
+        T[4][i] = __fmaf_rn(I[1][i], -f25_132,  t2);
         T[5][i] = I[2][i];
     }
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = rcp6 * T[i][2];
-        float t1 = __fmaf_rn(T[i][0], -rcp6, -t0);
-        float t2 = __fmaf_rn(T[i][0], rcp24,  t0);
-        share[ks][cs + 16*(i*6 + 0)] = %(cvt_out)s(rcp4 * T[i][0]);
-        share[ks][cs + 16*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp6,  t1));
-        share[ks][cs + 16*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp6,  t1));
-        share[ks][cs + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  rcp12, t2));
-        share[ks][cs + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -rcp12, t2));
+        float t0 = f25_88 *  T[i][2];
+        float t1 = __fmaf_rn(T[i][0], -f625_1078, -t0);
+        float t2 = __fmaf_rn(T[i][0],  f25_198,    t0);
+        share[ks][cs + 16*(i*6 + 0)] = %(cvt_out)s(f400_441 * T[i][0]);
+        share[ks][cs + 16*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(T[i][1], -f125_308, t1));
+        share[ks][cs + 16*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(T[i][1],  f125_308, t1));
+        share[ks][cs + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(T[i][1],  f25_132,  t2));
+        share[ks][cs + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(T[i][1], -f25_132,  t2));
         share[ks][cs + 16*(i*6 + 5)] = %(cvt_out)s(T[i][2]);
     }
-
     __syncthreads();
 
     // now make c contiguous
@@ -2094,23 +2031,6 @@ def _get_update_image_trans_4x4_kernel(dtype):
     code = r"""
 
 %(common)s
-
-__device__ __forceinline__ int div64(int value, int magic, int shift)
-{
-    int result;
-    // if the divisor is a power of two the magic will be 1 and it's just a simple right shift
-    if (magic == 1)
-        result = value >> shift;
-    // Otherwise multiply by magic and right shift just the high bits
-    else
-        asm(".reg .u64 res64;\n\t"
-            ".reg .u32 lo32, hi32;\n\t"
-            "mul.wide.u32 res64, %%1, %%2;\n\t"
-            "mov.b64 {lo32, hi32}, res64;\n\t"
-            "shr.b32 %%0, hi32, %%3;\n\t"
-            : "=r"(result) : "r"(value), "r"(magic), "r"(shift));
-    return result;
-}
 
 __global__ void update_image_trans_4x4(
     %(type)s* O, const %(type)s* In,
@@ -2195,71 +2115,40 @@ __global__ void update_image_trans_4x4(
     }
 
     float T[6][6];
-    float rcp4  = 1.0f/4.0f;
-    float rcp6  = 1.0f/6.0f;
-    float rcp12 = 1.0f/12.0f;
-    float rcp24 = 1.0f/24.0f;
-
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        //float t0 = __fmaf_rn(I[2][i], -4.0f, I[4][i]);
-        //float t1 = __fmaf_rn(I[1][i], -4.0f, I[3][i]);
-        //float t2 = I[4][i] - I[2][i];
-        //float t3 = I[3][i] - I[1][i];
-        //float t4 = __fmaf_rn(I[2][i], -5.0f, I[4][i]);
-        //float t5 = __fmaf_rn(I[3][i], -5.0f, I[5][i]);
-        //T[0][i] = __fmaf_rn(I[0][i], 4.0f, t4);
-        //T[1][i] = t0 + t1;
-        //T[2][i] = t0 - t1;
-        //T[3][i] = __fmaf_rn(t3,  2.0f, t2);
-        //T[4][i] = __fmaf_rn(t3, -2.0f, t2);
-        //T[5][i] = __fmaf_rn(I[1][i], 4.0f, t5);
+        float t0 = __fmaf_rn(I[2][i], -2.250000f, I[4][i]);
+        float t1 = __fmaf_rn(I[1][i], -2.250000f, I[3][i]);
+        float t2 = __fmaf_rn(I[2][i], -0.390625f, I[4][i]);
+        float t3 = __fmaf_rn(I[1][i], -0.390625f, I[3][i]);
+        float t4 = __fmaf_rn(I[2][i], -2.640625f, I[4][i]);
+        float t5 = __fmaf_rn(I[3][i], -2.640625f, I[5][i]);
 
-        float t0 = __fmaf_rn(I[2][i], 4.0f, -I[4][i]) * rcp6;
-        float t1 = __fmaf_rn(I[1][i], 4.0f, -I[3][i]) * rcp6;
-        float t2 = (I[4][i] - I[2][i]) * rcp24;
-        float t3 = (I[3][i] - I[1][i]) * rcp12;
-        float t4 = __fmaf_rn(I[2][i], -5.0f, I[4][i]);
-        float t5 = __fmaf_rn(I[3][i], -5.0f, I[5][i]);
-        T[0][i] = __fmaf_rn(t4, rcp4, I[0][i]);
-        T[1][i] = t0 + t1;
-        T[2][i] = t0 - t1;
-        T[3][i] = t2 + t3;
-        T[4][i] = t2 - t3;
-        T[5][i] = __fmaf_rn(I[1][i], 4.0f, t5);
+        T[0][i] = __fmaf_rn(I[0][i], 0.87890625f, t4);
+        T[1][i] = __fmaf_rn(t1,  0.625f, t0);
+        T[2][i] = __fmaf_rn(t1, -0.625f, t0);
+        T[3][i] = __fmaf_rn(t3,  1.500f, t2);
+        T[4][i] = __fmaf_rn(t3, -1.500f, t2);
+        T[5][i] = __fmaf_rn(I[1][i], 0.87890625f, t5);
     }
-
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        // float t0 = __fmaf_rn(T[i][2], -4.0f, T[i][4]);
-        // float t1 = __fmaf_rn(T[i][1], -4.0f, T[i][3]);
-        // float t2 = T[i][4] - T[i][2];
-        // float t3 = T[i][3] - T[i][1];
-        // float t4 = __fmaf_rn(T[i][2], -5.0f, T[i][4]);
-        // float t5 = __fmaf_rn(T[i][3], -5.0f, T[i][5]);
-        // share[ns][cs + 16*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(T[i][0], 4.0f, t4));
-        // share[ns][cs + 16*(i*6 + 1)] = %(cvt_out)s(t0 + t1);
-        // share[ns][cs + 16*(i*6 + 2)] = %(cvt_out)s(t0 - t1);
-        // share[ns][cs + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(t3,  2.0f, t2));
-        // share[ns][cs + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(t3, -2.0f, t2));
-        // share[ns][cs + 16*(i*6 + 5)] = %(cvt_out)s(__fmaf_rn(T[i][1], 4.0f, t5));
+        float t0 = __fmaf_rn(T[i][2], -2.250000f, T[i][4]);
+        float t1 = __fmaf_rn(T[i][1], -2.250000f, T[i][3]);
+        float t2 = __fmaf_rn(T[i][2], -0.390625f, T[i][4]);
+        float t3 = __fmaf_rn(T[i][1], -0.390625f, T[i][3]);
+        float t4 = __fmaf_rn(T[i][2], -2.640625f, T[i][4]);
+        float t5 = __fmaf_rn(T[i][3], -2.640625f, T[i][5]);
 
-        float t0 = __fmaf_rn(T[i][2], 4.0f, -T[i][4]) * rcp6;
-        float t1 = __fmaf_rn(T[i][1], 4.0f, -T[i][3]) * rcp6;
-        float t2 = (T[i][4] - T[i][2]) * rcp24;
-        float t3 = (T[i][3] - T[i][1]) * rcp12;
-        float t4 = __fmaf_rn(T[i][2], -5.0f, T[i][4]);
-        float t5 = __fmaf_rn(T[i][3], -5.0f, T[i][5]);
-        share[ns][cs + 16*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(t4, rcp4, T[i][0]));
-        share[ns][cs + 16*(i*6 + 1)] = %(cvt_out)s(t0 + t1);
-        share[ns][cs + 16*(i*6 + 2)] = %(cvt_out)s(t0 - t1);
-        share[ns][cs + 16*(i*6 + 3)] = %(cvt_out)s(t2 + t3);
-        share[ns][cs + 16*(i*6 + 4)] = %(cvt_out)s(t2 - t3);
-        share[ns][cs + 16*(i*6 + 5)] = %(cvt_out)s(__fmaf_rn(T[i][1], 4.0f, t5));
+        share[ns][cs + 16*(i*6 + 0)] = %(cvt_out)s(__fmaf_rn(T[i][0], 0.87890625f, t4));
+        share[ns][cs + 16*(i*6 + 1)] = %(cvt_out)s(__fmaf_rn(t1,  0.625f, t0));
+        share[ns][cs + 16*(i*6 + 2)] = %(cvt_out)s(__fmaf_rn(t1, -0.625f, t0));
+        share[ns][cs + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(t3,  1.500f, t2));
+        share[ns][cs + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(t3, -1.500f, t2));
+        share[ns][cs + 16*(i*6 + 5)] = %(cvt_out)s(__fmaf_rn(T[i][1], 0.87890625f, t5));
     }
-
     __syncthreads();
 
     // now make c contiguous
@@ -2285,7 +2174,7 @@ __global__ void update_image_trans_4x4(
     }
 }
 """
-    common  = _common_round["nearest"].get(dtype, "")
+    common  = _common_round["nearest"].get(dtype, "") + _div64
     if dtype == "f2":
         common += _common_fp16_to_fp32
 
@@ -2311,23 +2200,6 @@ def _get_update_delta_trans_4x4_kernel(dtype):
     code = r"""
 
 %(common)s
-
-__device__ __forceinline__ int div64(int value, int magic, int shift)
-{
-    int result;
-    // if the divisor is a power of two the magic will be 1 and it's just a simple right shift
-    if (magic == 1)
-        result = value >> shift;
-    // Otherwise multiply by magic and right shift just the high bits
-    else
-        asm(".reg .u64 res64;\n\t"
-            ".reg .u32 lo32, hi32;\n\t"
-            "mul.wide.u32 res64, %%1, %%2;\n\t"
-            "mov.b64 {lo32, hi32}, res64;\n\t"
-            "shr.b32 %%0, hi32, %%3;\n\t"
-            : "=r"(result) : "r"(value), "r"(magic), "r"(shift));
-    return result;
-}
 
 __global__ void update_delta_trans_4x4(
     %(type)s* O, const %(type)s* In,
@@ -2398,62 +2270,48 @@ __global__ void update_delta_trans_4x4(
     }
 
     float T[6][4];
-    // float rcp3  = 1.0f/3.0f;
-    // float rcp4  = 1.0f/4.0f;
-    // float rcp6  = 1.0f/6.0f;
+    float coeff0  =  0.26890756302521f;
+    float coeff1  = -0.688403361344538f;
+    float coeff2  =  0.119514472455649f;
+    float coeff3  =  0.430252100840336f;
+    float coeff4  =  0.179271708683473f;
+    float coeff5  =  0.168067226890756f;
+    float coeff6  =  0.403361344537815f;
+    float coeff7  =  1.13777777777778f;
 
     #pragma unroll
     for (int i = 0; i < 4; i++)
     {
-        float t0 = I[0][i] + I[2][i];
-        float t1 = __fmaf_rn(I[2][i], 4.0f, I[0][i]);
-        float t2 = I[1][i] + I[3][i];
-        float t3 = __fmaf_rn(I[3][i], 4.0f, I[1][i]);
-        T[0][i] = I[0][i];
-        T[1][i] = t0 + t2;
-        T[2][i] = t0 - t2;
-        T[3][i] = __fmaf_rn(t3,  2.0f, t1);
-        T[4][i] = __fmaf_rn(t3, -2.0f, t1);
-        T[5][i] = I[3][i];
+        float t0 = I[2][i] * coeff0;
+        float t1 = __fmaf_rn(I[0][i], coeff1, -t0);
+        float t2 = __fmaf_rn(I[0][i], coeff2,  t0);
+        float t3 = __fmaf_rn(I[1][i], coeff3,  I[3][i] * coeff5);
+        float t4 = __fmaf_rn(I[1][i], coeff4,  I[3][i] * coeff6);
 
-        // float t0 = (I[0][i] + I[2][i]) * -rcp6;
-        // float t1 = __fmaf_rn(I[0][i], rcp4, I[2][i]) * rcp6;
-        // float t2 = (I[1][i] + I[3][i]) * rcp6;
-        // float t3 = __fmaf_rn(I[1][i], rcp4, I[3][i]) * rcp3;
-        // T[0][i] = I[0][i]*rcp4;
-        // T[1][i] = t0 - t2;
-        // T[2][i] = t0 + t2;
-        // T[3][i] = t1 + t3;
-        // T[4][i] = t1 - t3;
-        // T[5][i] = I[3][i];
+        T[0][i] = I[0][i]*coeff7;
+        T[1][i] = t1 - t3;
+        T[2][i] = t1 + t3;
+        T[3][i] = t2 + t4;
+        T[4][i] = t2 - t4;
+        T[5][i] = I[3][i];
     }
 
     #pragma unroll
     for (int i = 0; i < 6; i++)
     {
-        float t0 = T[i][0] + T[i][2];
-        float t1 = __fmaf_rn(T[i][2], 4.0f, T[i][0]);
-        float t2 = T[i][1] + T[i][3];
-        float t3 = __fmaf_rn(T[i][3], 4.0f, T[i][1]);
-        share[ns][ks + 16*(i*6 + 0)] = %(cvt_out)s(T[i][0]);
-        share[ns][ks + 16*(i*6 + 1)] = %(cvt_out)s(t0 + t2);
-        share[ns][ks + 16*(i*6 + 2)] = %(cvt_out)s(t0 - t2);
-        share[ns][ks + 16*(i*6 + 3)] = %(cvt_out)s(__fmaf_rn(t3,  2.0f, t1));
-        share[ns][ks + 16*(i*6 + 4)] = %(cvt_out)s(__fmaf_rn(t3, -2.0f, t1));
+        float t0 = T[i][2] * coeff0;
+        float t1 = __fmaf_rn(T[i][0], coeff1, -t0);
+        float t2 = __fmaf_rn(T[i][0], coeff2,  t0);
+        float t3 = __fmaf_rn(T[i][1], coeff3,  T[i][3] * coeff5);
+        float t4 = __fmaf_rn(T[i][1], coeff4,  T[i][3] * coeff6);
+
+        share[ns][ks + 16*(i*6 + 0)] = %(cvt_out)s(T[i][0]*coeff7);
+        share[ns][ks + 16*(i*6 + 1)] = %(cvt_out)s(t1 - t3);
+        share[ns][ks + 16*(i*6 + 2)] = %(cvt_out)s(t1 + t3);
+        share[ns][ks + 16*(i*6 + 3)] = %(cvt_out)s(t2 + t4);
+        share[ns][ks + 16*(i*6 + 4)] = %(cvt_out)s(t2 - t4);
         share[ns][ks + 16*(i*6 + 5)] = %(cvt_out)s(T[i][3]);
-
-        //float t0 = (T[i][0] + T[i][2]) * -rcp6;
-        //float t1 = __fmaf_rn(T[i][0], rcp4, T[i][2]) * rcp6;
-        //float t2 = (T[i][1] + T[i][3]) * rcp6;
-        //float t3 = __fmaf_rn(T[i][1], rcp4, T[i][3]) * rcp3;
-        //share[ns][ks + 16*(i*6 + 0)] = %(cvt_out)s(T[i][0]*rcp4);
-        //share[ns][ks + 16*(i*6 + 1)] = %(cvt_out)s(t0 - t2);
-        //share[ns][ks + 16*(i*6 + 2)] = %(cvt_out)s(t0 + t2);
-        //share[ns][ks + 16*(i*6 + 3)] = %(cvt_out)s(t1 + t3);
-        //share[ns][ks + 16*(i*6 + 4)] = %(cvt_out)s(t1 - t3);
-        //share[ns][ks + 16*(i*6 + 5)] = %(cvt_out)s(T[i][3]);
     }
-
     __syncthreads();
 
     // now make k contiguous
@@ -2479,7 +2337,7 @@ __global__ void update_delta_trans_4x4(
     }
 }
 """
-    common  = _common_round["nearest"].get(dtype, "")
+    common  = _common_round["nearest"].get(dtype, "") + _div64
     if dtype == "f2":
         common += _common_fp16_to_fp32
 

@@ -119,7 +119,6 @@ class Layer(object):
         return bprop_in
 
     def grad_descent(self):
-
         self.weights[:] += self.updat_out*self.learning_rate
 
     def get_activation_mean(self):
@@ -401,6 +400,8 @@ class ConvLayer(Layer):
         # flop count for benchmarking
         self.flops = P*Q*M*K*N*C*R*S*T * 2.0
 
+        #lib.enable_winograd = 0
+
         ####### Cuda C ###########
         if lib.use_cudac_kernels:
 
@@ -431,8 +432,8 @@ class ConvLayer(Layer):
             else:
                 winograd = 2
 
-            if N >=64 and C < 8:
-                self.fprop_kernels = convolution.FpropDirect(
+            if N >=4 and C < 8:
+                self.fprop_kernels = convolution.FpropDirect2(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
             elif winograd == 4:
@@ -449,8 +450,8 @@ class ConvLayer(Layer):
                 self.bprop_kernels = BpropWinograd(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
 
-            if N >=32 and C < 8:
-                self.updat_kernels = convolution.UpdateDirect(
+            if N >=4 and (C < 8 or H*W > 112*112):
+                self.updat_kernels = convolution.UpdateDirect2(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w)
             elif winograd == 4:
@@ -464,28 +465,29 @@ class ConvLayer(Layer):
         else:
             vec_size = 4 if self.dtype.itemsize == 4 else 8
 
-            self.fprop_kernels = convolution.FpropDirect(
-                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                 pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
+            if N % 64 == 0 and K % vec_size == 0:
+                self.fprop_kernels = convolution.FpropDirect(
+                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
+            else:
+                self.fprop_kernels = convolution.FpropDirect2(
+                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
 
-            if C % vec_size == 0:
+            if N % 64 == 0 and C % vec_size == 0:
                 self.bprop_kernels = convolution.BpropDirect(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
             else:
-                # special kernel for deconv into first layer
-                if relu or bsum:
-                    logger.warning("Small C bprop kernels do not support compound relu or bsum")
-
-                self.bprop_kernels = convolution.BpropDirectSmallC(
+                self.bprop_kernels = convolution.BpropDirect2(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
+                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
 
-            self.updat_kernels = convolution.UpdateDirect(
+            self.updat_kernels = convolution.UpdateDirect2(
                 lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                  pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-        logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
+        #logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
 
 
     def init_activations(self, fprop_out=None):
@@ -804,7 +806,7 @@ class PoolLayer(Layer):
                     _ceil_div(T, str_d) * \
                     _ceil_div(J, str_c)
 
-                print (supW, D*supH, C), sb_params, maxLutSize
+                #print (supW, D*supH, C), sb_params, maxLutSize
 
                 self.bprop_kernel = [bprop_name, (supW, D*supH, C), (threads, 1, 1), _flatten([
                     N, W, H, D, C, WN, HWN, DHWN, magic_H,

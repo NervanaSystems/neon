@@ -1468,7 +1468,7 @@ __global__ void spool_bprop_avg_overlap(
 
 
 @context_dependent_memoize
-def _get_bprop_max_overlap_smallN(clss):
+def _get_bprop_max_overlap_smallN(clss, compute_capability):
 
     code = r"""
 %(common)s
@@ -1655,7 +1655,7 @@ __global__ void spool_bprop_max_overlap_smallN(
     %(atomic_max)s
 }
 """
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("spool_bprop_max_overlap_smallN")
@@ -1664,7 +1664,7 @@ __global__ void spool_bprop_max_overlap_smallN(
 
 
 @context_dependent_memoize
-def _get_bprop_avg_overlap_smallN(clss):
+def _get_bprop_avg_overlap_smallN(clss, compute_capability):
 
     code = r"""
 
@@ -1857,7 +1857,7 @@ __global__ void spool_bprop_avg_overlap_smallN(
 
 }
 """
-    template_vals = prepare_template_vals(clss)
+    template_vals = prepare_template_vals(clss, compute_capability)
     code = code % template_vals
     # f = open("pool.cu", "w")
     # print >>f, code

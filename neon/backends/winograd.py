@@ -64,7 +64,9 @@ def bconv_slice(x, S, Q, padding, strides):
                     firstE = q
                 lastF = s
                 lastE = q
-    return (slice(firstF,lastF+1,strides), slice(firstE,lastE+1,strides), 0)
+    if firstF is None:
+        return (slice(0,0,1), slice(0,0,1), 0)
+    return (slice(firstF,lastF+1,strides), slice(firstE,lastE+1,1), 0)
 
 def xprop_direct(I, F, O, padding, strides, backward=False):
 
