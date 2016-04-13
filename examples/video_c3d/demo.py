@@ -22,7 +22,7 @@ Reference:
 
 Usage:
     python examples/video_c3d/demo.py --data_dir <video_dir>
-                                      --label_index <label_index_file_map>
+                                      --class_ind_file <label_index_file_map>
                                       --model_weights <trained_pickle_file>
 """
 
@@ -38,7 +38,9 @@ from network import create_network
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument('--label_index', help='UCF-101 integer label to string label mapping file.')
+parser.add_argument('--class_ind_file',
+                    help='Path of two column file mapping integer'
+                         'class labels to their canonical names.')
 parser.add_argument('--model_weights', help='Pickle file of trained model weights.')
 args = parser.parse_args(gen_be=False)
 
@@ -64,26 +66,19 @@ model.initialize(dataset=videos)
 
 # read label index file into dictionary
 label_index = {}
-with open(args.label_index) as label_index_file:
+with open(args.class_ind_file) as label_index_file:
     for line in label_index_file:
         index, label = line.split()
         label_index[int(index)-1] = label
-
-if cv2.__version__.startswith('3.'):
-    codec_func = cv2.VideoWriter_fourcc
-    cv_fill = cv2.FILLED
-else:
-    codec_func = cv2.cv.CV_FOURCC
-    cv_fill = cv2.CV_FILLED
 
 
 def print_label_on_image(frame, top_labels):
     labels = [(label_index[index], "{0:.2f}".format(prob)) for (index, prob) in top_labels]
 
-    font = cv2.FONT_HERSHEY_PLAIN
+    font = cv2.FONT_HERSHEY_COMPLEX_SMALL
     rect_color = (0, 0, 0)
     text_color = (255, 255, 255)
-    font_scale = 0.65
+    font_scale = 0.45
     thickness = 1
     start_pt = (10, 10)
     extra_space = (4, 10)
@@ -92,7 +87,7 @@ def print_label_on_image(frame, top_labels):
     label_num = 0
     for label, prob in labels:
         if label_num > 0:
-            font_scale = .45
+            font_scale = .3
         rect_pt = (start_pt[0], start_pt[1] + label_offset)
         text_size = cv2.getTextSize(label, font, font_scale, thickness)[0]
         prob_size = cv2.getTextSize(prob, font, font_scale, thickness)[0]
@@ -101,7 +96,7 @@ def print_label_on_image(frame, top_labels):
         rect_ops_pt = tuple(map(sum, zip(text_top, text_size, extra_space, prob_offset)))
         text_bot = (text_top[0], rect_ops_pt[1] - extra_space[1])
         prob_bot = (text_top[0] + text_size[0] + extra_space[0], text_bot[1])
-        cv2.rectangle(frame, rect_pt, rect_ops_pt, rect_color, thickness=cv_fill)
+        cv2.rectangle(frame, rect_pt, rect_ops_pt, rect_color, thickness=cv2.cv.CV_FILLED)
         cv2.putText(frame, label, text_bot, font, font_scale, text_color, thickness)
         cv2.putText(frame, prob, prob_bot, font, font_scale, text_color, thickness)
         label_offset += rect_ops_pt[1] - rect_pt[1]
@@ -117,8 +112,8 @@ for root, dirs, files in os.walk(os.path.expanduser(args.data_dir)):
     for f in files:
         original_videos.append(os.path.join(root, f))
 
-fourcc = codec_func('D', 'I', 'V', 'X')
-vw = cv2.VideoWriter('output.avi', fourcc, 17, (128, 171))
+codec = cv2.cv.CV_FOURCC('M', 'J', 'P', 'G')
+vw = cv2.VideoWriter('output.avi', codec, 17, (128, 171))
 correct = 0
 batch_num = 0
 
