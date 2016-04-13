@@ -765,9 +765,9 @@ class XpropDirect2(KernelGroup):
 
         super(XpropDirect2, self).__init__(lib, dtype)
 
-        assert N % 4 == 0, "N dim must be multiple of 4"
+        assert N % 4 == 0 or N in (1,2), "N dim must be multiple of 4 or equal to 1 or 2"
 
-        for blockN in (32,16,8,4,):
+        for blockN in (32,16,8,4,2,1):
             if N % blockN == 0:
                 break
 
@@ -780,6 +780,8 @@ class XpropDirect2(KernelGroup):
             16 : ( 0x000, 0,   0x000, 0,   0x102, 1,    3,   4  ), # 1x2  xnn(nn)
             8  : ( 0x000, 0,   0x102, 1,   0x101, 1,    1,   3  ), # 2x2  yxn(nn)
             4  : ( 0x000, 0,   0x102, 1,   0x200, 2,    0,   2  ), # 2x4  yxx(nn)
+            2  : ( 0x000, 0,   0x201, 2,   0x100, 2,    0,   1  ), # 4x4  yyx(xn)
+            1  : ( 0x000, 0,   0x201, 2,   0x100, 3,    0,   0  ), # 4x8  yyx(xx)
         }
         sb_params_out = {
             #blkN:  supM,  supP,  supQ, supN
@@ -787,6 +789,8 @@ class XpropDirect2(KernelGroup):
             16 : ( 0x000, 0x000, 0x104, 15 ), # 1x2  xnnnn
             8  : ( 0x000, 0x104, 0x103,  7 ), # 2x2  yxnnn
             4  : ( 0x000, 0x104, 0x202,  3 ), # 2x4  yxxnn
+            2  : ( 0x000, 0x203, 0x201,  1 ), # 4x4  yyxxn
+            1  : ( 0x000, 0x203, 0x300,  0 ), # 4x8  yyxxx
         }
         superM, shiftM, superP, shiftP, superQ, shiftQ, superN, shiftN = sb_params_in.get(blockN)
         SuperM, SuperP, SuperQ, SuperN = sb_params_out.get(blockN)
@@ -820,8 +824,13 @@ class XpropDirect2(KernelGroup):
 
         grid = (gridM*gridP*gridQ*nk, gridK//k, gridN//n)
 
-        K1 = "" if K % 4 == 0 else "_K1"
-        SN = "" if N >= 32    else "_SN"
+        if K % 4 != 0: K1 = "K1"
+        else:          K1 = ""
+
+        if   N == 1: SN = "_N1"
+        elif N == 2: SN = "_N2"
+        elif N < 32: SN = "_SN"
+        else:        SN = ""
 
         kernel_name = "%s_direct_%s_64x32%s%s" % (self.clss, op, SN, K1)
         self.kernel = [kernel_name, grid, (128,1,1), None, None, None, None, None, None, None, None, None]
@@ -1102,7 +1111,7 @@ class UpdateDirect2(KernelGroup):
             PQkc, Qkc, kc, c, k, magic_PQkc, magic_Qkc, magic_kc, magic_c,
             CTRSK, CTRS, TRS, RS, S, magic_TRS, magic_RS, magic_S,
             superM, superP, superQ, superN, shiftM, shiftP, shiftQ,
-            strideP, strideQ, GP, GQ, GP*GQ,
+            strideP, strideQ, strideP*strideQ, GP, GQ,
             loopX, loopXp, loopQ, loopQp, blockN, blockN*itemsize ]))
 
         self.output_size = (self.determ_size or (self.dtype.type != np.float32 and CTRSK)) * 4
@@ -1149,26 +1158,27 @@ class UpdateDirect2(KernelGroup):
                     depth = (GP / strideP) * (GQ / strideQ) * loopsN
 
                     filters = strideP >= strideQ and \
-                              outputs <= 192 and \
                               blocks  >= block_slots and \
                               depth   >= 8.0
 
-                    # In case we filter out all settings, run though the loops again
-                    # this time looking only at settings that didn't pass.
-                    if small_set or (threshold and filters) or (not threshold and not filters):
+                    # Never allow settings beyond our max scratch size allocation
+                    if outputs <= 192:
+                        # In case we filter out all settings, run though the loops again
+                        # this time looking only at settings that didn't pass.
+                        if small_set or (threshold and filters) or (not threshold and not filters):
 
-                        settings = (strideP, strideQ)
-                        # print settings
-                        self.init(self.params, autotune=settings)
-                        self.bind_params(I, E, O, 1.0)
-                        start.record(stream=self.lib.stream)
-                        self.execute(repeat=2, unbind=False)
-                        stop.record(stream=self.lib.stream)
-                        stop.synchronize()
-                        msecs = stop.time_since(start) / 2.0
-                        results.append((msecs, settings))
-                    # else:
-                    #     print strideP, strideQ, blocks, round(depth,1)
+                            settings = (strideP, strideQ)
+                            #print settings
+                            self.init(self.params, autotune=settings)
+                            self.bind_params(I, E, O, 1.0)
+                            start.record(stream=self.lib.stream)
+                            self.execute(repeat=2, unbind=False)
+                            stop.record(stream=self.lib.stream)
+                            stop.synchronize()
+                            msecs = stop.time_since(start) / 2.0
+                            results.append((msecs, settings))
+                        # else:
+                        #     print strideP, strideQ, blocks, round(depth,1)
 
             # if we got any results, no need to disable the filter
             if len(results) > 0:

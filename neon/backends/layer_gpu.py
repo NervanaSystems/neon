@@ -483,9 +483,10 @@ class ConvLayer(Layer):
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
 
-            self.updat_kernels = convolution.UpdateDirect2(
-                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                 pad_d, pad_h, pad_w, str_d, str_h, str_w)
+            if N >= 4:
+                self.updat_kernels = convolution.UpdateDirect2(
+                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
         #logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
 

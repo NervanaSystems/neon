@@ -790,7 +790,9 @@ class NervanaGPU(Backend):
             size += 128 - (size & 127)
 
         if size > self.scratch_size:
-            raise RuntimeError("nervanagpu.scratch_size(%d) is too small for this operation." % self.scratch_size)
+            raise RuntimeError(
+                "nervanagpu.scratch_size(%d) is too small for this operation(%d)" % (
+                    self.scratch_size, size))
 
         self.scratch_offset = size
 
@@ -802,7 +804,9 @@ class NervanaGPU(Backend):
             size += 128 - (size & 127)
 
         if size + self.scratch_offset > self.scratch_size:
-            raise RuntimeError("nervanagpu.scratch_size(%d) is too small for this operation." % self.scratch_size)
+            raise RuntimeError(
+                "nervanagpu.scratch_size(%d) is too small for this operation(%d)" % (
+                    self.scratch_size, size))
 
         data = int(_get_scratch_data(self.scratch_size)) + self.scratch_offset
         self.scratch_offset += size

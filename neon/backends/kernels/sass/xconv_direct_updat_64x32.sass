@@ -96,9 +96,9 @@ sub output_op   { return $determ ? 'STG.E.CG' : 'RED.E.ADD.F32.FTZ.RN'; }
     param_shiftQ       : c[0x0][0x22c]
     param_strideP      : c[0x0][0x230]
     param_strideQ      : c[0x0][0x234]
-    param_gridP        : c[0x0][0x238]
-    param_gridQ        : c[0x0][0x23c]
-    param_gridPQ       : c[0x0][0x240]
+    param_stridePQ     : c[0x0][0x238]
+    param_gridP        : c[0x0][0x23c]
+    param_gridQ        : c[0x0][0x240]
     param_loopX        : c[0x0][0x244]
     param_loopXp       : c[0x0][0x248]
     param_loopQ        : c[0x0][0x24c]
@@ -881,8 +881,8 @@ FINISH_LOOP:
     return $determ ? q{
 // idx_MPQ = idx_M * grid_PQ + idx_P * grid_Q + idx_Q
 // trackF += idx_MPQ * CRSTK
---:-:-:-:1      XMAD      idx_MPQ, start_P, param_gridQ, start_Q;
---:-:-:-:1      XMAD.LO2C idx_MPQ, idx_M,  param_gridPQ, idx_MPQ;
+--:-:-:-:1      XMAD      idx_MPQ, start_P, param_strideQ, start_Q;
+--:-:-:-:1      XMAD.LO2C idx_MPQ, idx_M,  param_stridePQ, idx_MPQ;
 --:-:-:-:1      XMAD.LO   tf, idx_MPQ, param_CTRSK, tf, xmad_determ;
     } : '';
 +]

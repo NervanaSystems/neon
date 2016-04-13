@@ -14,23 +14,34 @@
 # limitations under the License.
 
 [-
-our $type;
-our $dtype        = $type eq 'h' ?        '.U16' : '';
-our $convert_in   = $type eq 'h' ? 'F2F.F32.F16' : '';
-our $convert_out  = $type eq 'h' ? 'F2F.F16.F32' : '';
-our $vec_size     = $type eq 'h' ?          '64' : '128';
-our $dtype_shift  = $type eq 'h' ?           '1' : '2';
-our $dtype_size   = $type eq 'h' ?           '2' : '4';
-sub dtype       { return $dtype;       }
-sub dtype_shift { return $dtype_shift; }
-sub vec_size    { return $vec_size; }
+    our ($type, $SN, $N2, $N1);
+    our $LN = !($SN || $N2 || $N1);
+    our $dtype        = $type eq 'h' ?        '.U16' : '';
+    our $convert_in   = $type eq 'h' ? 'F2F.F32.F16' : '';
+    our $convert_out  = $type eq 'h' ? 'F2F.F16.F32' : '';
+    our $vec_size     = $type eq 'h' ?          '64' : '128';
+    our $dtype_shift  = $type eq 'h' ?           '1' : '2';
+    our $dtype_size   = $type eq 'h' ?           '2' : '4';
+    our $slice_scale  = $N1 ? 4 : $N2 ? 3 : 2;
+    our $slice_offset = 1 << $slice_scale;
+    our $slice_load   = 8 << $slice_scale;
+    sub dtype       { return $dtype;       }
+    sub dtype_shift { return $dtype_shift; }
+    sub vec_size    { return $vec_size; }
+    our $vec_sizeI;
+    if ($type eq 'h')
+        { $vec_sizeI = $N1 ? 'U16' : $N2 ? '32' : '64';  }
+    else
+        { $vec_sizeI = $N1 ? '32'  : $N2 ? '64' : '128'; }
 -]
 
 <CONSTANT_MAPPING>
 
     addr_zero  : 4x<(32 + 64)*32*2>
     addr_szLut : 4x<(32 + 64)*32*2 + 4>
+    addr_lut4  : 4x<(32 + 64)*32*2 + 4>
     addr_lut   : 4x<(32 + 64)*32*2 + 6>
+
     szShareF   : (64*32)
     szShareI   : (32*32)
 
@@ -135,14 +146,32 @@ sub vec_size    { return $vec_size; }
 
       64-83 ~ tidY, m, p, q, negOne, trs, lutStore2, lut_size, warp_count, warp_inc, neg_RS, neg_S, dep_thd_mask, qs, pr, mt, neg_str_w, neg_str_h, neg_str_d
 
-     84-131 ~ idx_MPQnk, idx_PQnk, idx_Qnk, idx_nk, idx_n, idx_k, magic_PQnk, magic_Qnk, neg_PQnk, neg_Qnk, neg_nk, neg_k, div1, div2, div3, idx_P2, idx_Q2, x1, x2, super_m, super_p, super_q, super_n, tid1, tid3, tid7, tid8, tid31, tid32, tidX, k<0|1|2|3>, sb, warp_mask, mask_shr, shiftSB, maskSB
+     84-131 ~ idx_MPQnk, idx_PQnk, idx_Qnk, idx_nk, idx_n, idx_k, magic_PQnk, magic_Qnk, neg_PQnk, neg_Qnk, neg_nk, neg_k, div1, div2, div3, idx_P2, idx_Q2, super_m, super_p, super_q, super_n, tid1, tid3, tid7, tid8, tid31, tid32, tidX, k<0|1|2|3>, sb, warp_mask, mask_shr, shiftSB, maskSB, q<1|2|3>
 
-     84-131 ~ rs, t, r, s, z, y, x, z_prime, y_prime, x_prime, lutStore, ballot, warp_slices, dep_thd_bits, dep_thd_cnt, tidY1
+     84-131 ~ rs, t, r, s, z, y, x, x<1|2|3>, z_prime, y_prime, x_prime, x_prime<1|2|3>, z_mod, y_mod, x_mod, x_mod<1|2|3>, lutStore, ballot, warp_slices, dep_thd_bits, dep_thd_cnt, tidY1
 
-    132-133 : sliceI, sliceF
-    132-133 : sliceIF<0-1>
-    132-135 : sliceI0, sliceF0, sliceI1, sliceF1
-    132-135 : slice0IF<0-1>, slice1IF<0-1>
+[+
+    our ($SN, $N2, $N1);
+    return $N1 ? q{
+        132-135 : slice0I<0-3>
+        168-171 : slice1I<0-3>
+        172-183 : track0I<2-3>, track0I<4-5>, track0I<6-7>, track1I<2-3>, track1I<4-5>, track1I<6-7>
+        184-185 ~ predsI
+
+    } : $N2 ? q{
+        132-135 : slice0I<0-1>, slice1I<0-1>
+        168-171 : track0I<2-3>, track1I<2-3>
+
+    } : $SN ? q{
+        132-135 ~ slice0I, slice1I
+
+    } : q{
+        132-133 : sliceI, sliceF
+        132-133 : sliceIF<0-1>
+        132-135 : sliceI0, sliceF0, sliceI1, sliceF1
+        132-135 : slice0IF<0-1>, slice1IF<0-1>
+    };
++]
 
     136-151 ~ posCTRS, endCTRS, endCTRS32, lutSize, lutSizeRcp, lutSizeM1, posCTRSf, channel, lutOffset0, lutOffset1, offsetIc0, offsetIc1, offsetFc0, offsetFc1, partial
     152-167 ~ tid, idx_K, idx_M, idx_P, idx_Q, idx_N, k, n, writeFs, writeIs, readFs, readIs, swapBuf, writeOs, preds, sb_offset
@@ -234,10 +263,10 @@ sub vec_size    { return $vec_size; }
 //     idx_Q  = idx_Q2 >> 1
 --:-:-:-:1      ISETP.NE.AND P1, PT, idx_P2, param_gridP2, PT;
 --:-:-:-:1      SHL idx_P, idx_P2, 1;
---:-:-:-:1  @P1 LOP.AND x1, idx_Q2, 1;
---:-:-:-:1  @P1 BFE.U32 x2, idx_Q2, 0x101; // 1 bit at position 1
---:-:-:-:1  @P1 LOP.XOR x1, x1, x2;
---:-:-:-:1  @P1 IADD idx_P, idx_P, x1;
+--:-:-:-:1  @P1 LOP.AND q1, idx_Q2, 1;
+--:-:-:-:1  @P1 BFE.U32 q2, idx_Q2, 0x101; // 1 bit at position 1
+--:-:-:-:1  @P1 LOP.XOR q1, q1, q2;
+--:-:-:-:1  @P1 IADD idx_P, idx_P, q1;
 --:-:-:-:1  @P1 SHR.U32 idx_Q, idx_Q2, 1;
 --:-:-:-:1 @!P1 MOV idx_Q, idx_Q2;
 
@@ -316,12 +345,78 @@ sub vec_size    { return $vec_size; }
 +]
 
 [+
-    our $SN;
-    return $SN ? q{
+    our ($SN, $N2, $N1);
+    return $N1 ? q{
 --:-:-:-:1      SHL m, idx_M, param_shiftM;
 --:-:-:-:1      SHL p, idx_P, param_shiftP;
 --:-:-:-:1      SHL q, idx_Q, param_shiftQ;
-08:-:-:-:1      SHL n, idx_N, param_shiftN;
+
+--:-:-:-:1      BFE.U32 super_m, tid7, param_superM;
+--:-:-:-:1      BFE.U32 super_p, tid7, param_superP;
+--:-:-:-:1      BFE.U32 super_q, tid7, param_superQ;
+
+--:-:-:-:1      IADD m, m, super_m;
+--:-:-:-:1      IADD p, p, super_p;
+--:-:-:-:1      ISCADD  q, super_q, q, 2;
+--:-:-:-:1      IADD q1, q, 1;
+--:-:-:-:1      IADD q2, q, 2;
+--:-:-:-:1      IADD q3, q, 3;
+
+--:-:-:-:1      ISETP.LT.AND P4, PT, m,  param_M, PT;
+--:-:-:-:1      ISETP.LT.AND P4, PT, p,  param_P, P4;
+--:-:-:-:1      ISETP.LT.AND P0, PT, q,  param_Q, P4;
+--:-:-:-:1      ISETP.LT.AND P1, PT, q1, param_Q, P4;
+--:-:-:-:1      ISETP.LT.AND P2, PT, q2, param_Q, P4;
+--:-:-:-:1      ISETP.LT.AND P3, PT, q3, param_Q, P4;
+--:-:-:-:1      P2R predsI, PR, RZ, 0x0f;
+
+// warp_count = 16
+// warp_inc = 16
+// trs = tid3
+--:-:-:-:1      MOV warp_count, 16;
+--:-:-:-:1      MOV warp_inc,   16;
+--:-:-:-:1      MOV trs, tid3;
+// compute shared memory super-block offset into the lookup table
+// sb_offset = tid7 * TRS * 4 * 4
+--:-:-:-:1      XMAD sb_offset, tid7, param_TRS, RZ;
+--:-:-:-:1      SHL  sb_offset, sb_offset, 4;
+
+    } : $N2 ? q{
+
+--:-:-:-:1      SHL m, idx_M, param_shiftM;
+--:-:-:-:1      SHL p, idx_P, param_shiftP;
+--:-:-:-:1      SHL q, idx_Q, param_shiftQ;
+
+--:-:-:-:1      BFE.U32 super_m, tid7, param_superM;
+--:-:-:-:1      BFE.U32 super_p, tid7, param_superP;
+--:-:-:-:1      BFE.U32 super_q, tid7, param_superQ;
+
+--:-:-:-:1      IADD m, m, super_m;
+--:-:-:-:1      IADD p, p, super_p;
+--:-:-:-:1      ISCADD  q, super_q, q, 1;
+--:-:-:-:1      IADD q1, q, 1;
+
+--:-:-:-:1      ISETP.LT.AND P4, PT, m,  param_M, PT;
+--:-:-:-:1      ISETP.LT.AND P4, PT, p,  param_P, P4;
+--:-:-:-:1      ISETP.LT.AND P2, PT, q,  param_Q, P4;
+--:-:-:-:1      ISETP.LT.AND P3, PT, q1, param_Q, P4;
+
+// warp_count = 16
+// warp_inc = 16
+// trs = tid3
+--:-:-:-:1      MOV warp_count, 16;
+--:-:-:-:1      MOV warp_inc,   16;
+--:-:-:-:1      MOV trs, tid3;
+// compute shared memory super-block offset into the lookup table
+// sb_offset = tid7 * TRS * 4 * 2
+--:-:-:-:1      XMAD sb_offset, tid7, param_TRS, RZ;
+--:-:-:-:1      SHL  sb_offset, sb_offset, 3;
+
+    } : $SN ? q{
+--:-:-:-:1      SHL m, idx_M, param_shiftM;
+--:-:-:-:1      SHL p, idx_P, param_shiftP;
+--:-:-:-:1      SHL q, idx_Q, param_shiftQ;
+--:-:-:-:1      SHL n, idx_N, param_shiftN;
 
 --:-:-:-:1      BFE.U32 super_m, tid7, param_superM;
 --:-:-:-:1      BFE.U32 super_p, tid7, param_superP;
@@ -339,7 +434,7 @@ sub vec_size    { return $vec_size; }
 --:-:-:-:1      ISETP.LT.AND P0, PT, n, param_N, P0;
 --:-:-:-:1      PSETP.AND.AND P4, PT, P0, P1, P2;
 
-// sb = tid7 >> (shiftN - 2): 2,4,8
+// sb = tid7 >> (shiftN - 2): 0-1,0-3,0-7
 --:-:-:-:1      MOV  shiftSB, param_shiftN;
 --:-:-:-:1      IADD shiftSB, shiftSB, -2;
 --:-:-:-:1      SHR.U32 sb, tid7, shiftSB;
@@ -355,13 +450,13 @@ sub vec_size    { return $vec_size; }
 --:-:-:-:1      LOP.AND maskSB, tid7, maskSB;
 --:-:-:-:1      SHL  trs, tid3, shiftSB;
 --:-:-:-:1      IADD trs, trs,  maskSB;
-// compute shared memory super-block offset int the lookup table
+// compute shared memory super-block offset into the lookup table
 // sb_offset = sb * TRS * 4
 --:-:-:-:1      XMAD sb_offset, sb, param_TRS, RZ;
 --:-:-:-:1      SHL  sb_offset, sb_offset, 2;
 
     } : q{
-08:-:-:-:1      SHL n, idx_N, 5;
+--:-:-:-:1      SHL n, idx_N, 5;
 --:-:-:-:1      ISCADD n, tid7, n, 2;
 --:-:-:-:1      ISETP.LT.AND P4, PT, n, param_N, PT;
 
@@ -382,8 +477,8 @@ sub vec_size    { return $vec_size; }
 --:-:-:-:1      IADD neg_S,  RZ, -param_S;
 
 [+
-    our ($SN, $prop);
-    my ($m, $p, $q) = $SN ? qw(m p q) : qw(idx_M idx_P idx_Q);
+    our ($LN, $prop);
+    my ($m, $p, $q) = $LN ? qw(idx_M idx_P idx_Q) : qw(m p q);
     return $prop eq 'f' ? qq{
 // mt = m * str_d - pad_d
 // pr = p * str_h - pad_h
@@ -410,17 +505,17 @@ sub vec_size    { return $vec_size; }
 </SCHEDULE_BLOCK>
 
 [+
-    our $SN; return $SN ? '' : q{
+    our $LN; return $LN ? q{
 --:-:-:-:5  @P6 BRA.U END_SETUP;
-    };
+    } : '';
 +]
 
 LUT_LOOP:
 
 <SCHEDULE_BLOCK>
 // warp synchronous loop while warp_count < RST
---:-:-:-:1      ISETP.LT.AND P0, PT, warp_count, param_TRS, PT;
---:-:-:-:1      ISETP.LT.AND P2, PT, trs, param_TRS, PT;
+--:-:-:-:1      ISETP.LT.AND P6, PT, warp_count, param_TRS, PT;
+--:-:-:-:1      ISETP.LT.AND P5, PT, trs, param_TRS, PT;
 
 --:-:-:-:1      IADD warp_count, warp_count, warp_inc;
 // t =  trs / RS
@@ -435,19 +530,322 @@ LUT_LOOP:
 --:-:-:-:1      XMAD.U16.S16 s,  r, neg_S, rs;
 
 [+
-    our $prop;
-    return $prop eq 'f' ? q{
+    our ($SN, $N2, $N1, $prop);
+    if ($prop eq 'f')
+    {
+        return $N1 ? q{
 // x = qs + s
 // y = pr + r
 // z = mt + t
 --:-:-:-:1      IADD z, mt, t;
 --:-:-:-:1      IADD y, pr, r;
 --:-:-:-:1      IADD x, qs, s;
+--:-:-:-:1      IADD x1, x,  param_str_w;
+--:-:-:-:1      IADD x2, x1, param_str_w;
+--:-:-:-:1      IADD x3, x2, param_str_w;
 
---:-:-:-:1      ISETP.GE.AND  P3, PT, z, RZ, PT;
---:-:-:-:1      ISETP.GE.AND  P5, PT, y, RZ, PT;
---:-:-:-:1      ISETP.GE.AND  P6, PT, x, RZ, P2;
-    } : q{
+--:-:-:-:1      ISETP.GE.AND  P0, PT, z, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, y, RZ, PT;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, z, param_D, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, y, param_H, P1;
+--:-:-:-:1      PSETP.AND.AND P4, PT, P0, P1, P5;
+--:-:-:-:1  @P4 R2P PR, predsI, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ,    0x0f;
+--:-:-:-:1      ISETP.GE.AND  P0, PT, x,  RZ, P0;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, x1, RZ, P1;
+--:-:-:-:1      ISETP.GE.AND  P2, PT, x2, RZ, P2;
+--:-:-:-:1      ISETP.GE.AND  P3, PT, x3, RZ, P3;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, x,  param_W, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, x1, param_W, P1;
+--:-:-:-:1      ISETP.LT.AND  P2, PT, x2, param_W, P2;
+--:-:-:-:1      ISETP.LT.AND  P3, PT, x3, param_W, P3;
+
+// sliceI = z*HWN + y*WN + x
+01:-:-:-:1      XMAD.LO2C slice0I0, z, param_HWN, x;
+--:-:-:-:1      XMAD.LO2C slice0I0, y, param_WN,  slice0I0;
+--:-:-:-:1      IADD slice0I1, slice0I0, param_str_w;
+--:-:-:-:1      IADD slice0I2, slice0I1, param_str_w;
+--:-:-:-:1      IADD slice0I3, slice0I2, param_str_w;
+<ORDERED>
+--:-:-:-:1 @!P0 MOV slice0I0, -1;
+--:-:-:-:1 @!P1 MOV slice0I1, -1;
+--:-:-:-:1 @!P2 MOV slice0I2, -1;
+--:-:-:-:1 @!P3 MOV slice0I3, -1;
+--:-:-:-:1      ISCADD lutStore, trs, sb_offset, 4;
+--:-:-:-:1      IADD trs, trs, warp_inc;
+</ORDERED>
+--:1:-:-:1  @P5 STS.128 [lutStore + addr_lut4], slice0I;
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5  @P6 BRA.U LUT_LOOP;
+
+        } : $N2 ? q{
+
+--:-:-:-:1      IADD z, mt, t;
+--:-:-:-:1      IADD y, pr, r;
+--:-:-:-:1      IADD x, qs, s;
+--:-:-:-:1      IADD x1, x, param_str_w;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, z, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, y, RZ, P5;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, z, param_D, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, y, param_H, P1;
+--:-:-:-:1      PSETP.AND.AND P4, PT, P0, P1, P3;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P1, P2;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, x,  RZ, P0;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, x1, RZ, P4;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, x,  param_W, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, x1, param_W, P1;
+
+// sliceI = z*HWN + y*WN + x*2
+01:-:-:-:1      XMAD.LO2C slice0I0, z, param_HWN, RZ;
+--:-:-:-:1      XMAD.LO2C slice0I0, y, param_WN,  slice0I0;
+--:-:-:-:1      ISCADD slice0I1, x1, slice0I0, 1;
+--:-:-:-:1      ISCADD slice0I0, x,  slice0I0, 1;
+<ORDERED>
+--:-:-:-:1 @!P0 MOV slice0I0, -1;
+--:-:-:-:1 @!P1 MOV slice0I1, -1;
+--:-:-:-:1      ISCADD lutStore, trs, sb_offset, 3;
+--:-:-:-:1      IADD trs, trs, warp_inc;
+</ORDERED>
+--:1:-:-:1  @P5 STS.64 [lutStore + addr_lut4], slice0I;
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5  @P6 BRA.U LUT_LOOP;
+
+        } : $SN ? q{
+
+--:-:-:-:1      IADD z, mt, t;
+--:-:-:-:1      IADD y, pr, r;
+--:-:-:-:1      IADD x, qs, s;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, z, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, y, RZ, P4;
+--:-:-:-:1      ISETP.GE.AND  P2, PT, x, RZ, P5;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, z, param_D, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, y, param_H, P1;
+--:-:-:-:1      ISETP.LT.AND  P2, PT, x, param_W, P2;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P1, P2;
+
+// sliceI = z*HWN + y*WN + x*N
+01:-:-:-:1      XMAD.LO2C slice0I, z, param_HWN, RZ;
+--:-:-:-:1      XMAD.LO2C slice0I, y, param_WN,  slice0I;
+--:-:-:-:1      XMAD      slice0I, x, param_N,   slice0I;
+
+<ORDERED>
+--:-:-:-:1 @!P0 MOV slice0I, -1;
+--:-:-:-:1      ISCADD lutStore, trs, sb_offset, 2;
+--:-:-:-:1      IADD trs, trs, warp_inc;
+</ORDERED>
+
+--:1:-:-:1  @P5 STS [lutStore + addr_lut4], slice0I;
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5  @P6 BRA.U LUT_LOOP;
+
+        } : q{
+
+--:-:-:-:1      IADD z, mt, t;
+--:-:-:-:1      IADD y, pr, r;
+--:-:-:-:1      IADD x, qs, s;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, z, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, y, RZ, P4;
+--:-:-:-:1      ISETP.GE.AND  P2, PT, x, RZ, P5;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, z, param_D, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, y, param_H, P1;
+--:-:-:-:1      ISETP.LT.AND  P2, PT, x, param_W, P2;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P1, P2;
+
+<ORDERED>
+// sliceI = z*HWN + y*WN + x*N
+01:-:-:-:1      XMAD.LO2C sliceI, z, param_HWN, RZ;
+--:-:-:-:1      XMAD.LO2C sliceI, y, param_WN,  sliceI;
+--:-:-:-:1      XMAD      sliceI, x, param_N,   sliceI;
+// sliceF = trs * K
+--:-:-:-:1      XMAD sliceF, trs, param_K, RZ;
+</ORDERED>
+
+<ORDERED>
+// Get a mask of all valid slices in the warp
+--:-:-:-:1      VOTE.ANY ballot, PT, P0;
+// Count the total valid slices
+--:-:2:-:1      POPC warp_slices, ballot;
+// Prepare lutStore for this and next loop
+--:-:-:-:1  @P0 MOV    lutStore, lutStore2;
+02:-:-:-:1      ISCADD lutStore2, warp_slices, lutStore2, 3;
+// Count all the valid slices below this threadid
+--:-:-:-:1  @P0 LOP.AND dep_thd_bits, dep_thd_mask, ballot;
+--:-:3:-:1  @P0 POPC dep_thd_cnt, dep_thd_bits;
+// use the trs increment to space the barrier sync
+--:-:-:-:1      IADD trs, trs, warp_inc;
+// Update the lutStore address from this count
+04:-:-:-:1  @P0 ISCADD lutStore, dep_thd_cnt, lutStore, 3;
+// Store both slice offsets in the lut
+--:1:-:-:1  @P0 STS.64 [lutStore + addr_lut], sliceIF;
+</ORDERED>
+// Keep track of the total size of the lut
+--:-:-:-:1      IADD lut_size, lut_size, warp_slices;
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5  @P6 BRA.U LUT_LOOP;
+
+// Share the lut size with the other warp
+--:1:-:-:2      STS [addr_szLut], lut_size;
+        };
+    }
+    else  # bprop
+    {
+        return $N1 ? q{
+
+// x_prime = qs + s
+// y_prime = pr + r
+// z_prime = mt + t
+--:-:-:-:1      IADD z_prime, mt, t;
+--:-:-:-:1      IADD y_prime, pr, r;
+--:-:-:-:1      IADD x_prime, qs, s;
+--:-:-:-:1      IADD3 x_prime1, qs, 1, s;
+--:-:-:-:1      IADD3 x_prime2, qs, 2, s;
+--:-:-:-:1      IADD3 x_prime3, qs, 3, s;
+
+// z     = z_prime / str_d
+// z_mod = z_prime % str_d
+--:-:-:-:1      XMAD    z, z_prime, param_magic_str_d, RZ;
+--:-:-:-:1      SHR.U32 z, z,       param_shift_str_d;
+--:-:-:-:1      XMAD.U16.S16 z_mod, z, neg_str_d, z_prime;
+// y     = y_prime / str_h
+// y_mod = y_prime % str_h
+--:-:-:-:1      XMAD    y, y_prime, param_magic_str_h, RZ;
+--:-:-:-:1      SHR.U32 y, y,       param_shift_str_h;
+--:-:-:-:1      XMAD.U16.S16 y_mod, y, neg_str_h, y_prime;
+// x     = x_prime / str_w
+// x_mod = x_prime % str_w
+--:-:-:-:1      XMAD    x, x_prime, param_magic_str_w, RZ;
+--:-:-:-:1      SHR.U32 x, x,       param_shift_str_w;
+--:-:-:-:1      XMAD.U16.S16 x_mod, x, neg_str_w, x_prime;
+
+--:-:-:-:1      XMAD    x1, x_prime1, param_magic_str_w, RZ;
+--:-:-:-:1      SHR.U32 x1, x1,       param_shift_str_w;
+--:-:-:-:1      XMAD.U16.S16 x_mod1, x1, neg_str_w, x_prime1;
+
+--:-:-:-:1      XMAD    x2, x_prime2, param_magic_str_w, RZ;
+--:-:-:-:1      SHR.U32 x2, x2,       param_shift_str_w;
+--:-:-:-:1      XMAD.U16.S16 x_mod2, x2, neg_str_w, x_prime2;
+
+--:-:-:-:1      XMAD    x3, x_prime3, param_magic_str_w, RZ;
+--:-:-:-:1      SHR.U32 x3, x3,       param_shift_str_w;
+--:-:-:-:1      XMAD.U16.S16 x_mod3, x3, neg_str_w, x_prime3;
+
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, z_prime, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, y_prime, RZ, PT;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, z, param_D, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, y, param_H, P1;
+--:-:-:-:1      ISETP.EQ.AND  P0, PT, z_mod, RZ, P0;
+--:-:-:-:1      ISETP.EQ.AND  P1, PT, y_mod, RZ, P1;
+--:-:-:-:1      PSETP.AND.AND P4, PT, P0, P1, P5;
+--:-:-:-:1  @P4 R2P PR, predsI, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ,     0x0f;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, x_prime,  RZ, P0;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, x_prime1, RZ, P1;
+--:-:-:-:1      ISETP.GE.AND  P2, PT, x_prime2, RZ, P2;
+--:-:-:-:1      ISETP.GE.AND  P3, PT, x_prime3, RZ, P3;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, x,  param_W, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, x1, param_W, P1;
+--:-:-:-:1      ISETP.LT.AND  P2, PT, x2, param_W, P2;
+--:-:-:-:1      ISETP.LT.AND  P3, PT, x3, param_W, P3;
+--:-:-:-:1      ISETP.EQ.AND  P0, PT, x_mod,  RZ, P0;
+--:-:-:-:1      ISETP.EQ.AND  P1, PT, x_mod1, RZ, P1;
+--:-:-:-:1      ISETP.EQ.AND  P2, PT, x_mod2, RZ, P2;
+--:-:-:-:1      ISETP.EQ.AND  P3, PT, x_mod3, RZ, P3;
+
+// sliceI = z*HWN + y*WN + x
+01:-:-:-:1      XMAD.LO2C slice0I0, z, param_HWN, RZ;
+--:-:-:-:1      XMAD.LO2C slice0I0, y, param_WN,  slice0I0;
+--:-:-:-:1      IADD slice0I1, slice0I0, x1;
+--:-:-:-:1      IADD slice0I2, slice0I0, x2;
+--:-:-:-:1      IADD slice0I3, slice0I0, x3;
+--:-:-:-:1      IADD slice0I0, slice0I0, x;
+<ORDERED>
+--:-:-:-:1 @!P0 MOV slice0I0, -1;
+--:-:-:-:1 @!P1 MOV slice0I1, -1;
+--:-:-:-:1 @!P2 MOV slice0I2, -1;
+--:-:-:-:1 @!P3 MOV slice0I3, -1;
+--:-:-:-:1      ISCADD lutStore, trs, sb_offset, 4;
+--:-:-:-:1      IADD trs, trs, warp_inc;
+</ORDERED>
+--:1:-:-:1  @P5 STS.128 [lutStore + addr_lut4], slice0I;
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5  @P6 BRA.U LUT_LOOP;
+
+        } : $N2 ? q{
+
+// x_prime = qs + s
+// y_prime = pr + r
+// z_prime = mt + t
+--:-:-:-:1      IADD z_prime, mt, t;
+--:-:-:-:1      IADD y_prime, pr, r;
+--:-:-:-:1      IADD x_prime, qs, s;
+--:-:-:-:1      IADD3 x_prime1, qs, 1, s;
+--:-:-:-:1      IADD3 x_prime2, qs, 2, s;
+--:-:-:-:1      IADD3 x_prime3, qs, 3, s;
+
+// z     = z_prime / str_d
+// z_mod = z_prime % str_d
+--:-:-:-:1      XMAD    z, z_prime, param_magic_str_d, RZ;
+--:-:-:-:1      SHR.U32 z, z,       param_shift_str_d;
+--:-:-:-:1      XMAD.U16.S16 z_mod, z, neg_str_d, z_prime;
+// y     = y_prime / str_h
+// y_mod = y_prime % str_h
+--:-:-:-:1      XMAD    y, y_prime, param_magic_str_h, RZ;
+--:-:-:-:1      SHR.U32 y, y,       param_shift_str_h;
+--:-:-:-:1      XMAD.U16.S16 y_mod, y, neg_str_h, y_prime;
+// x     = x_prime / str_w
+// x_mod = x_prime % str_w
+--:-:-:-:1      XMAD    x, x_prime, param_magic_str_w, RZ;
+--:-:-:-:1      SHR.U32 x, x,       param_shift_str_w;
+--:-:-:-:1      XMAD.U16.S16 x_mod, x, neg_str_w, x_prime;
+
+--:-:-:-:1      XMAD    x1, x_prime1, param_magic_str_w, RZ;
+--:-:-:-:1      SHR.U32 x1, x1,       param_shift_str_w;
+--:-:-:-:1      XMAD.U16.S16 x_mod1, x1, neg_str_w, x_prime1;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, z_prime, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, y_prime, RZ, PT;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, z, param_D, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, y, param_H, P1;
+--:-:-:-:1      ISETP.EQ.AND  P0, PT, z_mod, RZ, P0;
+--:-:-:-:1      ISETP.EQ.AND  P1, PT, y_mod, RZ, P1;
+--:-:-:-:1      PSETP.AND.AND P4, PT, P0, P1, P3;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P1, P2;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, x_prime,  RZ, P0;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, x_prime1, RZ, P4;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, x,  param_W, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, x1, param_W, P1;
+--:-:-:-:1      ISETP.EQ.AND  P0, PT, x_mod,  RZ, P0;
+--:-:-:-:1      ISETP.EQ.AND  P1, PT, x_mod1, RZ, P1;
+
+// sliceI = z*HWN + y*WN + x*2
+01:-:-:-:1      XMAD.LO2C slice0I0, z, param_HWN, RZ;
+--:-:-:-:1      XMAD.LO2C slice0I0, y, param_WN,  slice0I0;
+--:-:-:-:1      ISCADD slice0I1, x1, slice0I0, 1;
+--:-:-:-:1      ISCADD slice0I0, x,  slice0I0, 1;
+<ORDERED>
+--:-:-:-:1 @!P0 MOV slice0I0, -1;
+--:-:-:-:1 @!P1 MOV slice0I1, -1;
+--:-:-:-:1      ISCADD lutStore, trs, sb_offset, 3;
+--:-:-:-:1      IADD trs, trs, warp_inc;
+</ORDERED>
+--:1:-:-:1  @P5 STS.64 [lutStore + addr_lut4], slice0I;
+</SCHEDULE_BLOCK>
+
+--:-:-:-:5  @P6 BRA.U LUT_LOOP;
+
+        } : $SN ? q{
 // x_prime = qs + s
 // y_prime = pr + r
 // z_prime = mt + t
@@ -455,9 +853,9 @@ LUT_LOOP:
 --:-:-:-:1      IADD y_prime, pr, r;
 --:-:-:-:1      IADD x_prime, qs, s;
 
---:-:-:-:1      ISETP.GE.AND  P3, PT, z_prime, RZ, PT;
---:-:-:-:1      ISETP.GE.AND  P5, PT, y_prime, RZ, PT;
---:-:-:-:1      ISETP.GE.AND  P6, PT, x_prime, RZ, P2;
+--:-:-:-:1      ISETP.GE.AND  P0, PT, z_prime, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, y_prime, RZ, P4;
+--:-:-:-:1      ISETP.GE.AND  P2, PT, x_prime, RZ, P5;
 
 // z       = z_prime / str_d
 // z_prime = z_prime % str_d
@@ -475,37 +873,66 @@ LUT_LOOP:
 --:-:-:-:1      SHR.U32 x, x,       param_shift_str_w;
 --:-:-:-:1      XMAD.U16.S16 x_prime, x, neg_str_w, x_prime;
 
---:-:-:-:1      ISETP.EQ.AND  P3, PT, z_prime, RZ, P3;
---:-:-:-:1      ISETP.EQ.AND  P5, PT, y_prime, RZ, P5;
---:-:-:-:1      ISETP.EQ.AND  P6, PT, x_prime, RZ, P6;
-    };
-+]
---:-:-:-:1      ISETP.LT.AND  P3, PT, z, param_D, P3;
---:-:-:-:1      ISETP.LT.AND  P5, PT, y, param_H, P5;
---:-:-:-:1      ISETP.LT.AND  P6, PT, x, param_W, P6;
---:-:-:-:1      PSETP.AND.AND P1, PT, P3, P5, P6;
-
-[+
-    our $SN;
-    return $SN ? q{
+--:-:-:-:1      ISETP.EQ.AND  P0, PT, z_prime, RZ, P0;
+--:-:-:-:1      ISETP.EQ.AND  P1, PT, y_prime, RZ, P1;
+--:-:-:-:1      ISETP.EQ.AND  P2, PT, x_prime, RZ, P2;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, z, param_D, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, y, param_H, P1;
+--:-:-:-:1      ISETP.LT.AND  P2, PT, x, param_W, P2;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P1, P2;
 
 // sliceI = z*HWN + y*WN + x*N
-01:-:-:-:1  @P2 XMAD.LO2C sliceI, z, param_HWN, RZ;
---:-:-:-:1  @P2 XMAD.LO2C sliceI, y, param_WN,  sliceI;
---:-:-:-:1  @P2 XMAD      sliceI, x, param_N,   sliceI;
+01:-:-:-:1      XMAD.LO2C slice0I, z, param_HWN, RZ;
+--:-:-:-:1      XMAD.LO2C slice0I, y, param_WN,  slice0I;
+--:-:-:-:1      XMAD      slice0I, x, param_N,   slice0I;
 
 <ORDERED>
---:-:-:-:1  @P2 SEL sliceI, sliceI, negOne, P1;
---:-:-:-:1  @P2 ISCADD lutStore, trs, sb_offset, 2;
---:-:-:-:1  @P2 IADD trs, trs, warp_inc;
+--:-:-:-:1 @!P0 MOV slice0I, -1;
+--:-:-:-:1      ISCADD lutStore, trs, sb_offset, 2;
+--:-:-:-:1      IADD trs, trs, warp_inc;
 </ORDERED>
 
---:1:-:-:1  @P2 STS [lutStore + addr_lut], sliceI;
+--:1:-:-:1  @P5 STS [lutStore + addr_lut4], slice0I;
 </SCHEDULE_BLOCK>
 
---:-:-:-:5  @P0 BRA.U LUT_LOOP;
+--:-:-:-:5  @P6 BRA.U LUT_LOOP;
 
-    } : q{
+        } : q{
+// x_prime = qs + s
+// y_prime = pr + r
+// z_prime = mt + t
+--:-:-:-:1      IADD z_prime, mt, t;
+--:-:-:-:1      IADD y_prime, pr, r;
+--:-:-:-:1      IADD x_prime, qs, s;
+
+--:-:-:-:1      ISETP.GE.AND  P0, PT, z_prime, RZ, PT;
+--:-:-:-:1      ISETP.GE.AND  P1, PT, y_prime, RZ, P4;
+--:-:-:-:1      ISETP.GE.AND  P2, PT, x_prime, RZ, P5;
+
+// z       = z_prime / str_d
+// z_prime = z_prime % str_d
+--:-:-:-:1      XMAD    z, z_prime, param_magic_str_d, RZ;
+--:-:-:-:1      SHR.U32 z, z,       param_shift_str_d;
+--:-:-:-:1      XMAD.U16.S16 z_prime, z, neg_str_d, z_prime;
+// y       = y_prime / str_h
+// y_prime = y_prime % str_h
+--:-:-:-:1      XMAD    y, y_prime, param_magic_str_h, RZ;
+--:-:-:-:1      SHR.U32 y, y,       param_shift_str_h;
+--:-:-:-:1      XMAD.U16.S16 y_prime, y, neg_str_h, y_prime;
+// x       = x_prime / str_w
+// x_prime = x_prime % str_w
+--:-:-:-:1      XMAD    x, x_prime, param_magic_str_w, RZ;
+--:-:-:-:1      SHR.U32 x, x,       param_shift_str_w;
+--:-:-:-:1      XMAD.U16.S16 x_prime, x, neg_str_w, x_prime;
+
+--:-:-:-:1      ISETP.EQ.AND  P0, PT, z_prime, RZ, P0;
+--:-:-:-:1      ISETP.EQ.AND  P1, PT, y_prime, RZ, P1;
+--:-:-:-:1      ISETP.EQ.AND  P2, PT, x_prime, RZ, P2;
+--:-:-:-:1      ISETP.LT.AND  P0, PT, z, param_D, P0;
+--:-:-:-:1      ISETP.LT.AND  P1, PT, y, param_H, P1;
+--:-:-:-:1      ISETP.LT.AND  P2, PT, x, param_W, P2;
+--:-:-:-:1      PSETP.AND.AND P0, PT, P0, P1, P2;
+
 <ORDERED>
 // sliceI = z*HWN + y*WN + x*N
 01:-:-:-:1      XMAD.LO2C sliceI, z, param_HWN, RZ;
@@ -517,31 +944,32 @@ LUT_LOOP:
 
 <ORDERED>
 // Get a mask of all valid slices in the warp
---:-:-:-:1      VOTE.ANY ballot, PT, P1;
+--:-:-:-:1      VOTE.ANY ballot, PT, P0;
 // Count the total valid slices
 --:-:2:-:1      POPC warp_slices, ballot;
 // Prepare lutStore for this and next loop
---:-:-:-:1  @P1 MOV    lutStore, lutStore2;
+--:-:-:-:1  @P0 MOV    lutStore, lutStore2;
 02:-:-:-:1      ISCADD lutStore2, warp_slices, lutStore2, 3;
 // Count all the valid slices below this threadid
---:-:-:-:1  @P1 LOP.AND dep_thd_bits, dep_thd_mask, ballot;
---:-:3:-:1  @P1 POPC dep_thd_cnt, dep_thd_bits;
+--:-:-:-:1  @P0 LOP.AND dep_thd_bits, dep_thd_mask, ballot;
+--:-:3:-:1  @P0 POPC dep_thd_cnt, dep_thd_bits;
 // use the trs increment to space the barrier sync
 --:-:-:-:1      IADD trs, trs, warp_inc;
 // Update the lutStore address from this count
-04:-:-:-:1  @P1 ISCADD lutStore, dep_thd_cnt, lutStore, 3;
+04:-:-:-:1  @P0 ISCADD lutStore, dep_thd_cnt, lutStore, 3;
 // Store both slice offsets in the lut
---:1:-:-:1  @P1 STS.64 [lutStore + addr_lut], sliceIF;
+--:1:-:-:1  @P0 STS.64 [lutStore + addr_lut], sliceIF;
 </ORDERED>
 // Keep track of the total size of the lut
 --:-:-:-:1      IADD lut_size, lut_size, warp_slices;
 </SCHEDULE_BLOCK>
 
---:-:-:-:5  @P0 BRA.U LUT_LOOP;
+--:-:-:-:5  @P6 BRA.U LUT_LOOP;
 
 // Share the lut size with the other warp
 --:1:-:-:2      STS [addr_szLut], lut_size;
-    };
+        };
+    }
 +]
 
 END_SETUP:
@@ -551,10 +979,10 @@ END_SETUP:
 // Grab the caclulated lut size and get it's reciprical
 // Get the total reduction depth
 [+
-    our $SN; return $SN ? q{
---:-:-:-:6      MOV lutSize, param_TRS;
-    } : q{
+    our $LN; return $LN ? q{
 --:-:1:-:2      LDS lutSize, [addr_szLut];
+    } : q{
+--:-:-:-:6      MOV lutSize, param_TRS;
     };
 +]
 01:-:-:-:0      XMAD endCTRS, lutSize, param_C, RZ;
@@ -585,31 +1013,8 @@ END_SETUP:
 --:-:-:-:1      IADD posCTRS, tidY, partial;
 --:-:-:-:1      IADD tidY1, tidY, 1;
 [+
-    our ($SN, $dtype_shift);
-    return $SN ? qq{
---:-:-:-:1      ISETP.LT.AND P5, PT, tidY,  partial, PT;
---:-:-:-:1      ISETP.LT.AND P6, PT, tidY1, partial, PT;
-
---:-:-:-:1      XMAD offsetFc0, tidY,  param_K, RZ;
---:-:-:-:1      XMAD offsetFc1, tidY1, param_K, RZ;
---:-:-:-:1      MOV sliceF0, RZ;
---:-:-:-:1      MOV sliceF1, RZ;
-
---:-:-:-:1      XMAD partial, partial,  param_K, RZ;
---:-:-:-:1      SHL partial, partial, $dtype_shift;
-
---:-:-:-:1      ISCADD lutOffset0, lutOffset0, sb_offset, 2;
---:-:-:-:1      XMAD.LO2C offsetIc0, channel, param_DHWN, RZ;
-
---:-:-:-:1  \@P0 IADD lutOffset1, lutOffset0, 4;
---:-:-:-:1  \@P0 MOV  offsetIc1, offsetIc0;
---:-:-:-:1 \@!P0 MOV  lutOffset1, sb_offset;
---:-:-:-:1 \@!P0 IADD offsetIc1, offsetIc0, param_DHWN;
-
---:-:1:-:1  \@P5 LDS.U.32 sliceI0, [lutOffset0 + addr_lut];
---:-:2:-:1  \@P6 LDS.U.32 sliceI1, [lutOffset1 + addr_lut];
-
-    } : q{
+    our ($N1, $N2, $LN, $dtype_shift, $slice_scale, $slice_offset, $slice_load);
+    return $LN ? q{
 // P5 = tidY < partial && lutSize != 0
 --:-:-:-:1      LOP.AND.NZ P6, RZ, lutSize, -1;
 --:-:-:-:1      ISETP.LT.AND P5, PT, tidY,  partial, P6;
@@ -629,29 +1034,52 @@ END_SETUP:
 --:-:-:-:1 @!P0 IADD offsetFc1, offsetFc0, param_TRSK;
 --:-:-:-:1 @!P0 IADD offsetIc1, offsetIc0, param_DHWN;
 
---:-:1:-:1  @P5 LDS.U.64 slice0IF, [lutOffset0 + addr_lut];
---:-:2:-:1  @P6 LDS.U.64 slice1IF, [lutOffset1 + addr_lut];
+--:-:5:-:1  @P5 LDS.U.64 slice0IF, [lutOffset0 + addr_lut];
+--:-:6:-:1  @P6 LDS.U.64 slice1IF, [lutOffset1 + addr_lut];
+    } : qq{
+--:-:-:-:1      ISETP.LT.AND P5, PT, tidY,  partial, PT;
+--:-:-:-:1      ISETP.LT.AND P6, PT, tidY1, partial, PT;
+
+--:-:-:-:1      XMAD offsetFc0, tidY,  param_K, RZ;
+--:-:-:-:1      XMAD offsetFc1, tidY1, param_K, RZ;
+
+--:-:-:-:1      XMAD partial, partial,  param_K, RZ;
+--:-:-:-:1      SHL partial, partial, $dtype_shift;
+
+--:-:-:-:1      ISCADD lutOffset0, lutOffset0, sb_offset, $slice_scale;
+--:-:-:-:1      XMAD.LO2C offsetIc0, channel, param_DHWN, RZ;
+
+--:-:-:-:1  \@P0 IADD lutOffset1, lutOffset0, $slice_offset;
+--:-:-:-:1  \@P0 MOV  offsetIc1, offsetIc0;
+--:-:-:-:1 \@!P0 MOV  lutOffset1, sb_offset;
+--:-:-:-:1 \@!P0 IADD offsetIc1, offsetIc0, param_DHWN;
+
+--:-:5:-:1  \@P5 LDS.U.$slice_load slice0I, [lutOffset0 + addr_lut4];
+--:-:6:-:1  \@P6 LDS.U.$slice_load slice1I, [lutOffset1 + addr_lut4];
     };
 +]
 </SCHEDULE_BLOCK>
 
 <SCHEDULE_BLOCK>
-// trackI = offsetIN + offsetIC + sliceI + param_I
-// trackF = offsetFK + offsetFC + sliceF + param_F
-01:-:-:-:1      IADD3 offsetFc0, offsetFc0, sliceF0, k;
---:-:-:-:1      IADD3 offsetIc0, offsetIc0, sliceI0, n;
---:-:-:-:1      LEA      track0F0.CC, offsetFc0, param_F[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X track0F1,    offsetFc0, param_F[1], RZ, [+ dtype_shift() +];
---:-:-:-:1      LEA      track0I0.CC, offsetIc0, param_I[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X track0I1,    offsetIc0, param_I[1], RZ, [+ dtype_shift() +];
+[+
+    our ($LN, $dtype_shift);
+    return $LN ? qq{
+10:-:-:-:1      IADD3 offsetFc0, offsetFc0, sliceF0, k;
+--:-:-:-:1      LEA      track0F0.CC, offsetFc0, param_F[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0F1,    offsetFc0, param_F[1], RZ, $dtype_shift;
 
-02:-:-:-:1      IADD3 offsetFc1, offsetFc1, sliceF1, k;
---:-:-:-:1      IADD3 offsetIc1, offsetIc1, sliceI1, n;
---:-:-:-:1      LEA      track1F0.CC, offsetFc1, param_F[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X track1F1,    offsetFc1, param_F[1], RZ, [+ dtype_shift() +];
---:-:-:-:1      LEA      track1I0.CC, offsetIc1, param_I[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X track1I1,    offsetIc1, param_I[1], RZ, [+ dtype_shift() +];
-
+20:-:-:-:1      IADD3 offsetFc1, offsetFc1, sliceF1, k;
+--:-:-:-:1      LEA      track1F0.CC, offsetFc1, param_F[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1F1,    offsetFc1, param_F[1], RZ, $dtype_shift;
+    } : qq{
+--:-:-:-:1      IADD  offsetFc0, offsetFc0, k;
+--:-:-:-:1      IADD  offsetFc1, offsetFc1, k;
+--:-:-:-:1      LEA      track0F0.CC, offsetFc0, param_F[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0F1,    offsetFc0, param_F[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1F0.CC, offsetFc1, param_F[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1F1,    offsetFc1, param_F[1], RZ, $dtype_shift;
+    };
++]
 [+
     our ($K1, $dtype, $vec_size, $dtype_size);
     return $K1 ? qq{
@@ -725,24 +1153,123 @@ END_SETUP:
 </SCHEDULE_BLOCK>
 <SCHEDULE_BLOCK>
 [+
-    our $SN;
-    return $SN ? q{
---:-:-:-:1      ISETP.GE.AND P5, PT, sliceI0, RZ, P5;
---:-:-:-:1      ISETP.GE.AND P6, PT, sliceI1, RZ, P6;
---:-:-:-:1      PSETP.AND.AND P5, PT, P5, P4, PT;
---:-:-:-:1      PSETP.AND.AND P6, PT, P6, P4, PT;
-    } : q{
---:-:-:-:1      PSETP.AND.AND P5, PT, P4, P5, PT;
---:-:-:-:1      PSETP.AND.AND P6, PT, P4, P6, PT;
-    };
-+]
+    our ($N1, $N2, $SN, $dtype_shift, $vec_sizeI);
+    return $N1 ? qq{
+10:-:-:-:1      ISETP.GE.AND P0, PT, slice0I0, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P1, PT, slice0I1, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P2, PT, slice0I2, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P3, PT, slice0I3, RZ, P5;
+--:-:-:-:1      IADD slice0I0, slice0I0, offsetIc0;
+--:-:-:-:1      IADD slice0I1, slice0I1, offsetIc0;
+--:-:-:-:1      IADD slice0I2, slice0I2, offsetIc0;
+--:-:-:-:1      IADD slice0I3, slice0I3, offsetIc0;
+--:-:-:-:1      LEA      track0I0.CC, slice0I0,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I1,    slice0I0,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track0I2.CC, slice0I1,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I3,    slice0I1,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track0I4.CC, slice0I2,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I5,    slice0I2,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track0I6.CC, slice0I3,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I7,    slice0I3,   param_I[1], RZ, $dtype_shift;
 <ORDERED>
---:-:5:-:1  @P5 LDG.E.CI.[+ vec_size()+] I0, [track0I];
---:-:6:-:1  @P6 LDG.E.CI.[+ vec_size()+] I1, [track1I];
---:-:-:-:1 @!P5 LDS.U.[+ vec_size()+] I0, [addr_zero];
---:-:5:-:1 @!P6 LDS.U.[+ vec_size()+] I1, [addr_zero];
+--:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I00, [track0I0];
+--:-:-:-:1  \@P1 LDG.E.CI.$vec_sizeI I01, [track0I2];
+--:-:-:-:1  \@P2 LDG.E.CI.$vec_sizeI I02, [track0I4];
+--:-:5:-:1  \@P3 LDG.E.CI.$vec_sizeI I03, [track0I6];
+</ORDERED>
+--:-:-:-:1 \@!P0 MOV I00, RZ;
+--:-:-:-:1 \@!P1 MOV I01, RZ;
+--:-:-:-:1 \@!P2 MOV I02, RZ;
+--:-:-:-:1 \@!P3 MOV I03, RZ;
+
+20:-:-:-:1      ISETP.GE.AND P0, PT, slice1I0, RZ, P6;
+--:-:-:-:1      ISETP.GE.AND P1, PT, slice1I1, RZ, P6;
+--:-:-:-:1      ISETP.GE.AND P2, PT, slice1I2, RZ, P6;
+--:-:-:-:1      ISETP.GE.AND P3, PT, slice1I3, RZ, P6;
+--:-:-:-:1      IADD slice1I0, slice1I0, offsetIc1;
+--:-:-:-:1      IADD slice1I1, slice1I1, offsetIc1;
+--:-:-:-:1      IADD slice1I2, slice1I2, offsetIc1;
+--:-:-:-:1      IADD slice1I3, slice1I3, offsetIc1;
+--:-:-:-:1      LEA      track1I0.CC, slice1I0,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I1,    slice1I0,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I2.CC, slice1I1,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I3,    slice1I1,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I4.CC, slice1I2,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I5,    slice1I2,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I6.CC, slice1I3,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I7,    slice1I3,   param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I10, [track1I0];
+--:-:-:-:1  \@P1 LDG.E.CI.$vec_sizeI I11, [track1I2];
+--:-:-:-:1  \@P2 LDG.E.CI.$vec_sizeI I12, [track1I4];
+--:-:6:-:1  \@P3 LDG.E.CI.$vec_sizeI I13, [track1I6];
+</ORDERED>
+--:-:-:-:1 \@!P0 MOV I10, RZ;
+--:-:-:-:1 \@!P1 MOV I11, RZ;
+--:-:-:-:1 \@!P2 MOV I12, RZ;
+--:-:-:-:1 \@!P3 MOV I13, RZ;
+
+    } : $N2 ? qq{
+
+10:-:-:-:1      ISETP.GE.AND P0, PT, slice0I0, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P1, PT, slice0I1, RZ, P5;
+20:-:-:-:1      ISETP.GE.AND P2, PT, slice1I0, RZ, P6;
+--:-:-:-:1      ISETP.GE.AND P3, PT, slice1I1, RZ, P6;
+--:-:-:-:1      IADD slice0I0, slice0I0, offsetIc0;
+--:-:-:-:1      IADD slice0I1, slice0I1, offsetIc0;
+--:-:-:-:1      IADD slice1I0, slice1I0, offsetIc1;
+--:-:-:-:1      IADD slice1I1, slice1I1, offsetIc1;
+--:-:-:-:1      LEA      track0I0.CC, slice0I0,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I1,    slice0I0,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track0I2.CC, slice0I1,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I3,    slice0I1,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I0.CC, slice1I0,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I1,    slice1I0,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I2.CC, slice1I1,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I3,    slice1I1,   param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I00, [track0I0];
+--:-:5:-:1  \@P1 LDG.E.CI.$vec_sizeI I02, [track0I2];
+--:-:-:-:1  \@P2 LDG.E.CI.$vec_sizeI I10, [track1I0];
+--:-:6:-:1  \@P3 LDG.E.CI.$vec_sizeI I12, [track1I2];
+--:-:-:-:1 \@!P0 LDS.U.$vec_sizeI I00, [addr_zero];
+--:-:-:-:1 \@!P1 LDS.U.$vec_sizeI I02, [addr_zero];
+--:-:-:-:1 \@!P2 LDS.U.$vec_sizeI I10, [addr_zero];
+--:-:5:-:1 \@!P3 LDS.U.$vec_sizeI I12, [addr_zero];
 </ORDERED>
 
+    } : $SN ? qq{
+
+10:-:-:-:1      ISETP.GE.AND P5, PT, slice0I, RZ, P5;
+20:-:-:-:1      ISETP.GE.AND P6, PT, slice1I, RZ, P6;
+--:-:-:-:1      IADD3 slice0I, slice0I, offsetIc0, n;
+--:-:-:-:1      IADD3 slice1I, slice1I, offsetIc1, n;
+--:-:-:-:1      LEA      track0I0.CC, slice0I,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I1,    slice0I,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I0.CC, slice1I,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I1,    slice1I,   param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:5:-:1  \@P5 LDG.E.CI.$vec_sizeI I0, [track0I];
+--:-:6:-:1  \@P6 LDG.E.CI.$vec_sizeI I1, [track1I];
+--:-:-:-:1 \@!P5 LDS.U.$vec_sizeI I0, [addr_zero];
+--:-:5:-:1 \@!P6 LDS.U.$vec_sizeI I1, [addr_zero];
+</ORDERED>
+
+    } : qq{
+--:-:-:-:1      IADD3 offsetIc0, offsetIc0, sliceI0, n;
+--:-:-:-:1      IADD3 offsetIc1, offsetIc1, sliceI1, n;
+--:-:-:-:1      LEA      track0I0.CC, offsetIc0, param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I1,    offsetIc0, param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I0.CC, offsetIc1, param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I1,    offsetIc1, param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:5:-:1  \@P5 LDG.E.CI.$vec_sizeI I0, [track0I];
+--:-:6:-:1  \@P6 LDG.E.CI.$vec_sizeI I1, [track1I];
+--:-:-:-:1 \@!P5 LDS.U.$vec_sizeI I0, [addr_zero];
+--:-:5:-:1 \@!P6 LDS.U.$vec_sizeI I1, [addr_zero];
+</ORDERED>
+    };
++]
 </SCHEDULE_BLOCK>
 
 [+
@@ -790,8 +1317,28 @@ END_SETUP:
     };
 +]
 [+
-    our $convert_in;
-    return !$convert_in ? '' : qq{
+    our ($convert_in, $N1, $N2);
+    return !$convert_in ? '' : $N1 ? qq{
+10:-:-:-:1      $convert_in I03, I03;
+--:-:-:-:1      $convert_in I02, I02;
+--:-:-:-:1      $convert_in I01, I01;
+--:-:5:-:1      $convert_in I00, I00;
+
+20:-:-:-:1      $convert_in I13, I13;
+--:-:-:-:1      $convert_in I12, I12;
+--:-:-:-:1      $convert_in I11, I11;
+--:-:6:-:1      $convert_in I10, I10;
+    } : $N2 ? qq{
+10:-:-:-:1      $convert_in I03, I02.H1;
+--:-:-:-:1      $convert_in I02, I02.H0;
+--:-:-:-:1      $convert_in I01, I00.H1;
+--:-:5:-:1      $convert_in I00, I00.H0;
+
+20:-:-:-:1      $convert_in I13, I12.H1;
+--:-:-:-:1      $convert_in I12, I12.H0;
+--:-:-:-:1      $convert_in I11, I10.H1;
+--:-:6:-:1      $convert_in I10, I10.H0;
+    } : qq{
 10:-:-:-:1      $convert_in I03, I01.H1;
 --:-:-:-:1      $convert_in I02, I01.H0;
 --:-:-:-:1      $convert_in I01, I00.H1;
@@ -836,21 +1383,9 @@ END_SETUP:
 10:-:-:-:1      VMAD.U16.U16 lutOffset0, -channel, lutSize, posCTRS;
 --:-:-:-:1      ISETP.LT.AND P0, PT, lutOffset0, lutSizeM1, PT;
 [+
-    our $SN;
-    return $SN ? q{
---:-:-:-:1      ISCADD lutOffset0, lutOffset0, sb_offset, 2;
---:-:-:-:1      XMAD.LO2C offsetIc0, channel, param_DHWN, RZ;
+    our ($N1, $N2, $LN, $dtype_shift, $slice_scale, $slice_offset, $slice_load);
+    return $LN ? q{
 
---:-:-:-:1  @P0 IADD lutOffset1, lutOffset0, 4;
---:-:-:-:1  @P0 MOV  offsetIc1, offsetIc0;
---:-:-:-:1 @!P0 MOV  lutOffset1, sb_offset;
---:-:-:-:1 @!P0 IADD offsetIc1, offsetIc0, param_DHWN;
-
---:-:-:-:1      IADD posCTRS, posCTRS, 32;
---:-:5:-:1  @P5 LDS.U.32 sliceI0, [lutOffset0 + addr_lut];
---:-:6:-:1  @P5 LDS.U.32 sliceI1, [lutOffset1 + addr_lut];
-
-    } : q{
 --:-:-:-:1      SHL lutOffset0, lutOffset0, 3;
 --:-:-:-:1      XMAD.LO2C offsetIc0, channel, param_DHWN, RZ;
 --:-:-:-:1      XMAD      offsetFc0, channel, param_TRSK, RZ;
@@ -865,6 +1400,20 @@ END_SETUP:
 --:-:-:-:1      IADD posCTRS, posCTRS, 32;
 --:-:5:-:1  @P5 LDS.U.64 slice0IF, [lutOffset0 + addr_lut];
 --:-:6:-:1  @P5 LDS.U.64 slice1IF, [lutOffset1 + addr_lut];
+
+    } : qq{
+
+--:-:-:-:1      ISCADD lutOffset0, lutOffset0, sb_offset, $slice_scale;
+--:-:-:-:1      XMAD.LO2C offsetIc0, channel, param_DHWN, RZ;
+
+--:-:-:-:1  \@P0 IADD lutOffset1, lutOffset0, $slice_offset;
+--:-:-:-:1  \@P0 MOV  offsetIc1, offsetIc0;
+--:-:-:-:1 \@!P0 MOV  lutOffset1, sb_offset;
+--:-:-:-:1 \@!P0 IADD offsetIc1, offsetIc0, param_DHWN;
+
+--:-:-:-:1      IADD posCTRS, posCTRS, 32;
+--:-:5:-:1  \@P5 LDS.U.$slice_load slice0I, [lutOffset0 + addr_lut4];
+--:-:6:-:1  \@P5 LDS.U.$slice_load slice1I, [lutOffset1 + addr_lut4];
     };
 +]
 
@@ -872,35 +1421,20 @@ END_SETUP:
 
 <SCHEDULE_BLOCK>
 [+
-    our ($SN, $dtype_shift);
-    return $SN ? qq{
-10:-:-:-:1      IADD3 offsetIc0, offsetIc0, sliceI0, n;
-20:-:-:-:1      IADD3 offsetIc1, offsetIc1, sliceI1, n;
+    our ($LN, $dtype_shift);
+    return $LN ? qq{
+10:-:-:-:1      IADD3 offsetFc0, offsetFc0, sliceF0, k;
+--:-:-:-:1      LEA      track0F0.CC, offsetFc0, param_F[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0F1,    offsetFc0, param_F[1], RZ, $dtype_shift;
 
+20:-:-:-:1      IADD3 offsetFc1, offsetFc1, sliceF1, k;
+--:-:-:-:1      LEA      track1F0.CC, offsetFc1, param_F[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1F1,    offsetFc1, param_F[1], RZ, $dtype_shift;
+    } : qq{
 --:-:-:-:1      IADD   track0F0.CC, track0F0, partial;
 --:-:-:-:1      IADD.X track0F1,    track0F1, RZ;
 --:-:-:-:1      IADD   track1F0.CC, track1F0, partial;
 --:-:-:-:1      IADD.X track1F1,    track1F1, RZ;
---:-:-:-:1      LEA      track0I0.CC, offsetIc0, param_I[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track0I1,    offsetIc0, param_I[1], RZ, $dtype_shift;
---:-:-:-:1      LEA      track1I0.CC, offsetIc1, param_I[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track1I1,    offsetIc1, param_I[1], RZ, $dtype_shift;
-    } : qq{
-// trackI = offsetIN + offsetIC + sliceI + param_I
-// trackF = offsetFK + offsetFC + sliceF + param_F
-10:-:-:-:1      IADD3 offsetFc0, offsetFc0, sliceF0, k;
---:-:-:-:1      IADD3 offsetIc0, offsetIc0, sliceI0, n;
---:-:-:-:1      LEA      track0F0.CC, offsetFc0, param_F[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track0F1,    offsetFc0, param_F[1], RZ, $dtype_shift;
---:-:-:-:1      LEA      track0I0.CC, offsetIc0, param_I[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track0I1,    offsetIc0, param_I[1], RZ, $dtype_shift;
-
-20:-:-:-:1      IADD3 offsetFc1, offsetFc1, sliceF1, k;
---:-:-:-:1      IADD3 offsetIc1, offsetIc1, sliceI1, n;
---:-:-:-:1      LEA      track1F0.CC, offsetFc1, param_F[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track1F1,    offsetFc1, param_F[1], RZ, $dtype_shift;
---:-:-:-:1      LEA      track1I0.CC, offsetIc1, param_I[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track1I1,    offsetIc1, param_I[1], RZ, $dtype_shift;
     };
 +]
 <ORDERED>
@@ -948,30 +1482,135 @@ END_SETUP:
 --:-:2:-:1  \@P1 LDG.E.CI.$vec_size F3, [track1F + ${dtype_size}x<32>];
     };
 +]
+</ORDERED>
 [+
-    our ($SN, $vec_size);
-    return $SN ? qq{
---:-:-:-:1      ISETP.GE.AND P2, PT, sliceI0, RZ, P5;
---:-:-:-:1      ISETP.GE.AND P3, PT, sliceI1, RZ, P5;
---:-:-:-:1      PSETP.AND.AND P2, PT, P2, P4, PT;
---:-:-:-:1      PSETP.AND.AND P3, PT, P3, P4, PT;
---:-:2:-:1  \@P2 LDG.E.CI.$vec_size I0, [track0I];
---:3:2:-:1  \@P3 LDG.E.CI.$vec_size I1, [track1I];
---:-:-:-:1 \@!P2 LDS.U.$vec_size I0, [addr_zero];
---:-:-:-:1 \@!P3 LDS.U.$vec_size I1, [addr_zero];
+    our ($N1, $N2, $SN, $dtype_shift, $vec_sizeI);
+    return $N1 ? qq{
+<ORDERED>
+10:-:-:-:1      ISETP.GE.AND P0, PT, slice0I0, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P1, PT, slice0I1, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P2, PT, slice0I2, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P3, PT, slice0I3, RZ, P5;
+</ORDERED>
+--:-:-:-:1      IADD slice0I0, slice0I0, offsetIc0;
+--:-:-:-:1      IADD slice0I1, slice0I1, offsetIc0;
+--:-:-:-:1      IADD slice0I2, slice0I2, offsetIc0;
+--:-:-:-:1      IADD slice0I3, slice0I3, offsetIc0;
+--:-:-:-:1      LEA      track0I0.CC, slice0I0,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I1,    slice0I0,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track0I2.CC, slice0I1,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I3,    slice0I1,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track0I4.CC, slice0I2,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I5,    slice0I2,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track0I6.CC, slice0I3,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I7,    slice0I3,   param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I00, [track0I0];
+--:-:-:-:1  \@P1 LDG.E.CI.$vec_sizeI I01, [track0I2];
+--:-:-:-:1  \@P2 LDG.E.CI.$vec_sizeI I02, [track0I4];
+--:-:2:-:1  \@P3 LDG.E.CI.$vec_sizeI I03, [track0I6];
+</ORDERED>
+--:-:-:-:1 \@!P0 MOV I00, RZ;
+--:-:-:-:1 \@!P1 MOV I01, RZ;
+--:-:-:-:1 \@!P2 MOV I02, RZ;
+--:-:-:-:1 \@!P3 MOV I03, RZ;
+
+<ORDERED>
+20:-:-:-:1      ISETP.GE.AND P0, PT, slice1I0, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P1, PT, slice1I1, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P2, PT, slice1I2, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P3, PT, slice1I3, RZ, P5;
+</ORDERED>
+--:-:-:-:1      IADD slice1I0, slice1I0, offsetIc1;
+--:-:-:-:1      IADD slice1I1, slice1I1, offsetIc1;
+--:-:-:-:1      IADD slice1I2, slice1I2, offsetIc1;
+--:-:-:-:1      IADD slice1I3, slice1I3, offsetIc1;
+--:-:-:-:1      LEA      track1I0.CC, slice1I0,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I1,    slice1I0,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I2.CC, slice1I1,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I3,    slice1I1,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I4.CC, slice1I2,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I5,    slice1I2,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I6.CC, slice1I3,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I7,    slice1I3,   param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I10, [track1I0];
+--:-:-:-:1  \@P1 LDG.E.CI.$vec_sizeI I11, [track1I2];
+--:-:-:-:1  \@P2 LDG.E.CI.$vec_sizeI I12, [track1I4];
+--:3:2:-:1  \@P3 LDG.E.CI.$vec_sizeI I13, [track1I6];
+</ORDERED>
+--:-:-:-:1 \@!P0 MOV I10, RZ;
+--:-:-:-:1 \@!P1 MOV I11, RZ;
+--:-:-:-:1 \@!P2 MOV I12, RZ;
+--:-:-:-:1 \@!P3 MOV I13, RZ;
+
+    } : $N2 ? qq{
+<ORDERED>
+10:-:-:-:1      ISETP.GE.AND P0, PT, slice0I0, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P1, PT, slice0I1, RZ, P5;
+20:-:-:-:1      ISETP.GE.AND P2, PT, slice1I0, RZ, P5;
+--:-:-:-:1      ISETP.GE.AND P3, PT, slice1I1, RZ, P5;
+</ORDERED>
+--:-:-:-:1      IADD slice0I0, slice0I0, offsetIc0;
+--:-:-:-:1      IADD slice0I1, slice0I1, offsetIc0;
+--:-:-:-:1      IADD slice1I0, slice1I0, offsetIc1;
+--:-:-:-:1      IADD slice1I1, slice1I1, offsetIc1;
+--:-:-:-:1      LEA      track0I0.CC, slice0I0,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I1,    slice0I0,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track0I2.CC, slice0I1,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I3,    slice0I1,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I0.CC, slice1I0,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I1,    slice1I0,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I2.CC, slice1I1,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I3,    slice1I1,   param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I00, [track0I0];
+--:-:2:-:1  \@P1 LDG.E.CI.$vec_sizeI I02, [track0I2];
+--:-:-:-:1  \@P2 LDG.E.CI.$vec_sizeI I10, [track1I0];
+--:3:2:-:1  \@P3 LDG.E.CI.$vec_sizeI I12, [track1I2];
+--:-:-:-:1 \@!P0 LDS.U.$vec_sizeI I00, [addr_zero];
+--:-:-:-:1 \@!P1 LDS.U.$vec_sizeI I02, [addr_zero];
+--:-:-:-:1 \@!P2 LDS.U.$vec_sizeI I10, [addr_zero];
+--:-:-:-:1 \@!P3 LDS.U.$vec_sizeI I12, [addr_zero];
+</ORDERED>
+
+    } : $SN ? qq{
+
+10:-:-:-:1      ISETP.GE.AND P0, PT, slice0I, RZ, P5;
+20:-:-:-:1      ISETP.GE.AND P1, PT, slice1I, RZ, P5;
+--:-:-:-:1      IADD3 slice0I, slice0I, offsetIc0, n;
+--:-:-:-:1      IADD3 slice1I, slice1I, offsetIc1, n;
+--:-:-:-:1      LEA      track0I0.CC, slice0I,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I1,    slice0I,   param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I0.CC, slice1I,   param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I1,    slice1I,   param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:2:-:1  \@P0 LDG.E.CI.$vec_sizeI I0, [track0I];
+--:3:2:-:1  \@P1 LDG.E.CI.$vec_sizeI I1, [track1I];
+--:-:-:-:1 \@!P0 LDS.U.$vec_sizeI I0, [addr_zero];
+--:-:-:-:1 \@!P1 LDS.U.$vec_sizeI I1, [addr_zero];
+</ORDERED>
 
     } : qq{
---:-:-:-:1      PSETP.AND.AND P2, PT, P4, P5, PT;
---:-:2:-:1  \@P2 LDG.E.CI.$vec_size I0, [track0I];
---:3:2:-:1  \@P2 LDG.E.CI.$vec_size I1, [track1I];
+--:-:-:-:1      IADD3 offsetIc0, offsetIc0, sliceI0, n;
+--:-:-:-:1      IADD3 offsetIc1, offsetIc1, sliceI1, n;
+--:-:-:-:1      LEA      track0I0.CC, offsetIc0, param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track0I1,    offsetIc0, param_I[1], RZ, $dtype_shift;
+--:-:-:-:1      LEA      track1I0.CC, offsetIc1, param_I[0],     $dtype_shift;
+--:-:-:-:1      LEA.HI.X track1I1,    offsetIc1, param_I[1], RZ, $dtype_shift;
+<ORDERED>
+--:-:2:-:1  \@P5 LDG.E.CI.$vec_sizeI I0, [track0I];
+--:3:2:-:1  \@P5 LDG.E.CI.$vec_sizeI I1, [track1I];
+</ORDERED>
     };
 +]
-</ORDERED>
 </SCHEDULE_BLOCK>
 
 LOOP:
 [+
-    our ($dtype, $dtype_shift, $dtype_size, $vec_size, $convert_in, $SN, $K1);
+    our ($N1, $N2, $SN, $LN, $K1, $dtype, $dtype_shift, $dtype_size, $vec_size, $vec_sizeI,
+         $convert_in, $slice_scale, $slice_offset, $slice_load);
+
     my %insert = (
         j0c1  => "--:-:5:-:1      I2F.F32.S32 posCTRSf, posCTRS;\n",
         j0c3  => "--:-:-:-:1      ISETP.LT.AND P5, PT, posCTRS, endCTRS,   PT;\n",
@@ -981,41 +1620,7 @@ LOOP:
         j0c20 => "--:-:-:-:1  \@P5 FFMA channel, channel, 5.9604644775390625e-08, channel;\n",
         j0c22 => "--:-:5:-:1  \@P5 F2I.S32.F32.TRUNC channel, channel;\n",
 
-        $SN ? (
-            j0c36 => "10:-:-:-:1  \@P5 VMAD.U16.U16 lutOffset0, -channel, lutSize, posCTRS;\n" .
-                     "--:-:-:-:1  \@P5 XMAD offsetIc0, channel, param_DHWN, RZ;\n" .
-                     "--:-:-:-:1      IADD posCTRS, posCTRS, 32;\n",
-
-            j0c39 => "--:-:-:-:1  \@P5 ISETP.LT.AND P0, PT, lutOffset0, lutSizeM1, PT;\n" .
-                     "--:-:-:-:1  \@P5 XMAD.PSL offsetIc0, channel, param_DHWN.H1, offsetIc0;\n" .
-                     "--:-:-:-:1  \@P5 ISCADD lutOffset0, lutOffset0, sb_offset, 2;\n",
-
-            j0c43 => "--:-:-:-:1  \@P5 LDS.U.32 sliceI0, [lutOffset0 + addr_lut];\n",
-
-            j5c16 => "--:-:-:-:1      ISETP.GE.AND P2, PT, sliceI0, RZ, P5;\n",
-            j5c31 => "--:-:-:-:1      PSETP.AND.AND P2, PT, P2, P4, PT;\n",
-            j5c45 => "--:-:-:-:1 \@!P2 LDS.U.$vec_size I0, [addr_zero];\n",
-
-
-            j0c50 => "--:-:-:-:1  \@P0 I2I.U32.U32 offsetIc1, offsetIc0;\n" .
-                     "--:-:-:-:1 \@!P0 IADD offsetIc1, offsetIc0, param_DHWN;\n",
-
-            j0c51 => "--:-:4:-:1 \@!P0 I2I.U32.U32 lutOffset1, sb_offset;\n" .
-                     "--:-:-:-:1  \@P0 IADD lutOffset1, lutOffset0, 4;\n",
-
-            j2c16 => "08:-:-:-:1  \@P5 LDS.U.32 sliceI1, [lutOffset1 + addr_lut];\n",
-
-            j6c16 => "--:-:-:-:1      ISETP.GE.AND P2, PT, sliceI1, RZ, P5;\n",
-            j6c31 => "--:-:-:-:1      PSETP.AND.AND P2, PT, P2, P4, PT;\n",
-            j6c45 => "--:-:-:-:1 \@!P2 LDS.U.$vec_size I1, [addr_zero];\n",
-
-            j1c49 => "04:-:-:-:1  \@P5 IADD   track0F0.CC, track0F0, param_K32p;\n",
-            j1c54 => "--:-:-:-:1  \@P5 IADD.X track0F1,    track0F1, RZ;\n",
-
-            j3c49 => "--:-:-:-:1  \@P5 IADD   track1F0.CC, track1F0, param_K32p;\n",
-            j3c54 => "--:-:-:-:1  \@P5 IADD.X track1F1,    track1F1, RZ;\n",
-
-        ) : (
+        $LN ? (
             j0c36 => "10:-:-:-:1  \@P5 VMAD.U16.U16 lutOffset0, -channel, lutSize, posCTRS;\n" .
                      "--:-:-:-:1  \@P5 XMAD offsetIc0, channel, param_DHWN, RZ;\n" .
                      "--:-:-:-:1  \@P5 XMAD offsetFc0, channel, param_TRSK, RZ;\n" .
@@ -1026,7 +1631,6 @@ LOOP:
                      "--:-:-:-:1  \@P5 SHL lutOffset0, lutOffset0, 3;\n",
 
             j0c42 => "--:-:5:-:1  \@P5 LDS.U.64 slice0IF, [lutOffset0 + addr_lut];\n",
-            j2c16 => "08:-:5:-:1  \@P5 LDS.U.64 slice1IF, [lutOffset1 + addr_lut];\n",
 
             j0c49 => "--:-:-:-:1  \@P0 I2I.U32.U32 offsetFc1, offsetFc0;\n" .
                      "--:-:-:-:1 \@!P0 IADD offsetFc1, offsetFc0, param_TRSK;\n",
@@ -1041,12 +1645,157 @@ LOOP:
             j1c49 => "04:-:-:-:1  \@P5 LEA      track0F0.CC, offsetFc0, param_F[0],     $dtype_shift;\n",
             j1c54 => "--:-:-:-:1  \@P5 LEA.HI.X track0F1,    offsetFc0, param_F[1], RZ, $dtype_shift;\n",
 
+            j2c16 => "08:-:5:-:1  \@P5 LDS.U.64 slice1IF, [lutOffset1 + addr_lut];\n",
+
             j3c44 => "10:-:-:-:1  \@P5 IADD3 offsetFc1, offsetFc1, sliceF1, k;\n",
             j3c49 => "--:-:-:-:1  \@P5 LEA      track1F0.CC, offsetFc1, param_F[0],     $dtype_shift;\n",
             j3c54 => "--:-:-:-:1  \@P5 LEA.HI.X track1F1,    offsetFc1, param_F[1], RZ, $dtype_shift;\n",
 
-            j5c31 => "--:-:-:-:1      PSETP.AND.AND P2, PT, P4, P5, PT;\n",
+            j5c44 => "--:-:-:-:1  \@P5 IADD3 offsetIc0, offsetIc0, sliceI0, n;\n",
+            j5c49 => "--:-:-:-:1  \@P5 LEA      track0I0.CC, offsetIc0, param_I[0],     $dtype_shift;\n",
+            j5c54 => "--:-:-:-:1  \@P5 LEA.HI.X track0I1,    offsetIc0, param_I[1], RZ, $dtype_shift;\n",
+            j5c60 => "20:-:2:-:1  \@P5 LDG.E.CI.$vec_size I0, [track0I];\n",
+
+            j6c44 => "--:-:-:-:1  \@P5 IADD3 offsetIc1, offsetIc1, sliceI1, n;\n",
+            j6c49 => "--:-:-:-:1  \@P5 LEA      track1I0.CC, offsetIc1, param_I[0],     $dtype_shift;\n",
+            j6c54 => "--:-:-:-:1  \@P5 LEA.HI.X track1I1,    offsetIc1, param_I[1], RZ, $dtype_shift;\n",
+            j6c60 => "20:3:2:-:1  \@P5 LDG.E.CI.$vec_size I1, [track1I];\n",
+
+        ) : (
+            j0c36 => "10:-:-:-:1  \@P5 VMAD.U16.U16 lutOffset0, -channel, lutSize, posCTRS;\n" .
+                     "--:-:-:-:1  \@P5 XMAD offsetIc0, channel, param_DHWN, RZ;\n" .
+                     "--:-:-:-:1      IADD posCTRS, posCTRS, 32;\n",
+
+            j0c39 => "--:-:-:-:1  \@P5 ISETP.LT.AND P0, PT, lutOffset0, lutSizeM1, PT;\n" .
+                     "--:-:-:-:1  \@P5 XMAD.PSL offsetIc0, channel, param_DHWN.H1, offsetIc0;\n" .
+                     "--:-:-:-:1  \@P5 ISCADD lutOffset0, lutOffset0, sb_offset, $slice_scale;\n",
+
+            j0c43 => "--:-:-:-:1  \@P5 LDS.U.$slice_load slice0I, [lutOffset0 + addr_lut4];\n",
+
+            j0c50 => "--:-:-:-:1  \@P0 I2I.U32.U32 offsetIc1, offsetIc0;\n" .
+                     "--:-:-:-:1 \@!P0 IADD offsetIc1, offsetIc0, param_DHWN;\n",
+
+            j0c51 => "--:-:4:-:1 \@!P0 I2I.U32.U32 lutOffset1, sb_offset;\n" .
+                     "--:-:-:-:1  \@P0 IADD lutOffset1, lutOffset0, $slice_offset;\n",
+
+            j2c16 => "08:-:-:-:1  \@P5 LDS.U.$slice_load slice1I, [lutOffset1 + addr_lut4];\n",
+
+            j1c49 => "04:-:-:-:1  \@P5 IADD   track0F0.CC, track0F0, param_K32p;\n",
+            j1c54 => "--:-:-:-:1  \@P5 IADD.X track0F1,    track0F1, RZ;\n",
+
+            j3c49 => "--:-:-:-:1  \@P5 IADD   track1F0.CC, track1F0, param_K32p;\n",
+            j3c54 => "--:-:-:-:1  \@P5 IADD.X track1F1,    track1F1, RZ;\n",
         ),
+
+        $N1 ? (
+
+            j5c31 => "--:-:-:-:1      ISETP.GE.AND P0, PT, slice0I0, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice0I0, slice0I0, offsetIc0;\n" .
+                     "--:-:-:-:1      ISETP.GE.AND P1, PT, slice0I1, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice0I1, slice0I1, offsetIc0;\n" .
+                     "--:-:-:-:1      ISETP.GE.AND P2, PT, slice0I2, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice0I2, slice0I2, offsetIc0;\n" .
+                     "--:-:-:-:1      ISETP.GE.AND P3, PT, slice0I3, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice0I3, slice0I3, offsetIc0;\n",
+
+            j5c32 => "--:-:-:-:1      LEA      track0I0.CC, slice0I0,   param_I[0],     $dtype_shift;\n",
+            j5c37 => "--:-:-:-:1      LEA.HI.X track0I1,    slice0I0,   param_I[1], RZ, $dtype_shift;\n" .
+                     "--:-:-:-:1      LEA      track0I2.CC, slice0I1,   param_I[0],     $dtype_shift;\n",
+            j5c42 => "--:-:-:-:1      LEA.HI.X track0I3,    slice0I1,   param_I[1], RZ, $dtype_shift;\n" .
+                     "--:-:-:-:1      LEA      track0I4.CC, slice0I2,   param_I[0],     $dtype_shift;\n",
+            j5c47 => "--:-:-:-:1      LEA.HI.X track0I5,    slice0I2,   param_I[1], RZ, $dtype_shift;\n" .
+                     "--:-:-:-:1      LEA      track0I6.CC, slice0I3,   param_I[0],     $dtype_shift;\n",
+            j5c52 => "--:-:-:-:1      LEA.HI.X track0I7,    slice0I3,   param_I[1], RZ, $dtype_shift;\n",
+
+            j5c55 => "20:-:-:-:1 \@!P0 I2I.U32.U32 I00, RZ;\n",
+            j5c57 => "--:-:-:-:1 \@!P1 I2I.U32.U32 I01, RZ;\n",
+            j5c59 => "--:-:-:-:1 \@!P2 I2I.U32.U32 I02, RZ;\n",
+            j5c61 => "--:-:-:-:1 \@!P3 I2I.U32.U32 I03, RZ;\n",
+
+            j5c56 => "--:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I00, [track0I0];\n",
+            j5c58 => "--:-:-:-:1  \@P1 LDG.E.CI.$vec_sizeI I01, [track0I2];\n",
+            j5c60 => "--:-:-:-:1  \@P2 LDG.E.CI.$vec_sizeI I02, [track0I4];\n",
+            j5c62 => "--:-:2:-:1  \@P3 LDG.E.CI.$vec_sizeI I03, [track0I6];\n",
+
+            j6c31 => "--:-:-:-:1      ISETP.GE.AND P0, PT, slice1I0, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice1I0, slice1I0, offsetIc1;\n" .
+                     "--:-:-:-:1      ISETP.GE.AND P1, PT, slice1I1, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice1I1, slice1I1, offsetIc1;\n" .
+                     "--:-:-:-:1      ISETP.GE.AND P2, PT, slice1I2, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice1I2, slice1I2, offsetIc1;\n" .
+                     "--:-:-:-:1      ISETP.GE.AND P3, PT, slice1I3, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice1I3, slice1I3, offsetIc1;\n",
+
+            j6c32 => "--:-:-:-:1      LEA      track1I0.CC, slice1I0,   param_I[0],     $dtype_shift;\n",
+            j6c37 => "--:-:-:-:1      LEA.HI.X track1I1,    slice1I0,   param_I[1], RZ, $dtype_shift;\n" .
+                     "--:-:-:-:1      LEA      track1I2.CC, slice1I1,   param_I[0],     $dtype_shift;\n",
+            j6c42 => "--:-:-:-:1      LEA.HI.X track1I3,    slice1I1,   param_I[1], RZ, $dtype_shift;\n" .
+                     "--:-:-:-:1      LEA      track1I4.CC, slice1I2,   param_I[0],     $dtype_shift;\n",
+            j6c47 => "--:-:-:-:1      LEA.HI.X track1I5,    slice1I2,   param_I[1], RZ, $dtype_shift;\n" .
+                     "--:-:-:-:1      LEA      track1I6.CC, slice1I3,   param_I[0],     $dtype_shift;\n",
+            j6c52 => "--:-:-:-:1      LEA.HI.X track1I7,    slice1I3,   param_I[1], RZ, $dtype_shift;\n",
+
+            j6c55 => "20:-:-:-:1 \@!P0 I2I.U32.U32 I10, RZ;\n",
+            j6c57 => "--:-:-:-:1 \@!P1 I2I.U32.U32 I11, RZ;\n",
+            j6c59 => "--:-:-:-:1 \@!P2 I2I.U32.U32 I12, RZ;\n",
+            j6c61 => "--:-:-:-:1 \@!P3 I2I.U32.U32 I13, RZ;\n",
+
+            j6c56 => "--:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I10, [track1I0];\n",
+            j6c58 => "--:-:-:-:1  \@P1 LDG.E.CI.$vec_sizeI I11, [track1I2];\n",
+            j6c60 => "--:-:-:-:1  \@P2 LDG.E.CI.$vec_sizeI I12, [track1I4];\n",
+            j6c62 => "--:3:2:-:1  \@P3 LDG.E.CI.$vec_sizeI I13, [track1I6];\n",
+
+        ) : $N2 ? (
+
+            j5c31 => "--:-:-:-:1      ISETP.GE.AND P0, PT, slice0I0, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice0I0, slice0I0, offsetIc0;\n" .
+                     "--:-:-:-:1      ISETP.GE.AND P1, PT, slice0I1, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice0I1, slice0I1, offsetIc0;\n",
+
+            j5c35 => "--:-:-:-:1      LEA      track0I0.CC, slice0I0,   param_I[0],     $dtype_shift;\n",
+            j5c40 => "--:-:-:-:1      LEA.HI.X track0I1,    slice0I0,   param_I[1], RZ, $dtype_shift;\n" .
+                     "--:-:-:-:1      LEA      track0I2.CC, slice0I1,   param_I[0],     $dtype_shift;\n",
+            j5c45 => "--:-:-:-:1      LEA.HI.X track0I3,    slice0I1,   param_I[1], RZ, $dtype_shift;\n",
+
+            j5c46 => "--:-:-:-:1 \@!P0 LDS.U.$vec_sizeI I00, [addr_zero];\n",
+            j5c47 => "--:-:-:-:1 \@!P1 LDS.U.$vec_sizeI I02, [addr_zero];\n",
+
+            j5c60 => "20:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I00, [track0I0];\n",
+            j5c62 => "--:-:2:-:1  \@P1 LDG.E.CI.$vec_sizeI I02, [track0I2];\n",
+
+            j6c31 => "--:-:-:-:1      ISETP.GE.AND P0, PT, slice1I0, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice1I0, slice1I0, offsetIc1;\n" .
+                     "--:-:-:-:1      ISETP.GE.AND P1, PT, slice1I1, RZ, P5;\n" .
+                     "--:-:-:-:1      IADD slice1I1, slice1I1, offsetIc1;\n",
+
+            j6c35 => "--:-:-:-:1      LEA      track1I0.CC, slice1I0,   param_I[0],     $dtype_shift;\n",
+            j6c40 => "--:-:-:-:1      LEA.HI.X track1I1,    slice1I0,   param_I[1], RZ, $dtype_shift;\n" .
+                     "--:-:-:-:1      LEA      track1I2.CC, slice1I1,   param_I[0],     $dtype_shift;\n",
+            j6c45 => "--:-:-:-:1      LEA.HI.X track1I3,    slice1I1,   param_I[1], RZ, $dtype_shift;\n",
+
+            j6c46 => "--:-:-:-:1 \@!P0 LDS.U.$vec_sizeI I10, [addr_zero];\n",
+            j6c47 => "--:-:-:-:1 \@!P1 LDS.U.$vec_sizeI I12, [addr_zero];\n",
+
+            j6c60 => "20:-:-:-:1  \@P0 LDG.E.CI.$vec_sizeI I10, [track1I0];\n",
+            j6c62 => "--:3:2:-:1  \@P1 LDG.E.CI.$vec_sizeI I12, [track1I2];\n",
+
+        ) : $SN ? (
+            j5c31 => "--:-:-:-:1      ISETP.GE.AND P2, PT, slice0I, RZ, P5;\n",
+            j5c45 => "--:-:-:-:1 \@!P2 LDS.U.$vec_size I0, [addr_zero];\n",
+
+            j5c44 => "--:-:-:-:1  \@P5 IADD3 offsetIc0, offsetIc0, slice0I, n;\n",
+            j5c49 => "--:-:-:-:1  \@P5 LEA      track0I0.CC, offsetIc0, param_I[0],     $dtype_shift;\n",
+            j5c54 => "--:-:-:-:1  \@P5 LEA.HI.X track0I1,    offsetIc0, param_I[1], RZ, $dtype_shift;\n",
+            j5c60 => "20:-:2:-:1  \@P2 LDG.E.CI.$vec_size I0, [track0I];\n",
+
+            j6c31 => "--:-:-:-:1      ISETP.GE.AND P2, PT, slice1I, RZ, P5;\n",
+            j6c45 => "--:-:-:-:1 \@!P2 LDS.U.$vec_size I1, [addr_zero];\n",
+
+            j6c44 => "--:-:-:-:1  \@P5 IADD3 offsetIc1, offsetIc1, slice1I, n;\n",
+            j6c49 => "--:-:-:-:1  \@P5 LEA      track1I0.CC, offsetIc1, param_I[0],     $dtype_shift;\n",
+            j6c54 => "--:-:-:-:1  \@P5 LEA.HI.X track1I1,    offsetIc1, param_I[1], RZ, $dtype_shift;\n",
+            j6c60 => "20:3:2:-:1  \@P2 LDG.E.CI.$vec_size I1, [track1I];\n",
+        ) : (),
 
         j1c30 => "20:6:-:-:1  \@P6 STS.128 [writeFs + 4x<0*32>], F0;\n",
         j2c30 => "20:6:-:-:1  \@P6 STS.128 [writeFs + 4x<1*32>], F1;\n",
@@ -1054,17 +1803,6 @@ LOOP:
         j4c30 => "20:6:-:-:1  \@P6 STS.128 [writeFs + 4x<3*32>], F3;\n",
         j5c30 => "20:6:-:-:1  \@P6 STS.128 [writeIs + 4x<0*32>], I0;\n",
         j6c30 => "20:6:-:-:1  \@P6 STS.128 [writeIs + 4x<1*32>], I1;\n",
-
-
-        j5c44 => "--:-:-:-:1  \@P5 IADD3 offsetIc0, offsetIc0, sliceI0, n;\n",
-        j5c49 => "--:-:-:-:1  \@P5 LEA      track0I0.CC, offsetIc0, param_I[0],     $dtype_shift;\n",
-        j5c54 => "--:-:-:-:1  \@P5 LEA.HI.X track0I1,    offsetIc0, param_I[1], RZ, $dtype_shift;\n",
-        j5c60 => "20:-:2:-:1  \@P2 LDG.E.CI.$vec_size I0, [track0I];\n",
-
-        j6c44 => "--:-:-:-:1  \@P5 IADD3 offsetIc1, offsetIc1, sliceI1, n;\n",
-        j6c49 => "--:-:-:-:1  \@P5 LEA      track1I0.CC, offsetIc1, param_I[0],     $dtype_shift;\n",
-        j6c54 => "--:-:-:-:1  \@P5 LEA.HI.X track1I1,    offsetIc1, param_I[1], RZ, $dtype_shift;\n",
-        j6c60 => "20:3:2:-:1  \@P2 LDG.E.CI.$vec_size I1, [track1I];\n",
 
         $convert_in ? (
             j1c5  => "--:-:-:-:1      DEPBAR.LE SB1, 5;\n",
@@ -1114,15 +1852,37 @@ LOOP:
                 j4c12 => "--:-:-:-:1  \@P6 $convert_in F31, F30.H1;\n",
                 j4c14 => "--:-:6:-:1  \@P6 $convert_in F30, F30.H0;\n",
             ),
-            j5c8  => "--:-:-:-:1  \@P6 $convert_in I03, I01.H1;\n",
-            j5c10 => "--:-:-:-:1  \@P6 $convert_in I02, I01.H0;\n",
-            j5c12 => "--:-:-:-:1  \@P6 $convert_in I01, I00.H1;\n",
-            j5c14 => "--:-:6:-:1  \@P6 $convert_in I00, I00.H0;\n",
+            $N1 ? (
+                j5c8  => "--:-:-:-:1  \@P6 $convert_in I03, I03;\n",
+                j5c10 => "--:-:-:-:1  \@P6 $convert_in I02, I02;\n",
+                j5c12 => "--:-:-:-:1  \@P6 $convert_in I01, I01;\n",
+                j5c14 => "--:-:6:-:1  \@P6 $convert_in I00, I00;\n",
 
-            j6c8  => "--:-:-:-:1  \@P6 $convert_in I13, I11.H1;\n",
-            j6c10 => "--:-:-:-:1  \@P6 $convert_in I12, I11.H0;\n",
-            j6c12 => "--:-:-:-:1  \@P6 $convert_in I11, I10.H1;\n",
-            j6c14 => "--:-:6:-:1  \@P6 $convert_in I10, I10.H0;\n",
+                j6c8  => "--:-:-:-:1  \@P6 $convert_in I13, I13;\n",
+                j6c10 => "--:-:-:-:1  \@P6 $convert_in I12, I12;\n",
+                j6c12 => "--:-:-:-:1  \@P6 $convert_in I11, I11;\n",
+                j6c14 => "--:-:6:-:1  \@P6 $convert_in I10, I10;\n",
+            ) : $N2 ? (
+                j5c8  => "--:-:-:-:1  \@P6 $convert_in I03, I02.H1;\n",
+                j5c10 => "--:-:-:-:1  \@P6 $convert_in I02, I02.H0;\n",
+                j5c12 => "--:-:-:-:1  \@P6 $convert_in I01, I00.H1;\n",
+                j5c14 => "--:-:6:-:1  \@P6 $convert_in I00, I00.H0;\n",
+
+                j6c8  => "--:-:-:-:1  \@P6 $convert_in I13, I12.H1;\n",
+                j6c10 => "--:-:-:-:1  \@P6 $convert_in I12, I12.H0;\n",
+                j6c12 => "--:-:-:-:1  \@P6 $convert_in I11, I10.H1;\n",
+                j6c14 => "--:-:6:-:1  \@P6 $convert_in I10, I10.H0;\n",
+            ) : (
+                j5c8  => "--:-:-:-:1  \@P6 $convert_in I03, I01.H1;\n",
+                j5c10 => "--:-:-:-:1  \@P6 $convert_in I02, I01.H0;\n",
+                j5c12 => "--:-:-:-:1  \@P6 $convert_in I01, I00.H1;\n",
+                j5c14 => "--:-:6:-:1  \@P6 $convert_in I00, I00.H0;\n",
+
+                j6c8  => "--:-:-:-:1  \@P6 $convert_in I13, I11.H1;\n",
+                j6c10 => "--:-:-:-:1  \@P6 $convert_in I12, I11.H0;\n",
+                j6c12 => "--:-:-:-:1  \@P6 $convert_in I11, I10.H1;\n",
+                j6c14 => "--:-:6:-:1  \@P6 $convert_in I10, I10.H0;\n",
+            ),
         ) : (
             j1c27 => "--:-:-:-:1      DEPBAR.LE SB1, 5;\n",
             j2c27 => "--:-:-:-:1      DEPBAR.LE SB1, 5;\n",
@@ -1247,8 +2007,19 @@ LOOP:
 --:-:-:-:1      IADD    k08, k00, 8;
 --:-:-:-:1      IADD    k12, k00, 12;
 [+
-    our $SN;
-    return $SN ? q{
+    our $LN; return $LN ? q{
+// n = idx_N*32 + tid31;
+--:-:-:-:1      ISCADD N, idx_N, tid_31, 5;
+// n < N
+--:-:-:-:1      ISETP.LT.AND P4, PT, N, param_N, P4;
+
+// o = k*MPQN + m*PQN + p*QN + q*N + n
+--:-:-:-:1      XMAD      offset, idx_Q, param_N,   N;
+--:-:-:-:1      XMAD.LO2C offset, idx_P, param_QN,  offset;
+--:-:-:-:1      XMAD.LO2C offset, idx_M, param_PQN, offset;
+
+    } : q{
+
 --:-:-:-:1      SHL M, idx_M, param_shiftM;
 --:-:-:-:1      SHL P, idx_P, param_shiftP;
 --:-:-:-:1      SHL Q, idx_Q, param_shiftQ;
@@ -1274,16 +2045,6 @@ LOOP:
 --:-:-:-:1      XMAD      offset, Q, param_N,   N;
 --:-:-:-:1      XMAD.LO2C offset, P, param_QN,  offset;
 --:-:-:-:1      XMAD.LO2C offset, M, param_PQN, offset;
-    } : q{
-// n = idx_N*32 + tid31;
---:-:-:-:1      ISCADD N, idx_N, tid_31, 5;
-// n < N
---:-:-:-:1      ISETP.LT.AND P4, PT, N, param_N, P4;
-
-// o = k*MPQN + m*PQN + p*QN + q*N + n
---:-:-:-:1      XMAD      offset, idx_Q, param_N,   N;
---:-:-:-:1      XMAD.LO2C offset, idx_P, param_QN,  offset;
---:-:-:-:1      XMAD.LO2C offset, idx_M, param_PQN, offset;
     };
 +]
 --:-:-:-:1      XMAD.LO2C offset, k00, param_MPQN, offset;
