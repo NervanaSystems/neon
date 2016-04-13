@@ -102,7 +102,7 @@ class ImageLoader(DataLoader):
         super(ImageLoader, self).__init__(set_name=self.set_name,
                                           repo_dir=repo_dir,
                                           media_params=media_params,
-                                          target_size=1, shuffle=shuffle,
+                                          target_size=1, reshuffle=shuffle,
                                           nclasses=self.nclass,
                                           subset_percent=subset_pct)
 
