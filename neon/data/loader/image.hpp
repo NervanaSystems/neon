@@ -113,11 +113,10 @@ public:
     }
 
     void getRandomAngle(unsigned int& seed, int& angle) {
-        if (_rotateMax == _rotateMin) {
-            angle = _rotateMax;
+        if ((_rotateMin == 0) && (_rotateMax == 0)) {
+            angle = 0;
             return;
         }
-
         if (_rotateMax < _rotateMin) {
             throw std::runtime_error("Max angle is less than min angle");
         }

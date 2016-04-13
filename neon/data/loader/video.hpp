@@ -91,11 +91,8 @@ public:
         AVFrame* pFrameRGB = av_frame_alloc();
         AVPixelFormat pFormat = AV_PIX_FMT_BGR24;
 
-        //int numBytes = av_image_get_buffer_size(pFormat, codecCtx->width, codecCtx->height, 1);
         int numBytes = avpicture_get_size(pFormat, codecCtx->width, codecCtx->height);
         uint8_t* buffer = (uint8_t *) av_malloc(numBytes * sizeof(uint8_t));
-        //av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize, buffer,
-        //                 pFormat, codecCtx->width, codecCtx->height, 1);
         avpicture_fill((AVPicture*) pFrameRGB, buffer, pFormat,
                        codecCtx->width, codecCtx->height);
         int numFrames = formatCtx->streams[videoStream]->nb_frames;
@@ -134,7 +131,7 @@ public:
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
-
+        assert(_params != 0);
     }
 
 private:
@@ -145,7 +142,6 @@ private:
     int _findVideoStream(AVCodecContext* &codecCtx, AVFormatContext* formatCtx) {
         for (int streamIdx = 0; streamIdx < (int) formatCtx->nb_streams; streamIdx++) {
             codecCtx = formatCtx->streams[streamIdx]->codec;
-            //if (avcodec_get_type(codecCtx->codec_id) == AVMEDIA_TYPE_VIDEO) {
             if (codecCtx->coder_type == AVMEDIA_TYPE_VIDEO) {
                 return streamIdx;
             }

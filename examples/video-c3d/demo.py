@@ -21,7 +21,7 @@ Reference:
     http://arxiv.org/pdf/1412.0767.pdf
 
 Usage:
-    python examples/video_c3d/demo.py --data_dir <video_dir>
+    python examples/video-c3d/demo.py --data_dir <video_dir>
                                       --class_ind_file <label_index_file_map>
                                       --model_weights <trained_pickle_file>
 """

@@ -21,12 +21,12 @@ Reference:
     http://arxiv.org/pdf/1412.0767.pdf
 
 Usage:
-    Run neon/examples/video_c3d/preprocess.py to preprocess videos into clips
+    Run neon/examples/video-c3d/preprocess.py to preprocess videos into clips
     for training and test splits. Point the --data_dir arg to the directory
     containing the preprocessed train and test folders. Try a smaller batch
     size if memory is limited.
 
-    python examples/video_c3d/train.py --data_dir <preprocessed_video_dir>
+    python examples/video-c3d/train.py --data_dir <preprocessed_video_dir>
                                        --batch_size 32
                                        --epochs 18
                                        --save_path UCF101-C3D.p
