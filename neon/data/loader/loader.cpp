@@ -118,7 +118,7 @@ int test(char* repoDir, char* indexFile,
     int minibatchCount = 65;
     int itemCount = 0;
 
-    ImageParams mediaParams(3, 30, 30, false, false, 0, 0, 0, 0, 0, 0, 0,
+    ImageParams mediaParams(3, 30, 30, true, false, 0, 0, 0, 0, 0, 0, 0,
                             false, 0, 0, 0, 0);
     char* dataBuffer[2];
     char* targetBuffer[2];

@@ -118,10 +118,21 @@ class ImageIngestParams(MediaParams):
 
 
 class VideoParams(MediaParams):
-    _fields_ = [('dummy', ct.c_int)]
+    _fields_ = [('frame_params', ImageParams),
+                ('frames_per_clip', ct.c_int)]
 
     def __init__(self, **kwargs):
+        for key in kwargs:
+            if not hasattr(self, (key)):
+                raise ValueError('Unknown argument %s' % key)
         super(VideoParams, self).__init__(mtype=MediaType.video, **kwargs)
+
+    def get_shape(self):
+        return (self.frame_params.channel_count, self.frames_per_clip,
+                self.frame_params.height, self.frame_params.width)
+
+    def datum_size(self):
+        return np.prod(self.get_shape())
 
 
 class AudioParams(MediaParams):
