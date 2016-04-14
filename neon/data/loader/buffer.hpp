@@ -120,6 +120,12 @@ public:
         pushItem(size);
     }
 
+    void read(T* src, int size) {
+        resizeIfNeeded(size);
+        memcpy((void *) _cur, (void *) src, size * sizeof(T));
+        pushItem(size);
+    }
+
 private:
     void resizeIfNeeded(int inc) {
         if (getLevel() + inc > getSize()) {

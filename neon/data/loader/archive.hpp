@@ -378,17 +378,10 @@ private:
         while ((int) _shuffleQueue.size() < count) {
             replenishQueue(count);
         }
-
-        CharBuffer* data = buffers.first;
-        CharBuffer* targets = buffers.second;
         for (int i=0; i<count; ++i) {
             auto ee = std::move(_shuffleQueue.at(0));
-            int dataSize = ee.first->size();
-            int targetSize = ee.second->size();
-            memcpy(data->getCurrent(), &(*ee.first)[0], dataSize);
-            memcpy(targets->getCurrent(), &(*ee.second)[0], targetSize);
-            data->pushItem(dataSize);
-            targets->pushItem(targetSize);
+            buffers.first->read(&(*ee.first)[0], ee.first->size());
+            buffers.second->read(&(*ee.second)[0], ee.second->size());
             _shuffleQueue.pop_front();
         }
         return count;
