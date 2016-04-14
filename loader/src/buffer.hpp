@@ -14,7 +14,7 @@
 */
 
 #include <assert.h>
-#if HASGPU
+#if HAS_GPU
 #include <cuda.h>
 #endif
 
@@ -149,7 +149,7 @@ private:
         T*      data;
         assert(_alloc == true);
         if (_pinned == true) {
-#if HASGPU
+#if HAS_GPU
             CUresult status = cuMemAllocHost((void**)&data, _size * sizeof(T));
             if (status != CUDA_SUCCESS) {
                 throw std::bad_alloc();
@@ -165,7 +165,7 @@ private:
 
     void dealloc(T* data) {
         if (_pinned == true) {
-#if HASGPU
+#if HAS_GPU
             cuMemFreeHost(data);
 #else
             delete[] data;

@@ -90,7 +90,8 @@ class DataLoader(NervanaDataIterator):
 
     def load_library(self):
         path = os.path.dirname(os.path.realpath(__file__))
-        libpath = os.path.join(path, 'loader', 'loader.so')
+        libpath = os.path.join(path, os.pardir, os.pardir,
+                               'loader', 'bin', 'loader.so')
         self.loaderlib = ct.cdll.LoadLibrary(libpath)
         self.loaderlib.start.restype = ct.c_void_p
         self.loaderlib.next.argtypes = [ct.c_void_p]

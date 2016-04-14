@@ -59,7 +59,7 @@ public:
     int                         _type;
 };
 
-#if HASGPU
+#if HAS_GPU
 #include <cuda.h>
 #include <cuda_runtime.h>
 using std::runtime_error;
@@ -223,7 +223,7 @@ private:
 };
 
 Device* Device::create(DeviceParams* params) {
-#if HASGPU
+#if HAS_GPU
     if (params->_type == CPU) {
         return new Cpu(reinterpret_cast<CpuParams*>(params));
     }

@@ -66,15 +66,13 @@ class BatchWriter(object):
                  class_samples_max=None, file_pattern='*.jpg', macro_size=3072,
                  pixel_mean=(0, 0, 0)):
 
-        libpath = os.path.dirname(os.path.realpath(__file__))
-        try:
-            self.writerlib = ct.cdll.LoadLibrary(
-                os.path.join(libpath, 'loader', 'loader.so'))
-            self.writerlib.write_batch.restype = None
-            self.writerlib.read_max_item.restype = ct.c_int
-        except:
-            logger.error('Unable to load loader.so. Ensure that '
-                         'this file has been compiled')
+
+        path = os.path.dirname(os.path.realpath(__file__))
+        libpath = os.path.join(path, os.pardir, os.pardir,
+                               'loader', 'bin', 'loader.so')
+        self.writerlib = ct.cdll.LoadLibrary(libpath)
+        self.writerlib.write_batch.restype = None
+        self.writerlib.read_max_item.restype = ct.c_int
 
         np.random.seed(0)
         self.out_dir = os.path.expanduser(out_dir)

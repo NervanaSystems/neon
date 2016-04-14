@@ -8,9 +8,9 @@
 #include <string>
 #include <sstream>
 #include <cstdio>
-#include "../buffer.hpp"
-#include "../batchfile.hpp"
-#include "../image.hpp"
+#include "buffer.hpp"
+#include "batchfile.hpp"
+#include "image.hpp"
 
 int main (int argc, char **argv) {
     ImageParams *imgp = new ImageParams(3, 224, 224, true, true, // channels, h, w, augment, flip

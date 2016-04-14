@@ -84,7 +84,7 @@ KERNEL_BUILDER_BUILD_OPTS := --kernels
 KERNEL_BUILDER_CLEAN_OPTS := --clean
 
 # neon compiled objects
-DATA_LOADER := neon/data/loader
+DATA_LOADER := loader
 
 .PHONY: default env maxas kernels sysinstall sysinstall_nodeps neon_install \
 	    sysdeps sysuninstall clean_py clean_maxas clean_so clean_kernels \
@@ -151,7 +151,7 @@ ifeq ($(HAS_GPU), true)
 endif
 
 $(DATA_LOADER):
-	-@cd $(DATA_LOADER) && $(MAKE) -s loader.so USEGPU=$(HAS_GPU)
+	-@cd $(DATA_LOADER) && $(MAKE) -s bin/loader.so HAS_GPU=$(HAS_GPU)
 
 # TODO: handle kernel/.so compilation via setup.py directly
 sysinstall_nodeps: kernels $(DATA_LOADER) neon_install

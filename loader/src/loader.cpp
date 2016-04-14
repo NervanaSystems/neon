@@ -18,20 +18,33 @@
 
 #include "loader.hpp"
 #include "image.hpp"
+
+#if HAS_VIDLIB
 #include "video.hpp"
+#endif
+
 #include "audio.hpp"
 
+#define UNSUPPORTED_MEDIA_MESSAGE "support not built-in. Please install the " \
+                                  "pre-requisites and re-run the installer."
 Media* Media::create(MediaParams* params, MediaParams* ingestParams) {
     switch (params->_mtype) {
     case IMAGE:
         return new Image(reinterpret_cast<ImageParams*>(params),
                          reinterpret_cast<ImageIngestParams*>(ingestParams));
     case VIDEO:
+#if HAS_VIDLIB
         return new Video(reinterpret_cast<VideoParams*>(params));
+#else
+        {
+            string message = "Video " UNSUPPORTED_MEDIA_MESSAGE;
+            throw std::runtime_error(message);
+        }
+#endif
     case AUDIO:
         return new Audio(reinterpret_cast<AudioParams*>(params));
     default:
-        throw std::runtime_error("Unknown media type\n");
+        throw std::runtime_error("Unknown media type");
     }
     return 0;
 }
