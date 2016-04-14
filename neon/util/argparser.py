@@ -72,6 +72,8 @@ class NeonArgparser(configargparse.ArgumentParser):
             # turn off the auto-generated config help for config files since it
             # referenced unsettable config options like --version
             kwargs['add_config_file_help'] = False
+
+        self.defaults = kwargs.pop('default_overrides', dict())
         super(NeonArgparser, self).__init__(*args, **kwargs)
 
         # ensure that default values are display via --help
@@ -88,7 +90,8 @@ class NeonArgparser(configargparse.ArgumentParser):
         self.add_argument('-c', '--config', is_config_file=True,
                           help='Read values for these arguments from the '
                                'configuration file specified here first.')
-        self.add_argument('-v', '--verbose', action='count', default=1,
+        self.add_argument('-v', '--verbose', action='count',
+                          default=self.defaults.get('verbose', 1),
                           help="verbosity level.  Add multiple v's to "
                                "further increase verbosity")
         # we store the negation of no_progress_bar in args.progress_bar during
@@ -104,55 +107,67 @@ class NeonArgparser(configargparse.ArgumentParser):
                             default=os.path.join(self.work_dir, 'data'),
                             help='working directory in which to cache '
                                  'downloaded and preprocessed datasets')
-        rt_grp.add_argument('-e', '--epochs', type=int, default=10,
+        rt_grp.add_argument('-e', '--epochs', type=int,
+                            default=self.defaults.get('epochs', 10),
                             help='number of complete passes over the dataset to run')
         rt_grp.add_argument('-s', '--save_path', type=str,
+                            default=self.defaults.get('save_path'),
                             help='file path to save model snapshots')
         rt_grp.add_argument('--serialize', nargs='?', type=int,
-                            default=0, const=1, metavar='N',
+                            default=self.defaults.get('serialize', 0),
+                            const=1, metavar='N',
                             help='serialize model every N epochs')
         rt_grp.add_argument('--model_file', help='load model from pkl file')
         rt_grp.add_argument('-l', '--log', dest='logfile', nargs='?',
                             const=os.path.join(self.work_dir, 'neon_log.txt'),
                             help='log file')
-        rt_grp.add_argument('-o', '--output_file', default=None,
+        rt_grp.add_argument('-o', '--output_file',
+                            default=self.defaults.get('output_file', None),
                             help='hdf5 data file for metrics computed during '
                                  'the run, optional.  Can be used by nvis for '
                                  'visualization.')
-        rt_grp.add_argument('-eval', '--eval_freq', type=int, default=None,
+        rt_grp.add_argument('-eval', '--eval_freq', type=int,
+                            default=self.defaults.get('eval_freq', None),
                             help='frequency (in epochs) to test the eval set.')
-        rt_grp.add_argument('-H', '--history', type=int, default=1,
+        rt_grp.add_argument('-H', '--history', type=int,
+                            default=self.defaults.get('history', 1),
                             help='number of checkpoint files to retain')
 
         be_grp = self.add_argument_group('backend')
         be_grp.add_argument('-b', '--backend', choices=['cpu', 'gpu', 'mgpu', 'argon'],
-                            default='gpu' if get_compute_capability() >= 3.0
-                                    else 'cpu',
+                            default=self.defaults.get('backend',
+                                                      'gpu' if get_compute_capability() >= 3.0
+                                                      else 'cpu'),
                             help='backend type. Multi-GPU support is a premium '
                                  'feature available exclusively through the '
                                  'Nervana cloud. Please contact '
                                  'info@nervanasys.com for details.')
-        be_grp.add_argument('-i', '--device_id', type=int, default=0,
+        be_grp.add_argument('-i', '--device_id', type=int,
+                            default=self.defaults.get('device_id', 0),
                             help='gpu device id (only used with GPU backend)')
-        be_grp.add_argument('-m', '--max_devices', type=int, default=get_device_count(),
+        be_grp.add_argument('-m', '--max_devices', type=int,
+                            default=self.defaults.get('max_devices', get_device_count()),
                             help='max number of GPUs (only used with mgpu backend')
 
         be_grp.add_argument('-r', '--rng_seed', type=int,
-                            default=None, metavar='SEED',
+                            default=self.defaults.get('rng_seed', None),
+                            metavar='SEED',
                             help='random number generator seed')
         be_grp.add_argument('-u', '--rounding',
                             const=True,
                             type=int,
                             nargs='?',
                             metavar='BITS',
-                            default=False,
+                            default=self.defaults.get('rounding', False),
                             help='use stochastic rounding [will round to BITS number '
                                  'of bits if specified]')
         be_grp.add_argument('-d', '--datatype', choices=['f16', 'f32', 'f64'],
-                            default='f32', metavar='default datatype',
+                            default=self.defaults.get('datatype', 'f32'),
+                            metavar='default datatype',
                             help='default floating point '
                             'precision for backend [f64 for cpu only]')
-        be_grp.add_argument('-z', '--batch_size', type=int, default=128,
+        be_grp.add_argument('-z', '--batch_size', type=int,
+                            default=self.defaults.get('batch_size', 128),
                             help='batch size')
         be_grp.add_argument('--caffe', action='store_true',
                             help='match caffe when computing conv and pool layer output '

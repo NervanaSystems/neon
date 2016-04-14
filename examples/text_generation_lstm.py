@@ -24,7 +24,6 @@ Reference:
 """
 import numpy as np
 
-from neon.backends import gen_backend
 from neon.data import Text
 from neon.data.dataloaders import load_shakespeare
 from neon.initializers import Uniform
@@ -33,30 +32,20 @@ from neon.models import Model
 from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
-from neon.util.argparser import NeonArgparser, extract_valid_args
+from neon.util.argparser import NeonArgparser
 
 # parse the command line arguments
-parser = NeonArgparser(__doc__)
-args = parser.parse_args(gen_be=False)
+default_overrides = dict(save_path='rnn_text_gen.pickle',
+                         serialize=1,
+                         batch_size=64)
 
-# Override save path if None
-if args.save_path is None:
-    args.save_path = 'rnn_text_gen.pickle'
-
-if args.callback_args['save_path'] is None:
-    args.callback_args['save_path'] = args.save_path
-
-if args.callback_args['serialize'] is None:
-    args.callback_args['serialize'] = 1
+parser = NeonArgparser(__doc__, default_overrides=default_overrides)
+args = parser.parse_args()
 
 # hyperparameters
-args.batch_size = 64
 time_steps = 64
 hidden_size = 512
 gradient_clip_value = 5
-
-# setup backend
-be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download shakespeare text
 data_path = load_shakespeare(path=args.data_dir)
@@ -95,7 +84,7 @@ def sample(prob):
     return np.argmax(np.random.multinomial(1, prob, 1))
 
 # Set batch size and time_steps to 1 for generation and reset buffers
-be.bsz = 1
+model.be.bsz = 1
 time_steps = 1
 num_predict = 1000
 
@@ -111,7 +100,7 @@ model_new.initialize(dataset=(train_set.shape[0], time_steps))
 text = []
 seed_tokens = list('ROMEO:')
 
-x = be.zeros((len(train_set.vocab), time_steps))
+x = model_new.be.zeros((len(train_set.vocab), time_steps))
 
 for s in seed_tokens:
     x.fill(0)

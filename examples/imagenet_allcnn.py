@@ -23,8 +23,7 @@ Reference:
 """
 
 from neon.util.argparser import NeonArgparser
-from neon.backends import gen_backend
-from neon.initializers import GlorotUniform
+from neon.initializers import Kaiming
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost, DataTransform
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Normalizer
@@ -33,23 +32,12 @@ from neon.callbacks.callbacks import Callbacks
 from neon.data import ImageLoader
 
 # parse the command line arguments
-parser = NeonArgparser(__doc__)
+parser = NeonArgparser(__doc__, default_overrides=dict(batch_size=64))
 parser.add_argument('--deconv', action='store_true',
                     help='save visualization data from deconvolution')
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
-
-
-# hyperparameters
-batch_size = 64
-
-# setup backend
-be = gen_backend(backend=args.backend,
-                 batch_size=batch_size,
-                 rng_seed=args.rng_seed,
-                 device_id=args.device_id,
-                 datatype=args.datatype)
 
 # setup data provider
 img_set_options = dict(repo_dir=args.data_dir,
@@ -60,8 +48,7 @@ train = ImageLoader(set_name='train', **img_set_options)
 test = ImageLoader(set_name='validation', do_transforms=False, **img_set_options)
 
 relu = Rectlin()
-
-init_uni = GlorotUniform()
+init_uni = Kaiming()
 
 # The parameters below are straight out of [Springenberg2014]
 opt_gdm = GradientDescentMomentum(learning_rate=0.01,

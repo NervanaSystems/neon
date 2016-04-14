@@ -1145,8 +1145,6 @@ class BatchNormTuneCallback(Callback):
 
             debiaser = float((batch_idx + 1.0) / batch_idx)
             for l in self.bn_layers:
-                if getattr(l.gvar, 'is_divergent', False):
-                    l.be.reduce_replicas(l.gvar, False)
                 l.gvar[:] = l.gvar * debiaser
 
 
