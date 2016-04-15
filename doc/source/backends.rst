@@ -338,6 +338,12 @@ optree:
     print(OpTreeNode.pp(f))
     print(OpTreeNode.pp(x0_grad_tree))
 
+Custom Kernels for GPU
+----------------------
+
+We use `pycuda <https://mathema.tician.de/software/pycuda/>`_ to wrap custom kernels for the GPU. For example, see `float_ew <https://github.com/NervanaSystems/neon/blob/master/neon/backends/float_ew.py#L1066>`_.
+
+
 .. |Tensor| replace:: :py:class:`.Tensor`
 .. |OpTreeNode| replace:: :py:class:`.OpTreeNode`
 .. |Autodiff| replace:: :py:class:`.Autodiff`

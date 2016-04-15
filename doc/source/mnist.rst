@@ -93,7 +93,7 @@ Model architecture
 ~~~~~~~~~~~~~~~~~~
 
 The model is specified as a list of layers. For classifying MNIST
-images, we have two layers:
+images, we use a multi-layer perceptron with fully connected layers.
 
 -  Affine (i.e. fully-connected) layer with 100 hidden units and a
    `rectified linear <https://en.wikipedia.org/wiki/Rectifier_(neural_networks)>`__
@@ -233,5 +233,5 @@ Next steps
 This simple example guides you through the basic operations needed to
 create and fit a neural network. However, Neon contains a rich feature
 set of customizable layers, metrics, and options. To learn more, we
-recommend reading through the :doc:`AlexNet tutorial <alexnet>`,
-which introduces convolutional/pooling layer and multiple optimizers.
+recommend reading through the :doc:`CIFAR10 tutorial <cifar10>`,
+which introduces convolutional neural networks.

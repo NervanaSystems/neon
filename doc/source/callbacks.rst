@@ -43,10 +43,10 @@ are enabled by default.
    :widths: 20, 40
    :escape: ~
 
-   :py:class:`RunTimerCallback<neon.callbacks.callbacks.RunTimerCallback>`, Tracks total training time
-   :py:class:`TrainCostCallback<neon.callbacks.callbacks.TrainCostCallback>`, Computes average training cost for each minibatch
-   :py:class:`ProgressBarCallback<neon.callbacks.callbacks.ProgressBarCallback>`, Live progress bar for training
-   :py:class:`TrainLoggerCallback<neon.callbacks.callbacks.TrainLoggerCallback>`, Logs training progress every `epoch_freq` epochs and `minibatch_freq` minibatches.
+   \* :py:class:`RunTimerCallback<neon.callbacks.callbacks.RunTimerCallback>`, Tracks total training time
+   \* :py:class:`TrainCostCallback<neon.callbacks.callbacks.TrainCostCallback>`, Computes average training cost for each minibatch
+   \* :py:class:`ProgressBarCallback<neon.callbacks.callbacks.ProgressBarCallback>`, Live progress bar for training
+   \* :py:class:`TrainLoggerCallback<neon.callbacks.callbacks.TrainLoggerCallback>`, Logs training progress every `epoch_freq` epochs and `minibatch_freq` minibatches.
    :py:class:`SerializeModelCallback<neon.callbacks.callbacks.SerializeModelCallback>`, Saves the model every `epoch_freq` epochs. Can be enabled with the `--serialize [epoch_freq]` command line argument.
    :py:class:`LossCallback<neon.callbacks.callbacks.LossCallback>`, Computes loss every epoch. Can be enabled with the `--eval_freq [epoch_freq]` command line argument (validation set must be passed to Callback).
    :py:class:`MetricCallback<neon.callbacks.callbacks.MetricCallback>`, Computes a given `metric` every `epoch_freq` epochs. Can be enabled with the `--eval_freq [epoch_freq]` command line argument (metric must be passed to Callback)

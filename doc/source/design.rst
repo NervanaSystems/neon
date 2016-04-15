@@ -25,6 +25,7 @@ Computation backend
   * A backend must first be generated before running a model using ``gen_backend``.
   * If swapping backends, then buffers must be reinitialized by reinstantiating the
     model layers and calling fprop with the new generated backend.
+  * The backend expects image data to be formatted as CHWN (channels, height, width, minibatch).
 
 Layers
 ------
@@ -99,4 +100,3 @@ Choice of sizes
 * In many of our examples, we use parameters from reference implementations. However,
   it is recommended to use multiples of 4. In many cases, zero-padding is needed to
   implement the same model.
-

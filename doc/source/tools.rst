@@ -44,7 +44,7 @@ visualization data:
 
 ::
 
-    examples/cifar10_allcnn.py -o data.h5
+    ./examples/cifar10_allcnn.py -o data.h5
     nvis -i data.h5 -o .
 
 Layer deconvolution visualization

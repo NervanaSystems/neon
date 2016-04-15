@@ -29,6 +29,7 @@ activation functions:
    :escape: ~
 
    :py:class:`neon.transforms.Identity<neon.transforms.activation.Identity>`, :math:`f(x) = x`
+   :py:class:`neon.transforms.Rectlin<neon.transforms.activation.Rectlin>`, :math:`f(x) = \max(x~, 0)`
    :py:class:`neon.transforms.Explin<neon.transforms.activation.Explin>`, :math:`f(x) = \max(x~, 0) + \alpha (e^{\min(x~, 0)}-1)`
    :py:class:`neon.transforms.Normalizer<neon.transforms.activation.Normalizer>`, :math:`f(x) = x / \alpha`
    :py:class:`neon.transforms.Softmax<neon.transforms.activation.Softmax>`, :math:`f(x_j) = \frac{\exp{x_j}}{\sum_i \exp {x_i}}`

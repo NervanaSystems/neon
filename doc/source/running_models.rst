@@ -25,12 +25,12 @@ containing the model, as mentioned before:
     examples/mnist_mlp.py
 
 This will run the multilayer perceptron (MLP) model and print the final
-misclassification error after 10 training epochs. On the first run, neon will download the MNIST dataset. It will create a ``~/nervana`` directory where the raw datasets are kept
+misclassification error after 10 training epochs. On the first run, neon will download the MNIST dataset. It will create a ``~/nervana`` directory where the raw datasets are kept. The data directory can be controlled with the ``-w`` flag.
 
 The second method is to specify the model in a YAML file.
 `YAML <http://yaml.org/>`__ is a widely-used markup language. For
 examples, see the YAML files in the ``examples`` folder. To run the YAML
-file for the MLP example, enter from the neon repository directory
+file for the MLP example, enter from the neon repository directory:
 
 .. code-block:: bash
 
@@ -48,9 +48,10 @@ command line. Some commonly used flags include:
    :widths: 20, 50
    :escape: ~
 
-   ``-w~, --data-dir``, Path to data directory (default: ``nervana/data``)
+   ``-w~, --data_dir``, Path to data directory (default: ``nervana/data``)
    ``-e~, --epochs``, Number of epochs to run during training (default: ``10``)
    ``-s~, --save_path``, Path to save the model snapshots (default: ``None``)
    ``-o~, --output_file``, Path to save the metrics and callback data generated during training. Can be used by ``nvis`` for visualization  (default: ``None``)
    ``-b~, --backend {cpu~,gpu}``, Which backend to use (default: ``cpu``)
    ``-z~, --batch_size``, Batch size for training (default: ``128``)
+   ``-v~``, Verbose output. Displays each layer's shape information.

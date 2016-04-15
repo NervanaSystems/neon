@@ -236,7 +236,7 @@ Operations
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Backend.onehot<.Backend.onehot>` | Generates a one-hot representation from a set of indicies (see [Loading data](loading_data.md))
+    :py:meth:`neon.backends.Backend.onehot<.Backend.onehot>` | Generates a one-hot representation from a set of indicies (see :doc:`Loading data<loading_data>`)
     :py:meth:`neon.backends.Backend.fill_normal<.NervanaGPU.fill_normal>` | Fills a tensor with gaussian random variables
     :py:meth:`neon.backends.Backend.compound_dot<.Backend.compound_dot>` | Depending on the size of the input :math:`A`, :math:`B`, :math:`C`, performs :math:`\alpha A B + \beta C`
     :py:meth:`neon.backends.NervanaGPU.make_binary_mask<.NervanaGPU.make_binary_mask>` | Creates a randomized binary mask for dropout layers
