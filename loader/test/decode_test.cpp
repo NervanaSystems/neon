@@ -13,11 +13,11 @@
 #include "image.hpp"
 
 int main (int argc, char **argv) {
-    ImageParams *imgp = new ImageParams(3, 224, 224, true, true, // channels, h, w, augment, flip
-        256, 256,   // Scale Params
-        75, 125,    // Contrast params
-        0, 0,       // Rotation params
-        0,          // Aspect Ratio
+    ImageParams *imgp = new ImageParams(3, 224, 224, false, true, // channels, h, w, augment, flip
+        20, 100,   // Scale Params
+        60, 140,    // Contrast params
+        -10, 10,       // Rotation params
+        133,          // Aspect Ratio
         false, 0, 0, 0, 0);  // subtract mean, r, g, b, gray means
     ImageIngestParams *iip = new ImageIngestParams(true, true, 256, 256);
 

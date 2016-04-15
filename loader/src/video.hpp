@@ -62,7 +62,7 @@ public:
         assert(params->_mtype == VIDEO);
         assert(params->_frameParams._mtype == IMAGE);
         _imgDecoder = new Image(&(_params->_frameParams), 0, id);
-        _imgSize = params->_frameParams._width * params->_frameParams._height;
+        _imgSize = params->_frameParams.getSize().area();
         _decodedSize = _imgSize * params->_frameParams._channelCount ;
         av_register_all();
     }
@@ -112,7 +112,6 @@ public:
                     Mat frame(pFrame->height, pFrame->width,
                               CV_8UC3, pFrameRGB->data[0]);
                     writeFrameToBuf(frame, buf, frameIdx, channelSize);
-
                     frameIdx++;
                 }
                 av_frame_free(&pFrame);

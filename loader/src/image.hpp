@@ -28,17 +28,31 @@ using cv::Mat;
 using cv::Rect;
 using cv::Point2i;
 using cv::Size2i;
+using cv::Scalar_;
 using std::ofstream;
 using std::vector;
 
 #pragma once
 
 typedef struct {
-    Rect                        cropBox;
-    int                         angle;
-    float                       alpha;
-    bool                        flip;
+    Rect cropBox;
+    int angle;
+    bool flip;
+    float colornoise[3];  //pixelwise random values
+    float cbs[3];  // contrast, brightness, saturation
 } AugParams;
+
+// These are the eigenvectors of the pixelwise covariance matrix
+float _CPCA[3][3] = {{0.39731118,  0.70119634, -0.59200296},
+                    {-0.81698062, -0.02354167, -0.5761844},
+                    {0.41795513, -0.71257945, -0.56351045}};
+const Mat CPCA(3, 3, CV_32FC1, _CPCA);
+
+// These are the square roots of the eigenvalues of the pixelwise covariance matrix
+const Mat CSTD(3, 1, CV_32FC1, {19.72083305, 37.09388853, 121.78006099});
+
+// This is the set of coefficients for converting BGR to grayscale
+const Mat GSCL(3, 1, CV_32FC1, {0.114, 0.587, 0.299});
 
 class ImageParams : public MediaParams {
 public:
@@ -60,6 +74,18 @@ public:
       _aspectRatio(aspectRatio), _subtractMean(true),
       _redMean(redMean), _greenMean(greenMean), _blueMean(blueMean),
       _grayMean(grayMean) {
+        if (_rotateMax < _rotateMin) {
+            throw std::runtime_error("Max angle is less than min angle");
+        }
+        if (_rotateMax > 180) {
+            throw std::runtime_error("Invalid max angle");
+        }
+        if (_rotateMin < -180) {
+            throw std::runtime_error("Invalid min angle");
+        }
+        // This is just temporary until we break api and add parameter to control separately
+        // setting allows us to get std of 0.1 if contrast max is 140 (i.e. 1.4)
+        _colorNoiseStd = (_contrastMax - 100) / 400.0f;
     }
 
     void dump() {
@@ -77,82 +103,68 @@ public:
         printf("aspect ratio %d\n", _aspectRatio);
     }
 
-    bool doRandomFlip(unsigned int& seed) {
-        return _flip && (rand_r(&seed) % 2 == 0);
-    }
+    void getDistortionValues(cv::RNG &rng, const Size2i &inputSize, AugParams *agp) {
+        // This function just gets the random distortion values without modifying the
+        // image itself.  Useful if we need to reapply the same transformations over
+        // again (e.g. for all frames of a video or for a corresponding target mask)
 
-    void getRandomCorner(unsigned int& seed, const Size2i &border,
-                         Point2i* point) {
+        // colornoise values
+        // N.B. if _contrastMax == 100, then _colorNoiseStd will be 0.0
+        for (int i=0; i<3; i++) {
+            agp->colornoise[i] = rng.gaussian(_colorNoiseStd);
+        }
+
+        // contrast, brightness, saturation
+        // N.B. all value ranges tied to _contrastMin and _contrastMax
+        for (int i=0; i<3; i++) {
+            agp->cbs[i] = rng.uniform(_contrastMin, _contrastMax) / 100.0f;
+        }
+
+        /**************************
+        *  HORIZONTAL FLIP        *
+        ***************************/
+        agp->flip = _flip && rng(2) != 0  ? true : false;
+
+        /**************************
+        *  ROTATION ANGLE         *
+        ***************************/
+        agp->angle = rng.uniform(_rotateMin, _rotateMax);
+
+        /**************************
+        *  CROP BOX               *
+        ***************************/
+        float shortSide = std::min(inputSize.height, inputSize.width);
         if (_center) {
-            point->x = border.width / 2;
-            point->y = border.height / 2;
+            agp->cropBox.width = shortSide * _width / (float) _scaleMin;
+            agp->cropBox.height = shortSide * _height / (float) _scaleMin;
+            agp->cropBox.x = (inputSize.width - agp->cropBox.width) / 2;
+            agp->cropBox.y = (inputSize.height - agp->cropBox.height) / 2;
         } else {
-            point->x = rand_r(&seed) % (border.width + 1);
-            point->y = rand_r(&seed) % (border.height + 1);
-        }
-    }
+            cv::Size2f oSize = inputSize;
 
-    float getRandomContrast(unsigned int& seed) {
-        if (_contrastMin == _contrastMax) {
-            return 0;
-        }
-        return (_contrastMin +
-                (rand_r(&seed) % (_contrastMax - _contrastMin))) / 100.0;
-    }
+            // This is a hack for backward compatibility.
+            // Valid aspect ratio range ( > 100) will override side scaling behavior
+            if (_aspectRatio == 0) {
+                float scaleFactor = rng.uniform(_scaleMin, _scaleMax);
+                agp->cropBox.width = shortSide * _width / scaleFactor;
+                agp->cropBox.height = shortSide * _height / scaleFactor;
+            } else {
+                float mAR = (float) _aspectRatio / 100.0f;
+                float nAR = rng.uniform(1.0f / mAR, mAR);
+                float oAR = oSize.width / oSize.height;
+                // between minscale pct% to 100% subject to aspect ratio limitation
+                float maxScale = nAR > oAR ? oAR / nAR : nAR / oAR;
+                float minScale = std::min((float) _scaleMin / 100.0f, maxScale);
+                float tgtArea = rng.uniform(minScale, maxScale) * oSize.area();
 
-    // adjust the square cropSize to be an inner rectangle
-    void getRandomAspectRatio(unsigned int& seed, Size2i &cropSize) {
-        int ratio = (101 + (rand_r(&seed) % (_aspectRatio - 100)));
-        float ratio_f = 100.0 / (float) ratio;
-        int orientation = rand_r(&(seed)) % 2;
-        if (orientation) {
-            cropSize.height *= ratio_f;
-        } else {
-            cropSize.width *= ratio_f;
-        }
-    }
+                agp->cropBox.height = sqrt(tgtArea / nAR);
+                agp->cropBox.width = agp->cropBox.height * nAR;
+            }
 
-    void getRandomAngle(unsigned int& seed, int& angle) {
-        if ((_rotateMin == 0) && (_rotateMax == 0)) {
-            angle = 0;
-            return;
-        }
-        if (_rotateMax < _rotateMin) {
-            throw std::runtime_error("Max angle is less than min angle");
-        }
-        if (_rotateMax > 180) {
-            throw std::runtime_error("Invalid max angle");
-        }
-        if (_rotateMin < -180) {
-            throw std::runtime_error("Invalid min angle");
-        }
-        angle = (rand_r(&seed) % (_rotateMax + 1 - _rotateMin)) + _rotateMin;
-    }
+            agp->cropBox.x = rng.uniform(0, inputSize.width - agp->cropBox.width);
+            agp->cropBox.y = rng.uniform(0, inputSize.height - agp->cropBox.height);
 
-    void getRandomCrop(unsigned int& seed, const Size2i &inputSize,
-                       Rect* cropBox) {
-        if (_scaleMin == 0) {
-            // Use the entire squashed image (Caffe style evaluation)
-            cropBox->x = cropBox->y = 0;
-            cropBox->width = inputSize.width;
-            cropBox->height = inputSize.height;
-            return;
         }
-
-        int scaleSize = (_scaleMin +
-                         (rand_r(&seed) % (_scaleMax + 1 - _scaleMin)));
-        float scaleFactor = std::min(inputSize.width, inputSize.height) /
-                            (float) scaleSize;
-        Size2i cropSize(_width * scaleFactor, _height * scaleFactor);
-        if (_aspectRatio > 100) {
-            getRandomAspectRatio(seed, cropSize);
-        }
-        Point2i corner;
-        getRandomCorner(seed, inputSize - cropSize, &corner);
-        cropBox->width = cropSize.width;
-        cropBox->height = cropSize.height;
-        cropBox->x = corner.x;
-        cropBox->y = corner.y;
         return;
     }
 
@@ -180,6 +192,7 @@ public:
     int                         _greenMean;
     int                         _blueMean;
     int                         _grayMean;
+    float                       _colorNoiseStd;
 };
 
 class ImageIngestParams : public MediaParams {
@@ -226,9 +239,11 @@ class Image: public Media {
 friend class Video;
 public:
     Image(ImageParams *params, ImageIngestParams* ingestParams, int id)
-    : _params(params), _ingestParams(ingestParams), _rngSeed(id) {
+    : _params(params), _ingestParams(ingestParams), _rng(id) {
         assert(params->_mtype == IMAGE);
         assert((params->_channelCount == 1) || (params->_channelCount == 3));
+        _innerSize = _params->getSize();
+        _numPixels = _innerSize.area();
     }
 
     void transform(char* item, int itemSize, char* buf, int bufSize) {
@@ -236,6 +251,21 @@ public:
         decode(item, itemSize, &decodedImage);
         createRandomAugParams(decodedImage.size());
         transformDecodedImage(decodedImage, buf, bufSize);
+    }
+
+    void dump_agp() {
+        int x = _augParams.cropBox.x;
+        int y = _augParams.cropBox.y;
+        int w = _augParams.cropBox.width;
+        int h = _augParams.cropBox.height;
+        printf("Cropbox: from (%d, %d) to (%d, %d), %dx%d\n", x, y, x+w, y+h, h, w);
+        printf("Flip: %s\n", _augParams.flip ? "true" : "false");
+        printf("Contrast/Brightness/Saturation: %.4f %.4f %.4f\n", _augParams.cbs[0],
+                                                                   _augParams.cbs[1],
+                                                                   _augParams.cbs[2]);
+        printf("BGR Lighting: %.4f %.4f %.4f\n", _augParams.colornoise[0],
+                                                 _augParams.colornoise[1],
+                                                 _augParams.colornoise[2]);
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
@@ -332,51 +362,98 @@ private:
         }
     }
 
-    void transformDecodedImage(const Mat& decodedImage, char* buf, int bufSize) {
+    void transformDecodedImage(const Mat& decodedImage, char* buf, int bufSize){
         Mat rotatedImage;
-        if (_augParams.angle == 0) {
-            rotatedImage = decodedImage;
-        } else {
-            rotate(decodedImage, rotatedImage, _augParams.angle);
-        }
-
+        rotate(decodedImage, rotatedImage, _augParams.angle);
         Mat croppedImage = rotatedImage(_augParams.cropBox);
-        auto innerSize = _params->getSize();
-        Mat resizedImage;
-        if ((innerSize.width == _augParams.cropBox.width) &&
-                (innerSize.height == _augParams.cropBox.height)) {
-            resizedImage = croppedImage;
-        } else {
-            resize(croppedImage, resizedImage, innerSize);
-        }
-        Mat flippedImage;
-        Mat *finalImage;
 
+        Mat resizedImage;
+
+        // Perform photometric distortions in smaller spatial domain
+        if (_augParams.cropBox.area() < _numPixels) {
+            cbsjitter(croppedImage, _augParams.cbs);
+            lighting(croppedImage, _augParams.colornoise);
+            resize(croppedImage, resizedImage, _innerSize);
+        } else {
+            resize(croppedImage, resizedImage, _innerSize);
+            cbsjitter(croppedImage, _augParams.cbs);
+            lighting(croppedImage, _augParams.colornoise);
+        }
+
+        Mat *finalImage = &resizedImage;
+        Mat flippedImage;
         if (_augParams.flip) {
             cv::flip(resizedImage, flippedImage, 1);
             finalImage = &flippedImage;
-        } else {
-            finalImage = &resizedImage;
-        }
-        Mat newImage;
-        if (_augParams.alpha) {
-            finalImage->convertTo(newImage, -1, _augParams.alpha);
-            finalImage = &newImage;
         }
 
         split(*finalImage, buf, bufSize);
     }
 
     void rotate(const Mat& input, Mat& output, int angle) {
-        Point2i pt(input.cols / 2, input.rows / 2);
-        Mat rot = cv::getRotationMatrix2D(pt, angle, 1.0);
-        cv::warpAffine(input, output, rot, input.size());
+        if (angle == 0) {
+            output = input;
+        } else {
+            Point2i pt(input.cols / 2, input.rows / 2);
+            Mat rot = cv::getRotationMatrix2D(pt, angle, 1.0);
+            cv::warpAffine(input, output, rot, input.size());
+        }
     }
 
     void resize(const Mat& input, Mat& output, const Size2i& size) {
-        int inter = input.size().area() < size.area() ?
-                    CV_INTER_CUBIC : CV_INTER_AREA;
-        cv::resize(input, output, size, 0, 0, inter);
+        if (_innerSize == input.size()) {
+            output = input;
+        } else {
+            int inter = input.size().area() < _numPixels ? CV_INTER_CUBIC : CV_INTER_AREA;
+            cv::resize(input, output, _innerSize, 0, 0, inter);
+        }
+    }
+
+    /*
+    Implements colorspace noise perturbation as described in:
+    Krizhevsky et. al., "ImageNet Classification with Deep Convolutional Neural Networks"
+    Constructs a random coloring pixel that is uniformly added to every pixel of the image.
+    pixelstd is filled with normally distributed values prior to calling this function.
+    */
+    void lighting(Mat& inout, float pixelstd[]) {
+        // Skip transformations if given deterministic settings
+        if (_params->_colorNoiseStd == 0.0) {
+            return;
+        }
+        Mat alphas(3, 1, CV_32FC1, pixelstd);
+        alphas = (CPCA * CSTD.mul(alphas));  // this is the random coloring pixel
+        auto pixel = alphas.reshape(3, 1).at<Scalar_<float>>(0, 0);
+        inout = (inout + pixel) / (1.0 + _params->_colorNoiseStd);
+    }
+
+    /*
+    Implements contrast, brightness, and saturation jittering using the following definitions:
+    Contrast: Add some multiple of the grayscale mean of the image.
+    Brightness: Magnify the intensity of each pixel by cbs[1]
+    Saturation: Add some multiple of the pixel's grayscale value to itself.
+    cbs is filled with uniformly distributed values prior to calling this function
+    */
+    // adjusts contrast, brightness, and saturation according
+    // to values in cbs[0], cbs[1], cbs[2], respectively
+    void cbsjitter(Mat& inout, float cbs[]) {
+        // Skip transformations if given deterministic settings
+        if (_params->_contrastMin == _params->_contrastMax) {
+            return;
+        }
+
+        /****************************
+        *  BRIGHTNESS & SATURATION  *
+        *****************************/
+        Mat satmtx = cbs[1] * (cbs[2] * Mat::eye(3, 3, CV_32FC1) +
+                                (1 - cbs[2]) * Mat::ones(3, 1, CV_32FC1) * GSCL.t());
+        cv::transform(inout, inout, satmtx);
+
+        /*************
+        *  CONTRAST  *
+        **************/
+        Mat gray_mean;
+        cv::cvtColor(Mat(1, 1, CV_32FC3, cv::mean(inout)), gray_mean, CV_BGR2GRAY);
+        inout = cbs[0] * inout + (1 - cbs[0]) * gray_mean.at<Scalar_<float>>(0, 0);
     }
 
     void split(Mat& img, char* buf, int bufSize) {
@@ -399,15 +476,14 @@ private:
     }
 
     void createRandomAugParams(const Size2i& size) {
-        _params->getRandomCrop(_rngSeed, size, &(_augParams.cropBox));
-        _params->getRandomAngle(_rngSeed, _augParams.angle);
-        _augParams.alpha = _params->getRandomContrast(_rngSeed);
-        _augParams.flip = _params->doRandomFlip(_rngSeed);
+        _params->getDistortionValues(_rng, size, &_augParams);
     }
 
 private:
     ImageParams*                _params;
     ImageIngestParams*          _ingestParams;
-    unsigned int                _rngSeed;
+    Size2i                      _innerSize;
+    cv::RNG                     _rng;
+    int                         _numPixels;
     AugParams                   _augParams;
 };

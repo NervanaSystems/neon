@@ -42,6 +42,13 @@ class ImageLoader(DataLoader):
                                   then the entire image will be used, without regard to aspect
                                   ratio.  For the 100 x 200 image, the entire image will be used
                                   and rescaled into an inner_size x inner_size output.
+                                  scale_range can also be provided as a dict with keys
+                                  'min_area_pct' and 'max_area_pct', which indicate the minimum
+                                  and maximum area percentage of the original image that the crop
+                                  will take on.  For example, if the original image is 200x200,
+                                  then a min_area_pct of 16 is 6400 pixels, which corresponds to
+                                  an 80x80 crop.  If inner_size is 224, then the 80x80 crop will
+                                  be enlarged to fill a 224x224 image.
         do_transforms (boolean, optional): whether to apply transformations (scaling, flipping,
                                            random cropping) or not.  If False, no flipping or
                                            center cropping will be taken.  If False, the shuffle
@@ -71,7 +78,8 @@ class ImageLoader(DataLoader):
                                       vertical direction (randomly determined) by some range
                                       between 1.0 and 1.33 (4/3).  If set to <= 100, or
                                       do_transforms is False, no random stretching will occur.
-                                      Defaults to 0.
+                                      aspect_ratio stretching will be ignored unless the scaling
+                                      is area-based (i.e. scale_range is provided as a dict)
     """
 
     def __init__(self, repo_dir, inner_size, scale_range, do_transforms=True,
@@ -86,8 +94,12 @@ class ImageLoader(DataLoader):
                 'bad value for aspect_ratio augmentation')
         if type(scale_range) == int:
             scale_min = scale_max = scale_range
-        else:
+        elif type(scale_range) == tuple:
             scale_min, scale_max = scale_range
+        elif type(scale_range) == dict:
+            scale_min = scale_range.get('min_area_pct', 100)
+            scale_max = scale_range.get('max_area_pct', 100)
+            aspect_ratio = 100 if aspect_ratio == 0 else aspect_ratio
 
         self.repo_dir = repo_dir
         shape = dict(channel_count=3, height=inner_size, width=inner_size)
