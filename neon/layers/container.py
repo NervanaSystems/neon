@@ -13,6 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import numpy as np
+import itertools as itt
 from operator import add
 
 from neon import NervanaObject
@@ -81,6 +82,10 @@ class LayerContainer(Layer):
         assert len(pdict['config']['layers']) == len(self.layers)
         for branch, bdict in zip(self.layers, pdict['config']['layers']):
             branch.load_weights(bdict, load_states=load_states)
+
+    def revert_tensors(self):
+        for tensor in itt.chain.from_iterable([l.revert_list for l in self.layers]):
+            self.be.revert_tensor(tensor)
 
     def propagate_parallelism(self, p):
         for l in self.layers:
@@ -174,17 +179,10 @@ class Sequential(LayerContainer):
         TODO:  Handle final layers that don't own their own outputs (bias, activation)
         """
         x = inputs
-        if inference:
-            inference_revert_list = []
 
         for l in self.layers:
-            l.revert_list = []
             altered_tensor = l.be.distribute_data(x, l.parallelism)
-            if altered_tensor:
-                if inference:
-                    inference_revert_list.append((l, altered_tensor))
-                else:
-                    l.revert_list.append(altered_tensor)
+            l.revert_list = [altered_tensor] if altered_tensor else []
 
             if l is self.layers[-1] and beta != 0:
                 x = l.fprop(x, inference, beta=beta)
@@ -192,8 +190,7 @@ class Sequential(LayerContainer):
                 x = l.fprop(x, inference)
 
         if inference:
-            for layer, tensor in inference_revert_list:
-                layer.be.revert_tensor(tensor)
+            self.revert_tensors()
 
         return x
 
@@ -209,7 +206,7 @@ class Sequential(LayerContainer):
                 error = l.bprop(error)
 
             for tensor in l.revert_list:
-                l.be.revert_tensor(tensor)
+                self.be.revert_tensor(tensor)
         return self._layers[0].deltas
 
     def get_terminal(self):

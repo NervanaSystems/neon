@@ -55,7 +55,6 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 logger = logging.getLogger()
-logger.setLevel(args.log_thresh)
 
 # load up the mnist data set
 # split into train and tests sets

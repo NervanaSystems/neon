@@ -110,8 +110,7 @@ class ImageLoader(DataLoader):
         """
         Set up all dataset config options.
         """
-        assert (subset_pct > 0 and subset_pct <= 100), (
-            'subset_pct must be between 0 and 100')
+        assert (subset_pct > 0 and subset_pct <= 100), ('subset_pct must be between 0 and 100')
         assert(set_name in ['train', 'validation'])
         self.set_name = set_name if set_name == 'train' else 'val'
 
@@ -129,13 +128,11 @@ class ImageLoader(DataLoader):
                           "data and create batch files for imageset" % (cache_filepath))
 
         # Should have following defined:
-        req_attributes = ['nclass', 'val_start', 'train_start',
-                          'train_nrec', 'val_nrec']
+        req_attributes = ['nclass', 'val_start', 'train_start', 'train_nrec', 'val_nrec']
 
         for r in req_attributes:
             if r not in dataset_cache:
-                raise ValueError(
-                    'Dataset cache missing required attribute %s' % (r))
+                raise ValueError('Dataset cache missing required attribute %s' % (r))
 
         self.__dict__.update(dataset_cache)
 
