@@ -122,8 +122,8 @@ def scale_bbreg_weights(model, means, stds):
 def load_vgg_weights(model, path):
     # load a pre-trained VGG16 from Neon model zoo to the local
     url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/'
-    filename = 'VGG_D.p'
-    size = 554227541
+    filename = 'VGG_D_Conv.p'
+    size = 169645138
 
     workdir, filepath = Dataset._valid_path_append(path, '', filename)
     if not os.path.exists(filepath):
@@ -134,13 +134,9 @@ def load_vgg_weights(model, path):
 
     param_layers = [l for l in model.layers.layers[0].layers[0].layers]
     param_dict_list = pdict['model']['config']['layers']
-    i = 0
     for layer, ps in zip(param_layers, param_dict_list):
-        i += 1
         print layer.name, ps['config']['name']
         layer.load_weights(ps, load_states=True)
-        if i == 43:
-            break
 
 
 def run_voc_eval(annopath, imagesetfile, year, image_set, classes, output_dir):
