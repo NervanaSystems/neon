@@ -1393,7 +1393,7 @@ class GeneralizedCost(NervanaObject):
         self.deltas = self.be.iobuf(in_obj.out_shape,
                                     parallelism=self.prev_layer.parallelism,
                                     persist_values=False)
-        self.cost = self.be.empty((1, 1), persist_values=False)
+        self.cost = np.empty([1, 1], dtype=np.float32)
 
     def get_cost(self, inputs, targets):
         """
@@ -1408,7 +1408,9 @@ class GeneralizedCost(NervanaObject):
             Tensor containing cost
         """
         self.outputs[:] = self.costfunc(inputs, targets)
-        self.cost[:] = self.be.mean(self.outputs, axis=1)
+        cost = self.be.empty((1,1))
+        cost[:] = self.be.mean(self.outputs, axis=1)
+        self.cost = cost.get()
         return self.cost
 
     def get_errors(self, inputs, targets):
@@ -1453,7 +1455,9 @@ class GeneralizedCostMask(GeneralizedCost):
         targets, mask = targets_mask
         masked_input = inputs * mask
         self.outputs[:] = self.costfunc(masked_input, targets)
-        self.cost[:] = self.be.mean(self.outputs, axis=1)
+        cost = self.be.empty((1,1))
+        cost[:] = self.be.mean(self.outputs, axis=1)
+        self.cost = cost.get()
         return self.cost
 
     def get_errors(self, inputs, targets_mask):

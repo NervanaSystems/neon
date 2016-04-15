@@ -563,7 +563,7 @@ class TrainCostCallback(Callback):
         callback_data['cost/train'].attrs['time_markers'] = 'minibatch'
 
     def on_minibatch_end(self, callback_data, model, epoch, minibatch):
-        self.cost_history.append(model.cost.cost.get())
+        self.cost_history.append(model.cost.cost)
         mean_cost = sum(self.cost_history) / len(self.cost_history)
         mbstart = callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
         callback_data['cost/train'][mbstart + minibatch] = mean_cost
@@ -843,7 +843,7 @@ class TrainLoggerCallback(Callback):
 
     def on_epoch_end(self, callback_data, model, epoch):
         _eil = self._get_cached_epoch_loss(callback_data, model, epoch, 'loss')
-        log_str = "Epoch %d complete.  Train Cost %f." % (epoch, model.total_cost.get())
+        log_str = "Epoch %d complete.  Train Cost %f." % (epoch, model.total_cost)
         log_str += "  Eval Cost %f" % _eil['cost'] if _eil else ""
         logger.info(log_str)
 
