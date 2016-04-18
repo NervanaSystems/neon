@@ -23,47 +23,45 @@ Usage:
     python deep_dream.py <image> --output <output_location>
 
 """
-import matplotlib.pyplot as plt
 import numpy as np
-import os
-import PIL.Image
-import scipy.ndimage as nd
+import os.path as osp
+from PIL import Image
+import sys
+import warnings
 
-from neon.backends import gen_backend
+try:
+    from scipy.ndimage import zoom
+except ImportError as err:
+    print("Running this example requires scipy packages.")
+    print("try activating your virtualenv then: pip install scipy")
+    sys.exit(1)
+
 from neon.models import Model
-from neon.util.persist import load_obj
+from neon.layers import Activation
 from neon.data.datasets import Dataset
-from neon.initializers import Constant, Gaussian
-from neon.layers import Conv, Pooling, DataTransform, GeneralizedCost
-from neon.transforms import Rectlin, Identity
+from neon.layers import GeneralizedCost
 from neon.transforms.cost import Cost
-from neon.util.argparser import NeonArgparser, extract_valid_args
+from neon.util.argparser import NeonArgparser
 
-parser = NeonArgparser(__doc__)
+# force use of CPU backend since we require a batch size of 1
+# (GPU needs a multiple of 32)
+default_overrides = dict(backend='cpu', batch_size=1)
+parser = NeonArgparser(__doc__, default_overrides=default_overrides)
 parser.add_argument("image", help="Base image to create dream on.")
-parser.add_argument("--output", default=None, help="File location to write dream.")
-args = parser.parse_args(gen_be=False)
-args.backend = 'cpu'
-args.batch_size = 1
-be = gen_backend(**extract_valid_args(args, gen_backend))
+parser.add_argument("--dream_file", default=None, help="Save dream to named file.")
+args = parser.parse_args()
 
 
-class Dream(DataTransform):
-    def __init__(self, image, name=None):
-        super(Dream, self).__init__(Identity(), name)
-        self.W = image
-        self.owns_output = True
-        self.has_params = True
+# redirect the dream file to the path of output_file
+if args.output_file is None:
+    output_dir = args.work_dir
+elif osp.isdir(args.output_file):
+    output_dir = args.output_file
+else:
+    output_dir = osp.dirname(args.output_file)
 
-    def get_params(self):
-        return self.dW
-
-    def bprop(self, error, alpha=1.0, beta=0.0):
-        if not self.deltas:
-            self.deltas = error
-        error[:] = self.transform.bprop(self.outputs) * error
-        self.dW = error.reshape(self.inputs.shape)
-        return error
+args.dream_file = osp.expanduser(osp.join(output_dir, osp.basename(args.dream_file)))
+RGB_MEAN = np.array([104.4, 119.2, 126.8])[:, np.newaxis, np.newaxis]
 
 
 class MaximizeActivations(Cost):
@@ -72,127 +70,127 @@ class MaximizeActivations(Cost):
         self.funcgrad = lambda y, t: -y
 
 
-def load_imagenet_weights(model, path):
-    # download trained Alexnet weights
-    url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/alexnet/'
-    filename = 'alexnet_conv.p'
-    size = 57824894
+class Dream(Activation):
+    def __init__(self, name=None):
+        super(Dream, self).__init__(name)
+        self.owns_output = True
 
-    workdir, filepath = Dataset._valid_path_append(path, '', filename)
-    if not os.path.exists(filepath):
-        Dataset.fetch_dataset(url, filename, filepath, size)
+    def fprop(self, inputs, inference=False):
+        return inputs
 
-    pdict = load_obj(filepath)
-
-    param_layers = [l for l in model.layers.layers[1:]]
-    param_dict_list = pdict['model']['config']['layers']
-    for layer, ps in zip(param_layers, param_dict_list):
-        layer.load_weights(ps, load_states=True)
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        return error
 
 
-def create_model(image):
-    layers = [
-        Dream(image),
-        Conv((11, 11, 64), init=Gaussian(scale=0.01), bias=Constant(0),
-            activation=Rectlin(), padding=3, strides=4),
-        Pooling(3, strides=2),
-        Conv((5, 5, 192), init=Gaussian(scale=0.01), bias=Constant(1),
-            activation=Rectlin(), padding=2),
-        Pooling(3, strides=2),
-        Conv((3, 3, 384), init=Gaussian(scale=0.03), bias=Constant(0),
-            activation=Rectlin(), padding=1),
-        Conv((3, 3, 256), init=Gaussian(scale=0.03), bias=Constant(1),
-            activation=Rectlin(), padding=1),
-        Conv((3, 3, 256), init=Gaussian(scale=0.03), bias=Constant(1),
-            activation=Rectlin(), padding=1)
-    ]
-    model = Model(layers=layers)
+class DreamModel(Model):
+    def __init__(self, model_path):
+        model_file = self.load_imagenet_weights(model_path)
+        super(DreamModel, self).__init__(layers=model_file, weights_only=True)
+        self.layers.layers.insert(0, Dream())
 
-    model.initialize(image.shape)
+    def load_imagenet_weights(self, model_path):
+        # download trained Alexnet weights
+        url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/alexnet/'
+        filename = 'alexnet_conv_ns.p'
+        size = 20550623
 
-    load_imagenet_weights(model, args.data_dir)
+        _, filepath = Dataset._valid_path_append(model_path, '', filename)
+        if not osp.exists(filepath):
+            Dataset.fetch_dataset(url, filename, filepath, size)
 
-    model.cost = GeneralizedCost(costfunc=MaximizeActivations())
-    model.cost.initialize(model.layers_to_optimize[-1])
+        return filepath
 
-    return model
+    def initialize(self, imgtensor, cost=None):
+        self.initialized = False
+        for l in self.layers.layers:
+            l.outputs = None
+            if hasattr(l, 'nglayer'):
+                l.nglayer = None
+        super(DreamModel, self).initialize(imgtensor.shape,
+                                           cost=GeneralizedCost(costfunc=MaximizeActivations()))
 
 
-def show_image(image, dtype=np.uint8, name='Deep Dream', first=False):
-    image = deprocess(image, dtype)
-    image = np.uint8(np.clip(image, 0, 255))
-    plt.gcf().canvas.set_window_title(name)
-    plt.imshow(PIL.Image.fromarray(image), interpolation='nearest')
-    if first:
-        plt.ion()
-        plt.show()
+class DeepImage(object):
+    def __init__(self, inobj):
+        # create from file
+        if isinstance(inobj, str):
+            self.image = np.uint8(Image.open(args.image))
+            self.t_dirty, self.i_dirty = True, False
+        elif isinstance(inobj, np.ndarray):
+            self.tensor = inobj
+            self.t_dirty, self.i_dirty = False, True
+
+    def as_tensor(self):
+        if self.t_dirty:
+            self.tensor = (self.image.transpose(2, 0, 1) - RGB_MEAN)[::-1].astype(np.float32)
+            self.t_dirty = False
+        return self.tensor
+
+    def as_image(self):
+        if self.i_dirty:
+            self.image = (self.tensor[::-1] + RGB_MEAN).astype(np.uint8).transpose(1, 2, 0)
+            self.i_dirty = False
+        return Image.fromarray(self.image.clip(0, 255).astype(np.uint8))
+
+    @property
+    def shape(self):
+        return self.as_tensor().shape
+
+    def take_step(self, model, step=1.5, jitter=32):
+        ox, oy = np.random.randint(-jitter, jitter + 1, 2)
+        self.tensor = np.roll(np.roll(self.as_tensor(), ox, -1), oy, -2)
+
+        image_buf = model.be.array(self.tensor)
+        delta = model.cost.get_errors(model.fprop(image_buf), None)
+        grad = model.bprop(delta).get().reshape(self.tensor.shape)
+
+        imgnp = self.tensor - step * grad / np.abs(grad).mean()
+        self.tensor = np.clip(imgnp, -RGB_MEAN[::-1], 255 - RGB_MEAN[::-1])
+        self.tensor = np.roll(np.roll(self.tensor, -ox, -1), -oy, -2)
+        self.i_dirty = True
+
+    def save_image(self, filename):
+        print("Saving {}".format(filename))
+        self.as_image().save(filename)
+
+
+def get_numbered_file(filename, index):
+    base, ext = osp.splitext(filename)
+    return "{}_{:03d}{}".format(base, index, ext)
+
+
+def zoom_to(tsr, to_shape):
+    if to_shape == tsr.shape:
+        return tsr
     else:
-        plt.draw()
-    plt.pause(1)
-
-
-def model_mean():
-    return np.array([104.4, 119.2, 126.8])
-
-
-def preprocess(image):
-    return np.float32(np.rollaxis(image - model_mean(), 2)[::-1])
-
-
-def deprocess(image, dtype=np.uint8):
-    return np.array(np.dstack(image[::-1]) + model_mean(), dtype=dtype)
-
-
-def make_step(image, model, step_size=1.5, jitter=32):
-    ox, oy = np.random.randint(-jitter, jitter + 1, 2)
-    image = np.roll(np.roll(image, ox, -1), oy, -2)
-    image_buf = model.be.array(image)
-
-    forward = model.fprop(image_buf)
-    delta = model.cost.get_errors(forward, None)
-    model.bprop(delta)
-
-    grad = np.array(model.layers_to_optimize[0].get_params().get())
-    image = np.array(image_buf.get()) - step_size/np.abs(grad).mean() * grad
-
-    image = np.roll(np.roll(image, -ox, -1), -oy, -2)
-
-    image = np.clip(image.transpose(), -model_mean(), 255 - model_mean()).transpose()
-
-    return image
+        scale_factor = (ts / float(fs) for ts, fs in zip(to_shape, tsr.shape))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            return zoom(tsr, scale_factor, order=1)
 
 
 def deepdream(image, iter_n=10, octave_n=4, octave_scale=1.4, name="Deep Dream"):
-    preprocessed_image = preprocess(image)
-    show_image(preprocessed_image, image.dtype, name, first=True)
+    model = DreamModel(model_path=args.data_dir)
+    detail = None
+    scales = [octave_scale ** -o for o in reversed(range(octave_n))]
 
-    octaves = [preprocessed_image]
-    for i in xrange(octave_n-1):
-        octaves.append(nd.zoom(octaves[-1], (1, 1.0/octave_scale, 1.0/octave_scale), order=1))
+    for o_idx, scale in enumerate(scales):
+        octave_shape = (3, round(image.shape[1] * scale), round(image.shape[2] * scale))
+        octave_base = zoom_to(image.as_tensor(), octave_shape)
+        detail = np.zeros_like(octave_base) if detail is None else zoom_to(detail, octave_shape)
 
-    dream = None
-    detail = np.zeros_like(octaves[-1])
-    for octave, octave_base in enumerate(octaves[::-1]):
-        h, w = octave_base.shape[-2:]
-        if octave > 0:
-            h1, w1 = detail.shape[-2:]
-            detail = nd.zoom(detail, (1, h/float(h1), w/float(w1)), order=1)
-
-        dream = octave_base + detail
-        model = create_model(dream)
+        dream = DeepImage(octave_base + detail)
+        model.initialize(dream)
 
         for i in xrange(iter_n):
-            dream = make_step(dream, model)
+            dream.take_step(model)
+            ofile = get_numbered_file(args.dream_file, o_idx * iter_n + i)
+            dream.save_image(ofile)
 
-            show_image(dream, image.dtype, name)
-            print "Step: {}, {}".format(octave, i)
+        detail = dream.as_tensor() - octave_base
 
-        detail = dream - octave_base
-
-    return deprocess(dream)
+    return dream
 
 
-image = np.float32(PIL.Image.open(args.image))
+image = DeepImage(args.image)
 dream = deepdream(image, name=args.image)
-if args.output is not None:
-    PIL.Image.fromarray(dream).save(args.output)
