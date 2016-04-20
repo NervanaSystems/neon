@@ -83,6 +83,7 @@ extern int stop(Loader* loader) {
 extern void write_batch(char *outfile, const int numData,
                         char **jpgfiles, uint32_t *targets,
                         int maxDim) {
+#if HAS_IMGLIB
     if (numData == 0) {
         return;
     }
@@ -99,6 +100,10 @@ extern void write_batch(char *outfile, const int numData,
         bf.writeItem(inp, tgt);
     }
     bf.close();
+#else
+    string message = "OpenCV " UNSUPPORTED_MEDIA_MESSAGE;
+    throw std::runtime_error(message);
+#endif
 }
 
 extern void write_raw(char *outfile, const int numData,

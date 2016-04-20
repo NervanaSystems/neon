@@ -151,7 +151,7 @@ ifeq ($(HAS_GPU), true)
 endif
 
 $(DATA_LOADER):
-	-@cd $(DATA_LOADER) && $(MAKE) -s bin/loader.so HAS_GPU=$(HAS_GPU)
+	-@cd $(DATA_LOADER) && $(MAKE) bin/loader.so HAS_GPU=$(HAS_GPU)
 
 # TODO: handle kernel/.so compilation via setup.py directly
 sysinstall_nodeps: kernels $(DATA_LOADER) neon_install

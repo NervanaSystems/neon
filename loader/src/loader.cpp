@@ -17,7 +17,10 @@
 #include <cstdio>
 
 #include "loader.hpp"
+
+#if HAS_IMGLIB
 #include "image.hpp"
+#endif
 
 #if HAS_VIDLIB
 #include "video.hpp"
@@ -25,13 +28,18 @@
 
 #include "audio.hpp"
 
-#define UNSUPPORTED_MEDIA_MESSAGE "support not built-in. Please install the " \
-                                  "pre-requisites and re-run the installer."
 Media* Media::create(MediaParams* params, MediaParams* ingestParams) {
     switch (params->_mtype) {
     case IMAGE:
+#if HAS_IMGLIB
         return new Image(reinterpret_cast<ImageParams*>(params),
                          reinterpret_cast<ImageIngestParams*>(ingestParams));
+#else
+        {
+            string message = "OpenCV " UNSUPPORTED_MEDIA_MESSAGE;
+            throw std::runtime_error(message);
+        }
+#endif
     case VIDEO:
 #if HAS_VIDLIB
         return new Video(reinterpret_cast<VideoParams*>(params));
@@ -125,6 +133,7 @@ int multi(Loader* loader, int epochCount, int minibatchCount,
 
 int test(char* repoDir, char* indexFile,
          int batchSize, int nchan, int height, int width) {
+#if HAS_IMGLIB
     int datumSize = nchan * height * width;
     int targetSize = 4;
     int epochCount = 2;
@@ -163,6 +172,10 @@ int test(char* repoDir, char* indexFile,
     assert(multiSum == singleSum);
     printf("OK\n");
     return 0;
+#else
+    string message = "OpenCV " UNSUPPORTED_MEDIA_MESSAGE;
+    throw std::runtime_error(message);
+#endif
 }
 
 int main(int argc, char** argv) {

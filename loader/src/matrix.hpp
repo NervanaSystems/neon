@@ -13,14 +13,18 @@
  limitations under the License.
 */
 
+#if HAS_IMGLIB
 #include <opencv2/core/core.hpp>
-
 using cv::Mat;
+#endif
 
+#define UNSUPPORTED_MEDIA_MESSAGE "support not built-in. Please install the " \
+                                  "pre-requisites and re-run the installer."
 template <typename Type>
 class Matrix {
 public:
     static void transpose(Type* data, int height, int width) {
+#if HAS_IMGLIB
         int elemType;
         if (sizeof(Type) == 1) {
             elemType = CV_8UC1;
@@ -33,5 +37,10 @@ public:
         Mat input = Mat(height, width, elemType, data).clone();
         Mat output = Mat(width, height, elemType, data);
         cv::transpose(input, output);
+#else
+#warning ("OpenCV support not built-in")
+        string message = "OpenCV " UNSUPPORTED_MEDIA_MESSAGE;
+        throw std::runtime_error(message);
+#endif
     }
 };
