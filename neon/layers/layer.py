@@ -1408,7 +1408,7 @@ class GeneralizedCost(NervanaObject):
             Tensor containing cost
         """
         self.outputs[:] = self.costfunc(inputs, targets)
-        cost = self.be.empty((1,1))
+        cost = self.be.empty((1, 1))
         cost[:] = self.be.mean(self.outputs, axis=1)
         self.cost = cost.get()
         return self.cost
@@ -1455,7 +1455,7 @@ class GeneralizedCostMask(GeneralizedCost):
         targets, mask = targets_mask
         masked_input = inputs * mask
         self.outputs[:] = self.costfunc(masked_input, targets)
-        cost = self.be.empty((1,1))
+        cost = self.be.empty((1, 1))
         cost[:] = self.be.mean(self.outputs, axis=1)
         self.cost = cost.get()
         return self.cost

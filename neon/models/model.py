@@ -136,7 +136,7 @@ class Model(NervanaObject):
         self.nbatches = dataset.nbatches
         self.ndata = dataset.ndata
         # self.set_shortcut()  # infer if bprop shortcut can be used
-        self.total_cost = np.empty([1,1], dtype=np.float32)
+        self.total_cost = np.empty([1, 1], dtype=np.float32)
         self.optimizer = optimizer
         self.initialize(dataset, cost)
 
