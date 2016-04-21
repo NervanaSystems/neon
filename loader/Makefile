@@ -15,7 +15,7 @@
 # ----------------------------------------------------------------------------
 
 SRCS            := $(wildcard src/*.hpp)
-CFLAGS          := -Wall -O3 -std=c++11
+CFLAGS          := -Wall -Wno-deprecated-declarations -O3 -std=c++11
 CFLAGSDBG       := -g -Wall -O0 -std=c++11
 CC              := g++
 LOADER          := bin/loader

@@ -58,7 +58,7 @@ public:
 class Video : public Media {
 public:
    Video(VideoParams *params)
-    : _params(params), _rngSeed(0) {
+    : _params(params) {
         assert(params->_mtype == VIDEO);
         assert(params->_frameParams._mtype == IMAGE);
         _imgDecoder = new Image(&(_params->_frameParams), NULL);
@@ -196,7 +196,6 @@ private:
 private:
     VideoParams*                _params;
     Image*                      _imgDecoder;
-    unsigned int                _rngSeed;
     int                         _imgSize;
     int                         _decodedSize;
 };
