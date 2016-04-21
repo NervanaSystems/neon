@@ -82,10 +82,6 @@ class XpropWinograd(KernelGroup):
 
             #print filter_extern, self.autotune_key
 
-        filter_trans = "_FX" if filter_extern else ""
-
-        kernel_name = "%s_winograd_2x2_3x3_32x32%s" % (self.clss, filter_trans)
-
         if N == 1:
             shiftN = 0
         elif N < 32:
@@ -130,8 +126,11 @@ class XpropWinograd(KernelGroup):
         grid  = ( gridK*gridY*gridX, gridN, 1 )
         block = (256, 1, 1)
 
-        self.kernel = [ kernel_name, grid, block, None, None, None, None, None, None, None, None ]
-        self.kernel.extend( _flatten([
+        self.kernel_opts = ("FX",) if filter_extern else tuple()
+        self.kernel_name = "%s_winograd_2x2_3x3_32x32" % self.clss
+
+        self.kernel_args = [ grid, block, None, None, None, None, None, None, None, None ]
+        self.kernel_args.extend( _flatten([
             K, C, H, W, N, P, Q, W*N, H*W*N, R*S*K, Q*N, P*Q*N,
             shiftY, shiftX, shiftN, superY, superX, gridX, gridK, Y2,
             YXGK, X2GK, groupK, magic_YXGK, magic_X2GK, magic_groupK,
@@ -220,12 +219,12 @@ class FpropWinograd(XpropWinograd):
         else:
             filter_temp = F.gpudata
 
-        self.kernel[3:11] = (self.lib.stream, bsum_gpudata, O.gpudata, I.gpudata, filter_temp,
-                             alpha, beta, flags)
+        self.kernel_args[2:10] = (self.lib.stream, bsum_gpudata, O.gpudata, I.gpudata,
+                                  filter_temp, alpha, beta, flags)
 
     def execute(self, repeat=1, unbind=True):
 
-        kernel = kernel_specs.get_kernel(self.kernel[0])
+        kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_opts)
         if self.trans_size:
             trans_kernel = _get_fprop_filter_trans_kernel(self.dtype_str)
 
@@ -237,16 +236,16 @@ class FpropWinograd(XpropWinograd):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
 
-            kernel.prepared_async_call(*self.kernel[1:])
+            kernel.prepared_async_call(*self.kernel_args)
 
         if unbind:
             self.bsum_zero = None
-            self.kernel[3:11] = (None,) * 8
+            self.kernel_args[2:10] = (None,) * 8
             if self.trans_size:
                 self.trans_args[2:5] = (None,) * 3
 
     def __str__(self):
-        return "FpropWinograd " + self.kernel[0]
+        return "FpropWinograd " + self.kernel_name
 
 class BpropWinograd(XpropWinograd):
 
@@ -298,12 +297,12 @@ class BpropWinograd(XpropWinograd):
         filter_temp = self.lib.scratch_buffer(self.trans_size)
         self.trans_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
 
-        self.kernel[3:11] = (self.lib.stream, bsum_gpudata, O.gpudata, I.gpudata, filter_temp,
-                             alpha, beta, flags)
+        self.kernel_args[2:10] = (self.lib.stream, bsum_gpudata, O.gpudata, I.gpudata,
+                                  filter_temp, alpha, beta, flags)
 
     def execute(self, repeat=1, unbind=True):
 
-        kernel = kernel_specs.get_kernel(self.kernel[0])
+        kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_opts)
 
         if self.filter_extern:
             trans_kernel = _get_bprop_filter_trans_kernel(self.dtype_str)
@@ -318,16 +317,16 @@ class BpropWinograd(XpropWinograd):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
 
-            kernel.prepared_async_call(*self.kernel[1:])
+            kernel.prepared_async_call(*self.kernel_args)
 
         if unbind:
             self.bsum_zero = None
-            self.kernel[3:11] = (None,) * 8
+            self.kernel_args[2:10] = (None,) * 8
             if self.trans_size:
                 self.trans_args[2:5] = (None,) * 3
 
     def __str__(self):
-        return "BpropWinograd " + self.kernel[0]
+        return "BpropWinograd " + self.kernel_name
 
 class UpdateWinograd(KernelGroup):
 
@@ -434,16 +433,16 @@ class UpdateWinograd(KernelGroup):
 
         self.blocksCK = gridK * gridC
 
+        options = list()
         if external:
             # External Image transform
-            IX  = "_IX"
+            options.append("IX")
             WN  = GX*N
             HWN = GY*WN
 
             self.image_transform(N, C, K, H, W, P, Q, pad_h, pad_w)
         else:
             # Internal Image transform
-            IX     = ""
             WN     = W*N
             HWN    = H*WN
             superI = superE
@@ -452,28 +451,27 @@ class UpdateWinograd(KernelGroup):
 
         # If output grid is 1, don't use atomics.  Kernel is deterministic by default
         if strideY*strideX == 1:
-            determ = "D"
+            options.append("D")
             self.determ_size  = 0
             self.determ_shape = False
             self.zero         = False
         elif self.lib.deterministic:
-            determ = "D"
+            options.append("D")
             self.determ_size  = strideY*strideX * C*R*S*K
             self.determ_shape = (strideY*strideX, C*R*S*K)
             self.zero         = False
         else:
-            determ = ""
             self.determ_size  = 0
             self.determ_shape = False
             self.zero         = True
 
-        kernel_name = "%s_winograd%s_3x3_2x2_32x32%s" % (self.clss, determ, IX)
-
         # print "blks/sm:%.2f blks:%d gridKC:(%d,%d) gridYX:(%d,%d) stride:(%d,%d)" % (
         #    gridPQKC/24.0, gridPQKC, gridK, gridC, GYS, GXS, strideY, strideX)
 
-        self.kernel = [ kernel_name, (gridPQKC,1,1), (256,1,1), None, None, None, None, None ]
-        self.kernel.extend(_flatten([
+        self.kernel_opts = tuple(options)
+        self.kernel_name = "%s_winograd_3x3_2x2_32x32" % self.clss
+        self.kernel_args = [ (gridPQKC,1,1), (256,1,1), None, None, None, None, None ]
+        self.kernel_args.extend(_flatten([
             H, W, P, Q, C, K, N, pad_h, pad_w,
             GY, GX, GYS, GXS, superI, superE, loopXI, loopXE, loopN, strideY, strideX,
             WN, HWN, Q*N, P*Q*N, S*K, R*S*K, Np, XNp, XN2p, QNp,
@@ -668,11 +666,11 @@ class UpdateWinograd(KernelGroup):
         if self.zero:
             self.zero_args = [update_temp, 0, O.size, self.lib.stream]
 
-        self.kernel[3:8] = (self.lib.stream, update_temp, input_temp, E.gpudata, alpha)
+        self.kernel_args[2:7] = (self.lib.stream, update_temp, input_temp, E.gpudata, alpha)
 
     def execute(self, repeat=1, unbind=True):
 
-        kernel = kernel_specs.get_kernel(self.kernel[0])
+        kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_opts)
 
         if self.trans_size:
             trans_kernel = _get_update_image_trans_kernel(self.dtype_str)
@@ -685,18 +683,18 @@ class UpdateWinograd(KernelGroup):
             if self.zero:
                 drv.memset_d32_async(*self.zero_args)
 
-            kernel.prepared_async_call(*self.kernel[1:])
+            kernel.prepared_async_call(*self.kernel_args)
 
             if self.convert_args:
                 _fp_convert(*self.convert_args)
 
         if unbind:
             self.zero_args = self.convert_args = None
-            self.kernel[3:8] = (None,) * 5
+            self.kernel_args[2:7] = (None,) * 5
 
     def __str__(self):
         N, C, K, H, W, P, Q, pad_h, pad_w = self.params
-        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d)" % (self.kernel[0], N, C, K, H, W)
+        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d)" % (self.kernel_name, N, C, K, H, W)
 
 
 class XpropWinograd_4x4_3x3(KernelGroup):
@@ -708,10 +706,6 @@ class XpropWinograd_4x4_3x3(KernelGroup):
                  relu, bsum, external):
 
         super(XpropWinograd_4x4_3x3, self).__init__(lib, dtype)
-
-        ext = "_X" if external else ""
-
-        kernel_name = "%s_winograd_4x4_3x3_32x32%s" % (self.clss, ext)
 
         if N == 1:
             shlN = 0
@@ -741,14 +735,15 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         GXS2 = GXS  * 2
         k    = _closest_divisor(GK, 4)
 
-        self.kernel = [
-            kernel_name, (GYS*GXS*k, GK//k, GN), (640, 1, 1), None,
+        self.kernel_args = [
+            (GYS*GXS*k, GK//k, GN), (640, 1, 1), None,
             None, None, None, None, None, None, None ]
 
         #print GYS, GXS, GYS*GXS*GK*GN, GYS*GXS*GK*GN/24.0, k
 
-
+        options = list()
         if external:
+            self.kernel_name = "%s_winograd_4x4_3x3_32x32_X" % self.clss
 
             Xk = GXS*k
 
@@ -764,7 +759,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
                 shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
                 H*W*N, W*N, GYS*GXS*C*1152, GXS*C*1152, C*1152]
 
-            self.kernel.extend( _flatten([
+            self.kernel_args.extend( _flatten([
                 C, K, N, Xk, k, magic_Xk, magic_k,
                 C*1152, GXS*C*1152, GYS*GXS*C*1152,
                 P, Q, Q*N, P*Q*N, N*itemsize, Q*N*itemsize, Q*N*3*itemsize,
@@ -772,6 +767,11 @@ class XpropWinograd_4x4_3x3(KernelGroup):
                 maskN, shlX, shlY, supX, supY ]))
 
         else:
+            self.kernel_name = "%s_winograd_4x4_3x3_32x32" % self.clss
+            options.append(("K",K))
+            options.append(("X",W))
+            options.append(("N",N))
+
             self.image_size = 0
 
             Xk = GXS2*k
@@ -779,13 +779,15 @@ class XpropWinograd_4x4_3x3(KernelGroup):
             magic_Xk   = _magic64(Xk)
             magic_k    = _magic32(Xk, k)
 
-            self.kernel.extend( _flatten([
+            self.kernel_args.extend( _flatten([
                 C, K, N, H, W, H*W*N, W*N, GYS2, GXS,
                 Xk, k, magic_Xk, magic_k,
                 P, Q, Q*N, P*Q*N, N*itemsize, Q*N*itemsize, Q*N*3*itemsize,
                 max(P*Q*N - Q*N*3, 0)*itemsize, (P*Q*N*15 - Q*N*3)*itemsize,
                 maskN, shlX, shlY, supX, supY,
                 pad_w, pad_h, R*S*K, R*S*K*2*itemsize, H*W*N*2*itemsize ]))
+
+        self.kernel_opts = tuple(options)
 
         lib.set_scratch_size(self.image_size, self.filter_size)
 
@@ -799,13 +801,12 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         bsum_gpudata, flags = self.init_bsum(bsum, flags)
 
         # Warning: beta and bsum mutually exclusive in 4x4 kernels
+        self.kernel_options = self.kernel_opts
         if beta:
-            self.mode = "_beta"
+            self.kernel_options += ("beta",)
             #assert not bsum
         elif bsum:
-            self.mode = "_bsum"
-        else:
-            self.mode = ""
+            self.kernel_options += ("bsum",)
 
         if self.image_size:
             image_temp = self.lib.scratch_buffer(self.image_size)
@@ -819,8 +820,8 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         else:
             filter_temp = F.gpudata
 
-        self.kernel[3:11] = (self.lib.stream, bsum_gpudata, O.gpudata, image_temp, filter_temp,
-                             alpha, beta, flags)
+        self.kernel_args[2:10] = (self.lib.stream, bsum_gpudata, O.gpudata,
+                                  image_temp, filter_temp, alpha, beta, flags)
 
     def execute(self, repeat=1, unbind=True):
 
@@ -830,7 +831,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         if self.filter_size:
             filter_kernel = self.filter_func(self.dtype_str)
 
-        kernel = kernel_specs.get_kernel(self.kernel[0] + self.mode)
+        kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_options)
 
         for r in range(repeat):
             if self.image_size:
@@ -842,11 +843,11 @@ class XpropWinograd_4x4_3x3(KernelGroup):
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
 
-            kernel.prepared_async_call(*self.kernel[1:])
+            kernel.prepared_async_call(*self.kernel_args)
 
         if unbind:
             self.bsum_zero = None
-            self.kernel[3:11] = (None,) * 8
+            self.kernel_args[2:10] = (None,) * 8
             if self.image_size:
                 self.image_args[2:5]  = (None,) * 3
             if self.filter_size:
@@ -878,7 +879,7 @@ class FpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
                  lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum, external)
 
     def __str__(self):
-        return "FpropWinograd " + self.kernel[0]
+        return "FpropWinograd " + self.kernel_name
 
 class BpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
 
@@ -917,7 +918,7 @@ class BpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
                  lib, dtype, N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, relu, bsum, external)
 
     def __str__(self):
-        return "BpropWinograd " + self.kernel[0]
+        return "BpropWinograd " + self.kernel_name
 
 class UpdateWinograd_3x3_4x4(KernelGroup):
 
@@ -1051,31 +1052,31 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         magic_c       = _magic32(kc, Gc)
 
         # If output grid is 1, don't use atomics.  Kernel is deterministic by default
+        options = list()
         if strideYXN == 1:
-            determ = "D"
+            options.append("D")
             self.determ_size  = 0
             self.determ_shape = False
             self.zero         = False
         elif self.lib.deterministic:
-            determ = "D"
+            options.append("D")
             self.determ_size  = strideYXN * C*R*S*K
             self.determ_shape = (strideYXN, C*R*S*K)
             self.zero         = False
         else:
-            determ = ""
             self.determ_size  = 0
             self.determ_shape = False
             self.zero         = True
 
-        kernel_name = "%s_winograd%s_3x3_4x4_32x32" % (self.clss, determ)
-
         #print strideYXN*Gk*Gc, strideYXN, Gk, Gc, strideYXN*Gk*Gc*GC*GK, YXN2//strideYXN
 
-        self.kernel = [
-            kernel_name, (strideYXN*Gk*Gc, GC, GK), (640, 1, 1), None,
+        self.kernel_opts = tuple(options)
+        self.kernel_name = "%s_winograd_3x3_4x4_32x32" % self.clss
+        self.kernel_args = [
+            (strideYXN*Gk*Gc, GC, GK), (640, 1, 1), None,
             None, None, None, None]
 
-        self.kernel.extend( _flatten([
+        self.kernel_args.extend( _flatten([
             K, C, Gk, Gc, kc, magic_kc, magic_c, YXN2, strideYXN, magic_sYXN,
             strideYXN*2*1152*itemsize, YXN, YXN*1152, R*S*K, C*R*S*K,
             K*4, S*K*4, (R*S*K*15 - S*K*2)*4 ]))
@@ -1183,11 +1184,11 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         if self.zero:
             self.zero_args = [updat_temp, 0, O.size, self.lib.stream]
 
-        self.kernel[3:8] = (self.lib.stream, updat_temp, image_temp, delta_temp, alpha)
+        self.kernel_args[2:7] = (self.lib.stream, updat_temp, image_temp, delta_temp, alpha)
 
     def execute(self, repeat=1, unbind=True):
 
-        kernel = kernel_specs.get_kernel(self.kernel[0])
+        kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_opts)
 
         image_kernel = _get_update_image_trans_4x4_kernel(self.dtype_str)
         delta_kernel = _get_update_delta_trans_4x4_kernel(self.dtype_str)
@@ -1200,20 +1201,20 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
             image_kernel.prepared_async_call(*self.image_args)
             delta_kernel.prepared_async_call(*self.delta_args)
 
-            kernel.prepared_async_call(*self.kernel[1:])
+            kernel.prepared_async_call(*self.kernel_args)
 
             if self.convert_args:
                 _fp_convert(*self.convert_args)
 
         if unbind:
             self.zero_args = self.convert_args = None
-            self.kernel[3:8]     = (None,) * 5
-            self.image_args[2:5] = (None,) * 3
-            self.delta_args[2:5] = (None,) * 3
+            self.kernel_args[2:7] = (None,) * 5
+            self.image_args[2:5]  = (None,) * 3
+            self.delta_args[2:5]  = (None,) * 3
 
     def __str__(self):
         N, C, K, H, W, P, Q, pad_h, pad_w = self.params
-        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d)" % (self.kernel[0], N, C, K, H, W)
+        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d)" % (self.kernel_name, N, C, K, H, W)
 
 
 @context_dependent_memoize

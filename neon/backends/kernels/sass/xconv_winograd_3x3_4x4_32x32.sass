@@ -14,7 +14,8 @@
 # limitations under the License.
 
 [-
-our ($type, $determ);
+our ($type, $D);
+our $determ = $D;
 our $convert_in   = $type eq 'h' ? 'F2F.F32.F16' :    '';
 our $convert_out  = $type eq 'h' ? 'F2F.F16.F32' :    '';
 our $dtype_shift  = $type eq 'h' ?           '1' :   '2';

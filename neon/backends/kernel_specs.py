@@ -14,9 +14,12 @@
 
 import re
 import os.path
+import subprocess
 import pycuda.driver as drv
 from pycuda.tools import context_dependent_memoize
-from math import ceil
+
+# helpful for kernel development
+debug = 0
 
 base_dir  = os.path.dirname(__file__)
 ptx_dir   = os.path.join(base_dir, "kernels", "ptx")
@@ -25,9 +28,10 @@ pre_dir   = os.path.join(base_dir, "kernels", "pre")
 cubin_dir = os.path.join(base_dir, "kernels", "cubin")
 dump_dir  = os.path.join(base_dir, "kernels", "dump")
 
+
 kernels = {
 
-    "hconv_bprop_C1_N64":     {"threads":  32, "sass": "hconv_bprop_C1_N64",    "params": "bprop1", "share": " 32*8*2 +  64*8*2"},
+    #TODO: perhaps get rid of these old conv kernels
     "hconv_bprop_C128_N128":  {"threads": 256, "sass": "hconv_xprop_X128_N128", "params": "bprop",  "share": "128*8*2 + 128*8*2 + 8", "args": {"prop": "b"}},
     "hconv_bprop_C128_N64":   {"threads": 128, "sass": "hconv_xprop_X128_N64",  "params": "bprop",  "share": "128*8*2 +  64*8*2 + 8", "args": {"prop": "b"}},
     "hconv_bprop_C32_N128":   {"threads":  64, "sass": "hconv_xprop_X32_N128",  "params": "bprop",  "share": " 32*8*2 + 128*8*2 + 8", "args": {"prop": "b"}},
@@ -38,29 +42,7 @@ kernels = {
     "hconv_fprop_K32_N128":   {"threads":  64, "sass": "hconv_xprop_X32_N128",  "params": "fprop",  "share": " 32*8*2 + 128*8*2 + 8", "args": {"prop": "f"}},
     "hconv_fprop_K64_N128":   {"threads": 128, "sass": "hconv_xprop_X64_N128",  "params": "fprop",  "share": " 64*8*2 + 128*8*2 + 8", "args": {"prop": "f"}},
     "hconv_fprop_K64_N64":    {"threads":  64, "sass": "hconv_xprop_X64_N64",   "params": "fprop",  "share": " 64*8*2 +  64*8*2 + 8", "args": {"prop": "f"}},
-    "hconv_updat_C128_K128":  {"threads": 256, "sass": "hconv_updat_C128_K128", "params": "updat",  "share": "(128*16 + 32)*2 + (128*16 + 32)*2 + 8", "occupancy": 4.0},
-    "hconv_updatD_C128_K128": {"threads": 256, "sass": "hconv_updat_C128_K128", "params": "updat",  "share": "(128*16 + 32)*2 + (128*16 + 32)*2 + 8", "occupancy": 4.0, "args": {"determ": "1"},},
-    "hconv_updat_C128_K64":   {"threads": 128, "sass": "hconv_updat_C128_K64",  "params": "updat",  "share": "(128*16 + 32)*2 + ( 64*16 + 32)*2 + 8", "occupancy": 3.0},
-    "hconv_updatD_C128_K64":  {"threads": 128, "sass": "hconv_updat_C128_K64",  "params": "updat",  "share": "(128*16 + 32)*2 + ( 64*16 + 32)*2 + 8", "occupancy": 3.0, "args": {"determ": "1"},},
-    "hgemm_nn_128x128":       {"threads": 256, "sass": "hgemm_nn_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4"},
-    "hgemm_nt_128x128":       {"threads": 256, "sass": "hgemm_nt_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4"},
-    "hgemm_tn_128x128":       {"threads": 256, "sass": "hgemm_tn_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4"},
-    "hgemm_nn_vec_128x128":   {"threads": 256, "sass": "hgemm_nn_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4", "args": {"vec": "1"}},
-    "hgemm_nt_vec_128x128":   {"threads": 256, "sass": "hgemm_nt_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4", "args": {"vec": "1"}},
-    "hgemm_tn_vec_128x128":   {"threads": 256, "sass": "hgemm_tn_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4", "args": {"vec": "1"}},
-    "hgemm_nn_128x64":        {"threads": 128, "sass": "hgemm_nn_128x64",       "params": "gemm",   "share": "128*8*2 +  64*8*2 + 4"},
-    "hgemm_tn_128x64":        {"threads": 128, "sass": "hgemm_tn_128x64",       "params": "gemm",   "share": "128*8*2 +  64*8*2 + 4"},
-    "hgemm_nn_vec_128x64":    {"threads": 128, "sass": "hgemm_nn_128x64",       "params": "gemm",   "share": "128*8*2 +  64*8*2 + 4", "args": {"vec": "1"}},
-    "hgemm_tn_vec_128x64":    {"threads": 128, "sass": "hgemm_tn_128x64",       "params": "gemm",   "share": "128*8*2 +  64*8*2 + 4", "args": {"vec": "1"}},
-    "hgemm_nn_128x32":        {"threads": 128, "sass": "hgemm_nn_128x32",       "params": "gemm",   "share": "(128*16 + 32)*2 + 32*16*2 + 4"},
-    "hgemm_tn_128x32":        {"threads": 128, "sass": "hgemm_tn_128x32",       "params": "gemm",   "share": "(128*16 +  0)*2 + 32*16*2 + 4"},
-    "hgemm_nn_vec_128x32":    {"threads": 128, "sass": "hgemm_nn_128x32",       "params": "gemm",   "share": "(128*16 + 32)*2 + 32*16*2 + 4", "args": {"vec": "1"}},
-    "hgemm_tn_vec_128x32":    {"threads": 128, "sass": "hgemm_tn_128x32",       "params": "gemm",   "share": "(128*16 +  0)*2 + 32*16*2 + 4", "args": {"vec": "1"}},
-    "hgemm_nn_32x128":        {"threads": 128, "sass": "hgemm_nn_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4"},
-    "hgemm_nt_32x128":        {"threads": 128, "sass": "hgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4"},
-    "hgemm_nn_vec_32x128":    {"threads": 128, "sass": "hgemm_nn_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4", "args": {"vec": "1"}},
-    "hgemm_nt_vec_32x128":    {"threads": 128, "sass": "hgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4", "args": {"vec": "1"}},
-    "sconv_bprop_C1_N64":     {"threads":  32, "sass": "sconv_bprop_C1_N64",    "params": "bprop1", "share": " 32*8*2 +  64*8*2"},
+
     "sconv_bprop_C128_N128":  {"threads": 256, "sass": "sconv_xprop_X128_N128", "params": "bprop",  "share": "128*8*2 + 128*8*2 + 8", "args": {"prop": "b"}},
     "sconv_bprop_C128_N64":   {"threads": 128, "sass": "sconv_xprop_X128_N64",  "params": "bprop",  "share": "128*8*2 +  64*8*2 + 8", "args": {"prop": "b"}},
     "sconv_bprop_C32_N128":   {"threads":  64, "sass": "sconv_xprop_X32_N128",  "params": "bprop",  "share": " 32*8*2 + 128*8*2 + 8", "args": {"prop": "b"}},
@@ -71,145 +53,47 @@ kernels = {
     "sconv_fprop_K32_N128":   {"threads":  64, "sass": "sconv_xprop_X32_N128",  "params": "fprop",  "share": " 32*8*2 + 128*8*2 + 8", "args": {"prop": "f"}},
     "sconv_fprop_K64_N128":   {"threads": 128, "sass": "sconv_xprop_X64_N128",  "params": "fprop",  "share": " 64*8*2 + 128*8*2 + 8", "args": {"prop": "f"}},
     "sconv_fprop_K64_N64":    {"threads":  64, "sass": "sconv_xprop_X64_N64",   "params": "fprop",  "share": " 64*8*2 +  64*8*2 + 8", "args": {"prop": "f"}},
-    "sconv_updat_C128_K128":  {"threads": 256, "sass": "sconv_updat_C128_K128", "params": "updat",  "share": "(128*16 + 32)*2 + (128*16 + 32)*2 + 8", "occupancy": 4.0},
-    "sconv_updatD_C128_K128": {"threads": 256, "sass": "sconv_updat_C128_K128", "params": "updat",  "share": "(128*16 + 32)*2 + (128*16 + 32)*2 + 8", "occupancy": 4.0, "args": {"determ": "1"}, },
-    "sconv_updat_C128_K64":   {"threads": 128, "sass": "sconv_updat_C128_K64",  "params": "updat",  "share": "(128*16 + 32)*2 + ( 64*16 + 32)*2 + 8", "occupancy": 3.0},
-    "sconv_updatD_C128_K64":  {"threads": 128, "sass": "sconv_updat_C128_K64",  "params": "updat",  "share": "(128*16 + 32)*2 + ( 64*16 + 32)*2 + 8", "occupancy": 3.0, "args": {"determ": "1"},},
-    "sgemm_nn_128x128":       {"threads": 256, "sass": "sgemm_nn_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4"},
-    "sgemm_nt_128x128":       {"threads": 256, "sass": "sgemm_nt_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4"},
-    "sgemm_tn_128x128":       {"threads": 256, "sass": "sgemm_tn_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4"},
-    "sgemm_nn_vec_128x128":   {"threads": 256, "sass": "sgemm_nn_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4", "args": {"vec": "1"}},
-    "sgemm_nt_vec_128x128":   {"threads": 256, "sass": "sgemm_nt_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4", "args": {"vec": "1"}},
-    "sgemm_tn_vec_128x128":   {"threads": 256, "sass": "sgemm_tn_128x128",      "params": "gemm",   "share": "128*8*2 + 128*8*2 + 4", "args": {"vec": "1"}},
-    "sgemm_nn_128x64":        {"threads": 128, "sass": "sgemm_nn_128x64",       "params": "gemm",   "share": "128*8*2 +  64*8*2 + 4"},
-    "sgemm_tn_128x64":        {"threads": 128, "sass": "sgemm_tn_128x64",       "params": "gemm",   "share": "128*8*2 +  64*8*2 + 4"},
-    "sgemm_nn_vec_128x64":    {"threads": 128, "sass": "sgemm_nn_128x64",       "params": "gemm",   "share": "128*8*2 +  64*8*2 + 4", "args": {"vec": "1"}},
-    "sgemm_tn_vec_128x64":    {"threads": 128, "sass": "sgemm_tn_128x64",       "params": "gemm",   "share": "128*8*2 +  64*8*2 + 4", "args": {"vec": "1"}},
-    "sgemm_nn_128x32":        {"threads": 128, "sass": "sgemm_nn_128x32",       "params": "gemm",   "share": "(128*16 + 32)*2 + 32*16*2 + 4"},
-    "sgemm_tn_128x32":        {"threads": 128, "sass": "sgemm_tn_128x32",       "params": "gemm",   "share": "(128*16 +  0)*2 + 32*16*2 + 4"},
-    "sgemm_nn_vec_128x32":    {"threads": 128, "sass": "sgemm_nn_128x32",       "params": "gemm",   "share": "(128*16 + 32)*2 + 32*16*2 + 4", "args": {"vec": "1"}},
-    "sgemm_tn_vec_128x32":    {"threads": 128, "sass": "sgemm_tn_128x32",       "params": "gemm",   "share": "(128*16 +  0)*2 + 32*16*2 + 4", "args": {"vec": "1"}},
-    "sgemm_nn_32x128":        {"threads": 128, "sass": "sgemm_nn_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4"},
-    "sgemm_nt_32x128":        {"threads": 128, "sass": "sgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4"},
-    "sgemm_nn_vec_32x128":    {"threads": 128, "sass": "sgemm_nn_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4", "args": {"vec": "1"}},
-    "sgemm_nt_vec_32x128":    {"threads": 128, "sass": "sgemm_nt_32x128",       "params": "gemm",   "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4", "args": {"vec": "1"}},
 
-    "sconv_winograd_2x2_3x3_32x32":    {"threads": 256, "sass": "xconv_winograd_2x2_3x3_32x32",  "params": "fpropw", "share": "512*4*4", "args": {"prop": "f", "type": "s"}},
-    "hconv_winograd_2x2_3x3_32x32":    {"threads": 256, "sass": "xconv_winograd_2x2_3x3_32x32",  "params": "fpropw", "share": "512*4*4", "args": {"prop": "f", "type": "h"}},
-    "sconv_winograd_2x2_3x3_32x32_FX": {"threads": 256, "sass": "xconv_winograd_2x2_3x3_32x32",  "params": "fpropw", "share": "512*4*4", "args": {"prop": "f", "type": "s", "FX": "1"}},
-    "hconv_winograd_2x2_3x3_32x32_FX": {"threads": 256, "sass": "xconv_winograd_2x2_3x3_32x32",  "params": "fpropw", "share": "512*4*4", "args": {"prop": "f", "type": "h", "FX": "1"}},
+    "sgemm_nn_128x128": {"threads": 256, "sass": "sgemm_nn_128x128", "params": "gemm", "share": "128*8*2 + 128*8*2 + 4"},
+    "sgemm_nt_128x128": {"threads": 256, "sass": "sgemm_nt_128x128", "params": "gemm", "share": "128*8*2 + 128*8*2 + 4"},
+    "sgemm_tn_128x128": {"threads": 256, "sass": "sgemm_tn_128x128", "params": "gemm", "share": "128*8*2 + 128*8*2 + 4"},
+    "hgemm_nn_128x128": {"threads": 256, "sass": "hgemm_nn_128x128", "params": "gemm", "share": "128*8*2 + 128*8*2 + 4"},
+    "hgemm_nt_128x128": {"threads": 256, "sass": "hgemm_nt_128x128", "params": "gemm", "share": "128*8*2 + 128*8*2 + 4"},
+    "hgemm_tn_128x128": {"threads": 256, "sass": "hgemm_tn_128x128", "params": "gemm", "share": "128*8*2 + 128*8*2 + 4"},
 
-    "sconv_winograd_3x3_2x2_32x32":   {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",    "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "s"}},
-    "hconv_winograd_3x3_2x2_32x32":   {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",    "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "h"}},
-    "sconv_winogradD_3x3_2x2_32x32":  {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",    "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "s","determ": "1"}},
-    "hconv_winogradD_3x3_2x2_32x32":  {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",    "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "h","determ": "1"}},
+    "sgemm_nn_128x64":  {"threads": 128, "sass": "sgemm_nn_128x64",  "params": "gemm", "share": "128*8*2 +  64*8*2 + 4"},
+    "sgemm_tn_128x64":  {"threads": 128, "sass": "sgemm_tn_128x64",  "params": "gemm", "share": "128*8*2 +  64*8*2 + 4"},
+    "hgemm_nn_128x64":  {"threads": 128, "sass": "hgemm_nn_128x64",  "params": "gemm", "share": "128*8*2 +  64*8*2 + 4"},
+    "hgemm_tn_128x64":  {"threads": 128, "sass": "hgemm_tn_128x64",  "params": "gemm", "share": "128*8*2 +  64*8*2 + 4"},
 
-    "sconv_winograd_3x3_2x2_32x32_IX":   {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",    "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "s", "IX": "1"}},
-    "hconv_winograd_3x3_2x2_32x32_IX":   {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",    "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "h", "IX": "1"}},
-    "sconv_winogradD_3x3_2x2_32x32_IX":  {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",    "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "s", "IX": "1","determ": "1"}},
-    "hconv_winogradD_3x3_2x2_32x32_IX":  {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",    "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "h", "IX": "1","determ": "1"}},
+    "sgemm_nn_128x32":  {"threads": 128, "sass": "sgemm_nn_128x32",  "params": "gemm", "share": "(128*16 + 32)*2 + 32*16*2 + 4"},
+    "sgemm_tn_128x32":  {"threads": 128, "sass": "sgemm_tn_128x32",  "params": "gemm", "share": "(128*16 +  0)*2 + 32*16*2 + 4"},
+    "hgemm_nn_128x32":  {"threads": 128, "sass": "hgemm_nn_128x32",  "params": "gemm", "share": "(128*16 + 32)*2 + 32*16*2 + 4"},
+    "hgemm_tn_128x32":  {"threads": 128, "sass": "hgemm_tn_128x32",  "params": "gemm", "share": "(128*16 +  0)*2 + 32*16*2 + 4"},
 
-    "sconv_winograd_4x4_3x3_32x32":       {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32",  "params": "fpropw4", "share": "32*36*2*4 + 8", "args": {"type": "s","K":"32","X":"6","N":"32"}},
-    "hconv_winograd_4x4_3x3_32x32":       {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32",  "params": "fpropw4", "share": "32*36*2*4 + 8", "args": {"type": "h","K":"32","X":"6","N":"32"}},
+    "sgemm_nn_32x128":  {"threads": 128, "sass": "sgemm_nn_32x128",  "params": "gemm", "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4"},
+    "sgemm_nt_32x128":  {"threads": 128, "sass": "sgemm_nt_32x128",  "params": "gemm", "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4"},
+    "hgemm_nn_32x128":  {"threads": 128, "sass": "hgemm_nn_32x128",  "params": "gemm", "share": "(32*16 + 32)*2 + (128*16 +  0)*2 + 4"},
+    "hgemm_nt_32x128":  {"threads": 128, "sass": "hgemm_nt_32x128",  "params": "gemm", "share": "(32*16 + 32)*2 + (128*16 + 32)*2 + 4"},
 
-    "sconv_winograd_4x4_3x3_32x32_X":       {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32_X",  "params": "fpropw4X", "share": "32*36*2*4 + 8", "args": {"type": "s"}},
-    "hconv_winograd_4x4_3x3_32x32_X":       {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32_X",  "params": "fpropw4X", "share": "32*36*2*4 + 8", "args": {"type": "h"}},
-    "sconv_winograd_4x4_3x3_32x32_X_bsum":  {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32_X",  "params": "fpropw4X", "share": "32*36*2*4 + 8", "args": {"type": "s", "bsum": "1"}},
-    "hconv_winograd_4x4_3x3_32x32_X_bsum":  {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32_X",  "params": "fpropw4X", "share": "32*36*2*4 + 8", "args": {"type": "h", "bsum": "1"}},
-    "sconv_winograd_4x4_3x3_32x32_X_beta":  {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32_X",  "params": "fpropw4X", "share": "32*36*2*4 + 8", "args": {"type": "s", "beta": "1"}},
-    "hconv_winograd_4x4_3x3_32x32_X_beta":  {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32_X",  "params": "fpropw4X", "share": "32*36*2*4 + 8", "args": {"type": "h", "beta": "1"}},
+    "sconv_winograd_2x2_3x3_32x32":   {"threads": 256, "sass": "xconv_winograd_2x2_3x3_32x32",   "params": "fpropw", "share": "512*4*4", "args": {"type": "s"}},
+    "hconv_winograd_2x2_3x3_32x32":   {"threads": 256, "sass": "xconv_winograd_2x2_3x3_32x32",   "params": "fpropw", "share": "512*4*4", "args": {"type": "h"}},
+    "sconv_winograd_3x3_2x2_32x32":   {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",   "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "s"}},
+    "hconv_winograd_3x3_2x2_32x32":   {"threads": 256, "sass": "xconv_winograd_3x3_2x2_32x32",   "params": "updatw", "share": "(512*4 + 32)*4 + 8", "args": {"type": "h"}},
 
-    "sconv_winograd_3x3_4x4_32x32":  {"threads": 640, "sass": "xconv_winograd_3x3_4x4_32x32",  "params": "updatw4", "share": "32*36*2*4 + 8", "args": {"type": "s"}},
-    "hconv_winograd_3x3_4x4_32x32":  {"threads": 640, "sass": "xconv_winograd_3x3_4x4_32x32",  "params": "updatw4", "share": "32*36*2*4 + 8", "args": {"type": "h"}},
-    "sconv_winogradD_3x3_4x4_32x32": {"threads": 640, "sass": "xconv_winograd_3x3_4x4_32x32",  "params": "updatw4", "share": "32*36*2*4 + 8", "args": {"type": "s","determ": "1"}},
-    "hconv_winogradD_3x3_4x4_32x32": {"threads": 640, "sass": "xconv_winograd_3x3_4x4_32x32",  "params": "updatw4", "share": "32*36*2*4 + 8", "args": {"type": "h","determ": "1"}},
+    "sconv_winograd_4x4_3x3_32x32":   {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32",   "params": "fpropw4",  "share": "32*36*2*4 + 8", "args": {"type": "s"}},
+    "hconv_winograd_4x4_3x3_32x32":   {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32",   "params": "fpropw4",  "share": "32*36*2*4 + 8", "args": {"type": "h"}},
+    "sconv_winograd_4x4_3x3_32x32_X": {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32_X", "params": "fpropw4X", "share": "32*36*2*4 + 8", "args": {"type": "s"}},
+    "hconv_winograd_4x4_3x3_32x32_X": {"threads": 640, "sass": "xconv_winograd_4x4_3x3_32x32_X", "params": "fpropw4X", "share": "32*36*2*4 + 8", "args": {"type": "h"}},
+    "sconv_winograd_3x3_4x4_32x32":   {"threads": 640, "sass": "xconv_winograd_3x3_4x4_32x32",   "params": "updatw4",  "share": "32*36*2*4 + 8", "args": {"type": "s"}},
+    "hconv_winograd_3x3_4x4_32x32":   {"threads": 640, "sass": "xconv_winograd_3x3_4x4_32x32",   "params": "updatw4",  "share": "32*36*2*4 + 8", "args": {"type": "h"}},
 
-    "sconv_direct_updat_64x32":    {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "s",}},
-    "hconv_direct_updat_64x32":    {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "h",}},
-    "sconv_direct_updat_64x32_LN": {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "s","largeN": "1",}},
-    "hconv_direct_updat_64x32_LN": {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "h","largeN": "1",}},
-
-    "sconv_direct_updat_64x32_D":    {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "s","determ": "1",}},
-    "hconv_direct_updat_64x32_D":    {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "h","determ": "1",}},
-    "sconv_direct_updat_64x32_LN_D": {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "s","largeN": "1","determ": "1",}},
-    "hconv_direct_updat_64x32_LN_D": {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "h","largeN": "1","determ": "1",}},
-
-    # TODO: generate these on the fly
-    "sconv_direct_fprop_64x32":            {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f"}},
-    "sconv_direct_fprop_64x32_SN":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"s","prop":"f","SN":"1"}},
-    "sconv_direct_fprop_64x32_N2":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"s","prop":"f","N2":"1"}},
-    "sconv_direct_fprop_64x32_N1":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"s","prop":"f","N1":"1"}},
-
-
-    #"sconv_direct_fprop_64x32_K1":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","K1":"1"}},
-    #"sconv_direct_fprop_64x32_SN_K1":      {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","SN":"1","K1":"1"}},
-    #"sconv_direct_fprop_64x32_beta":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","beta":"1"}},
-    #"sconv_direct_fprop_64x32_SN_beta":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","SN":"1","beta":"1"}},
-    #"sconv_direct_fprop_64x32_K1_beta":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","K1":"1","beta":"1"}},
-    #"sconv_direct_fprop_64x32_SN_K1_beta": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","SN":"1","K1":"1","beta":"1"}},
-    #"sconv_direct_fprop_64x32_relu":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","relu":"1"}},
-    #"sconv_direct_fprop_64x32_SN_relu":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","SN":"1","relu":"1"}},
-    #"sconv_direct_fprop_64x32_K1_relu":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","K1":"1","relu":"1"}},
-    #"sconv_direct_fprop_64x32_SN_K1_relu": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","SN":"1","K1":"1","relu":"1"}},
-    #"sconv_direct_fprop_64x32_bsum":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","bsum":"1"}},
-    #"sconv_direct_fprop_64x32_SN_bsum":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","SN":"1","bsum":"1"}},
-    #"sconv_direct_fprop_64x32_K1_bsum":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","K1":"1","bsum":"1"}},
-    #"sconv_direct_fprop_64x32_SN_K1_bsum": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"f","SN":"1","K1":"1","bsum":"1"}},
-
-    "sconv_direct_bprop_64x32":            {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b"}},
-    "sconv_direct_bprop_64x32_SN":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"s","prop":"b","SN":"1"}},
-    "sconv_direct_bprop_64x32_N2":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"s","prop":"b","N2":"1"}},
-    "sconv_direct_bprop_64x32_N1":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"s","prop":"b","N1":"1"}},
-
-
-    #"sconv_direct_bprop_64x32_K1":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","K1":"1"}},
-    #"sconv_direct_bprop_64x32_SN_K1":      {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","SN":"1","K1":"1"}},
-    #"sconv_direct_bprop_64x32_beta":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","beta":"1"}},
-    #"sconv_direct_bprop_64x32_SN_beta":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","SN":"1","beta":"1"}},
-    #"sconv_direct_bprop_64x32_K1_beta":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","K1":"1","beta":"1"}},
-    #"sconv_direct_bprop_64x32_SN_K1_beta": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","SN":"1","K1":"1","beta":"1"}},
-    #"sconv_direct_bprop_64x32_relu":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","relu":"1"}},
-    #"sconv_direct_bprop_64x32_SN_relu":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","SN":"1","relu":"1"}},
-    #"sconv_direct_bprop_64x32_K1_relu":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","K1":"1","relu":"1"}},
-    #"sconv_direct_bprop_64x32_SN_K1_relu": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","SN":"1","K1":"1","relu":"1"}},
-    #"sconv_direct_bprop_64x32_bsum":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","bsum":"1"}},
-    #"sconv_direct_bprop_64x32_SN_bsum":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","SN":"1","bsum":"1"}},
-    #"sconv_direct_bprop_64x32_K1_bsum":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","K1":"1","bsum":"1"}},
-    #"sconv_direct_bprop_64x32_SN_K1_bsum": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"s","prop":"b","SN":"1","K1":"1","bsum":"1"}},
-
-    #"hconv_direct_fprop_64x32":            {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f"}},
-    #"hconv_direct_fprop_64x32_SN":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","SN":"1"}},
-    #"hconv_direct_fprop_64x32_K1":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","K1":"1"}},
-    #"hconv_direct_fprop_64x32_SN_K1":      {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","SN":"1","K1":"1"}},
-    #"hconv_direct_fprop_64x32_beta":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","beta":"1"}},
-    #"hconv_direct_fprop_64x32_SN_beta":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","SN":"1","beta":"1"}},
-    #"hconv_direct_fprop_64x32_K1_beta":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","K1":"1","beta":"1"}},
-    #"hconv_direct_fprop_64x32_SN_K1_beta": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","SN":"1","K1":"1","beta":"1"}},
-    #"hconv_direct_fprop_64x32_relu":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","relu":"1"}},
-    #"hconv_direct_fprop_64x32_SN_relu":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","SN":"1","relu":"1"}},
-    #"hconv_direct_fprop_64x32_K1_relu":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","K1":"1","relu":"1"}},
-    #"hconv_direct_fprop_64x32_SN_K1_relu": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","SN":"1","K1":"1","relu":"1"}},
-    #"hconv_direct_fprop_64x32_bsum":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","bsum":"1"}},
-    #"hconv_direct_fprop_64x32_SN_bsum":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","SN":"1","bsum":"1"}},
-    #"hconv_direct_fprop_64x32_K1_bsum":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","K1":"1","bsum":"1"}},
-    #"hconv_direct_fprop_64x32_SN_K1_bsum": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"f","SN":"1","K1":"1","bsum":"1"}},
-
-    #"hconv_direct_bprop_64x32":            {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b"}},
-    #"hconv_direct_bprop_64x32_SN":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","SN":"1"}},
-    #"hconv_direct_bprop_64x32_K1":         {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","K1":"1"}},
-    #"hconv_direct_bprop_64x32_SN_K1":      {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","SN":"1","K1":"1"}},
-    #"hconv_direct_bprop_64x32_beta":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","beta":"1"}},
-    #"hconv_direct_bprop_64x32_SN_beta":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","SN":"1","beta":"1"}},
-    #"hconv_direct_bprop_64x32_K1_beta":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","K1":"1","beta":"1"}},
-    #"hconv_direct_bprop_64x32_SN_K1_beta": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","SN":"1","K1":"1","beta":"1"}},
-    #"hconv_direct_bprop_64x32_relu":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","relu":"1"}},
-    #"hconv_direct_bprop_64x32_SN_relu":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","SN":"1","relu":"1"}},
-    #"hconv_direct_bprop_64x32_K1_relu":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","K1":"1","relu":"1"}},
-    #"hconv_direct_bprop_64x32_SN_K1_relu": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","SN":"1","K1":"1","relu":"1"}},
-    #"hconv_direct_bprop_64x32_bsum":       {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","bsum":"1"}},
-    #"hconv_direct_bprop_64x32_SN_bsum":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","SN":"1","bsum":"1"}},
-    #"hconv_direct_bprop_64x32_K1_bsum":    {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","K1":"1","bsum":"1"}},
-    #"hconv_direct_bprop_64x32_SN_K1_bsum": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 6", "args": {"type":"h","prop":"b","SN":"1","K1":"1","bsum":"1"}},
+    "sconv_direct_fprop_64x32": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"s","prop":"f"}},
+    "sconv_direct_bprop_64x32": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"s","prop":"b"}},
+    "hconv_direct_fprop_64x32": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "fprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"h","prop":"f"}},
+    "hconv_direct_bprop_64x32": {"threads": 128, "sass": "xconv_direct_xprop_64x32",  "params": "bprop2", "share": "(32 + 64)*32*2 + 4", "args": {"type":"h","prop":"b"}},
+    "sconv_direct_updat_64x32": {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "s",}},
+    "hconv_direct_updat_64x32": {"threads": 128, "sass": "xconv_direct_updat_64x32",  "params": "updat2", "share": "(32 + 64)*33*2 + 8", "args": {"type": "h",}},
 }
 
 _params = {
@@ -323,94 +207,6 @@ _params = {
         "int param_SuperQ",
         "int param_SuperN",
     ],
-    "bprop1": [
-        "float* param_O",
-        "float* param_I",
-        "float* param_F",
-        "float para_alpha",
-        "int param_N",
-        "int param_K",
-        "int param_D",
-        "int param_H",
-        "int param_W",
-        "int param_WN",
-        "int param_HWN",
-        "int param_DHWN",
-        "int param_C",
-        "int param_CRST",
-        "int param_RST",
-        "int param_magic_RST",
-        "int param_shift_RST",
-        "int param_RS",
-        "int param_magic_RS",
-        "int param_shift_RS",
-        "int param_S",
-        "int param_magic_S",
-        "int param_shift_S",
-        "int param_pad_d",
-        "int param_pad_h",
-        "int param_pad_w",
-        "int param_str_d",
-        "int param_str_h",
-        "int param_str_w",
-        "int param_Q",
-        "int param_PQ",
-        "int param_QN",
-        "int param_PQN",
-        "int param_MPQN",
-        "int param_magic_Q",
-        "int param_shift_Q",
-        "int param_magic_PQ",
-        "int param_shift_PQ",
-        "int param_CRST8",
-        "int param_MPQN8",
-    ],
-    "updat": [
-        "float* param_F",
-        "float* param_I",
-        "float* param_E",
-        "float param_alpha",
-        "int param_offset_K",
-        "int param_N",
-        "int param_K",
-        "int param_D",
-        "int param_H",
-        "int param_W",
-        "int param_WN",
-        "int param_HWN",
-        "int param_DHWN",
-        "int param_C",
-        "int param_CRST",
-        "int param_RST",
-        "int param_magic_RST",
-        "int param_shift_RST",
-        "int param_RS",
-        "int param_magic_RS",
-        "int param_shift_RS",
-        "int param_S",
-        "int param_magic_S",
-        "int param_shift_S",
-        "int param_pad_d",
-        "int param_pad_h",
-        "int param_pad_w",
-        "int param_str_d",
-        "int param_str_h",
-        "int param_str_w",
-        "int param_P",
-        "int param_Q",
-        "int param_PQ",
-        "int param_QN",
-        "int param_PQN",
-        "int param_MPQN",
-        "int param_magic_Q",
-        "int param_shift_Q",
-        "int param_magic_PQ",
-        "int param_shift_PQ",
-        "int param_part_P",
-        "int param_part_Q",
-        "int param_part_PQ",
-        "int param_CRSTK",
-    ],
     "updat2": [
         "float* param_F",
         "float* param_I",
@@ -480,102 +276,6 @@ _params = {
         "int param_loopQp",
         "int param_loopN",
         "int param_loopNp",
-    ],
-    "pool": [
-        "float* param_O",
-        "float* param_B",
-        "float* param_I",
-        "float param_alpha",
-        "float param_beta",
-        "int param_mode",
-        "int param_N",
-        "int param_W",
-        "int param_H",
-        "int param_D",
-        "int param_C",
-        "int param_WN",
-        "int param_HWN",
-        "int param_DHWN",
-        "int param_P",
-        "int param_Q",
-        "int param_magic_P",
-        "int param_shift_P",
-        "int param_QN",
-        "int param_PQN",
-        "int param_MPQN",
-        "int param_pad_j",
-        "int param_pad_d",
-        "int param_pad_h",
-        "int param_pad_w",
-        "int param_str_j",
-        "int param_str_d",
-        "int param_str_h",
-        "int param_str_w",
-        "int param_S",
-        "int param_RS",
-        "int param_RST",
-        "int param_JRST",
-        "int param_magic_S",
-        "int param_shift_S",
-        "int param_magic_RS",
-        "int param_shift_RS",
-        "int param_magic_RST",
-        "int param_shift_RST",
-        "int param_overlap",
-    ],
-    "pool2": [
-        "float* param_E",
-        "float* param_B",
-        "float* param_I",
-        "float param_alpha",
-        "float param_beta",
-        "int param_mode",
-        "int param_N",
-        "int param_W",
-        "int param_H",
-        "int param_D",
-        "int param_C",
-        "int param_WN",
-        "int param_HWN",
-        "int param_DHWN",
-        "int param_magic_H",
-        "int param_shift_H",
-        "int param_pad_w",
-        "int param_pad_h",
-        "int param_pad_d",
-        "int param_pad_c",
-        "int param_str_w",
-        "int param_str_h",
-        "int param_str_d",
-        "int param_str_c",
-        "int param_magic_str_w",
-        "int param_shift_str_w",
-        "int param_magic_str_h",
-        "int param_shift_str_h",
-        "int param_magic_str_d",
-        "int param_shift_str_d",
-        "int param_magic_str_c",
-        "int param_shift_str_c",
-        "int param_S",
-        "int param_R",
-        "int param_T",
-        "int param_J",
-        "int param_RS",
-        "int param_RST",
-        "int param_JRST",
-        "int param_magic_S",
-        "int param_shift_S",
-        "int param_magic_RS",
-        "int param_shift_RS",
-        "int param_magic_RST",
-        "int param_shift_RST",
-        "int param_Q",
-        "int param_P",
-        "int param_M",
-        "int param_K",
-        "int param_QN",
-        "int param_PQN",
-        "int param_MPQN",
     ],
     "gemm": [
         "float* param_C",
@@ -853,9 +553,8 @@ _kernel_template = r"""
 }}
 """
 
-def get_ptx_file(kernel_name, arch):
+def get_ptx_file(kernel_spec, kernel_name, arch):
 
-    kernel_spec = kernels[kernel_name]
     thread_spec = kernel_spec["threads"]
     args_spec   = str(kernel_spec.get("args",""))
     param_spec  = _params[kernel_spec["params"]]
@@ -880,6 +579,9 @@ def get_ptx_file(kernel_name, arch):
     else:
         share = ""
 
+    if not os.path.exists(ptx_dir):
+        os.mkdir(ptx_dir)
+
     kernel_text = _kernel_template.format(arch, kernel_name, kernel_params, thread_spec, share, args_spec)
     kernel_ptx  = os.path.join(ptx_dir, kernel_name + ".ptx")
 
@@ -897,12 +599,109 @@ def get_ptx_file(kernel_name, arch):
     return kernel_ptx
 
 
+include_re = re.compile(r'^<INCLUDE\s+file="([^"]+)"\s*/>')
+
+def extract_includes(name, includes=None):
+    if not includes:
+        includes = list()
+    sass_file = os.path.join(sass_dir, name)
+    includes.append((sass_file, os.path.getmtime(sass_file)))
+    for line in open(sass_file, "r"):
+        match = include_re.search(line)
+        if match:
+            extract_includes(match.group(1), includes)
+    return includes
+
+def run_command(cmdlist):
+    cmdline = " ".join(cmdlist)
+    proc = subprocess.Popen(cmdline, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    code = proc.wait()
+    if code:
+        error = proc.stderr.read()
+        raise RuntimeError("Error(%d):\n%s\n%s" % (code, cmdline, error))
+    if debug:
+        out = proc.stdout.read()
+        print cmdline
+        if out: print out
+
 @context_dependent_memoize
-def get_kernel(kernel_name):
+def get_kernel(base_name, options=None):
 
-    #import ipdb; ipdb.set_trace()
+    attributes = drv.Context.get_device().get_attributes()
+    major = attributes[drv.device_attribute.COMPUTE_CAPABILITY_MAJOR]
+    minor = attributes[drv.device_attribute.COMPUTE_CAPABILITY_MINOR]
+    if major < 5:
+        raise RuntimeError("sass kernels require Maxwell or greater class hardware")
 
-    kernel_spec = kernels[kernel_name]
+    arch = "sm_%d%d" % (major, minor)
+
+    maxas_i = ["maxas.pl -i"]
+    maxas_p = ["maxas.pl -p"]
+
+    kernel_spec = kernels[base_name]
+    kernel_name = base_name
+
+    if "args" in kernel_spec:
+        for pair in kernel_spec["args"].items():
+            maxas_i.append("-D%s %s" % pair)
+            maxas_p.append("-D%s %s" % pair)
+
+    if options is not None:
+        for opt in options:
+            if type(opt) is tuple:
+                maxas_i.append("-D%s %s" % opt)
+                maxas_p.append("-D%s %s" % opt)
+                kernel_name += "_%s%s" % opt
+            else:
+                maxas_i.append("-D%s 1" % opt)
+                maxas_p.append("-D%s 1" % opt)
+                kernel_name += "_%s" % opt
+
+    maxas_i.insert(1, "-k " + kernel_name)
+
+    sass_name  = kernel_spec["sass"] + ".sass"
+    cubin_name = kernel_name + ".cubin"
+
+    ptx_file   = get_ptx_file(kernel_spec, kernel_name, arch)
+    sass_file  = os.path.join(sass_dir, sass_name)
+    cubin_file = os.path.join(cubin_dir, cubin_name)
+
+    if not os.path.exists(cubin_dir):
+        os.mkdir(cubin_dir)
+    if not os.path.exists(sass_file):
+        raise RuntimeError("Missing: %s for kernel: %s" % (sass_name, kernel_name))
+
+    ptx_age   = os.path.getmtime(ptx_file)
+    cubin_age = os.path.getmtime(cubin_file) if os.path.exists(cubin_file) else 0
+
+    if ptx_age > cubin_age:
+        run_command([ "ptxas -v -arch", arch, "-o", cubin_file, ptx_file ])
+        cubin_age = 0
+
+    includes = extract_includes(sass_name)
+
+    for include, include_age in includes:
+        if include_age > cubin_age:
+            run_command(maxas_i + [sass_file, cubin_file])
+            cubin_age = include_age
+            break
+
+    if debug:
+        if not os.path.exists(pre_dir):  os.mkdir(pre_dir)
+        if not os.path.exists(dump_dir): os.mkdir(dump_dir)
+        pre_file  = os.path.join(pre_dir,  kernel_name + "_pre.sass")
+        dump_file = os.path.join(dump_dir, kernel_name + "_dump.sass")
+        pre_age   = os.path.getmtime(pre_file)  if os.path.exists(pre_file)  else 0
+        dump_age  = os.path.getmtime(dump_file) if os.path.exists(dump_file) else 0
+
+        for include, include_age in includes:
+            if include_age > pre_age:
+                run_command(maxas_p + [sass_file, pre_file])
+                break
+
+        if cubin_age > dump_age:
+            run_command(["nvdisasm -raw", cubin_file, ">", dump_file])
+
     params  = _params[kernel_spec["params"]]
     sig = ""
     for p in params:
@@ -922,59 +721,3 @@ def get_kernel(kernel_name):
     return func
 
 
-def K_partitions(K, tiles):
-    k = K
-    partitions = []
-    for tile_K in tiles:
-        grid_K = (k + tiles[-1] - 1) // tile_K
-        if grid_K > 0:
-            partitions.append([tile_K, grid_K, K-k])
-            k -= grid_K * tile_K
-        if k <= 0:
-            break
-    return partitions
-
-
-def xprop_conv_kernels(clss, op, tile_dim, tile_N, grid_N, K, tiles, PQM, RST, args):
-
-    kernel_list = []
-    for tile_K, grid_K, offset_K in K_partitions(K, tiles):
-
-        kernel_name = "%s_%s_%s%d_N%d" % (clss, op, tile_dim, tile_K, tile_N)
-
-        block = (kernels[kernel_name]["threads"], 1, 1)
-        if RST > 1:
-            grid = (PQM, grid_K, grid_N)
-        else:
-            grid = (grid_K, grid_N, PQM)
-
-        kernel_list.append([kernel_name, grid, block, offset_K, args])
-
-    return kernel_list
-
-
-def update_grid(kernel_name, base_blocks, P, Q, SM_count):
-
-    threads   = kernels[kernel_name]["threads"]
-    occupancy = kernels[kernel_name]["occupancy"]
-
-    # warps per scheduler for one block
-    occ_per_block = threads / (32.0 * 4.0 * SM_count)
-
-    grid = []
-    for p in range(1, P+1):
-        for q in range(1, Q+1):
-
-            occup  = p*q*base_blocks * occ_per_block
-            groups = occup / occupancy
-            slots  = ceil(groups)
-
-            # This is a heuristic that keeps the balance of work accross the SMs
-            # while also maximizing the work that each block does
-            heuristic = min(abs(x - slots) for x in range(4, 8)) + (slots - groups) / 100.0
-
-            grid.append((p, q, heuristic))
-
-    grid.sort(key=lambda x: x[-1])
-
-    return (grid[0][0], grid[0][1], threads)

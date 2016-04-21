@@ -526,232 +526,6 @@ class BpropDirect(KernelGroup):
         return "BpropDirect " + str([k[0] for k in self.kernels])
 
 
-class BpropDirectSmallC(KernelGroup):
-
-    def __init__(self, lib, dtype,
-                 N, C, K,
-                 D, H, W,
-                 T, R, S,
-                 M, P, Q,
-                 pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w):
-
-        super(BpropDirectSmallC, self).__init__(lib, dtype)
-
-        assert N % 32 == 0, "N dim must be multiple of 32"
-
-        magic_PQ = _magic64(P*Q)
-        magic_Q = _magic64(Q)
-        magic_RST = _magic32(C*R*S*T, R*S*T)
-        magic_RS = _magic32(R*S*T+32, R*S)
-        magic_S = _magic32(R*S+32, S)
-
-        # special kernel for deconv into first layer
-        kernel_name = "%s_bprop_C1_N64" % self.clss
-
-        grid = (P*Q*M, _ceil_div(C*R*S*T, 32), _ceil_div(N, 64))
-        block = (32, 1, 1)
-
-        self.kernel = [kernel_name, grid, block, None, None, None, None, None]
-        self.kernel.extend(_flatten([
-            N, K, D, H, W, W*N, H*W*N, D*H*W*N,
-            C, C*R*S*T, R*S*T, magic_RST, R*S, magic_RS, S, magic_S,
-            pad_d, pad_h, pad_w, str_d, str_h, str_w,
-            Q, P*Q, Q*N, P*Q*N, M*P*Q*N, magic_Q, magic_PQ,
-            C*R*S*T*8*dtype.itemsize, M*P*Q*N*8*dtype.itemsize]))
-
-        # generate the kernel args for transpose CRST,K => K,CRST
-        shuffle_grid = (_ceil_div(K, 32), _ceil_div(C*R*S*T, 32), 1)
-        self.shuffle_size = K*T*R*S*C*dtype.itemsize
-        self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None, None, C*R*S*T, K]
-
-        self.zero = C*D*H*W*N * dtype.itemsize
-
-        lib.set_scratch_size(self.shuffle_size)
-
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
-
-        assert I.dtype == F.dtype == O.dtype
-
-        if beta and beta != 1.0:
-            O[:] = O * beta  # pre-apply beta
-
-        self.beta = beta
-
-        self.zero_args = [O.gpudata, 0, self.zero, self.lib.stream]
-
-        filter_temp = self.lib.scratch_buffer(self.shuffle_size)
-
-        self.shuffle_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
-
-        self.kernel[3:8] = (self.lib.stream, O.gpudata, I.gpudata, filter_temp, alpha)
-
-    def execute(self, repeat=1, unbind=True):
-
-        shuffle_kernel = _get_transpose_kernel(self.dtype_str)
-
-        kernel = kernel_specs.get_kernel(self.kernel[0])
-        for r in range(repeat):
-
-            # let atomic adds accumulate on top
-            if not self.beta:
-                drv.memset_d8_async(*self.zero_args)
-
-            shuffle_kernel.prepared_async_call(*self.shuffle_args)
-
-            kernel.prepared_async_call(*self.kernel[1:])
-
-        if unbind:
-            self.zero_args = None
-            self.shuffle_args[2:5] = (None,) * 3
-            self.kernel[3:8] = (None,) * 5
-
-    def __str__(self):
-        return "BpropDirectSmallC " + str(self.kernel[0])
-
-
-
-class UpdateDirect(KernelGroup):
-
-    def __init__(self, lib, dtype,
-                 N, C, K,
-                 D, H, W,
-                 T, R, S,
-                 M, P, Q,
-                 pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w):
-
-        super(UpdateDirect, self).__init__(lib, dtype)
-
-        assert N % 32 == 0, "N dim must be multiple of 32"
-
-        magic_RST = _magic32(C*R*S*T, R*S*T)
-        magic_RS = _magic32(R*S*T+32, R*S)
-        magic_S = _magic32(R*S+32, S)
-
-        grid_C = _ceil_div(C*R*S*T, 128)
-        sm_count = _get_sm_count()
-
-        # in float32 for big feature_map layers the smaller tile is actually faster
-        # so restrict tile selection to just that.
-        if dtype.type is np.float32 and P*Q > 56*56:
-            K_tiles = (64,)
-        else:
-            K_tiles = (128, 64)
-
-        if lib.deterministic:
-            determ = "D"
-            if K <= 64:
-                K_tiles = (64,)
-            else:
-                K_tiles = K_tiles[0:1]
-            self.determ = C*T*R*S*K
-        else:
-            determ = ""
-            self.determ = 0
-
-        self.kernels = []
-        for tile_K, grid_K, offset_K in self.k_partitions(K, K_tiles):
-
-            kernel_name = "%s_updat%s_C128_K%d" % (self.clss, determ, tile_K)
-            base_blocks = M*grid_C*grid_K
-
-            grid_P, grid_Q, threads = self.update_grid(kernel_name, base_blocks, P, Q, sm_count)
-            # print grid_P, grid_Q
-
-            grid_PQ = grid_P * grid_Q
-            magic_PQu = _magic64(grid_PQ)
-            magic_Qu = _magic64(grid_Q)
-
-            block = (threads, 1, 1)
-            if R*S*T > 1:
-                grid = (M*grid_PQ, grid_C, grid_K)
-            else:
-                grid = (grid_C, grid_K, M*grid_PQ)
-
-            self.determ *= M*grid_PQ
-            self.determ_shape = (M*grid_PQ, C*T*R*S*K)
-
-            kernel = [kernel_name, grid, block, None, None, None, None, None]
-            kernel.extend(_flatten([
-                offset_K, N, K, D, H, W, W*N, H*W*N, D*H*W*N,
-                C, C*R*S*T, R*S*T, magic_RST, R*S, magic_RS, S, magic_S,
-                pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                P, Q, P*Q, Q*N, P*Q*N, M*P*Q*N, magic_Qu, magic_PQu,
-                grid_P, grid_Q, grid_PQ, C*R*S*T*K]))
-
-            self.kernels.append(kernel)
-
-        lib.set_scratch_size((self.determ or C*T*R*S*K)*4)
-
-    def update_grid(self, kernel_name, base_blocks, P, Q, SM_count):
-
-        threads = kernel_specs.kernels[kernel_name]["threads"]
-        occupancy = kernel_specs.kernels[kernel_name]["occupancy"]
-
-        # warps per scheduler for one block
-        occ_per_block = threads / (32.0 * 4.0 * SM_count)
-
-        grid = []
-        for p in range(1, P+1):
-            for q in range(1, Q+1):
-
-                occup = p*q*base_blocks * occ_per_block
-                groups = occup / occupancy
-                slots = ceil(groups)
-
-                # This is a heuristic that keeps the balance of work accross the SMs
-                # while also maximizing the work that each block does
-                heuristic = min(abs(x - slots) for x in range(4, 8)) + (slots - groups) / 100.0
-
-                grid.append((p, q, heuristic))
-
-        grid.sort(key=lambda x: x[-1])
-
-        return (grid[0][0], grid[0][1], threads)
-
-    def bind_params(self, I, E, O, alpha):
-
-        assert I.dtype == E.dtype
-
-        if O.dtype.type is not np.float32 or self.determ:
-
-            update_temp = self.lib.scratch_buffer((self.determ or O.size)*4)
-
-            self.convert_args = [update_temp, "f4", O, False]
-            if self.determ:
-                self.convert_args[3] = self.determ_shape
-        else:
-            update_temp = O.gpudata
-            self.convert_args = False
-
-        self.zero_args = [update_temp, 0, O.size, self.lib.stream]
-
-        for kernel in self.kernels:
-            kernel[3:8] = (self.lib.stream, update_temp, I.gpudata, E.gpudata, alpha)
-
-    def execute(self, repeat=1, unbind=True):
-
-        for r in range(repeat):
-
-            if not self.determ:
-                drv.memset_d32_async(*self.zero_args)
-
-            for kernel_params in self.kernels:
-                kernel = kernel_specs.get_kernel(kernel_params[0])
-                kernel.prepared_async_call(*kernel_params[1:])
-
-            if self.convert_args:
-                _fp_convert(*self.convert_args)
-
-        if unbind:
-            self.zero_args = self.convert_args = None
-            for kernel_params in self.kernels:
-                kernel_params[3:8] = (None,) * 5
-
-    def __str__(self):
-        return "UpdateDirect " + str([k[0] for k in self.kernels])
-
 class XpropDirect2(KernelGroup):
 
     def __init__(self, op, lib, dtype,
@@ -824,17 +598,16 @@ class XpropDirect2(KernelGroup):
 
         grid = (gridM*gridP*gridQ*nk, gridK//k, gridN//n)
 
-        if K % 4 != 0: K1 = "K1"
-        else:          K1 = ""
+        options = list()
+        if     N == 1: options.append("N1")
+        elif   N == 2: options.append("N2")
+        elif   N < 32: options.append("SN")
+        if K % 4 != 0: options.append("K1")
 
-        if   N == 1: SN = "_N1"
-        elif N == 2: SN = "_N2"
-        elif N < 32: SN = "_SN"
-        else:        SN = ""
-
-        kernel_name = "%s_direct_%s_64x32%s%s" % (self.clss, op, SN, K1)
-        self.kernel = [kernel_name, grid, (128,1,1), None, None, None, None, None, None, None, None, None]
-        self.kernel.extend(_flatten([
+        self.kernel_opts = tuple(options)
+        self.kernel_name = "%s_direct_%s_64x32" % (self.clss, op)
+        self.kernel_args = [grid, (128,1,1), None, None, None, None, None, None, None, None, None]
+        self.kernel_args.extend(_flatten([
             C, D, H, W, N, K, M, P, Q,
             str_d, str_h, str_w, pad_d, pad_h, pad_w,
             D*H*W*N, H*W*N, W*N, M*P*Q*N, P*Q*N, Q*N,
@@ -845,30 +618,31 @@ class XpropDirect2(KernelGroup):
             SuperM, SuperP, SuperQ, SuperN ]))
 
         if N >= 32:
-            self.shared = T*R*S * 4 * 2
+            self.shared = (T*R*S + 1) * 4 * 2
         else:
             self.shared = T*R*S * 4 * (32 >> shiftN)
         self.relu = relu
 
     def bind_params(self, I, F, O, alpha, beta, bsum, no_op=0):
 
+        # TODO: allow hybrid types
         assert I.dtype == F.dtype == O.dtype
 
-        self.compound = ""
-
+        # TODO: expose more compound operations
+        self.kernel_options = self.kernel_opts
         if bsum:
             bsum_gpudata = bsum.gpudata
             self.bsum_zero = (bsum_gpudata, 0, bsum.size, self.lib.stream)
-            self.compound = "_bsum"
+            self.kernel_options += ("bsum",)
         else:
             bsum_gpudata = 0
             self.bsum_zero = None
 
         if beta:
-            self.compound = "_beta"
+            self.kernel_options += ("beta",)
 
         if self.relu:
-            self.compound = "_relu"
+            self.kernel_options += ("relu",)
 
         if self.trans_size:
             filter_temp = self.lib.scratch_buffer(self.trans_size)
@@ -876,12 +650,12 @@ class XpropDirect2(KernelGroup):
         else:
             filter_temp = F.gpudata
 
-        self.kernel[3:12] = (self.lib.stream, bsum_gpudata, O.gpudata, O.gpudata, I.gpudata, filter_temp,
+        self.kernel_args[2:11] = (self.lib.stream, bsum_gpudata, O.gpudata, O.gpudata, I.gpudata, filter_temp,
                              alpha, beta, no_op)
 
     def execute(self, repeat=1, unbind=True):
 
-        kernel = kernel_specs.get_kernel(self.kernel[0] + self.compound)
+        kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_options)
 
         if self.trans_size:
             trans_kernel = _get_shuffle_kernel(self.dtype_str)
@@ -894,11 +668,11 @@ class XpropDirect2(KernelGroup):
             if self.trans_size:
                 trans_kernel.prepared_async_call(*self.trans_args)
 
-            kernel.prepared_async_call(*self.kernel[1:], shared_size=self.shared)
+            kernel.prepared_async_call(*self.kernel_args, shared_size=self.shared)
 
         if unbind:
             self.bsum_zero = None
-            self.kernel[3:12] = (None,) * 9
+            self.kernel_args[2:11] = (None,) * 9
             if self.trans_size:
                 self.trans_args[2:5] = (None,) * 3
 
@@ -906,7 +680,7 @@ class XpropDirect2(KernelGroup):
         (N, C, K, D, H, W, T, R, S, M, P, Q,
         pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
         return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d) RS:(%d,%d) str:(%d,%d)" % (
-            self.kernel[0], N, C, K, H, W, R, S, str_h, str_w)
+            self.kernel_name, N, C, K, H, W, R, S, str_h, str_w)
 
 class FpropDirect2(XpropDirect2):
 
@@ -946,7 +720,7 @@ class BpropDirect2(XpropDirect2):
             N, K, C, M, P, Q, T, R, S, D, H, W,
             pad_d, pad_h, pad_w, str_d, str_h, str_w, relu)
 
-        self.kernel.extend(_flatten([
+        self.kernel_args.extend(_flatten([
             _magic32(D + T, str_d),
             _magic32(H + R, str_h),
             _magic32(W + S, str_w) ]))
@@ -1073,28 +847,29 @@ class UpdateDirect2(KernelGroup):
         loopQ = strideQ * blockQ
         loopX = loopQ * str_w
 
+        options = list()
         if N > blockN:
             loopQp = N * (loopQ - 1) * itemsize
             loopXp = N * (loopX - 1) * itemsize
-            largeN = "_LN"
         else:
             loopQp = N * loopQ * itemsize
             loopXp = N * loopX * itemsize
-            largeN = ""
+            options.append("SN")
 
         # If output grid is 1, don't use atomics.  Kernel is deterministic by default
         if GM*strideP*strideQ == 1:
-            determ = "_D"
             self.determ_size  = 0
             self.determ_shape = False
             self.zero         = False
+            options.append("D")
+
         elif self.lib.deterministic:
-            determ = "_D"
             self.determ_size  = GM*strideP*strideQ * CTRSK
             self.determ_shape = (GM*strideP*strideQ, CTRSK)
             self.zero         = False
+            options.append("D")
+
         else:
-            determ = ""
             self.determ_size  = 0
             self.determ_shape = False
             self.zero         = True
@@ -1102,9 +877,10 @@ class UpdateDirect2(KernelGroup):
         grid = (GM*strideP*strideQ*kc, GC//c, GK//k)
         #print grid, c, k
 
-        kernel_name = "%s_direct_updat_64x32%s%s" % (self.clss, largeN, determ)
-        self.kernel = [kernel_name, grid, (128,1,1), None, None, None, None, None]
-        self.kernel.extend(_flatten([
+        self.kernel_opts = tuple(options)
+        self.kernel_name = "%s_direct_updat_64x32" % self.clss
+        self.kernel_args = [grid, (128,1,1), None, None, None, None, None]
+        self.kernel_args.extend(_flatten([
             C, D, H, W, N, K, M, P, Q,
             str_d, str_h, str_w, pad_d, pad_h, pad_w,
             D*H*W*N, H*W*N, W*N, M*P*Q*N*16*itemsize, M*P*Q*N, P*Q*N, Q*N,
@@ -1213,31 +989,31 @@ class UpdateDirect2(KernelGroup):
         if self.zero:
             self.zero_args = [update_temp, 0, O.size, self.lib.stream]
 
-        self.kernel[3:8] = (self.lib.stream, update_temp, I.gpudata, E.gpudata, alpha)
+        self.kernel_args[2:7] = (self.lib.stream, update_temp, I.gpudata, E.gpudata, alpha)
 
     def execute(self, repeat=1, unbind=True):
 
-        kernel = kernel_specs.get_kernel(self.kernel[0])
+        kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_opts)
 
         for r in range(repeat):
 
             if self.zero:
                 drv.memset_d32_async(*self.zero_args)
 
-            kernel.prepared_async_call(*self.kernel[1:])
+            kernel.prepared_async_call(*self.kernel_args)
 
             if self.convert_args:
                 _fp_convert(*self.convert_args)
 
         if unbind:
             self.zero_args = self.convert_args = None
-            self.kernel[3:8] = (None,) * 5
+            self.kernel_args[2:7] = (None,) * 5
 
     def __str__(self):
         (N, C, K, D, H, W, T, R, S, M, P, Q,
         pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
         return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d) RS:(%d,%d) str:(%d,%d)" % (
-            self.kernel[0], N, C, K, H, W, R, S, str_h, str_w)
+            self.kernel_name, N, C, K, H, W, R, S, str_h, str_w)
 
 
 

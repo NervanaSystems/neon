@@ -1484,19 +1484,12 @@ class NervanaGPU(Backend):
 
         k_vec = 8 if sizeA == 32 or sizeB == 32 else 16
 
-        if op == "tn":
-            if (m % 4 == 0 and n % 4 == 0 and
-                A.strides[1] % 4 == 0 and B.strides[0] % 4 == 0):
-                op += "_vec"
-        elif op == "nn":
-            if (k % k_vec == 0 and n % 4 == 0 and
-                A.strides[0] % k_vec == 0 and B.strides[0] % 4 == 0):
-                op += "_vec"
-        elif op == "nt":
-            if (k % k_vec == 0 and n % 4 == 0 and
-                A.strides[0] % k_vec == 0 and B.strides[1] % k_vec == 0):
-                op += "_vec"
-
+        if (op == "tn" and m % 4 == 0 and n % 4 == 0 or
+            op == "nn" and k % k_vec == 0 and n % 4 == 0 or
+            op == "nt" and k % k_vec == 0 and n % 4 == 0):
+            vec_opt = ("vec",)
+        else:
+            vec_opt = None
 
         # nt and nn are more efficient with k%16==0
         if C.dtype.type is np.float16:
@@ -1510,7 +1503,7 @@ class NervanaGPU(Backend):
         if relu:
             flags |= 2
 
-        kernel = kernel_specs.get_kernel("_".join((clss, op, size)))
+        kernel = kernel_specs.get_kernel("_".join((clss, op, size)), vec_opt)
         params = [
             (1, gridA, gridB), (kernel.threads, 1, 1), self.stream,
             C.gpudata, A.gpudata, B.gpudata, alpha, beta, flags,
@@ -1641,7 +1634,9 @@ class NervanaGPU(Backend):
         if (op == "tn" and m % 4 == 0 and n % 4 == 0 or
                 op == "nn" and k % k_vec == 0 and n % 4 == 0 or
                 op == "nt" and k % k_vec == 0):
-            op += "_vec"
+            vec_opt = ("vec",)
+        else:
+            vec_opt = None
 
         # nt and nn are more efficient with k%16==0
         if C.dtype.type is np.float16:
@@ -1651,7 +1646,7 @@ class NervanaGPU(Backend):
         else:
             raise TypeError("Only floating point dot currently supported.")
 
-        kernel = kernel_specs.get_kernel("_".join((clss, op, size)))
+        kernel = kernel_specs.get_kernel("_".join((clss, op, size)), vec_opt)
         params = [
             (batch_grid, gridA, gridB), (threads, 1, 1), self.stream,
             C.gpudata, A.gpudata, B.gpudata, alpha, beta, flags,
