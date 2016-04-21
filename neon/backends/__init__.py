@@ -139,9 +139,7 @@ def cleanup_backend():
     if NervanaObject.be is None:
         return;
     be = NervanaObject.be
-    from neon.backends.nervanacpu import NervanaCPU
-    from argon.neon_backend.ar_backend import ArBackend
-    if (type(be) is not NervanaCPU) and (type(be) is not ArBackend):
+    if type(be).__name__ in ['NervanaGPU', 'NervanaMGPU']:
         from neon.backends.nervanagpu import NervanaGPU
         try:
             if type(be) is NervanaGPU:
