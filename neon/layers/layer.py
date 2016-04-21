@@ -1776,14 +1776,14 @@ class LookupTable(ParameterLayer):
             self.weight_shape = (self.vocab_size, self.embedding_dim)
         return self
 
-    def allocate(self):
+    def allocate(self, shared_outputs=None):
         super(LookupTable, self).allocate()
         if self.inputs is None:
             self.inputs = self.be.zeros((1, self.nin * self.be.bsz),
                                         dtype=np.int32)  # inputs is np.float32
         self.dW[:] = 0
         if self.pad_idx is not None:
-            self.W[:, self.pad_idx] = 0
+            self.W[self.pad_idx] = 0
         if self.outputs_t is None:
             self.outputs_t = self.be.empty_like(self.outputs.T)
 
@@ -1821,7 +1821,6 @@ class LookupTable(ParameterLayer):
             self.dW[:] = 0
             self.be.compound_bprop_lut(self.nin, self.inputs, error, self.outputs_t,
                                        self.dW, self.pad_idx, alpha, beta)
-
         return self.deltas
 
 

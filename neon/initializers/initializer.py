@@ -39,6 +39,9 @@ class Constant(Initializer):
         self.val = val
 
     def fill(self, param):
+        if isinstance(self.val, Tensor):
+            assert self.val.shape == param.shape, "Constant(Array) initializer can"\
+                                                  " only fill a matching shape tensor"
         param[:] = self.val
 
 
