@@ -422,7 +422,7 @@ class ConvLayer(Layer):
 
         ####### Winograd ###########
         elif lib.enable_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
-            from winograd_conv import (FpropWinograd, BpropWinograd, UpdateWinograd,
+            from winograd_conv import (FpropWinograd_2x2_3x3, BpropWinograd_2x2_3x3, UpdateWinograd_3x3_2x2,
                                        FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
 
             # Temp for now till we can autotune
@@ -432,59 +432,48 @@ class ConvLayer(Layer):
             else:
                 winograd = 2
 
-            if N >=4 and C < 8:
-                self.fprop_kernels = convolution.FpropDirect2(
+            if C < 8:
+                self.fprop_kernels = convolution.FpropDirect(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
             elif winograd == 4:
                 self.fprop_kernels = FpropWinograd_4x4_3x3(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
             else:
-                self.fprop_kernels = FpropWinograd(
+                self.fprop_kernels = FpropWinograd_2x2_3x3(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
 
             if winograd == 4:
                 self.bprop_kernels = BpropWinograd_4x4_3x3(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
             else:
-                self.bprop_kernels = BpropWinograd(
+                self.bprop_kernels = BpropWinograd_2x2_3x3(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
 
             if N >=4 and (C < 8 or H*W > 112*112):
-                self.updat_kernels = convolution.UpdateDirect2(
+                self.updat_kernels = convolution.UpdateDirect(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w)
             elif winograd == 4:
                 self.updat_kernels = UpdateWinograd_3x3_4x4(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
             else:
-                self.updat_kernels = UpdateWinograd(
+                self.updat_kernels = UpdateWinograd_3x3_2x2(
                     lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
 
         ####### Direct ###########
         else:
-            vec_size = 4 if self.dtype.itemsize == 4 else 8
 
-            if N % 64 == 0 and K % vec_size == 0:
-                self.fprop_kernels = convolution.FpropDirect(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
-            else:
-                self.fprop_kernels = convolution.FpropDirect2(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
+            self.fprop_kernels = convolution.FpropDirect(
+                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                 pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
 
-            if N % 64 == 0 and C % vec_size == 0:
-                self.bprop_kernels = convolution.BpropDirect(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
-            else:
-                self.bprop_kernels = convolution.BpropDirect2(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
+            self.bprop_kernels = convolution.BpropDirect(
+                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                 pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
 
             if N >= 4:
-                self.updat_kernels = convolution.UpdateDirect2(
+                self.updat_kernels = convolution.UpdateDirect(
                     lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                      pad_d, pad_h, pad_w, str_d, str_h, str_w)
 

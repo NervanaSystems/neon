@@ -29,11 +29,13 @@
     szShareI  : (128*8)
 
     addr_zero  : 4x<128*8*2 + 128*8*2 + 0>
+    addr_mpqk  : 4x<128*8*2 + 128*8*2 + 4>
     addr_m     : 4x<128*8*2 + 128*8*2 + 4>
     addr_p     : 4x<128*8*2 + 128*8*2 + 5>
     addr_q     : 4x<128*8*2 + 128*8*2 + 6>
-    addr_szLut : 4x<128*8*2 + 128*8*2 + 7>
-    addr_lut   : 4x<128*8*2 + 128*8*2 + 8>
+    addr_k     : 4x<128*8*2 + 128*8*2 + 7>
+    addr_szLut : 4x<128*8*2 + 128*8*2 + 8>
+    addr_lut   : 4x<128*8*2 + 128*8*2 + 10>
 
 [+ params() +]
 
@@ -52,11 +54,11 @@
 
        0-63 : czero<00-63>
 
-      64-67 : mpq<0-3>
-      64-69 : m, p, q, tidY, blkMPQ, one
-
-     70-111 ~ tid1, tid128, tidX
-     70-111 ~ mask_shr, rst, lutStore, lutStore2, warp_count, mt, pr, qs, dep_thd_mask, dep_thd_bits, dep_thd_cnt, t, r, s, rs, x, y, z, ballot, warp_slices, partial, endCRST, magicPQ, magicQ, negQ, negPQ, div1, div2, div3, str_d, str_h, str_w, rst_prime, x_prime, y_prime, z_prime
+      64-67 : mpqk<0-3>
+      64-67 : m, p, q
+      64-71 : idx_M, idx_P, idx_Q, idx_K, tidY, negOne
+     72-111 ~ tid1, tid128, tidX, idx_MPQk, idx_PQk, idx_Qk, idx_k, magic_PQk, magic_Qk, neg_PQk, neg_Qk, neg_k, div1, div2, div3, idx_P2, idx_Q2, q1, q2
+     72-111 ~ mask_shr, rst, lutStore, lutStore2, warp_count, mt, pr, qs, dep_thd_mask, dep_thd_bits, dep_thd_cnt, t, r, s, rs, x, y, z, ballot, warp_slices, partial, endCRST, str_d, str_h, str_w, rst_prime, x_prime, y_prime, z_prime
 
       64-79 : j0Ix<0-7>, j0Fy<0-7>
       80-95 : j1Ix<0-7>, j1Fy<0-7>
@@ -70,25 +72,27 @@
     112-113 : sliceIF<0-1>
 
     114-122 ~ writeS, offsetIn, offsetFk, posCRST, posCRSTf, channel, lutSize, lutSizeRcp, lutOffset
-    123-127 ~ readFs, readIs, tid, blkF, blkI
+    123-127 ~ readFs, readIs, tid, idx_N
 
-    74-75   : Out<0-1>
-    76-91   : cs<0-7>, b<0-7>
-    92-93   : Sum<0-1>
-    94-125  ~ writeCs, readCs, alpha, beta, flags, tidOX, tidOX2, tidOX63, tidOY, to, k, n, MPQN, MPQN1, MPQN4, MPQN60, sum<0-3>
+    72-91   : cs<0-7>, c<0-3>, b<0-7>
+    72-83   ~ x<0-7>
+    92-99   : out<0-7>
+   100-101  : Out<0-1>
+   102-103  : Sum<0-1>
+   104-122  ~ writeCs, readCs, alpha, k, n, sum<0-3>, offset, out_offset, bsum_offset, tidOX, tidOY, tidOX2, tidOX63
 
 </REGISTER_MAPPING>
 
-// 1 tid
-// 2 blkF
-// 3 blkI
-// 4 blkMPQ
-[+ load_ids() +]
+--:-:1:-:1      S2R tid,      SR_TID.X;
+--:-:2:-:1      S2R idx_MPQk, SR_CTAID.X;
+--:-:3:-:1      S2R idx_K,    SR_CTAID.Y;
+--:-:4:-:1      S2R idx_N,    SR_CTAID.Z;
 
 <SCHEDULE_BLOCK>
 01:-:-:-:1      ISETP.GE.AND P0, PT, tid, 32, PT;
 
 [+ load_zeros() +]
+[+ get_mpqk() +]
 
 // tidX = (tid & 31) << 2
 // tidY = tid >> 5
@@ -96,12 +100,11 @@
 --:-:-:-:1      SHL     tidX, tidX, 2;
 --:-:-:-:1      SHR.U32 tidY, tid,  5;
 
-// trackF += blkF*128 + tidX + offset_K
-02:-:-:-:1      ISCADD  offsetFk, blkF, tidX, 7;
---:-:-:-:1      IADD    offsetFk, offsetFk, param_offset_K;
+// trackF += blkF*128 + tidX
+--:-:-:-:1      ISCADD  offsetFk, idx_K, tidX, 7;
 
 // trackI += blkI*128 + tidX
-0c:-:-:-:1      ISCADD  offsetIn, blkI, tidX, 7;
+08:-:-:-:1      ISCADD  offsetIn, idx_N, tidX, 7;
 
 // writeS = (128*tidY + tidX) * 4
 --:-:-:-:1      ISCADD  writeS, tidY, tidX, 7;
@@ -190,7 +193,7 @@ LOOP:
 
 [+ main_loop() +]
 
---:-:1:-:1      LDS.U.128 mpq, [addr_m];
+--:-:1:-:1      LDS.U.128 mpqk, [addr_mpqk];
 
 <SCHEDULE_BLOCK>
 
@@ -216,15 +219,14 @@ LOOP:
 --:-:-:-:1      SHL    readCs, readCs, 2;
 
 // n = blkI*128 + tidOX;
---:-:-:-:1      ISCADD n, blkI, tidOX, 7;
+--:-:-:-:1      ISCADD n, idx_N, tidOX, 7;
 
 // Mul by 4 here expands k stride back out
 // k = blkF*128 + tidOY * 4
---:-:-:-:1      SHL    tidOY,   tidOY, 2;
---:-:-:-:1      ISCADD k, blkF, tidOY, 7;
---:-:-:-:1      IADD   k, k, param_offset_K;
+--:-:-:-:1      SHL tidOY, tidOY, 2;
+01:-:-:-:1      ISCADD k, idx_K, tidOY, 7;
 
-[+ output_setup(63) +]
+[+ output_setup(63, 3) +]
 
 </SCHEDULE_BLOCK>
 

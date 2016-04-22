@@ -1,126 +1,148 @@
 
 
 [-
+    # Kernel Options:
+    our ($beta, $bias, $relu, $prelu, $brelu, $bprelu, $bsum);
+
     # set externally
-    our ($prefix, $prop, $shareI, $shareF, $stepI, $stepF, $remapI, $remapF, $int16);
+    our ($prefix, $prop, $shareI, $shareF, $stepI, $stepF, $remapI, $remapF);
 
     our $addr_shift = $prefix eq 's' ? 2 : 1;
-
-    sub fprop_params
-    {
-        my $params = <<'EOF';
-    param_Sum[0]       : c[0x0][0x140]
-    param_Sum[1]       : c[0x0][0x144]
-    param_O[0]         : c[0x0][0x148]
-    param_O[1]         : c[0x0][0x14c]
-    param_I[0]         : c[0x0][0x150]
-    param_I[1]         : c[0x0][0x154]
-    param_F[0]         : c[0x0][0x158]
-    param_F[1]         : c[0x0][0x15c]
-    param_alpha        : c[0x0][0x160]
-    param_beta         : c[0x0][0x164]
-    param_flags        : c[0x0][0x168]
-    param_offset_K     : c[0x0][0x16c]
-    param_N            : c[0x0][0x170]
-    param_K            : c[0x0][0x174]
-    param_D            : c[0x0][0x178]
-    param_H            : c[0x0][0x17c]
-    param_W            : c[0x0][0x180]
-    param_WN           : c[0x0][0x184]
-    param_HWN          : c[0x0][0x188]
-    param_DHWN         : c[0x0][0x18c]
-    param_C            : c[0x0][0x190]
-    param_KRST         : c[0x0][0x194]
-    param_RST          : c[0x0][0x198]
-    param_RS           : c[0x0][0x19c]
-    param_magic_RS     : c[0x0][0x1a0]
-    param_shift_RS     : c[0x0][0x1a4]
-    param_S            : c[0x0][0x1a8]
-    param_magic_S      : c[0x0][0x1ac]
-    param_shift_S      : c[0x0][0x1b0]
-    param_pad_d        : c[0x0][0x1b4]
-    param_pad_h        : c[0x0][0x1b8]
-    param_pad_w        : c[0x0][0x1bc]
-    param_str_d        : c[0x0][0x1c0]
-    param_str_h        : c[0x0][0x1c4]
-    param_str_w        : c[0x0][0x1c8]
-    param_Q            : c[0x0][0x1cc]
-    param_PQ           : c[0x0][0x1d0]
-    param_QN           : c[0x0][0x1d4]
-    param_PQN          : c[0x0][0x1d8]
-    param_MPQN         : c[0x0][0x1dc]
-    param_magic_Q      : c[0x0][0x1e0]
-    param_shift_Q      : c[0x0][0x1e4]
-    param_magic_PQ     : c[0x0][0x1e8]
-    param_shift_PQ     : c[0x0][0x1ec]
-EOF
-        $params .= <<'EOF' if $int16 && $prop eq 'f';
-    param_Stats[0]     : c[0x0][0x1f0]
-    param_Stats[1]     : c[0x0][0x1f4]
-    param_scale        : c[0x0][0x1f8]
-EOF
-        return $params;
-    }
-    return;
-
-    sub bprop_params {
-        my $params = fprop_params() . <<'EOF';
-    param_R            : c[0x0][0x1f0]
-    param_T            : c[0x0][0x1f4]
-    param_magic_str_w  : c[0x0][0x1f8]
-    param_shift_str_w  : c[0x0][0x1fc]
-    param_magic_str_h  : c[0x0][0x200]
-    param_shift_str_h  : c[0x0][0x204]
-    param_magic_str_d  : c[0x0][0x208]
-    param_shift_str_d  : c[0x0][0x20c]
-EOF
-        $params .= <<'EOF' if $int16;
-    param_Stats[0]     : c[0x0][0x210]
-    param_Stats[1]     : c[0x0][0x214]
-    param_scale        : c[0x0][0x218]
-EOF
-        return $params;
-    }
+    our $half = $prefix eq 'h';
 
     sub params
     {
-        return $prop eq 'f' ? fprop_params() : bprop_params();
-    }
-
-    sub load_ids
-    {
         return <<'EOF';
---:-:-:-:0      MOV one, 1;
---:-:1:-:6      S2R tid, SR_TID.X;
---:-:-:Y:d      ISETP.EQ.AND P0, PT, one, param_RST, PT;
---:-:-:-:5  @P0 BRA.U CTAID1;
---:-:2:-:1      S2R blkF,   SR_CTAID.Y;
---:-:3:-:1      S2R blkI,   SR_CTAID.Z;
---:-:4:-:1      S2R blkMPQ, SR_CTAID.X;
---:-:-:-:5      BRA.U END_CTAID1;
-CTAID1:
---:-:2:-:1      S2R blkF,   SR_CTAID.X;
---:-:3:-:1      S2R blkI,   SR_CTAID.Y;
---:-:4:-:1      S2R blkMPQ, SR_CTAID.Z;
-END_CTAID1:
+    param_Sum[0]       : c[0x0][0x140]
+    param_Sum[1]       : c[0x0][0x144]
+    param_X[0]         : c[0x0][0x148]
+    param_X[1]         : c[0x0][0x14c]
+    param_O[0]         : c[0x0][0x150]
+    param_O[1]         : c[0x0][0x154]
+    param_I[0]         : c[0x0][0x158]
+    param_I[1]         : c[0x0][0x15c]
+    param_F[0]         : c[0x0][0x160]
+    param_F[1]         : c[0x0][0x164]
+    param_alpha        : c[0x0][0x168]
+    param_beta         : c[0x0][0x16c]
+    param_flags        : c[0x0][0x170]
+    param_N            : c[0x0][0x174]
+    param_K            : c[0x0][0x178]
+    param_D            : c[0x0][0x17c]
+    param_H            : c[0x0][0x180]
+    param_W            : c[0x0][0x184]
+    param_WN           : c[0x0][0x188]
+    param_HWN          : c[0x0][0x18c]
+    param_DHWN         : c[0x0][0x190]
+    param_C            : c[0x0][0x194]
+    param_KRST         : c[0x0][0x198]
+    param_RST          : c[0x0][0x19c]
+    param_RS           : c[0x0][0x1a0]
+    param_T            : c[0x0][0x1a4]
+    param_R            : c[0x0][0x1a8]
+    param_S            : c[0x0][0x1ac]
+    param_magic_RS     : c[0x0][0x1b0]
+    param_shift_RS     : c[0x0][0x1b4]
+    param_magic_S      : c[0x0][0x1b8]
+    param_shift_S      : c[0x0][0x1bc]
+    param_pad_d        : c[0x0][0x1c0]
+    param_pad_h        : c[0x0][0x1c4]
+    param_pad_w        : c[0x0][0x1c8]
+    param_str_d        : c[0x0][0x1cc]
+    param_str_h        : c[0x0][0x1d0]
+    param_str_w        : c[0x0][0x1d4]
+    param_P2           : c[0x0][0x1d8]
+    param_Q            : c[0x0][0x1dc]
+    param_PQk          : c[0x0][0x1e0]
+    param_Qk           : c[0x0][0x1e4]
+    param_k            : c[0x0][0x1e8]
+    param_magic_PQk    : c[0x0][0x1ec]
+    param_shift_PQk    : c[0x0][0x1f0]
+    param_magic_Qk     : c[0x0][0x1f4]
+    param_shift_Qk     : c[0x0][0x1f8]
+    param_magic_k      : c[0x0][0x1fc]
+    param_shift_k      : c[0x0][0x200]
+    param_QN           : c[0x0][0x204]
+    param_PQN          : c[0x0][0x208]
+    param_MPQN         : c[0x0][0x20c]
+    param_gridN        : c[0x0][0x210]
+    param_gridQN       : c[0x0][0x214]
+    param_gridPQN      : c[0x0][0x218]
+    param_gridMPQN     : c[0x0][0x21c]
+    param_magic_str_d  : c[0x0][0x220]
+    param_shift_str_d  : c[0x0][0x224]
+    param_magic_str_h  : c[0x0][0x228]
+    param_shift_str_h  : c[0x0][0x22c]
+    param_magic_str_w  : c[0x0][0x230]
+    param_shift_str_w  : c[0x0][0x234]
 EOF
     }
 
-    sub reload_ids
+    sub get_mpqk
     {
         return <<'EOF';
---:-:-:-:0      MOV one, 1;
---:-:1:-:6      LDS.U.128 mpq, [addr_m];
---:-:-:-:0      ISETP.EQ.AND P0, PT, one, param_RST, PT;
---:-:2:Y:d      S2R tid, SR_TID.X;
---:-:-:-:5  @P0 BRA.U CTAID2;
---:-:3:-:1      S2R blkF,   SR_CTAID.Y;
---:-:4:-:1      S2R blkI,   SR_CTAID.Z;
---:-:-:-:5      BRA.U END_CTAID2;
-CTAID2:
---:-:3:-:1      S2R blkF,   SR_CTAID.X;
---:-:4:-:1      S2R blkI,   SR_CTAID.Y;
-END_CTAID2:
+// idx_M = idx_MPQk / blk_PQk
+--:-:-:-:1      MOV  magic_PQk, param_magic_PQk;
+--:-:-:-:1      ISETP.NE.AND P1, PT,   magic_PQk, 1, PT;
+02:-:-:-:1  @P1 XMAD     div1, idx_MPQk,    magic_PQk,    RZ;
+--:-:-:-:1  @P1 XMAD     div2, idx_MPQk,    magic_PQk.H1, RZ;
+--:-:-:-:1  @P1 XMAD     div3, idx_MPQk.H1, magic_PQk.H1, RZ;
+--:-:-:-:1  @P1 XMAD.CHI div1, idx_MPQk.H1, magic_PQk,    div1;
+--:-:-:-:1  @P1 IADD3.RS idx_M, div1, div2, div3;
+--:-:-:-:1  @P1 SHR.U32  idx_M, idx_M,    param_shift_PQk;
+--:-:-:-:1 @!P1 SHR.U32  idx_M, idx_MPQk, param_shift_PQk;
+
+// idx_PQk = idx_PQk % blk_Qk
+--:-:-:-:1      IADD neg_PQk, RZ, -param_PQk;
+--:-:-:-:1      XMAD.LO2 idx_PQk, neg_PQk, idx_M, idx_MPQk;
+
+// idx_P2 = idx_PQk / blk_Qk
+--:-:-:-:1      MOV  magic_Qk, param_magic_Qk;
+--:-:-:-:1      ISETP.NE.AND P2, PT,  magic_Qk, 1, PT;
+--:-:-:-:1  @P2 XMAD     div1, idx_PQk,    magic_Qk,    RZ;
+--:-:-:-:1  @P2 XMAD     div2, idx_PQk,    magic_Qk.H1, RZ;
+--:-:-:-:1  @P2 XMAD     div3, idx_PQk.H1, magic_Qk.H1, RZ;
+--:-:-:-:1  @P2 XMAD.CHI div1, idx_PQk.H1, magic_Qk,    div1;
+--:-:-:-:1  @P2 IADD3.RS idx_P2, div1, div2, div3;
+--:-:-:-:1  @P2 SHR.U32  idx_P2, idx_P2,  param_shift_Qk;
+--:-:-:-:1 @!P2 SHR.U32  idx_P2, idx_PQk, param_shift_Qk;
+
+// idx_Qk = idx_PQk % blk_Qk
+--:-:-:-:1      IADD neg_Qk, RZ, -param_Qk;
+--:-:-:-:1      XMAD.LO2 idx_Qk, neg_Qk, idx_P2, idx_PQk;
+
+// idx_Q2  = idx_Qk / k
+--:-:-:-:1      XMAD.LO2C idx_Q2, idx_Qk, param_magic_k, RZ;
+--:-:-:-:1      SHR.U32   idx_Q2, idx_Q2, param_shift_k;
+// idx_k = idx_Qk % k
+--:-:-:-:1      IADD neg_k, RZ, -param_k;
+--:-:-:-:1      XMAD.S16.U16  idx_k, neg_k, idx_Q2, idx_Qk;
+
+// idx_K = idx_K * blk_k + idx_k
+04:-:-:-:1      XMAD idx_K, idx_K, param_k, idx_k;
+
+// Implement a square wave block id remapping (for all but last row (if odd number of rows))
+// idx_P = idx_P2 * 2
+// idx_Q = idx_Q2
+// if idx_P2 != gridP2:
+//     idx_P += (idx_Q2 & 1) ^ ((idx_Q2 & 2)>>1)
+//     idx_Q  = idx_Q2 >> 1
+--:-:-:-:1      ISETP.NE.AND P1, PT, idx_P2, param_P2, PT;
+--:-:-:-:1      SHL idx_P, idx_P2, 1;
+--:-:-:-:1  @P1 LOP.AND q1, idx_Q2, 1;
+--:-:-:-:1  @P1 BFE.U32 q2, idx_Q2, 0x101; // 1 bit at position 1
+--:-:-:-:1  @P1 LOP.XOR q1, q1, q2;
+--:-:-:-:1  @P1 IADD idx_P, idx_P, q1;
+--:-:-:-:1  @P1 SHR.U32 idx_Q, idx_Q2, 1;
+--:-:-:-:1 @!P1 MOV idx_Q, idx_Q2;
+
+// Scan backwards on odd rows
+// if idx_P2 & 1:
+//     idx_Q = Q - idx_Q - 1
+--:-:-:-:1      LOP.AND.NZ P2, RZ, idx_P2, 1;
+--:-:-:-:1      MOV negOne, -1;
+--:-:-:-:1  @P2 IADD3 idx_Q, -idx_Q, param_Q, negOne;
+
 EOF
     }
 
@@ -136,52 +158,15 @@ EOF
 --:-:-:-:5  @P0 BRA.U END_SETUP;
 
 <SCHEDULE_BLOCK>
+--:-:-:-:1      STS.128 [addr_mpqk], mpqk;
+
 --:-:-:-:1      MOV rst,        tid;
 --:-:-:-:1      MOV lutStore2,  RZ;
 --:-:-:-:1      MOV lutSize,    RZ;
 --:-:-:-:1      MOV warp_count, 32;
 
---:-:-:-:1      MOV  magicPQ,    param_magic_PQ;
---:-:-:-:1      MOV  magicQ,     param_magic_Q;
---:-:-:-:1      IADD negQ,  RZ, -param_Q;
---:-:-:-:1      IADD negPQ, RZ, -param_PQ;
-
---:-:-:-:1      ISETP.NE.AND P1, PT, magicPQ, 1, PT;
---:-:-:-:1      ISETP.NE.AND P2, PT, magicQ,  1, PT;
-
-// m = blkMPQ / PQ
---:-:-:-:1  @P1 XMAD     div1, blkMPQ,    magicPQ,    RZ;
---:-:-:-:1  @P1 XMAD     div2, blkMPQ,    magicPQ.H1, RZ;
---:-:-:-:1  @P1 XMAD     div3, blkMPQ.H1, magicPQ.H1, RZ;
---:-:-:-:1  @P1 XMAD.CHI div1, blkMPQ.H1, magicPQ,    div1;
---:-:-:-:1  @P1 IADD3.RS m, div1, div2, div3;
---:-:-:-:1  @P1 SHR.U32  m, m,      param_shift_PQ;
---:-:-:-:1 @!P1 SHR.U32  m, blkMPQ, param_shift_PQ;
-
-// pq = blkMPQ % PQ
---:-:-:-:1      XMAD.LO2 blkMPQ, negPQ, m, blkMPQ;
-
-// p = blockPQ / Q
---:-:-:-:1  @P2 XMAD     div1, blkMPQ,    magicQ,    RZ;
---:-:-:-:1  @P2 XMAD     div2, blkMPQ,    magicQ.H1, RZ;
---:-:-:-:1  @P2 XMAD     div3, blkMPQ.H1, magicQ.H1, RZ;
---:-:-:-:1  @P2 XMAD.CHI div1, blkMPQ.H1, magicQ,    div1;
---:-:-:-:1  @P2 IADD3.RS p, div1, div2, div3;
---:-:-:-:1  @P2 SHR.U32  p, p,  param_shift_Q;
---:-:-:-:1 @!P2 SHR.U32  p, blkMPQ, param_shift_Q;
-
-// q = blockPQ % Q
---:-:-:-:1      XMAD.S16.S16 q, negQ, p, blkMPQ;
-
---:-:-:-:1      MOV dep_thd_mask, -1;
-
---:-:-:-:1      LOP.AND.NZ P1, RZ, p, 1;
---:-:-:-:1  @P1 IADD3 q, -q, param_Q, dep_thd_mask;
-
 --:-:-:-:1      IADD    mask_shr, -tid, 32;
---:-:-:-:1      SHR.U32 dep_thd_mask, dep_thd_mask, mask_shr;
-
---:-:-:-:1      STS.128 [addr_m], m;
+--:-:-:-:1      SHR.U32 dep_thd_mask, negOne, mask_shr;
 EOF
     }
 
@@ -328,18 +313,15 @@ EOF
     sub bprop_lut
     {
         return begin_lut() . <<'EOF' . end_lut();
---:-:-:-:1      MOV str_d,      param_str_d;
---:-:-:-:1      MOV str_h,      param_str_h;
---:-:-:-:1      MOV str_w,      param_str_w;
-// qs = q - S + pad_w + 1
-// pr = p - R + pad_h + 1
-// mt = m - T + pad_d + 1
---:-:-:-:1      IADD  qs, q, -param_S;
---:-:-:-:1      IADD3 qs, qs, param_pad_w, one;
---:-:-:-:1      IADD  pr, p, -param_R;
---:-:-:-:1      IADD3 pr, pr, param_pad_h, one;
---:-:-:-:1      IADD  mt, m, -param_T;
---:-:-:-:1      IADD3 mt, mt, param_pad_d, one;
+--:-:-:-:1      MOV str_d, param_str_d;
+--:-:-:-:1      MOV str_h, param_str_h;
+--:-:-:-:1      MOV str_w, param_str_w;
+// qs = q - pad_w
+// pr = p - pad_h
+// mt = m - pad_d
+--:-:-:-:1      IADD qs, q, -param_pad_w;
+--:-:-:-:1      IADD pr, p, -param_pad_h;
+--:-:-:-:1      IADD mt, m, -param_pad_d;
 </SCHEDULE_BLOCK>
 
 LUT_LOOP:
@@ -514,531 +496,341 @@ EOF
     }
 
 
-    sub output_offset
+    sub output_setup
     {
-        my $tidOX = shift;
+        my ($tidOX, $warp_shift) = @_;
+        my $out;
 
-        return sprintf <<'EOF', $tidOX, $addr_shift;
-// sum = S + k
---:-:-:-:1      LEA      Sum0.CC, k, param_Sum[0],     2;
---:-:-:-:1      LEA.HI.X Sum1,    k, param_Sum[1], RZ, 2;
+        $out .= qq{
+02:-:-:-:1      SHR.U32   bsum_offset, tid, 5;
+04:-:-:-:1      ISCADD    bsum_offset, idx_N, bsum_offset,   $warp_shift;
+01:-:-:-:1      XMAD      bsum_offset, idx_Q, param_gridN,   bsum_offset;
+--:-:-:-:1      XMAD.LO2C bsum_offset, idx_P, param_gridQN,  bsum_offset;
+--:-:-:-:1      XMAD.LO2C bsum_offset, idx_M, param_gridPQN, bsum_offset;
 
---:-:-:-:1      LOP.AND tidOX63, tidOX, %1$s;
+--:-:-:-:1      LOP.AND tidOX63, tidOX, $tidOX;
+--:-:-:-:1      ISETP.EQ.AND P5, PT, tidOX63, RZ, PT;
+        } if $bsum;
 
+        $out .= qq{
+// out_offset = m*PQN + p*QN + q*N + n
+01:-:-:-:1      XMAD      out_offset, q, param_N,    n;
+--:-:-:-:1      XMAD.LO2C out_offset, p, param_QN,   out_offset;
+--:-:-:-:1      XMAD.LO2C out_offset, m, param_PQN,  out_offset;
 
-// o = k*MPQN + m*PQN + p*QN + q*N + n
-01:-:-:-:1      XMAD      to, q, param_N,    n;
---:-:-:-:1      XMAD.LO2C to, p, param_QN,   to;
---:-:-:-:1      XMAD.LO2C to, m, param_PQN,  to;
---:-:-:-:1      XMAD.LO2C to, k, param_MPQN, to;
---:-:-:-:1      LEA      Out0.CC, to, param_O[0],     %2$s;
---:-:-:-:0      LEA.HI.X Out1,    to, param_O[1], RZ, %2$s;
-EOF
+--:-:-:-:1      MOV alpha, param_alpha;
+
+--:-:-:-:1      ISETP.EQ.AND P2, PT, RZ, param_flags, PT; // no output
+--:-:-:-:1      ISETP.LT.AND P0, PT, n, param_N, P2;
+        };
+
+        $out .=  $half ? q{
+--:-:-:-:1      ISETP.LT.AND P1, PT, n, param_N, P2;
+        } : qq{
+--:-:-:-:1      IADD n, n, $stepI;
+--:-:-:-:1      ISETP.LT.AND P1, PT, n, param_N, P2;
+        };
+        return $out;
     }
 
-    sub output_step
-    {
-
-        return sprintf <<'EOF', $addr_shift if $remapF;
---:-:-:-:1      MOV  MPQN,  param_MPQN;
---:-:-:-:1      SHL  MPQN1, MPQN, %1$s;
-EOF
-
-        my $shift4 = 2 + $addr_shift;
-        my $shiftK = 1;
-        $shiftK += 1 while 1 << $shiftK < $stepF;
-        $shiftK += $addr_shift;
-        return sprintf <<'EOF', $addr_shift, $shift4, $stepF-4, $shiftK;
---:-:-:-:1      MOV  MPQN,  param_MPQN;
---:-:-:-:1      SHL  MPQN1, MPQN, %1$s;
---:-:-:-:1      SHL  MPQN4, MPQN, %2$s;
---:-:-:-:1      ISCADD MPQN%3$s, MPQN, -MPQN4, %4$s;
-EOF
-
-    }
-
-    sub call_output
+    sub output
     {
         my $out = "--:-:-:-:5      BAR.SYNC 0;\n\n";
 
         foreach my $y (0..7)
         {
-            if ($y == 4 && !$remapF)
-            {
-                my $stepK = $stepF-4;
+            my $incK  = $y == 4 && !$remapF ? $stepF-3 : 1;
+            my $stepK = $y ? "\n--:-:-:-:1      IADD k, k, $incK;" : "";
 
-                $out .= sprintf(
-                    "--:-:-:-:1      IADD Out0.CC, Out0, MPQN%d;\n" .
-                    "--:-:-:-:1      IADD k, k, %d;\n" .
-                    "--:-:-:-:1      FMUL cs0, cx0y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs1, cx1y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs2, cx2y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs3, cx3y%d, alpha;\n" .
-                    "--:-:-:-:1      IADD.X Out1, Out1, RZ;\n"   .
-                    "--:-:-:-:1      IADD Sum0.CC, Sum0, 4x<%d>;\n" .
-                    "--:-:-:-:1      FMUL cs4, cx4y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs5, cx5y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs6, cx6y%d, alpha;\n" .
-                    "--:-:-:-:2      FMUL cs7, cx7y%d, alpha;\n" .
-                    "--:-:-:-:0      IADD.X Sum1, Sum1, RZ;\n",
-                    ($stepK) x 2, ($y) x 4, $stepK, ($y) x 4);
-            }
-            else
-            {
-                $out .= sprintf(
-                    "--:-:-:-:1      FMUL cs0, cx0y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs1, cx1y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs2, cx2y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs3, cx3y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs4, cx4y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs5, cx5y%d, alpha;\n" .
-                    "--:-:-:-:1      FMUL cs6, cx6y%d, alpha;\n" .
-                    "--:-:-:-:0      FMUL cs7, cx7y%d, alpha;\n",
-                    ($y) x 8);
-            }
-            $out .= "--:-:-:-:5      CAL STORE_C;\n\n";
+            $out .= qq{$stepK
+--:-:-:-:1      FMUL cs0, cx0y$y, alpha;
+--:-:-:-:1      FMUL cs1, cx1y$y, alpha;
+--:-:-:-:1      FMUL cs2, cx2y$y, alpha;
+--:-:-:-:1      FMUL cs3, cx3y$y, alpha;
+--:-:-:-:1      FMUL cs4, cx4y$y, alpha;
+--:-:-:-:1      FMUL cs5, cx5y$y, alpha;
+--:-:-:-:1      FMUL cs6, cx6y$y, alpha;
+--:-:-:-:0      FMUL cs7, cx7y$y, alpha;
+--:-:-:-:5      CAL STORE_O;
+            };
         }
-        return $out;
-    }
+        $out .= q{
 
-    sub output_preds_fp32
-    {
-        return sprintf <<'EOF', $stepI;
---:-:-:-:1      MOV alpha, param_alpha;
---:-:-:-:1      MOV beta,  param_beta;
---:-:-:-:1      MOV flags, param_flags;
-
---:-:-:-:1      LOP.AND.Z  P2, RZ, flags, 1; // no output
---:-:-:-:1      LOP.AND.NZ P3, RZ, flags, 2; // relu
-
---:-:-:-:1      ISETP.LT.AND P0, PT, n, param_N, P2; // n +  0 < N
---:-:-:-:1      IADD n, n, %1$s;
---:-:-:-:1      ISETP.LT.AND P1, PT, n, param_N, P2; // n + %1$s < N
-
---:-:-:-:1      ISETP.NE.AND P4, PT, beta, RZ, PT; // beta != 0
---:-:-:-:1      ISETP.NE.AND P5, PT, beta, RZ, P0; // beta != 0 && n +  0 < N
---:-:-:-:1      ISETP.NE.AND P6, PT, beta, RZ, P1; // beta != 0 && n + %1$s < N
-EOF
-    }
-
-    sub output_fp32
-    {
-        return sprintf <<'EOF', $stepI;
 --:-:-:-:5      EXIT;
 
-STORE_C:
+STORE_O:
 
 <SCHEDULE_BLOCK>
+30:-:-:-:1      XMAD offset, k, param_MPQN, out_offset;
+--:-:-:-:1      XMAD.PSL offset, k, param_MPQN.H1, offset;
+--:-:-:-:1      ISETP.LT.AND P2, PT, k, param_K, P0; // k < K && n < N
+--:-:-:-:1      ISETP.LT.AND P3, PT, k, param_K, P1; // k < K && n < N
+        };
 
-// Apply relu
---:-:-:-:1  @P3 FMNMX cs0, cs0, RZ, !PT;
---:-:-:-:1  @P3 FMNMX cs1, cs1, RZ, !PT;
---:-:-:-:1  @P3 FMNMX cs2, cs2, RZ, !PT;
---:-:-:-:1  @P3 FMNMX cs3, cs3, RZ, !PT;
---:-:-:-:1  @P3 FMNMX cs4, cs4, RZ, !PT;
---:-:-:-:1  @P3 FMNMX cs5, cs5, RZ, !PT;
---:-:-:-:1  @P3 FMNMX cs6, cs6, RZ, !PT;
---:-:-:-:1  @P3 FMNMX cs7, cs7, RZ, !PT;
-
---:-:-:-:1      ISETP.LT.AND P2, PT, k, param_K, P5; // beta != 0 && k < K && n +  0 < N
---:-:-:-:1      ISETP.LT.AND P3, PT, k, param_K, P6; // beta != 0 && k < K && n + %1$s < N
-
-// Warp shuffle
-<ORDERED>
+        if ($beta || $brelu || $bprelu)
+        {
+            $out .= qq{
+--:-:-:-:1      LEA      Out0.CC, offset, param_X[0],     $addr_shift;
+--:-:-:-:1      LEA.HI.X Out1,    offset, param_X[1], RZ, $addr_shift;
+            };
+            $out .= $half ? q{
+--:-:5:-:2  @P2 LDG.E.128 b0, [Out];
+            } : q{
 --:-:5:-:1  @P2 LDG.E.128 b0, [Out + 4x<00>];
---:-:6:-:1  @P3 LDG.E.128 b4, [Out + 4x<%1$s>];
+--:-:6:-:1  @P3 LDG.E.128 b4, [Out + 4x<$stepI>];
+            };
+        }
 
+        $out .= q{
+--:-:-:-:1      LEA      Sum0.CC, k, param_Sum[0],     2;
+--:-:-:-:1      LEA.HI.X Sum1,    k, param_Sum[1], RZ, 2;
+
+--:-:6:-:1  @P2 LDG.E.CI b00, [Sum];
+--:-:-:-:1 @!P2 MOV b00, RZ;
+        } if $bias;
+
+        $out .= q{
+<ORDERED>
 --:-:-:-:1      STS.128 [writeCs + 4x<00>], cs0;
---:-:-:-:1      STS.128 [writeCs + 4x<%1$s>], cs4;
---:-:1:-:1      LDS.U.128 cs0, [readCs + 4x<00>];
---:-:2:-:1      LDS.U.128 cs4, [readCs + 4x<%1$s>];
+--:-:-:-:1      STS.128 [writeCs + 4x<$remapI ? 4 : $stepI>], cs4;
+--:-:1:-:1  @P2 LDS.U.128 out0, [readCs + 4x<00>];
+--:-:2:-:1  @P3 LDS.U.128 out4, [readCs + 4x<$half ? 4 : $stepI>];
 </ORDERED>
-
---:-:-:-:1      ISETP.LT.AND P2, PT, k, param_K, P0; // k < K && n +  0 < N
---:-:-:-:1      ISETP.LT.AND P3, PT, k, param_K, P1; // k < K && n + %1$s < N
---:-:-:-:1      IADD k, k, 1;
-
 </SCHEDULE_BLOCK>
-
-11:-:-:-:1  @P4 FFMA cs0, b0, beta, cs0;
---:-:-:-:1  @P4 FFMA cs1, b1, beta, cs1;
---:-:-:-:1  @P4 FFMA cs2, b2, beta, cs2;
---:-:-:-:1  @P4 FFMA cs3, b3, beta, cs3;
-22:-:-:-:1  @P4 FFMA cs4, b4, beta, cs4;
---:-:-:-:1  @P4 FFMA cs5, b5, beta, cs5;
---:-:-:-:1  @P4 FFMA cs6, b6, beta, cs6;
---:-:-:-:1  @P4 FFMA cs7, b7, beta, cs7;
-
---:-:-:-:0      LOP.AND.NZ P4, RZ, flags, 4;
-
-// Store results back to global
---:-:-:-:2  @P2 STG.E.CG.128 [Out + 4x<00>], cs0;
---:1:-:-:1  @P3 STG.E.CG.128 [Out + 4x<%1$s>], cs4;
-
 <SCHEDULE_BLOCK>
+        };
+
+        $out .= q{
+21:-:-:-:1      FADD out0, out0, b0;
+--:-:-:-:1      FADD out1, out1, b0;
+--:-:-:-:1      FADD out2, out2, b0;
+--:-:-:-:1      FADD out3, out3, b0;
+02:-:-:-:1      FADD out4, out4, b0;
+--:-:-:-:1      FADD out5, out5, b0;
+--:-:-:-:1      FADD out6, out6, b0;
+--:-:-:-:1      FADD out7, out7, b0;
+        } if $bias;
+
+        $out .= q{
+01:-:-:-:1      FMNMX out0, out0, RZ, !PT;
+--:-:-:-:1      FMNMX out1, out1, RZ, !PT;
+--:-:-:-:1      FMNMX out2, out2, RZ, !PT;
+--:-:-:-:1      FMNMX out3, out3, RZ, !PT;
+02:-:-:-:1      FMNMX out4, out4, RZ, !PT;
+--:-:-:-:1      FMNMX out5, out5, RZ, !PT;
+--:-:-:-:1      FMNMX out6, out6, RZ, !PT;
+--:-:-:-:1      FMNMX out7, out7, RZ, !PT;
+        } if $relu;
+
+        $out .= q{
+// maximum(x, 0) + slope * minimum(0, x)
+01:-:-:-:1      FMNMX b0, out0, RZ, !PT;
+--:-:-:-:1      FMNMX b1, out1, RZ, !PT;
+--:-:-:-:1      FMNMX b2, out2, RZ, !PT;
+--:-:-:-:1      FMNMX b3, out3, RZ, !PT;
+02:-:-:-:1      FMNMX b4, out4, RZ, !PT;
+--:-:-:-:1      FMNMX b5, out5, RZ, !PT;
+--:-:-:-:1      FMNMX b6, out6, RZ, !PT;
+--:-:-:-:1      FMNMX b7, out7, RZ, !PT;
+
+--:-:-:-:1      FMNMX x0, out0, RZ, PT;
+--:-:-:-:1      FMNMX x1, out1, RZ, PT;
+--:-:-:-:1      FMNMX x2, out2, RZ, PT;
+--:-:-:-:1      FMNMX x3, out3, RZ, PT;
+--:-:-:-:1      FMNMX x4, out4, RZ, PT;
+--:-:-:-:1      FMNMX x5, out5, RZ, PT;
+--:-:-:-:1      FMNMX x6, out6, RZ, PT;
+--:-:-:-:1      FMNMX x7, out7, RZ, PT;
+
+--:-:-:-:1      FFMA out0, x0, param_beta, b0;
+--:-:-:-:1      FFMA out1, x1, param_beta, b1;
+--:-:-:-:1      FFMA out2, x2, param_beta, b2;
+--:-:-:-:1      FFMA out3, x3, param_beta, b3;
+--:-:-:-:1      FFMA out4, x4, param_beta, b4;
+--:-:-:-:1      FFMA out5, x5, param_beta, b5;
+--:-:-:-:1      FFMA out6, x6, param_beta, b6;
+--:-:-:-:1      FFMA out7, x7, param_beta, b7;
+        } if $prelu;
+
+        $out .= q{
+</SCHEDULE_BLOCK>
+        };
+
+        $out .= q{
+13:-:-:-:1  @P2 F2F.F32.F16 b7, b3.H1;
+--:-:-:-:1  @P2 F2F.F32.F16 b6, b3.H0;
+--:-:-:-:1  @P2 F2F.F32.F16 b5, b2.H1;
+--:-:-:-:1  @P2 F2F.F32.F16 b4, b2.H0;
+--:-:-:-:1  @P2 F2F.F32.F16 b3, b1.H1;
+--:-:-:-:1  @P2 F2F.F32.F16 b2, b1.H0;
+--:-:-:-:1  @P2 F2F.F32.F16 b1, b0.H1;
+--:-:5:-:2  @P2 F2F.F32.F16 b0, b0.H0;
+        } if $half && ($beta || $brelu || $bprelu);
+
+        $out .= q{
+<SCHEDULE_BLOCK>
+        };
+
+        $out .= q{
+11:-:-:-:1  @P2 FFMA out0, b0, param_beta, out0;
+--:-:-:-:1  @P2 FFMA out1, b1, param_beta, out1;
+--:-:-:-:1  @P2 FFMA out2, b2, param_beta, out2;
+--:-:-:-:1  @P2 FFMA out3, b3, param_beta, out3;
+22:-:-:-:1  @P3 FFMA out4, b4, param_beta, out4;
+--:-:-:-:1  @P3 FFMA out5, b5, param_beta, out5;
+--:-:-:-:1  @P3 FFMA out6, b6, param_beta, out6;
+--:-:-:-:1  @P3 FFMA out7, b7, param_beta, out7;
+        } if $beta;
+
+        $out .= q{
+//delta *= (x > 0)
+--:-:-:-:1      P2R preds, PR, RZ, 0x0f;
+11:-:-:-:1      FSETP.GT.AND P0, PT, b0, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P1, PT, b1, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P2, PT, b2, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P3, PT, b3, RZ, PT;
+--:-:-:-:1 @!P0 MOV out0, RZ;
+--:-:-:-:1 @!P1 MOV out1, RZ;
+--:-:-:-:1 @!P2 MOV out2, RZ;
+--:-:-:-:1 @!P3 MOV out3, RZ;
+22:-:-:-:1      FSETP.GT.AND P0, PT, b4, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P1, PT, b5, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P2, PT, b6, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P3, PT, b7, RZ, PT;
+--:-:-:-:1 @!P0 MOV out4, RZ;
+--:-:-:-:1 @!P1 MOV out5, RZ;
+--:-:-:-:1 @!P2 MOV out6, RZ;
+--:-:-:-:1 @!P3 MOV out7, RZ;
+--:-:-:-:1      R2P PR, preds, 0x0f;
+        } if $brelu;
+
+        $out .= q{
+//delta *= ((x > 0) + slope * (x < 0))
+--:-:-:-:1      P2R preds, PR, RZ, 0x0f;
+11:-:-:-:1      FSETP.GT.AND P0, PT, b0, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P1, PT, b1, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P2, PT, b2, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P3, PT, b3, RZ, PT;
+--:-:-:-:1      SEL x0, one, RZ, P0;
+--:-:-:-:1      SEL x1, one, RZ, P1;
+--:-:-:-:1      SEL x2, one, RZ, P2;
+--:-:-:-:1      SEL x3, one, RZ, P3;
+--:-:-:-:1      FSETP.LT.AND P0, PT, b0, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P1, PT, b1, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P2, PT, b2, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P3, PT, b3, RZ, PT;
+--:-:-:-:1      SEL b0, one, RZ, P0;
+--:-:-:-:1      SEL b1, one, RZ, P1;
+--:-:-:-:1      SEL b2, one, RZ, P2;
+--:-:-:-:1      SEL b3, one, RZ, P3;
+--:-:-:-:1      FFMA b0, b0, param_beta, x0;
+--:-:-:-:1      FFMA b1, b1, param_beta, x1;
+--:-:-:-:1      FFMA b2, b2, param_beta, x2;
+--:-:-:-:1      FFMA b3, b3, param_beta, x3;
+--:-:-:-:1      FMUL out0, out0, b0;
+--:-:-:-:1      FMUL out1, out1, b1;
+--:-:-:-:1      FMUL out2, out2, b2;
+--:-:-:-:1      FMUL out3, out3, b3;
+22:-:-:-:1      FSETP.GT.AND P0, PT, b4, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P1, PT, b5, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P2, PT, b6, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P3, PT, b7, RZ, PT;
+--:-:-:-:1      SEL x4, one, RZ, P0;
+--:-:-:-:1      SEL x5, one, RZ, P1;
+--:-:-:-:1      SEL x6, one, RZ, P2;
+--:-:-:-:1      SEL x7, one, RZ, P3;
+--:-:-:-:1      FSETP.LT.AND P0, PT, b4, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P1, PT, b5, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P2, PT, b6, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P3, PT, b7, RZ, PT;
+--:-:-:-:1      SEL b4, one, RZ, P0;
+--:-:-:-:1      SEL b5, one, RZ, P1;
+--:-:-:-:1      SEL b6, one, RZ, P2;
+--:-:-:-:1      SEL b7, one, RZ, P3;
+--:-:-:-:1      R2P PR, preds, 0x0f;
+--:-:-:-:1      FFMA b4, b4, param_beta, x4;
+--:-:-:-:1      FFMA b5, b5, param_beta, x5;
+--:-:-:-:1      FFMA b6, b6, param_beta, x6;
+--:-:-:-:1      FFMA b7, b7, param_beta, x7;
+--:-:-:-:1      FMUL out4, out4, b4;
+--:-:-:-:1      FMUL out5, out5, b5;
+--:-:-:-:1      FMUL out6, out6, b6;
+--:-:-:-:1      FMUL out7, out7, b7;
+        } if $bprelu;
+
+        $out .= q{
 --:-:-:-:1 @!P2 MOV  sum0, RZ;
 --:-:-:-:1 @!P3 MOV  sum2, RZ;
---:-:-:-:1  @P2 FADD sum0, cs0, cs1;
---:-:-:-:1  @P2 FADD sum1, cs2, cs3;
---:-:-:-:1  @P3 FADD sum2, cs4, cs5;
---:-:-:-:1  @P3 FADD sum3, cs6, cs7;
+01:-:-:-:1  @P2 FADD sum0, out0, out1;
+--:-:-:-:1  @P2 FADD sum1, out2, out3;
+02:-:-:-:1  @P3 FADD sum2, out4, out5;
+--:-:-:-:1  @P3 FADD sum3, out6, out7;
 --:-:-:-:1  @P2 FADD sum0, sum0, sum1;
 --:-:-:-:1  @P3 FADD sum2, sum2, sum3;
---:-:-:-:4      FADD sum0, sum0, sum2;
-</SCHEDULE_BLOCK>
+--:-:-:-:1      FADD sum0, sum0, sum2;
+        } if $bsum;
 
---:-:-:-:0      PSETP.OR.AND P2, PT, P2, P3, P4;
-
---:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 1,  0x1f;
-02:-:-:-:4  @P4 FADD sum0, sum1, sum0;
-
---:-:-:-:0      ISETP.EQ.AND P2, PT, tidOX63, RZ, P2;
-
---:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 2,  0x1f;
-02:-:-:-:4  @P4 FADD sum0, sum1, sum0;
---:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 4,  0x1f;
-02:-:-:-:2  @P4 FADD sum0, sum1, sum0;
-
-01:-:-:-:0      IADD   Out0.CC, Out0, MPQN1;
-
---:2:-:-:1  @P2 RED.E.ADD.F32.FTZ.RN [Sum], sum0;
-
---:-:-:-:1      LOP.AND.NZ P3, RZ, flags, 2;
---:-:-:-:4      ISETP.NE.AND P4, PT, beta, RZ, PT;
-
---:-:-:-:1      IADD.X Out1, Out1, RZ;
-
-02:-:-:-:6      IADD   Sum0.CC, Sum0, 4;
---:-:-:-:0      IADD.X Sum1,    Sum1, RZ;
-
---:-:-:-:5      RET;
-EOF
-    }
-
-
-    sub output_preds_fp16
-    {
-        return <<'EOF';
---:-:-:-:1      MOV alpha, param_alpha;
---:-:-:-:1      MOV beta,  param_beta;
---:-:-:-:1      MOV flags, param_flags;
-
---:-:-:-:1      LOP.AND.Z  P1, RZ, flags, 1; // no output
---:-:-:-:1      LOP.AND.NZ P2, RZ, flags, 2; // relu
-
---:-:-:-:1      ISETP.LT.AND P0, PT, n, param_N, P1; // n +  0 < N
-
---:-:-:-:1      ISETP.NE.AND P3, PT, beta, RZ, P1; // beta != 0
---:-:-:-:1      ISETP.NE.AND P4, PT, beta, RZ, P0; // beta != 0 && n < N
-EOF
-    }
-
-    sub output_fp16
-    {
-        return sprintf <<'EOF', $remapI ? 4 : $stepI;
---:-:-:-:5      EXIT;
-
-STORE_C:
-
-<SCHEDULE_BLOCK>
---:-:-:-:1      ISETP.LT.AND P6, PT, k, param_K, P4; // k < K && n < N && beta != 0
---:-:-:-:1      ISETP.LT.AND P5, PT, k, param_K, P0; // k < K && n < N
-
-// Apply relu
---:-:-:-:1  @P2 FMNMX cs0, cs0, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs1, cs1, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs2, cs2, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs3, cs3, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs4, cs4, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs5, cs5, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs6, cs6, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs7, cs7, RZ, !PT;
-
+        $out .= q{
 <ORDERED>
---:-:1:-:1  @P6 LDG.E.128 b0, [Out];
-
---:-:-:-:1      LOP.AND.NZ P6, RZ, flags, 4;
---:-:-:-:1      ISETP.EQ.AND P2, PT, tidOX63, RZ, PT;
-
-// Undo the stride in the X dim (items spaced by 32 are actually spaced 4)
---:-:-:-:1      STS.128 [writeCs + 4x<0>], cs0;
---:-:-:-:1      STS.128 [writeCs + 4x<%1$s>], cs4;
---:-:5:-:1      LDS.U.128 cs4, [readCs + 4x<4>];
---:-:6:-:1      LDS.U.128 cs0, [readCs + 4x<0>];
+01:-:-:-:1  @P2 F2F.F16.F32 out0, out0;
+--:-:-:-:1  @P2 F2F.F16.F32 out1, out1;
+--:-:-:-:1  @P2 F2F.F16.F32 out2, out2;
+--:-:1:-:1  @P2 F2F.F16.F32 out3, out3;
+02:-:-:-:1  @P2 F2F.F16.F32 out4, out4;
+--:-:-:-:1  @P2 F2F.F16.F32 out5, out5;
+--:-:-:-:1  @P2 F2F.F16.F32 out6, out6;
+--:-:2:-:1  @P2 F2F.F16.F32 out7, out7;
 </ORDERED>
+        } if $half;
+
+        $out .= q{
 </SCHEDULE_BLOCK>
+        };
 
-01:-:-:-:1  @P3 F2F.F32.F16 b7, b3.H1;
---:-:1:-:1  @P3 F2F.F32.F16 b6, b3.H0;
---:-:-:-:1  @P3 F2F.F32.F16 b5, b2.H1;
---:-:2:-:1  @P3 F2F.F32.F16 b4, b2.H0;
---:-:-:-:1  @P3 F2F.F32.F16 b3, b1.H1;
---:-:3:-:1  @P3 F2F.F32.F16 b2, b1.H0;
---:-:-:-:1  @P3 F2F.F32.F16 b1, b0.H1;
---:-:4:-:1  @P3 F2F.F32.F16 b0, b0.H0;
-
+        $out .= $half ? qq{
 <SCHEDULE_BLOCK>
-11:-:-:-:1  @P3 FFMA cs7, b7, beta, cs7;
---:-:-:-:1  @P3 FFMA cs6, b6, beta, cs6;
-02:-:-:-:1  @P3 FFMA cs5, b5, beta, cs5;
---:-:-:-:1  @P3 FFMA cs4, b4, beta, cs4;
-24:-:-:-:1  @P3 FFMA cs3, b3, beta, cs3;
---:-:-:-:1  @P3 FFMA cs2, b2, beta, cs2;
-08:-:-:-:1  @P3 FFMA cs1, b1, beta, cs1;
---:-:-:-:1  @P3 FFMA cs0, b0, beta, cs0;
+--:-:-:-:1      LEA      Out0.CC, offset, param_O[0],     $addr_shift;
+--:-:-:-:1      LEA.HI.X Out1,    offset, param_O[1], RZ, $addr_shift;
 
---:-:-:-:1  @P5 FADD sum0, cs7, cs6;
---:-:-:-:1  @P5 FADD sum1, cs5, cs4;
---:-:-:-:1  @P5 FADD sum2, cs3, cs2;
---:-:-:-:1  @P5 FADD sum3, cs1, cs0;
---:-:-:-:1  @P5 FADD sum0, sum0, sum1;
---:-:-:-:1  @P5 FADD sum1, sum2, sum3;
---:-:-:-:1  @P5 FADD sum0, sum0, sum1;
---:-:-:-:1 @!P5 MOV  sum0, RZ;
+01:-:-:-:1  \@P2 BFI c0, out1, 0x1010, out0;
+--:-:-:-:1  \@P2 BFI c1, out3, 0x1010, out2;
+02:-:-:-:1  \@P2 BFI c2, out5, 0x1010, out4;
+--:-:-:-:1  \@P2 BFI c3, out7, 0x1010, out6;
 
---:-:-:-:1      F2F.F16.F32 cs7, cs7;
---:-:1:-:1      F2F.F16.F32 cs6, cs6;
---:-:-:-:1      F2F.F16.F32 cs5, cs5;
---:-:2:-:1      F2F.F16.F32 cs4, cs4;
---:-:-:-:1      F2F.F16.F32 cs3, cs3;
---:-:3:-:1      F2F.F16.F32 cs2, cs2;
---:-:-:-:1      F2F.F16.F32 cs1, cs1;
---:-:4:-:1      F2F.F16.F32 cs0, cs0;
+--:5:-:-:1  \@P2 STG.E.CG.128 [Out], c0;
 </SCHEDULE_BLOCK>
+        } : qq{
+<SCHEDULE_BLOCK>
+--:-:-:-:1      LEA      Out0.CC, offset, param_O[0],     $addr_shift;
+--:-:-:-:1      LEA.HI.X Out1,    offset, param_O[1], RZ, $addr_shift;
 
-// Pack 2 16 bit values into 32 bit words
-01:-:-:-:2      BFI c3, cs7, 0x1010, cs6;
-02:-:-:-:2      BFI c2, cs5, 0x1010, cs4;
-04:-:-:-:2      BFI c1, cs3, 0x1010, cs2;
-08:-:-:-:2      BFI c0, cs1, 0x1010, cs0;
+01:-:-:-:1  \@P2 STG.E.CG.128 [Out + 4x<00>], out0;
+02:5:-:-:1  \@P3 STG.E.CG.128 [Out + 4x<$stepI>], out4;
+</SCHEDULE_BLOCK>
+        };
 
---:-:-:-:0      IADD k, k, 1;
+        $out .= q{
+<SCHEDULE_BLOCK>
+--:-:-:-:1      XMAD.LO2C offset, k, param_gridMPQN, bsum_offset;
+--:-:-:-:1      LEA      Sum0.CC, offset, param_Sum[0],     2;
+--:-:-:-:1      LEA.HI.X Sum1,    offset, param_Sum[1], RZ, 2;
 
-// Store results back to global
-01:1:-:-:1  @P5 STG.E.CG.128 [Out], c0;
+--:-:-:-:1      ISETP.LT.AND P6, PT, k, param_K, P5; // k < K && tid31 == 0
 
---:-:-:-:0      PSETP.AND.AND P5, PT, P5, P6, P2;
+--:-:2:-:2      SHFL.BFLY PT, sum1, sum0, 1,  0x1f;
+02:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:2:-:2      SHFL.BFLY PT, sum1, sum0, 2,  0x1f;
+02:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:2:-:2      SHFL.BFLY PT, sum1, sum0, 4,  0x1f;
+02:-:-:-:2      FADD sum0, sum1, sum0;
 
---:-:2:-:2  @P6 SHFL.BFLY PT, sum1, sum0, 1,  0x1f;
-02:-:-:-:4  @P6 FADD sum0, sum1, sum0;
---:-:2:-:2  @P6 SHFL.BFLY PT, sum1, sum0, 2,  0x1f;
-02:-:-:-:4  @P6 FADD sum0, sum1, sum0;
---:-:2:-:2  @P6 SHFL.BFLY PT, sum1, sum0, 4,  0x1f;
-02:-:-:-:2  @P6 FADD sum0, sum1, sum0;
+--:6:-:-:1  @P6 STG.E.CG [Sum], sum0;
+</SCHEDULE_BLOCK>
+        } if $bsum;
 
-01:-:-:-:0      IADD   Out0.CC, Out0, MPQN1;
-
---:2:-:-:5  @P5 RED.E.ADD.F32.FTZ.RN [Sum], sum0;
-
---:-:-:-:1      LOP.AND.NZ P2, RZ, flags, 2; // relu
-
---:-:-:-:1      IADD.X Out1,    Out1, RZ;
-
-02:-:-:-:6      IADD   Sum0.CC, Sum0, 4;
---:-:-:-:0      IADD.X Sum1,    Sum1, RZ;
-
+        $out .= q{
 --:-:-:-:5      RET;
-EOF
-    }
-
-
-    sub output_preds_int16
-    {
-        return <<'EOF';
---:-:-:-:1      MOV max,   RZ;
---:-:-:-:1      MOV alpha, param_alpha;
---:-:-:-:1      MOV beta,  param_beta;
---:-:-:-:1      MOV flags, param_flags;
-
---:-:-:-:1      ISETP.LT.AND P0, PT, n, param_N, PT; // n < N
---:-:-:-:1      LOP.AND.Z  P1, RZ, flags, 1; // !no-op
---:-:-:-:1      LOP.AND.NZ P2, RZ, flags, 2; // relu
---:-:-:-:1      LOP.AND.NZ P4, RZ, flags, 4; // bsum
-EOF
-    }
-
-    # relu        = flags & 2
-    # load beta   = n < N && k <  K && beta != 0
-    # store out   = n < N && k <  K && flags & 1
-    # reduce stat = n < N && k <  K
-    # reduce bsum = flags & 4
-    # output bsum = flags & 4 && tidOX63 == 0 && store out
-    #
-    # P0 = n < N
-    # P1 = flags & 1 // no-op
-    # P2 = flags & 2 // relu
-    # P4 = flags & 4 // bsum
-    #
-    # // reduce stats
-    # P6 = P0 && k < K
-    #
-    # // load beta
-    # P3 = P0 && P6 && beta != 0
-    #
-    # // store out
-    # P5 = P0 && P1 && P6
-    #
-    # // output bsum
-    # P3 = P4 && P5 && tidOX63 == 0
-
-    sub output_int16
-    {
-        return sprintf <<'EOF', $remapI ? 4 : $stepI;
-
---:-:-:-:0      LOP.AND.Z P0, RZ, tid, 31;
---:-:1:-:2      SHFL.BFLY PT, warp_max, max, 0x10, 0x1f;
-01:-:-:-:4      IMNMX max, warp_max, max, !PT;
---:-:1:-:2      SHFL.BFLY PT, warp_max, max, 0x8,  0x1f;
-01:-:-:-:4      IMNMX max, warp_max, max, !PT;
---:-:1:-:2      SHFL.BFLY PT, warp_max, max, 0x4,  0x1f;
-01:-:-:-:4      IMNMX max, warp_max, max, !PT;
---:-:-:-:0      MOV Stats0, param_Stats[0];
---:-:1:-:2      SHFL.BFLY PT, warp_max, max, 0x2,  0x1f;
-01:-:-:-:4      IMNMX max, warp_max, max, !PT;
---:-:-:-:0      MOV Stats1, param_Stats[1];
---:-:1:-:2      SHFL.BFLY PT, warp_max, max, 0x1,  0x1f;
-01:-:-:-:2      IMNMX max, warp_max, max, !PT;
---:-:-:-:1  @P0 RED.E.MAX [Stats], max;
---:-:-:-:5      EXIT;
-
-STORE_C:
-
-<SCHEDULE_BLOCK>
---:-:-:-:1      ISETP.LT.AND P6, PT, k, param_K, P0; // reduce stats
---:-:-:-:1      ISETP.NE.AND P3, PT, beta, RZ, P6;   // load beta
---:-:-:-:1      PSETP.AND.AND P5, PT, P1, P6, PT;    // store out
-
-// Apply relu
---:-:-:-:1  @P2 FMNMX cs0, cs0, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs1, cs1, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs2, cs2, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs3, cs3, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs4, cs4, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs5, cs5, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs6, cs6, RZ, !PT;
---:-:-:-:1  @P2 FMNMX cs7, cs7, RZ, !PT;
-
-<ORDERED>
---:-:1:-:1  @P3 LDG.E.128 b0, [Out];
-
-// Undo the stride in the X dim (items spaced by 32 are actually spaced 4)
---:-:-:-:1      STS.128 [writeCs + 4x<0>], cs0;
---:-:-:-:1      STS.128 [writeCs + 4x<%1$s>], cs4;
---:-:5:-:1      LDS.U.128 cs4, [readCs + 4x<4>];
---:-:6:-:1      LDS.U.128 cs0, [readCs + 4x<0>];
-</ORDERED>
-</SCHEDULE_BLOCK>
-
-01:-:-:-:1  @P3 I2F.F32.S16 b7, b3.H1;
---:-:1:-:1  @P3 I2F.F32.S16 b6, b3.H0;
---:-:-:-:1  @P3 I2F.F32.S16 b5, b2.H1;
---:-:2:-:1  @P3 I2F.F32.S16 b4, b2.H0;
---:-:-:-:1  @P3 I2F.F32.S16 b3, b1.H1;
---:-:3:-:1  @P3 I2F.F32.S16 b2, b1.H0;
---:-:-:-:1  @P3 I2F.F32.S16 b1, b0.H1;
---:-:4:-:1  @P3 I2F.F32.S16 b0, b0.H0;
-
-<SCHEDULE_BLOCK>
-11:-:-:-:1  @P3 FFMA cs7, b7, beta, cs7;
---:-:-:-:1  @P3 FFMA cs6, b6, beta, cs6;
-02:-:-:-:1  @P3 FFMA cs5, b5, beta, cs5;
---:-:-:-:1  @P3 FFMA cs4, b4, beta, cs4;
-24:-:-:-:1  @P3 FFMA cs3, b3, beta, cs3;
---:-:-:-:1  @P3 FFMA cs2, b2, beta, cs2;
-08:-:-:-:1  @P3 FFMA cs1, b1, beta, cs1;
---:-:-:-:1  @P3 FFMA cs0, b0, beta, cs0;
-
---:-:-:-:1      ISETP.EQ.AND P3, PT, tidOX63, RZ, P4; // output bsum
---:-:-:-:1      PSETP.AND.AND P3, PT, P3, P5, PT;     // output bsum
-
---:-:-:-:1      FMUL cs7, cs7, param_scale;
---:-:-:-:1      FMUL cs6, cs6, param_scale;
---:-:-:-:1      FMUL cs5, cs5, param_scale;
---:-:-:-:1      FMUL cs4, cs4, param_scale;
---:-:-:-:1      FMUL cs3, cs3, param_scale;
---:-:-:-:1      FMUL cs2, cs2, param_scale;
---:-:-:-:1      FMUL cs1, cs1, param_scale;
---:-:-:-:1      FMUL cs0, cs0, param_scale;
-
---:-:-:-:1  @P5 FADD sum0, cs7, cs6;
---:-:-:-:1  @P5 FADD sum1, cs5, cs4;
---:-:-:-:1  @P5 FADD sum2, cs3, cs2;
---:-:-:-:1  @P5 FADD sum3, cs1, cs0;
---:-:-:-:1  @P5 FADD sum0, sum0, sum1;
---:-:-:-:1  @P5 FADD sum1, sum2, sum3;
---:-:-:-:1  @P5 FADD sum0, sum0, sum1;
---:-:-:-:1 @!P5 MOV  sum0, RZ;
-
---:-:-:-:1      F2I.S16.F32 cs7, cs7;
---:-:1:-:1      F2I.S16.F32 cs6, cs6;
---:-:-:-:1      F2I.S16.F32 cs5, cs5;
---:-:2:-:1      F2I.S16.F32 cs4, cs4;
---:-:-:-:1      F2I.S16.F32 cs3, cs3;
---:-:3:-:1      F2I.S16.F32 cs2, cs2;
---:-:-:-:1      F2I.S16.F32 cs1, cs1;
---:-:4:-:1      F2I.S16.F32 cs0, cs0;
-</SCHEDULE_BLOCK>
-
-// Pack 2 16 bit values into 32 bit words
-01:-:-:-:2      BFI c3, cs7, 0x1010, cs6;
-02:-:-:-:2      BFI c2, cs5, 0x1010, cs4;
-04:-:-:-:2      BFI c1, cs3, 0x1010, cs2;
-08:-:-:-:2      BFI c0, cs1, 0x1010, cs0;
-
---:-:-:-:0      IADD k, k, 1;
-
-// Store results back to global
---:1:-:-:4  @P5 STG.E.CG.128 [Out], c0;
-
-<SCHEDULE_BLOCK>
-// a = abs(a)
---:-:-:-:1  @P6 VABSDIFF.S16.S16.MRG_16L cs0, c0,    RZ, RZ;
---:-:-:-:1  @P6 VABSDIFF.S16.S16.MRG_16L cs1, c1,    RZ, RZ;
---:-:-:-:1  @P6 VABSDIFF.S16.S16.MRG_16L cs2, c2,    RZ, RZ;
---:-:-:-:1  @P6 VABSDIFF.S16.S16.MRG_16L cs3, c3,    RZ, RZ;
---:-:-:-:1  @P6 VABSDIFF.S16.S16.MRG_16H cs0, c0.H1, RZ, cs0;
---:-:-:-:1  @P6 VABSDIFF.S16.S16.MRG_16H cs1, c1.H1, RZ, cs1;
---:-:-:-:1  @P6 VABSDIFF.S16.S16.MRG_16H cs2, c2.H1, RZ, cs2;
---:-:-:-:1  @P6 VABSDIFF.S16.S16.MRG_16H cs3, c3.H1, RZ, cs3;
-
-// max = max(c,d,max(a,b,max)) ...
---:-:-:-:1  @P6 VMNMX.UD.U16.U16.MX.MAX max, cs0, cs0.H1, max;
---:-:-:-:1  @P6 VMNMX.UD.U16.U16.MX.MAX max, cs1, cs1.H1, max;
---:-:-:-:1  @P6 VMNMX.UD.U16.U16.MX.MAX max, cs2, cs2.H1, max;
---:-:-:-:1  @P6 VMNMX.UD.U16.U16.MX.MAX max, cs3, cs3.H1, max;
-
---:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 1,  0x1f;
-02:-:-:-:4  @P4 FADD sum0, sum1, sum0;
---:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 2,  0x1f;
-02:-:-:-:4  @P4 FADD sum0, sum1, sum0;
---:-:2:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 4,  0x1f;
-02:-:-:-:2  @P4 FADD sum0, sum1, sum0;
-</SCHEDULE_BLOCK>
-
-01:-:-:-:0      IADD   Out0.CC, Out0, MPQN1;
---:2:-:-:6  @P3 RED.E.ADD.F32.FTZ.RN [Sum], sum0;
---:-:-:-:1      IADD.X Out1,    Out1, RZ;
-
-02:-:-:-:6      IADD   Sum0.CC, Sum0, 4;
---:-:-:-:0      IADD.X Sum1,    Sum1, RZ;
-
---:-:-:-:5      RET;
-EOF
-    }
-
-    sub output_setup
-    {
-        my $tidOX = shift;
-        return output_offset($tidOX) . output_step() . output_preds_int16() if $int16;
-        return output_offset($tidOX) . output_step() . output_preds_fp16() if $prefix eq 'h';
-        return output_offset($tidOX) . output_step() . output_preds_fp32() if $prefix eq 's';
-    }
-
-    sub output
-    {
-        return call_output() .output_int16() if $int16;
-        return call_output() .output_fp16() if $prefix eq 'h';
-        return call_output() .output_fp32() if $prefix eq 's';
+        };
     }
 
 -]

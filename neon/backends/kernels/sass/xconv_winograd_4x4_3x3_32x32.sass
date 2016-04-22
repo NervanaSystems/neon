@@ -15,16 +15,16 @@
 
 [-
 our $type;
-our $dtype        = $type eq 'h' ?        '.U16' :    '';
-our $convert_in   = $type eq 'h' ? 'F2F.F32.F16' :    '';
-our $convert_out  = $type eq 'h' ? 'F2F.F16.F32' :    '';
-our $dtype_shift  = $type eq 'h' ?           '1' :   '2';
-our $dtype_size   = $type eq 'h' ?           '2' :   '4';
-our $vec_size     = $type eq 'h' ?          '64' : '128';
-sub dtype       { return $dtype;       }
-sub dtype_size  { return $dtype_size;  }
-sub dtype_shift { return $dtype_shift; }
-sub vec_size    { return $vec_size;    }
+our $dtype       = $type eq 'h' ?         'U16' :  '32';
+our $convert_in  = $type eq 'h' ? 'F2F.F32.F16' :    '';
+our $convert_out = $type eq 'h' ? 'F2F.F16.F32' :    '';
+our $dshift      = $type eq 'h' ?           '1' :   '2';
+our $dsize       = $type eq 'h' ?           '2' :   '4';
+our $vsize       = $type eq 'h' ?          '64' : '128';
+sub dtype  { return $dtype;  }
+sub dsize  { return $dsize;  }
+sub dshift { return $dshift; }
+sub vsize  { return $vsize;  }
 -]
 
 <CONSTANT_MAPPING>
@@ -34,51 +34,52 @@ sub vec_size    { return $vec_size;    }
     addr_idx_X  : 4x<32*36*2*4 + 5>
     addr_idx_K  : 4x<32*36*2*4 + 6>
 
-    param_Sum[0]         : c[0x0][0x140]
-    param_Sum[1]         : c[0x0][0x144]
-    param_O[0]           : c[0x0][0x148]
-    param_O[1]           : c[0x0][0x14c]
-    param_I[0]           : c[0x0][0x150]
-    param_I[1]           : c[0x0][0x154]
-    param_F[0]           : c[0x0][0x158]
-    param_F[1]           : c[0x0][0x15c]
-    param_alpha          : c[0x0][0x160]
-    param_beta           : c[0x0][0x164]
-    param_flags          : c[0x0][0x168]
-    param_C              : c[0x0][0x16c]
-    param_K              : c[0x0][0x170]
-    param_N              : c[0x0][0x174]
-    param_Y              : c[0x0][0x178]
-    param_X              : c[0x0][0x17c]
-    param_YXN            : c[0x0][0x180]
-    param_XN             : c[0x0][0x184]
-    param_Y2             : c[0x0][0x188]
-    param_GX             : c[0x0][0x18c]
-    param_Xk             : c[0x0][0x190]
-    param_k              : c[0x0][0x194]
-    param_magic_Xk       : c[0x0][0x198]
-    param_shift_Xk       : c[0x0][0x19c]
-    param_magic_k        : c[0x0][0x1a0]
-    param_shift_k        : c[0x0][0x1a4]
-    param_P              : c[0x0][0x1a8]
-    param_Q              : c[0x0][0x1ac]
-    param_QN             : c[0x0][0x1b0]
-    param_PQN            : c[0x0][0x1b4]
-    param_Np             : c[0x0][0x1b8]
-    param_QNp            : c[0x0][0x1bc]
-    param_QN3p           : c[0x0][0x1c0]
-    param_PQN1_QN3p      : c[0x0][0x1c4]
-    param_PQN15_QN3p     : c[0x0][0x1c8]
-    param_maskN          : c[0x0][0x1cc]
-    param_shiftX         : c[0x0][0x1d0]
-    param_shiftY         : c[0x0][0x1d4]
-    param_superX         : c[0x0][0x1d8]
-    param_superY         : c[0x0][0x1dc]
-    param_pad_x          : c[0x0][0x1e0]
-    param_pad_y          : c[0x0][0x1e4]
-    param_RSK            : c[0x0][0x1e8]
-    param_RSK2p          : c[0x0][0x1ec]
-    param_YXN2p          : c[0x0][0x1f0]
+    param_S[0]           : c[0x0][0x140]
+    param_S[1]           : c[0x0][0x144]
+    param_X[0]           : c[0x0][0x148]
+    param_X[1]           : c[0x0][0x14c]
+    param_O[0]           : c[0x0][0x150]
+    param_O[1]           : c[0x0][0x154]
+    param_I[0]           : c[0x0][0x158]
+    param_I[1]           : c[0x0][0x15c]
+    param_F[0]           : c[0x0][0x160]
+    param_F[1]           : c[0x0][0x164]
+    param_alpha          : c[0x0][0x168]
+    param_beta           : c[0x0][0x16c]
+    param_flags          : c[0x0][0x170]
+    param_C              : c[0x0][0x174]
+    param_K              : c[0x0][0x178]
+    param_N              : c[0x0][0x17c]
+    param_Y              : c[0x0][0x180]
+    param_W              : c[0x0][0x184]
+    param_YXN            : c[0x0][0x188]
+    param_XN             : c[0x0][0x18c]
+    param_Y2             : c[0x0][0x190]
+    param_GX             : c[0x0][0x194]
+    param_Xk             : c[0x0][0x198]
+    param_k              : c[0x0][0x19c]
+    param_magic_Xk       : c[0x0][0x1a0]
+    param_shift_Xk       : c[0x0][0x1a4]
+    param_magic_k        : c[0x0][0x1a8]
+    param_shift_k        : c[0x0][0x1ac]
+    param_P              : c[0x0][0x1b0]
+    param_Q              : c[0x0][0x1b4]
+    param_QN             : c[0x0][0x1b8]
+    param_PQN            : c[0x0][0x1bc]
+    param_PQN15          : c[0x0][0x1c0]
+    param_maskN          : c[0x0][0x1c4]
+    param_shiftX         : c[0x0][0x1c8]
+    param_shiftY         : c[0x0][0x1cc]
+    param_superX         : c[0x0][0x1d0]
+    param_superY         : c[0x0][0x1d4]
+    param_pad_x          : c[0x0][0x1d8]
+    param_pad_y          : c[0x0][0x1dc]
+    param_RSK            : c[0x0][0x1e0]
+    param_RSK2p          : c[0x0][0x1e4]
+    param_YXN2p          : c[0x0][0x1e8]
+    param_gridN          : c[0x0][0x1ec]
+    param_gridQN         : c[0x0][0x1f0]
+    param_gridPQN        : c[0x0][0x1f4]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -128,7 +129,7 @@ sub vec_size    { return $vec_size;    }
       80,81,76,78,79,77 : I<0-5>5
 
       // Filter Transform
-      44-47 ~ rcp6, rcp12, rcp24
+      44-47 ~ rcp6, rcp8, rcp12, rcp24
 
       52,53,54 : f<0-2>0
       55,56,57 : f<0-2>1
@@ -154,7 +155,7 @@ sub vec_size    { return $vec_size;    }
       82,83,84,85,86,60 : F<0-5>5
 
       32-39 ~ partialC, idx_K, idx_Y, idx_X
-      40-86 ~ idx_KYXk, idx_YXk, idx_Xk, idx_k, div<1-3>, magic_YXk, negYXk, magic_Xk, negXk, tid32_2, tid1, tid31, gx, gy, c, kk, offset, sign, idx_N, nn, x<1-5>, mask_x, super_x, super_y
+      40-86 ~ idx_KYXk, idx_YXk, idx_Xk, idx_k, idx_Y2, idx_X2, div<1-3>, magic_YXk, negYXk, magic_Xk, negXk, tid32_2, tid1, tid31, gx, gy, c, kk, offset, sign, idx_N, nn, x<1-5>, mask_x, super_x, super_y
 
       32-39 : shuffle16_x<0-3>y0, shuffle16_x<0-3>y1
       48-91 ~ Tid, Tid1, Tid32_2, write16Cs, alpha16
@@ -179,15 +180,22 @@ sub vec_size    { return $vec_size;    }
          87 = tid
       93-95 ~ C, readFs, readIs
 
-      64-87 ~ tid_128, tid_32, tid_31, tid_16, Tid_1, idxN, idxX, idxY, idxK, readFs2, readIs2, flags, offsetO, p, q, n, z<1-3>, mask_q
-      82-87 : out1<0-1>, out2<0-1>, out3<0-1>
-      88-89 : out0<0-1>
-      90-95 ~ alpha, beta, writeCs, readCs, k, preds
+      64-85 ~ tid_128, tid_32, tid_31, tid_16, Tid_1, idxN, idxX, idxY, idxK, readFs2, readIs2, p, q, n, z<1-3>, mask_q
+      86-95 ~ alpha, one, writeCs, readCs, k, preds, offsetO, bias, bsum_offset
 
       64-79 : shuffle_x<0-7>y0, shuffle_x<0-7>y1
 
+      // t00 80      r00 78
+      // t10 m10     r01 w01
+      // t20 m20     r02 w02
+      // t30 m30     r03 w03
+      // w00 m00     s00 w00
+      // w30 m40     s01 w01
+      // w10 m10     s02 w02
+      // w20 m20     s03 w04
 
       78 = t0<0-5>, r<0-3>0
+      79 = temp
 
        3, 2,11,10,19,18 : m<0-5>0
        1, 9, 0, 8,17,16 : m<0-5>1
@@ -218,8 +226,9 @@ sub vec_size    { return $vec_size;    }
             11, 0,25,74 : s20, s21, s22, s23
             19,17,64,76 : s30, s31, s32, s33
 
-            18,65,75,77 ~ sum<0-3>
-                  80-81 : Sum<0-1>
+                  78-81 ~ sum<0-3>
+                  82-83 : Sum<0-1>
+                  84-85 : Out<0-1>
 
              8,10,16,18 ~ b0<0-3>
             24,65,66,67 ~ b1<0-3>
@@ -249,7 +258,7 @@ LOAD_SETUP:
 --:-:-:-:1      ISETP.EQ.AND P0, PT, tid, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND P1, PT, tid, 64, PT;
 
-// idx_Y   = idx_YXk / blk_Xk
+// idx_Y2   = idx_YXk / blk_Xk
 --:-:-:-:1      MOV  magic_Xk, param_magic_Xk;
 --:-:-:-:1      IADD negXk, RZ, -param_Xk;
 --:-:-:-:1      ISETP.NE.AND P3, PT, magic_Xk, 1, PT;
@@ -257,63 +266,62 @@ LOAD_SETUP:
 --:-:-:-:1  @P3 XMAD     div2, idx_YXk,    magic_Xk.H1, RZ;
 --:-:-:-:1  @P3 XMAD     div3, idx_YXk.H1, magic_Xk.H1, RZ;
 --:-:-:-:1  @P3 XMAD.CHI div1, idx_YXk.H1, magic_Xk,    div1;
---:-:-:-:1  @P3 IADD3.RS idx_Y, div1, div2, div3;
---:-:-:-:1  @P3 SHR.U32  idx_Y, idx_Y,   param_shift_Xk;
---:-:-:-:1 @!P3 SHR.U32  idx_Y, idx_YXk, param_shift_Xk;
+--:-:-:-:1  @P3 IADD3.RS idx_Y2, div1, div2, div3;
+--:-:-:-:1  @P3 SHR.U32  idx_Y2, idx_Y2,  param_shift_Xk;
+--:-:-:-:1 @!P3 SHR.U32  idx_Y2, idx_YXk, param_shift_Xk;
 
 // idx_Xk  = idx_YXk % blk_Xk
---:-:-:-:1      XMAD.LO2 idx_Xk, negXk, idx_Y, idx_YXk;
+--:-:-:-:1      XMAD.LO2 idx_Xk, negXk, idx_Y2, idx_YXk;
 
-// idx_X   = idx_Xk / blk_k
+// idx_X2   = idx_Xk / blk_k
 // idx_k   = idx_Xk % blk_k
---:-:-:-:1      XMAD    idx_X,  idx_Xk, param_magic_k, RZ;
---:-:-:-:1      SHR.U32 idx_X,  idx_X,  param_shift_k;
---:-:-:-:1      XMAD    idx_k,  idx_X,  param_k, RZ;
---:-:-:-:1      IADD    idx_k, -idx_k,  idx_Xk;
+--:-:-:-:1      XMAD    idx_X2,  idx_Xk, param_magic_k, RZ;
+--:-:-:-:1      SHR.U32 idx_X2,  idx_X2, param_shift_k;
+--:-:-:-:1      XMAD    idx_k,   idx_X2, param_k, RZ;
+--:-:-:-:1      IADD    idx_k,  -idx_k,  idx_Xk;
 
 // idx_K = idx_K * blk_k + idx_k
 02:-:-:-:1      XMAD idx_K, idx_K, param_k, idx_k;
 
 // gx = x2
 // gy = y2 * 2
---:-:-:-:1      MOV gx, idx_X;
---:-:-:-:1      SHL gy, idx_Y, 1;
+--:-:-:-:1      MOV idx_X, idx_X2;
+--:-:-:-:1      SHL idx_Y, idx_Y2, 1;
 
 // Implement a square wave block id remapping (for all but last row (if odd number of rows))
 // if y2 != Y2:
 //     gy += (gx&1) ^ ((gx&2)>>1)
 //     gx /= 2
---:-:-:-:1      ISETP.NE.AND P4, PT, idx_Y, param_Y2, PT;
+--:-:-:-:1      ISETP.NE.AND P4, PT, idx_Y2, param_Y2, PT;
 --:-:-:-:1  @P4 LOP.AND x1, idx_X, 1;
 --:-:-:-:1  @P4 BFE.U32 x2, idx_X, 0x101; // 1 bit at position 1
 --:-:-:-:1  @P4 LOP.XOR x1, x1, x2;
---:-:-:-:1  @P4 IADD gy, gy, x1;
---:-:-:-:1  @P4 SHR.U32 gx, idx_X, 1;
+--:-:-:-:1  @P4 IADD idx_Y, idx_Y, x1;
+--:-:-:-:1  @P4 SHR.U32 idx_X, idx_X, 1;
 
 // Scan backwards on odd rows
 // if y2 & 1:
 //     gx = gridX - gx - 1
---:-:-:-:1      LOP.AND.NZ P5, RZ, idx_Y, 1;
---:-:-:-:1  @P5 IADD gx, -gx,  param_GX;
---:-:-:-:1  @P5 IADD gx,  gx, -1;
-
-// x = gx << shiftX
-// y = gy << shiftY
---:-:-:-:1      SHL idx_X, gx, param_shiftX;
---:-:-:-:1      SHL idx_Y, gy, param_shiftY;
-
-// Distribute the 8|4|2|1 blocks of the super block among 4|8|16|32 threads each of the warp
---:-:-:-:1      BFE.U32 super_x, tid, param_superX;
---:-:-:-:1      BFE.U32 super_y, tid, param_superY;
---:-:-:-:1      ISCADD gx, super_x,  idx_X, 2;
---:-:-:-:1      ISCADD gy, super_y,  idx_Y, 2;
+--:-:-:-:1      LOP.AND.NZ P5, RZ, idx_Y2, 1;
+--:-:-:-:1  @P5 IADD idx_X, -idx_X,  param_GX;
+--:-:-:-:1  @P5 IADD idx_X,  idx_X, -1;
 
 --:6:-:-:1  @P0 STS [addr_idx_Y], idx_Y;
 --:6:-:-:1  @P0 STS [addr_idx_X], idx_X;
 --:6:-:-:1  @P0 STS [addr_idx_K], idx_K;
 
+// x = gx << shiftX
+// y = gy << shiftY
+--:-:-:-:1      SHL gx, idx_X, param_shiftX;
+--:-:-:-:1      SHL gy, idx_Y, param_shiftY;
 
---:-:-:-:1      LOP.AND  tid32_2,  tid,    -32;
+// Distribute the 8|4|2|1 blocks of the super block among 4|8|16|32 threads each of the warp
+--:-:-:-:1      BFE.U32 super_x, tid, param_superX;
+--:-:-:-:1      BFE.U32 super_y, tid, param_superY;
+--:-:-:-:1      ISCADD gx, super_x,  gx, 2;
+--:-:-:-:1      ISCADD gy, super_y,  gy, 2;
+
+--:-:-:-:1      LOP.AND  tid32_2,  tid,   -32;
 --:-:-:-:1      SHR.U32  tid32_2,  tid32_2, 2;
 
 // readIs = ((tid & -32) >> 2) | ((tid >> 1) & 7)
@@ -368,7 +376,7 @@ IMAGE_SETUP:
 --:-:-:-:1      XMAD.S16.U16.LO2C offset, c,  param_YXN, offset;
 --:-:-:-:1      ISET.LT.AND sign, offset, RZ, PT;
 
---:-:-:-:1      LEA    track0.CC, offset, param_I[0], [+ dtype_shift() +];
+--:-:-:-:1      LEA    track0.CC, offset, param_I[0], [+ dshift() +];
 --:-:-:-:1      IADD.X track1,    sign,   param_I[1];
 
 --:-:-:-:1      IADD x1, gx, 1;
@@ -377,12 +385,12 @@ IMAGE_SETUP:
 --:-:-:-:1      IADD x4, gx, 4;
 --:-:-:-:1      IADD x5, gx, 5;
 
---:-:-:-:1      ISETP.LT.AND P0, PT, gx, param_X, PT;
---:-:-:-:1      ISETP.LT.AND P1, PT, x1, param_X, PT;
---:-:-:-:1      ISETP.LT.AND P2, PT, x2, param_X, PT;
---:-:-:-:1      ISETP.LT.AND P3, PT, x3, param_X, PT;
---:-:-:-:1      ISETP.LT.AND P4, PT, x4, param_X, PT;
---:-:-:-:1      ISETP.LT.AND P5, PT, x5, param_X, PT;
+--:-:-:-:1      ISETP.LT.AND P0, PT, gx, param_W, PT;
+--:-:-:-:1      ISETP.LT.AND P1, PT, x1, param_W, PT;
+--:-:-:-:1      ISETP.LT.AND P2, PT, x2, param_W, PT;
+--:-:-:-:1      ISETP.LT.AND P3, PT, x3, param_W, PT;
+--:-:-:-:1      ISETP.LT.AND P4, PT, x4, param_W, PT;
+--:-:-:-:1      ISETP.LT.AND P5, PT, x5, param_W, PT;
 --:-:-:-:1      ISETP.GE.AND P0, PT, gx, RZ, P0;
 --:-:-:-:1      ISETP.GE.AND P1, PT, x1, RZ, P1;
 --:-:-:-:1      ISETP.GE.AND P2, PT, x2, RZ, P2;
@@ -420,7 +428,7 @@ IMAGE_SETUP:
 --:-:-:-:1      ISETP.EQ.AND P6, PT, c, 1, PT;
 --:-:-:-:1      ISETP.EQ.AND P6, PT, c, partialC, P6;
 --:-:-:-:1      XMAD partialC, partialC, param_YXN, RZ;
---:-:-:-:1      SHL  partialC, partialC, [+ dtype_shift() +];
+--:-:-:-:1      SHL  partialC, partialC, [+ dshift() +];
 
 
 --:-:-:-:1 @!P6 R2P PR, pred30, 0x3f;
@@ -432,12 +440,12 @@ IMAGE_SETUP:
 --:-:-:-:1 @!P3 MOV i03, RZ;
 --:-:-:-:1 @!P4 MOV i04, RZ;
 --:-:-:-:1 @!P5 MOV i05, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i00, [track + [+ dtype_size() +]x<0*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i01, [track + [+ dtype_size() +]x<0*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i02, [track + [+ dtype_size() +]x<0*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i03, [track + [+ dtype_size() +]x<0*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i04, [track + [+ dtype_size() +]x<0*$X*$N + 4*$N>];
---:-:1:-:1  @P5 LDG.E.CI[+ dtype() +] i05, [track + [+ dtype_size() +]x<0*$X*$N + 5*$N>];
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i00, [track + [+ dsize() +]x<0*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i01, [track + [+ dsize() +]x<0*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i02, [track + [+ dsize() +]x<0*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i03, [track + [+ dsize() +]x<0*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i04, [track + [+ dsize() +]x<0*$W*$N + 4*$N>];
+--:-:1:-:1  @P5 LDG.E.CI.[+ dtype() +] i05, [track + [+ dsize() +]x<0*$W*$N + 5*$N>];
 
 --:-:-:-:1 @!P6 R2P PR, pred30, 0x3f;
 --:-:-:-:1  @P6 R2P PR,     RZ, 0x3f;
@@ -448,12 +456,12 @@ IMAGE_SETUP:
 --:-:-:-:1 @!P3 MOV i13, RZ;
 --:-:-:-:1 @!P4 MOV i14, RZ;
 --:-:-:-:1 @!P5 MOV i15, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i10, [track + [+ dtype_size() +]x<1*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i11, [track + [+ dtype_size() +]x<1*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i12, [track + [+ dtype_size() +]x<1*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i13, [track + [+ dtype_size() +]x<1*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i14, [track + [+ dtype_size() +]x<1*$X*$N + 4*$N>];
---:-:2:-:1  @P5 LDG.E.CI[+ dtype() +] i15, [track + [+ dtype_size() +]x<1*$X*$N + 5*$N>];
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i10, [track + [+ dsize() +]x<1*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i11, [track + [+ dsize() +]x<1*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i12, [track + [+ dsize() +]x<1*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i13, [track + [+ dsize() +]x<1*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i14, [track + [+ dsize() +]x<1*$W*$N + 4*$N>];
+--:-:2:-:1  @P5 LDG.E.CI.[+ dtype() +] i15, [track + [+ dsize() +]x<1*$W*$N + 5*$N>];
 
 --:-:-:-:1 @!P6 R2P PR, pred30, 0x3f;
 --:-:-:-:1  @P6 R2P PR,     RZ, 0x3f;
@@ -464,12 +472,12 @@ IMAGE_SETUP:
 --:-:-:-:1 @!P3 MOV i23, RZ;
 --:-:-:-:1 @!P4 MOV i24, RZ;
 --:-:-:-:1 @!P5 MOV i25, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i20, [track + [+ dtype_size() +]x<2*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i21, [track + [+ dtype_size() +]x<2*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i22, [track + [+ dtype_size() +]x<2*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i23, [track + [+ dtype_size() +]x<2*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i24, [track + [+ dtype_size() +]x<2*$X*$N + 4*$N>];
---:-:3:-:1  @P5 LDG.E.CI[+ dtype() +] i25, [track + [+ dtype_size() +]x<2*$X*$N + 5*$N>];
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i20, [track + [+ dsize() +]x<2*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i21, [track + [+ dsize() +]x<2*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i22, [track + [+ dsize() +]x<2*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i23, [track + [+ dsize() +]x<2*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i24, [track + [+ dsize() +]x<2*$W*$N + 4*$N>];
+--:-:3:-:1  @P5 LDG.E.CI.[+ dtype() +] i25, [track + [+ dsize() +]x<2*$W*$N + 5*$N>];
 
 --:-:-:-:1 @!P6 R2P PR, pred30, 0x3f;
 --:-:-:-:1  @P6 R2P PR,     RZ, 0x3f;
@@ -480,12 +488,12 @@ IMAGE_SETUP:
 --:-:-:-:1 @!P3 MOV i33, RZ;
 --:-:-:-:1 @!P4 MOV i34, RZ;
 --:-:-:-:1 @!P5 MOV i35, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i30, [track + [+ dtype_size() +]x<3*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i31, [track + [+ dtype_size() +]x<3*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i32, [track + [+ dtype_size() +]x<3*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i33, [track + [+ dtype_size() +]x<3*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i34, [track + [+ dtype_size() +]x<3*$X*$N + 4*$N>];
---:-:4:-:1  @P5 LDG.E.CI[+ dtype() +] i35, [track + [+ dtype_size() +]x<3*$X*$N + 5*$N>];
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i30, [track + [+ dsize() +]x<3*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i31, [track + [+ dsize() +]x<3*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i32, [track + [+ dsize() +]x<3*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i33, [track + [+ dsize() +]x<3*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i34, [track + [+ dsize() +]x<3*$W*$N + 4*$N>];
+--:-:4:-:1  @P5 LDG.E.CI.[+ dtype() +] i35, [track + [+ dsize() +]x<3*$W*$N + 5*$N>];
 
 --:-:-:-:1 @!P6 R2P PR, pred30, 0x3f;
 --:-:-:-:1  @P6 R2P PR,     RZ, 0x3f;
@@ -496,12 +504,12 @@ IMAGE_SETUP:
 --:-:-:-:1 @!P3 MOV i43, RZ;
 --:-:-:-:1 @!P4 MOV i44, RZ;
 --:-:-:-:1 @!P5 MOV i45, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i40, [track + [+ dtype_size() +]x<4*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i41, [track + [+ dtype_size() +]x<4*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i42, [track + [+ dtype_size() +]x<4*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i43, [track + [+ dtype_size() +]x<4*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i44, [track + [+ dtype_size() +]x<4*$X*$N + 4*$N>];
---:-:-:-:1  @P5 LDG.E.CI[+ dtype() +] i45, [track + [+ dtype_size() +]x<4*$X*$N + 5*$N>];
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i40, [track + [+ dsize() +]x<4*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i41, [track + [+ dsize() +]x<4*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i42, [track + [+ dsize() +]x<4*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i43, [track + [+ dsize() +]x<4*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i44, [track + [+ dsize() +]x<4*$W*$N + 4*$N>];
+--:-:5:-:1  @P5 LDG.E.CI.[+ dtype() +] i45, [track + [+ dsize() +]x<4*$W*$N + 5*$N>];
 
 --:-:-:-:1 @!P6 R2P PR, pred36, 0x3f;
 --:-:-:-:1  @P6 R2P PR,     RZ, 0x3f;
@@ -511,18 +519,18 @@ IMAGE_SETUP:
 --:-:-:-:1 @!P3 MOV i53, RZ;
 --:-:-:-:1 @!P4 MOV i54, RZ;
 --:-:-:-:1 @!P5 MOV i55, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i50, [track + [+ dtype_size() +]x<5*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i51, [track + [+ dtype_size() +]x<5*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i52, [track + [+ dtype_size() +]x<5*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i53, [track + [+ dtype_size() +]x<5*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i54, [track + [+ dtype_size() +]x<5*$X*$N + 4*$N>];
---:5:6:-:1  @P5 LDG.E.CI[+ dtype() +] i55, [track + [+ dtype_size() +]x<5*$X*$N + 5*$N>];
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i50, [track + [+ dsize() +]x<5*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i51, [track + [+ dsize() +]x<5*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i52, [track + [+ dsize() +]x<5*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i53, [track + [+ dsize() +]x<5*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i54, [track + [+ dsize() +]x<5*$W*$N + 4*$N>];
+--:-:6:-:1  @P5 LDG.E.CI.[+ dtype() +] i55, [track + [+ dsize() +]x<5*$W*$N + 5*$N>];
 
 </SCHEDULE_BLOCK>
 
 --:-:-:-:5      BAR.SYNC 0;
 
-10:-:-:-:5      IADD   track0.CC, track0, -partialC;
+3f:-:-:-:5      IADD   track0.CC, track0, -partialC;
 --:-:-:-:1      IADD   writeS,    writeS, 4x<32*36*2*2>;
 --:-:-:-:0      IADD.X track1,    track1, -RZ;
 
@@ -541,7 +549,7 @@ FILTER_SETUP:
 --:-:-:-:1      ISETP.EQ.AND P6, PT, c, 1, PT;
 --:-:-:-:1      ISETP.EQ.AND P6, PT, c, partialC, P6;
 --:-:-:-:1      XMAD partialC, partialC, param_RSK, RZ;
---:-:-:-:1      SHL  partialC, partialC, [+ dtype_shift() +];
+--:-:-:-:1      SHL  partialC, partialC, [+ dshift() +];
 
 // k = idx_K*32 + tid & 31
 --:-:-:-:1      ISCADD  kk, idx_K, tid31,  5;
@@ -550,8 +558,8 @@ FILTER_SETUP:
 
 // a0 = c*RSK + k
 --:-:-:-:1      XMAD.LO2C offset, c, param_RSK, kk;
---:-:-:-:1      LEA      track0.CC, offset, param_F[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X track1,    offset, param_F[1], RZ, [+ dtype_shift() +];
+--:-:-:-:1      LEA      track0.CC, offset, param_F[0],     [+ dshift() +];
+--:-:-:-:1      LEA.HI.X track1,    offset, param_F[1], RZ, [+ dshift() +];
 
 --:-:-:-:1      STS [writeS + 4x<32*0>], RZ;
 --:-:-:-:1      STS [writeS + 4x<32*1>], RZ;
@@ -561,23 +569,23 @@ FILTER_SETUP:
 20:-:-:-:1 @!P6 MOV f00, RZ;
 --:-:-:-:1 @!P6 MOV f01, RZ;
 --:-:-:-:1 @!P6 MOV f02, RZ;
---:-:-:-:1  @P6 LDG.E.CI[+ dtype() +] f00, [track + [+ dtype_size() +]x<0*3*$K + 0*$K>];
---:-:-:-:1  @P6 LDG.E.CI[+ dtype() +] f01, [track + [+ dtype_size() +]x<0*3*$K + 1*$K>];
---:-:1:-:1  @P6 LDG.E.CI[+ dtype() +] f02, [track + [+ dtype_size() +]x<0*3*$K + 2*$K>];
+--:-:-:-:1  @P6 LDG.E.CI.[+ dtype() +] f00, [track + [+ dsize() +]x<0*3*$K + 0*$K>];
+--:-:-:-:1  @P6 LDG.E.CI.[+ dtype() +] f01, [track + [+ dsize() +]x<0*3*$K + 1*$K>];
+--:-:1:-:1  @P6 LDG.E.CI.[+ dtype() +] f02, [track + [+ dsize() +]x<0*3*$K + 2*$K>];
 
 --:-:-:-:1 @!P6 MOV f10, RZ;
 --:-:-:-:1 @!P6 MOV f11, RZ;
 --:-:-:-:1 @!P6 MOV f12, RZ;
---:-:-:-:1  @P6 LDG.E.CI[+ dtype() +] f10, [track + [+ dtype_size() +]x<1*3*$K + 0*$K>];
---:-:-:-:1  @P6 LDG.E.CI[+ dtype() +] f11, [track + [+ dtype_size() +]x<1*3*$K + 1*$K>];
---:-:2:-:1  @P6 LDG.E.CI[+ dtype() +] f12, [track + [+ dtype_size() +]x<1*3*$K + 2*$K>];
+--:-:-:-:1  @P6 LDG.E.CI.[+ dtype() +] f10, [track + [+ dsize() +]x<1*3*$K + 0*$K>];
+--:-:-:-:1  @P6 LDG.E.CI.[+ dtype() +] f11, [track + [+ dsize() +]x<1*3*$K + 1*$K>];
+--:-:2:-:1  @P6 LDG.E.CI.[+ dtype() +] f12, [track + [+ dsize() +]x<1*3*$K + 2*$K>];
 
 --:-:-:-:1 @!P6 MOV f20, RZ;
 --:-:-:-:1 @!P6 MOV f21, RZ;
 --:-:-:-:1 @!P6 MOV f22, RZ;
---:-:-:-:1  @P6 LDG.E.CI[+ dtype() +] f20, [track + [+ dtype_size() +]x<2*3*$K + 0*$K>];
---:-:-:-:1  @P6 LDG.E.CI[+ dtype() +] f21, [track + [+ dtype_size() +]x<2*3*$K + 1*$K>];
---:5:3:-:1  @P6 LDG.E.CI[+ dtype() +] f22, [track + [+ dtype_size() +]x<2*3*$K + 2*$K>];
+--:-:-:-:1  @P6 LDG.E.CI.[+ dtype() +] f20, [track + [+ dsize() +]x<2*3*$K + 0*$K>];
+--:-:-:-:1  @P6 LDG.E.CI.[+ dtype() +] f21, [track + [+ dsize() +]x<2*3*$K + 1*$K>];
+--:5:3:-:1  @P6 LDG.E.CI.[+ dtype() +] f22, [track + [+ dsize() +]x<2*3*$K + 2*$K>];
 
 </SCHEDULE_BLOCK>
 
@@ -738,83 +746,28 @@ IMAGE_LOOP:
         } : '';
 +]
 <SCHEDULE_BLOCK>
-3f:-:-:-:1      FFMA ti4,   i20, -5, i40;
---:-:-:-:1      FFMA ti5,   i30, -5, i50;
---:-:-:-:1      FFMA ti0,   i20, -4, i40;
---:-:-:-:1      FFMA ti1,   i10, -4, i30;
---:-:-:-:1      FADD ti2,  -i20,     i40;
---:-:-:-:1      FADD ti3,  -i10,     i30;
---:-:-:-:1      FFMA TI00,  i00,  4, ti4;
---:-:-:-:1      FFMA TI50,  i10,  4, ti5;
---:-:-:-:1      FADD TI10,  ti1,     ti0;
---:-:-:-:1      FADD TI20, -ti1,     ti0;
---:-:-:-:1      FFMA TI30,  ti3,  2, ti2;
---:-:-:-:1      FFMA TI40,  ti3, -2, ti2;
-
---:-:-:-:1      FFMA ti4,   i21, -5, i41;
---:-:-:-:1      FFMA ti5,   i31, -5, i51;
---:-:-:-:1      FFMA ti0,   i21, -4, i41;
---:-:-:-:1      FFMA ti1,   i11, -4, i31;
---:-:-:-:1      FADD ti2,  -i21,     i41;
---:-:-:-:1      FADD ti3,  -i11,     i31;
---:-:-:-:1      FFMA TI01,  i01,  4, ti4;
---:-:-:-:1      FFMA TI51,  i11,  4, ti5;
---:-:-:-:1      FADD TI11,  ti1,     ti0;
---:-:-:-:1      FADD TI21, -ti1,     ti0;
---:-:-:-:1      FFMA TI31,  ti3,  2, ti2;
---:-:-:-:1      FFMA TI41,  ti3, -2, ti2;
-
---:-:-:-:1      FFMA ti4,   i22, -5, i42;
---:-:-:-:1      FFMA ti5,   i32, -5, i52;
---:-:-:-:1      FFMA ti0,   i22, -4, i42;
---:-:-:-:1      FFMA ti1,   i12, -4, i32;
---:-:-:-:1      FADD ti2,  -i22,     i42;
---:-:-:-:1      FADD ti3,  -i12,     i32;
---:-:-:-:1      FFMA TI02,  i02,  4, ti4;
---:-:-:-:1      FFMA TI52,  i12,  4, ti5;
---:-:-:-:1      FADD TI12,  ti1,     ti0;
---:-:-:-:1      FADD TI22, -ti1,     ti0;
---:-:-:-:1      FFMA TI32,  ti3,  2, ti2;
---:-:-:-:1      FFMA TI42,  ti3, -2, ti2;
-
---:-:-:-:1      FFMA ti4,   i23, -5, i43;
---:-:-:-:1      FFMA ti5,   i33, -5, i53;
---:-:-:-:1      FFMA ti0,   i23, -4, i43;
---:-:-:-:1      FFMA ti1,   i13, -4, i33;
---:-:-:-:1      FADD ti2,  -i23,     i43;
---:-:-:-:1      FADD ti3,  -i13,     i33;
---:-:-:-:1      FFMA TI03,  i03,  4, ti4;
---:-:-:-:1      FFMA TI53,  i13,  4, ti5;
---:-:-:-:1      FADD TI13,  ti1,     ti0;
---:-:-:-:1      FADD TI23, -ti1,     ti0;
---:-:-:-:1      FFMA TI33,  ti3,  2, ti2;
---:-:-:-:1      FFMA TI43,  ti3, -2, ti2;
-
---:-:-:-:1      FFMA ti4,   i24, -5, i44;
---:-:-:-:1      FFMA ti5,   i34, -5, i54;
---:-:-:-:1      FFMA ti0,   i24, -4, i44;
---:-:-:-:1      FFMA ti1,   i14, -4, i34;
---:-:-:-:1      FADD ti2,  -i24,     i44;
---:-:-:-:1      FADD ti3,  -i14,     i34;
---:-:-:-:1      FFMA TI04,  i04,  4, ti4;
---:-:-:-:1      FFMA TI54,  i14,  4, ti5;
---:-:-:-:1      FADD TI14,  ti1,     ti0;
---:-:-:-:1      FADD TI24, -ti1,     ti0;
---:-:-:-:1      FFMA TI34,  ti3,  2, ti2;
---:-:-:-:1      FFMA TI44,  ti3, -2, ti2;
-
---:-:-:-:1      FFMA ti4,   i25, -5, i45;
---:-:-:-:1      FFMA ti5,   i35, -5, i55;
---:-:-:-:1      FFMA ti0,   i25, -4, i45;
---:-:-:-:1      FFMA ti1,   i15, -4, i35;
---:-:-:-:1      FADD ti2,  -i25,     i45;
---:-:-:-:1      FADD ti3,  -i15,     i35;
---:-:-:-:1      FFMA TI05,  i05,  4, ti4;
---:-:-:-:1      FFMA TI55,  i15,  4, ti5;
---:-:-:-:1      FADD TI15,  ti1,     ti0;
---:-:-:-:1      FADD TI25, -ti1,     ti0;
---:-:-:-:1      FFMA TI35,  ti3,  2, ti2;
---:-:-:-:1      FFMA TI45,  ti3, -2, ti2;
+[+
+    my $out;
+    foreach my $i (0 .. 5)
+    {
+        my $w = $i == 0 ? '3f' : '--';
+        $out .= qq{
+$w:-:-:-:1      FFMA ti4,   i2$i, -2.640625,   i4$i;
+--:-:-:-:1      FFMA ti5,   i3$i, -2.640625,   i5$i;
+--:-:-:-:1      FFMA ti0,   i2$i, -2.25,       i4$i;
+--:-:-:-:1      FFMA ti1,   i1$i, -2.25,       i3$i;
+--:-:-:-:1      FFMA ti2,   i2$i, -0.390625,   i4$i;
+--:-:-:-:1      FFMA ti3,   i1$i, -0.390625,   i3$i;
+--:-:-:-:1      FFMA TI0$i, i0$i,  0.87890625, ti4;
+--:-:-:-:1      FFMA TI5$i, i1$i,  0.87890625, ti5;
+--:-:-:-:1      FFMA TI1$i, ti1,   0.625,      ti0;
+--:-:-:-:1      FFMA TI2$i, ti1,  -0.625,      ti0;
+--:-:-:-:1      FFMA TI3$i, ti3,   1.5,        ti2;
+--:-:-:-:1      FFMA TI4$i, ti3,  -1.5,        ti2;
+        };
+    }
+    return $out;
++]
 
 --:-:-:-:1      LDS.U.128 jl0Fy4, [readFs + 4x<0*32*36 + 16>];
 --:-:-:-:1      LDS.U.128 jl0Ix0, [readIs + 4x<0*32*36 + 00>];
@@ -832,84 +785,27 @@ IMAGE_LOOP:
 --:-:-:-:1      R2P PR, pred30, 0x3f;
 --:-:-:-:1      SHF.R.U64 pred30, pred30, 6, pred30;
 
---:-:-:-:1      FFMA ti4,   TI02, -5, TI04;
---:-:-:-:1      FFMA ti5,   TI03, -5, TI05;
---:-:-:-:1      FFMA ti0,   TI02, -4, TI04;
---:-:-:-:1      FFMA ti1,   TI01, -4, TI03;
---:-:-:-:1      FADD ti2,  -TI02,     TI04;
---:-:-:-:1      FADD ti3,  -TI01,     TI03;
---:-:-:-:1      FFMA I00,   TI00,  4, ti4;
---:-:-:-:1      FFMA I05,   TI01,  4, ti5;
---:-:-:-:1      FADD I01,   ti1,      ti0;
---:-:-:-:1      FADD I02,  -ti1,      ti0;
---:-:-:-:1      FFMA I03,   ti3,   2, ti2;
---:-:-:-:1      FFMA I04,   ti3,  -2, ti2;
-
---:-:-:-:1      FFMA ti4,   TI12, -5, TI14;
---:-:-:-:1      FFMA ti5,   TI13, -5, TI15;
---:-:-:-:1      FFMA ti0,   TI12, -4, TI14;
---:-:-:-:1      FFMA ti1,   TI11, -4, TI13;
---:-:-:-:1      FADD ti2,  -TI12,     TI14;
---:-:-:-:1      FADD ti3,  -TI11,     TI13;
---:-:-:-:1      FFMA I10,   TI10,  4, ti4;
---:-:-:-:1      FFMA I15,   TI11,  4, ti5;
---:-:-:-:1      FADD I11,   ti1,      ti0;
---:-:-:-:1      FADD I12,  -ti1,      ti0;
---:-:-:-:1      FFMA I13,   ti3,   2, ti2;
---:-:-:-:1      FFMA I14,   ti3,  -2, ti2;
-
---:-:-:-:1      FFMA ti4,   TI22, -5, TI24;
---:-:-:-:1      FFMA ti5,   TI23, -5, TI25;
---:-:-:-:1      FFMA ti0,   TI22, -4, TI24;
---:-:-:-:1      FFMA ti1,   TI21, -4, TI23;
---:-:-:-:1      FADD ti2,  -TI22,     TI24;
---:-:-:-:1      FADD ti3,  -TI21,     TI23;
---:-:-:-:1      FFMA I20,   TI20,  4, ti4;
---:-:-:-:1      FFMA I25,   TI21,  4, ti5;
---:-:-:-:1      FADD I21,   ti1,      ti0;
---:-:-:-:1      FADD I22,  -ti1,      ti0;
---:-:-:-:1      FFMA I23,   ti3,   2, ti2;
---:-:-:-:1      FFMA I24,   ti3,  -2, ti2;
-
---:-:-:-:1      FFMA ti4,   TI32, -5, TI34;
---:-:-:-:1      FFMA ti5,   TI33, -5, TI35;
---:-:-:-:1      FFMA ti0,   TI32, -4, TI34;
---:-:-:-:1      FFMA ti1,   TI31, -4, TI33;
---:-:-:-:1      FADD ti2,  -TI32,     TI34;
---:-:-:-:1      FADD ti3,  -TI31,     TI33;
---:-:-:-:1      FFMA I30,   TI30,  4, ti4;
---:-:-:-:1      FFMA I35,   TI31,  4, ti5;
---:-:-:-:1      FADD I31,   ti1,      ti0;
---:-:-:-:1      FADD I32,  -ti1,      ti0;
---:-:-:-:1      FFMA I33,   ti3,   2, ti2;
---:-:-:-:1      FFMA I34,   ti3,  -2, ti2;
-
---:-:-:-:1      FFMA ti4,   TI42, -5, TI44;
---:-:-:-:1      FFMA ti5,   TI43, -5, TI45;
---:-:-:-:1      FFMA ti0,   TI42, -4, TI44;
---:-:-:-:1      FFMA ti1,   TI41, -4, TI43;
---:-:-:-:1      FADD ti2,  -TI42,     TI44;
---:-:-:-:1      FADD ti3,  -TI41,     TI43;
---:-:-:-:1      FFMA I40,   TI40,  4, ti4;
---:-:-:-:1      FFMA I45,   TI41,  4, ti5;
---:-:-:-:1      FADD I41,   ti1,      ti0;
---:-:-:-:1      FADD I42,  -ti1,      ti0;
---:-:-:-:1      FFMA I43,   ti3,   2, ti2;
---:-:-:-:1      FFMA I44,   ti3,  -2, ti2;
-
---:-:-:-:1      FFMA ti4,   TI52, -5, TI54;
---:-:-:-:1      FFMA ti5,   TI53, -5, TI55;
---:-:-:-:1      FFMA ti0,   TI52, -4, TI54;
---:-:-:-:1      FFMA ti1,   TI51, -4, TI53;
---:-:-:-:1      FADD ti2,  -TI52,     TI54;
---:-:-:-:1      FADD ti3,  -TI51,     TI53;
---:-:-:-:1      FFMA I50,   TI50,  4, ti4;
---:-:-:-:1      FFMA I55,   TI51,  4, ti5;
---:-:-:-:1      FADD I51,   ti1,      ti0;
---:-:-:-:1      FADD I52,  -ti1,      ti0;
---:-:-:-:1      FFMA I53,   ti3,   2, ti2;
---:-:-:-:1      FFMA I54,   ti3,  -2, ti2;
-
+[+
+    my $out;
+    foreach my $i (0 .. 5)
+    {
+        $out .= qq{
+--:-:-:-:1      FFMA ti4,    TI${i}2, -2.640625,   TI${i}4;
+--:-:-:-:1      FFMA ti5,    TI${i}3, -2.640625,   TI${i}5;
+--:-:-:-:1      FFMA ti0,    TI${i}2, -2.25,       TI${i}4;
+--:-:-:-:1      FFMA ti1,    TI${i}1, -2.25,       TI${i}3;
+--:-:-:-:1      FFMA ti2,    TI${i}2, -0.390625,   TI${i}4;
+--:-:-:-:1      FFMA ti3,    TI${i}1, -0.390625,   TI${i}3;
+--:-:-:-:1      FFMA I${i}0, TI${i}0,  0.87890625, ti4;
+--:-:-:-:1      FFMA I${i}5, TI${i}1,  0.87890625, ti5;
+--:-:-:-:1      FFMA I${i}1, ti1,      0.625,      ti0;
+--:-:-:-:1      FFMA I${i}2, ti1,     -0.625,      ti0;
+--:-:-:-:1      FFMA I${i}3, ti3,      1.5,        ti2;
+--:-:-:-:1      FFMA I${i}4, ti3,     -1.5,        ti2;
+        };
+    }
+    return $out;
++]
 <ORDERED>
 --:-:-:-:1      STS [writeS + 4x<32*(0*6 + 3)>], I03;
 --:-:-:-:1      STS [writeS + 4x<32*(0*6 + 4)>], I04;
@@ -926,12 +822,12 @@ IMAGE_LOOP:
 --:-:-:-:1      STS [writeS + 4x<32*(1*6 + 2)>], I12;
 --:2:-:-:1      STS [writeS + 4x<32*(1*6 + 4)>], I14;
 
-01:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i00, [track + [+ dtype_size() +]x<0*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i01, [track + [+ dtype_size() +]x<0*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i02, [track + [+ dtype_size() +]x<0*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i03, [track + [+ dtype_size() +]x<0*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i04, [track + [+ dtype_size() +]x<0*$X*$N + 4*$N>];
---:-:1:-:1  @P5 LDG.E.CI[+ dtype() +] i05, [track + [+ dtype_size() +]x<0*$X*$N + 5*$N>];
+01:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i00, [track + [+ dsize() +]x<0*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i01, [track + [+ dsize() +]x<0*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i02, [track + [+ dsize() +]x<0*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i03, [track + [+ dsize() +]x<0*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i04, [track + [+ dsize() +]x<0*$W*$N + 4*$N>];
+--:-:1:-:1  @P5 LDG.E.CI.[+ dtype() +] i05, [track + [+ dsize() +]x<0*$W*$N + 5*$N>];
 --:-:-:-:1 @!P0 I2I.U32.U32 i00, RZ;
 --:-:-:-:1 @!P1 I2I.U32.U32 i01, RZ;
 --:-:-:-:1 @!P2 I2I.U32.U32 i02, RZ;
@@ -955,12 +851,12 @@ IMAGE_LOOP:
 --:-:-:-:1      STS [writeS + 4x<32*(3*6 + 3)>], I33;
 --:4:-:-:1      STS [writeS + 4x<32*(3*6 + 4)>], I34;
 
-02:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i10, [track + [+ dtype_size() +]x<1*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i11, [track + [+ dtype_size() +]x<1*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i12, [track + [+ dtype_size() +]x<1*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i13, [track + [+ dtype_size() +]x<1*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i14, [track + [+ dtype_size() +]x<1*$X*$N + 4*$N>];
---:-:2:-:1  @P5 LDG.E.CI[+ dtype() +] i15, [track + [+ dtype_size() +]x<1*$X*$N + 5*$N>];
+02:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i10, [track + [+ dsize() +]x<1*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i11, [track + [+ dsize() +]x<1*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i12, [track + [+ dsize() +]x<1*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i13, [track + [+ dsize() +]x<1*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i14, [track + [+ dsize() +]x<1*$W*$N + 4*$N>];
+--:-:2:-:1  @P5 LDG.E.CI.[+ dtype() +] i15, [track + [+ dsize() +]x<1*$W*$N + 5*$N>];
 --:-:-:-:1 @!P0 I2I.U32.U32 i10, RZ;
 --:-:-:-:1 @!P1 I2I.U32.U32 i11, RZ;
 --:-:-:-:1 @!P2 I2I.U32.U32 i12, RZ;
@@ -986,12 +882,12 @@ IMAGE_LOOP:
 --:-:-:-:1      LDS.U.128 jl1Fy4, [readFs + 4x<1*32*36 + 16>];
 --:-:-:-:1      LDS.U.128 jl1Ix0, [readIs + 4x<1*32*36 + 00>];
 
-04:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i20, [track + [+ dtype_size() +]x<2*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i21, [track + [+ dtype_size() +]x<2*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i22, [track + [+ dtype_size() +]x<2*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i23, [track + [+ dtype_size() +]x<2*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i24, [track + [+ dtype_size() +]x<2*$X*$N + 4*$N>];
---:-:3:-:1  @P5 LDG.E.CI[+ dtype() +] i25, [track + [+ dtype_size() +]x<2*$X*$N + 5*$N>];
+04:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i20, [track + [+ dsize() +]x<2*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i21, [track + [+ dsize() +]x<2*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i22, [track + [+ dsize() +]x<2*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i23, [track + [+ dsize() +]x<2*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i24, [track + [+ dsize() +]x<2*$W*$N + 4*$N>];
+--:-:3:-:1  @P5 LDG.E.CI.[+ dtype() +] i25, [track + [+ dsize() +]x<2*$W*$N + 5*$N>];
 --:-:-:-:1 @!P0 I2I.U32.U32 i20, RZ;
 --:-:-:-:1 @!P1 I2I.U32.U32 i21, RZ;
 --:-:-:-:1 @!P2 I2I.U32.U32 i22, RZ;
@@ -1008,12 +904,12 @@ IMAGE_LOOP:
 --:-:-:-:1      STS [writeS + 4x<32*(5*6 + 3)>], I53;
 --:6:-:-:1      STS [writeS + 4x<32*(5*6 + 4)>], I54;
 
-08:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i30, [track + [+ dtype_size() +]x<3*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i31, [track + [+ dtype_size() +]x<3*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i32, [track + [+ dtype_size() +]x<3*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i33, [track + [+ dtype_size() +]x<3*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i34, [track + [+ dtype_size() +]x<3*$X*$N + 4*$N>];
---:-:4:-:1  @P5 LDG.E.CI[+ dtype() +] i35, [track + [+ dtype_size() +]x<3*$X*$N + 5*$N>];
+08:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i30, [track + [+ dsize() +]x<3*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i31, [track + [+ dsize() +]x<3*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i32, [track + [+ dsize() +]x<3*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i33, [track + [+ dsize() +]x<3*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i34, [track + [+ dsize() +]x<3*$W*$N + 4*$N>];
+--:-:4:-:1  @P5 LDG.E.CI.[+ dtype() +] i35, [track + [+ dsize() +]x<3*$W*$N + 5*$N>];
 --:-:-:-:1 @!P0 I2I.U32.U32 i30, RZ;
 --:-:-:-:1 @!P1 I2I.U32.U32 i31, RZ;
 --:-:-:-:1 @!P2 I2I.U32.U32 i32, RZ;
@@ -1022,12 +918,12 @@ IMAGE_LOOP:
 --:-:-:-:1 @!P5 I2I.U32.U32 i35, RZ;
 --:-:-:-:c      R2P PR, pred30, 0x3f; // FORCE
 
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i40, [track + [+ dtype_size() +]x<4*$X*$N + 0*$N>];
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i41, [track + [+ dtype_size() +]x<4*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i42, [track + [+ dtype_size() +]x<4*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i43, [track + [+ dtype_size() +]x<4*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i44, [track + [+ dtype_size() +]x<4*$X*$N + 4*$N>];
---:-:5:-:1  @P5 LDG.E.CI[+ dtype() +] i45, [track + [+ dtype_size() +]x<4*$X*$N + 5*$N>];
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i40, [track + [+ dsize() +]x<4*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i41, [track + [+ dsize() +]x<4*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i42, [track + [+ dsize() +]x<4*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i43, [track + [+ dsize() +]x<4*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i44, [track + [+ dsize() +]x<4*$W*$N + 4*$N>];
+--:-:5:-:1  @P5 LDG.E.CI.[+ dtype() +] i45, [track + [+ dsize() +]x<4*$W*$N + 5*$N>];
 --:-:-:-:1      SHF.L.U64 pred30, pred30, 24, pred30;
 
 --:-:-:-:1 @!P0 I2I.U32.U32 i40, RZ;
@@ -1038,13 +934,13 @@ IMAGE_LOOP:
 --:-:-:-:1 @!P5 I2I.U32.U32 i45, RZ;
 --:-:-:-:a      R2P PR, pred36, 0x3f; // FORCE
 
-20:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] i50, [track + [+ dtype_size() +]x<5*$X*$N + 0*$N>];
+20:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i50, [track + [+ dsize() +]x<5*$W*$N + 0*$N>];
 --:-:-:-:1 @!P0 I2I.U32.U32 i50, RZ;
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] i51, [track + [+ dtype_size() +]x<5*$X*$N + 1*$N>];
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] i52, [track + [+ dtype_size() +]x<5*$X*$N + 2*$N>];
---:-:-:-:1  @P3 LDG.E.CI[+ dtype() +] i53, [track + [+ dtype_size() +]x<5*$X*$N + 3*$N>];
---:-:-:-:1  @P4 LDG.E.CI[+ dtype() +] i54, [track + [+ dtype_size() +]x<5*$X*$N + 4*$N>];
---:-:6:-:1  @P5 LDG.E.CI[+ dtype() +] i55, [track + [+ dtype_size() +]x<5*$X*$N + 5*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i51, [track + [+ dsize() +]x<5*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i52, [track + [+ dsize() +]x<5*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i53, [track + [+ dsize() +]x<5*$W*$N + 3*$N>];
+--:-:-:-:1  @P4 LDG.E.CI.[+ dtype() +] i54, [track + [+ dsize() +]x<5*$W*$N + 4*$N>];
+--:-:6:-:1  @P5 LDG.E.CI.[+ dtype() +] i55, [track + [+ dsize() +]x<5*$W*$N + 5*$N>];
 --:-:-:-:1 @!P1 I2I.U32.U32 i51, RZ;
 --:-:-:-:1 @!P2 I2I.U32.U32 i52, RZ;
 --:-:-:-:1 @!P3 I2I.U32.U32 i53, RZ;
@@ -1054,7 +950,7 @@ IMAGE_LOOP:
 
 <ORDERED>
 [+
-    our ($vec_size, $dtype_size, $convert_in);
+    our ($vsize, $dsize, $convert_in);
     my %insert = (
         j0c15 => "--:-:5:-:1      LDS.U.128 jl1Fy0, [readFs + 4x<1*32*36 + 00>];\n",
     );
@@ -1120,12 +1016,13 @@ FILTER_LOOP:
         } : '';
 +]
 <SCHEDULE_BLOCK>
---:-:-:-:1      MOV32I rcp6,  0x3e2aaaab;
---:-:-:-:1      MOV32I rcp24, 0x3d2aaaab;
---:-:-:-:1      MOV32I rcp12, 0x3daaaaab;
---:-:-:-:1      FMUL tf00, f20, rcp6;
---:-:-:-:1      FMUL tf01, f21, rcp6;
---:-:-:-:1      FMUL tf02, f22, rcp6;
+--:-:-:-:1      MOV32I rcp6,  0.688403361344538;
+--:-:-:-:1      MOV32I rcp8,  0.430252100840336;
+--:-:-:-:1      MOV32I rcp24, 0.119514472455649;
+--:-:-:-:1      MOV32I rcp12, 0.179271708683473;
+07:-:-:-:1      FMUL32I tf00, f20, 0.26890756302521;
+--:-:-:-:1      FMUL32I tf01, f21, 0.26890756302521;
+--:-:-:-:1      FMUL32I tf02, f22, 0.26890756302521;
 --:-:-:-:1      FFMA tf10, f00, -rcp6, -tf00;
 --:-:-:-:1      FFMA tf20, f00,  rcp24, tf00;
 --:-:-:-:1      FFMA tf11, f01, -rcp6, -tf01;
@@ -1133,33 +1030,33 @@ FILTER_LOOP:
 --:-:-:-:1      FFMA tf12, f02, -rcp6, -tf02;
 --:-:-:-:1      FFMA tf22, f02,  rcp24, tf02;
 
-07:-:-:-:1      FMUL TF00, f00,  0.25;
---:-:-:-:1      FFMA TF10, f10, -rcp6,  tf10;
---:-:-:-:1      FFMA TF20, f10,  rcp6,  tf10;
+--:-:-:-:1      FMUL32I TF00, f00,  1.13777777777778;
+--:-:-:-:1      FFMA TF10, f10, -rcp8,  tf10;
+--:-:-:-:1      FFMA TF20, f10,  rcp8,  tf10;
 --:-:-:-:1      FFMA TF30, f10,  rcp12, tf20;
 --:-:-:-:1      FFMA TF40, f10, -rcp12, tf20;
 //--:-:-:-:1      MOV  TF50, f20;
 
---:-:-:-:1      FMUL TF02, f02,  0.25;
---:-:-:-:1      FFMA TF12, f12, -rcp6,  tf12;
---:-:-:-:1      FFMA TF22, f12,  rcp6,  tf12;
+--:-:-:-:1      FMUL32I TF02, f02,  1.13777777777778;
+--:-:-:-:1      FFMA TF12, f12, -rcp8,  tf12;
+--:-:-:-:1      FFMA TF22, f12,  rcp8,  tf12;
 --:-:-:-:1      FFMA TF32, f12,  rcp12, tf22;
 --:-:-:-:1      FFMA TF42, f12, -rcp12, tf22;
 //--:-:-:-:1      MOV  TF52, f22;
 
---:-:-:-:1      FMUL TF01, f01,  0.25;
---:-:-:-:1      FFMA TF11, f11, -rcp6,  tf11;
---:-:-:-:1      FFMA TF21, f11,  rcp6,  tf11;
+--:-:-:-:1      FMUL32I TF01, f01,  1.13777777777778;
+--:-:-:-:1      FFMA TF11, f11, -rcp8,  tf11;
+--:-:-:-:1      FFMA TF21, f11,  rcp8,  tf11;
 --:-:-:-:1      FFMA TF31, f11,  rcp12, tf21;
 --:-:-:-:1      FFMA TF41, f11, -rcp12, tf21;
 //--:-:-:-:1      MOV  TF51, f21;
 
---:-:-:-:1      FMUL ff00, TF02, rcp6;
---:-:-:-:1      FMUL ff10, TF12, rcp6;
---:-:-:-:1      FMUL ff20, TF22, rcp6;
---:-:-:-:1      FMUL ff30, TF32, rcp6;
---:-:-:-:1      FMUL ff40, TF42, rcp6;
---:-:-:-:1      FMUL ff50, TF52, rcp6;
+--:-:-:-:1      FMUL32I ff00, TF02, 0.26890756302521;
+--:-:-:-:1      FMUL32I ff10, TF12, 0.26890756302521;
+--:-:-:-:1      FMUL32I ff20, TF22, 0.26890756302521;
+--:-:-:-:1      FMUL32I ff30, TF32, 0.26890756302521;
+--:-:-:-:1      FMUL32I ff40, TF42, 0.26890756302521;
+--:-:-:-:1      FMUL32I ff50, TF52, 0.26890756302521;
 --:-:-:-:1      FFMA ff01, TF00, -rcp6, -ff00;
 --:-:-:-:1      FFMA ff02, TF00,  rcp24, ff00;
 --:-:-:-:1      FFMA ff11, TF10, -rcp6, -ff10;
@@ -1173,44 +1070,44 @@ FILTER_LOOP:
 --:-:-:-:1      FFMA ff51, TF50, -rcp6, -ff50;
 --:-:-:-:1      FFMA ff52, TF50,  rcp24, ff50;
 
---:-:-:-:1      FMUL F00, TF00,  0.25;
---:-:-:-:1      FFMA F01, TF01, -rcp6,  ff01;
---:-:-:-:1      FFMA F02, TF01,  rcp6,  ff01;
+--:-:-:-:1      FMUL32I F00, TF00,  1.13777777777778;
+--:-:-:-:1      FFMA F01, TF01, -rcp8,  ff01;
+--:-:-:-:1      FFMA F02, TF01,  rcp8,  ff01;
 --:-:-:-:1      FFMA F03, TF01,  rcp12, ff02;
 --:-:-:-:1      FFMA F04, TF01, -rcp12, ff02;
 //--:-:-:-:1      MOV  F05, TF02;
 
---:-:-:-:1      FMUL F10, TF10,  0.25;
---:-:-:-:1      FFMA F11, TF11, -rcp6,  ff11;
---:-:-:-:1      FFMA F12, TF11,  rcp6,  ff11;
+--:-:-:-:1      FMUL32I F10, TF10,  1.13777777777778;
+--:-:-:-:1      FFMA F11, TF11, -rcp8,  ff11;
+--:-:-:-:1      FFMA F12, TF11,  rcp8,  ff11;
 --:-:-:-:1      FFMA F13, TF11,  rcp12, ff12;
 --:-:-:-:1      FFMA F14, TF11, -rcp12, ff12;
 //--:-:-:-:1      MOV  F15, TF12;
 
---:-:-:-:1      FMUL F20, TF20,  0.25;
---:-:-:-:1      FFMA F21, TF21, -rcp6,  ff21;
---:-:-:-:1      FFMA F22, TF21,  rcp6,  ff21;
+--:-:-:-:1      FMUL32I F20, TF20,  1.13777777777778;
+--:-:-:-:1      FFMA F21, TF21, -rcp8,  ff21;
+--:-:-:-:1      FFMA F22, TF21,  rcp8,  ff21;
 --:-:-:-:1      FFMA F23, TF21,  rcp12, ff22;
 --:-:-:-:1      FFMA F24, TF21, -rcp12, ff22;
 //--:-:-:-:1      MOV  F25, TF22;
 
---:-:-:-:1      FMUL F30, TF30,  0.25;
---:-:-:-:1      FFMA F31, TF31, -rcp6,  ff31;
---:-:-:-:1      FFMA F32, TF31,  rcp6,  ff31;
+--:-:-:-:1      FMUL32I F30, TF30,  1.13777777777778;
+--:-:-:-:1      FFMA F31, TF31, -rcp8,  ff31;
+--:-:-:-:1      FFMA F32, TF31,  rcp8,  ff31;
 --:-:-:-:1      FFMA F33, TF31,  rcp12, ff32;
 --:-:-:-:1      FFMA F34, TF31, -rcp12, ff32;
 //--:-:-:-:1      MOV  F35, TF32;
 
---:-:-:-:1      FMUL F40, TF40,  0.25;
---:-:-:-:1      FFMA F41, TF41, -rcp6,  ff41;
---:-:-:-:1      FFMA F42, TF41,  rcp6,  ff41;
+--:-:-:-:1      FMUL32I F40, TF40,  1.13777777777778;
+--:-:-:-:1      FFMA F41, TF41, -rcp8,  ff41;
+--:-:-:-:1      FFMA F42, TF41,  rcp8,  ff41;
 --:-:-:-:1      FFMA F43, TF41,  rcp12, ff42;
 --:-:-:-:1      FFMA F44, TF41, -rcp12, ff42;
 //--:-:-:-:1      MOV  F45, TF42;
 
---:-:-:-:1      FMUL F50, TF50,  0.25;
---:-:-:-:1      FFMA F51, TF51, -rcp6,  ff51;
---:-:-:-:1      FFMA F52, TF51,  rcp6,  ff51;
+--:-:-:-:1      FMUL32I F50, TF50,  1.13777777777778;
+--:-:-:-:1      FFMA F51, TF51, -rcp8,  ff51;
+--:-:-:-:1      FFMA F52, TF51,  rcp8,  ff51;
 --:-:-:-:1      FFMA F53, TF51,  rcp12, ff52;
 --:-:-:-:1      FFMA F54, TF51, -rcp12, ff52;
 //--:-:-:-:1      MOV  F55, TF52;
@@ -1266,29 +1163,29 @@ FILTER_LOOP:
 --:-:-:-:1      IADD.X track1,    track1, RZ;
 <ORDERED>
 [+
-    our ($dtype, $dtype_size, $SK, $K);
+    our ($dtype, $dsize, $SK, $K);
     my %insert = (
         j0c0  => "--:-:-:-:1      LDS.U.128 jl1Fy4, [readFs + 4x<1*32*36 + 16>];\n",
         j0c1  => "--:-:-:-:1      LDS.U.128 jl1Ix0, [readIs + 4x<1*32*36 + 00>];\n",
         j0c15 => "--:-:5:-:1      LDS.U.128 jl1Fy0, [readFs + 4x<1*32*36 + 00>];\n",
 
-        j0c17 => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 0)>], F50;\n",
-        j0c19 => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 1)>], F51;\n",
-        j0c21 => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 2)>], F52;\n",
-        j0c23 => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 3)>], F53;\n",
-        j0c25 => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 4)>], F54;\n",
+        j0c5  => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 0)>], F50;\n",
+        j0c7  => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 1)>], F51;\n",
+        j0c9  => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 2)>], F52;\n",
+        j0c11 => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 3)>], F53;\n",
+        j0c13 => "--:-:-:-:1      STS [writeS + 4x<32*(5*6 + 4)>], F54;\n",
 
-        j1c1  => "--:-:-:-:1  \@P0 LDG.E.CI$dtype f00, [track + ${dtype_size}x<0*3*$K + 0*$K>];\n",
-        j1c2  => "--:-:-:-:1  \@P0 LDG.E.CI$dtype f01, [track + ${dtype_size}x<0*3*$K + 1*$K>];\n",
-        j1c3  => "--:-:1:-:1  \@P0 LDG.E.CI$dtype f02, [track + ${dtype_size}x<0*3*$K + 2*$K>];\n",
+        j1c1  => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype f00, [track + ${dsize}x<0*3*$K + 0*$K>];\n",
+        j1c2  => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype f01, [track + ${dsize}x<0*3*$K + 1*$K>];\n",
+        j1c3  => "--:-:1:-:1  \@P0 LDG.E.CI.$dtype f02, [track + ${dsize}x<0*3*$K + 2*$K>];\n",
 
-        j1c4  => "--:-:-:-:1  \@P0 LDG.E.CI$dtype f10, [track + ${dtype_size}x<1*3*$K + 0*$K>];\n",
-        j1c5  => "--:-:-:-:1  \@P0 LDG.E.CI$dtype f11, [track + ${dtype_size}x<1*3*$K + 1*$K>];\n",
-        j1c6  => "--:-:2:-:1  \@P0 LDG.E.CI$dtype f12, [track + ${dtype_size}x<1*3*$K + 2*$K>];\n",
+        j1c4  => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype f10, [track + ${dsize}x<1*3*$K + 0*$K>];\n",
+        j1c5  => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype f11, [track + ${dsize}x<1*3*$K + 1*$K>];\n",
+        j1c6  => "--:-:2:-:1  \@P0 LDG.E.CI.$dtype f12, [track + ${dsize}x<1*3*$K + 2*$K>];\n",
 
-        j1c7  => "--:-:-:-:1  \@P0 LDG.E.CI$dtype f20, [track + ${dtype_size}x<2*3*$K + 0*$K>];\n",
-        j1c8  => "--:-:-:-:1  \@P0 LDG.E.CI$dtype f21, [track + ${dtype_size}x<2*3*$K + 1*$K>];\n",
-        j1c9  => "--:-:3:-:1  \@P0 LDG.E.CI$dtype f22, [track + ${dtype_size}x<2*3*$K + 2*$K>];\n",
+        j1c7  => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype f20, [track + ${dsize}x<2*3*$K + 0*$K>];\n",
+        j1c8  => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype f21, [track + ${dsize}x<2*3*$K + 1*$K>];\n",
+        j1c9  => "--:-:3:-:1  \@P0 LDG.E.CI.$dtype f22, [track + ${dsize}x<2*3*$K + 2*$K>];\n",
     );
 
     my @cOrder;
@@ -1443,11 +1340,17 @@ COMPUTE_FINISH:
 --:-:4:-:1      LDS idxK, [addr_idx_K];
 <SCHEDULE_BLOCK>
 
---:-:-:-:1      MOV beta,  param_beta;
---:-:-:-:1      MOV flags, param_flags;
-
 --:-:-:-:1      LOP.AND tid_31, tid_128, 31;
 --:-:-:-:1      SHR.U32 tid_32, tid_128,  5;
+
+[+
+    our $bsum; return $bsum ? q{
+03:-:-:-:1      XMAD      bsum_offset, idxX, param_gridN,   idxN;
+04:-:-:-:1      XMAD.LO2C bsum_offset, idxY, param_gridQN,  bsum_offset;
+    } : '';
++]
+
+--:-:-:-:1      MOV32I one, 1.0;
 
 // readCs = tid>>5 * 32*36 + tid & 31
 --:-:-:-:1      XMAD readCs, tid_32, 1x<32*36>, tid_31;
@@ -1457,12 +1360,17 @@ COMPUTE_FINISH:
 --:-:-:-:1      LOP.AND n, tid_31, param_maskN;
 01:-:-:-:1      ISCADD  n, idxN, n, 5;
 
+// Superblock offset
+// idxX <<= shiftX
+// idxX <<= shiftY
+02:-:-:-:1      SHL idxX, idxX, param_shiftX;
+04:-:-:-:1      SHL idxY, idxY, param_shiftY;
+
 // Get this threads offset within the superblock
 --:-:-:-:1      BFE.U32 q, tid_31, param_superX;
 --:-:-:-:1      BFE.U32 p, tid_31, param_superY;
-02:-:-:-:1      ISCADD q, q, idxX, 2;
-04:-:-:-:1      ISCADD p, p, idxY, 2;
-
+--:-:-:-:1      ISCADD q, q, idxX, 2;
+--:-:-:-:1      ISCADD p, p, idxY, 2;
 
 // k = idxK*32 + tid_32<<1
 --:-:-:-:1      SHL tid_32, tid_32,   1;
@@ -1472,15 +1380,13 @@ COMPUTE_FINISH:
 --:-:-:-:1      XMAD      offsetO, q, param_N,    n;
 --:-:-:-:1      XMAD.LO2C offsetO, p, param_QN,   offsetO;
 --:-:-:-:1      XMAD.LO2C offsetO, k, param_PQN,  offsetO;
---:-:-:-:1      LEA      out00.CC, offsetO, param_O[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X out01,    offsetO, param_O[1], RZ, [+ dtype_shift() +];
-
---:-:-:-:1      LOP.AND.Z  P5, RZ, flags, 1;
---:-:-:-:1      ISETP.LT.AND P6, PT, n, param_N, PT;
 
 --:-:-:-:1      IADD z1, q, 1;
 --:-:-:-:1      IADD z2, q, 2;
 --:-:-:-:1      IADD z3, q, 3;
+
+--:-:-:-:1      ISETP.EQ.AND P5, PT, RZ, param_flags, PT; // ! no-op
+--:-:-:-:1      ISETP.LT.AND P6, PT, n, param_N, PT;
 
 --:-:-:-:1      ISETP.LT.AND P0, PT, q,  param_Q, P5;
 --:-:-:-:1      ISETP.LT.AND P1, PT, z1, param_Q, P5;
@@ -1509,28 +1415,12 @@ COMPUTE_FINISH:
 --:-:-:-:1  @P2 BFI preds, mask_q, 0x408, preds;
 --:-:-:-:1  @P3 BFI preds, mask_q, 0x40c, preds;
 
-[+
-    our $bsum;
-    return $bsum ? q{
---:-:-:-:1      ISETP.EQ.AND P5, PT, tid_31, RZ, PT;
---:-:-:-:1      LEA      Sum0.CC, k, param_Sum[0],     2;
---:-:-:-:1      LEA.HI.X Sum1,    k, param_Sum[1], RZ, 2;
-    } : q{
---:-:-:-:1      LOP.AND.NZ P5, RZ, flags, 2;};
-+]
-
+--:-:-:-:1      ISETP.EQ.AND P6, PT, tid_31, RZ, PT;
 </SCHEDULE_BLOCK>
 
 SKIP0:
 
 <SCHEDULE_BLOCK>
---:-:-:-:1      IADD     out10.CC, out00, param_Np;
---:-:-:-:1      IADD.X   out11,    out01, RZ;
---:-:-:-:1      IADD     out20.CC, out10, param_Np;
---:-:-:-:1      IADD.X   out21,    out11, RZ;
---:-:-:-:1      IADD     out30.CC, out20, param_Np;
---:-:-:-:1      IADD.X   out31,    out21, RZ;
-
 --:-:-:-:1      FMUL shuffle_x0y0, ccx0y0, alpha;
 --:-:-:-:1      FMUL shuffle_x1y0, ccx1y0, alpha;
 --:-:-:-:1      FMUL shuffle_x2y0, ccx2y0, alpha;
@@ -1557,20 +1447,8 @@ SKIP0:
 
 --:-:-:-:5  @P4 BRA.U SKIP1;
 --:-:-:-:5      CAL OUTPUT_TRANSFORM;
-10:-:-:-:5      IADD   out00.CC, out00, param_PQN1_QN3p;
 --:-:-:-:1      IADD k, k, 1;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:6      IADD   out10.CC, out10, param_PQN1_QN3p;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:6      IADD   out20.CC, out20, param_PQN1_QN3p;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:6      IADD   out30.CC, out30, param_PQN1_QN3p;
---:-:-:-:1      IADD.X out31,    out31, RZ;
-[+
-    our $bsum; return $bsum ? q{
-01:-:-:-:6      IADD   Sum0.CC, Sum0, 4x<1>;
---:-:-:-:1      IADD.X Sum1,    Sum1, RZ;} : '';
-+]
+--:-:-:-:1      IADD offsetO, offsetO, param_PQN;
 
 SKIP1:
 
@@ -1599,20 +1477,9 @@ SKIP1:
 
 --:-:-:-:5  @P4 BRA.U SKIP2;
 --:-:-:-:5      CAL OUTPUT_TRANSFORM;
-10:-:-:-:5      IADD   out00.CC, out00, param_PQN15_QN3p;
 --:-:-:-:1      IADD k, k, 15;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:6      IADD   out10.CC, out10, param_PQN15_QN3p;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:6      IADD   out20.CC, out20, param_PQN15_QN3p;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:6      IADD   out30.CC, out30, param_PQN15_QN3p;
---:-:-:-:1      IADD.X out31,    out31, RZ;
-[+
-    our $bsum; return $bsum ? q{
-01:-:-:-:6      IADD   Sum0.CC, Sum0, 4x<15>;
---:-:-:-:1      IADD.X Sum1,    Sum1, RZ;} : '';
-+]
+--:-:-:-:1      IADD offsetO, offsetO, param_PQN15;
+
 SKIP2:
 
 --:-:-:-:0      FMUL shuffle_x0y0, ccx0y4, alpha;
@@ -1640,20 +1507,9 @@ SKIP2:
 
 --:-:-:-:5  @P4 BRA.U SKIP3;
 --:-:-:-:5      CAL OUTPUT_TRANSFORM;
-10:-:-:-:5      IADD   out00.CC, out00, param_PQN1_QN3p;
 --:-:-:-:1      IADD k, k, 1;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:6      IADD   out10.CC, out10, param_PQN1_QN3p;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:6      IADD   out20.CC, out20, param_PQN1_QN3p;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:6      IADD   out30.CC, out30, param_PQN1_QN3p;
---:-:-:-:1      IADD.X out31,    out31, RZ;
-[+
-    our $bsum; return $bsum ? q{
-01:-:-:-:6      IADD   Sum0.CC, Sum0, 4x<1>;
---:-:-:-:1      IADD.X Sum1,    Sum1, RZ;} : '';
-+]
+--:-:-:-:1      IADD offsetO, offsetO, param_PQN;
+
 SKIP3:
 
 --:-:-:-:0      FMUL shuffle_x0y0, ccx0y5, alpha;
@@ -1687,7 +1543,19 @@ SKIP4:
 
 OUTPUT_TRANSFORM:
 
---:-:-:-:0      ISETP.LT.AND P6, PT, k, param_K, PT;
+<SCHEDULE_BLOCK>
+11:-:-:-:1      ISETP.LT.AND P5, PT, k, param_K, PT;
+[+
+    our $bias;
+    return $bias ? q{
+--:-:-:-:1      LEA      Sum0.CC, k, param_S[0],     2;
+--:-:-:-:1      LEA.HI.X Sum1,    k, param_S[1], RZ, 2;
+
+--:-:-:-:1 @!P5 MOV bias, RZ;
+--:-:5:-:1  @P5 LDG.E.CI bias, [Sum];
+    } : '';
++]
+</SCHEDULE_BLOCK>
 
 [+
     my $out;
@@ -1714,9 +1582,12 @@ $w:-:-:-:1      FADD t0$i, m1$i,  m2$i;
 --:-:-:-:1      FADD t2$i, m3$i, -m4$i;
 --:-:-:-:1      FADD t3$i, m3$i,  m4$i;
 --:-:-:-:1      FADD w0$i, t0$i,  m0$i;
---:-:-:-:1      FFMA w3$i, t2$i,  8.0, t1$i;
---:-:-:-:1      FFMA w1$i, t2$i,  2.0, t1$i;
---:-:-:-:1      FFMA w2$i, t3$i,  4.0, t0$i;
+--:-:-:-:1      FMUL32I w3$i, t1$i, 0.244140625;
+--:-:-:-:1      FMUL32I w1$i, t1$i, 0.625;
+--:-:-:-:1      FMUL32I temp, t0$i, 0.390625;
+--:-:-:-:1      FFMA w3$i, t2$i,  3.375, w3$i;
+--:-:-:-:1      FFMA w1$i, t2$i,  1.500, w1$i;
+--:-:-:-:1      FFMA w2$i, t3$i,  2.250, temp;
 --:-:-:-:1      FADD w0$i, w0$i,  t3$i;
 --:-:-:-:1      FADD w3$i, w3$i,  m5$i;
 </ORDERED>
@@ -1735,7 +1606,6 @@ $w:-:-:-:1      FADD t0$i, m1$i,  m2$i;
 </SCHEDULE_BLOCK>
 
 <SCHEDULE_BLOCK>
-
 [+
     my $out;
 
@@ -1749,9 +1619,12 @@ $w:-:-:-:1      FADD t0$i, m1$i,  m2$i;
 --:-:-:-:1      FADD t2$i, m3$i, -m4$i;
 --:-:-:-:1      FADD t3$i, m3$i,  m4$i;
 --:-:-:-:1      FADD w0$i, t0$i,  m0$i;
---:-:-:-:1      FFMA w3$i, t2$i,  8.0, t1$i;
---:-:-:-:1      FFMA w1$i, t2$i,  2.0, t1$i;
---:-:-:-:1      FFMA w2$i, t3$i,  4.0, t0$i;
+--:-:-:-:1      FMUL32I w3$i, t1$i, 0.244140625;
+--:-:-:-:1      FMUL32I w1$i, t1$i, 0.625;
+--:-:-:-:1      FMUL32I temp, t0$i, 0.390625;
+--:-:-:-:1      FFMA w3$i, t2$i,  3.375, w3$i;
+--:-:-:-:1      FFMA w1$i, t2$i,  1.500, w1$i;
+--:-:-:-:1      FFMA w2$i, t3$i,  2.250, temp;
 --:-:-:-:1      FADD w0$i, w0$i,  t3$i;
 --:-:-:-:1      FADD w3$i, w3$i,  m5$i;
 </ORDERED>
@@ -1759,23 +1632,15 @@ $w:-:-:-:1      FADD t0$i, m1$i,  m2$i;
     }
     return $out;
 +]
---:-:-:-:1  @P6 R2P PR, preds, 0x0f;
---:-:-:-:1 @!P6 R2P PR, RZ,    0x0f;
+--:-:-:-:1  @P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 @!P5 R2P PR, RZ,    0x0f;
 --:-:-:-:1      SHF.R.U64 preds, preds, 4, preds;
 </SCHEDULE_BLOCK>
 
 <SCHEDULE_BLOCK>
 [+
     my $out;
-    our ($convert_out, $bsum, $beta);
-    if ($bsum)
-    {
-        $out .= q{
---:-:-:-:1      MOV  sum0, RZ;
---:-:-:-:1      MOV  sum1, RZ;
---:-:-:-:1      MOV  sum2, RZ;
---:-:-:-:1      MOV  sum3, RZ;};
-    }
+    our ($convert_out, $bias, $relu);
     foreach my $i (0 .. 3)
     {
         $out .= qq{
@@ -1784,144 +1649,121 @@ $w:-:-:-:1      FADD t0$i, m1$i,  m2$i;
 --:-:-:-:1      FADD r${i}2, w${i}3, -w${i}4;
 --:-:-:-:1      FADD r${i}3, w${i}3,  w${i}4;
 --:-:-:-:1      FADD s${i}0, r${i}0,  w${i}0;
---:-:-:-:1      FFMA s${i}3, r${i}2,  8.0, r${i}1;
---:-:-:-:1      FFMA s${i}1, r${i}2,  2.0, r${i}1;
---:-:-:-:1      FFMA s${i}2, r${i}3,  4.0, r${i}0;
+--:-:-:-:1      FMUL32I s${i}3, r${i}1, 0.244140625;
+--:-:-:-:1      FMUL32I s${i}1, r${i}1, 0.625;
+--:-:-:-:1      FMUL32I temp,   r${i}0, 0.390625;
+--:-:-:-:1      FFMA s${i}3, r${i}2,  3.375, s${i}3;
+--:-:-:-:1      FFMA s${i}1, r${i}2,  1.500, s${i}1;
+--:-:-:-:1      FFMA s${i}2, r${i}3,  2.250, temp;
 --:-:-:-:1      FADD s${i}0, s${i}0,  r${i}3;
---:-:-:-:1      FADD s${i}3, s${i}3,  w${i}5;};
-        if ($bsum)
-        {
-            my ($dir, $amt) = $i == 2 ? ('L','12') : ('R','4');
-            $out .= qq{
---:-:-:-:1  \@P0 FADD sum0, sum0, s${i}0;
---:-:-:-:1  \@P1 FADD sum1, sum1, s${i}1;
---:-:-:-:1  \@P2 FADD sum2, sum2, s${i}2;
---:-:-:-:1  \@P3 FADD sum3, sum3, s${i}3;
---:-:-:-:1  \@P6 R2P PR, preds, 0x0f;
---:-:-:-:1      SHF.$dir.U64 preds, preds, $amt, preds;
---:-:-:-:1 \@!P6 R2P PR, RZ,    0x0f;};
-        }
-        elsif (!$beta)
+--:-:-:-:1      FADD s${i}3, s${i}3,  w${i}5;
+        };
+        if ($bias)
         {
             $out .= qq{
---:-:-:-:1  \@P5 FMNMX s${i}0, s${i}0, RZ, !PT;
---:-:-:-:1  \@P5 FMNMX s${i}1, s${i}1, RZ, !PT;
---:-:-:-:1  \@P5 FMNMX s${i}2, s${i}2, RZ, !PT;
---:-:-:-:1  \@P5 FMNMX s${i}3, s${i}3, RZ, !PT;};
+10:-:-:-:1      FADD s${i}0, s${i}0, bias;
+--:-:-:-:1      FADD s${i}1, s${i}1, bias;
+--:-:-:-:1      FADD s${i}2, s${i}2, bias;
+--:-:-:-:1      FADD s${i}3, s${i}3, bias;};
         }
-        if ($convert_out && !$beta)
+        if ($relu)
         {
-            my $b = $i + 1;
             $out .= qq{
---:-:$b:-:1      F2F.F16.F32 s${i}0, s${i}0;
---:-:$b:-:1      F2F.F16.F32 s${i}1, s${i}1;
---:-:$b:-:1      F2F.F16.F32 s${i}2, s${i}2;
---:-:$b:-:1      F2F.F16.F32 s${i}3, s${i}3;};
+--:-:-:-:1      FMNMX s${i}0, s${i}0, RZ, !PT;
+--:-:-:-:1      FMNMX s${i}1, s${i}1, RZ, !PT;
+--:-:-:-:1      FMNMX s${i}2, s${i}2, RZ, !PT;
+--:-:-:-:1      FMNMX s${i}3, s${i}3, RZ, !PT;};
         }
-    }
-    if ($bsum)
-    {
-        $out .= q{
---:-:-:-:1      FADD sum0, sum0, sum1;
---:-:-:-:1      FADD sum2, sum2, sum3;
---:-:-:-:4      FADD sum0, sum0, sum2;};
     }
     return $out;
 +]
 </SCHEDULE_BLOCK>
-
+<SCHEDULE_BLOCK>
 [+
-    our ($beta, $dtype, $convert_out);
+    our $prelu; my $out;
+    if ($prelu)
+    {
+        foreach my $i (0 .. 3)
+        {
+            $out .= qq{
+// maximum(x, 0) + beta * minimum(0, x)
+--:-:-:-:1      FMNMX b00, s${i}0, RZ, !PT;
+--:-:-:-:1      FMNMX b01, s${i}1, RZ, !PT;
+--:-:-:-:1      FMNMX b02, s${i}2, RZ, !PT;
+--:-:-:-:1      FMNMX b03, s${i}3, RZ, !PT;
+
+--:-:-:-:1      FMNMX b10, s${i}0, RZ, PT;
+--:-:-:-:1      FMNMX b11, s${i}1, RZ, PT;
+--:-:-:-:1      FMNMX b12, s${i}2, RZ, PT;
+--:-:-:-:1      FMNMX b13, s${i}3, RZ, PT;
+
+--:-:-:-:1      FFMA s${i}0, b10, param_beta, b00;
+--:-:-:-:1      FFMA s${i}1, b11, param_beta, b01;
+--:-:-:-:1      FFMA s${i}2, b12, param_beta, b02;
+--:-:-:-:1      FFMA s${i}3, b13, param_beta, b03;
+            };
+        }
+    }
+    return $out;
++]
+</SCHEDULE_BLOCK>
+[+
+    our ($beta, $brelu, $bprelu, $dtype, $dsize, $dshift, $convert_out, $Q, $N);
     my $out;
-    if ($beta)
+    if ($beta || $brelu || $bprelu)
     {
         $out .= qq{
 <SCHEDULE_BLOCK>
-<ORDERED>
+--:-:-:-:1      LEA      Out0.CC, offsetO, param_X[0],     $dshift;
+--:-:-:-:1      LEA.HI.X Out1,    offsetO, param_X[1], RZ, $dshift;
+
+--:-:-:-:1  \@P0 LDG.E.CG.$dtype b00, [Out + ${dsize}x<0*$Q*$N + 0*$N>];
+--:-:-:-:1  \@P1 LDG.E.CG.$dtype b01, [Out + ${dsize}x<0*$Q*$N + 1*$N>];
+--:-:-:-:1  \@P2 LDG.E.CG.$dtype b02, [Out + ${dsize}x<0*$Q*$N + 2*$N>];
+--:-:1:-:1  \@P3 LDG.E.CG.$dtype b03, [Out + ${dsize}x<0*$Q*$N + 3*$N>];
 --:-:-:-:1 \@!P0 MOV b00, RZ;
---:-:-:-:1  \@P0 LDG.E.CG$dtype b00, [out0];
 --:-:-:-:1 \@!P1 MOV b01, RZ;
---:5:-:-:1  \@P1 LDG.E.CG$dtype b01, [out1];
 --:-:-:-:1 \@!P2 MOV b02, RZ;
---:-:-:-:1  \@P2 LDG.E.CG$dtype b02, [out2];
 --:-:-:-:1 \@!P3 MOV b03, RZ;
---:6:1:-:1  \@P3 LDG.E.CG$dtype b03, [out3];
-
-10:-:-:-:1      IADD   out00.CC, out00, param_QNp;
---:-:-:-:1  \@P6 R2P PR, preds, 0x0f;
+--:-:-:-:1  \@P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 \@!P5 R2P PR, RZ,    0x0f;
 --:-:-:-:1      SHF.R.U64 preds, preds, 4, preds;
---:-:-:-:1 \@!P6 R2P PR, RZ,    0x0f;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:1      IADD   out10.CC, out10, param_QNp;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:1      IADD   out20.CC, out20, param_QNp;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:1      IADD   out30.CC, out30, param_QNp;
---:-:-:-:1      IADD.X out31,    out31, RZ;
 
+--:-:-:-:1  \@P0 LDG.E.CG.$dtype b10, [Out + ${dsize}x<1*$Q*$N + 0*$N>];
+--:-:-:-:1  \@P1 LDG.E.CG.$dtype b11, [Out + ${dsize}x<1*$Q*$N + 1*$N>];
+--:-:-:-:1  \@P2 LDG.E.CG.$dtype b12, [Out + ${dsize}x<1*$Q*$N + 2*$N>];
+--:-:2:-:1  \@P3 LDG.E.CG.$dtype b13, [Out + ${dsize}x<1*$Q*$N + 3*$N>];
 --:-:-:-:1 \@!P0 MOV b10, RZ;
---:-:-:-:1  \@P0 LDG.E.CG$dtype b10, [out0];
 --:-:-:-:1 \@!P1 MOV b11, RZ;
---:5:-:-:1  \@P1 LDG.E.CG$dtype b11, [out1];
 --:-:-:-:1 \@!P2 MOV b12, RZ;
---:-:-:-:1  \@P2 LDG.E.CG$dtype b12, [out2];
 --:-:-:-:1 \@!P3 MOV b13, RZ;
---:6:2:-:1  \@P3 LDG.E.CG$dtype b13, [out3];
-
-10:-:-:-:1      IADD   out00.CC, out00, param_QNp;
---:-:-:-:1  \@P6 R2P PR, preds, 0x0f;
+--:-:-:-:1  \@P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 \@!P5 R2P PR, RZ,    0x0f;
 --:-:-:-:1      SHF.R.U64 preds, preds, 4, preds;
---:-:-:-:1 \@!P6 R2P PR, RZ,    0x0f;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:1      IADD   out10.CC, out10, param_QNp;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:1      IADD   out20.CC, out20, param_QNp;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:1      IADD   out30.CC, out30, param_QNp;
---:-:-:-:1      IADD.X out31,    out31, RZ;
 
+--:-:-:-:1  \@P0 LDG.E.CG.$dtype b20, [Out + ${dsize}x<2*$Q*$N + 0*$N>];
+--:-:-:-:1  \@P1 LDG.E.CG.$dtype b21, [Out + ${dsize}x<2*$Q*$N + 1*$N>];
+--:-:-:-:1  \@P2 LDG.E.CG.$dtype b22, [Out + ${dsize}x<2*$Q*$N + 2*$N>];
+--:-:3:-:1  \@P3 LDG.E.CG.$dtype b23, [Out + ${dsize}x<2*$Q*$N + 3*$N>];
 --:-:-:-:1 \@!P0 MOV b20, RZ;
---:-:-:-:1  \@P0 LDG.E.CG$dtype b20, [out0];
 --:-:-:-:1 \@!P1 MOV b21, RZ;
---:5:-:-:1  \@P1 LDG.E.CG$dtype b21, [out1];
 --:-:-:-:1 \@!P2 MOV b22, RZ;
---:-:-:-:1  \@P2 LDG.E.CG$dtype b22, [out2];
 --:-:-:-:1 \@!P3 MOV b23, RZ;
---:6:3:-:1  \@P3 LDG.E.CG$dtype b23, [out3];
-
-10:-:-:-:1      IADD   out00.CC, out00, param_QNp;
---:-:-:-:1  \@P6 R2P PR, preds, 0x0f;
+--:-:-:-:1  \@P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 \@!P5 R2P PR, RZ,    0x0f;
 --:-:-:-:1      SHF.L.U64 preds, preds, 12, preds;
---:-:-:-:1 \@!P6 R2P PR, RZ,    0x0f;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:1      IADD   out10.CC, out10, param_QNp;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:1      IADD   out20.CC, out20, param_QNp;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:1      IADD   out30.CC, out30, param_QNp;
---:-:-:-:1      IADD.X out31,    out31, RZ;
 
+--:-:-:-:1  \@P0 LDG.E.CG.$dtype b30, [Out + ${dsize}x<3*$Q*$N + 0*$N>];
+--:-:-:-:1  \@P1 LDG.E.CG.$dtype b31, [Out + ${dsize}x<3*$Q*$N + 1*$N>];
+--:-:-:-:1  \@P2 LDG.E.CG.$dtype b32, [Out + ${dsize}x<3*$Q*$N + 2*$N>];
+--:-:4:-:1  \@P3 LDG.E.CG.$dtype b33, [Out + ${dsize}x<3*$Q*$N + 3*$N>];
 --:-:-:-:1 \@!P0 MOV b30, RZ;
---:-:-:-:1  \@P0 LDG.E.CG$dtype b30, [out0];
 --:-:-:-:1 \@!P1 MOV b31, RZ;
---:5:-:-:1  \@P1 LDG.E.CG$dtype b31, [out1];
 --:-:-:-:1 \@!P2 MOV b32, RZ;
---:-:-:-:1  \@P2 LDG.E.CG$dtype b32, [out2];
 --:-:-:-:1 \@!P3 MOV b33, RZ;
---:6:4:-:1  \@P3 LDG.E.CG$dtype b33, [out3];
-
-10:-:-:-:1      IADD   out00.CC, out00, -param_QN3p;
---:-:-:-:1  \@P6 R2P PR, preds, 0x0f;
+--:-:-:-:1  \@P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 \@!P5 R2P PR, RZ,    0x0f;
 --:-:-:-:1      SHF.R.U64 preds, preds, 4, preds;
---:-:-:-:1 \@!P6 R2P PR, RZ,    0x0f;
---:-:-:-:1      IADD.X out01,    out01, -RZ;
---:-:-:-:1      IADD   out10.CC, out10, -param_QN3p;
---:-:-:-:1      IADD.X out11,    out11, -RZ;
-20:-:-:-:1      IADD   out20.CC, out20, -param_QN3p;
---:-:-:-:1      IADD.X out21,    out21, -RZ;
---:-:-:-:1      IADD   out30.CC, out30, -param_QN3p;
---:-:-:-:1      IADD.X out31,    out31, -RZ;
-</ORDERED>
 </SCHEDULE_BLOCK>};
 
         if ($convert_out)
@@ -1942,24 +1784,118 @@ $w:-:-:-:1      FADD t0$i, m1$i,  m2$i;
 08:-:-:-:1      F2F.F32.F16 b30, b30;
 --:-:-:-:1      F2F.F32.F16 b31, b31;
 --:-:-:-:1      F2F.F32.F16 b32, b32;
---:-:4:-:1      F2F.F32.F16 b33, b33;
+--:-:4:-:1      F2F.F32.F16 b33, b33;};
+        }
+    }
+    return $out;
++]
+
 <SCHEDULE_BLOCK>
-01:-:-:-:1      FFMA s00, b00, beta, s00;
---:-:-:-:1      FFMA s01, b01, beta, s01;
---:-:-:-:1      FFMA s02, b02, beta, s02;
---:-:-:-:1      FFMA s03, b03, beta, s03;
-02:-:-:-:1      FFMA s10, b10, beta, s10;
---:-:-:-:1      FFMA s11, b11, beta, s11;
---:-:-:-:1      FFMA s12, b12, beta, s12;
---:-:-:-:1      FFMA s13, b13, beta, s13;
-04:-:-:-:1      FFMA s20, b20, beta, s20;
---:-:-:-:1      FFMA s21, b21, beta, s21;
---:-:-:-:1      FFMA s22, b22, beta, s22;
---:-:-:-:1      FFMA s23, b23, beta, s23;
-08:-:-:-:1      FFMA s30, b30, beta, s30;
---:-:-:-:1      FFMA s31, b31, beta, s31;
---:-:-:-:1      FFMA s32, b32, beta, s32;
---:-:-:-:1      FFMA s33, b33, beta, s33;
+[+
+    our $beta; return $beta ? q{
+01:-:-:-:1      FFMA s00, b00, param_beta, s00;
+--:-:-:-:1      FFMA s01, b01, param_beta, s01;
+--:-:-:-:1      FFMA s02, b02, param_beta, s02;
+--:-:-:-:1      FFMA s03, b03, param_beta, s03;
+02:-:-:-:1      FFMA s10, b10, param_beta, s10;
+--:-:-:-:1      FFMA s11, b11, param_beta, s11;
+--:-:-:-:1      FFMA s12, b12, param_beta, s12;
+--:-:-:-:1      FFMA s13, b13, param_beta, s13;
+04:-:-:-:1      FFMA s20, b20, param_beta, s20;
+--:-:-:-:1      FFMA s21, b21, param_beta, s21;
+--:-:-:-:1      FFMA s22, b22, param_beta, s22;
+--:-:-:-:1      FFMA s23, b23, param_beta, s23;
+08:-:-:-:1      FFMA s30, b30, param_beta, s30;
+--:-:-:-:1      FFMA s31, b31, param_beta, s31;
+--:-:-:-:1      FFMA s32, b32, param_beta, s32;
+--:-:-:-:1      FFMA s33, b33, param_beta, s33;} : '';
++]
+[+
+    our ($brelu, $bprelu); my $out;
+    if ($brelu || $bprelu)
+    {
+        foreach my $i (0 .. 3)
+        {
+            my $w = sprintf "%02x", 1 << $i;
+            $out .= $brelu ? qq{
+//delta *= (x > 0)
+$w:-:-:-:1      FSETP.GT.AND P0, PT, b${i}0, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P1, PT, b${i}1, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P2, PT, b${i}2, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P3, PT, b${i}3, RZ, PT;
+--:-:-:-:1 \@!P0 MOV s${i}0, RZ;
+--:-:-:-:1 \@!P1 MOV s${i}1, RZ;
+--:-:-:-:1 \@!P2 MOV s${i}2, RZ;
+--:-:-:-:1 \@!P3 MOV s${i}3, RZ;
+            } : qq{
+//delta *= ((x > 0) + slope * (x < 0))
+$w:-:-:-:1      FSETP.GT.AND P0, PT, b${i}0, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P1, PT, b${i}1, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P2, PT, b${i}2, RZ, PT;
+--:-:-:-:1      FSETP.GT.AND P3, PT, b${i}3, RZ, PT;
+--:-:-:-:1      SEL sum0, one, RZ, P0;
+--:-:-:-:1      SEL sum1, one, RZ, P1;
+--:-:-:-:1      SEL sum2, one, RZ, P2;
+--:-:-:-:1      SEL sum3, one, RZ, P3;
+--:-:-:-:1      FSETP.LT.AND P0, PT, b${i}0, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P1, PT, b${i}1, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P2, PT, b${i}2, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P3, PT, b${i}3, RZ, PT;
+--:-:-:-:1      SEL b${i}0, one, RZ, P0;
+--:-:-:-:1      SEL b${i}1, one, RZ, P1;
+--:-:-:-:1      SEL b${i}2, one, RZ, P2;
+--:-:-:-:1      SEL b${i}3, one, RZ, P3;
+--:-:-:-:1      FFMA b${i}0, b${i}0, param_beta, sum0;
+--:-:-:-:1      FFMA b${i}1, b${i}1, param_beta, sum1;
+--:-:-:-:1      FFMA b${i}2, b${i}2, param_beta, sum2;
+--:-:-:-:1      FFMA b${i}3, b${i}3, param_beta, sum3;
+--:-:-:-:1      FMUL s${i}0, s${i}0, b${i}0;
+--:-:-:-:1      FMUL s${i}1, s${i}1, b${i}1;
+--:-:-:-:1      FMUL s${i}2, s${i}2, b${i}2;
+--:-:-:-:1      FMUL s${i}3, s${i}3, b${i}3;
+            };
+        }
+        $out .= q{
+--:-:-:-:1  @P5 R2P PR, preds, 0x0f;
+--:-:-:-:5 @!P5 R2P PR, RZ, 0x0f;};
+    }
+    return $out;
++]
+[+
+    our $bsum; my $out;
+    if ($bsum)
+    {
+        $out = q{
+--:-:-:-:1      XMAD.LO2C bias, k, param_gridPQN, bsum_offset;
+--:-:-:-:1      LEA      Sum0.CC, bias, param_S[0],     2;
+--:-:-:-:1      LEA.HI.X Sum1,    bias, param_S[1], RZ, 2;
+--:-:-:-:1      MOV  sum0, RZ;
+--:-:-:-:1      MOV  sum1, RZ;
+--:-:-:-:1      MOV  sum2, RZ;
+--:-:-:-:1      MOV  sum3, RZ;};
+        foreach my $i (0 .. 3)
+        {
+            my ($dir, $amt) = $i == 2 ? ('L','12') : ('R','4');
+            $out .= qq{
+--:-:-:-:1  \@P0 FADD sum0, sum0, s${i}0;
+--:-:-:-:1  \@P1 FADD sum1, sum1, s${i}1;
+--:-:-:-:1  \@P2 FADD sum2, sum2, s${i}2;
+--:-:-:-:1  \@P3 FADD sum3, sum3, s${i}3;
+--:-:-:-:1  \@P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 \@!P5 R2P PR, RZ,    0x0f;
+--:-:-:-:1      SHF.$dir.U64 preds, preds, $amt, preds;};
+        }
+        $out .= q{
+--:-:-:-:1      FADD sum0, sum0, sum1;
+--:-:-:-:1      FADD sum2, sum2, sum3;
+--:-:-:-:1      FADD sum0, sum0, sum2;};
+    }
+    return $out;
++]
+</SCHEDULE_BLOCK>
+
+[+
+    our $convert_out; return $convert_out ? q{
 --:-:-:-:1      F2F.F16.F32 s00, s00;
 --:-:-:-:1      F2F.F16.F32 s01, s01;
 --:-:-:-:1      F2F.F16.F32 s02, s02;
@@ -1975,119 +1911,98 @@ $w:-:-:-:1      FADD t0$i, m1$i,  m2$i;
 --:-:-:-:1      F2F.F16.F32 s30, s30;
 --:-:-:-:1      F2F.F16.F32 s31, s31;
 --:-:-:-:1      F2F.F16.F32 s32, s32;
---:-:4:-:1      F2F.F16.F32 s33, s33;
-</SCHEDULE_BLOCK>};
-        }
-        else
-        {
-            $out .= q{
-01:-:-:-:1  @P0 FFMA s00, b00, beta, s00;
---:-:-:-:1  @P1 FFMA s01, b01, beta, s01;
---:-:-:-:1  @P2 FFMA s02, b02, beta, s02;
---:-:-:-:0  @P3 FFMA s03, b03, beta, s03;};
-        }
-    }
-    return $out;
+--:-:4:-:1      F2F.F16.F32 s33, s33;} : '';
 +]
 
-01:-:-:-:1  @P0 STG.E.CG[+ dtype() +] [out0], s00;
---:5:-:-:1  @P1 STG.E.CG[+ dtype() +] [out1], s01;
---:-:-:-:1  @P2 STG.E.CG[+ dtype() +] [out2], s02;
---:6:-:-:1  @P3 STG.E.CG[+ dtype() +] [out3], s03;
-
-[+ our $bsum; return $bsum ? q{--:-:1:-:1      SHFL.BFLY PT, sum1, sum0, 1, 0x1f;} : ''; +]
-
-10:-:-:-:1      IADD   out00.CC, out00, param_QNp;
---:-:-:-:1  @P6 R2P PR, preds, 0x0f;
---:-:-:-:1      SHF.R.U64 preds, preds, 4, preds;
---:-:-:-:3 @!P6 R2P PR, RZ,    0x0f;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:6      IADD   out10.CC, out10, param_QNp;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:6      IADD   out20.CC, out20, param_QNp;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:6      IADD   out30.CC, out30, param_QNp;
---:-:-:-:1      IADD.X out31,    out31, RZ;
-
-[+ our $bsum; return $bsum ? q{01:-:-:-:0      FADD sum0, sum1, sum0;} : ''; +]
 [+
-    our ($beta, $convert_out);
-    return $beta && !$convert_out ? q{
-02:-:-:-:1  @P0 FFMA s10, b10, beta, s10;
---:-:-:-:1  @P1 FFMA s11, b11, beta, s11;
---:-:-:-:1  @P2 FFMA s12, b12, beta, s12;
---:-:-:-:0  @P3 FFMA s13, b13, beta, s13;} : '';
-+]
-02:-:-:-:1  @P0 STG.E.CG[+ dtype() +] [out0], s10;
---:5:-:-:1  @P1 STG.E.CG[+ dtype() +] [out1], s11;
---:-:-:-:1  @P2 STG.E.CG[+ dtype() +] [out2], s12;
---:6:-:-:1  @P3 STG.E.CG[+ dtype() +] [out3], s13;
+    our ($bsum, $dtype, $dsize, $dshift, $Q, $N);
+    return $bsum ? qq{
+--:-:-:Y:6      LEA      Out0.CC, offsetO, param_O[0],     $dshift;
+--:-:-:-:0      LEA.HI.X Out1,    offsetO, param_O[1], RZ, $dshift;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0,  1, 0x1f;
+01:-:-:-:1  \@P0 STG.E.CG.$dtype [Out + ${dsize}x<0*$Q*$N + 0*$N>], s00;
+--:-:-:-:1  \@P1 STG.E.CG.$dtype [Out + ${dsize}x<0*$Q*$N + 1*$N>], s01;
+--:-:-:-:1  \@P2 STG.E.CG.$dtype [Out + ${dsize}x<0*$Q*$N + 2*$N>], s02;
+--:-:-:-:1  \@P3 STG.E.CG.$dtype [Out + ${dsize}x<0*$Q*$N + 3*$N>], s03;
+--:-:-:-:2  \@P5 R2P PR, preds, 0x0f;
+--:-:-:Y:7 \@!P5 R2P PR, RZ, 0x0f;
 
-[+ our $bsum; return $bsum ? q{--:-:1:-:1      SHFL.BFLY PT, sum1, sum0, 2, 0x1f;} : ''; +]
+10:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:-:-:0      SHF.R.U64 preds, preds, 4, preds;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0, 2, 0x1f;
 
-10:-:-:-:1      IADD   out00.CC, out00, param_QNp;
---:-:-:-:1  @P6 R2P PR, preds, 0x0f;
+02:-:-:-:1  \@P0 STG.E.CG.$dtype [Out + ${dsize}x<1*$Q*$N + 0*$N>], s10;
+--:-:-:-:1  \@P1 STG.E.CG.$dtype [Out + ${dsize}x<1*$Q*$N + 1*$N>], s11;
+--:-:-:-:1  \@P2 STG.E.CG.$dtype [Out + ${dsize}x<1*$Q*$N + 2*$N>], s12;
+--:-:-:-:1  \@P3 STG.E.CG.$dtype [Out + ${dsize}x<1*$Q*$N + 3*$N>], s13;
+--:-:-:-:2  \@P5 R2P PR, preds, 0x0f;
+--:-:-:Y:7 \@!P5 R2P PR, RZ, 0x0f;
+
+10:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:-:-:0      SHF.R.U64 preds, preds, 4, preds;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0, 4, 0x1f;
+
+04:-:-:-:1  \@P0 STG.E.CG.$dtype [Out + ${dsize}x<2*$Q*$N + 0*$N>], s20;
+--:-:-:-:1  \@P1 STG.E.CG.$dtype [Out + ${dsize}x<2*$Q*$N + 1*$N>], s21;
+--:-:-:-:1  \@P2 STG.E.CG.$dtype [Out + ${dsize}x<2*$Q*$N + 2*$N>], s22;
+--:-:-:-:1  \@P3 STG.E.CG.$dtype [Out + ${dsize}x<2*$Q*$N + 3*$N>], s23;
+--:-:-:-:2  \@P5 R2P PR, preds, 0x0f;
+--:-:-:Y:7 \@!P5 R2P PR, RZ, 0x0f;
+
+10:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:-:-:0      SHF.L.U64 preds, preds, 12, preds;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0, 8, 0x1f;
+
+08:-:-:-:1  \@P0 STG.E.CG.$dtype [Out + ${dsize}x<3*$Q*$N + 0*$N>], s30;
+--:-:-:-:1  \@P1 STG.E.CG.$dtype [Out + ${dsize}x<3*$Q*$N + 1*$N>], s31;
+--:-:-:-:1  \@P2 STG.E.CG.$dtype [Out + ${dsize}x<3*$Q*$N + 2*$N>], s32;
+--:1:-:-:1  \@P3 STG.E.CG.$dtype [Out + ${dsize}x<3*$Q*$N + 3*$N>], s33;
+
+10:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:-:-:0      PSETP.AND.AND P5, PT, P5, P6, PT; // k < K && tid31 == 0
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0, 16, 0x1f;
+10:-:-:-:2      FADD sum0, sum1, sum0;
+--:5:-:-:1  \@P5 STG.E.CG [Sum], sum0;
+    } : qq{
+<SCHEDULE_BLOCK>
+<ORDERED>
+--:-:-:-:1      LEA      Out0.CC, offsetO, param_O[0],     $dshift;
+--:-:-:-:1      LEA.HI.X Out1,    offsetO, param_O[1], RZ, $dshift;
+
+01:-:-:-:1  \@P0 STG.E.CG.$dtype [Out + ${dsize}x<0*$Q*$N + 0*$N>], s00;
+--:-:-:-:1  \@P1 STG.E.CG.$dtype [Out + ${dsize}x<0*$Q*$N + 1*$N>], s01;
+--:-:-:-:1  \@P2 STG.E.CG.$dtype [Out + ${dsize}x<0*$Q*$N + 2*$N>], s02;
+--:-:-:-:1  \@P3 STG.E.CG.$dtype [Out + ${dsize}x<0*$Q*$N + 3*$N>], s03;
+
+--:-:-:-:1  \@P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 \@!P5 R2P PR, RZ,    0x0f;
 --:-:-:-:1      SHF.R.U64 preds, preds, 4, preds;
---:-:-:-:3 @!P6 R2P PR, RZ,    0x0f;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:6      IADD   out10.CC, out10, param_QNp;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:6      IADD   out20.CC, out20, param_QNp;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:6      IADD   out30.CC, out30, param_QNp;
---:-:-:-:1      IADD.X out31,    out31, RZ;
 
-[+ our $bsum; return $bsum ? q{01:-:-:-:0      FADD sum0, sum1, sum0;} : ''; +]
-[+
-    our ($beta, $convert_out);
-    return $beta && !$convert_out ? q{
-04:-:-:-:1  @P0 FFMA s20, b20, beta, s20;
---:-:-:-:1  @P1 FFMA s21, b21, beta, s21;
---:-:-:-:1  @P2 FFMA s22, b22, beta, s22;
---:-:-:-:0  @P3 FFMA s23, b23, beta, s23;} : '';
-+]
-04:-:-:-:1  @P0 STG.E.CG[+ dtype() +] [out0], s20;
---:5:-:-:1  @P1 STG.E.CG[+ dtype() +] [out1], s21;
---:-:-:-:1  @P2 STG.E.CG[+ dtype() +] [out2], s22;
---:6:-:-:1  @P3 STG.E.CG[+ dtype() +] [out3], s23;
+02:-:-:-:1  \@P0 STG.E.CG.$dtype [Out + ${dsize}x<1*$Q*$N + 0*$N>], s10;
+--:-:-:-:1  \@P1 STG.E.CG.$dtype [Out + ${dsize}x<1*$Q*$N + 1*$N>], s11;
+--:-:-:-:1  \@P2 STG.E.CG.$dtype [Out + ${dsize}x<1*$Q*$N + 2*$N>], s12;
+--:-:-:-:1  \@P3 STG.E.CG.$dtype [Out + ${dsize}x<1*$Q*$N + 3*$N>], s13;
 
-[+ our $bsum; return $bsum ? q{--:-:1:-:1      SHFL.BFLY PT, sum1, sum0, 4, 0x1f;} : ''; +]
+--:-:-:-:1  \@P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 \@!P5 R2P PR, RZ,    0x0f;
+--:-:-:-:1      SHF.R.U64 preds, preds, 4, preds;
 
-10:-:-:-:1      IADD   out00.CC, out00, param_QNp;
---:-:-:-:1  @P6 R2P PR, preds, 0x0f;
+04:-:-:-:1  \@P0 STG.E.CG.$dtype [Out + ${dsize}x<2*$Q*$N + 0*$N>], s20;
+--:-:-:-:1  \@P1 STG.E.CG.$dtype [Out + ${dsize}x<2*$Q*$N + 1*$N>], s21;
+--:-:-:-:1  \@P2 STG.E.CG.$dtype [Out + ${dsize}x<2*$Q*$N + 2*$N>], s22;
+--:-:-:-:1  \@P3 STG.E.CG.$dtype [Out + ${dsize}x<2*$Q*$N + 3*$N>], s23;
+
+--:-:-:-:1  \@P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 \@!P5 R2P PR, RZ,    0x0f;
 --:-:-:-:1      SHF.L.U64 preds, preds, 12, preds;
---:-:-:-:3 @!P6 R2P PR, RZ,    0x0f;
---:-:-:-:1      IADD.X out01,    out01, RZ;
---:-:-:-:6      IADD   out10.CC, out10, param_QNp;
---:-:-:-:1      IADD.X out11,    out11, RZ;
-20:-:-:-:6      IADD   out20.CC, out20, param_QNp;
---:-:-:-:1      IADD.X out21,    out21, RZ;
---:-:-:-:6      IADD   out30.CC, out30, param_QNp;
---:-:-:-:1      IADD.X out31,    out31, RZ;
 
-[+ our $bsum; return $bsum ? q{01:-:-:-:0      FADD sum0, sum1, sum0;} : ''; +]
-[+
-    our ($beta, $convert_out);
-    return $beta && !$convert_out ? q{
-08:-:-:-:1  @P0 FFMA s30, b30, beta, s30;
---:-:-:-:1  @P1 FFMA s31, b31, beta, s31;
---:-:-:-:1  @P2 FFMA s32, b32, beta, s32;
---:-:-:-:0  @P3 FFMA s33, b33, beta, s33;} : '';
+08:-:-:-:1  \@P0 STG.E.CG.$dtype [Out + ${dsize}x<3*$Q*$N + 0*$N>], s30;
+--:-:-:-:1  \@P1 STG.E.CG.$dtype [Out + ${dsize}x<3*$Q*$N + 1*$N>], s31;
+--:-:-:-:1  \@P2 STG.E.CG.$dtype [Out + ${dsize}x<3*$Q*$N + 2*$N>], s32;
+--:1:-:-:1  \@P3 STG.E.CG.$dtype [Out + ${dsize}x<3*$Q*$N + 3*$N>], s33;
+</ORDERED>
+</SCHEDULE_BLOCK>
+    };
 +]
-08:-:-:-:1  @P0 STG.E.CG[+ dtype() +] [out0], s30;
---:5:-:-:1  @P1 STG.E.CG[+ dtype() +] [out1], s31;
---:-:-:-:1  @P2 STG.E.CG[+ dtype() +] [out2], s32;
---:6:-:-:1  @P3 STG.E.CG[+ dtype() +] [out3], s33;
-
-[+ our $bsum; return $bsum ? q{
---:-:-:-:0      PSETP.AND.AND P0, PT, P5, P6, PT;
---:-:1:-:2      SHFL.BFLY PT, sum1, sum0,  8, 0x1f;
-01:-:-:-:4      FADD sum0, sum1, sum0;
---:-:1:-:2      SHFL.BFLY PT, sum1, sum0, 16, 0x1f;
-01:-:-:-:2      FADD sum0, sum1, sum0;
-
-// bsum && k < K && tid31 == 0
---:1:-:-:1  @P0 RED.E.ADD.F32.FTZ.RN [Sum], sum0;} : '';
- +]
 
 --:-:-:-:5      RET;

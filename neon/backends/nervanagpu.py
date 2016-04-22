@@ -784,6 +784,9 @@ class NervanaGPU(Backend):
         if not os.path.isdir(self.cache_dir):
             os.makedirs(self.cache_dir)
 
+    def scratch_buffer_init(self):
+        self.scratch_offset = 0
+
     def scratch_buffer(self, size):
 
         if size & 127 != 0:
@@ -805,8 +808,8 @@ class NervanaGPU(Backend):
 
         if size + self.scratch_offset > self.scratch_size:
             raise RuntimeError(
-                "nervanagpu.scratch_size(%d) is too small for this operation(%d)" % (
-                    self.scratch_size, size))
+                "nervanagpu.scratch_size(%d) is too small for this operation(%d, %d)" % (
+                    self.scratch_size, size, self.scratch_offset))
 
         data = int(_get_scratch_data(self.scratch_size)) + self.scratch_offset
         self.scratch_offset += size
@@ -1404,7 +1407,8 @@ class NervanaGPU(Backend):
 
         if A.is_trans:
             opA = 't'
-            lda *= 8 * A.dtype.itemsize  # saves a kernel register
+            if size not in ("32x64", "16x64"):
+                lda *= 8 * A.dtype.itemsize  # saves a kernel register
         else:
             opA = 'n'
 
@@ -1412,7 +1416,8 @@ class NervanaGPU(Backend):
             opB = 't'
         else:
             opB = 'n'
-            ldb *= 8 * B.dtype.itemsize  # saves a kernel register
+            if size not in ("32x64", "16x64"):
+                ldb *= 8 * B.dtype.itemsize  # saves a kernel register
 
         op = opA + opB
         assert op != "tt"
@@ -1482,7 +1487,7 @@ class NervanaGPU(Backend):
         gridA = m // sizeA + (m % sizeA != 0)
         gridB = n // sizeB + (n % sizeB != 0)
 
-        k_vec = 8 if sizeA == 32 or sizeB == 32 else 16
+        k_vec = 8 if sizeA in (16,32) or sizeB == 32 else 16
 
         if (op == "tn" and m % 4 == 0 and n % 4 == 0 or
             op == "nn" and k % k_vec == 0 and n % 4 == 0 or
@@ -1530,7 +1535,7 @@ class NervanaGPU(Backend):
             print("%7.3f msecs %4.0f gflops (%s_%s: %d,%d,%d) size:%s grid:(%d,%d)" %
                  (msecs, gflops, clss, op, m, n, k, size, gridA, gridB))
             if repeat > 1:
-                return gflops
+                return msecs, gflops
         if bsum is not None:
             bsum[:] = self.sum(C, 1)
         return C
@@ -2214,7 +2219,7 @@ class NervanaGPU(Backend):
                           gamma, eps, threads=None, repeat=1):
         """
         Function to perform batch normalization forward pass.
-   
+
         Arguments:
             delta_out (Tensor): Delta buffer (where to write the output deltas)
             grad_gamma (Tensor): Gradient w.r.t. gamma

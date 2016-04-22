@@ -15,7 +15,7 @@
 # limitations under the License.
 
 import numpy as np
-from ipdb import set_trace
+#from ipdb import set_trace
 from struct import pack, unpack
 
 def ceil_div(x, y):
@@ -151,94 +151,135 @@ quarter = np.float(0.25)
 
 def trans_I_2x2_3x3(Iw, I, minimal=False):
     if minimal:
-        A0 = I[0,0] - I[2,0]
-        A1 = I[0,1] - I[2,1]
-        A2 = I[0,2] - I[2,2]
-        A3 = I[0,3] - I[2,3]
-        B0 = I[1,0] + I[2,0]
-        B1 = I[1,1] + I[2,1]
-        B2 = I[1,2] + I[2,2]
-        B3 = I[1,3] + I[2,3]
-        C0 = I[2,0] - I[1,0]
-        C1 = I[2,1] - I[1,1]
-        C2 = I[2,2] - I[1,2]
-        C3 = I[2,3] - I[1,3]
-        D0 = I[1,0] - I[3,0]
-        D1 = I[1,1] - I[3,1]
-        D2 = I[1,2] - I[3,2]
-        D3 = I[1,3] - I[3,3]
-        Iw[0,0] = A0 - A2
-        Iw[0,1] = A1 + A2
-        Iw[0,2] = A2 - A1
-        Iw[0,3] = A1 - A3
-        Iw[1,0] = B0 - B2
-        Iw[1,1] = B1 + B2
-        Iw[1,2] = B2 - B1
-        Iw[1,3] = B1 - B3
-        Iw[2,0] = C0 - C2
-        Iw[2,1] = C1 + C2
-        Iw[2,2] = C2 - C1
-        Iw[2,3] = C1 - C3
-        Iw[3,0] = D0 - D2
-        Iw[3,1] = D1 + D2
-        Iw[3,2] = D2 - D1
-        Iw[3,3] = D1 - D3
+
+        T0 = np.empty((4,4))
+        T1 = np.empty((4,4))
+
+        for O, I in ((T0, I), (T1, T0.T)):
+
+            O[0,:] = I[0,:] - I[2,:]
+            O[1,:] = I[1,:] + I[2,:]
+            O[2,:] = I[2,:] - I[1,:]
+            O[3,:] = I[1,:] - I[3,:]
+
+        Iw[:] = T1.T
+
+        # TI00 = I[0,0] - I[2,0]
+        # TI01 = I[0,1] - I[2,1]
+        # TI02 = I[0,2] - I[2,2]
+        # TI03 = I[0,3] - I[2,3]
+        # TI30 = I[1,0] - I[3,0]
+        # TI31 = I[1,1] - I[3,1]
+        # TI32 = I[1,2] - I[3,2]
+        # TI33 = I[1,3] - I[3,3]
+        # TI10 = I[1,0] + I[2,0]
+        # TI11 = I[1,1] + I[2,1]
+        # TI12 = I[1,2] + I[2,2]
+        # TI13 = I[1,3] + I[2,3]
+        # TI20 = I[2,0] - I[1,0]
+        # TI21 = I[2,1] - I[1,1]
+        # TI22 = I[2,2] - I[1,2]
+        # TI23 = I[2,3] - I[1,3]
+
+        # Iw[0,0] = TI00 - TI02
+        # Iw[0,3] = TI01 - TI03
+        # Iw[3,0] = TI30 - TI32
+        # Iw[3,3] = TI31 - TI33
+        # Iw[1,0] = TI10 - TI12
+        # Iw[2,0] = TI20 - TI22
+        # Iw[1,3] = TI11 - TI13
+        # Iw[2,3] = TI21 - TI23
+        # Iw[2,1] = TI21 + TI22
+        # Iw[2,2] = TI22 - TI21
+        # Iw[0,1] = TI01 + TI02
+        # Iw[0,2] = TI02 - TI01
+        # Iw[1,1] = TI11 + TI12
+        # Iw[1,2] = TI12 - TI11
+        # Iw[3,1] = TI31 + TI32
+        # Iw[3,2] = TI32 - TI31
+
     else:
         Iw[:] = np.dot( np.dot(I_2x2_3x3, I), I_2x2_3x3.T )
 
 def trans_F_2x2_3x3(Fw, F, minimal=False):
     if minimal:
-        x0  = half*F[0,1]
-        x1  = F[0,0] + F[0,2]
-        x2  = F[2,0] + F[2,2]
-        x8  = half*F[2,1]
-        x10 = x1 + x2
-        x5  = F[0,1] + F[2,1]
-        x7  = F[1,0] + F[1,2]
-        x9  = quarter*F[1,1]
-        x11 = x10 + x5
-        x14 = x10 - x5
-        x13 = quarter*x7 + x9
-        x15 = quarter*x7 - x9
-        x3  = half*F[1,0]
-        x4  = half*F[1,2]
-        x6  = F[0,0] + F[2,0]
-        x12 = F[0,2] + F[2,2]
-        Fw[0,1] = half*x1 + x0
-        Fw[0,2] = half*x1 - x0
-        Fw[0,0] = F[0,0]
-        Fw[0,3] = F[0,2]
-        Fw[3,0] = F[2,0]
-        Fw[3,1] = half*x2 + x8
-        Fw[3,2] = half*x2 - x8
-        Fw[3,3] = F[2,2]
-        Fw[1,1] = quarter*x11 + x13
-        Fw[2,1] = quarter*x11 - x13
-        Fw[1,2] = quarter*x14 + x15
-        Fw[2,2] = quarter*x14 - x15
-        Fw[1,0] = half*x6  + x3
-        Fw[1,3] = half*x12 + x4
-        Fw[2,0] = half*x6  - x3
-        Fw[2,3] = half*x12 - x4
+
+        T0 = np.empty((4,3))
+        T1 = np.empty((4,4))
+
+        for O, I in ((T0, F), (T1, T0.T)):
+
+            t0 = (I[0,:] + I[2,:])*0.5
+
+            O[0,:] = I[0,:]
+            O[1,:] = t0 + I[1,:]*0.5
+            O[2,:] = t0 - I[1,:]*0.5
+            O[3,:] = I[2,:]
+
+        Fw[:] = T1.T
+
+        # TF00 = F[0,0]
+        # TF01 = F[0,1]
+        # TF02 = F[0,2]
+        # TF30 = F[2,0]
+        # TF31 = F[2,1]
+        # TF32 = F[2,2]
+        # Fw[0,0] = TF00
+        # Fw[0,3] = TF02
+        # Fw[3,0] = TF30
+        # Fw[3,3] = TF32
+        # tb0 = TF00 + TF02
+        # tb3 = TF30 + TF32
+        # ta0 = F[0,0] + F[2,0]
+        # ta1 = F[0,1] + F[2,1]
+        # ta2 = F[0,2] + F[2,2]
+        # tb0 = tb0 * 0.5
+        # tb3 = tb3 * 0.5
+        # ta0 = ta0 * 0.5
+        # ta1 = ta1 * 0.5
+        # ta2 = ta2 * 0.5
+        # Fw[0,1] = tb0 + TF01*0.5
+        # Fw[0,2] = tb0 - TF01*0.5
+        # Fw[3,1] = tb3 + TF31*0.5
+        # Fw[3,2] = tb3 - TF31*0.5
+        # TF10 = ta0 + F[1,0]*0.5
+        # TF20 = ta0 - F[1,0]*0.5
+        # TF11 = ta1 + F[1,1]*0.5
+        # TF21 = ta1 - F[1,1]*0.5
+        # TF12 = ta2 + F[1,2]*0.5
+        # TF22 = ta2 - F[1,2]*0.5
+        # Fw[1,0] = TF10
+        # Fw[2,0] = TF20
+        # Fw[1,3] = TF12
+        # Fw[2,3] = TF22
+        # tb1 = TF10 + TF12
+        # tb2 = TF20 + TF22
+        # tb1 = tb1 * 0.5
+        # tb2 = tb2 * 0.5
+        # Fw[1,1] = tb1 + TF11*0.5
+        # Fw[1,2] = tb1 - TF11*0.5
+        # Fw[2,1] = tb2 + TF21*0.5
+        # Fw[2,2] = tb2 - TF21*0.5
+
     else:
         Fw[:] = np.dot( np.dot(F_2x2_3x3, F), F_2x2_3x3.T )
 
 def trans_O_2x2_3x3(Mw, minimal=False):
     if minimal:
-        O = np.empty((2,2), dtype=Mw.dtype)
-        t00 = Mw[0,0] + Mw[0,1] + Mw[0,2]
-        t01 = Mw[0,1] - Mw[0,2] - Mw[0,3]
-        t10 = Mw[1,0] + Mw[1,1] + Mw[1,2]
-        t11 = Mw[1,1] - Mw[1,2] - Mw[1,3]
-        t20 = Mw[2,0] + Mw[2,1] + Mw[2,2]
-        t21 = Mw[2,1] - Mw[2,2] - Mw[2,3]
-        t30 = Mw[3,0] + Mw[3,1] + Mw[3,2]
-        t31 = Mw[3,1] - Mw[3,2] - Mw[3,3]
-        O[0,0] = t00 + t10 + t20;
-        O[0,1] = t01 + t11 + t21;
-        O[1,0] = t10 - t20 - t30;
-        O[1,1] = t11 - t21 - t31;
-        return O
+
+        T0 = np.empty((2,4))
+        T1 = np.empty((2,2))
+
+        for O, I in ((T0, Mw), (T1, T0.T)):
+
+            t0 = I[0,:] + I[1,:]
+            t1 = I[1,:] - I[2,:]
+
+            O[0,:] = t0 + I[2,:]
+            O[1,:] = t1 - I[3,:]
+
+        return T1.T
+
     else:
         return np.dot( np.dot(O_2x2_3x3, Mw), O_2x2_3x3.T )
 
@@ -260,96 +301,80 @@ O_3x3_2x2 = np.array([
 
 def trans_I_3x3_2x2(Iw, I, minimal=False):
     if minimal:
-        A0 = I[0,0] - I[2,0]
-        A1 = I[0,1] - I[2,1]
-        A2 = I[0,2] - I[2,2]
-        A3 = I[0,3] - I[2,3]
-        B0 = I[1,0] + I[2,0]
-        B1 = I[1,1] + I[2,1]
-        B2 = I[1,2] + I[2,2]
-        B3 = I[1,3] + I[2,3]
-        C0 = I[2,0] - I[1,0]
-        C1 = I[2,1] - I[1,1]
-        C2 = I[2,2] - I[1,2]
-        C3 = I[2,3] - I[1,3]
-        D0 = I[3,0] - I[1,0]
-        D1 = I[3,1] - I[1,1]
-        D2 = I[3,2] - I[1,2]
-        D3 = I[3,3] - I[1,3]
-        Iw[0,0] = A0 - A2
-        Iw[0,1] = A1 + A2
-        Iw[0,2] = A2 - A1
-        Iw[0,3] = A3 - A1
-        Iw[1,0] = B0 - B2
-        Iw[1,1] = B1 + B2
-        Iw[1,2] = B2 - B1
-        Iw[1,3] = B3 - B1
-        Iw[2,0] = C0 - C2
-        Iw[2,1] = C1 + C2
-        Iw[2,2] = C2 - C1
-        Iw[2,3] = C3 - C1
-        Iw[3,0] = D0 - D2
-        Iw[3,1] = D1 + D2
-        Iw[3,2] = D2 - D1
-        Iw[3,3] = D3 - D1
+
+        T0 = np.empty((4,4))
+        T1 = np.empty((4,4))
+
+        for O, I in ((T0, I), (T1, T0.T)):
+
+            O[0,:] = I[0,:] - I[2,:]
+            O[1,:] = I[1,:] + I[2,:]
+            O[2,:] = I[2,:] - I[1,:]
+            O[3,:] = I[3,:] - I[1,:]
+
+        Iw[:] = T1.T
+
     else:
         Iw[:] = np.dot( np.dot(I_3x3_2x2, I), I_3x3_2x2.T )
 
 def trans_F_3x3_2x2(Fw, F, minimal=False):
     if minimal:
-        x0  =  half*F[0,0]
-        x1  =  half*F[1,1]
-        B0  =  half*F[1,0] + x0
-        B1  =  half*F[0,1] + x1
-        C0  = -half*F[1,0] + x0
-        C1  =  half*F[0,1] - x1
-        x2  =  half*B0
-        x3  =  half*C0
-        Fw[0,0] =  F[0,0]
-        Fw[0,1] =  half*F[0,1] + x0
-        Fw[0,2] = -half*F[0,1] + x0
-        Fw[0,3] =  F[0,1]
-        Fw[3,0] =  F[1,0]
-        Fw[3,1] =  half*F[1,0] + x1
-        Fw[3,2] =  half*F[1,0] - x1
-        Fw[3,3] =  F[1,1]
-        Fw[1,0] =  B0
-        Fw[1,1] =  half*B1 + x2
-        Fw[1,2] = -half*B1 + x2
-        Fw[1,3] =  B1
-        Fw[2,0] =  C0
-        Fw[2,1] =  half*C1 + x3
-        Fw[2,2] = -half*C1 + x3
-        Fw[2,3] =  C1
+
+        T0 = np.empty((4,2))
+        T1 = np.empty((4,4))
+
+        for O, I in ((T0, F), (T1, T0.T)):
+
+            O[0,:] =  I[0,:]
+            O[1,:] = (I[0,:] + I[1,:])*0.5
+            O[2,:] = (I[0,:] - I[1,:])*0.5
+            O[3,:] =  I[1,:]
+
+        Fw[:] = T1.T
+
+        # x0  =  half*F[0,0]
+        # x1  =  half*F[1,1]
+        # B0  =  half*F[1,0] + x0
+        # B1  =  half*F[0,1] + x1
+        # C0  = -half*F[1,0] + x0
+        # C1  =  half*F[0,1] - x1
+        # x2  =  half*B0
+        # x3  =  half*C0
+        # Fw[0,0] =  F[0,0]
+        # Fw[0,1] =  half*F[0,1] + x0
+        # Fw[0,2] = -half*F[0,1] + x0
+        # Fw[0,3] =  F[0,1]
+        # Fw[3,0] =  F[1,0]
+        # Fw[3,1] =  half*F[1,0] + x1
+        # Fw[3,2] =  half*F[1,0] - x1
+        # Fw[3,3] =  F[1,1]
+        # Fw[1,0] =  B0
+        # Fw[1,1] =  half*B1 + x2
+        # Fw[1,2] = -half*B1 + x2
+        # Fw[1,3] =  B1
+        # Fw[2,0] =  C0
+        # Fw[2,1] =  half*C1 + x3
+        # Fw[2,2] = -half*C1 + x3
+        # Fw[2,3] =  C1
     else:
         Fw[:] = np.dot( np.dot(F_3x3_2x2, F), F_3x3_2x2.T )
 
 def trans_O_3x3_2x2(Mw, minimal=False):
 
     if minimal:
-        O   = np.empty((3,3), dtype=Mw.dtype)
-        t00 = Mw[0,0] + Mw[1,0] + Mw[2,0]
-        t01 = Mw[0,1] + Mw[1,1] + Mw[2,1]
-        t02 = Mw[0,2] + Mw[1,2] + Mw[2,2]
-        t03 = Mw[0,3] + Mw[1,3] + Mw[2,3]
-        t10 = Mw[1,0] - Mw[2,0]
-        t11 = Mw[1,1] - Mw[2,1]
-        t12 = Mw[1,2] - Mw[2,2]
-        t13 = Mw[1,3] - Mw[2,3]
-        t20 = Mw[1,0] + Mw[2,0] + Mw[3,0]
-        t21 = Mw[1,1] + Mw[2,1] + Mw[3,1]
-        t22 = Mw[1,2] + Mw[2,2] + Mw[3,2]
-        t23 = Mw[1,3] + Mw[2,3] + Mw[3,3]
-        O[0,0] = t00 + t01 + t02
-        O[0,1] = t01 - t02
-        O[0,2] = t01 + t02 + t03
-        O[1,0] = t10 + t11 + t12
-        O[1,1] = t11 - t12
-        O[1,2] = t11 + t12 + t13
-        O[2,0] = t20 + t21 + t22
-        O[2,1] = t21 - t22
-        O[2,2] = t21 + t22 + t23
-        return O
+
+        T0 = np.empty((3,4))
+        T1 = np.empty((3,3))
+
+        for O, I in ((T0, Mw), (T1, T0.T)):
+
+            t0 = I[1,:] + I[2,:]
+
+            O[0,:] = t0 + I[0,:]
+            O[1,:] = I[1,:] - I[2,:]
+            O[2,:] = t0 + I[3,:]
+
+        return T1.T
     else:
         return np.dot( np.dot(O_3x3_2x2, Mw), O_3x3_2x2.T )
 
@@ -514,10 +539,10 @@ def updat_winograd(I, E, U, padding, minimal=False, inner=False):
 
 np.set_printoptions(threshold=8192*4, linewidth=600, formatter={'float':lambda x: "%6.3f" % x})
 
-minimal = 0
+minimal = 1
 ones = 0
-N    = 4
-C, K = 1024, 32
+N    = 32
+C, K = 32, 32
 Y, X = 4, 4
 R, S = 3, 3     # Fixed winograd dim
 strides = 1, 1  # Fixed winograd dim

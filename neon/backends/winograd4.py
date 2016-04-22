@@ -419,9 +419,19 @@ def trans_O_4x4_3x3(Mw, minimal=False, trans=False):
             t3 = I[3,:] - I[4,:]
 
             O[0,:] = t0 + t1  + I[0,:]
-            O[1,:] = t2*0.700 + t3*1.500
-            O[2,:] = t0*0.490 + t1*2.250
-            O[3,:] = t2*0.343 + t3*3.375 + I[5,:]
+            O[1,:] = t2*0.625       + t3*1.500
+            O[2,:] = t0*0.390625    + t1*2.250
+            O[3,:] = t2*0.244140625 + t3*3.375 + I[5,:]
+
+            # t0 = I[1,:] + I[2,:]
+            # t1 = I[3,:] + I[4,:]
+            # t2 = I[1,:] - I[2,:]
+            # t3 = I[3,:] - I[4,:]
+
+            # O[0,:] = t0 + t1  + I[0,:]
+            # O[1,:] = t2*0.700 + t3*1.500
+            # O[2,:] = t0*0.490 + t1*2.250
+            # O[3,:] = t2*0.343 + t3*3.375 + I[5,:]
 
             #t0 =  I[1,:] + I[2,:]
             #t1 =  I[3,:] + I[4,:]
@@ -756,10 +766,10 @@ def updat_winograd(I, E, U, padding, minimal=False, trans=False, inner=True):
 
 ### Test Code ###
 
-np.set_printoptions(threshold=8192*4, linewidth=600, formatter={'float':lambda x: "%4.0f" % x})
+np.set_printoptions(threshold=8192*4, linewidth=600, formatter={'float':lambda x: "%6.3f" % x})
 
 minimal = 0
-trans = (5,5)
+trans = (4,4)
 ones = 0
 N    = 32
 C, K = 32, 32
@@ -782,9 +792,9 @@ if ones:
     F  = np.ones(dimF)
     E  = np.ones(dimO)
 
-    for c in range(2):
-        for n in range(32):
-            I[c,:,:,n] = np.arange(0,36, dtype=np.float32).reshape(6,6)
+    # for c in range(2):
+    #     for n in range(32):
+    #         I[c,:,:,n] = np.arange(0,36, dtype=np.float32).reshape(6,6)
 
 
     # for p,q in np.ndindex((Y,X)):
@@ -841,3 +851,4 @@ print abs(difU).max()/Ud.max()
 # print Ud[0,:,:,0]
 # print Uw[0,:,:,0]
 # print difU[0,:,:,0]
+

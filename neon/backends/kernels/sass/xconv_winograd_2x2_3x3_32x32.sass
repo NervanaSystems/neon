@@ -1,5 +1,5 @@
 
-# Copyright 2015 Nervana Systems Inc. All rights reserved.
+# Copyright 2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -15,66 +15,67 @@
 
 [-
 our $type;
-our $dtype        = $type eq 'h' ?        '.U16' :    '';
-our $convert_in   = $type eq 'h' ? 'F2F.F32.F16' :    '';
-our $convert_out  = $type eq 'h' ? 'F2F.F16.F32' :    '';
-our $dtype_shift  = $type eq 'h' ?           '1' :   '2';
-our $dtype_size   = $type eq 'h' ?           '2' :   '4';
-our $vec_size     = $type eq 'h' ?          '64' : '128';
-sub dtype       { return $dtype;       }
-sub dtype_shift { return $dtype_shift; }
+our $dtype  = $type eq 'h' ?  'U16' :  '32';
+our $dshift = $type eq 'h' ?    '1' :   '2';
+our $dsize  = $type eq 'h' ?    '2' :   '4';
+our $vsize  = $type eq 'h' ?   '64' : '128';
+
+sub dtype  { return $dtype;  }
+sub dsize  { return $dsize;  }
+sub dshift { return $dshift; }
+
+our $convert_in  = $type eq 'h' ? 'F2F.F32.F16' : '';
+our $convert_out = $type eq 'h' ? 'F2F.F16.F32' : '';
 -]
 
 <CONSTANT_MAPPING>
-    param_Sum[0]       : c[0x0][0x140]
-    param_Sum[1]       : c[0x0][0x144]
-    param_O[0]         : c[0x0][0x148]
-    param_O[1]         : c[0x0][0x14c]
-    param_I[0]         : c[0x0][0x150]
-    param_I[1]         : c[0x0][0x154]
-    param_F[0]         : c[0x0][0x158]
-    param_F[1]         : c[0x0][0x15c]
-    param_alpha        : c[0x0][0x160]
-    param_beta         : c[0x0][0x164]
-    param_flags        : c[0x0][0x168]
-    param_K            : c[0x0][0x16c]
-    param_C            : c[0x0][0x170]
-    param_Y            : c[0x0][0x174]
-    param_X            : c[0x0][0x178]
-    param_N            : c[0x0][0x17c]
-    param_P            : c[0x0][0x180]
-    param_Q            : c[0x0][0x184]
-    param_XN           : c[0x0][0x188]
-    param_YXN          : c[0x0][0x18c]
-    param_RSK          : c[0x0][0x190]
+    param_S[0]         : c[0x0][0x140]
+    param_S[1]         : c[0x0][0x144]
+    param_X[0]         : c[0x0][0x148]
+    param_X[1]         : c[0x0][0x14c]
+    param_O[0]         : c[0x0][0x150]
+    param_O[1]         : c[0x0][0x154]
+    param_I[0]         : c[0x0][0x158]
+    param_I[1]         : c[0x0][0x15c]
+    param_F[0]         : c[0x0][0x160]
+    param_F[1]         : c[0x0][0x164]
+    param_alpha        : c[0x0][0x168]
+    param_beta         : c[0x0][0x16c]
+    param_flags        : c[0x0][0x170]
+    param_C            : c[0x0][0x174]
+    param_H            : c[0x0][0x178]
+    param_P            : c[0x0][0x17c]
+    param_pad_h        : c[0x0][0x180]
+    param_pad_w        : c[0x0][0x184]
+    param_HWN          : c[0x0][0x188]
+    param_WN           : c[0x0][0x18c]
+    param_PQN          : c[0x0][0x190]
     param_QN           : c[0x0][0x194]
-    param_PQN          : c[0x0][0x198]
-    param_shiftY       : c[0x0][0x19c]
-    param_shiftX       : c[0x0][0x1a0]
-    param_shiftN       : c[0x0][0x1a4]
-    param_superY       : c[0x0][0x1a8]
-    param_superX       : c[0x0][0x1ac]
-    param_gridX        : c[0x0][0x1b0]
-    param_gridK        : c[0x0][0x1b4]
-    param_Y2           : c[0x0][0x1b8]
-    param_YXGK         : c[0x0][0x1bc]
-    param_X2GK         : c[0x0][0x1c0]
-    param_groupK       : c[0x0][0x1c4]
-    param_magic_YXGK   : c[0x0][0x1c8]
-    param_shift_YXGK   : c[0x0][0x1cc]
-    param_magic_X2GK   : c[0x0][0x1d0]
-    param_shift_X2GK   : c[0x0][0x1d4]
-    param_magic_groupK : c[0x0][0x1d8]
-    param_shift_groupK : c[0x0][0x1dc]
-    param_2XNp         : c[0x0][0x1e0]
-    param_XNp          : c[0x0][0x1e4]
-    param_4YXN_n3XNp   : c[0x0][0x1e8]
-    param_2SKp         : c[0x0][0x1ec]
-    param_SKp          : c[0x0][0x1f0]
-    param_4RSK_nSKp    : c[0x0][0x1f4]
-    param_4C_batchKp   : c[0x0][0x1f8]
-    param_pad_y        : c[0x0][0x1fc]
-    param_pad_x        : c[0x0][0x200]
+    param_Qnk          : c[0x0][0x198]
+    param_nk           : c[0x0][0x19c]
+    param_n            : c[0x0][0x1a0]
+    param_k            : c[0x0][0x1a4]
+    param_magic_Qnk    : c[0x0][0x1a8]
+    param_shift_Qnk    : c[0x0][0x1ac]
+    param_magic_nk     : c[0x0][0x1b0]
+    param_shift_nk     : c[0x0][0x1b4]
+    param_magic_k      : c[0x0][0x1b8]
+    param_shift_k      : c[0x0][0x1bc]
+    param_RSK          : c[0x0][0x1c0]
+    param_4RSKp        : c[0x0][0x1c4]
+    param_4HWNp        : c[0x0][0x1c8]
+    param_gridK        : c[0x0][0x1cc]
+    param_gridP2       : c[0x0][0x1d0]
+    param_gridQ        : c[0x0][0x1d4]
+    param_gridN        : c[0x0][0x1d8]
+    param_gridQN       : c[0x0][0x1dc]
+    param_gridPQN      : c[0x0][0x1e0]
+    param_superP       : c[0x0][0x1e4]
+    param_superQ       : c[0x0][0x1e8]
+    param_superN       : c[0x0][0x1ec]
+    param_shiftP       : c[0x0][0x1f0]
+    param_shiftQ       : c[0x0][0x1f4]
+    param_shiftN       : c[0x0][0x1f8]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -90,116 +91,192 @@ sub dtype_shift { return $dtype_shift; }
     33,32,41,40,49,48,57,56 : cx<0-7>y6
     37,36,45,44,53,52,61,60 : cx<0-7>y7
 
+      64-79 : j0Ix<0-7>, j0Fy<0-7>
+      80-95 : j1Ix<0-7>, j1Fy<0-7>
+
+      64-79 ~ tid, idx_P, idx_Q, idx_N, idx_K, idx_n, idx_k, tid16, tid31, c, addr_zero, partialC
+     80-119 ~ tid1, idx_PQnk, idx_Qnk, idx_nk, magic_Qnk, neg_Qnk, neg_nk, neg_k, div<1-3>, idx_P2, idx_Q2, z<1-2>, negOne, super_P, super_Q
+      80-95 ~ super_N, y, x, ti, ti_sign, x<1-3>, mask_x, preds1, offsetIC
+      80-95 ~ tf, tid31_4, offsetFC
+
+    120-121 : track<0-1>
+    122-127 ~ writeS, readFs, readIs, C, preds, idx_nkpq
+
+      80-95 ~ p, q, n, tid32, q2, p2, to, superP, superQ, superN
+      96-99 : Out<0-1>, Sum<0-1>
+    100-121 ~ alpha, one, writeCs, readCs, k, PQN8, tid_31, out_offset, bsum_offset
+
       64-95 : shuffle_x<0-7>y0, shuffle_x<0-7>y1, shuffle_x<0-7>y2, shuffle_x<0-7>y3
       64-95 : shuffle_x<0-7>y4, shuffle_x<0-7>y5, shuffle_x<0-7>y6, shuffle_x<0-7>y7
 
       64-79 : m0<0-3>, m1<0-3>, m2<0-3>, m3<0-3>
-      80-95 : t0<0-1>, t1<0-1>, t2<0-1>, t3<0-1>, s0<0-1>, s1<0-1>
+      80-95 : t0<0-1>, t1<0-1>, t2<0-1>, t3<0-1>
 
-      64-79 : j0Ix<0-7>, j0Fy<0-7>
-      80-95 : j1Ix<0-7>, j1Fy<0-7>
 
-      64-65 : grid_y, grid_x
+       0-31 ~ b<00|01|10|11>, x<00|01|10|11>, sum<0|1>, s0<0-1>, s1<0-1>
 
-      66-71 ~ c, partialC, y2, tid31, addr_zero
 
-      72-95 ~ blkKYX, tid16, tid1, magic_YXGK, magic_X2GK, negYXGK, negX2GK, div<1-3>, group_k
 
-      72-95 ~ n, x, y, X, N, ti, ti_sign, mask_xlo, mask_xhi, mask_y<0-3>, pred_bits1, offsetIC, nXN
-
-    104-119 : super_x, super_y, shift_n, mask_n, mask_x, mask_y, x<1-3>
-
-      72-95 ~ k, tf<0-2>, offsetFCp, tid31_4
-
-     96-103 : track0<0-1>, track1<0-1>, track2<0-1>, track3<0-1>
-
-    120-127 ~ writeS, readFs, readIs, C, pred_bits, tid, k32, grid_yx
-
-      66-95 ~ p, q, tid_32, tid_16, q2, p2, to0<0-1>, to1<0-1>, nn, shift_nn, mask_nn
-     96-105 : Out00_<0-1>, Out01_<0-1>, Out10_<0-1>, Out11_<0-1>, Sum<0-1>
-    106-119 ~ alpha, beta, flags, writeCs, readCs, kk, PQN8, tid_31
-
-       0-31 ~ b00, b01, b10, b11, sum0, sum1
-
-    // Image registers (registers assigned to avoid bank conflicts)
-    104 = y0x0, Y0X0, I00, Y1X0
-    105 = y0x1, Y0X1, I02, Y1X2
-    106 = y0x2, Y0X2, I13
-    107 = y0x3, Y0X3, I03, Y1X3
-    108 = y1x0, I04
-    110 = y1x1, I05
-    109 = y1x2, I06
-    111 = y1x3, I07
-    113 = y2x0, Y2X0, I08
-    112 = y2x1, Y2X1
-    119 = y2x2, Y2X2, I10
-    117 = y2x3, Y2X3, I11
-    115 = y3x0, Y3X0, I12
-    116 = y3x1, Y3X1, I14
-    114 = y3x2, Y3X2, I09
-    118 = y3x3, Y3X3, I15
-    80  = I01
-    64  = Y1X1
-
+        // Image registers (registers assigned to avoid bank conflicts)
+         96 = i00
+         97 = i01
+         98 = i02
+         99 = i03
+        100 = i30
+        101 = i31
+        102 = i32
+        103 = i33
+        105 = i13
+        104 = i12
+        107 = i11
+        106 = i10
+        108 = i23, TI23, I23
+        109 = i22, TI22
+        110 = i21, TI21
+        111 = i20, TI20, I20
+        113 = TI00, I00, TI10, I10, I21, I01
+        112 = TI01, I11
+        115 = TI02, I12
+        114 = TI03, I03, TI11, I31
+        116 = TI30, I30, TI12, I32
+        117 = TI31
+        118 = TI32
+        119 = TI33, I33, TI13, I13, I22, I02
     // Filter registers
 [+
     our $FX;
     return $FX ? q{
     104-119 : F0<0-3>, F1<0-3>, F2<0-3>, F3<0-3>
     } : q{
-    104 = r0s0,   F00
-    105 = r0s1,   temp07, temp15, F10
-    106 = r0s2,   F03
-    107 = r1s0,   temp03, F08
-    108 = r1s1,   temp09, F05
-    109 = r1s2,   temp04, F11
-    110 = r2s0,   F12
-    111 = r2s1,   temp11, F09
-    112 = r2s2,   F15
-    113 = temp00, F02
-    114 = temp01, temp10, temp14, temp06, temp12
-    115 = F01
-    116 = temp02, temp05, temp13, F06
-    117 = temp08, F14
-    118 = F13
-    119 = F04
-    64  = F07
+         96 = f00, TF00, F00
+         97 = f01, TF01
+         98 = f02, TF02, F03
+         99 = f10
+        100 = f11
+        101 = f12
+        102 = f20, TF30, F30
+        103 = f21, TF31
+        104 = f22, TF32, F33
+        105 = tb3, F32
+        106 = tb0, F02
+        107 = ta2, TF22, F23
+        108 = ta0, TF20, F20
+        109 = ta1, TF21
+        110 = F01
+        111 = F31
+        112 = TF10, F10
+        113 = TF11
+        114 = TF12, F13
+        115 = tb1, F12
+        116 = tb2, F22
+        117 = F11
+        118 = F21
     };
 +]
 </REGISTER_MAPPING>
 
---:-:-:-:0      MOV C,      param_C;
---:-:1:-:1      S2R tid,    SR_TID.X;
---:-:2:-:1      S2R blkKYX, SR_CTAID.X;
-
+--:-:1:-:1      S2R tid,      SR_TID.X;
+--:-:2:-:1      S2R idx_PQnk, SR_CTAID.X;
 <SCHEDULE_BLOCK>
 01:-:-:-:1      ISETP.GE.AND P0, PT, tid, 128, PT;
+
+--:-:-:-:1      LOP.AND tid31, tid, 31;
 
 // c = (tid & 127) / 32
 --:-:-:-:1      BFE.U32 c, tid, 0x205; // 2 bits at position 5
 
---:-:-:-:1      SHL  addr_zero, c, 11;
+--:-:-:-:1      SHL addr_zero, tid31, 4;
+--:-:-:-:1      ISCADD addr_zero, c, addr_zero, 11;
 --:-:-:-:1  @P0 IADD addr_zero, addr_zero, 4x<512*4>;
 
---:-:-:-:1      STS.128 [addr_zero], RZ;
+--:-:-:-:1      STS.128 [addr_zero + 4x<00*4>], RZ;
+--:-:-:-:1      STS.128 [addr_zero + 4x<32*4>], RZ;
+--:-:-:-:1      STS.128 [addr_zero + 4x<64*4>], RZ;
+--:-:-:-:1      STS.128 [addr_zero + 4x<96*4>], RZ;
+
 [+ join '', map sprintf("--:-:-:-:1      LDS.U.128 czero%02d, [addr_zero];\n", $_ * 4), 0..15; +]
+
+
+// idx_P2 = idx_PQnk / blk_Qnk
+--:-:-:-:1      MOV  magic_Qnk, param_magic_Qnk;
+--:-:-:-:1      ISETP.NE.AND P1, PT,  magic_Qnk, 1, PT;
+02:-:-:-:1  @P1 XMAD     div1, idx_PQnk,    magic_Qnk,    RZ;
+--:-:-:-:1  @P1 XMAD     div2, idx_PQnk,    magic_Qnk.H1, RZ;
+--:-:-:-:1  @P1 XMAD     div3, idx_PQnk.H1, magic_Qnk.H1, RZ;
+--:-:-:-:1  @P1 XMAD.CHI div1, idx_PQnk.H1, magic_Qnk,    div1;
+--:-:-:-:1  @P1 IADD3.RS idx_P2, div1, div2, div3;
+--:-:-:-:1  @P1 SHR.U32  idx_P2, idx_P2,   param_shift_Qnk;
+--:-:-:-:1 @!P1 SHR.U32  idx_P2, idx_PQnk, param_shift_Qnk;
+
+// idx_Qnk = idx_PQnk % blk_Qnk
+--:-:-:-:1      IADD neg_Qnk, RZ, -param_Qnk;
+--:-:-:-:1      XMAD.LO2 idx_Qnk, neg_Qnk, idx_P2, idx_PQnk;
+
+// idx_Q2  = idx_Qnk / nk
+--:-:-:-:1      XMAD.LO2C idx_Q2, idx_Qnk, param_magic_nk, RZ;
+--:-:-:-:1      SHR.U32   idx_Q2, idx_Q2,  param_shift_nk;
+// idx_nk = idx_Qnk % nk
+--:-:-:-:1      IADD neg_nk, RZ, -param_nk;
+--:-:-:-:1      XMAD.S16.U16  idx_nk, neg_nk, idx_Q2, idx_Qnk;
+
+// idx_n = idx_nk / k
+--:-:-:-:1      XMAD    idx_n,  idx_nk, param_magic_k, RZ;
+--:-:-:-:1      SHR.U32 idx_n,  idx_n,  param_shift_k;
+// idx_k = idx_nk % k
+--:-:-:-:1      IADD neg_k, RZ, -param_k;
+--:-:-:-:1      XMAD.S16.U16 idx_k, neg_k, idx_n, idx_nk;
+
+// Implement a square wave block id remapping (for all but last row (if odd number of rows))
+// idx_P = idx_P2 * 2
+// idx_Q = idx_Q2
+// if idx_P2 != gridP2:
+//     idx_P += (idx_Q2 & 1) ^ ((idx_Q2 & 2)>>1)
+//     idx_Q  = idx_Q2 >> 1
+--:-:-:-:1      ISETP.NE.AND P1, PT, idx_P2, param_gridP2, PT;
+--:-:-:-:1      SHL idx_P, idx_P2, 1;
+--:-:-:-:1  @P1 LOP.AND z1, idx_Q2, 1;
+--:-:-:-:1  @P1 BFE.U32 z2, idx_Q2, 0x101; // 1 bit at position 1
+--:-:-:-:1  @P1 LOP.XOR z1, z1, z2;
+--:-:-:-:1  @P1 IADD idx_P, idx_P, z1;
+--:-:-:-:1  @P1 SHR.U32 idx_Q, idx_Q2, 1;
+--:-:-:-:1 @!P1 MOV idx_Q, idx_Q2;
+
+// Scan backwards on odd rows
+// if idx_P2 & 1:
+//     idx_Q = gridQ - idx_Q - 1
+--:-:-:-:1      LOP.AND.NZ P2, RZ, idx_P2, 1;
+--:-:-:-:1      MOV negOne, -1;
+--:-:-:-:1  @P2 IADD3 idx_Q, -idx_Q, param_gridQ, negOne;
+
+--:-:-:-:1      BFI idx_nkpq, idx_P, 0x0c0c, idx_Q;
+--:-:-:-:1      BFI idx_nkpq, idx_k, 0x0418, idx_nkpq;
+--:-:-:-:1      BFI idx_nkpq, idx_n, 0x041c, idx_nkpq;
+
+// x = grid_x << shiftX
+// y = grid_y << shiftY
+--:-:-:-:1      SHL idx_P, idx_P, param_shiftP;
+--:-:-:-:1      SHL idx_Q, idx_Q, param_shiftQ;
+
+// Distribute the 8|4|2|1 blocks of the super block among 4|8|16|32 threads each of the warp
+--:-:-:-:1      BFE.U32 super_P, tid, param_superP;
+--:-:-:-:1      BFE.U32 super_Q, tid, param_superQ;
+--:-:-:-:1      ISCADD idx_P, super_P,  idx_P, 1;
+--:-:-:-:1      ISCADD idx_Q, super_Q,  idx_Q, 1;
 
 // If this value is not a multiple of 4 we want to grab the partial amount on the first fetch.
 // If it is a multiple of 4 then make a full 4 line fetch.
+--:-:-:-:1      MOV C, param_C;
 --:-:-:-:1      LOP.AND.Z P6, partialC, C, 3;
+--:-:-:-:1 @!P6 IADD3 C, C, 4, -partialC;
 --:-:-:-:1  @P6 MOV partialC, 4;
-// P1 = tidY < partial &&
+// P6 = c < partialC
 --:-:-:-:1      ISETP.LT.AND P6, PT, c, partialC, PT;
 
---:-:-:-:1      IADD C, C, -partialC;
-
-// writeS = c*512 + tid & 31
---:-:-:-:1      LOP.AND tid31, tid, 31;
 [+
-    our $FX;
-    return $FX ? '' : q{
+    our $FX; return $FX ? '' : q{
+// writeS = c*512 + tid & 31
 --:-:-:-:1      ISCADD writeS, c, tid31, 9;
---:-:-:-:1      SHL writeS, writeS, 2;
+--:-:-:-:1      ISCADD writeS, writeS, 4x<512*4*2>, 2;
     }
 +]
 
@@ -217,87 +294,12 @@ sub dtype_shift { return $dtype_shift; }
 --:-:-:-:1      SHR.U32  readFs, readFs, 2;
 --:-:-:-:1      LOP3.LUT readFs, readFs, tid16, tid1, 0xfe;
 --:-:-:-:1      ISCADD   readFs, readFs, 4x<512*4>, 4;
-
---:-:-:-:1      MOV  magic_YXGK, param_magic_YXGK;
---:-:-:-:1      MOV  magic_X2GK, param_magic_X2GK;
---:-:-:-:1      IADD negYXGK,    RZ, -param_YXGK;
---:-:-:-:1      IADD negX2GK,    RZ, -param_X2GK;
-
---:-:-:-:1      ISETP.NE.AND P1, PT, magic_YXGK, 1, PT;
---:-:-:-:1      ISETP.NE.AND P2, PT, magic_X2GK, 1, PT;
-
-// group_k = blkKYX / YXGK
-02:-:-:-:1  @P1 XMAD     div1, blkKYX,    magic_YXGK,    RZ;
---:-:-:-:1  @P1 XMAD     div2, blkKYX,    magic_YXGK.H1, RZ;
---:-:-:-:1  @P1 XMAD     div3, blkKYX.H1, magic_YXGK.H1, RZ;
---:-:-:-:1  @P1 XMAD.CHI div1, blkKYX.H1, magic_YXGK,    div1;
---:-:-:-:1  @P1 IADD3.RS group_k, div1, div2, div3;
---:-:-:-:1  @P1 SHR.U32  group_k, group_k, param_shift_YXGK;
---:-:-:-:1 @!P1 SHR.U32  group_k, blkKYX,  param_shift_YXGK;
-
-// blkKYX = blkKYX % YXGK
---:-:-:-:1      XMAD.LO2 blkKYX, negYXGK, group_k, blkKYX;
-
-// y2 = blkKYX / X2GK
---:-:-:-:1  @P2 XMAD     div1, blkKYX,    magic_X2GK,    RZ;
---:-:-:-:1  @P2 XMAD     div2, blkKYX,    magic_X2GK.H1, RZ;
---:-:-:-:1  @P2 XMAD     div3, blkKYX.H1, magic_X2GK.H1, RZ;
---:-:-:-:1  @P2 XMAD.CHI div1, blkKYX.H1, magic_X2GK,    div1;
---:-:-:-:1  @P2 IADD3.RS y2, div1, div2, div3;
---:-:-:-:1  @P2 SHR.U32  y2, y2,      param_shift_X2GK;
---:-:-:-:1 @!P2 SHR.U32  y2, blkKYX,  param_shift_X2GK;
-
-// blkKYX = blkKYX % X2GK
---:-:-:-:1      XMAD.LO2 blkKYX, negX2GK, y2, blkKYX;
-
-// grid_x = blkKYX / groupK
-// k32    = blkKYX % groupK
---:-:-:-:1      XMAD    grid_x, blkKYX, param_magic_groupK, RZ;
---:-:-:-:1      SHR.U32 grid_x, grid_x, param_shift_groupK;
---:-:-:-:1      XMAD  k32, grid_x, param_groupK, RZ;
---:-:-:-:1      IADD  k32, -k32, blkKYX;
-
-// k32 += group_k*groupK
---:-:-:-:1      XMAD k32, group_k, param_groupK, k32;
-
-// grid_y = y2 * 2
---:-:-:-:1      SHL grid_y, y2, 1;
-
-// Implement a square wave block id remapping (for all but last row (if odd number of rows))
-// if y2 != Y2:
-//     grid_y += (grid_x&1) ^ ((grid_x&2)>>1)
-//     grid_x /= 2
---:-:-:-:1      ISETP.NE.AND P3, PT, y2, param_Y2, PT;
---:-:-:-:1  @P3 LOP.AND x1, grid_x, 1;
---:-:-:-:1  @P3 BFE.U32 x2, grid_x, 0x101; // 1 bit at position 1
---:-:-:-:1  @P3 LOP.XOR x1, x1, x2;
---:-:-:-:1  @P3 IADD grid_y, grid_y, x1;
---:-:-:-:1  @P3 SHR.U32 grid_x, grid_x, 1;
-
-// Scan backwards on odd rows
-// if y2 & 1:
-//     grid_x = gridX - grid_x - 1
---:-:-:-:1      LOP.AND.NZ P4, RZ, y2, 1;
---:-:-:-:1  @P4 IADD grid_x, -grid_x,  param_gridX;
---:-:-:-:1  @P4 IADD grid_x,  grid_x, -1;
-
-// x = grid_x << shiftX
-// y = grid_y << shiftY
---:-:-:-:1      SHL grid_x, grid_x, param_shiftX;
---:-:-:-:1      SHL grid_y, grid_y, param_shiftY;
-
-// Distribute the 8|4|2|1 blocks of the super block among 4|8|16|32 threads each of the warp
---:-:-:-:1      BFE.U32 super_x, tid, param_superX;
---:-:-:-:1      BFE.U32 super_y, tid, param_superY;
---:-:-:-:1      ISCADD grid_x, super_x,  grid_x, 1;
---:-:-:-:1      ISCADD grid_y, super_y,  grid_y, 1;
-
---:-:-:-:0      BFI grid_yx, grid_y, 0x1010, grid_x;
 </SCHEDULE_BLOCK>
 
 --:-:-:-:5  @P0 BRA.U FILTER_SETUP;
 
---:-:1:-:1      S2R n, SR_CTAID.Y;
+--:-:1:-:2      S2R idx_N, SR_CTAID.Z;
+
 
 <SCHEDULE_BLOCK>
 
@@ -306,47 +308,39 @@ sub dtype_shift { return $dtype_shift; }
     our $FX;
     return $FX ? q{
 --:-:-:-:1      ISCADD writeS, c, tid31, 9;
---:-:-:-:1      SHL writeS, writeS, 2;
+--:-:-:-:1      ISCADD writeS, writeS, 4x<512*4*2>, 2;
     } : '';
 +]
 
-// n = (n * 4|8|16|32) + (tid & 3|7|15|31)
---:-:-:-:1      MOV  mask_n, -1;
---:-:-:-:1      SHL  mask_n, mask_n, param_shiftN;
---:-:-:-:1      LOP.AND mask_n, tid, ~mask_n;
-01:-:-:-:1      SHL  n, n, param_shiftN;
---:-:-:-:1      IADD n, n, mask_n;
+--:-:-:-:1      LOP.AND super_N, tid, param_superN;
+
+01:-:-:-:1      XMAD idx_N, idx_N, param_n, idx_n;
+--:-:-:-:1      SHL  idx_N, idx_N, param_shiftN;
+--:-:-:-:1      IADD idx_N, idx_N, super_N;
 
 // n < N
---:-:-:-:1      ISETP.LT.AND P5, PT, n, param_N, PT;
+--:-:-:-:1      ISETP.LT.AND P5, PT, idx_N, 1x<$N>, PT;
 
 // Subtract off the padding
---:-:-:-:1      IADD x, grid_x, -param_pad_x;
---:-:-:-:1      IADD y, grid_y, -param_pad_y;
+--:-:-:-:1      IADD y, idx_P, -param_pad_h;
+--:-:-:-:1      IADD x, idx_Q, -param_pad_w;
 
 // a0 = n + x*N + y*XN + c*YXN
---:-:-:-:1      XMAD.S16.U16      ti, x,  param_N,   n;
---:-:-:-:1      XMAD.S16.U16.LO2C ti, y,  param_XN,  ti;
---:-:-:-:1      XMAD.S16.U16.LO2C ti, c,  param_YXN, ti;
+--:-:-:-:1      XMAD.S16.U16      ti, x,  1x<$N>,    idx_N;
+--:-:-:-:1      XMAD.S16.U16.LO2C ti, y,  param_WN,  ti;
+--:-:-:-:1      XMAD.S16.U16.LO2C ti, c,  param_HWN, ti;
 --:-:-:-:1      ISET.LT.AND ti_sign, ti, RZ, PT;
---:-:-:-:1      MOV    N, param_N;
---:-:-:-:1      LEA    track00.CC, ti,      param_I[0], [+ dtype_shift() +];
---:-:-:-:1      IADD.X track01,    ti_sign, param_I[1];
---:-:-:-:1      LEA    track10.CC, N,  track00, [+ dtype_shift() +];
---:-:-:-:1      IADD.X track11,    RZ, track01;
---:-:-:-:1      LEA    track20.CC, N,  track10, [+ dtype_shift() +];
---:-:-:-:1      IADD.X track21,    RZ, track11;
---:-:-:-:1      LEA    track30.CC, N,  track20, [+ dtype_shift() +];
---:-:-:-:1      IADD.X track31,    RZ, track21;
+--:-:-:-:1      LEA    track0.CC, ti,      param_I[0], [+ dshift() +];
+--:-:-:-:1      IADD.X track1,    ti_sign, param_I[1];
 
 --:-:-:-:1      IADD x1, x, 1;
 --:-:-:-:1      IADD x2, x, 2;
 --:-:-:-:1      IADD x3, x, 3;
 
---:-:-:-:1      ISETP.LT.AND P0, PT, x,  param_X, PT;
---:-:-:-:1      ISETP.LT.AND P1, PT, x1, param_X, PT;
---:-:-:-:1      ISETP.LT.AND P2, PT, x2, param_X, PT;
---:-:-:-:1      ISETP.LT.AND P3, PT, x3, param_X, PT;
+--:-:-:-:1      ISETP.LT.AND P0, PT, x,  1x<$W>, PT;
+--:-:-:-:1      ISETP.LT.AND P1, PT, x1, 1x<$W>, PT;
+--:-:-:-:1      ISETP.LT.AND P2, PT, x2, 1x<$W>, PT;
+--:-:-:-:1      ISETP.LT.AND P3, PT, x3, 1x<$W>, PT;
 --:-:-:-:1      ISETP.GE.AND P0, PT, x,  RZ, P0;
 --:-:-:-:1      ISETP.GE.AND P1, PT, x1, RZ, P1;
 --:-:-:-:1      ISETP.GE.AND P2, PT, x2, RZ, P2;
@@ -356,695 +350,326 @@ sub dtype_shift { return $dtype_shift; }
 --:-:-:-:1      IADD x1, y, 1;
 --:-:-:-:1      IADD x2, y, 2;
 --:-:-:-:1      IADD x3, y, 3;
---:-:-:-:1      ISETP.LT.AND P0, PT, y,  param_Y, P5;
---:-:-:-:1      ISETP.LT.AND P1, PT, x1, param_Y, P5;
---:-:-:-:1      ISETP.LT.AND P2, PT, x2, param_Y, P5;
---:-:-:-:1      ISETP.LT.AND P3, PT, x3, param_Y, P5;
+--:-:-:-:1      ISETP.LT.AND P0, PT, y,  param_H, P5;
+--:-:-:-:1      ISETP.LT.AND P1, PT, x1, param_H, P5;
+--:-:-:-:1      ISETP.LT.AND P2, PT, x2, param_H, P5;
+--:-:-:-:1      ISETP.LT.AND P3, PT, x3, param_H, P5;
 --:-:-:-:1      ISETP.GE.AND P0, PT, y,  RZ, P0;
 --:-:-:-:1      ISETP.GE.AND P1, PT, x1, RZ, P1;
 --:-:-:-:1      ISETP.GE.AND P2, PT, x2, RZ, P2;
 --:-:-:-:1      ISETP.GE.AND P3, PT, x3, RZ, P3;
 
---:-:-:-:1      SEL pred_bits1, mask_x, RZ, P0;
---:-:-:-:1  @P1 BFI pred_bits1, mask_x, 0x404, pred_bits1;
---:-:-:-:1  @P2 BFI pred_bits1, mask_x, 0x408, pred_bits1;
---:-:-:-:1  @P3 BFI pred_bits1, mask_x, 0x40c, pred_bits1;
+--:-:-:-:1      SEL preds, mask_x, RZ, P0;
+--:-:-:-:1  @P1 BFI preds, mask_x, 0x404, preds;
+--:-:-:-:1  @P2 BFI preds, mask_x, 0x408, preds;
+--:-:-:-:1  @P3 BFI preds, mask_x, 0x40c, preds;
 
 // For partial C on first load
---:-:-:-:1      SEL pred_bits, pred_bits1, RZ, P6;
+--:-:-:-:1      SEL preds1, preds, RZ, P6;
 
-// offsetIC = partialC*YXN - 3*XN
---:-:-:-:1      IADD nXN, RZ, -param_XN;
---:-:-:-:1      XMAD.LO2C offsetIC, partialC, param_YXN, nXN;
---:-:-:-:1      ISCADD offsetIC, nXN, offsetIC, 1;
+// offsetIC = partialC*YXN
+--:-:-:-:1      XMAD.LO2C offsetIC, partialC, param_HWN, RZ;
 
---:-:-:-:1      R2P PR, pred_bits, 0x0f;
---:-:-:-:0      SHF.R.U64 pred_bits, pred_bits, 8, pred_bits;
-</SCHEDULE_BLOCK>
+--:-:-:-:1      R2P PR, preds1, 0x0f;
+--:-:-:-:1      SHF.R.U64 preds1, preds1, 12, preds1;
 
---:-:-:Y:d      CAL LOAD_IMAGE;
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i00, [track + [+ dsize() +]x<0*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i01, [track + [+ dsize() +]x<0*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i02, [track + [+ dsize() +]x<0*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i03, [track + [+ dsize() +]x<0*$W*$N + 3*$N>];
+--:-:-:-:1 @!P0 MOV i00, RZ;
+--:-:-:-:1 @!P1 MOV i01, RZ;
+--:-:-:-:1 @!P2 MOV i02, RZ;
+--:-:-:-:1 @!P3 MOV i03, RZ;
 
-<SCHEDULE_BLOCK>
-[+
-    our ($convert_in, $FX);
-    return $convert_in ? qq{
-<ORDERED>
-02:-:-:-:1      $convert_in y0x0, y0x0;
---:-:-:-:1      $convert_in y0x1, y0x1;
---:-:-:-:1      $convert_in y0x2, y0x2;
---:-:2:-:1      $convert_in y0x3, y0x3;
+--:-:-:-:1      R2P PR, preds1, 0x0f;
+--:-:-:-:1      SHF.L.U64 preds1, preds1, 8, preds1;
 
-04:-:-:-:1      $convert_in y2x0, y2x0;
---:-:-:-:1      $convert_in y2x1, y2x1;
---:-:-:-:1      $convert_in y2x2, y2x2;
---:-:3:-:1      $convert_in y2x3, y2x3;
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i30, [track + [+ dsize() +]x<3*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i31, [track + [+ dsize() +]x<3*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i32, [track + [+ dsize() +]x<3*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i33, [track + [+ dsize() +]x<3*$W*$N + 3*$N>];
+--:-:-:-:1 @!P0 MOV i30, RZ;
+--:-:-:-:1 @!P1 MOV i31, RZ;
+--:-:-:-:1 @!P2 MOV i32, RZ;
+--:-:-:-:1 @!P3 MOV i33, RZ;
 
-08:-:-:-:1      $convert_in y1x0, y1x0;
---:-:-:-:1      $convert_in y1x1, y1x1;
---:-:-:-:1      $convert_in y1x2, y1x2;
---:-:4:-:1      $convert_in y1x3, y1x3;
+--:-:-:-:1      R2P PR, preds1, 0x0f;
+--:-:-:-:1      SHF.R.U64 preds1, preds1, 4, preds1;
 
-10:-:-:-:1      $convert_in y3x0, y3x0;
---:-:-:-:1      $convert_in y3x1, y3x1;
---:-:-:-:1      $convert_in y3x2, y3x2;
---:-:5:-:1      $convert_in y3x3, y3x3;
-</ORDERED>} : $FX ? '' : q{
---:-:-:-:1      NOP; # we need 25 conversions.  that's two instruction cache lines + 1
-};
-+]
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i10, [track + [+ dsize() +]x<1*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i11, [track + [+ dsize() +]x<1*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i12, [track + [+ dsize() +]x<1*$W*$N + 2*$N>];
+--:-:-:-:1  @P3 LDG.E.CI.[+ dtype() +] i13, [track + [+ dsize() +]x<1*$W*$N + 3*$N>];
+--:-:-:-:1 @!P0 MOV i10, RZ;
+--:-:-:-:1 @!P1 MOV i11, RZ;
+--:-:-:-:1 @!P2 MOV i12, RZ;
+--:-:-:-:1 @!P3 MOV i13, RZ;
 
---:-:-:-:1      ISETP.GE.AND P6, PT, C, 4, PT;
---:-:-:-:1      IADD C, C, -4;
---:-:-:-:1      SEL pred_bits, pred_bits1, RZ, P6;
+--:-:-:-:1      R2P PR, preds1, 0x0f;
 
---:-:-:-:1      R2P PR, pred_bits, 0x0f;
---:-:-:-:1      SHF.R.U64 pred_bits, pred_bits, 8, pred_bits;
-
-20:-:-:-:1      LEA    track00.CC, offsetIC, track00, [+ dtype_shift() +];
---:-:-:-:1      IADD.X track01,    track01, RZ;
---:-:-:-:1      LEA    track10.CC, offsetIC, track10, [+ dtype_shift() +];
---:-:-:-:1      IADD.X track11,    track11, RZ;
---:-:-:-:1      LEA    track20.CC, offsetIC, track20, [+ dtype_shift() +];
---:-:-:-:1      IADD.X track21,    track21, RZ;
---:-:-:-:1      LEA    track30.CC, offsetIC, track30, [+ dtype_shift() +];
---:-:-:-:1      IADD.X track31,    track31, RZ;
-
-<ORDERED>
-06:-:-:-:1      FADD Y0X0, y0x0, -y2x0;
---:-:-:-:1      FADD Y0X1, y0x1, -y2x1;
---:-:-:-:1      FADD Y0X2, y0x2, -y2x2;
---:-:-:-:1      FADD Y0X3, y0x3, -y2x3;
---:-:-:-:1      FADD I00, Y0X0, -Y0X2;
---:-:-:-:1      FADD I03, Y0X1, -Y0X3;
---:-:-:-:1      FADD I01, Y0X1,  Y0X2;
---:-:-:-:1      FADD I02, Y0X2, -Y0X1;
---:-:-:-:1      STS [writeS + 4x<32*00>], I00;
---:-:-:-:1      STS [writeS + 4x<32*03>], I03;
---:-:-:-:1      STS [writeS + 4x<32*01>], I01;
---:1:-:-:1      STS [writeS + 4x<32*02>], I02;
-18:-:-:-:1      FADD Y3X0, y1x0, -y3x0;
---:-:-:-:1      FADD Y3X1, y1x1, -y3x1;
---:-:-:-:1      FADD Y3X2, y1x2, -y3x2;
---:-:-:-:1      FADD Y3X3, y1x3, -y3x3;
---:-:-:-:1      FADD I12,  Y3X0, -Y3X2;
---:-:-:-:1      FADD I15,  Y3X1, -Y3X3;
---:-:-:-:1      FADD I13,  Y3X1,  Y3X2;
---:-:-:-:1      FADD I14,  Y3X2, -Y3X1;
---:-:-:-:1      STS [writeS + 4x<32*12>], I12;
---:-:-:-:1      STS [writeS + 4x<32*15>], I15;
---:-:-:-:1      STS [writeS + 4x<32*13>], I13;
---:-:-:-:1      STS [writeS + 4x<32*14>], I14;
-01:-:-:-:1      FADD Y1X0, y1x0,  y2x0;
---:-:-:-:1      FADD Y1X1, y1x1,  y2x1;
---:-:-:-:1      FADD Y1X2, y1x2,  y2x2;
---:-:-:-:1      FADD Y1X3, y1x3,  y2x3;
---:-:-:-:1      FADD Y2X0, y2x0, -y1x0;
---:-:-:-:1      FADD Y2X1, y2x1, -y1x1;
---:-:-:-:1      FADD Y2X2, y2x2, -y1x2;
---:-:-:-:1      FADD Y2X3, y2x3, -y1x3;
---:-:-:-:1      FADD I04,  Y1X0, -Y1X2;
---:-:-:-:1      FADD I05,  Y1X1,  Y1X2;
---:-:-:-:1      FADD I06,  Y1X2, -Y1X1;
---:-:-:-:1      FADD I07,  Y1X1, -Y1X3;
---:-:-:-:1      STS [writeS + 4x<32*04>], I04;
---:-:-:-:1      STS [writeS + 4x<32*05>], I05;
---:-:-:-:1      STS [writeS + 4x<32*06>], I06;
---:-:-:-:1      STS [writeS + 4x<32*07>], I07;
---:-:-:-:1      FADD I08,  Y2X0, -Y2X2;
---:-:-:-:1      FADD I11,  Y2X1, -Y2X3;
---:-:-:-:1      FADD I09,  Y2X1,  Y2X2;
---:-:-:-:1      FADD I10,  Y2X2, -Y2X1;
---:-:-:-:1      STS [writeS + 4x<32*08>], I08;
---:-:-:-:1      STS [writeS + 4x<32*11>], I11;
---:-:-:-:1      STS [writeS + 4x<32*09>], I09;
---:-:-:-:1      STS [writeS + 4x<32*10>], I10;
-</ORDERED>
-
+--:-:-:-:1  @P0 LDG.E.CI.[+ dtype() +] i20, [track + [+ dsize() +]x<2*$W*$N + 0*$N>];
+--:-:-:-:1  @P1 LDG.E.CI.[+ dtype() +] i21, [track + [+ dsize() +]x<2*$W*$N + 1*$N>];
+--:-:-:-:1  @P2 LDG.E.CI.[+ dtype() +] i22, [track + [+ dsize() +]x<2*$W*$N + 2*$N>];
+--:6:2:-:1  @P3 LDG.E.CI.[+ dtype() +] i23, [track + [+ dsize() +]x<2*$W*$N + 3*$N>];
+--:-:-:-:1 @!P0 MOV i20, RZ;
+--:-:-:-:1 @!P1 MOV i21, RZ;
+--:-:-:-:1 @!P2 MOV i22, RZ;
+--:-:-:-:1 @!P3 MOV i23, RZ;
 </SCHEDULE_BLOCK>
 
 --:-:-:-:5      BAR.SYNC 0;
---:-:-:-:0      LOP.XOR writeS, writeS, 4x<512*4*2>;
 
 --:-:-:-:1      LDS.U.128 j0Ix0, [readIs + 4x<0*512 + 00>];
 --:-:-:-:1      LDS.U.128 j0Fy0, [readFs + 4x<0*512 + 00>];
 --:-:-:-:1      LDS.U.128 j0Ix4, [readIs + 4x<0*512 + 16>];
 --:-:1:-:1      LDS.U.128 j0Fy4, [readFs + 4x<0*512 + 16>];
 
---:-:-:-:5      CAL LOAD_IMAGE;
+20:-:-:-:6      LEA      track0.CC, offsetIC, track0,     [+ dshift() +];
+--:-:-:-:0      LEA.HI.X track1,    offsetIC, track1, RZ, [+ dshift() +];
 
 --:-:-:-:5      BRA.U IMAGE_LOOP;
 
-// align loop on 128 byte boundry to minimize instruction cache thrashing
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
 
-LOAD_IMAGE:
-
---:-:-:-:0 @!P0 MOV y0x0, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] y0x0, [track0];
---:-:-:-:0 @!P1 MOV y0x1, RZ;
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] y0x1, [track1];
---:-:-:-:0 @!P2 MOV y0x2, RZ;
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] y0x2, [track2];
---:-:-:-:0 @!P3 MOV y0x3, RZ;
---:6:2:-:1  @P3 LDG.E.CI[+ dtype() +] y0x3, [track3];
---:-:-:-:1      R2P PR, pred_bits, 0x0f;
---:-:-:-:1      SHF.L.U64 pred_bits, pred_bits, 4, pred_bits;
-20:-:-:-:6      IADD   track00.CC, track00, param_2XNp;
---:-:-:-:1      IADD.X track01,    track01, RZ;
---:-:-:-:6      IADD   track10.CC, track10, param_2XNp;
---:-:-:-:1      IADD.X track11,    track11, RZ;
---:-:-:-:6      IADD   track20.CC, track20, param_2XNp;
---:-:-:-:1      IADD.X track21,    track21, RZ;
---:-:-:-:6      IADD   track30.CC, track30, param_2XNp;
---:-:-:-:1      IADD.X track31,    track31, RZ;
-
---:-:-:-:0 @!P0 MOV y2x0, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] y2x0, [track0];
---:-:-:-:0 @!P1 MOV y2x1, RZ;
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] y2x1, [track1];
---:-:-:-:0 @!P2 MOV y2x2, RZ;
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] y2x2, [track2];
---:-:-:-:0 @!P3 MOV y2x3, RZ;
---:6:3:-:1  @P3 LDG.E.CI[+ dtype() +] y2x3, [track3];
---:-:-:-:1      R2P PR, pred_bits, 0x0f;
---:-:-:-:1      SHF.R.U64 pred_bits, pred_bits, 8, pred_bits;
-20:-:-:-:6      IADD   track00.CC, track00, -param_XNp;
---:-:-:-:1      IADD.X track01,    track01, -RZ;
---:-:-:-:6      IADD   track10.CC, track10, -param_XNp;
---:-:-:-:1      IADD.X track11,    track11, -RZ;
---:-:-:-:6      IADD   track20.CC, track20, -param_XNp;
---:-:-:-:1      IADD.X track21,    track21, -RZ;
---:-:-:-:6      IADD   track30.CC, track30, -param_XNp;
---:-:-:-:1      IADD.X track31,    track31, -RZ;
-
---:-:-:-:0 @!P0 MOV y1x0, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] y1x0, [track0];
---:-:-:-:0 @!P1 MOV y1x1, RZ;
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] y1x1, [track1];
---:-:-:-:0 @!P2 MOV y1x2, RZ;
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] y1x2, [track2];
---:-:-:-:0 @!P3 MOV y1x3, RZ;
---:6:4:-:1  @P3 LDG.E.CI[+ dtype() +] y1x3, [track3];
---:-:-:-:1      R2P PR, pred_bits, 0x0f;
---:-:-:-:1      SHF.L.U64 pred_bits, pred_bits, 12, pred_bits;
-20:-:-:-:6      IADD   track00.CC, track00, param_2XNp;
---:-:-:-:1      IADD.X track01,    track01, RZ;
---:-:-:-:6      IADD   track10.CC, track10, param_2XNp;
---:-:-:-:1      IADD.X track11,    track11, RZ;
---:-:-:-:6      IADD   track20.CC, track20, param_2XNp;
---:-:-:-:1      IADD.X track21,    track21, RZ;
---:-:-:-:6      IADD   track30.CC, track30, param_2XNp;
---:-:-:-:1      IADD.X track31,    track31, RZ;
-
---:-:-:-:0 @!P0 MOV y3x0, RZ;
---:-:-:-:1  @P0 LDG.E.CI[+ dtype() +] y3x0, [track0];
---:-:-:-:0 @!P1 MOV y3x1, RZ;
---:-:-:-:1  @P1 LDG.E.CI[+ dtype() +] y3x1, [track1];
---:-:-:-:0 @!P2 MOV y3x2, RZ;
---:-:-:-:1  @P2 LDG.E.CI[+ dtype() +] y3x2, [track2];
---:-:-:-:0 @!P3 MOV y3x3, RZ;
---:6:5:-:1  @P3 LDG.E.CI[+ dtype() +] y3x3, [track3];
-
---:-:-:-:5      RET;
 
 FILTER_SETUP:
 
+--:-:1:-:2      S2R idx_K, SR_CTAID.Y;
+
 <SCHEDULE_BLOCK>
+01:-:-:-:1      XMAD idx_K, idx_K, param_k, idx_k;
+
 [+
-    our ($dtype, $dtype_shift, $FX, $vec_size, $dtype_size);
+    our ($dtype, $dshift, $FX, $K, $vsize, $dsize);
     return $FX ? qq{
+
 // writeS = (c*512 + (tid & 31)*4)*4
 --:-:-:-:1      SHL writeS, tid31, 4;
 --:-:-:-:1      ISCADD writeS, c, writeS, 11;
+--:-:-:-:1      LOP.XOR writeS, writeS, 4x<512*4*2>;
 
-// offset = (c*gridK*512 + k32*512 + tid31*4)*4;
---:-:-:-:1      XMAD   tf0,  c, param_gridK, k32;
---:-:-:-:1      SHL    tid31_4,  tid31,   2;
---:-:-:-:1      ISCADD tf0, tf0, tid31_4, 9;
---:-:-:-:1      LEA      track00.CC, tf0, param_F[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track01,    tf0, param_F[1], RZ, $dtype_shift;
+// (kBlks,C,4,4,32)
+// offset = idx_K*C*512 + c*512 + tid31*4;
+--:-:-:-:1      SHL    tid31_4,  tid31, 2;
+--:-:-:-:1      XMAD   tf, idx_K, param_C, c;
+--:-:-:-:1      ISCADD tf, tf, tid31_4, 9;
+--:-:-:-:1      LEA      track0.CC, tf, param_F[0],     $dshift;
+--:-:-:-:1      LEA.HI.X track1,    tf, param_F[1], RZ, $dshift;
 
-// offsetFCp = (partialC*gridK*512)*4
---:-:-:-:1      XMAD offsetFCp, partialC, param_gridK, RZ;
+// offsetFC = partialC*512
+--:-:-:-:1      SHL  offsetFC, partialC, 9;
 
+--:-:-:-:1 \@!P6 LDS.U.$vsize F0, [addr_zero];
+--:-:-:-:1 \@!P6 LDS.U.$vsize F1, [addr_zero];
+--:-:-:-:1 \@!P6 LDS.U.$vsize F2, [addr_zero];
+--:-:-:-:1 \@!P6 LDS.U.$vsize F3, [addr_zero];
 <ORDERED>
---:-:-:-:1 \@!P6 LDS.U.$vec_size F0, [addr_zero];
---:-:-:-:1 \@!P6 LDS.U.$vec_size F1, [addr_zero];
---:-:-:-:1 \@!P6 LDS.U.$vec_size F2, [addr_zero];
---:-:1:-:1 \@!P6 LDS.U.$vec_size F3, [addr_zero];
-</ORDERED>
-
-<ORDERED>
---:-:2:-:1  \@P6 LDG.E.CG.$vec_size F0, [track0 + 4x<00 * $dtype_size>];
---:-:3:-:1  \@P6 LDG.E.CG.$vec_size F1, [track0 + 4x<32 * $dtype_size>];
---:-:4:-:1  \@P6 LDG.E.CG.$vec_size F2, [track0 + 4x<64 * $dtype_size>];
---:-:5:-:1  \@P6 LDG.E.CG.$vec_size F3, [track0 + 4x<96 * $dtype_size>];
+--:-:2:-:1  \@P6 LDG.E.CG.$vsize F0, [track + 4x<00 * $dsize>];
+--:-:3:-:1  \@P6 LDG.E.CG.$vsize F1, [track + 4x<32 * $dsize>];
+--:-:4:-:1  \@P6 LDG.E.CG.$vsize F2, [track + 4x<64 * $dsize>];
+--:6:5:-:1  \@P6 LDG.E.CG.$vsize F3, [track + 4x<96 * $dsize>];
 </ORDERED>
 
     } : qq{
-// k = k32*32 + tid & 31
---:-:-:-:1      ISCADD  k, k32, tid31,  5;
---:-:-:-:1      ISETP.LT.AND P0, PT, k, param_K, P6;
+// k = idx_K*32 + tid & 31
+--:-:-:-:1      ISCADD  idx_K, idx_K, tid31,  5;
+--:-:-:-:1      ISETP.LT.AND P0, PT, idx_K, 1x<$K>, P6;
+--:-:-:-:1      ISETP.LT.AND P1, PT, idx_K, 1x<$K>, PT;
 
-// offsetFCp = 4*(partialC*RSK - SK)
---:-:-:-:1      XMAD.LO2C offsetFCp, partialC,   param_RSK, RZ;
---:-:-:-:1      ISCADD    offsetFCp, offsetFCp, -param_SKp, $dtype_shift;
+// offsetFC = partialC * RSK
+--:-:-:-:1      XMAD.LO2C offsetFC, partialC, param_RSK, RZ;
 
 // a0 = k + c*RSK
---:-:-:-:1      XMAD.LO2C tf0, c, param_RSK, k;
---:-:-:-:1      IADD tf1, tf0, param_K;
---:-:-:-:1      IADD tf2, tf1, param_K;
---:-:-:-:1      LEA      track00.CC, tf0, param_F[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track01,    tf0, param_F[1], RZ, $dtype_shift;
---:-:-:-:1      LEA      track10.CC, tf1, param_F[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track11,    tf1, param_F[1], RZ, $dtype_shift;
---:-:-:-:1      LEA      track20.CC, tf2, param_F[0],     $dtype_shift;
---:-:-:-:1      LEA.HI.X track21,    tf2, param_F[1], RZ, $dtype_shift;
+--:-:-:-:1      XMAD.LO2C tf, c, param_RSK, idx_K;
 
---:1:-:-:1  \@P0 LDG.E.CI$dtype r0s0, [track0];
---:2:-:-:1  \@P0 LDG.E.CI$dtype r0s1, [track1];
---:3:4:-:1  \@P0 LDG.E.CI$dtype r0s2, [track2];
---:-:-:-:1 \@!P0 MOV r0s0, RZ;
---:-:-:-:1 \@!P0 MOV r0s1, RZ;
---:-:-:-:1 \@!P0 MOV r0s2, RZ;
-01:-:-:-:1      IADD   track00.CC, track00, param_2SKp;
---:-:-:-:1      IADD.X track01,    track01, RZ;
-02:-:-:-:1      IADD   track10.CC, track10, param_2SKp;
---:-:-:-:1      IADD.X track11,    track11, RZ;
-04:-:-:-:1      IADD   track20.CC, track20, param_2SKp;
---:-:-:-:1      IADD.X track21,    track21, RZ;
+--:-:-:-:1      LEA      track0.CC, tf, param_F[0],     $dshift;
+--:-:-:-:1      LEA.HI.X track1,    tf, param_F[1], RZ, $dshift;
 
---:1:-:-:1  \@P0 LDG.E.CI$dtype r2s0, [track0];
---:2:-:-:1  \@P0 LDG.E.CI$dtype r2s1, [track1];
---:3:5:-:1  \@P0 LDG.E.CI$dtype r2s2, [track2];
---:-:-:-:1 \@!P0 MOV r2s0, RZ;
---:-:-:-:1 \@!P0 MOV r2s1, RZ;
---:-:-:-:1 \@!P0 MOV r2s2, RZ;
-01:-:-:-:1      IADD   track00.CC, track00, -param_SKp;
---:-:-:-:1      IADD.X track01,    track01, -RZ;
-02:-:-:-:1      IADD   track10.CC, track10, -param_SKp;
---:-:-:-:1      IADD.X track11,    track11, -RZ;
-04:-:-:-:1      IADD   track20.CC, track20, -param_SKp;
---:-:-:-:1      IADD.X track21,    track21, -RZ;
-
---:1:-:-:1  \@P0 LDG.E.CI$dtype r1s0, [track0];
---:2:-:-:1  \@P0 LDG.E.CI$dtype r1s1, [track1];
---:3:6:-:1  \@P0 LDG.E.CI$dtype r1s2, [track2];
---:-:-:-:1 \@!P0 MOV r1s0, RZ;
---:-:-:-:1 \@!P0 MOV r1s1, RZ;
---:-:-:-:1 \@!P0 MOV r1s2, RZ;
-    };
-+]
-</SCHEDULE_BLOCK>
-
-<SCHEDULE_BLOCK>
-[+
-    our ($convert_in, $FX);
-    if ($convert_in)
-    {
-        return $FX ? q{
-<ORDERED>
-03:-:-:-:1      F2F.F32.F16 F03, F01.H1;
---:-:-:-:1      F2F.F32.F16 F02, F01.H0;
---:-:-:-:1      F2F.F32.F16 F01, F00.H1;
---:-:2:-:1      F2F.F32.F16 F00, F00.H0;
-
-04:-:-:-:1      F2F.F32.F16 F13, F11.H1;
---:-:-:-:1      F2F.F32.F16 F12, F11.H0;
---:-:-:-:1      F2F.F32.F16 F11, F10.H1;
---:-:3:-:1      F2F.F32.F16 F10, F10.H0;
-
-08:-:-:-:1      F2F.F32.F16 F23, F21.H1;
---:-:-:-:1      F2F.F32.F16 F22, F21.H0;
---:-:-:-:1      F2F.F32.F16 F21, F20.H1;
---:-:4:-:1      F2F.F32.F16 F20, F20.H0;
-
-10:-:-:-:1      F2F.F32.F16 F33, F31.H1;
---:-:-:-:1      F2F.F32.F16 F32, F31.H0;
---:-:-:-:1      F2F.F32.F16 F31, F30.H1;
---:-:5:-:1      F2F.F32.F16 F30, F30.H0;
-
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
---:-:-:-:1      NOP;
-</ORDERED>
-        } : qq{
-<ORDERED>
-08:-:-:-:1      $convert_in r0s0, r0s0;
---:-:-:-:1      $convert_in r0s1, r0s1;
---:-:4:-:1      $convert_in r0s2, r0s2;
-
-10:-:-:-:1      $convert_in r2s0, r2s0;
---:-:-:-:1      $convert_in r2s1, r2s1;
---:-:5:-:1      $convert_in r2s2, r2s2;
-
-20:-:-:-:1      $convert_in r1s0, r1s0;
---:-:-:-:1      $convert_in r1s1, r1s1;
---:-:6:-:1      $convert_in r1s2, r1s2;
-</ORDERED>};
-    }
-    return '';
-+]
-
-[+
-    our ($FX, $dtype_shift);
-    return $FX ? qq{
-<ORDERED>
-03:-:-:-:1      STS.128 [writeS + 4x<512*4 + 00*4>], F0;
-04:-:-:-:1      STS.128 [writeS + 4x<512*4 + 32*4>], F1;
-08:-:-:-:1      STS.128 [writeS + 4x<512*4 + 64*4>], F2;
-10:-:-:-:1      STS.128 [writeS + 4x<512*4 + 96*4>], F3;
---:-:-:-:1      LEA      track00.CC, offsetFCp, track00,     1x<9 + $dtype_shift>;
---:-:-:-:0      LEA.HI.X track01,    offsetFCp, track01, RZ, 1x<9 + $dtype_shift>;
-</ORDERED>
---:-:-:-:1      ISETP.GE.AND P1, PT, C, 4, PT;
---:-:-:-:1      IADD C, C, -4;
-
-    } : q{
-01:-:-:-:1      IADD   track00.CC, track00, offsetFCp;
---:-:-:-:1      IADD.X track01,    track01, RZ;
-02:-:-:-:1      IADD   track10.CC, track10, offsetFCp;
---:-:-:-:1      IADD.X track11,    track11, RZ;
-04:-:-:-:1      IADD   track20.CC, track20, offsetFCp;
---:-:-:-:1      IADD.X track21,    track21, RZ;
-
---:-:-:-:1      ISETP.GE.AND P1, PT, C,  4, PT;
---:-:-:-:1      ISETP.LT.AND P1, PT, k, param_K, P1;
---:-:-:-:1      IADD C, C, -4;
-
-<ORDERED>
-08:-:-:-:1      FMUL temp00, r0s1, 0.5;
---:-:-:-:1      FADD temp01, r0s0, r0s2;
---:-:-:-:1      FFMA F01, temp01, 0.5,  temp00;
---:-:-:-:1      FFMA F02, temp01, 0.5, -temp00;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*00>], F00;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*01>], F01;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*02>], F02;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*03>], F03;
-10:-:-:-:1      FADD temp02, r2s0, r2s2;
---:-:-:-:1      FMUL temp08, r2s1, 0.5;
---:-:-:-:1      FFMA F13, temp02, 0.5,  temp08;
---:-:-:-:1      FFMA F14, temp02, 0.5, -temp08;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*12>], F12;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*13>], F13;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*14>], F14;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*15>], F15;
---:-:-:-:1      FADD temp10, temp01, temp02;
---:-:-:-:1      FADD temp05, r0s1,   r2s1;
-20:-:-:-:1      FADD temp07, r1s0,   r1s2;
---:-:-:-:1      FMUL temp09, r1s1, 0.25;
---:-:-:-:1      FADD temp11, temp10,  temp05;
---:-:-:-:1      FADD temp14, temp10, -temp05;
---:-:-:-:1      FFMA temp13, temp07, 0.25,  temp09;
---:-:-:-:1      FFMA temp15, temp07, 0.25, -temp09;
---:-:-:-:1      FFMA F05, temp11, 0.25,  temp13;
---:-:-:-:1      FFMA F09, temp11, 0.25, -temp13;
---:-:-:-:1      FFMA F06, temp14, 0.25,  temp15;
---:-:-:-:1      FFMA F10, temp14, 0.25, -temp15;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*05>], F05;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*09>], F09;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*06>], F06;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*10>], F10;
---:-:-:-:1      FMUL temp03, r1s0, 0.5;
---:-:-:-:1      FADD temp06, r0s0, r2s0;
---:-:-:-:1      FMUL temp04, r1s2, 0.5;
---:-:-:-:1      FFMA F04, temp06, 0.5,  temp03;
---:-:-:-:1      FFMA F08, temp06, 0.5, -temp03;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*04>], F04;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*08>], F08;
---:-:-:-:1      FADD temp12, r0s2, r2s2;
---:-:-:-:1      FFMA F07, temp12, 0.5,  temp04;
---:-:-:-:1      FFMA F11, temp12, 0.5, -temp04;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*07>], F07;
---:-:-:-:1      STS [writeS + 4x<512*4 + 32*11>], F11;
-</ORDERED>
+--:-:-:-:1 \@!P0 MOV f00, RZ;
+--:-:-:-:1 \@!P0 MOV f01, RZ;
+--:-:-:-:1 \@!P0 MOV f02, RZ;
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype f00, [track + ${dsize}x<0*3*$K + 0*$K>];
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype f01, [track + ${dsize}x<0*3*$K + 1*$K>];
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype f02, [track + ${dsize}x<0*3*$K + 2*$K>];
+--:-:-:-:1 \@!P0 MOV f20, RZ;
+--:-:-:-:1 \@!P0 MOV f21, RZ;
+--:-:-:-:1 \@!P0 MOV f22, RZ;
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype f20, [track + ${dsize}x<2*3*$K + 0*$K>];
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype f21, [track + ${dsize}x<2*3*$K + 1*$K>];
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype f22, [track + ${dsize}x<2*3*$K + 2*$K>];
+--:-:-:-:1 \@!P0 MOV f10, RZ;
+--:-:-:-:1 \@!P0 MOV f11, RZ;
+--:-:-:-:1 \@!P0 MOV f12, RZ;
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype f10, [track + ${dsize}x<1*3*$K + 0*$K>];
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype f11, [track + ${dsize}x<1*3*$K + 1*$K>];
+--:6:2:-:1  \@P0 LDG.E.CI.$dtype f12, [track + ${dsize}x<1*3*$K + 2*$K>];
     };
 +]
 </SCHEDULE_BLOCK>
 
 --:-:-:-:5      BAR.SYNC 0;
---:-:-:-:0      LOP.XOR writeS, writeS, 4x<512*4*2>;
 
 --:-:-:-:1      LDS.U.128 j0Ix0, [readIs + 4x<0*512 + 00>];
 --:-:-:-:1      LDS.U.128 j0Fy0, [readFs + 4x<0*512 + 00>];
 --:-:-:-:1      LDS.U.128 j0Ix4, [readIs + 4x<0*512 + 16>];
 --:-:1:-:1      LDS.U.128 j0Fy4, [readFs + 4x<0*512 + 16>];
 
-[+
-    our ($dtype, $FX, $vec_size, $dtype_size);
-    return $FX ? qq{
---:-:2:-:1  \@P1 LDG.E.CG.$vec_size F0, [track0 + 4x<00 * $dtype_size>];
---:-:3:-:1  \@P1 LDG.E.CG.$vec_size F1, [track0 + 4x<32 * $dtype_size>];
---:-:4:-:1  \@P1 LDG.E.CG.$vec_size F2, [track0 + 4x<64 * $dtype_size>];
---:6:5:-:1  \@P1 LDG.E.CG.$vec_size F3, [track0 + 4x<96 * $dtype_size>];
-    } : qq{
---:-:-:-:1  \@P1 LDG.E.CI$dtype r0s0, [track0];
---:-:-:-:0      NOP;
---:-:-:-:1  \@P1 LDG.E.CI$dtype r0s1, [track1];
---:-:-:-:0      NOP;
---:6:2:-:2  \@P1 LDG.E.CI$dtype r0s2, [track2];
-
-20:-:-:-:6  \@P1 IADD   track00.CC, track00, param_2SKp;
---:-:-:-:1  \@P1 IADD.X track01,    track01, RZ;
---:-:-:-:6  \@P1 IADD   track10.CC, track10, param_2SKp;
---:-:-:-:1  \@P1 IADD.X track11,    track11, RZ;
---:-:-:-:6  \@P1 IADD   track20.CC, track20, param_2SKp;
---:-:-:-:0  \@P1 IADD.X track21,    track21, RZ;
-
---:-:-:-:1  \@P1 LDG.E.CI$dtype r2s0, [track0];
---:-:-:-:0      NOP;
---:-:-:-:1  \@P1 LDG.E.CI$dtype r2s1, [track1];
---:-:-:-:0      NOP;
---:6:3:-:2  \@P1 LDG.E.CI$dtype r2s2, [track2];
-
-20:-:-:-:6  \@P1 IADD   track00.CC, track00, -param_SKp;
---:-:-:-:1  \@P1 IADD.X track01,    track01, -RZ;
---:-:-:-:6  \@P1 IADD   track10.CC, track10, -param_SKp;
---:-:-:-:1  \@P1 IADD.X track11,    track11, -RZ;
---:-:-:-:6  \@P1 IADD   track20.CC, track20, -param_SKp;
---:-:-:-:0  \@P1 IADD.X track21,    track21, -RZ;
-
---:-:-:-:1  \@P1 LDG.E.CI$dtype r1s0, [track0];
---:-:-:-:1  \@P1 LDG.E.CI$dtype r1s1, [track1];
---:6:4:-:1  \@P1 LDG.E.CI$dtype r1s2, [track2];
-    };
-+]
+20:-:-:-:6      LEA      track0.CC, offsetFC, track0,     [+ dshift() +];
+--:-:-:-:0      LEA.HI.X track1,    offsetFC, track1, RZ, [+ dshift() +];
 
 --:-:-:-:5      BRA.U FILTER_LOOP;
 
 
 IMAGE_LOOP:
-
+--:-:-:-:1      ISETP.GT.AND P6, PT, C, 4, PT;
 [+
-    our ($dtype, $convert_in);
+    our ($dtype, $dsize, $convert_in, $W, $N);
     my %insert = (
 
-        j0c8  => "--:-:-:-:1      ISETP.GE.AND P5, PT, C, RZ, PT;\n",
-        j0c9  => "--:-:-:-:1      ISETP.GE.AND P6, PT, C,  4, PT;\n" .
+        j0c1  => "--:-:-:-:1      ISETP.GT.AND P5, PT, C, RZ, PT;\n" .
                  "--:-:-:-:1      IADD C, C, -4;\n",
 
-        j1c22 => "06:-:-:-:1  \@P5 FADD Y0X0, y0x0, -y2x0;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y0X1, y0x1, -y2x1;\n",
 
-        j1c24 => "--:-:-:-:1  \@P5 FADD Y0X2, y0x2, -y2x2;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y0X3, y0x3, -y2x3;\n",
+        j0c14 => "--:-:-:-:1      R2P PR, preds, 0x0f;\n",
+        j0c16 => "--:-:-:-:1  \@P6 SHF.R.U64 preds, preds, 12, preds;\n",
 
-        j1c28 => "--:-:-:-:1  \@P5 FADD I00, Y0X0, -Y0X2;\n" .
-                 "--:-:-:-:1  \@P5 FADD I03, Y0X1, -Y0X3;\n",
-        j1c30 => "--:-:-:-:1  \@P5 FADD I01, Y0X1,  Y0X2;\n" .
-                 "--:-:-:-:1  \@P5 FADD I02, Y0X2, -Y0X1;\n",
+        $convert_in ? (
+            j0c3  => "02:-:-:-:1      $convert_in i00, i00;\n",
+            j0c5  => "--:-:-:-:1      $convert_in i01, i01;\n",
+            j0c7  => "--:-:-:-:1      $convert_in i02, i02;\n",
+            j0c9  => "--:-:-:-:0 \@!P6 MOV preds, RZ;\n" .
+                     "--:-:-:-:1      $convert_in i03, i03;\n",
 
-        j1c31 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*00>], I00;\n",
-        j1c33 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*03>], I03;\n",
-        j1c35 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*01>], I01;\n",
-        j1c37 => "--:2:-:-:1  \@P5 STS [writeS + 4x<32*02>], I02;\n",
+            j0c11 => "--:-:-:-:1      $convert_in i20, i20;\n",
+            j0c13 => "--:-:-:-:1      $convert_in i21, i21;\n",
+            j0c15 => "--:-:-:-:1      $convert_in i22, i22;\n",
+            j0c17 => "--:-:2:-:1      $convert_in i23, i23;\n",
 
-        j1c39 => "18:-:-:-:1  \@P5 FADD Y3X0, y1x0, -y3x0;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y3X1, y1x1, -y3x1;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y3X2, y1x2, -y3x2;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y3X3, y1x3, -y3x3;\n",
+            j0c19 => "--:-:-:-:1      $convert_in i10, i10;\n",
+            j0c21 => "--:-:-:-:1      $convert_in i11, i11;\n",
+            j0c23 => "--:-:-:-:1      $convert_in i12, i12;\n",
+            j0c25 => "--:-:-:-:1      $convert_in i13, i13;\n",
 
-        j1c40 => "--:-:3:-:1 \@!P6 I2I.U32.U32 pred_bits, RZ;\n",
+            j0c27 => "--:-:-:-:1      $convert_in i30, i30;\n",
+            j0c29 => "--:-:-:-:1      $convert_in i31, i31;\n",
+            j0c31 => "--:-:-:-:1      $convert_in i32, i32;\n",
+            j0c33 => "--:-:3:-:1      $convert_in i33, i33;\n",
+        ) : (
+            j0c9  => "--:-:-:-:1 \@!P6 MOV preds, RZ;\n",
+        ),
 
-        j1c43 => "--:-:-:-:1  \@P5 FADD I12,  Y3X0, -Y3X2;\n" .
-                 "--:-:-:-:1  \@P5 FADD I15,  Y3X1, -Y3X3;\n" .
-                 "--:-:-:-:1  \@P5 FADD I13,  Y3X1,  Y3X2;\n" .
-                 "--:-:-:-:1  \@P5 FADD I14,  Y3X2, -Y3X1;\n",
+        j0c32 => "02:-:-:-:1  \@P5 FADD TI00, i00, -i20;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI01, i01, -i21;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI02, i02, -i22;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI03, i03, -i23;\n",
 
-        j1c44 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*12>], I12;\n",
-        j1c46 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*15>], I15;\n",
-        j1c48 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*13>], I13;\n",
-        j1c50 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*14>], I14;\n",
+        j0c35 => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype i00, [track + ${dsize}x<0*$W*$N + 0*$N>];\n",
+        j0c37 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype i01, [track + ${dsize}x<0*$W*$N + 1*$N>];\n",
+        j0c39 => "--:-:-:-:1  \@P2 LDG.E.CI.$dtype i02, [track + ${dsize}x<0*$W*$N + 2*$N>];\n",
+        j0c41 => "--:-:-:-:1  \@P3 LDG.E.CI.$dtype i03, [track + ${dsize}x<0*$W*$N + 3*$N>];\n",
+        j0c43 => "--:-:-:-:1 \@!P0 I2F.F32.U32 i00, RZ;\n",
+        j0c45 => "--:-:-:-:1 \@!P1 I2F.F32.U32 i01, RZ;\n",
+        j0c47 => "--:-:-:-:1 \@!P2 I2F.F32.U32 i02, RZ;\n",
+        j0c49 => "--:-:-:-:1 \@!P3 I2F.F32.U32 i03, RZ;\n" .
+                 "--:-:-:-:1      R2P PR, preds, 0x0f;\n",
 
-        j1c63 => "04:-:-:-:1      R2P PR, pred_bits, 0x0f;\n" .
-                 "--:-:-:-:1      SHF.R.U64 pred_bits, pred_bits, 8, pred_bits;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track00.CC, track00, param_4YXN_n3XNp;\n",
+        j0c50 => "--:-:-:-:1  \@P6 SHF.L.U64 preds, preds, 8, preds;\n",
 
-        j2c16 => "--:-:-:-:1  \@P6 IADD.X track01,    track01, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track10.CC, track10, param_4YXN_n3XNp;\n",
+        j0c55 => "04:-:-:-:1  \@P5 FADD TI30, i10, -i30;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI31, i11, -i31;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI32, i12, -i32;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI33, i13, -i33;\n",
+
+        j0c57 => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype i30, [track + ${dsize}x<3*$W*$N + 0*$N>];\n",
+        j0c59 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype i31, [track + ${dsize}x<3*$W*$N + 1*$N>];\n",
+        j0c61 => "--:-:-:-:1  \@P2 LDG.E.CI.$dtype i32, [track + ${dsize}x<3*$W*$N + 2*$N>];\n",
+        j0c63 => "--:-:-:-:1  \@P3 LDG.E.CI.$dtype i33, [track + ${dsize}x<3*$W*$N + 3*$N>];\n",
+        j1c1  => "--:-:-:-:1 \@!P0 I2F.F32.U32 i30, RZ;\n",
+        j1c3  => "--:-:-:-:1 \@!P1 I2F.F32.U32 i31, RZ;\n",
+        j1c5  => "--:-:-:-:1 \@!P2 I2F.F32.U32 i32, RZ;\n",
+        j1c7  => "--:-:-:-:1 \@!P3 I2F.F32.U32 i33, RZ;\n" .
+                 "--:-:-:-:1      R2P PR, preds, 0x0f;\n" .
+                 "--:-:-:-:1  \@P5 FADD I00, TI00, -TI02;\n" .
+                 "--:-:-:-:1  \@P5 FADD I03, TI01, -TI03;\n" .
+                 "--:-:-:-:1  \@P5 FADD I30, TI30, -TI32;\n" .
+                 "--:-:-:-:1  \@P5 FADD I33, TI31, -TI33;\n" .
+                 "--:-:-:-:1  \@P6 SHF.R.U64 preds, preds, 4, preds;\n",
+
+        j1c9  => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(0*4 + 0)>], I00;\n",
+        j1c11 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(0*4 + 3)>], I03;\n",
+        j1c13 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(3*4 + 0)>], I30;\n",
+        j1c15 => "--:3:-:-:1  \@P5 STS [writeS + 4x<32*(3*4 + 3)>], I33;\n",
 
 
-        j2c18 => "02:-:-:-:1  \@P5 FADD Y1X0, y1x0,  y2x0;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y1X1, y1x1,  y2x1;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y1X2, y1x2,  y2x2;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y1X3, y1x3,  y2x3;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y2X0, y2x0, -y1x0;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y2X1, y2x1, -y1x1;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y2X2, y2x2, -y1x2;\n" .
-                 "--:-:-:-:1  \@P5 FADD Y2X3, y2x3, -y1x3;\n" .
-                 "--:-:-:-:1  \@P5 FADD I04,  Y1X0, -Y1X2;\n" .
-                 "--:-:-:-:1  \@P5 FADD I05,  Y1X1,  Y1X2;\n" .
-                 "--:-:-:-:1  \@P5 FADD I06,  Y1X2, -Y1X1;\n" .
-                 "--:-:-:-:1  \@P5 FADD I07,  Y1X1, -Y1X3;\n",
+        j1c29 => "04:-:-:-:1  \@P5 FADD TI10,  i10, i20;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI20, -i10, i20;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI11,  i11, i21;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI21, -i11, i21;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI12,  i12, i22;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI22, -i12, i22;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI13,  i13, i23;\n" .
+                 "--:-:-:-:1  \@P5 FADD TI23, -i13, i23;\n",
 
-        j2c19 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*04>], I04;\n",
-        j2c21 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*05>], I05;\n",
-        j2c23 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*06>], I06;\n",
-        j2c25 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*07>], I07;\n",
+        j1c30 => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype i10, [track + ${dsize}x<1*$W*$N + 0*$N>];\n",
+        j1c32 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype i11, [track + ${dsize}x<1*$W*$N + 1*$N>];\n",
+        j1c34 => "--:-:-:-:1  \@P2 LDG.E.CI.$dtype i12, [track + ${dsize}x<1*$W*$N + 2*$N>];\n",
+        j1c36 => "--:-:-:-:1  \@P3 LDG.E.CI.$dtype i13, [track + ${dsize}x<1*$W*$N + 3*$N>];\n",
+        j1c38 => "--:-:-:-:1 \@!P0 I2F.F32.U32 i10, RZ;\n",
+        j1c40 => "--:-:-:-:1 \@!P1 I2F.F32.U32 i11, RZ;\n",
+        j1c42 => "--:-:-:-:1 \@!P2 I2F.F32.U32 i12, RZ;\n",
+        j1c44 => "--:-:-:-:1 \@!P3 I2F.F32.U32 i13, RZ;\n" .
+                 "--:-:-:-:1      R2P PR, preds, 0x0f;\n" .
+                 "--:-:-:-:1  \@P5 FADD I10, TI10, -TI12;\n" .
+                 "--:-:-:-:1  \@P5 FADD I20, TI20, -TI22;\n" .
+                 "--:-:-:-:1  \@P5 FADD I13, TI11, -TI13;\n" .
+                 "--:-:-:-:1  \@P5 FADD I23, TI21, -TI23;\n" .
+                 "--:-:-:-:1  \@P6 SHF.L.U64 preds, preds, 8, preds;\n",
 
-        j2c27 => "--:-:-:-:1  \@P6 IADD.X track11,    track11, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track20.CC, track20, param_4YXN_n3XNp;\n",
+        j1c46 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(1*4 + 0)>], I10;\n",
+        j1c48 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(2*4 + 0)>], I20;\n",
+        j1c50 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(1*4 + 3)>], I13;\n",
+        j1c52 => "--:3:-:-:1  \@P5 STS [writeS + 4x<32*(2*4 + 3)>], I23;\n",
 
-        j2c31 => "--:-:-:-:1  \@P5 FADD I08,  Y2X0, -Y2X2;\n" .
-                 "--:-:-:-:1  \@P5 FADD I11,  Y2X1, -Y2X3;\n" .
-                 "--:-:-:-:1  \@P5 FADD I09,  Y2X1,  Y2X2;\n" .
-                 "--:-:-:-:1  \@P5 FADD I10,  Y2X2, -Y2X1;\n",
 
-        j2c32 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*08>], I08;\n",
-        j2c34 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*11>], I11;\n",
-        j2c36 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*09>], I09;\n",
-        j2c38 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*10>], I10;\n",
+        j2c8  => "04:-:-:-:1  \@P5 FADD I21,  TI21, TI22;\n" .
+                 "--:-:-:-:1  \@P5 FADD I22, -TI21, TI22;\n",
 
-        j2c40 => "--:-:-:-:1  \@P6 IADD.X track21,    track21, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track30.CC, track30, param_4YXN_n3XNp;\n",
+        j2c11 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(2*4 + 1)>], I21;\n",
+        j2c13 => "--:3:-:-:1  \@P5 STS [writeS + 4x<32*(2*4 + 2)>], I22;\n",
 
-        j2c46 => "--:-:-:-:1  \@P6 IADD.X track31,    track31, RZ;\n",
+        j2c15 => "--:-:-:-:1  \@P0 LDG.E.CI.$dtype i20, [track + ${dsize}x<2*$W*$N + 0*$N>];\n",
+        j2c17 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype i21, [track + ${dsize}x<2*$W*$N + 1*$N>];\n",
+        j2c19 => "--:-:-:-:1  \@P2 LDG.E.CI.$dtype i22, [track + ${dsize}x<2*$W*$N + 2*$N>];\n",
+        j2c21 => "--:6:2:-:1  \@P3 LDG.E.CI.$dtype i23, [track + ${dsize}x<2*$W*$N + 3*$N>];\n",
+        j2c23 => "--:-:-:-:1 \@!P0 I2F.F32.U32 i20, RZ;\n",
+        j2c25 => "--:-:-:-:1 \@!P1 I2F.F32.U32 i21, RZ;\n",
+        j2c27 => "--:-:-:-:1 \@!P2 I2F.F32.U32 i22, RZ;\n",
+        j2c29 => "--:-:-:-:1 \@!P3 I2F.F32.U32 i23, RZ;\n",
+
+        j2c30 => "04:-:-:-:1  \@P5 FADD I01,  TI01, TI02;\n" .
+                 "--:-:-:-:1  \@P5 FADD I02, -TI01, TI02;\n" .
+                 "--:-:-:-:1  \@P5 FADD I11,  TI11, TI12;\n" .
+                 "--:-:-:-:1  \@P5 FADD I12, -TI11, TI12;\n" .
+                 "--:-:-:-:1  \@P5 FADD I31,  TI31, TI32;\n" .
+                 "--:-:-:-:1  \@P5 FADD I32, -TI31, TI32;\n",
+
+        j2c31 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(0*4 + 1)>], I01;\n",
+        j2c33 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(0*4 + 2)>], I02;\n",
+        j2c35 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(1*4 + 1)>], I11;\n",
+        j2c37 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(1*4 + 2)>], I12;\n",
+        j2c39 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(3*4 + 1)>], I31;\n",
+        j2c41 => "--:-:-:-:1  \@P5 STS [writeS + 4x<32*(3*4 + 2)>], I32;\n",
 
         j2c62 => "--:-:-:-:5      BAR.SYNC 0;\n" .
-                 "--:-:-:-:0  \@P5 LOP.XOR readIs, readIs, 4x<512*4*2>;\n" .
-                 "--:-:-:-:1 \@!P0 I2I.U32.U32 y0x0, RZ;\n" .
-                 "--:-:-:-:0  \@P5 LOP.XOR readFs, readFs, 4x<512*4*2>;\n" .
-                 "--:-:-:-:1  \@P0 LDG.E.CI$dtype y0x0, [track0];\n" .
-                 "--:-:-:-:0  \@P5 LOP.XOR writeS, writeS, 4x<512*4*2>;\n" .
-                 "--:-:-:-:1 \@!P1 I2I.U32.U32 y0x1, RZ;\n",
-        j2c63 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype y0x1, [track1];\n",
-        j3c0  => "--:-:-:-:1 \@!P2 I2I.U32.U32 y0x2, RZ;\n",
-        j3c1  => "--:-:-:-:1  \@P2 LDG.E.CI$dtype y0x2, [track2];\n",
-        j3c2  => "--:-:-:-:1 \@!P3 I2I.U32.U32 y0x3, RZ;\n",
-        j3c3  => "--:6:2:-:1  \@P3 LDG.E.CI$dtype y0x3, [track3];\n" .
-                 "--:-:-:Y:8      R2P PR, pred_bits, 0x0f;\n" .
-                 "20:-:-:-:1  \@P6 IADD   track00.CC, track00, param_2XNp;\n" .
-                 "--:-:-:-:1      SHF.L.U64 pred_bits, pred_bits, 4, pred_bits;\n",
+                 "--:-:-:-:1  \@P5 LOP.XOR readIs, readIs, 4x<512*4*2>;\n" .
+                 "--:-:-:-:1  \@P5 LOP.XOR readFs, readFs, 4x<512*4*2>;\n" .
+                 "--:-:-:-:1  \@P5 LOP.XOR writeS, writeS, 4x<512*4*2>;\n",
 
-        j3c7  => "--:-:-:-:1 \@!P0 I2I.U32.U32 y2x0, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track01,    track01, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track10.CC, track10, param_2XNp;\n",
-
-        j3c12 => "--:-:-:-:1  \@P0 LDG.E.CI$dtype y2x0, [track0];\n" .
-                 "--:-:-:-:0  \@P6 IADD.X track11,    track11, RZ;\n" .
-                 "--:-:-:-:1 \@!P1 I2I.U32.U32 y2x1, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track20.CC, track20, param_2XNp;\n",
-
-        j3c13 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype y2x1, [track1];\n",
-
-        j3c17 => "--:-:-:-:1 \@!P2 I2I.U32.U32 y2x2, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track21,    track21, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track30.CC, track30, param_2XNp;\n",
-
-        j3c18 => "--:-:-:-:1  \@P2 LDG.E.CI$dtype y2x2, [track2];\n",
-
-        j3c22 => "--:-:-:-:1 \@!P3 I2I.U32.U32 y2x3, RZ;\n" .
-                 "--:-:-:-:2  \@P6 IADD.X track31,    track31, RZ;\n",
-
-        j3c23 => "--:6:3:-:1  \@P3 LDG.E.CI$dtype y2x3, [track3];\n" .
-                 "--:-:-:Y:8      R2P PR, pred_bits, 0x0f;\n" .
-                 "20:-:-:-:1  \@P6 IADD   track00.CC, track00, -param_XNp;\n" .
-                 "--:-:-:-:1      SHF.R.U64 pred_bits, pred_bits, 8, pred_bits;\n",
-
-        j3c27 => "--:-:-:-:1 \@!P0 I2I.U32.U32 y1x0, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track01,    track01, -RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track10.CC, track10, -param_XNp;\n",
-
-        j3c28 => "--:-:-:-:1  \@P0 LDG.E.CI$dtype y1x0, [track0];\n",
-
-        j3c32 => "--:-:-:-:1 \@!P1 I2I.U32.U32 y1x1, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track11,    track11, -RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track20.CC, track20, -param_XNp;\n",
-
-        j3c33 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype y1x1, [track1];\n",
-
-        j3c37 => "--:-:-:-:1 \@!P2 I2I.U32.U32 y1x2, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track21,    track21, -RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track30.CC, track30, -param_XNp;\n",
-
-        j3c38 => "--:-:-:-:1  \@P2 LDG.E.CI$dtype y1x2, [track2];\n",
-
-        j3c42 => "--:-:-:-:1 \@!P3 I2I.U32.U32 y1x3, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track31,    track31, -RZ;\n",
-
-        j3c44 => "--:6:4:-:1  \@P3 LDG.E.CI$dtype y1x3, [track3];\n" .
-                 "--:-:-:Y:8      R2P PR, pred_bits, 0x0f;\n" .
-                 "20:-:-:-:1  \@P6 IADD   track00.CC, track00, param_2XNp;\n" .
-                 "--:-:-:-:1      SHF.L.U64 pred_bits, pred_bits, 12, pred_bits;\n",
-
-        j3c48 => "--:-:-:-:1 \@!P0 I2I.U32.U32 y3x0, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track01,    track01, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track10.CC, track10, param_2XNp;\n",
-
-        j3c49 => "--:-:-:-:1  \@P0 LDG.E.CI$dtype y3x0, [track0];\n",
-
-        j3c53 => "--:-:-:-:1 \@!P1 I2I.U32.U32 y3x1, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track11,    track11, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track20.CC, track20, param_2XNp;\n",
-
-        j3c54 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype y3x1, [track1];\n",
-
-        j3c58 => "--:-:-:-:1 \@!P2 I2I.U32.U32 y3x2, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track21,    track21, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD   track30.CC, track30, param_2XNp;\n",
-
-        j3c59 => "--:-:-:-:1  \@P2 LDG.E.CI$dtype y3x2, [track2];\n",
-
-        j3c60 => "--:-:-:-:4 \@!P3 I2I.U32.U32 y3x3, RZ;\n" .
-                 "--:-:-:-:1  \@P6 IADD.X track31,    track31, RZ;\n",
-
-        j3c62 => "--:-:5:-:1  \@P3 LDG.E.CI$dtype y3x3, [track3];\n",
-
+        j3c57 => "20:-:-:-:1  \@P6 IADD   track0.CC, track0, param_4HWNp;\n",
+        j3c62 => "--:-:-:-:1  \@P6 IADD.X track1,    track1, RZ;\n",
 
         j3c63 => "--:-:-:Y:5  \@P5 BRA.U IMAGE_LOOP;\n" .
                  "--:-:-:Y:5      BRA.U END_LOOP;\n",
-
-        $convert_in ? (
-            j0c37 => "02:-:-:-:1      $convert_in y0x0, y0x0;\n",
-            j0c41 => "--:-:-:-:1      $convert_in y0x1, y0x1;\n",
-            j0c45 => "--:-:-:-:1      $convert_in y0x2, y0x2;\n",
-            j0c49 => "--:-:2:-:1      $convert_in y0x3, y0x3;\n",
-
-            j0c53 => "04:-:-:-:1      $convert_in y2x0, y2x0;\n",
-            j0c57 => "--:-:-:-:1      $convert_in y2x1, y2x1;\n",
-            j0c61 => "--:-:-:-:1      $convert_in y2x2, y2x2;\n",
-            j1c1  => "--:-:3:-:1      $convert_in y2x3, y2x3;\n",
-
-            j1c5  => "08:-:-:-:1      $convert_in y1x0, y1x0;\n",
-            j1c10 => "--:-:-:-:1      $convert_in y1x1, y1x1;\n",
-            j1c14 => "--:-:-:-:1      $convert_in y1x2, y1x2;\n",
-            j1c16 => "--:-:4:-:1      $convert_in y1x3, y1x3;\n",
-
-            j1c21 => "10:-:-:-:1      $convert_in y3x0, y3x0;\n",
-            j1c23 => "--:-:-:-:1      $convert_in y3x1, y3x1;\n",
-            j1c27 => "--:-:-:-:1      $convert_in y3x2, y3x2;\n",
-            j1c29 => "--:-:5:-:1      $convert_in y3x3, y3x3;\n",
-        ) : ()
     );
     my @cOrder;
     my @swirl = ([0,2],[1,2],[1,0],[0,0]);
@@ -1065,12 +690,10 @@ IMAGE_LOOP:
         my $rsOffset = ($j + 1) % 4;
         my $rsPred   = $j == 3 ? '@P5' : '   ';
 
-        my ($c0, $c2, $c4, $c6) = $j == 3 ? (4,6,8,10) : (0,2,4,6);
-
-        $insert{"j${j}c$c0"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dIx0, [readIs + 4x<%d*512 + 00>];\n", $rsPred, $nOdd, $rsOffset;
-        $insert{"j${j}c$c2"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dFy0, [readFs + 4x<%d*512 + 00>];\n", $rsPred, $nOdd, $rsOffset;
-        $insert{"j${j}c$c4"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dIx4, [readIs + 4x<%d*512 + 16>];\n", $rsPred, $nOdd, $rsOffset;
-        $insert{"j${j}c$c6"} = sprintf "--:-:1:-:1  %s LDS.U.128 j%dFy4, [readFs + 4x<%d*512 + 16>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c0"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dIx0, [readIs + 4x<%d*512 + 00>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c2"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dFy0, [readFs + 4x<%d*512 + 00>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c4"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dIx4, [readIs + 4x<%d*512 + 16>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c6"} = sprintf "--:-:1:-:1  %s LDS.U.128 j%dFy4, [readFs + 4x<%d*512 + 16>];\n", $rsPred, $nOdd, $rsOffset;
 
         foreach my $c (0 .. 63)
         {
@@ -1093,14 +716,138 @@ IMAGE_LOOP:
 +]
 
 FILTER_LOOP:
-
+--:-:-:-:1      ISETP.GT.AND P0, PT, C, RZ, PT;
 [+
-    our ($dtype, $convert_in, $FX, $vec_size, $dtype_size);
+    our ($dtype, $convert_in, $FX, $vsize, $dsize, $K);
     my %insert = (
 
-        j0c57 => "--:-:-:-:1      ISETP.GE.AND P1, PT, C,  4, P1;\n",
-        j0c59 => "--:-:-:-:1      ISETP.GE.AND P0, PT, C, RZ, PT;\n" .
+        j0c1  => "--:-:-:-:1      ISETP.GT.AND P1, PT, C, 4, PT;\n" .
                  "--:-:-:-:1      IADD C, C, -4;\n",
+
+        $FX ? (
+            $convert_in ? (
+                j1c8  => "02:-:-:-:1  \@P0 $convert_in F03, F01.H1;\n",
+                j1c12 => "--:-:-:-:1  \@P0 $convert_in F02, F01.H0;\n",
+                j1c16 => "--:-:-:-:1  \@P0 $convert_in F01, F00.H1;\n",
+                j1c20 => "--:-:2:-:1  \@P0 $convert_in F00, F00.H0;\n",
+
+                j1c26 => "04:-:-:-:1  \@P0 $convert_in F13, F11.H1;\n",
+                j1c30 => "--:-:-:-:1  \@P0 $convert_in F12, F11.H0;\n",
+                j1c34 => "--:-:-:-:1  \@P0 $convert_in F11, F10.H1;\n",
+                j1c38 => "--:-:3:-:1  \@P0 $convert_in F10, F10.H0;\n",
+
+                j2c8  => "08:-:-:-:1  \@P0 $convert_in F23, F21.H1;\n",
+                j2c12 => "--:-:-:-:1  \@P0 $convert_in F22, F21.H0;\n",
+                j2c16 => "--:-:-:-:1  \@P0 $convert_in F21, F20.H1;\n",
+                j2c20 => "--:-:4:-:1  \@P0 $convert_in F20, F20.H0;\n",
+
+                j2c26 => "10:-:-:-:1  \@P0 $convert_in F33, F31.H1;\n",
+                j2c30 => "--:-:-:-:1  \@P0 $convert_in F32, F31.H0;\n",
+                j2c34 => "--:-:-:-:1  \@P0 $convert_in F31, F30.H1;\n",
+                j2c38 => "--:6:5:-:1  \@P0 $convert_in F30, F30.H0;\n",
+            ) : (),
+
+            j1c22 => "02:2:-:-:1  \@P0 STS.128 [writeS + 4x<512*4 + 00*4>], F0;\n",
+            j1c24 => "02:-:2:-:1  \@P1 LDG.E.CG.$vsize F0, [track0 + 4x<00 * $dsize>];\n",
+
+            j1c40 => "04:3:-:-:1  \@P0 STS.128 [writeS + 4x<512*4 + 32*4>], F1;\n",
+            j1c42 => "04:-:3:-:1  \@P1 LDG.E.CG.$vsize F1, [track0 + 4x<32 * $dsize>];\n",
+
+            j2c22 => "08:4:-:-:1  \@P0 STS.128 [writeS + 4x<512*4 + 64*4>], F2;\n",
+            j2c24 => "08:-:4:-:1  \@P1 LDG.E.CG.$vsize F2, [track0 + 4x<64 * $dsize>];\n",
+
+            j2c40 => "10:5:-:-:1  \@P0 STS.128 [writeS + 4x<512*4 + 96*4>], F3;\n",
+            j2c42 => "10:6:5:-:1  \@P1 LDG.E.CG.$vsize F3, [track0 + 4x<96 * $dsize>];\n",
+
+            j3c57 => "20:-:-:-:1  \@P1 IADD   track0.CC, track0, 4x<32*16 * $dsize>;\n",
+            j3c62 => "--:-:-:-:1  \@P1 IADD.X track1,    track1, RZ;\n",
+
+        ) : (
+            $convert_in ? (
+                j0c5  => "02:-:-:-:1      $convert_in f00, f00;\n",
+                j0c7  => "--:-:-:-:1      $convert_in f01, f01;\n",
+                j0c9  => "--:-:-:-:1      $convert_in f02, f02;\n",
+
+                j0c11 => "--:-:-:-:1      $convert_in f20, f20;\n",
+                j0c13 => "--:-:-:-:1      $convert_in f21, f21;\n",
+                j0c15 => "--:-:2:-:1      $convert_in f22, f22;\n",
+
+                j0c17 => "--:-:-:-:1      $convert_in f10, f10;\n",
+                j0c19 => "--:-:-:-:1      $convert_in f11, f11;\n",
+                j0c21 => "--:-:4:-:1      $convert_in f12, f12;\n",
+            ) : (),
+
+            j0c33 => "02:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(0*4 + 0)>], F00;\n",
+            j0c35 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(0*4 + 3)>], F03;\n",
+            j0c37 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(3*4 + 0)>], F30;\n",
+            j0c39 => "--:3:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(3*4 + 3)>], F33;\n",
+
+            j0c40 => "--:-:-:-:1  \@P0 FADD tb0, TF00, TF02;\n" .
+                     "--:-:-:-:1  \@P0 FADD tb3, TF30, TF32;\n" .
+                     "--:-:-:-:1  \@P0 FADD ta0, f00,  f20;\n" .
+                     "--:-:-:-:1  \@P0 FADD ta1, f01,  f21;\n" .
+                     "--:-:-:-:1  \@P0 FADD ta2, f02,  f22;\n",
+
+            j0c41 => "--:-:-:-:1  \@P0 FMUL tb0, tb0, 0.5;\n" .
+                     "--:-:-:-:1  \@P0 FMUL tb3, tb3, 0.5;\n" .
+                     "--:-:-:-:1  \@P0 FMUL ta0, ta0, 0.5;\n" .
+                     "--:-:-:-:1  \@P0 FMUL ta1, ta1, 0.5;\n" .
+                     "--:-:-:-:1  \@P0 FMUL ta2, ta2, 0.5;\n",
+
+            j0c42 => "--:-:-:-:1  \@P0 FFMA F01, TF01,  0.5, tb0;\n" .
+                     "--:-:-:-:1  \@P0 FFMA F02, TF01, -0.5, tb0;\n" .
+                     "--:-:-:-:1  \@P0 FFMA F31, TF31,  0.5, tb3;\n" .
+                     "--:-:-:-:1  \@P0 FFMA F32, TF31, -0.5, tb3;\n",
+
+            j0c45 => "04:-:-:-:1  \@P1 LDG.E.CI.$dtype f00, [track + ${dsize}x<0*3*$K + 0*$K>];\n",
+            j0c47 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype f01, [track + ${dsize}x<0*3*$K + 1*$K>];\n",
+            j0c49 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype f02, [track + ${dsize}x<0*3*$K + 2*$K>];\n",
+
+            j0c51 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype f20, [track + ${dsize}x<2*3*$K + 0*$K>];\n",
+            j0c53 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype f21, [track + ${dsize}x<2*3*$K + 1*$K>];\n",
+            j0c55 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype f22, [track + ${dsize}x<2*3*$K + 2*$K>];\n",
+
+            j1c8  => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(0*4 + 1)>], F01;\n",
+            j1c10 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(0*4 + 2)>], F02;\n",
+            j1c12 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(3*4 + 1)>], F31;\n",
+            j1c14 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(3*4 + 2)>], F32;\n",
+
+            j1c15 => "08:-:-:-:1  \@P0 FFMA TF10, f10,  0.5, ta0;\n" .
+                     "--:-:-:-:1  \@P0 FFMA TF20, f10, -0.5, ta0;\n" .
+                     "--:-:-:-:1  \@P0 FFMA TF11, f11,  0.5, ta1;\n" .
+                     "--:-:-:-:1  \@P0 FFMA TF21, f11, -0.5, ta1;\n" .
+                     "--:-:-:-:1  \@P0 FFMA TF12, f12,  0.5, ta2;\n" .
+                     "--:-:-:-:1  \@P0 FFMA TF22, f12, -0.5, ta2;\n",
+
+            j1c16 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype f10, [track + ${dsize}x<1*3*$K + 0*$K>];\n",
+            j1c18 => "--:-:-:-:1  \@P1 LDG.E.CI.$dtype f11, [track + ${dsize}x<1*3*$K + 1*$K>];\n",
+            j1c20 => "--:6:2:-:1  \@P1 LDG.E.CI.$dtype f12, [track + ${dsize}x<1*3*$K + 2*$K>];\n",
+
+            j1c22 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(1*4 + 0)>], F10;\n",
+            j1c24 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(2*4 + 0)>], F20;\n",
+            j1c26 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(1*4 + 3)>], F13;\n",
+            j1c28 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(2*4 + 3)>], F23;\n",
+
+            j1c29 => "--:-:-:-:1  \@P0 FADD tb1, TF10, TF12;\n" .
+                     "--:-:-:-:1  \@P0 FADD tb2, TF20, TF22;\n",
+
+            j1c34 => "--:-:-:-:1  \@P0 FMUL tb1, tb1, 0.5;\n" .
+                     "--:-:-:-:1  \@P0 FMUL tb2, tb2, 0.5;\n",
+
+            j1c39 => "--:-:-:-:1  \@P0 FFMA F11, TF11,  0.5, tb1;\n" .
+                     "--:-:-:-:1  \@P0 FFMA F12, TF11, -0.5, tb1;\n" .
+                     "--:-:-:-:1  \@P0 FFMA F21, TF21,  0.5, tb2;\n" .
+                     "--:-:-:-:1  \@P0 FFMA F22, TF21, -0.5, tb2;\n",
+
+            j2c8  => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(1*4 + 1)>], F11;\n",
+            j2c10 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(1*4 + 2)>], F12;\n",
+            j2c12 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(2*4 + 1)>], F21;\n",
+            j2c14 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*(2*4 + 2)>], F22;\n",
+
+
+            j3c57 => "20:-:-:-:1  \@P1 IADD   track0.CC, track0, param_4RSKp;\n",
+            j3c62 => "--:-:-:-:1  \@P1 IADD.X track1,    track1, RZ;\n",
+        ),
 
         j2c62 => "--:-:-:-:5      BAR.SYNC 0;\n" .
                  "--:-:-:-:1  \@P0 LOP.XOR readIs, readIs, 4x<512*4*2>;\n" .
@@ -1108,169 +855,6 @@ FILTER_LOOP:
                  "--:-:-:-:1  \@P0 LOP.XOR writeS, writeS, 4x<512*4*2>;\n",
 
         j3c63 => "--:-:-:Y:5  \@P0 BRA.U FILTER_LOOP;\n",
-
-        $FX ? (
-
-            j0c50 => "20:-:-:-:1  \@P1 IADD   track00.CC, track00, param_4C_batchKp;\n",
-            j0c55 => "--:-:-:-:1  \@P1 IADD.X track01,    track01, RZ;\n",
-
-            j1c22 => "02:2:-:-:1  \@P0 STS.128 [writeS + 4x<512*4 + 00*4>], F0;\n",
-            j1c24 => "02:-:2:-:1  \@P1 LDG.E.CG.$vec_size F0, [track0 + 4x<00 * $dtype_size>];\n",
-
-            j1c40 => "04:3:-:-:1  \@P0 STS.128 [writeS + 4x<512*4 + 32*4>], F1;\n",
-            j1c42 => "04:-:3:-:1  \@P1 LDG.E.CG.$vec_size F1, [track0 + 4x<32 * $dtype_size>];\n",
-
-            j2c22 => "08:4:-:-:1  \@P0 STS.128 [writeS + 4x<512*4 + 64*4>], F2;\n",
-            j2c24 => "08:-:4:-:1  \@P1 LDG.E.CG.$vec_size F2, [track0 + 4x<64 * $dtype_size>];\n",
-
-            j2c40 => "10:5:-:-:1  \@P0 STS.128 [writeS + 4x<512*4 + 96*4>], F3;\n",
-            j2c42 => "10:6:5:-:1  \@P1 LDG.E.CG.$vec_size F3, [track0 + 4x<96 * $dtype_size>];\n",
-
-            $convert_in ? (
-                j1c8  => "02:-:-:-:1  \@P0 F2F.F32.F16 F03, F01.H1;\n",
-                j1c12 => "--:-:-:-:1  \@P0 F2F.F32.F16 F02, F01.H0;\n",
-                j1c16 => "--:-:-:-:1  \@P0 F2F.F32.F16 F01, F00.H1;\n",
-                j1c20 => "--:-:2:-:1  \@P0 F2F.F32.F16 F00, F00.H0;\n",
-
-                j1c26 => "04:-:-:-:1  \@P0 F2F.F32.F16 F13, F11.H1;\n",
-                j1c30 => "--:-:-:-:1  \@P0 F2F.F32.F16 F12, F11.H0;\n",
-                j1c34 => "--:-:-:-:1  \@P0 F2F.F32.F16 F11, F10.H1;\n",
-                j1c38 => "--:-:3:-:1  \@P0 F2F.F32.F16 F10, F10.H0;\n",
-
-                j2c8  => "08:-:-:-:1  \@P0 F2F.F32.F16 F23, F21.H1;\n",
-                j2c12 => "--:-:-:-:1  \@P0 F2F.F32.F16 F22, F21.H0;\n",
-                j2c16 => "--:-:-:-:1  \@P0 F2F.F32.F16 F21, F20.H1;\n",
-                j2c20 => "--:-:4:-:1  \@P0 F2F.F32.F16 F20, F20.H0;\n",
-
-                j2c26 => "10:-:-:-:1  \@P0 F2F.F32.F16 F33, F31.H1;\n",
-                j2c30 => "--:-:-:-:1  \@P0 F2F.F32.F16 F32, F31.H0;\n",
-                j2c34 => "--:-:-:-:1  \@P0 F2F.F32.F16 F31, F30.H1;\n",
-                j2c38 => "--:-:5:-:1  \@P0 F2F.F32.F16 F30, F30.H0;\n",
-            ) : ()
-
-        ) : (
-
-            j1c23 => "02:-:-:-:1  \@P0 FMUL temp00, r0s1, 0.5;\n" .
-                     "--:-:-:-:1  \@P0 FADD temp01, r0s0, r0s2;\n",
-            j1c28 => "--:-:-:-:1  \@P0 FFMA F01, temp01, 0.5,  temp00;\n" .
-                     "--:-:-:-:1  \@P0 FFMA F02, temp01, 0.5, -temp00;\n",
-            j1c29 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*00>], F00;\n",
-            j1c31 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*01>], F01;\n",
-            j1c33 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*02>], F02;\n",
-            j1c35 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*03>], F03;\n",
-            j1c48 => "04:-:-:-:1  \@P0 FADD temp02, r2s0, r2s2;\n" .
-                     "--:-:-:-:1  \@P0 FMUL temp08, r2s1, 0.5;\n",
-            j1c53 => "--:-:-:-:1  \@P0 FFMA F13, temp02, 0.5,  temp08;\n" .
-                     "--:-:-:-:1  \@P0 FFMA F14, temp02, 0.5, -temp08;\n",
-            j1c54 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*12>], F12;\n",
-            j1c56 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*13>], F13;\n",
-            j1c58 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*14>], F14;\n",
-            j1c60 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*15>], F15;\n",
-
-            j2c21 => "--:-:-:-:1  \@P0 FADD temp10, temp01, temp02;\n" .
-                     "--:-:-:-:1  \@P0 FADD temp05, r0s1,   r2s1;\n" .
-                     "08:-:-:-:1  \@P0 FADD temp07, r1s0,   r1s2;\n" .
-                     "--:-:-:-:1  \@P0 FMUL temp09, r1s1, 0.25;\n",
-
-            j2c22 => "--:-:-:-:1  \@P1 IADD   track00.CC, track00, param_4RSK_nSKp;\n",
-
-            j2c24 => "--:-:-:-:1  \@P0 FADD temp11, temp10,  temp05;\n" .
-                     "--:-:-:-:1  \@P0 FADD temp14, temp10, -temp05;\n" .
-                     "--:-:-:-:1  \@P0 FFMA temp13, temp07, 0.25,  temp09;\n" .
-                     "--:-:-:-:1  \@P0 FFMA temp15, temp07, 0.25, -temp09;\n",
-
-            j2c25 => "--:-:-:-:1  \@P1 IADD.X track01,    track01, RZ;\n" .
-                     "--:-:-:-:1  \@P1 IADD   track10.CC, track10, param_4RSK_nSKp;\n",
-
-
-            j2c28 => "--:-:-:-:1  \@P0 FFMA F05, temp11, 0.25,  temp13;\n" .
-                     "--:-:-:-:1  \@P0 FFMA F09, temp11, 0.25, -temp13;\n" .
-                     "--:-:-:-:1  \@P0 FFMA F06, temp14, 0.25,  temp15;\n" .
-                     "--:-:-:-:1  \@P0 FFMA F10, temp14, 0.25, -temp15;\n",
-
-
-            j2c29 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*05>], F05;\n",
-            j2c31 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*09>], F09;\n",
-            j2c33 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*06>], F06;\n",
-            j2c35 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*10>], F10;\n",
-
-            j2c36 => "--:-:-:-:1  \@P1 IADD.X track11,    track11, RZ;\n" .
-                     "--:-:-:-:1  \@P1 IADD   track20.CC, track20, param_4RSK_nSKp;\n",
-
-            j2c40 => "--:-:-:-:1  \@P0 FMUL temp03, r1s0, 0.5;\n" .
-                     "--:-:-:-:1  \@P0 FADD temp06, r0s0, r2s0;\n" .
-                     "--:-:-:-:1  \@P0 FMUL temp04, r1s2, 0.5;\n",
-
-            j2c44 => "--:-:-:-:1  \@P0 FFMA F04, temp06, 0.5,  temp03;\n" .
-                     "--:-:-:-:1  \@P0 FFMA F08, temp06, 0.5, -temp03;\n",
-
-            j2c45 => "--:-:-:-:1  \@P1 IADD.X track21,    track21, RZ;\n",
-
-            j2c47 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*04>], F04;\n",
-            j2c49 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*08>], F08;\n",
-
-            j2c50 => "--:-:-:-:1  \@P0 FADD temp12, r0s2, r2s2;\n",
-
-            j2c55 => "--:-:-:-:1  \@P0 FFMA F07, temp12, 0.5,  temp04;\n" .
-                     "--:-:-:-:1  \@P0 FFMA F11, temp12, 0.5, -temp04;\n",
-
-            j2c58 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*07>], F07;\n",
-            j2c60 => "--:-:-:-:1  \@P0 STS [writeS + 4x<512*4 + 32*11>], F11;\n",
-
-
-
-
-            j3c8  => "--:-:-:-:1  \@P1 LDG.E.CI$dtype r0s0, [track0];\n",
-            j3c10 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype r0s1, [track1];\n",
-            j3c12 => "--:6:2:-:1  \@P1 LDG.E.CI$dtype r0s2, [track2];\n",
-
-            j3c13 => "20:-:-:-:1  \@P1 IADD   track00.CC, track00, param_2SKp;\n",
-
-            j3c18 => "--:-:-:-:1  \@P1 IADD.X track01,    track01, RZ;\n" .
-                     "--:-:-:-:1  \@P1 IADD   track10.CC, track10, param_2SKp;\n",
-
-            j3c19 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype r2s0, [track0];\n",
-
-            j3c23 => "--:-:-:-:1  \@P1 IADD.X track11,    track11, RZ;\n" .
-                     "--:-:-:-:1  \@P1 IADD   track20.CC, track20, param_2SKp;\n",
-
-            j3c24 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype r2s1, [track1];\n",
-
-            j3c28 => "--:-:-:-:1  \@P1 IADD.X track21,    track21, RZ;\n",
-
-            j3c30 => "--:6:3:-:1  \@P1 LDG.E.CI$dtype r2s2, [track2];\n",
-
-            j3c31 => "20:-:-:-:1  \@P1 IADD   track00.CC, track00, -param_SKp;\n",
-
-            j3c36 => "--:-:-:-:1  \@P1 IADD.X track01,    track01, -RZ;\n" .
-                     "--:-:-:-:1  \@P1 IADD   track10.CC, track10, -param_SKp;\n",
-
-            j3c37 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype r1s0, [track0];\n",
-
-            j3c41 => "--:-:-:-:1  \@P1 IADD.X track11,    track11, -RZ;\n" .
-                     "--:-:-:-:1  \@P1 IADD   track20.CC, track20, -param_SKp;\n",
-
-            j3c42 => "--:-:-:-:1  \@P1 LDG.E.CI$dtype r1s1, [track1];\n",
-
-            j3c46 => "--:-:-:-:1  \@P1 IADD.X track21,    track21, -RZ;\n",
-
-            j3c48 => "--:6:4:-:1  \@P1 LDG.E.CI$dtype r1s2, [track2];\n",
-
-            $convert_in ? (
-                j1c8  => "02:-:-:-:1      $convert_in r0s0, r0s0;\n",
-                j1c10 => "--:-:-:-:1      $convert_in r0s1, r0s1;\n",
-                j1c12 => "--:-:2:-:1      $convert_in r0s2, r0s2;\n",
-
-                j1c37 => "04:-:-:-:1      $convert_in r2s0, r2s0;\n",
-                j1c39 => "--:-:-:-:1      $convert_in r2s1, r2s1;\n",
-                j1c41 => "--:-:3:-:1      $convert_in r2s2, r2s2;\n",
-
-                j2c8  => "08:-:-:-:1      $convert_in r1s0, r1s0;\n",
-                j2c10 => "--:-:-:-:1      $convert_in r1s1, r1s1;\n",
-                j2c12 => "--:-:4:-:1      $convert_in r1s2, r1s2;\n",
-            ) : ()
-
-        )
     );
     my @cOrder;
     my @swirl = ([0,2],[1,2],[1,0],[0,0]);
@@ -1317,86 +901,97 @@ FILTER_LOOP:
 +]
 
 END_LOOP:
---:-:1:-:1      S2R nn, SR_CTAID.Y;
+--:-:1:-:1      S2R tid,   SR_TID.X;
+--:-:2:-:1      S2R idx_N, SR_CTAID.Z;
+--:-:3:-:1      S2R idx_K, SR_CTAID.Y;
 
 <SCHEDULE_BLOCK>
---:-:-:-:1      LOP.AND tid_31, tid, 31;
+01:-:-:-:1      LOP.AND tid_31, tid, 31;
 
---:-:-:-:1      SHR.U32 p, grid_yx, 16;
---:-:-:-:1      LOP.AND q, grid_yx, 0xffff;
+--:-:-:-:1      BFE idx_n, idx_nkpq, 0x041c;
+--:-:-:-:1      BFE idx_k, idx_nkpq, 0x0418;
+--:-:-:-:1      BFE idx_P, idx_nkpq, 0x0c0c;
+--:-:-:-:1      BFE idx_Q, idx_nkpq, 0x0c00;
+
+02:-:-:-:1      XMAD idx_N, idx_N, param_n, idx_n;
+04:-:-:-:1      XMAD idx_K, idx_K, param_k, idx_k;
+
+[+
+    our $bsum; return $bsum ? q{
+--:-:-:-:1      XMAD      bsum_offset, idx_Q, param_gridN,   idx_N;
+--:-:-:-:1      XMAD.LO2C bsum_offset, idx_P, param_gridQN,  bsum_offset;
+    } : '';
++]
+
+// x = grid_x << shiftX
+// y = grid_y << shiftY
+--:-:-:-:1      SHL p, idx_P, param_shiftP;
+--:-:-:-:1      SHL q, idx_Q, param_shiftQ;
+
+// Distribute the 8|4|2|1 blocks of the super block among 4|8|16|32 threads each of the warp
+--:-:-:-:1      BFE.U32 superP, tid, param_superP;
+--:-:-:-:1      BFE.U32 superQ, tid, param_superQ;
+--:-:-:-:1      ISCADD p, superP,  p, 1;
+--:-:-:-:1      ISCADD q, superQ,  q, 1;
+
+
+--:-:-:-:1      LOP.AND superN, tid, param_superN;
+--:-:-:-:1      SHL  n, idx_N, param_shiftN;
+--:-:-:-:1      IADD n, n, superN;
 
 --:-:-:-:1      MOV alpha, param_alpha;
---:-:-:-:1      MOV beta,  param_beta;
---:-:-:-:1      MOV flags, param_flags;
-
-01:-:-:-:1      SHL  nn, nn, param_shiftN;
---:-:-:-:1      MOV  mask_nn, -1;
---:-:-:-:1      SHL  mask_nn, mask_nn, param_shiftN;
---:-:-:-:1      LOP.AND mask_nn, tid, ~mask_nn;
---:-:-:-:1      IADD nn, nn, mask_nn;
+--:-:-:-:1      MOV32I one, 1.0;
 
 // Strip double buffering offsets, and the batch dimension on readFs (tid16<<4)
 // This gives us the shared memory write mapping for the thread's registers:
 // writeCs = readFs * 512 + readIs;
---:-:-:-:1      LOP.AND  tid_16, tid,   -16;
---:-:-:-:1      SHR.U32  tid_16, tid_16,  1;
---:-:-:-:1      ISCADD   tid_16, tid_16,   4x<512*4*3>, 4;
+--:-:-:-:1      LOP.AND  tid16, tid,   -16;
+--:-:-:-:1      SHR.U32  tid16, tid16,  1;
+--:-:-:-:1      ISCADD   tid16, tid16, 4x<512*4*3>, 4;
 --:-:-:-:1      LOP.AND readIs, readIs, ~4x<512*4*2>;
---:-:-:-:1      LOP.AND readFs, readFs, ~tid_16;
+--:-:-:-:1      LOP.AND readFs, readFs, ~tid16;
 --:-:-:-:1      ISCADD  writeCs, readFs, readIs, 9;
 
 // readCs = tid//32 * 512 + tid & 31
---:-:-:-:1      SHR.U32 tid_32, tid,  5;
---:-:-:-:1      ISCADD  readCs, tid_32, tid_31, 9;
+--:-:-:-:1      SHR.U32 tid32, tid,  5;
+--:-:-:-:1      ISCADD  readCs, tid32, tid_31, 9;
 --:-:-:-:1      SHL     readCs, readCs, 2;
 
-// k = k32*32 + tid//32
---:-:-:-:1      ISCADD  kk, k32, tid_32, 5;
-
-// sum = S + k
---:-:-:-:1      LEA      Sum0.CC, kk, param_Sum[0],     2;
---:-:-:-:1      LEA.HI.X Sum1,    kk, param_Sum[1], RZ, 2;
+// k = Idx_K*32 + tid//32
+--:-:-:-:1      ISCADD  k, idx_K, tid32, 5;
 
 // Out00 = k*PQN + p*QN + q*N + n
 // Out01 = Out00 + N
 // Out10 = Out00 + QN
 // Out11 = Out01 + QN
---:-:-:-:1      XMAD      to00, q,  param_N,    nn;
---:-:-:-:1      XMAD.LO2C to00, p,  param_QN,   to00;
---:-:-:-:1      XMAD.LO2C to00, kk, param_PQN,  to00;
---:-:-:-:1      IADD to01, to00, param_N;
---:-:-:-:1      IADD to10, to00, param_QN;
---:-:-:-:1      IADD to11, to01, param_QN;
---:-:-:-:1      LEA      Out00_0.CC, to00, param_O[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X Out00_1,    to00, param_O[1], RZ, [+ dtype_shift() +];
---:-:-:-:1      LEA      Out01_0.CC, to01, param_O[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X Out01_1,    to01, param_O[1], RZ, [+ dtype_shift() +];
---:-:-:-:1      LEA      Out10_0.CC, to10, param_O[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X Out10_1,    to10, param_O[1], RZ, [+ dtype_shift() +];
---:-:-:-:1      LEA      Out11_0.CC, to11, param_O[0],     [+ dtype_shift() +];
---:-:-:-:1      LEA.HI.X Out11_1,    to11, param_O[1], RZ, [+ dtype_shift() +];
+--:-:-:-:1      XMAD      out_offset, q, 1x<$N>,    n;
+--:-:-:-:1      XMAD.LO2C out_offset, p, param_QN,  out_offset;
+--:-:-:-:1      XMAD.LO2C out_offset, k, param_PQN, out_offset;
+
 
 --:-:-:-:1      MOV PQN8, param_PQN;
---:-:-:-:1      SHL PQN8, PQN8, [+ dtype_shift() + 3 +];
+--:-:-:-:1      SHL PQN8, PQN8, 3;
 
 --:-:-:-:1      IADD q2, q, 1;
 --:-:-:-:1      IADD p2, p, 1;
 
---:-:-:-:1      ISETP.LT.AND P0, PT, nn, param_N, PT; // nn < N
---:-:-:-:1      ISETP.LT.AND P2, PT, p,  param_P, P0; // y0 < Y && nn < N
---:-:-:-:1      ISETP.LT.AND P3, PT, q,  param_Q, P0; // x0 < X && nn < N
---:-:-:-:1      ISETP.LT.AND P4, PT, p2, param_P, P0; // y1 < Y && nn < N
---:-:-:-:1      ISETP.LT.AND P5, PT, q2, param_Q, P0; // x1 < X && nn < N
---:-:-:-:1      ISETP.NE.AND P6, PT, beta,    RZ, PT; // beta != 0
 
---:-:-:-:1      PSETP.AND.AND P0, PT, P2, P3, PT; // y0 && x0
---:-:-:-:1      PSETP.AND.AND P1, PT, P2, P5, PT; // y0 && x1
---:-:-:-:1      PSETP.AND.AND P2, PT, P4, P3, PT; // y1 && x0
---:-:-:-:1      PSETP.AND.AND P3, PT, P4, P5, PT; // y1 && x1
---:-:-:-:1      P2R pred_bits, PR, RZ, 0x0f;
---:-:-:-:1      ISETP.LT.AND P4, PT, kk, param_K, P6; // kk < K && beta
+--:-:-:-:1      ISETP.EQ.AND P6, PT, RZ, param_flags, PT; // ! no-op
+--:-:-:-:1      ISETP.LT.AND P6, PT, n,  1x<$N>,  P6; // n < N
+--:-:-:-:1      ISETP.LT.AND P2, PT, p,  param_P, PT; // p0 < P && n < N
+--:-:-:-:1      ISETP.LT.AND P3, PT, q,  1x<$Q>,  PT; // q0 < Q && n < N
+--:-:-:-:1      ISETP.LT.AND P4, PT, p2, param_P, PT; // p1 < P && n < N
+--:-:-:-:1      ISETP.LT.AND P5, PT, q2, 1x<$Q>,  PT; // q1 < Q && n < N
+
+--:-:-:-:1      PSETP.AND.AND P0, PT, P2, P3, P6; // p0 && q0
+--:-:-:-:1      PSETP.AND.AND P1, PT, P2, P5, P6; // p0 && q1
+--:-:-:-:1      PSETP.AND.AND P2, PT, P4, P3, P6; // p1 && q0
+--:-:-:-:1      PSETP.AND.AND P3, PT, P4, P5, P6; // p1 && q1
+--:-:-:-:1      P2R preds, PR, RZ, 0x0f;
+
+--:-:-:-:1      ISETP.EQ.AND P6, PT, tid_31, RZ, PT; // tid31 == 0
+
 </SCHEDULE_BLOCK>
-
 --:-:-:-:1      FMUL shuffle_x0y0, cx0y0, alpha;
 --:-:-:-:1      FMUL shuffle_x1y0, cx1y0, alpha;
 --:-:-:-:1      FMUL shuffle_x2y0, cx2y0, alpha;
@@ -1437,6 +1032,7 @@ END_LOOP:
 --:-:-:-:0      FMUL shuffle_x7y3, cx7y3, alpha;
 --:-:-:-:4      STS.128 [writeCs+4x<3*512 + 00>], shuffle_x0y3;
 --:-:-:-:1      STS.128 [writeCs+4x<3*512 + 16>], shuffle_x4y3;
+
 --:-:-:-:5      BAR.SYNC 0;
 
 --:-:-:-:5      CAL OUTPUT_TRANSFORM;
@@ -1498,43 +1094,59 @@ END_LOOP:
 OUTPUT_TRANSFORM:
 
 
-// beta && k < K && R2P
---:-:-:-:1  @P4 R2P PR, pred_bits, 0x0f;
+<SCHEDULE_BLOCK>
+01:-:-:-:1      ISETP.LT.AND P4, PT, k, 1x<$K>, PT; // k < K
+--:-:-:-:1  @P4 R2P PR, preds, 0x0f;
 --:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
---:-:-:Y:c      LOP.AND.Z  P5, RZ, flags, 1; // output
---:-:-:-:0 @!P0 MOV b00, RZ;
---:-:-:-:1  @P0 LDG.E.CG[+ dtype() +] b00, [Out00_0];
---:-:-:-:0 @!P1 MOV b01, RZ;
---:-:5:-:1  @P1 LDG.E.CG[+ dtype() +] b01, [Out01_0];
---:-:-:-:0 @!P2 MOV b10, RZ;
---:-:-:-:1  @P2 LDG.E.CG[+ dtype() +] b10, [Out10_0];
---:-:-:-:0 @!P3 MOV b11, RZ;
---:-:6:-:1  @P3 LDG.E.CG[+ dtype() +] b11, [Out11_0];
+[+
+    our ($beta, $brelu, $bprelu, $dsize, $dshift, $dtype, $Q, $N);
+    return $beta || $brelu || $bprelu ? qq{
+--:-:-:-:1      LEA      Out0.CC, out_offset, param_X[0],     $dshift;
+--:-:-:-:1      LEA.HI.X Out1,    out_offset, param_X[1], RZ, $dshift;
 
---:-:-:-:0      ISETP.LT.AND P4, PT, kk, param_K, P5; // kk < K && output
+--:-:-:-:1 \@!P0 MOV b00, RZ;
+--:-:-:-:1 \@!P1 MOV b01, RZ;
+--:-:-:-:1 \@!P2 MOV b10, RZ;
+--:-:-:-:1 \@!P3 MOV b11, RZ;
+<ORDERED>
+--:-:-:-:1  \@P0 LDG.E.CI.$dtype b00, [Out + ${dsize}x<0*$Q*$N + 0*$N>];
+--:-:5:-:1  \@P1 LDG.E.CI.$dtype b01, [Out + ${dsize}x<0*$Q*$N + 1*$N>];
+--:-:-:-:1  \@P2 LDG.E.CI.$dtype b10, [Out + ${dsize}x<1*$Q*$N + 0*$N>];
+--:-:6:-:1  \@P3 LDG.E.CI.$dtype b11, [Out + ${dsize}x<1*$Q*$N + 1*$N>];
+</ORDERED>
+    } : '';
++]
+[+
+    our $bias; return $bias ? q{
+// sum = S + k
+20:-:-:-:1      LEA      Sum0.CC, k, param_S[0],     2;
+--:-:-:-:1      LEA.HI.X Sum1,    k, param_S[1], RZ, 2;
+
+--:-:-:-:1 @!P4 MOV b00, RZ;
+--:-:5:-:1  @P4 LDG.E.CI b00, [Sum];
+    } : '';
++]
+</SCHEDULE_BLOCK>
 
 --:-:-:-:1      LDS m00, [readCs + 4x< 0*32>];
 --:-:-:-:1      LDS m01, [readCs + 4x< 1*32>];
 --:-:-:-:1      LDS m02, [readCs + 4x< 2*32>];
---:-:1:-:1      LDS m03, [readCs + 4x< 3*32>];
+--:-:1:Y:1      LDS m03, [readCs + 4x< 3*32>];
 
 --:-:-:-:1      LDS m10, [readCs + 4x< 4*32>];
 --:-:-:-:1      LDS m11, [readCs + 4x< 5*32>];
 --:-:-:-:1      LDS m12, [readCs + 4x< 6*32>];
---:-:2:-:1      LDS m13, [readCs + 4x< 7*32>];
+--:-:2:Y:1      LDS m13, [readCs + 4x< 7*32>];
 
 --:-:-:-:1      LDS m20, [readCs + 4x< 8*32>];
 --:-:-:-:1      LDS m21, [readCs + 4x< 9*32>];
 --:-:-:-:1      LDS m22, [readCs + 4x<10*32>];
---:-:3:-:1      LDS m23, [readCs + 4x<11*32>];
+--:-:3:Y:1      LDS m23, [readCs + 4x<11*32>];
 
 --:-:-:-:1      LDS m30, [readCs + 4x<12*32>];
 --:-:-:-:1      LDS m31, [readCs + 4x<13*32>];
 --:-:-:-:1      LDS m32, [readCs + 4x<14*32>];
---:-:4:-:1      LDS m33, [readCs + 4x<15*32>];
-
---:-:-:-:1  @P4 R2P PR, pred_bits, 0x0f;
---:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
+--:-:4:Y:1      LDS m33, [readCs + 4x<15*32>];
 
 <SCHEDULE_BLOCK>
 // t00 = m00+m01+m02;
@@ -1572,95 +1184,369 @@ OUTPUT_TRANSFORM:
 --:-:-:-:1      FADD s10, t10, -t20;
 --:-:-:-:1      FADD s10, s10, -t30;
 --:-:-:-:1      FADD s11, t11, -t21;
---:-:-:-:1      FADD s11, s11, -t31;
+--:-:-:-:3      FADD s11, s11, -t31;
 
-// init bsum
---:-:-:-:1      MOV  sum0, RZ;
+[+
+    our $bias; return $bias ? q{
+10:-:-:-:1  @P0 FADD s00, s00, b00;
+--:-:-:-:1  @P1 FADD s01, s01, b00;
+--:-:-:-:1  @P2 FADD s10, s10, b00;
+--:-:-:-:1  @P3 FADD s11, s11, b00;
+    } : '';
++]
+[+
+    our $relu; return $relu ? q{
+// maximum(x, 0) + slope * minimum(0, x)
+--:-:-:-:1  @P0 FMNMX s00, s00, RZ, !PT;
+--:-:-:-:1  @P1 FMNMX s01, s01, RZ, !PT;
+--:-:-:-:1  @P2 FMNMX s10, s10, RZ, !PT;
+--:-:-:-:1  @P3 FMNMX s11, s11, RZ, !PT;
+    } : '';
++]
+[+
+    our $prelu; return $prelu ? q{
+// maximum(x, 0) + slope * minimum(0, x)
+--:-:-:-:1  @P0 FMNMX b00, s00, RZ, !PT;
+--:-:-:-:1  @P1 FMNMX b01, s01, RZ, !PT;
+--:-:-:-:1  @P2 FMNMX b10, s10, RZ, !PT;
+--:-:-:-:1  @P3 FMNMX b11, s11, RZ, !PT;
 
-// Apply relu
---:-:-:-:1      LOP.AND.NZ P5, RZ, flags, 2;
---:-:-:-:1  @P5 FMNMX s00, s00, RZ, !PT;
---:-:-:-:1  @P5 FMNMX s01, s01, RZ, !PT;
---:-:-:-:1  @P5 FMNMX s10, s10, RZ, !PT;
---:-:-:-:1  @P5 FMNMX s11, s11, RZ, !PT;
+--:-:-:-:1  @P0 FMNMX x00, s00, RZ, PT;
+--:-:-:-:1  @P1 FMNMX x01, s01, RZ, PT;
+--:-:-:-:1  @P2 FMNMX x10, s10, RZ, PT;
+--:-:-:-:1  @P3 FMNMX x11, s11, RZ, PT;
 
---:-:-:-:1      ISETP.EQ.AND P5, PT, tid_31, RZ, P4; // tid31 == 0 && k < K && output
---:-:-:-:1      LOP.AND.NZ P4, RZ, flags, 4;         // bsum
+--:-:-:-:1  @P0 FFMA s00, x00, param_beta, b00;
+--:-:-:-:1  @P1 FFMA s01, x01, param_beta, b01;
+--:-:-:-:1  @P2 FFMA s10, x10, param_beta, b10;
+--:-:-:-:1  @P3 FFMA s11, x11, param_beta, b11;
+    } : '';
++]
 </SCHEDULE_BLOCK>
 
-// add beta
+<SCHEDULE_BLOCK>
 [+
-    our $convert_in;
-    return $convert_in ? qq{
-10:-:1:-:1  \@P6 $convert_in b00, b00;
---:-:2:-:1  \@P6 $convert_in b01, b01;
-20:-:3:-:1  \@P6 $convert_in b10, b10;
---:-:4:-:1  \@P6 $convert_in b11, b11;
-} : '';
+    our ($beta, $brelu, $bprelu, $convert_in);
+    return $convert_in && ($beta || $brelu || $bprelu) ? qq{
+10:-:1:-:1  \@P0 $convert_in b00, b00;
+--:-:2:-:1  \@P1 $convert_in b01, b01;
+20:-:3:-:1  \@P2 $convert_in b10, b10;
+--:-:4:-:1  \@P3 $convert_in b11, b11;
+    } : '';
 +]
-11:-:-:-:1  @P6 FFMA s00, b00, beta, s00;
-02:-:-:-:1  @P6 FFMA s01, b01, beta, s01;
-24:-:-:-:1  @P6 FFMA s10, b10, beta, s10;
-08:-:-:-:3  @P6 FFMA s11, b11, beta, s11;
+[+
+    our $beta; return $beta ? q{
+11:-:-:-:1  @P0 FFMA s00, b00, param_beta, s00;
+02:-:-:-:1  @P1 FFMA s01, b01, param_beta, s01;
+24:-:-:-:1  @P2 FFMA s10, b10, param_beta, s10;
+08:-:-:-:1  @P3 FFMA s11, b11, param_beta, s11;
+    } : '';
++]
+[+
+    our $brelu; return $brelu ? q{
+//delta *= x > 0
+11:-:-:-:1      FSETP.LT.AND P0, PT, b00, RZ, PT;
+02:-:-:-:1      FSETP.LT.AND P1, PT, b01, RZ, PT;
+24:-:-:-:1      FSETP.LT.AND P2, PT, b10, RZ, PT;
+08:-:-:-:1      FSETP.LT.AND P3, PT, b11, RZ, PT;
+--:-:-:-:1  @P0 MOV s00, RZ;
+--:-:-:-:1  @P1 MOV s01, RZ;
+--:-:-:-:1  @P2 MOV s10, RZ;
+--:-:-:-:1  @P3 MOV s11, RZ;
+--:-:-:-:1  @P4 R2P PR, preds, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
+    } : '';
++]
+[+
+    our $bprelu; return $bprelu ? q{
+//delta *= ((x > 0) + slope * (x < 0))
+11:-:-:-:1      FSETP.GT.AND P0, PT, b00, RZ, PT;
+02:-:-:-:1      FSETP.GT.AND P1, PT, b01, RZ, PT;
+24:-:-:-:1      FSETP.GT.AND P2, PT, b10, RZ, PT;
+08:-:-:-:1      FSETP.GT.AND P3, PT, b11, RZ, PT;
+--:-:-:-:1      SEL x00, one, RZ, P0;
+--:-:-:-:1      SEL x01, one, RZ, P1;
+--:-:-:-:1      SEL x10, one, RZ, P2;
+--:-:-:-:1      SEL x11, one, RZ, P3;
+--:-:-:-:1      FSETP.LT.AND P0, PT, b00, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P1, PT, b04, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P2, PT, b08, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P3, PT, b12, RZ, PT;
+--:-:-:-:1      SEL b00, one, RZ, P0;
+--:-:-:-:1      SEL b01, one, RZ, P1;
+--:-:-:-:1      SEL b10, one, RZ, P2;
+--:-:-:-:1      SEL b11, one, RZ, P3;
+--:-:-:-:1      FFMA b00, b00, param_beta, x00;
+--:-:-:-:1      FFMA b01, b01, param_beta, x01;
+--:-:-:-:1      FFMA b10, b10, param_beta, x10;
+--:-:-:-:1      FFMA b11, b11, param_beta, x11;
+--:-:-:-:1      FMUL s00, s00, b00;
+--:-:-:-:1      FMUL s01, s01, b01;
+--:-:-:-:1      FMUL s10, s10, b10;
+--:-:-:-:1      FMUL s11, s11, b11;
+--:-:-:-:1  @P4 R2P PR, preds, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
+    } : '';
++]
+[+
+    our $bsum; return $bsum ? q{
+--:-:-:-:1      MOV sum0, RZ;
+--:-:-:-:1  @P0 FADD sum0, s00, sum0;
+--:-:-:-:1  @P1 FADD sum0, s01, sum0;
+--:-:-:-:1  @P2 FADD sum0, s10, sum0;
+--:-:-:-:1  @P3 FADD sum0, s11, sum0;
+    } : '';
++]
+</SCHEDULE_BLOCK>
 
 [+
     our $convert_out;
     return $convert_out ? qq{
---:-:-:-:0  \@P0 FADD sum0, sum0,  s00;
---:-:1:-:6  \@P0 $convert_out s00, s00;
---:-:-:-:0  \@P1 FADD sum0, sum0,  s01;
---:-:2:-:6  \@P1 $convert_out s01, s01;
---:-:-:-:0  \@P2 FADD sum0, sum0,  s10;
---:-:3:-:6  \@P2 $convert_out s10, s10;
---:-:-:-:0  \@P3 FADD sum0, sum0,  s11;
+--:-:1:-:1  \@P0 $convert_out s00, s00;
+--:-:2:-:1  \@P1 $convert_out s01, s01;
+--:-:3:-:1  \@P2 $convert_out s10, s10;
 --:-:4:-:1  \@P3 $convert_out s11, s11;
-} : q{
---:-:-:-:6  @P0 FADD sum0, sum0, s00;
---:-:-:-:6  @P1 FADD sum0, sum0, s01;
---:-:-:-:6  @P2 FADD sum0, sum0, s10;
---:-:-:-:1  @P3 FADD sum0, sum0, s11;
-};
+    } : '';
 +]
 
-// bsum && k < K && tid31 == 0
---:-:-:-:0      PSETP.AND.AND P5, PT, P4, P5, PT;
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      LEA      Out0.CC, out_offset, param_O[0],     [+ dshift() +];
+--:-:-:-:1      LEA.HI.X Out1,    out_offset, param_O[1], RZ, [+ dshift() +];
+--:-:-:-:1      IADD out_offset, out_offset, PQN8;
 
 // k < K && R2P && output
-01:1:-:-:1  @P0 STG.E.CG[+ dtype() +] [Out00_0], s00;
-02:2:-:-:1  @P1 STG.E.CG[+ dtype() +] [Out01_0], s01;
-04:3:-:-:1  @P2 STG.E.CG[+ dtype() +] [Out10_0], s10;
-08:4:-:-:1  @P3 STG.E.CG[+ dtype() +] [Out11_0], s11;
+01:-:-:-:1  @P0 STG.E.CG.[+ dtype() +] [Out + [+ dsize() +]x<0*$Q*$N + 0*$N>], s00;
+02:-:-:-:1  @P1 STG.E.CG.[+ dtype() +] [Out + [+ dsize() +]x<0*$Q*$N + 1*$N>], s01;
+04:-:-:-:1  @P2 STG.E.CG.[+ dtype() +] [Out + [+ dsize() +]x<1*$Q*$N + 0*$N>], s10;
+08:1:-:-:1  @P3 STG.E.CG.[+ dtype() +] [Out + [+ dsize() +]x<1*$Q*$N + 1*$N>], s11;
+</SCHEDULE_BLOCK>
 
---:-:-:-:0      IADD kk, kk, 8;
+[+
+    our $bsum;
+    return $bsum ? q{
+<SCHEDULE_BLOCK>
+20:-:-:-:1      XMAD.LO2C b00, k, param_gridPQN, bsum_offset;
 
-// bsum warp shuffle
---:-:5:-:2  @P4 SHFL.BFLY PT, sum1, sum0,  1, 0x1f;
-10:-:-:-:4  @P4 FADD sum0, sum1, sum0;
---:-:5:-:2  @P4 SHFL.BFLY PT, sum1, sum0,  2, 0x1f;
-10:-:-:-:4  @P4 FADD sum0, sum1, sum0;
---:-:5:-:2  @P4 SHFL.BFLY PT, sum1, sum0,  4, 0x1f;
-10:-:-:-:4  @P4 FADD sum0, sum1, sum0;
---:-:5:-:2  @P4 SHFL.BFLY PT, sum1, sum0,  8, 0x1f;
-10:-:-:-:4  @P4 FADD sum0, sum1, sum0;
---:-:5:-:2  @P4 SHFL.BFLY PT, sum1, sum0, 16, 0x1f;
-10:-:-:-:2  @P4 FADD sum0, sum1, sum0;
+--:-:-:-:1      LEA      Sum0.CC, b00, param_S[0],     2;
+--:-:-:-:1      LEA.HI.X Sum1,    b00, param_S[1], RZ, 2;
 
---:-:-:-:0      ISETP.LT.AND P4, PT, kk, param_K, P6; // kk < K && beta
+--:-:-:-:1      PSETP.AND.AND P5, PT, P4, P6, PT; // k < K && tid31 == 0
 
-// bsum && k < K && tid31 == 0
---:5:-:-:1  @P5 RED.E.ADD.F32.FTZ.RN [Sum], sum0;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0,  1, 0x1f;
+10:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0,  2, 0x1f;
+10:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0,  4, 0x1f;
+10:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0,  8, 0x1f;
+10:-:-:-:4      FADD sum0, sum1, sum0;
+--:-:5:-:2      SHFL.BFLY PT, sum1, sum0, 16, 0x1f;
+10:-:-:-:2      FADD sum0, sum1, sum0;
 
-01:-:-:-:6      IADD   Out00_0.CC, Out00_0, PQN8;
---:-:-:-:1      IADD.X Out00_1,    Out00_1, RZ;
-02:-:-:-:6      IADD   Out01_0.CC, Out01_0, PQN8;
---:-:-:-:1      IADD.X Out01_1,    Out01_1, RZ;
-04:-:-:-:6      IADD   Out10_0.CC, Out10_0, PQN8;
---:-:-:-:1      IADD.X Out10_1,    Out10_1, RZ;
-08:-:-:-:6      IADD   Out11_0.CC, Out11_0, PQN8;
---:-:-:-:1      IADD.X Out11_1,    Out11_1, RZ;
+--:6:-:-:1  @P5 STG.E.CG [Sum], sum0;
+</SCHEDULE_BLOCK>
+    } : '';
++]
 
-10:-:-:-:6      IADD   Sum0.CC, Sum0, 4x<8>;
---:-:-:-:0      IADD.X Sum1,    Sum1, RZ;
+--:-:-:-:0      IADD k, k, 8;
 
 --:-:-:-:5      RET;
 
+
+
+//     T0 = np.empty((4,4))
+//     T1 = np.empty((4,4))
+//
+//     for O, I in ((T0, I), (T1, T0.T)):
+//
+//         O[0,:] = I[0,:] - I[2,:]
+//         O[1,:] = I[1,:] + I[2,:]
+//         O[2,:] = I[2,:] - I[1,:]
+//         O[3,:] = I[1,:] - I[3,:]
+//
+//     Iw[:] = T1.T
+//
+// 0  = i00
+// 1  = i01
+// 2  = i02
+// 3  = i03
+// 4  = i30
+// 5  = i31
+// 6  = i32
+// 7  = i33
+// 8  = i13
+// 9  = i12
+// 10 = i11
+// 11 = i10
+// 12 = i23, TI23, I23
+// 13 = i22, TI22
+// 14 = i21, TI21
+// 15 = i20, TI20, I20
+// 16 = TI00, I00, TI10, I10, I21, I01
+// 17 = TI01, I11
+// 18 = TI02, I12
+// 19 = TI03, I03, TI11, I31
+// 20 = TI30, I30, TI12, I32
+// 21 = TI31
+// 22 = TI32
+// 23 = TI33, I33, TI13, I13, I22, I02
+//
+//
+// TI00 = i00 - i20
+// TI01 = i01 - i21
+// TI02 = i02 - i22
+// TI03 = i03 - i23
+// # load 0
+//
+// TI30 = i10 - i30
+// TI31 = i11 - i31
+// TI32 = i12 - i32
+// TI33 = i13 - i33
+// # load 3
+//
+// I00 = TI00 - TI02
+// I03 = TI01 - TI03
+// I30 = TI30 - TI32
+// I33 = TI31 - TI33
+// # store 0
+//
+// # wait 0
+// TI10 = i10 + i20
+// TI11 = i11 + i21
+// TI12 = i12 + i22
+// TI13 = i13 + i23
+//
+// TI20 = i20 - i10
+// TI21 = i21 - i11
+// TI22 = i22 - i12
+// TI23 = i23 - i13
+//
+// #load 1
+//
+// I10 = TI10 - TI12
+// I20 = TI20 - TI22
+// I13 = TI11 - TI13
+// I23 = TI21 - TI23
+// # store 1
+//
+// # wait 1
+// I21 = TI21 + TI22
+// I22 = TI22 - TI21
+// # store 2
+//
+// # load 2
+//
+// # wait 2
+// I01 = TI01 + TI02
+// I02 = TI02 - TI01
+// I11 = TI11 + TI12
+// I12 = TI12 - TI11
+// I31 = TI31 + TI32
+// I32 = TI32 - TI31
+// #store 3
+
+
+
+//     T0 = np.empty((4,3))
+//     T1 = np.empty((4,4))
+//
+//     for O, I in ((T0, F), (T1, T0.T)):
+//
+//         t0 = (I[0,:] + I[2,:])*0.5
+//
+//         O[0,:] = I[0,:]
+//         O[1,:] = t0 + I[1,:]*0.5
+//         O[2,:] = t0 - I[1,:]*0.5
+//         O[3,:] = I[2,:]
+//
+//     Fw[:] = T1.T
+//
+// 0  = f00, TF00, F00
+// 1  = f01, TF01
+// 2  = f02, TF02, F03
+// 3  = f10
+// 4  = f11
+// 5  = f12
+// 6  = f20, TF30, F30
+// 7  = f21, TF31
+// 8  = f22, TF32, F33
+// 9  = tb3, F32
+// 10 = tb0, F02
+// 11 = ta2, TF22, F23
+// 12 = ta0, TF20, F20
+// 13 = ta1, TF21
+// 14 = F01
+// 15 = F31
+// 16 = TF10, F10
+// 17 = TF11
+// 18 = TF12, F13
+// 19 = tb1, F12
+// 20 = tb2, F22
+// 21 = F11
+// 22 = F21
+// 23 =
+//
+//
+// TF00 = f00
+// TF01 = f01
+// TF02 = f02
+// TF30 = f20
+// TF31 = f21
+// TF32 = f22
+//
+// F00 = TF00
+// F03 = TF02
+// F30 = TF30
+// F33 = TF32
+//
+// # store 0
+//
+// tb0 = TF00 + TF02
+// tb3 = TF30 + TF32
+// ta0 = f00 + f20
+// ta1 = f01 + f21
+// ta2 = f02 + f22
+//
+// tb0 = tb0 * 0.5
+// tb3 = tb3 * 0.5
+// ta0 = ta0 * 0.5
+// ta1 = ta1 * 0.5
+// ta2 = ta2 * 0.5
+//
+// F01 = tb0 + TF01*0.5
+// F02 = tb0 - TF01*0.5
+// F31 = tb3 + TF31*0.5
+// F32 = tb3 - TF31*0.5
+//
+// # wait 0
+// # load 0, 2
+// # store 1
+//
+// TF10 = ta0 + f10*0.5
+// TF20 = ta0 - f10*0.5
+// TF11 = ta1 + f11*0.5
+// TF21 = ta1 - f11*0.5
+// TF12 = ta2 + f12*0.5
+// TF22 = ta2 - f12*0.5
+//
+// # load 1
+//
+// F10 = TF10
+// F20 = TF20
+// F13 = TF12
+// F23 = TF22
+//
+// # store 2
+//
+// tb1 = TF10 + TF12
+// tb2 = TF20 + TF22
+// tb1 = tb1 * 0.5
+// tb2 = tb2 * 0.5
+//
+// F11 = tb1 + TF11*0.5
+// F12 = tb1 - TF11*0.5
+// F21 = tb2 + TF21*0.5
+// F22 = tb2 - TF21*0.5
+//
+// # store 3//

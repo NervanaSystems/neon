@@ -1,0 +1,1067 @@
+# Kernel: hgemm_nt_32x32
+
+# Copyright 2014 Nervana Systems Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+<CONSTANT_MAPPING>
+    addr_zero  : 16x<32*65>
+    szShareA   : (32*65)
+    szShareB   : (32*65)
+
+    gridDimA : c[0x0][0x14]
+    gridDimB : c[0x0][0x18]
+
+    param_C[0]      : c[0x0][0x140]
+    param_C[1]      : c[0x0][0x144]
+    param_A[0]      : c[0x0][0x148]
+    param_A[1]      : c[0x0][0x14c]
+    param_B[0]      : c[0x0][0x150]
+    param_B[1]      : c[0x0][0x154]
+    param_alpha     : c[0x0][0x158]
+    param_beta      : c[0x0][0x15c]
+    param_flags     : c[0x0][0x160]
+    param_lda       : c[0x0][0x164]
+    param_ldb       : c[0x0][0x168]
+    param_ldc       : c[0x0][0x16c]
+    param_m         : c[0x0][0x170]
+    param_n         : c[0x0][0x174]
+    param_k         : c[0x0][0x178]
+    param_ldaz      : c[0x0][0x17c]
+    param_ldbz      : c[0x0][0x180]
+    param_ldcz      : c[0x0][0x184]
+    param_loops     : c[0x0][0x188]
+</CONSTANT_MAPPING>
+
+<REGISTER_MAPPING>
+
+     3, 2,11,10,19,18,27,26 : cx<0-7>y0
+     7, 6,15,14,23,22,31,30 : cx<0-7>y1
+     1, 0, 9, 8,17,16,25,24 : cx<0-7>y2
+     5, 4,13,12,21,20,29,28 : cx<0-7>y3
+    35,34,43,42,51,50,59,58 : cx<0-7>y4
+    39,38,47,46,55,54,63,62 : cx<0-7>y5
+    33,32,41,40,49,48,57,56 : cx<0-7>y6
+    37,36,45,44,53,52,61,60 : cx<0-7>y7
+
+       0-63 : czero<00-63>
+      64-79 : j0Ay<0-7>, j0Bx<0-7>
+      80-95 : j1Ay<0-7>, j1Bx<0-7>
+
+      64-95 ~ tidX, tidY, tidY<1-3>, lda, ldb, ldaz, ldbz, lda16, ldb16, tid1, tid16, tid16_8, ta<00|16>, txa<00|16>, tb<00|16>, txb<00|16>, xmad_ta, xmad_tb, shiftX, predsY0, predsY4, partialK
+
+     96-127 :  load0A<0-7>,  load1A<0-7>,  load0B<0-7>,  load1B<0-7>
+    128-135 : track0A<0-1>, track1A<0-1>, track0B<0-1>, track1B<0-1>
+
+    136-142 ~ swapBuf, readAs, readBs, writeAs, writeBs, k
+    143-149 ~ tid, blkA, blkB, blkZ, writeCs, preds
+
+       0-31 : part0C<0-3>, part1C<0-3>, part2C<0-3>, part3C<0-3>, part4C<0-3>, part5C<0-3>, part6C<0-3>, part7C<0-3>
+      64-95 : shuffle_x<0-7>y0, shuffle_x<0-7>y1, shuffle_x<0-7>y2, shuffle_x<0-7>y3
+      64-95 : shuffle_x<0-7>y4, shuffle_x<0-7>y5, shuffle_x<0-7>y6, shuffle_x<0-7>y7
+      96-99 : loadC<0-3>
+    100-103 : b<0-3>
+    104-107 : c<0-3>
+    108-109 : C<0-1>
+    110-142 ~ ldc, ldcz, cx, cx<1-3>, cy, ci, xmad_c, ldc16, readCs, alpha, beta, flags, tid7, tid8
+
+</REGISTER_MAPPING>
+
+--:-:1:-:1      S2R tid,  SR_TID.X;
+--:-:2:-:1      S2R blkA, SR_CTAID.Y;
+--:-:3:-:1      S2R blkB, SR_CTAID.Z;
+--:-:4:-:1      S2R blkZ, SR_CTAID.X;
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      MOV k,    param_k;
+--:-:-:-:1      MOV lda,  param_lda;
+--:-:-:-:1      MOV ldb,  param_ldb;
+--:-:-:-:1      MOV ldaz, param_ldaz;
+--:-:-:-:1      MOV ldbz, param_ldbz;
+--:-:-:-:1      SHL lda16, lda, 4;
+--:-:-:-:1      SHL ldb16, ldb, 4;
+
+--:-:-:-:1      STS.128 [addr_zero], RZ;
+[+ join '', map sprintf("--:-:-:-:1      LDS.U.128 czero%02d, [addr_zero];\n", $_ * 4), 0..15; +]
+
+// tidX   = tid >> 3
+// tidY   = (tid & 7) << 3
+// shiftX = (tid & 7) << 2
+01:-:-:-:1      SHR.U32 tidX, tid,  3;
+--:-:-:-:1      LOP.AND tidY, tid,  7;
+--:-:-:-:1      SHL     shiftX, tidY, 2;
+--:-:-:-:1      SHL     tidY,   tidY, 3;
+
+// trackA += ((blkA*32 + tidX) * lda + tidY) * 2
+02:-:-:-:1      ISCADD   txa00, blkA, tidX, 5;
+--:-:-:-:1      IADD     txa16, txa00, 16;
+--:-:-:-:1      XMAD.LO  ta00, lda,  txa00, tidY, xmad_ta;
+08:-:-:-:1      XMAD.LO2 ta00, ldaz, blkZ, ta00;
+--:-:-:-:1      IADD     ta16, ta00, lda16;
+--:-:-:-:1      LEA      track0A0.CC, ta00, param_A[0],     1;
+--:-:-:-:1      LEA.HI.X track0A1,    ta00, param_A[1], RZ, 1;
+--:-:-:-:1      LEA      track1A0.CC, ta16, param_A[0],     1;
+--:-:-:-:1      LEA.HI.X track1A1,    ta16, param_A[1], RZ, 1;
+
+--:-:-:-:1      ISETP.LT.AND P2, PT, txa00, param_m, PT;
+--:-:-:-:1      ISETP.LT.AND P3, PT, txa16, param_m, PT;
+
+// trackB += ((blkB*32 + tidX) * ldb + tidY) * 2
+04:-:-:-:1      ISCADD   txb00, blkB, tidX, 5;
+--:-:-:-:1      IADD     txb16, txb00, 16;
+--:-:-:-:1      XMAD.LO  tb00, ldb,  txb00, tidY, xmad_tb;
+--:-:-:-:1      XMAD.LO2 tb00, ldbz, blkZ, tb00;
+--:-:-:-:1      IADD     tb16, tb00, ldb16;
+--:-:-:-:1      LEA      track0B0.CC, tb00, param_B[0],     1;
+--:-:-:-:1      LEA.HI.X track0B1,    tb00, param_B[1], RZ, 1;
+--:-:-:-:1      LEA      track1B0.CC, tb16, param_B[0],     1;
+--:-:-:-:1      LEA.HI.X track1B1,    tb16, param_B[1], RZ, 1;
+
+--:-:-:-:1      ISETP.LT.AND P4, PT, txb00, param_n, PT;
+--:-:-:-:1      ISETP.LT.AND P5, PT, txb16, param_n, PT;
+
+--:-:-:-:1      P2R preds, PR, RZ, 0x3c;
+
+// writeAs = (tidY*32 + tidX + shiftX) * 4
+--:-:-:-:1      ISCADD writeAs, tidY, tidX, 5;
+--:-:-:-:1      IADD   writeAs, writeAs, shiftX;
+--:-:-:-:1      SHL    writeAs, writeAs, 2;
+
+// writeBs = (tidY*32 + tidX + shiftX) * 4
+--:-:-:-:1      ISCADD writeBs, tidY, tidX, 5;
+--:-:-:-:1      IADD   writeBs, writeBs, shiftX;
+--:-:-:-:1      ISCADD writeBs, writeBs, 4x<szShareA>, 2;
+
+
+// readAs = (((tid & 8) >> 2) | (tid & 1)) << 4
+--:-:-:-:1      LOP.AND tid1,   tid,    1;
+--:-:-:-:1      LOP.AND readAs, tid,    8;
+--:-:-:-:1      SHR.U32 readAs, readAs, 2;
+--:-:-:-:1      LOP.OR  readAs, readAs, tid1;
+--:-:-:-:1      SHL     readAs, readAs, 4;
+
+// readBs  = (((tid >> 1) & 3) << 4
+--:-:-:-:1      BFE.U32 readBs, tid,    0x201; // 2 bits at position 1
+--:-:-:-:1      SHL     readBs, readBs, 4;
+
+// tid16 = tid & -16
+// tid16_8 = tid16 / 2 * 4
+--:-:-:-:1      LOP.AND tid16, tid, -16;
+--:-:-:-:1      SHL     tid16_8, tid16, 1;
+
+// writeCs = (readAs + tid16*4) * 32 + readBs;
+--:-:-:-:1      ISCADD writeCs, tid16,   readAs, 2;
+--:-:-:-:1      ISCADD writeCs, writeCs, readBs, 5;
+
+// Each block of 16 threads works on 8 lines, shifted over by 4
+// readAs += tid16_8 * 32 + tid16
+// readBs += tid16_8 * 32 + tid16 + 4x<szShareA>
+--:-:-:-:1      ISCADD readAs, tid16_8, readAs, 5;
+--:-:-:-:1      ISCADD readBs, tid16_8, readBs, 5;
+--:-:-:-:1      IADD   readAs, tid16, readAs;
+--:-:-:-:1      IADD3  readBs, tid16, 4x<szShareA>, readBs;
+
+--:-:-:-:1      MOV32I swapBuf, 4x<szShareA + szShareB>;
+
+// If k is not a multiple of 64 we want to grab the partial amount on the first fetch.
+// If it is a multiple of 64 then make a full 64 line fetch.
+--:-:-:-:1      LOP.AND.Z P0, partialK, k, 63;
+--:-:-:-:1  @P0 MOV partialK, 64;
+--:-:-:-:1      IADD k, k, -partialK;
+[+
+    our $vec;
+    return $vec ? q{
+
+--:-:-:-:1      ISETP.LT.AND P1, PT, tidY, partialK, PT;
+--:-:-:-:1  @P1 R2P PR, preds, 0x3c;
+--:-:-:-:1 @!P1 R2P PR, RZ, 0x3c;
+
+<ORDERED>
+--:-:2:-:1  @P2 LDG.E.CI.128 load0A, [track0A];
+--:-:3:-:1  @P3 LDG.E.CI.128 load1A, [track1A];
+--:-:4:-:1  @P4 LDG.E.CI.128 load0B, [track0B];
+--:-:5:-:1  @P5 LDG.E.CI.128 load1B, [track1B];
+</ORDERED>
+
+<ORDERED>
+--:-:-:-:1 @!P2 LDS.U.128 load0A, [addr_zero];
+--:-:-:-:1 @!P3 LDS.U.128 load1A, [addr_zero];
+--:-:-:-:1 @!P4 LDS.U.128 load0B, [addr_zero];
+--:-:6:-:1 @!P5 LDS.U.128 load1B, [addr_zero];
+</ORDERED>
+
+    } : q{
+--:-:-:-:1      IADD tidY1, tidY, 1;
+--:-:-:-:1      IADD tidY2, tidY, 2;
+--:-:-:-:1      IADD tidY3, tidY, 3;
+--:-:-:-:1      ISETP.LT.AND P0, PT, tidY,  partialK, PT;
+--:-:-:-:1      ISETP.LT.AND P1, PT, tidY1, partialK, PT;
+--:-:-:-:1      ISETP.LT.AND P2, PT, tidY2, partialK, PT;
+--:-:-:-:1      ISETP.LT.AND P3, PT, tidY3, partialK, PT;
+--:-:-:-:1      P2R predsY0, PR, RZ, 0x0f;
+
+--:-:-:-:1      IADD tidY,  tidY,  4;
+--:-:-:-:1      IADD tidY1, tidY1, 4;
+--:-:-:-:1      IADD tidY2, tidY2, 4;
+--:-:-:-:1      IADD tidY3, tidY3, 4;
+--:-:-:-:1      ISETP.LT.AND P0, PT, tidY,  partialK, PT;
+--:-:-:-:1      ISETP.LT.AND P1, PT, tidY1, partialK, PT;
+--:-:-:-:1      ISETP.LT.AND P2, PT, tidY2, partialK, PT;
+--:-:-:-:1      ISETP.LT.AND P3, PT, tidY3, partialK, PT;
+--:-:-:-:1      P2R predsY4, PR, RZ, 0x0f;
+
+
+--:-:-:-:1      ISETP.LT.AND P4, PT, txa00, param_m, PT;
+--:-:-:-:1  @P4 R2P PR, predsY0, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
+<ORDERED>
+--:-:-:-:1  @P0 LDG.E.CI.U16 load0A0, [track0A + 2x<0>];
+--:-:-:-:1  @P1 LDG.E.CI.U16 load0A1, [track0A + 2x<1>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A2, [track0A + 2x<2>];
+--:-:2:-:1  @P3 LDG.E.CI.U16 load0A3, [track0A + 2x<3>];
+</ORDERED>
+--:-:-:-:1 @!P0 MOV load0A0, RZ;
+--:-:-:-:1 @!P1 MOV load0A1, RZ;
+--:-:-:-:1 @!P2 MOV load0A2, RZ;
+--:-:-:-:1 @!P3 MOV load0A3, RZ;
+
+--:-:-:-:1  @P4 R2P PR, predsY4, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
+<ORDERED>
+--:-:-:-:1  @P0 LDG.E.CI.U16 load0A4, [track0A + 2x<4>];
+--:-:-:-:1  @P1 LDG.E.CI.U16 load0A5, [track0A + 2x<5>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A6, [track0A + 2x<6>];
+--:-:2:-:1  @P3 LDG.E.CI.U16 load0A7, [track0A + 2x<7>];
+</ORDERED>
+--:-:-:-:1 @!P0 MOV load0A4, RZ;
+--:-:-:-:1 @!P1 MOV load0A5, RZ;
+--:-:-:-:1 @!P2 MOV load0A6, RZ;
+--:-:-:-:1 @!P3 MOV load0A7, RZ;
+
+
+--:-:-:-:1      ISETP.LT.AND P5, PT, txa16, param_m, PT;
+--:-:-:-:1  @P5 R2P PR, predsY0, 0x0f;
+--:-:-:-:1 @!P5 R2P PR, RZ, 0x0f;
+<ORDERED>
+--:-:-:-:1  @P0 LDG.E.CI.U16 load1A0, [track1A + 2x<0>];
+--:-:-:-:1  @P1 LDG.E.CI.U16 load1A1, [track1A + 2x<1>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load1A2, [track1A + 2x<2>];
+--:-:3:-:1  @P3 LDG.E.CI.U16 load1A3, [track1A + 2x<3>];
+</ORDERED>
+--:-:-:-:1 @!P0 MOV load1A0, RZ;
+--:-:-:-:1 @!P1 MOV load1A1, RZ;
+--:-:-:-:1 @!P2 MOV load1A2, RZ;
+--:-:-:-:1 @!P3 MOV load1A3, RZ;
+
+--:-:-:-:1  @P5 R2P PR, predsY4, 0x0f;
+--:-:-:-:1 @!P5 R2P PR, RZ, 0x0f;
+<ORDERED>
+--:-:-:-:1  @P0 LDG.E.CI.U16 load1A4, [track1A + 2x<4>];
+--:-:-:-:1  @P1 LDG.E.CI.U16 load1A5, [track1A + 2x<5>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load1A6, [track1A + 2x<6>];
+--:-:3:-:1  @P3 LDG.E.CI.U16 load1A7, [track1A + 2x<7>];
+</ORDERED>
+--:-:-:-:1 @!P0 MOV load1A4, RZ;
+--:-:-:-:1 @!P1 MOV load1A5, RZ;
+--:-:-:-:1 @!P2 MOV load1A6, RZ;
+--:-:-:-:1 @!P3 MOV load1A7, RZ;
+
+
+--:-:-:-:1      ISETP.LT.AND P6, PT, txb00, param_n, PT;
+--:-:-:-:1  @P6 R2P PR, predsY0, 0x0f;
+--:-:-:-:1 @!P6 R2P PR, RZ, 0x0f;
+<ORDERED>
+--:-:-:-:1  @P0 LDG.E.CI.U16 load0B0, [track0B + 2x<0>];
+--:-:-:-:1  @P1 LDG.E.CI.U16 load0B1, [track0B + 2x<1>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0B2, [track0B + 2x<2>];
+--:-:4:-:1  @P3 LDG.E.CI.U16 load0B3, [track0B + 2x<3>];
+</ORDERED>
+--:-:-:-:1 @!P0 MOV load0B0, RZ;
+--:-:-:-:1 @!P1 MOV load0B1, RZ;
+--:-:-:-:1 @!P2 MOV load0B2, RZ;
+--:-:-:-:1 @!P3 MOV load0B3, RZ;
+
+--:-:-:-:1  @P6 R2P PR, predsY4, 0x0f;
+--:-:-:-:1 @!P6 R2P PR, RZ, 0x0f;
+<ORDERED>
+--:-:-:-:1  @P0 LDG.E.CI.U16 load0B4, [track0B + 2x<4>];
+--:-:-:-:1  @P1 LDG.E.CI.U16 load0B5, [track0B + 2x<5>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0B6, [track0B + 2x<6>];
+--:-:4:-:1  @P3 LDG.E.CI.U16 load0B7, [track0B + 2x<7>];
+</ORDERED>
+--:-:-:-:1 @!P0 MOV load0B4, RZ;
+--:-:-:-:1 @!P1 MOV load0B5, RZ;
+--:-:-:-:1 @!P2 MOV load0B6, RZ;
+--:-:-:-:1 @!P3 MOV load0B7, RZ;
+
+--:-:-:-:1      ISETP.LT.AND P4, PT, txb16, param_n, PT;
+--:-:-:-:1  @P4 R2P PR, predsY0, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
+<ORDERED>
+--:-:-:-:1  @P0 LDG.E.CI.U16 load1B0, [track1B + 2x<0>];
+--:-:-:-:1  @P1 LDG.E.CI.U16 load1B1, [track1B + 2x<1>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load1B2, [track1B + 2x<2>];
+--:-:5:-:1  @P3 LDG.E.CI.U16 load1B3, [track1B + 2x<3>];
+</ORDERED>
+--:-:-:-:1 @!P0 MOV load1B0, RZ;
+--:-:-:-:1 @!P1 MOV load1B1, RZ;
+--:-:-:-:1 @!P2 MOV load1B2, RZ;
+--:-:-:-:1 @!P3 MOV load1B3, RZ;
+
+--:-:-:-:1  @P4 R2P PR, predsY4, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
+<ORDERED>
+--:-:-:-:1  @P0 LDG.E.CI.U16 load1B4, [track1B + 2x<4>];
+--:-:-:-:1  @P1 LDG.E.CI.U16 load1B5, [track1B + 2x<5>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load1B6, [track1B + 2x<6>];
+--:-:5:-:1  @P3 LDG.E.CI.U16 load1B7, [track1B + 2x<7>];
+</ORDERED>
+--:-:-:-:1 @!P0 MOV load1B4, RZ;
+--:-:-:-:1 @!P1 MOV load1B5, RZ;
+--:-:-:-:1 @!P2 MOV load1B6, RZ;
+--:-:-:-:1 @!P3 MOV load1B7, RZ;
+    };
++]
+--:-:-:-:1      SHL partialK, partialK, 1;
+
+--:-:-:-:1      ISETP.GE.AND P0, PT, k, 64, PT;
+--:-:-:-:1      IADD k, k, -64;
+--:-:-:-:1  @P0 R2P PR, preds, 0x3c;
+--:-:-:-:1 @!P0 R2P PR, RZ, 0x3c;
+</SCHEDULE_BLOCK>
+
+[+
+    our $vec;
+    return $vec ? q{
+22:-:-:-:1      F2F.F32.F16 load0A7, load0A3.H1;
+--:-:-:-:1      F2F.F32.F16 load0A6, load0A3.H0;
+--:-:-:-:1      F2F.F32.F16 load0A5, load0A2.H1;
+--:-:6:-:1      F2F.F32.F16 load0A4, load0A2.H0;
+--:-:-:-:1      F2F.F32.F16 load0A3, load0A1.H1;
+--:-:-:-:1      F2F.F32.F16 load0A2, load0A1.H0;
+--:-:-:-:1      F2F.F32.F16 load0A1, load0A0.H1;
+--:-:2:-:1      F2F.F32.F16 load0A0, load0A0.H0;
+    } : q{
+02:-:-:-:1      F2F.F32.F16 load0A7, load0A7;
+--:-:-:-:1      F2F.F32.F16 load0A6, load0A6;
+--:-:-:-:1      F2F.F32.F16 load0A5, load0A5;
+--:-:6:-:1      F2F.F32.F16 load0A4, load0A4;
+--:-:-:-:1      F2F.F32.F16 load0A3, load0A3;
+--:-:-:-:1      F2F.F32.F16 load0A2, load0A2;
+--:-:-:-:1      F2F.F32.F16 load0A1, load0A1;
+--:-:2:-:1      F2F.F32.F16 load0A0, load0A0;
+    };
++]
+--:-:-:-:0      IADD   track0A0.CC, track0A0, partialK;
+20:-:-:-:1      STS [writeAs + 4x<7*32 + 0*16>], load0A7;
+--:-:-:-:1      STS [writeAs + 4x<6*32 + 0*16>], load0A6;
+--:-:-:-:1      STS [writeAs + 4x<5*32 + 0*16>], load0A5;
+--:-:-:-:1      STS [writeAs + 4x<4*32 + 0*16>], load0A4;
+02:-:-:-:1      STS [writeAs + 4x<3*32 + 0*16>], load0A3;
+--:-:-:-:1      STS [writeAs + 4x<2*32 + 0*16>], load0A2;
+--:-:-:-:1      STS [writeAs + 4x<1*32 + 0*16>], load0A1;
+--:-:-:-:1      STS [writeAs + 4x<0*32 + 0*16>], load0A0;
+--:-:-:-:0      IADD.X track0A1,    track0A1, RZ;
+
+[+
+    our $vec;
+    return $vec ? q{
+04:-:-:-:1      F2F.F32.F16 load1A7, load1A3.H1;
+--:-:-:-:1      F2F.F32.F16 load1A6, load1A3.H0;
+--:-:-:-:1      F2F.F32.F16 load1A5, load1A2.H1;
+--:-:6:-:1      F2F.F32.F16 load1A4, load1A2.H0;
+--:-:-:-:1      F2F.F32.F16 load1A3, load1A1.H1;
+--:-:-:-:1      F2F.F32.F16 load1A2, load1A1.H0;
+--:-:-:-:1      F2F.F32.F16 load1A1, load1A0.H1;
+--:-:2:-:1      F2F.F32.F16 load1A0, load1A0.H0;
+    } : q{
+04:-:-:-:1      F2F.F32.F16 load1A7, load1A7;
+--:-:-:-:1      F2F.F32.F16 load1A6, load1A6;
+--:-:-:-:1      F2F.F32.F16 load1A5, load1A5;
+--:-:6:-:1      F2F.F32.F16 load1A4, load1A4;
+--:-:-:-:1      F2F.F32.F16 load1A3, load1A3;
+--:-:-:-:1      F2F.F32.F16 load1A2, load1A2;
+--:-:-:-:1      F2F.F32.F16 load1A1, load1A1;
+--:-:2:-:1      F2F.F32.F16 load1A0, load1A0;
+    };
++]
+--:-:-:-:0      IADD   track1A0.CC, track1A0, partialK;
+20:-:-:-:1      STS [writeAs + 4x<7*32 + 1*16>], load1A7;
+--:-:-:-:1      STS [writeAs + 4x<6*32 + 1*16>], load1A6;
+--:-:-:-:1      STS [writeAs + 4x<5*32 + 1*16>], load1A5;
+--:-:-:-:1      STS [writeAs + 4x<4*32 + 1*16>], load1A4;
+02:-:-:-:1      STS [writeAs + 4x<3*32 + 1*16>], load1A3;
+--:-:-:-:1      STS [writeAs + 4x<2*32 + 1*16>], load1A2;
+--:-:-:-:1      STS [writeAs + 4x<1*32 + 1*16>], load1A1;
+--:-:-:-:1      STS [writeAs + 4x<0*32 + 1*16>], load1A0;
+--:-:-:-:0      IADD.X track1A1,    track1A1, RZ;
+
+[+
+    our $vec;
+    return $vec ? q{
+08:-:-:-:1      F2F.F32.F16 load0B7, load0B3.H1;
+--:-:-:-:1      F2F.F32.F16 load0B6, load0B3.H0;
+--:-:-:-:1      F2F.F32.F16 load0B5, load0B2.H1;
+--:-:6:-:1      F2F.F32.F16 load0B4, load0B2.H0;
+--:-:-:-:1      F2F.F32.F16 load0B3, load0B1.H1;
+--:-:-:-:1      F2F.F32.F16 load0B2, load0B1.H0;
+--:-:-:-:1      F2F.F32.F16 load0B1, load0B0.H1;
+--:-:2:-:1      F2F.F32.F16 load0B0, load0B0.H0;
+    } : q{
+08:-:-:-:1      F2F.F32.F16 load0B7, load0B7;
+--:-:-:-:1      F2F.F32.F16 load0B6, load0B6;
+--:-:-:-:1      F2F.F32.F16 load0B5, load0B5;
+--:-:6:-:1      F2F.F32.F16 load0B4, load0B4;
+--:-:-:-:1      F2F.F32.F16 load0B3, load0B3;
+--:-:-:-:1      F2F.F32.F16 load0B2, load0B2;
+--:-:-:-:1      F2F.F32.F16 load0B1, load0B1;
+--:-:2:-:1      F2F.F32.F16 load0B0, load0B0;
+    };
++]
+--:-:-:-:0      IADD   track0B0.CC, track0B0, partialK;
+20:-:-:-:1      STS [writeBs + 4x<7*32 + 0*16>], load0B7;
+--:-:-:-:1      STS [writeBs + 4x<6*32 + 0*16>], load0B6;
+--:-:-:-:1      STS [writeBs + 4x<5*32 + 0*16>], load0B5;
+--:-:-:-:1      STS [writeBs + 4x<4*32 + 0*16>], load0B4;
+02:-:-:-:1      STS [writeBs + 4x<3*32 + 0*16>], load0B3;
+--:-:-:-:1      STS [writeBs + 4x<2*32 + 0*16>], load0B2;
+--:-:-:-:1      STS [writeBs + 4x<1*32 + 0*16>], load0B1;
+--:-:-:-:1      STS [writeBs + 4x<0*32 + 0*16>], load0B0;
+--:-:-:-:0      IADD.X track0B1,    track0B1, RZ;
+
+[+
+    our $vec;
+    return $vec ? q{
+10:-:-:-:1      F2F.F32.F16 load1B7, load1B3.H1;
+--:-:-:-:1      F2F.F32.F16 load1B6, load1B3.H0;
+--:-:-:-:1      F2F.F32.F16 load1B5, load1B2.H1;
+--:-:6:-:1      F2F.F32.F16 load1B4, load1B2.H0;
+--:-:-:-:1      F2F.F32.F16 load1B3, load1B1.H1;
+--:-:-:-:1      F2F.F32.F16 load1B2, load1B1.H0;
+--:-:-:-:1      F2F.F32.F16 load1B1, load1B0.H1;
+--:-:2:-:1      F2F.F32.F16 load1B0, load1B0.H0;
+    } : q{
+10:-:-:-:1      F2F.F32.F16 load1B7, load1B7;
+--:-:-:-:1      F2F.F32.F16 load1B6, load1B6;
+--:-:-:-:1      F2F.F32.F16 load1B5, load1B5;
+--:-:6:-:1      F2F.F32.F16 load1B4, load1B4;
+--:-:-:-:1      F2F.F32.F16 load1B3, load1B3;
+--:-:-:-:1      F2F.F32.F16 load1B2, load1B2;
+--:-:-:-:1      F2F.F32.F16 load1B1, load1B1;
+--:-:2:-:1      F2F.F32.F16 load1B0, load1B0;
+    };
++]
+--:-:-:-:0      IADD   track1B0.CC, track1B0, partialK;
+20:-:-:-:1      STS [writeBs + 4x<7*32 + 1*16>], load1B7;
+--:-:-:-:1      STS [writeBs + 4x<6*32 + 1*16>], load1B6;
+--:-:-:-:1      STS [writeBs + 4x<5*32 + 1*16>], load1B5;
+--:-:-:-:1      STS [writeBs + 4x<4*32 + 1*16>], load1B4;
+02:-:-:-:1      STS [writeBs + 4x<3*32 + 1*16>], load1B3;
+--:-:-:-:1      STS [writeBs + 4x<2*32 + 1*16>], load1B2;
+--:-:-:-:1      STS [writeBs + 4x<1*32 + 1*16>], load1B1;
+--:-:-:-:1      STS [writeBs + 4x<0*32 + 1*16>], load1B0;
+--:-:-:-:0      IADD.X track1B1,    track1B1, RZ;
+
+--:-:-:-:5      BAR.SYNC 0;
+--:-:-:-:1      IADD writeBs, writeBs, swapBuf;
+--:-:-:-:1      IADD writeAs, writeAs, swapBuf;
+--:-:-:-:0      IADD swapBuf, RZ, -swapBuf;
+
+--:-:-:-:1      LDS.U.128 j0Ay0, [readAs + 4x<0*32 + 00>];
+--:-:-:-:1      LDS.U.128 j0Bx0, [readBs + 4x<0*32 + 00>];
+--:-:-:-:1      LDS.U.128 j0Ay4, [readAs + 4x<0*32 + 16>];
+--:-:1:-:1      LDS.U.128 j0Bx4, [readBs + 4x<0*32 + 16>];
+
+[+
+    our $vec;
+    return $vec ? q{
+--:-:2:-:1  @P2 LDG.E.CI.128 load0A, [track0A];
+--:-:3:-:1  @P3 LDG.E.CI.128 load1A, [track1A];
+--:-:4:-:1  @P4 LDG.E.CI.128 load0B, [track0B];
+--:-:5:-:1  @P5 LDG.E.CI.128 load1B, [track1B];
+    } : q{
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A0, [track0A + 2x<0>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A1, [track0A + 2x<1>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A2, [track0A + 2x<2>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A3, [track0A + 2x<3>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A4, [track0A + 2x<4>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A5, [track0A + 2x<5>];
+--:-:-:-:1  @P2 LDG.E.CI.U16 load0A6, [track0A + 2x<6>];
+--:-:2:-:1  @P2 LDG.E.CI.U16 load0A7, [track0A + 2x<7>];
+
+--:-:-:-:1  @P3 LDG.E.CI.U16 load1A0, [track1A + 2x<0>];
+--:-:-:-:1  @P3 LDG.E.CI.U16 load1A1, [track1A + 2x<1>];
+--:-:-:-:1  @P3 LDG.E.CI.U16 load1A2, [track1A + 2x<2>];
+--:-:-:-:1  @P3 LDG.E.CI.U16 load1A3, [track1A + 2x<3>];
+--:-:-:-:1  @P3 LDG.E.CI.U16 load1A4, [track1A + 2x<4>];
+--:-:-:-:1  @P3 LDG.E.CI.U16 load1A5, [track1A + 2x<5>];
+--:-:-:-:1  @P3 LDG.E.CI.U16 load1A6, [track1A + 2x<6>];
+--:-:3:-:1  @P3 LDG.E.CI.U16 load1A7, [track1A + 2x<7>];
+
+--:-:-:-:1  @P4 LDG.E.CI.U16 load0B0, [track0B + 2x<0>];
+--:-:-:-:1  @P4 LDG.E.CI.U16 load0B1, [track0B + 2x<1>];
+--:-:-:-:1  @P4 LDG.E.CI.U16 load0B2, [track0B + 2x<2>];
+--:-:-:-:1  @P4 LDG.E.CI.U16 load0B3, [track0B + 2x<3>];
+--:-:-:-:1  @P4 LDG.E.CI.U16 load0B4, [track0B + 2x<4>];
+--:-:-:-:1  @P4 LDG.E.CI.U16 load0B5, [track0B + 2x<5>];
+--:-:-:-:1  @P4 LDG.E.CI.U16 load0B6, [track0B + 2x<6>];
+--:-:4:-:1  @P4 LDG.E.CI.U16 load0B7, [track0B + 2x<7>];
+
+--:-:-:-:1  @P5 LDG.E.CI.U16 load1B0, [track1B + 2x<0>];
+--:-:-:-:1  @P5 LDG.E.CI.U16 load1B1, [track1B + 2x<1>];
+--:-:-:-:1  @P5 LDG.E.CI.U16 load1B2, [track1B + 2x<2>];
+--:-:-:-:1  @P5 LDG.E.CI.U16 load1B3, [track1B + 2x<3>];
+--:-:-:-:1  @P5 LDG.E.CI.U16 load1B4, [track1B + 2x<4>];
+--:-:-:-:1  @P5 LDG.E.CI.U16 load1B5, [track1B + 2x<5>];
+--:-:-:-:1  @P5 LDG.E.CI.U16 load1B6, [track1B + 2x<6>];
+--:-:5:-:1  @P5 LDG.E.CI.U16 load1B7, [track1B + 2x<7>];
+    };
++]
+
+LOOP:
+
+[+
+    our $vec;
+    our %insert =
+    (
+        j0c8   => "--:-:-:-:1      ISETP.GE.AND P0, PT, k, RZ, PT;\n",
+        j0c10  => "--:-:-:-:1      ISETP.GE.AND P1, PT, k, 64, PT;\n" .
+                  "--:-:-:-:1      IADD k, k, -64;\n",
+
+        j0c23  => "--:-:-:-:1  \@P1 R2P PR, preds, 0x3c;\n" .
+                  "--:-:-:-:1 \@!P1 R2P PR, RZ,    0x3c;\n",
+
+        j3c32  => "--:-:-:-:1  \@P2 IADD   track0A0.CC, track0A0, 2x<64>;\n",
+        j3c37  => "--:-:-:-:1  \@P2 IADD.X track0A1,    track0A1, RZ;\n",
+        j4c32  => "--:-:-:-:1  \@P3 IADD   track1A0.CC, track1A0, 2x<64>;\n",
+        j4c37  => "--:-:-:-:1  \@P3 IADD.X track1A1,    track1A1, RZ;\n",
+        j5c32  => "--:-:-:-:1  \@P4 IADD   track0B0.CC, track0B0, 2x<64>;\n",
+        j5c37  => "--:-:-:-:1  \@P4 IADD.X track0B1,    track0B1, RZ;\n",
+        j6c32  => "--:-:-:-:1  \@P5 IADD   track1B0.CC, track1B0, 2x<64>;\n",
+        j6c37  => "--:-:-:-:1  \@P5 IADD.X track1B1,    track1B1, RZ;\n",
+
+        j6c63  => "--:-:-:-:5      BAR.SYNC 0;\n" .
+                  "--:-:-:-:1  \@P0 IADD readAs,  readAs, -swapBuf;\n" .
+                  "--:-:-:-:1  \@P0 IADD readBs,  readBs, -swapBuf;\n" .
+                  "--:-:-:-:1  \@P0 IADD writeAs, writeAs, swapBuf;\n" .
+                  "--:-:-:-:1  \@P0 IADD writeBs, writeBs, swapBuf;\n" .
+                  "--:-:-:-:1  \@P0 IADD swapBuf, RZ,     -swapBuf;\n",
+
+        ($vec ?
+            (
+                j2c45 => "02:-:-:-:1  \@P0 F2F.F32.F16 load0A7, load0A3.H1;\n",
+                j2c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A6, load0A3.H0;\n",
+                j2c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A5, load0A2.H1;\n",
+                j2c57 => "--:-:2:-:1  \@P0 F2F.F32.F16 load0A4, load0A2.H0;\n",
+                j2c61 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A3, load0A1.H1;\n",
+                j3c1  => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A2, load0A1.H0;\n",
+                j3c5  => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A1, load0A0.H1;\n",
+                j3c9  => "--:-:6:-:1  \@P0 F2F.F32.F16 load0A0, load0A0.H0;\n",
+
+                j3c45 => "04:-:-:-:1  \@P0 F2F.F32.F16 load1A7, load1A3.H1;\n",
+                j3c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A6, load1A3.H0;\n",
+                j3c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A5, load1A2.H1;\n",
+                j3c57 => "--:-:3:-:1  \@P0 F2F.F32.F16 load1A4, load1A2.H0;\n",
+                j3c61 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A3, load1A1.H1;\n",
+                j4c1  => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A2, load1A1.H0;\n",
+                j4c5  => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A1, load1A0.H1;\n",
+                j4c9  => "--:-:6:-:1  \@P0 F2F.F32.F16 load1A0, load1A0.H0;\n",
+
+                j4c45 => "08:-:-:-:1  \@P0 F2F.F32.F16 load0B7, load0B3.H1;\n",
+                j4c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B6, load0B3.H0;\n",
+                j4c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B5, load0B2.H1;\n",
+                j4c57 => "--:-:4:-:1  \@P0 F2F.F32.F16 load0B4, load0B2.H0;\n",
+                j4c61 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B3, load0B1.H1;\n",
+                j5c1  => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B2, load0B1.H0;\n",
+                j5c5  => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B1, load0B0.H1;\n",
+                j5c9  => "--:-:6:-:1  \@P0 F2F.F32.F16 load0B0, load0B0.H0;\n",
+
+                j5c45 => "10:-:-:-:1  \@P0 F2F.F32.F16 load1B7, load1B3.H1;\n",
+                j5c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B6, load1B3.H0;\n",
+                j5c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B5, load1B2.H1;\n",
+                j5c57 => "--:-:5:-:1  \@P0 F2F.F32.F16 load1B4, load1B2.H0;\n",
+                j5c61 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B3, load1B1.H1;\n",
+                j6c1  => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B2, load1B1.H0;\n",
+                j6c5  => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B1, load1B0.H1;\n",
+                j6c9  => "--:-:6:-:1  \@P0 F2F.F32.F16 load1B0, load1B0.H0;\n",
+
+                j3c16  => "02:-:-:-:1  \@P0 STS [writeAs + 4x<7*32 + 0*16>], load0A7;\n",
+                j3c18  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<6*32 + 0*16>], load0A6;\n",
+                j3c20  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<5*32 + 0*16>], load0A5;\n",
+                j3c22  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<4*32 + 0*16>], load0A4;\n",
+                j3c24  => "20:-:-:-:1  \@P0 STS [writeAs + 4x<3*32 + 0*16>], load0A3;\n",
+                j3c26  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<2*32 + 0*16>], load0A2;\n",
+                j3c28  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<1*32 + 0*16>], load0A1;\n",
+                j3c30  => "--:2:-:-:1  \@P0 STS [writeAs + 4x<0*32 + 0*16>], load0A0;\n",
+
+                j4c16  => "04:-:-:-:1  \@P0 STS [writeAs + 4x<7*32 + 1*16>], load1A7;\n",
+                j4c18  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<6*32 + 1*16>], load1A6;\n",
+                j4c20  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<5*32 + 1*16>], load1A5;\n",
+                j4c22  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<4*32 + 1*16>], load1A4;\n",
+                j4c24  => "20:-:-:-:1  \@P0 STS [writeAs + 4x<3*32 + 1*16>], load1A3;\n",
+                j4c26  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<2*32 + 1*16>], load1A2;\n",
+                j4c28  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<1*32 + 1*16>], load1A1;\n",
+                j4c30  => "--:3:-:-:1  \@P0 STS [writeAs + 4x<0*32 + 1*16>], load1A0;\n",
+
+                j5c16  => "08:-:-:-:1  \@P0 STS [writeBs + 4x<7*32 + 0*16>], load0B7;\n",
+                j5c18  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<6*32 + 0*16>], load0B6;\n",
+                j5c20  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<5*32 + 0*16>], load0B5;\n",
+                j5c22  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<4*32 + 0*16>], load0B4;\n",
+                j5c24  => "20:-:-:-:1  \@P0 STS [writeBs + 4x<3*32 + 0*16>], load0B3;\n",
+                j5c26  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<2*32 + 0*16>], load0B2;\n",
+                j5c28  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<1*32 + 0*16>], load0B1;\n",
+                j5c30  => "--:4:-:-:1  \@P0 STS [writeBs + 4x<0*32 + 0*16>], load0B0;\n",
+
+                j6c16  => "10:-:-:-:1  \@P0 STS [writeBs + 4x<7*32 + 1*16>], load1B7;\n",
+                j6c18  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<6*32 + 1*16>], load1B6;\n",
+                j6c20  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<5*32 + 1*16>], load1B5;\n",
+                j6c22  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<4*32 + 1*16>], load1B4;\n",
+                j6c24  => "20:-:-:-:1  \@P0 STS [writeBs + 4x<3*32 + 1*16>], load1B3;\n",
+                j6c26  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<2*32 + 1*16>], load1B2;\n",
+                j6c28  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<1*32 + 1*16>], load1B1;\n",
+                j6c30  => "--:5:-:-:1  \@P0 STS [writeBs + 4x<0*32 + 1*16>], load1B0;\n",
+
+                j3c62 => "02:-:2:-:1  \@P2 LDG.E.CI.128 load0A, [track0A];\n",
+                j4c62 => "04:-:3:-:1  \@P3 LDG.E.CI.128 load1A, [track1A];\n",
+                j5c62 => "08:-:4:-:1  \@P4 LDG.E.CI.128 load0B, [track0B];\n",
+                j6c62 => "10:-:5:-:1  \@P5 LDG.E.CI.128 load1B, [track1B];\n",
+            ) :
+            (
+                j2c45 => "02:-:-:-:1  \@P0 F2F.F32.F16 load0A0, load0A0;\n",
+                j2c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A1, load0A1;\n",
+                j2c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A2, load0A2;\n",
+                j2c57 => "--:-:2:-:1  \@P0 F2F.F32.F16 load0A3, load0A3;\n",
+                j2c61 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A4, load0A4;\n",
+                j3c1  => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A5, load0A5;\n",
+                j3c5  => "--:-:-:-:1  \@P0 F2F.F32.F16 load0A6, load0A6;\n",
+                j3c9  => "--:-:6:-:1  \@P0 F2F.F32.F16 load0A7, load0A7;\n",
+
+                j3c45 => "04:-:-:-:1  \@P0 F2F.F32.F16 load1A0, load1A0;\n",
+                j3c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A1, load1A1;\n",
+                j3c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A2, load1A2;\n",
+                j3c57 => "--:-:3:-:1  \@P0 F2F.F32.F16 load1A3, load1A3;\n",
+                j3c61 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A4, load1A4;\n",
+                j4c1  => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A5, load1A5;\n",
+                j4c5  => "--:-:-:-:1  \@P0 F2F.F32.F16 load1A6, load1A6;\n",
+                j4c9  => "--:-:6:-:1  \@P0 F2F.F32.F16 load1A7, load1A7;\n",
+
+                j4c45 => "08:-:-:-:1  \@P0 F2F.F32.F16 load0B0, load0B0;\n",
+                j4c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B1, load0B1;\n",
+                j4c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B2, load0B2;\n",
+                j4c57 => "--:-:4:-:1  \@P0 F2F.F32.F16 load0B3, load0B3;\n",
+                j4c61 => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B4, load0B4;\n",
+                j5c1  => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B5, load0B5;\n",
+                j5c5  => "--:-:-:-:1  \@P0 F2F.F32.F16 load0B6, load0B6;\n",
+                j5c9  => "--:-:6:-:1  \@P0 F2F.F32.F16 load0B7, load0B7;\n",
+
+                j5c45 => "10:-:-:-:1  \@P0 F2F.F32.F16 load1B0, load1B0;\n",
+                j5c49 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B1, load1B1;\n",
+                j5c53 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B2, load1B2;\n",
+                j5c57 => "--:-:5:-:1  \@P0 F2F.F32.F16 load1B3, load1B3;\n",
+                j5c61 => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B4, load1B4;\n",
+                j6c1  => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B5, load1B5;\n",
+                j6c5  => "--:-:-:-:1  \@P0 F2F.F32.F16 load1B6, load1B6;\n",
+                j6c9  => "--:-:6:-:1  \@P0 F2F.F32.F16 load1B7, load1B7;\n",
+
+                j3c16  => "02:-:-:-:1  \@P0 STS [writeAs + 4x<0*32 + 0*16>], load0A0;\n",
+                j3c18  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<1*32 + 0*16>], load0A1;\n",
+                j3c20  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<2*32 + 0*16>], load0A2;\n",
+                j3c22  => "--:2:-:-:1  \@P0 STS [writeAs + 4x<3*32 + 0*16>], load0A3;\n",
+                j3c24  => "20:-:-:-:1  \@P0 STS [writeAs + 4x<4*32 + 0*16>], load0A4;\n",
+                j3c26  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<5*32 + 0*16>], load0A5;\n",
+                j3c28  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<6*32 + 0*16>], load0A6;\n",
+                j3c30  => "--:6:-:-:1  \@P0 STS [writeAs + 4x<7*32 + 0*16>], load0A7;\n",
+
+                j4c16  => "04:-:-:-:1  \@P0 STS [writeAs + 4x<0*32 + 1*16>], load1A0;\n",
+                j4c18  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<1*32 + 1*16>], load1A1;\n",
+                j4c20  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<2*32 + 1*16>], load1A2;\n",
+                j4c22  => "--:3:-:-:1  \@P0 STS [writeAs + 4x<3*32 + 1*16>], load1A3;\n",
+                j4c24  => "20:-:-:-:1  \@P0 STS [writeAs + 4x<4*32 + 1*16>], load1A4;\n",
+                j4c26  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<5*32 + 1*16>], load1A5;\n",
+                j4c28  => "--:-:-:-:1  \@P0 STS [writeAs + 4x<6*32 + 1*16>], load1A6;\n",
+                j4c30  => "--:6:-:-:1  \@P0 STS [writeAs + 4x<7*32 + 1*16>], load1A7;\n",
+
+                j5c16  => "08:-:-:-:1  \@P0 STS [writeBs + 4x<0*32 + 0*16>], load0B0;\n",
+                j5c18  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<1*32 + 0*16>], load0B1;\n",
+                j5c20  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<2*32 + 0*16>], load0B2;\n",
+                j5c22  => "--:4:-:-:1  \@P0 STS [writeBs + 4x<3*32 + 0*16>], load0B3;\n",
+                j5c24  => "20:-:-:-:1  \@P0 STS [writeBs + 4x<4*32 + 0*16>], load0B4;\n",
+                j5c26  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<5*32 + 0*16>], load0B5;\n",
+                j5c28  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<6*32 + 0*16>], load0B6;\n",
+                j5c30  => "--:6:-:-:1  \@P0 STS [writeBs + 4x<7*32 + 0*16>], load0B7;\n",
+
+                j6c16  => "10:-:-:-:1  \@P0 STS [writeBs + 4x<0*32 + 1*16>], load1B0;\n",
+                j6c18  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<1*32 + 1*16>], load1B1;\n",
+                j6c20  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<2*32 + 1*16>], load1B2;\n",
+                j6c22  => "--:5:-:-:1  \@P0 STS [writeBs + 4x<3*32 + 1*16>], load1B3;\n",
+                j6c24  => "20:-:-:-:1  \@P0 STS [writeBs + 4x<4*32 + 1*16>], load1B4;\n",
+                j6c26  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<5*32 + 1*16>], load1B5;\n",
+                j6c28  => "--:-:-:-:1  \@P0 STS [writeBs + 4x<6*32 + 1*16>], load1B6;\n",
+                j6c30  => "--:6:-:-:1  \@P0 STS [writeBs + 4x<7*32 + 1*16>], load1B7;\n",
+
+                j3c48 => "02:-:-:-:1  \@P2 LDG.E.CI.U16 load0A0, [track0A + 2x<0>];\n",
+                j3c50 => "--:-:-:-:1  \@P2 LDG.E.CI.U16 load0A1, [track0A + 2x<1>];\n",
+                j3c52 => "--:-:-:-:1  \@P2 LDG.E.CI.U16 load0A2, [track0A + 2x<2>];\n",
+                j3c54 => "--:-:-:-:1  \@P2 LDG.E.CI.U16 load0A3, [track0A + 2x<3>];\n",
+                j3c56 => "20:-:-:-:1  \@P2 LDG.E.CI.U16 load0A4, [track0A + 2x<4>];\n",
+                j3c58 => "--:-:-:-:1  \@P2 LDG.E.CI.U16 load0A5, [track0A + 2x<5>];\n",
+                j3c60 => "--:-:-:-:1  \@P2 LDG.E.CI.U16 load0A6, [track0A + 2x<6>];\n",
+                j3c62 => "--:-:2:-:1  \@P2 LDG.E.CI.U16 load0A7, [track0A + 2x<7>];\n",
+
+                j4c48 => "04:-:-:-:1  \@P3 LDG.E.CI.U16 load1A0, [track1A + 2x<0>];\n",
+                j4c50 => "--:-:-:-:1  \@P3 LDG.E.CI.U16 load1A1, [track1A + 2x<1>];\n",
+                j4c52 => "--:-:-:-:1  \@P3 LDG.E.CI.U16 load1A2, [track1A + 2x<2>];\n",
+                j4c54 => "--:-:-:-:1  \@P3 LDG.E.CI.U16 load1A3, [track1A + 2x<3>];\n",
+                j4c56 => "20:-:-:-:1  \@P3 LDG.E.CI.U16 load1A4, [track1A + 2x<4>];\n",
+                j4c58 => "--:-:-:-:1  \@P3 LDG.E.CI.U16 load1A5, [track1A + 2x<5>];\n",
+                j4c60 => "--:-:-:-:1  \@P3 LDG.E.CI.U16 load1A6, [track1A + 2x<6>];\n",
+                j4c62 => "--:-:3:-:1  \@P3 LDG.E.CI.U16 load1A7, [track1A + 2x<7>];\n",
+
+                j5c48 => "08:-:-:-:1  \@P4 LDG.E.CI.U16 load0B0, [track0B + 2x<0>];\n",
+                j5c50 => "--:-:-:-:1  \@P4 LDG.E.CI.U16 load0B1, [track0B + 2x<1>];\n",
+                j5c52 => "--:-:-:-:1  \@P4 LDG.E.CI.U16 load0B2, [track0B + 2x<2>];\n",
+                j5c54 => "--:-:-:-:1  \@P4 LDG.E.CI.U16 load0B3, [track0B + 2x<3>];\n",
+                j5c56 => "20:-:-:-:1  \@P4 LDG.E.CI.U16 load0B4, [track0B + 2x<4>];\n",
+                j5c58 => "--:-:-:-:1  \@P4 LDG.E.CI.U16 load0B5, [track0B + 2x<5>];\n",
+                j5c60 => "--:-:-:-:1  \@P4 LDG.E.CI.U16 load0B6, [track0B + 2x<6>];\n",
+                j5c62 => "--:-:4:-:1  \@P4 LDG.E.CI.U16 load0B7, [track0B + 2x<7>];\n",
+
+                j6c48 => "10:-:-:-:1  \@P5 LDG.E.CI.U16 load1B0, [track1B + 2x<0>];\n",
+                j6c50 => "--:-:-:-:1  \@P5 LDG.E.CI.U16 load1B1, [track1B + 2x<1>];\n",
+                j6c52 => "--:-:-:-:1  \@P5 LDG.E.CI.U16 load1B2, [track1B + 2x<2>];\n",
+                j6c54 => "--:-:-:-:1  \@P5 LDG.E.CI.U16 load1B3, [track1B + 2x<3>];\n",
+                j6c56 => "20:-:-:-:1  \@P5 LDG.E.CI.U16 load1B4, [track1B + 2x<4>];\n",
+                j6c58 => "--:-:-:-:1  \@P5 LDG.E.CI.U16 load1B5, [track1B + 2x<5>];\n",
+                j6c60 => "--:-:-:-:1  \@P5 LDG.E.CI.U16 load1B6, [track1B + 2x<6>];\n",
+                j6c62 => "--:-:5:-:1  \@P5 LDG.E.CI.U16 load1B7, [track1B + 2x<7>];\n",
+            )
+        ),
+        j7c63 => "--:-:-:Y:5  \@P0 BRA.U LOOP;\n",
+    );
+    my @cOrder;
+    my @swirl = ([0,2],[1,2],[1,0],[0,0]);
+    my @y = (0,1,4,5);
+    foreach my $x (0,2,4,6)
+    {
+        foreach my $y (@y)
+        {
+            push @cOrder, [$x + $_->[0], $y + $_->[1]] foreach @swirl;
+        }
+        @y = reverse @y;
+    }
+    my $out = '';
+    foreach my $j (0 .. 7)
+    {
+        my $odd      = $j & 1;
+        my $nOdd     = !$odd + 0;
+        my $rsOffset = ($j + 1) % 8;
+        my $rsPred   = $j == 7 ? '@P0' : '   ';
+
+        $insert{"j${j}c0"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dAy0, [readAs + 4x<%d*32 + 00>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c2"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dBx0, [readBs + 4x<%d*32 + 00>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c4"} = sprintf "--:-:-:-:1  %s LDS.U.128 j%dAy4, [readAs + 4x<%d*32 + 16>];\n", $rsPred, $nOdd, $rsOffset;
+        $insert{"j${j}c6"} = sprintf "--:-:1:-:1  %s LDS.U.128 j%dBx4, [readBs + 4x<%d*32 + 16>];\n", $rsPred, $nOdd, $rsOffset;
+
+        foreach my $c (0 .. 63)
+        {
+            my ($x,$y) = @{$cOrder[$c]};
+
+            my $ins    = $insert{"j${j}c$c"} || '';
+
+            my $stall  = $ins =~ /LDS|I2I|I2F|F2I|F2F|LDG|STS|BAR|BRA/ ? 0 : 1;
+
+            my $yield  = $c == 32 && $stall ? 'Y' : '-';
+
+            my $wait   = $c == 0 ? '01' : '--';
+
+            my $ctrl   = "$wait:-:-:$yield:$stall";
+
+            $out .= sprintf "%s      FFMA cx%dy%d, j%dBx%d, j%dAy%d, cx%dy%d;\n%s", $ctrl,  $x,$y,  $odd,$x,  $odd,$y,  $x,$y,  $ins;
+        }
+    }
+    return $out;
++]
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      MOV alpha, param_alpha;
+--:-:-:-:1      MOV beta,  param_beta;
+--:-:-:-:1      MOV flags, param_flags;
+
+// readCs = ((tid & 7) * 4 + (tid / 8) * 32) * 4
+--:-:-:-:1      LOP.AND tid7, tid, 7;
+--:-:-:-:1      SHR.U32 tid8, tid, 3;
+--:-:-:-:1      SHL     tid7, tid7, 2;
+--:-:-:-:1      ISCADD readCs, tid8, tid7, 5;
+--:-:-:-:1      SHL    readCs, readCs, 2;
+
+// cx = blkB*32 + tid7;
+--:-:-:-:1      ISCADD cx, blkB, tid7, 5;
+--:-:-:-:1      IADD   cx1, cx, 1;
+--:-:-:-:1      IADD   cx2, cx, 2;
+--:-:-:-:1      IADD   cx3, cx, 3;
+
+// cy = blkA*32 + tid8
+--:-:-:-:1      ISCADD cy, blkA, tid8, 5;
+
+// C += (cy*ldc + cx) * 2;
+--:-:-:-:1      MOV  ldc,  param_ldc;
+--:-:-:-:1      MOV  ldcz, param_ldcz;
+--:-:-:-:1      SHL  ldc16, ldc, 5;
+
+--:-:-:-:1      XMAD.LO  ci, cy, ldc, cx, xmad_c;
+--:-:-:-:1      XMAD.LO2 ci, ldcz, blkZ, ci;
+--:-:-:-:1      LEA      C0.CC, ci, param_C[0],     1;
+--:-:-:-:1      LEA.HI.X C1,    ci, param_C[1], RZ, 1;
+
+// P0 = cx < n
+--:-:-:-:1      ISETP.LT.AND P0, PT, cx,  param_n, PT;
+--:-:-:-:1      ISETP.LT.AND P1, PT, cx1, param_n, PT;
+--:-:-:-:1      ISETP.LT.AND P2, PT, cx2, param_n, PT;
+--:-:-:-:1      ISETP.LT.AND P3, PT, cx3, param_n, PT;
+--:-:-:-:1      P2R preds, PR, RZ, 0x0f;
+
+// P4 = cy < m
+--:-:-:-:1      ISETP.LT.AND P4, PT, cy, param_m, PT;
+
+// P5 = beta != 0 && P4
+--:-:-:-:1      ISETP.NE.AND P5, PT, beta, RZ, P4;
+
+// P6 = Apply relu
+--:-:-:-:1      LOP.AND.NZ P6, RZ, flags, 2;
+
+// Init beta preds
+--:-:-:-:1  @P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 @!P5 R2P PR, RZ,    0x0f;
+
+</SCHEDULE_BLOCK>
+
+--:-:-:-:1      FMUL shuffle_x0y0, cx0y0, alpha;
+--:-:-:-:1      FMUL shuffle_x1y0, cx1y0, alpha;
+--:-:-:-:1      FMUL shuffle_x2y0, cx2y0, alpha;
+--:-:-:-:1      FMUL shuffle_x3y0, cx3y0, alpha;
+--:-:-:-:1      FMUL shuffle_x4y0, cx4y0, alpha;
+--:-:-:-:1      FMUL shuffle_x5y0, cx5y0, alpha;
+--:-:-:-:1      FMUL shuffle_x6y0, cx6y0, alpha;
+--:-:-:-:0      FMUL shuffle_x7y0, cx7y0, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*32 + 00>], shuffle_x0y0;
+--:-:-:-:1      FMUL shuffle_x0y1, cx0y1, alpha;
+--:-:-:-:1      FMUL shuffle_x1y1, cx1y1, alpha;
+--:-:-:-:1      FMUL shuffle_x2y1, cx2y1, alpha;
+--:-:-:-:0      FMUL shuffle_x3y1, cx3y1, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*32 + 16>], shuffle_x4y0;
+--:-:-:-:1      FMUL shuffle_x4y1, cx4y1, alpha;
+--:-:-:-:1      FMUL shuffle_x5y1, cx5y1, alpha;
+--:-:-:-:1      FMUL shuffle_x6y1, cx6y1, alpha;
+--:-:-:-:0      FMUL shuffle_x7y1, cx7y1, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<1*32 + 00>], shuffle_x0y1;
+--:-:-:-:1      FMUL shuffle_x0y2, cx0y2, alpha;
+--:-:-:-:1      FMUL shuffle_x1y2, cx1y2, alpha;
+--:-:-:-:1      FMUL shuffle_x2y2, cx2y2, alpha;
+--:-:-:-:0      FMUL shuffle_x3y2, cx3y2, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<1*32 + 16>], shuffle_x4y1;
+--:-:-:-:1      FMUL shuffle_x4y2, cx4y2, alpha;
+--:-:-:-:1      FMUL shuffle_x5y2, cx5y2, alpha;
+--:-:-:-:1      FMUL shuffle_x6y2, cx6y2, alpha;
+--:-:-:-:0      FMUL shuffle_x7y2, cx7y2, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<2*32 + 00>], shuffle_x0y2;
+--:-:-:-:1      FMUL shuffle_x0y3, cx0y3, alpha;
+--:-:-:-:1      FMUL shuffle_x1y3, cx1y3, alpha;
+--:-:-:-:1      FMUL shuffle_x2y3, cx2y3, alpha;
+--:-:-:-:0      FMUL shuffle_x3y3, cx3y3, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<2*32 + 16>], shuffle_x4y2;
+--:-:-:-:1      FMUL shuffle_x4y3, cx4y3, alpha;
+--:-:-:-:1      FMUL shuffle_x5y3, cx5y3, alpha;
+--:-:-:-:1      FMUL shuffle_x6y3, cx6y3, alpha;
+--:-:-:-:0      FMUL shuffle_x7y3, cx7y3, alpha;
+--:-:-:-:4      STS.128 [writeCs+4x<3*32 + 00>], shuffle_x0y3;
+--:-:-:-:1      STS.128 [writeCs+4x<3*32 + 16>], shuffle_x4y3;
+--:-:-:-:5      BAR.SYNC 0;
+
+--:-:-:-:5      CAL STORE_C;
+
+--:-:-:-:1      FMUL shuffle_x0y4, cx0y4, alpha;
+--:-:-:-:1      FMUL shuffle_x1y4, cx1y4, alpha;
+--:-:-:-:1      FMUL shuffle_x2y4, cx2y4, alpha;
+--:-:-:-:1      FMUL shuffle_x3y4, cx3y4, alpha;
+--:-:-:-:1      FMUL shuffle_x4y4, cx4y4, alpha;
+--:-:-:-:1      FMUL shuffle_x5y4, cx5y4, alpha;
+--:-:-:-:0      FMUL shuffle_x6y4, cx6y4, alpha;
+--:-:-:-:5      BAR.SYNC 0;
+--:-:-:-:0      FMUL shuffle_x7y4, cx7y4, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*32 + 00>], shuffle_x0y4;
+--:-:-:-:1      FMUL shuffle_x0y5, cx0y5, alpha;
+--:-:-:-:1      FMUL shuffle_x1y5, cx1y5, alpha;
+--:-:-:-:1      FMUL shuffle_x2y5, cx2y5, alpha;
+--:-:-:-:0      FMUL shuffle_x3y5, cx3y5, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*32 + 16>], shuffle_x4y4;
+--:-:-:-:1      FMUL shuffle_x4y5, cx4y5, alpha;
+--:-:-:-:1      FMUL shuffle_x5y5, cx5y5, alpha;
+--:-:-:-:1      FMUL shuffle_x6y5, cx6y5, alpha;
+--:-:-:-:0      FMUL shuffle_x7y5, cx7y5, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<1*32 + 00>], shuffle_x0y5;
+--:-:-:-:1      FMUL shuffle_x0y6, cx0y6, alpha;
+--:-:-:-:1      FMUL shuffle_x1y6, cx1y6, alpha;
+--:-:-:-:1      FMUL shuffle_x2y6, cx2y6, alpha;
+--:-:-:-:0      FMUL shuffle_x3y6, cx3y6, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<1*32 + 16>], shuffle_x4y5;
+--:-:-:-:1      FMUL shuffle_x4y6, cx4y6, alpha;
+--:-:-:-:1      FMUL shuffle_x5y6, cx5y6, alpha;
+--:-:-:-:1      FMUL shuffle_x6y6, cx6y6, alpha;
+--:-:-:-:0      FMUL shuffle_x7y6, cx7y6, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<2*32 + 00>], shuffle_x0y6;
+--:-:-:-:1      FMUL shuffle_x0y7, cx0y7, alpha;
+--:-:-:-:1      FMUL shuffle_x1y7, cx1y7, alpha;
+--:-:-:-:1      FMUL shuffle_x2y7, cx2y7, alpha;
+--:-:-:-:0      FMUL shuffle_x3y7, cx3y7, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<2*32 + 16>], shuffle_x4y6;
+--:-:-:-:1      FMUL shuffle_x4y7, cx4y7, alpha;
+--:-:-:-:1      FMUL shuffle_x5y7, cx5y7, alpha;
+--:-:-:-:1      FMUL shuffle_x6y7, cx6y7, alpha;
+--:-:-:-:0      FMUL shuffle_x7y7, cx7y7, alpha;
+--:-:-:-:4      STS.128 [writeCs+4x<3*32 + 00>], shuffle_x0y7;
+--:-:-:-:1      STS.128 [writeCs+4x<3*32 + 16>], shuffle_x4y7;
+--:-:-:-:5      BAR.SYNC 0;
+
+--:-:-:-:5      CAL STORE_C;
+
+--:-:-:-:5      EXIT;
+
+STORE_C:
+
+[+
+    our $vec;
+    return $vec ? q{
+--:-:1:-:1  @P0 LDG.E.64 loadC, [C];
+    } : q{
+--:-:-:-:0 @!P0 MOV loadC0, RZ;
+--:-:-:-:1  @P0 LDG.E.CI.U16 loadC0, [C + 2x<0>];
+--:-:-:-:0 @!P1 MOV loadC1, RZ;
+--:-:-:-:1  @P1 LDG.E.CI.U16 loadC1, [C + 2x<1>];
+--:-:-:-:0 @!P2 MOV loadC2, RZ;
+--:-:-:-:1  @P2 LDG.E.CI.U16 loadC2, [C + 2x<2>];
+--:-:-:-:0 @!P3 MOV loadC3, RZ;
+--:-:1:-:1  @P3 LDG.E.CI.U16 loadC3, [C + 2x<3>];
+    };
++]
+
+// Restore output preds
+--:-:-:-:1  @P4 R2P PR, preds, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ,    0x0f;
+
+--:-:-:-:1      LDS.U.128 part0C, [readCs + 4x<0*16*32>];
+--:-:2:-:1      LDS.U.128 part1C, [readCs + 4x<1*16*32>];
+--:-:-:-:1      LDS.U.128 part2C, [readCs + 4x<2*16*32>];
+--:-:3:-:1      LDS.U.128 part3C, [readCs + 4x<3*16*32>];
+--:-:-:-:1      LDS.U.128 part4C, [readCs + 4x<4*16*32>];
+--:-:4:-:1      LDS.U.128 part5C, [readCs + 4x<5*16*32>];
+--:-:-:-:1      LDS.U.128 part6C, [readCs + 4x<6*16*32>];
+--:-:5:-:1      LDS.U.128 part7C, [readCs + 4x<7*16*32>];
+
+<SCHEDULE_BLOCK>
+02:-:-:-:1  @P0 FADD part0C0, part0C0, part1C0;
+--:-:-:-:1  @P1 FADD part0C1, part0C1, part1C1;
+--:-:-:-:1  @P2 FADD part0C2, part0C2, part1C2;
+--:-:-:-:1  @P3 FADD part0C3, part0C3, part1C3;
+
+04:-:-:-:1  @P0 FADD part2C0, part2C0, part3C0;
+--:-:-:-:1  @P1 FADD part2C1, part2C1, part3C1;
+--:-:-:-:1  @P2 FADD part2C2, part2C2, part3C2;
+--:-:-:-:1  @P3 FADD part2C3, part2C3, part3C3;
+
+08:-:-:-:1  @P0 FADD part4C0, part4C0, part5C0;
+--:-:-:-:1  @P1 FADD part4C1, part4C1, part5C1;
+--:-:-:-:1  @P2 FADD part4C2, part4C2, part5C2;
+--:-:-:-:1  @P3 FADD part4C3, part4C3, part5C3;
+
+10:-:-:-:1  @P0 FADD part6C0, part6C0, part7C0;
+--:-:-:-:1  @P1 FADD part6C1, part6C1, part7C1;
+--:-:-:-:1  @P2 FADD part6C2, part6C2, part7C2;
+--:-:-:-:1  @P3 FADD part6C3, part6C3, part7C3;
+
+--:-:-:-:1  @P0 FADD part0C0, part0C0, part2C0;
+--:-:-:-:1  @P1 FADD part0C1, part0C1, part2C1;
+--:-:-:-:1  @P2 FADD part0C2, part0C2, part2C2;
+--:-:-:-:1  @P3 FADD part0C3, part0C3, part2C3;
+
+--:-:-:-:1  @P0 FADD part4C0, part4C0, part6C0;
+--:-:-:-:1  @P1 FADD part4C1, part4C1, part6C1;
+--:-:-:-:1  @P2 FADD part4C2, part4C2, part6C2;
+--:-:-:-:1  @P3 FADD part4C3, part4C3, part6C3;
+
+--:-:-:-:1  @P0 FADD c0, part0C0, part4C0;
+--:-:-:-:1  @P1 FADD c1, part0C1, part4C1;
+--:-:-:-:1  @P2 FADD c2, part0C2, part4C2;
+--:-:-:-:1  @P3 FADD c3, part0C3, part4C3;
+</SCHEDULE_BLOCK>
+
+--:-:-:-:0      IADD cy, cy, 16;
+
+[+
+    our $vec;
+    return $vec ? q{
+01:-:1:-:1  @P5 F2F.F32.F16 b0, loadC0.H0;
+--:-:2:-:1  @P5 F2F.F32.F16 b1, loadC0.H1;
+--:-:3:-:1  @P5 F2F.F32.F16 b2, loadC1.H0;
+--:-:4:-:1  @P5 F2F.F32.F16 b3, loadC1.H1;
+    } : q{
+01:-:1:-:1  @P5 F2F.F32.F16 b0, loadC0;
+--:-:2:-:1  @P5 F2F.F32.F16 b1, loadC1;
+--:-:3:-:1  @P5 F2F.F32.F16 b2, loadC2;
+--:-:4:-:1  @P5 F2F.F32.F16 b3, loadC3;
+    };
++]
+
+01:-:-:-:1  @P5 FFMA c0, b0, beta, c0;
+02:-:-:-:1  @P5 FFMA c1, b1, beta, c1;
+04:-:-:-:1  @P5 FFMA c2, b2, beta, c2;
+08:-:-:-:3  @P5 FFMA c3, b3, beta, c3;
+
+--:-:-:-:1  @P6 FMNMX c0, c0, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c1, c1, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c2, c2, RZ, !PT;
+--:-:-:-:1  @P6 FMNMX c3, c3, RZ, !PT;
+
+--:-:-:-:0      ISETP.LT.AND P5, PT, cy, param_m, P5;
+
+--:-:1:-:1  @P0 F2F.F16.F32 c0, c0;
+--:-:2:-:1  @P1 F2F.F16.F32 c1, c1;
+
+--:-:-:-:0      ISETP.LT.AND P4, PT, cy, param_m, PT;
+
+--:-:3:-:1  @P2 F2F.F16.F32 c2, c2;
+--:-:4:-:1  @P3 F2F.F16.F32 c3, c3;
+
+[+
+    our $vec;
+    return $vec ? q{
+03:-:-:-:2  @P0 BFI c0, c1, 0x1010, c0;
+0c:-:-:-:2  @P0 BFI c1, c3, 0x1010, c2;
+
+--:1:-:-:1  @P0 STG.E.CG.64 [C], c;
+    } : q{
+01:-:-:-:1  @P0 STG.E.U16 [C + 2x<0>], c0;
+02:-:-:-:1  @P1 STG.E.U16 [C + 2x<1>], c1;
+04:-:-:-:1  @P2 STG.E.U16 [C + 2x<2>], c2;
+08:1:-:-:1  @P3 STG.E.U16 [C + 2x<3>], c3;
+    };
++]
+
+// Restore beta preds
+--:-:-:-:1  @P5 R2P PR, preds, 0x0f;
+--:-:-:-:1 @!P5 R2P PR, RZ,    0x0f;
+
+01:-:-:-:6      IADD   C0.CC, C0, ldc16;
+--:-:-:-:0      IADD.X C1,    C1, RZ;
+
+--:-:-:-:5      RET;

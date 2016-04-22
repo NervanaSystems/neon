@@ -20,7 +20,7 @@ import pycuda.driver as drv
 from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 from neon.backends import kernel_specs
-from neon.backends.cuda_templates import _common_round, _ew_types
+from neon.backends.cuda_templates import _common_round, _ew_types, _common_fp16_to_fp32
 from math import ceil
 from operator import mul
 import sys
@@ -70,38 +70,6 @@ class KernelGroup(object):
             self.bsum_zero = 0
             flags &= ~4
         return bsum_gpudata, flags
-
-    def k_partitions(self, K, tiles):
-        k = K
-        partitions = []
-        for tile_K in tiles:
-            grid_K = (k + tiles[-1] - 1) // tile_K
-            if grid_K > 0:
-                partitions.append([tile_K, grid_K, K-k])
-                k -= grid_K * tile_K
-            if k <= 0:
-                break
-        return partitions
-
-    def xprop_kernels(self, op, tile_dim, tile_N, grid_N, K, tiles, PQM, RST, args):
-
-        self.kernels = []
-        for tile_K, grid_K, offset_K in self.k_partitions(K, tiles):
-
-            kernel_name = "%s_%s_%s%d_N%d" % (self.clss, op, tile_dim, tile_K, tile_N)
-
-            block = (kernel_specs.kernels[kernel_name]["threads"], 1, 1)
-            if RST > 1:
-                grid = (PQM, grid_K, grid_N)
-            else:
-                grid = (grid_K, grid_N, PQM)
-
-            params = [
-                kernel_name, grid, block, None,
-                None, None, None, None, None, None, None, offset_K]
-            params.extend(args)
-
-            self.kernels.append(params)
 
 class FpropCuda(KernelGroup):
 
@@ -182,7 +150,6 @@ class BpropCuda(KernelGroup):
         super(BpropCuda, self).__init__(lib, dtype)
 
         assert N % 32 == 0, "N dim must be multiple of 32"
-        assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
 
         magic_HW = _magic64(H*W)
         magic_W = _magic64(W)
@@ -211,16 +178,9 @@ class BpropCuda(KernelGroup):
         self.shared = R*S*T * 4 * 2
         self.flags = (bsum and 4)
 
-        # generate the kernel args for dim shuffling CTRSK => KTRSC
-        shuffle_grid = (_ceil_div(K, 32), _ceil_div(C, 32), R*S*T)
-        self.shuffle_size = C*T*R*S*K*dtype.itemsize
-        self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None, None]
-        self.shuffle_args.extend(_flatten([
-            R*S*T*K, R*S*K, S*K, K,
-            R*S*T*C, R*S*C, S*C, C,
-            R*S, T, R, S, magic_RS, magic_S]))
+        self.filter_trans = FilterDimShuffle(lib, dtype, C, T, R, S, K)
 
-        lib.set_scratch_size(self.shuffle_size)
+        lib.set_scratch_size(self.filter_trans.size)
 
     def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
 
@@ -228,31 +188,29 @@ class BpropCuda(KernelGroup):
         if self.bsum:
             assert bsum is not None, "must use initialized bsum config"
 
+        self.lib.scratch_buffer_init()
+
+        filter_data = self.filter_trans.bind_params(F)
+
         bsum_gpudata, flags = self.init_bsum(bsum, flags)
 
-        filter_temp = self.lib.scratch_buffer(self.shuffle_size)
-
-        self.shuffle_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
         self.launch_args[2:9] = (self.lib.stream, alpha, beta,
-                                 I.gpudata, filter_temp, O.gpudata, bsum_gpudata)
+                                 I.gpudata, filter_data, O.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
-        C = self.shuffle_args[12]
-        assert C >= 4, "C dim must be 4 or greater for CUDA C backprop kernel"
-
-        shuffle_kernel = _get_shuffle_kernel(self.dtype.str[1:])
 
         for r in range(repeat):
 
             if self.bsum_zero:
                 drv.memset_d32_async(*self.bsum_zero)
 
-            shuffle_kernel.prepared_async_call(*self.shuffle_args)
+            self.filter_trans.execute()
+
             self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
 
         if unbind:
             self.bsum_zero = None
-            self.shuffle_args[2:5] = (None,) * 3
+            self.filter_trans.unbind()
             self.launch_args[2:9] = (None,) * 7
 
     def __str__(self):
@@ -307,7 +265,9 @@ class UpdateCuda(KernelGroup):
                                        magic_PQ, magic_Q, magic_S])
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
 
-        lib.set_scratch_size((self.determ or C*T*R*S*K)*4)
+        self.output_trans = UpdateConvReduce(lib, 1, CRSTK)
+
+        lib.set_scratch_size(self.output_trans.size)
 
     def update_grid(self, kernel_name, base_blocks, P, Q, SM_count):
 
@@ -335,25 +295,19 @@ class UpdateCuda(KernelGroup):
 
         return (grid[0][0], grid[0][1], threads)
 
-    def bind_params(self, I, E, O, alpha):
+    def bind_params(self, I, E, O, alpha, beta=0):
 
         assert I.dtype == E.dtype
 
-        if O.dtype.type is not np.float32:
+        self.lib.scratch_buffer_init()
 
-            update_temp = self.lib.scratch_buffer((self.determ or O.size)*4)
+        output_data = self.output_trans.bind_params(O, beta)
 
-            self.convert_args = [update_temp, "f4", O, False]
-        else:
-            update_temp = O.gpudata
-            self.convert_args = False
+        self.zero_args = [output_data, 0, O.size, self.lib.stream]
 
-        self.zero_args = [update_temp, 0, O.size, self.lib.stream]
-
-        beta = 0.0
         bsum_gpudata = 0
-        self.launch_args[2:9] = (self.lib.stream, alpha, beta,
-                                 I.gpudata, E.gpudata, O.gpudata, bsum_gpudata)
+        self.launch_args[2:9] = (self.lib.stream, alpha, 0.0,
+                                 I.gpudata, E.gpudata, output_data, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
 
@@ -363,190 +317,101 @@ class UpdateCuda(KernelGroup):
 
             self.kernel.prepared_async_call(*self.launch_args)
 
-            if self.convert_args:
-                _fp_convert(*self.convert_args)
+            self.output_trans.execute()
 
         if unbind:
-            self.zero_args = self.convert_args = None
+            self.output_trans.unbind()
+            self.zero_args = None
             self.launch_args[2:9] = (None,) * 7
 
     def __str__(self):
         return "UpdateCuda"
 
-class FpropDirect(KernelGroup):
-
-    def __init__(self, lib, dtype,
-                 N, C, K,
-                 D, H, W,
-                 T, R, S,
-                 M, P, Q,
-                 pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 relu, bsum):
-
-        super(FpropDirect, self).__init__(lib, dtype)
-
-        assert N % 32 == 0, "N dim must be multiple of 32"
-        assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
-
-        tile_N = 128 if N > 64 else 64
-        grid_N = _ceil_div(N, tile_N)
-        tile_K = (128, 64, 32) if tile_N == 128 else (128, 64)
-
-        magic_PQ = _magic64(P*Q)
-        magic_Q = _magic64(Q)
-        magic_RS = _magic32(R*S*T+32, R*S)
-        magic_S = _magic32(R*S+32, S)
-
-        self.xprop_kernels(
-            "fprop", "K", tile_N, grid_N, K, tile_K, P*Q*M, R*S*T,
-            _flatten([N, K, D, H, W, W*N, H*W*N, D*H*W*N,
-                      C, K*R*S*T, R*S*T, R*S, magic_RS, S, magic_S,
-                      pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                      Q, P*Q, Q*N, P*Q*N, M*P*Q*N, magic_Q, magic_PQ]))
-
-        self.shared = R*S*T * 4 * 2
-        self.flags = (relu and 2) + (bsum and 4)
-
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
-
-        assert I.dtype == F.dtype == O.dtype
-
-        bsum_gpudata, flags = self.init_bsum(bsum, flags)
-
-        for kernel in self.kernels:
-            kernel[3:11] = (self.lib.stream, bsum_gpudata, O.gpudata, I.gpudata, F.gpudata,
-                            alpha, beta, flags)
-
-    def execute(self, repeat=1, unbind=True):
-
-        for r in range(repeat):
-
-            if self.bsum_zero:
-                drv.memset_d32_async(*self.bsum_zero)
-
-            for kernel_params in self.kernels:
-                kernel = kernel_specs.get_kernel(kernel_params[0])
-                kernel.prepared_async_call(*kernel_params[1:], shared_size=self.shared)
-
-        if unbind:
-            self.bsum_zero = None
-            for kernel_params in self.kernels:
-                kernel_params[3:11] = (None,) * 8
-
-    def __str__(self):
-        return "FpropDirect " + str([k[0] for k in self.kernels])
-
-class BpropDirect(KernelGroup):
-
-    def __init__(self, lib, dtype,
-                 N, C, K,
-                 D, H, W,
-                 T, R, S,
-                 M, P, Q,
-                 pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 relu, bsum):
-
-        super(BpropDirect, self).__init__(lib, dtype)
-
-        assert N % 32 == 0, "N dim must be multiple of 32"
-        assert C % self.vec_size == 0, "C dim must be multiple of %d" % self.vec_size
-
-        tile_N = 128 if N > 64 else 64
-        grid_N = _ceil_div(N, tile_N)
-        tile_C = (128, 64, 32) if tile_N == 128 else (128, 64)
-
-        magic_HW = _magic64(H*W)
-        magic_W = _magic64(W)
-        magic_RS = _magic32(R*S*T+32, R*S)
-        magic_S = _magic32(R*S+32, S)
-        magic_str_w = _magic32(W + S, str_w)
-        magic_str_h = _magic32(H + R, str_h)
-        magic_str_d = _magic32(D + T, str_d)
-
-        self.xprop_kernels(
-            "bprop", "C", tile_N, grid_N, C, tile_C, D*H*W, R*S*T,
-            _flatten([N, C, M, P, Q, Q*N, P*Q*N, M*P*Q*N,
-                      K, C*R*S*T, R*S*T, R*S, magic_RS, S, magic_S,
-                      pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                      W, H*W, W*N, H*W*N, D*H*W*N, magic_W, magic_HW,
-                      R, T, magic_str_w, magic_str_h, magic_str_d]))
-
-        self.shared = R*S*T * 4 * 2
-        self.flags = (relu and 2) + (bsum and 4)
-
-        # generate the kernel args for dim shuffling CTRSK => KTRSC
-        shuffle_grid = (_ceil_div(K, 32), _ceil_div(C, 32), R*S*T)
-        self.shuffle_size = C*T*R*S*K*dtype.itemsize
-        self.shuffle_args = [shuffle_grid, (32, 8, 1), None, None, None]
-        self.shuffle_args.extend(_flatten([
-            R*S*T*K, R*S*K, S*K, K,
-            R*S*T*C, R*S*C, S*C, C,
-            R*S, T, R, S, magic_RS, magic_S]))
-
-        lib.set_scratch_size(self.shuffle_size)
-
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
-
-        assert I.dtype == F.dtype == O.dtype
-
-        bsum_gpudata, flags = self.init_bsum(bsum, flags)
-
-        filter_temp = self.lib.scratch_buffer(self.shuffle_size)
-
-        self.shuffle_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
-
-        for kernel in self.kernels:
-            kernel[3:11] = (self.lib.stream, bsum_gpudata, O.gpudata, I.gpudata, filter_temp,
-                            alpha, beta, flags)
-
-    def execute(self, repeat=1, unbind=True):
-
-        shuffle_kernel = _get_shuffle_kernel(self.dtype_str)
-
-        for r in range(repeat):
-
-            if self.bsum_zero:
-                drv.memset_d32_async(*self.bsum_zero)
-
-            shuffle_kernel.prepared_async_call(*self.shuffle_args)
-
-            for kernel_params in self.kernels:
-                kernel = kernel_specs.get_kernel(kernel_params[0])
-                kernel.prepared_async_call(*kernel_params[1:], shared_size=self.shared)
-
-        if unbind:
-            self.bsum_zero = None
-            self.shuffle_args[2:5] = (None,) * 3
-            for kernel_params in self.kernels:
-                kernel_params[3:11] = (None,) * 8
-
-    def __str__(self):
-        return "BpropDirect " + str([k[0] for k in self.kernels])
-
-
-class XpropDirect2(KernelGroup):
+class XpropDirect(KernelGroup):
 
     def __init__(self, op, lib, dtype,
-                 N, C, K,
-                 D, H, W,
-                 T, R, S,
-                 M, P, Q,
+                 N, C, K, D, H, W, T, R, S, M, P, Q,
                  pad_d, pad_h, pad_w,
                  str_d, str_h, str_w,
                  relu):
 
-        super(XpropDirect2, self).__init__(lib, dtype)
+        super(XpropDirect, self).__init__(lib, dtype)
+
+        self.params = (N, C, K, D, H, W, T, R, S, M, P, Q,
+                       pad_d, pad_h, pad_w, str_d, str_h, str_w)
+
+        if N % 64 == 0 and K % self.vec_size == 0:
+            self.init_largeN(op)
+        else:
+            self.init_smallN(op)
+        self.relu = relu
+        lib.set_scratch_size(self.filter_trans.size, self.bsum.size)
+
+    def init_largeN(self, op):
+
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+
+        for blockN in (128, 64):
+            if N % blockN == 0:
+                break
+
+        #TODO: build 32x64 kernels
+        K_tiles = (128, 64, 32) if blockN == 128 else (128, 64)
+        for blockK in K_tiles:
+            mod = K % blockK
+            if mod == 0 or mod > blockK - 32:
+                break
+
+        kname   = "%s_direct_%s_%dx%d" % (self.clss, op, blockK, blockN)
+        threads = kernel_specs.kernels[kname]["threads"]
+        warps   = threads // 32
+
+        gridK = _ceil_div(K, blockK)
+        gridN = _ceil_div(N, blockN)
+        RS    = R * S
+        TRS   = T * RS
+        TRSK  = K * TRS
+        k     = _closest_divisor(gridK, 128 // blockK)
+        P2    = max(P // 2, 1)
+        Q2    = Q * 2
+        Qk    = Q2 * k
+        PQk   = P * Q * k
+
+        magic_PQk = _magic64(PQk)
+        magic_Qk  = _magic64(Qk)
+        magic_k   = _magic32(Qk, k)
+        magic_RS  = _magic32(TRS + 32, RS)
+        magic_S   = _magic32(RS  + 32,  S)
+
+        gridMPQ = M*P*Q
+        grid    = (gridMPQ*k, gridK//k, gridN)
+
+        self.kernel_opts = tuple()
+        self.kernel_name = kname
+        self.kernel_args = [grid, (threads,1,1), None, None, None, None, None, None, None, None, None]
+        self.kernel_args.extend(_flatten([
+
+            N, K, D, H, W, W*N, H*W*N, D*H*W*N,
+            C, TRSK, TRS, RS, T, R, S, magic_RS, magic_S,
+            pad_d, pad_h, pad_w, str_d, str_h, str_w,
+            P2, Q, PQk, Qk, k, magic_PQk, magic_Qk, magic_k,
+            Q*N, P*Q*N, M*P*Q*N,
+            gridN*warps, Q*gridN*warps, P*Q*gridN*warps, gridMPQ*gridN*warps ]))
+
+        self.shared = TRS * 4 * 2
+        self.bsum   = BatchNormSum(self.lib, K, gridMPQ*gridN*warps)
+
+    def init_smallN(self, op):
+
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
 
         assert N % 4 == 0 or N in (1,2), "N dim must be multiple of 4 or equal to 1 or 2"
 
         for blockN in (32,16,8,4,2,1):
             if N % blockN == 0:
                 break
-
-        self.params = (N, C, K, D, H, W, T, R, S, M, P, Q,
-                       pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
         sb_params_in = {
             #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN, shfN
@@ -596,7 +461,8 @@ class XpropDirect2(KernelGroup):
         magic_RS   = _magic32(TRS, RS)
         magic_S    = _magic32(RS,   S)
 
-        grid = (gridM*gridP*gridQ*nk, gridK//k, gridN//n)
+        gridMPQ = gridM*gridP*gridQ
+        grid    = (gridMPQ*nk, gridK//k, gridN//n)
 
         options = list()
         if     N == 1: options.append("N1")
@@ -612,69 +478,54 @@ class XpropDirect2(KernelGroup):
             str_d, str_h, str_w, pad_d, pad_h, pad_w,
             D*H*W*N, H*W*N, W*N, M*P*Q*N, P*Q*N, Q*N,
             PQnk, Qnk, nk, n, k, magic_PQnk, magic_Qnk, magic_nk, magic_k,
-            max(K-32,0), K*32*dtype.itemsize, TRSK, TRS, RS, S, magic_RS, magic_S, gridP2, gridQ,
+            max(K-32,0), K*32*self.dtype.itemsize, TRSK, TRS, RS, S, magic_RS, magic_S,
+            gridP2, gridQ, gridN, gridQ*gridN, gridP*gridQ*gridN, gridMPQ*gridN,
             superM, superP, superQ, superN,
             shiftM, shiftP, shiftQ, shiftN,
             SuperM, SuperP, SuperQ, SuperN ]))
+
+        self.bsum = BatchNormSum(self.lib, K, gridMPQ*gridN)
 
         if N >= 32:
             self.shared = (T*R*S + 1) * 4 * 2
         else:
             self.shared = T*R*S * 4 * (32 >> shiftN)
-        self.relu = relu
 
     def bind_params(self, I, F, O, alpha, beta, bsum, no_op=0):
 
-        # TODO: allow hybrid types
-        assert I.dtype == F.dtype == O.dtype
+        assert I.dtype == O.dtype
+
+        self.lib.scratch_buffer_init()
+
+        filter_data = self.filter_trans.bind_params(F)
+        bsum_data   = self.bsum.bind_params(bsum)
 
         # TODO: expose more compound operations
         self.kernel_options = self.kernel_opts
         if bsum:
-            bsum_gpudata = bsum.gpudata
-            self.bsum_zero = (bsum_gpudata, 0, bsum.size, self.lib.stream)
             self.kernel_options += ("bsum",)
-        else:
-            bsum_gpudata = 0
-            self.bsum_zero = None
-
         if beta:
             self.kernel_options += ("beta",)
-
         if self.relu:
             self.kernel_options += ("relu",)
 
-        if self.trans_size:
-            filter_temp = self.lib.scratch_buffer(self.trans_size)
-            self.trans_args[2:5] = (self.lib.stream, filter_temp, F.gpudata)
-        else:
-            filter_temp = F.gpudata
-
-        self.kernel_args[2:11] = (self.lib.stream, bsum_gpudata, O.gpudata, O.gpudata, I.gpudata, filter_temp,
-                             alpha, beta, no_op)
+        self.kernel_args[2:11] = (self.lib.stream, bsum_data, O.gpudata,
+                                  O.gpudata, I.gpudata, filter_data, alpha, beta, no_op)
 
     def execute(self, repeat=1, unbind=True):
 
         kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_options)
 
-        if self.trans_size:
-            trans_kernel = _get_shuffle_kernel(self.dtype_str)
-
         for r in range(repeat):
 
-            if self.bsum_zero:
-                drv.memset_d32_async(*self.bsum_zero)
-
-            if self.trans_size:
-                trans_kernel.prepared_async_call(*self.trans_args)
-
+            self.filter_trans.execute()
             kernel.prepared_async_call(*self.kernel_args, shared_size=self.shared)
+            self.bsum.execute()
 
         if unbind:
-            self.bsum_zero = None
+            self.filter_trans.unbind()
+            self.bsum.unbind()
             self.kernel_args[2:11] = (None,) * 9
-            if self.trans_size:
-                self.trans_args[2:5] = (None,) * 3
 
     def __str__(self):
         (N, C, K, D, H, W, T, R, S, M, P, Q,
@@ -682,7 +533,7 @@ class XpropDirect2(KernelGroup):
         return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d) RS:(%d,%d) str:(%d,%d)" % (
             self.kernel_name, N, C, K, H, W, R, S, str_h, str_w)
 
-class FpropDirect2(XpropDirect2):
+class FpropDirect(XpropDirect):
 
     def __init__(self, lib, dtype,
                  N, C, K,
@@ -693,13 +544,18 @@ class FpropDirect2(XpropDirect2):
                  str_d, str_h, str_w,
                  relu, bsum):
 
-        self.trans_size = 0
+        # The filters may still be in fp32 so we potentially need to dynamically quantize
+        if dtype.itemsize != 4:
+            self.filter_trans = ConvertDataType(lib, dtype, C*T*R*S*K, out_mode=False)
+        # if kernel is sconv then no need for any transform in fprop.
+        else:
+            self.filter_trans = NoopTransform()
 
-        super(FpropDirect2, self).__init__("fprop", lib, dtype,
+        super(FpropDirect, self).__init__("fprop", lib, dtype,
             N, C, K, D, H, W, T, R, S, M, P, Q,
             pad_d, pad_h, pad_w, str_d, str_h, str_w, relu)
 
-class BpropDirect2(XpropDirect2):
+class BpropDirect(XpropDirect):
 
     def __init__(self, lib, dtype,
                  N, C, K,
@@ -709,6 +565,8 @@ class BpropDirect2(XpropDirect2):
                  pad_d, pad_h, pad_w,
                  str_d, str_h, str_w,
                  relu, bsum):
+
+        self.filter_trans = FilterDimShuffle(lib, dtype, C, T, R, S, K)
 
         # invert padding
         pad_d = T - pad_d - 1
@@ -716,7 +574,7 @@ class BpropDirect2(XpropDirect2):
         pad_w = S - pad_w - 1
 
         # Swap C<=>K and DHW<=>MPQ
-        super(BpropDirect2, self).__init__("bprop", lib, dtype,
+        super(BpropDirect, self).__init__("bprop", lib, dtype,
             N, K, C, M, P, Q, T, R, S, D, H, W,
             pad_d, pad_h, pad_w, str_d, str_h, str_w, relu)
 
@@ -725,19 +583,8 @@ class BpropDirect2(XpropDirect2):
             _magic32(H + R, str_h),
             _magic32(W + S, str_w) ]))
 
-        gridC = _ceil_div(C, 32)
-        gridK = _ceil_div(K, 32)
 
-        self.trans_size = C*T*R*S*K * dtype.itemsize
-        self.trans_args = [(gridK, gridC, T*R*S), (32, 8, 1), None, None, None]
-        self.trans_args.extend(_flatten([
-            T*R*S*K, R*S*K, S*K, K,
-            T*R*S*C, R*S*C, S*C, C,
-            R*S, T, R, S, _magic32(T*R*S, R*S), _magic32(R*S, S)]))
-
-        lib.set_scratch_size(self.trans_size)
-
-class UpdateDirect2(KernelGroup):
+class UpdateDirect(KernelGroup):
 
     def __init__(self, lib, dtype,
                  N, C, K,
@@ -749,7 +596,7 @@ class UpdateDirect2(KernelGroup):
 
         assert N % 4 == 0, "N dim must be multiple of 4"
 
-        super(UpdateDirect2, self).__init__(lib, dtype)
+        super(UpdateDirect, self).__init__(lib, dtype)
 
         SMs = _get_sm_count()
 
@@ -763,7 +610,7 @@ class UpdateDirect2(KernelGroup):
                        pad_d, pad_h, pad_w, str_d, str_h, str_w)
         self.init(self.params)
 
-        lib.set_scratch_size(self.output_size)
+        lib.set_scratch_size(self.output_trans.size)
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 5 Tflops on 24 SMs
@@ -818,9 +665,6 @@ class UpdateDirect2(KernelGroup):
 
             autotune_db.close()
 
-        # print P, Q, blockP, blockQ
-        # print GP, GQ, strideP, strideQ
-
         itemsize = self.dtype.itemsize
         RS       = R * S
         TRS      = T * RS
@@ -856,26 +700,18 @@ class UpdateDirect2(KernelGroup):
             loopXp = N * loopX * itemsize
             options.append("SN")
 
+        gridMPQ = GM*strideP*strideQ
+
         # If output grid is 1, don't use atomics.  Kernel is deterministic by default
-        if GM*strideP*strideQ == 1:
-            self.determ_size  = 0
-            self.determ_shape = False
-            self.zero         = False
+        if gridMPQ == 1 or self.lib.deterministic:
+            self.output_trans = UpdateConvReduce(self.lib, gridMPQ, CTRSK)
+            self.zero = False
             options.append("D")
-
-        elif self.lib.deterministic:
-            self.determ_size  = GM*strideP*strideQ * CTRSK
-            self.determ_shape = (GM*strideP*strideQ, CTRSK)
-            self.zero         = False
-            options.append("D")
-
         else:
-            self.determ_size  = 0
-            self.determ_shape = False
-            self.zero         = True
+            self.output_trans = UpdateConvReduce(self.lib, 1, CTRSK)
+            self.zero = True
 
-        grid = (GM*strideP*strideQ*kc, GC//c, GK//k)
-        #print grid, c, k
+        grid = (gridMPQ*kc, GC//c, GK//k)
 
         self.kernel_opts = tuple(options)
         self.kernel_name = "%s_direct_updat_64x32" % self.clss
@@ -889,8 +725,6 @@ class UpdateDirect2(KernelGroup):
             superM, superP, superQ, superN, shiftM, shiftP, shiftQ,
             strideP, strideQ, strideP*strideQ, GP, GQ,
             loopX, loopXp, loopQ, loopQp, blockN, blockN*itemsize ]))
-
-        self.output_size = (self.determ_size or (self.dtype.type != np.float32 and CTRSK)) * 4
 
     def autotune(self, I, E, O):
 
@@ -971,7 +805,7 @@ class UpdateDirect2(KernelGroup):
 
         self.init(self.params, autotune=settings)
 
-    def bind_params(self, I, E, O, alpha):
+    def bind_params(self, I, E, O, alpha, beta=0):
 
         assert I.dtype == E.dtype
 
@@ -979,17 +813,14 @@ class UpdateDirect2(KernelGroup):
             self.initialized = True
             self.autotune(I, E, O)
 
-        if O.dtype.type is not np.float32 or self.determ_size:
-            update_temp       = self.lib.scratch_buffer(self.output_size)
-            self.convert_args = [ update_temp, "f4", O, self.determ_shape ]
-        else:
-            update_temp = O.gpudata
-            self.convert_args = False
+        self.lib.scratch_buffer_init()
+
+        output_data = self.output_trans.bind_params(O, beta)
 
         if self.zero:
-            self.zero_args = [update_temp, 0, O.size, self.lib.stream]
+            self.zero_args = ( output_data, 0, O.size, self.lib.stream )
 
-        self.kernel_args[2:7] = (self.lib.stream, update_temp, I.gpudata, E.gpudata, alpha)
+        self.kernel_args[2:7] = (self.lib.stream, output_data, I.gpudata, E.gpudata, alpha)
 
     def execute(self, repeat=1, unbind=True):
 
@@ -1002,11 +833,11 @@ class UpdateDirect2(KernelGroup):
 
             kernel.prepared_async_call(*self.kernel_args)
 
-            if self.convert_args:
-                _fp_convert(*self.convert_args)
+            self.output_trans.execute()
 
         if unbind:
-            self.zero_args = self.convert_args = None
+            self.output_trans.unbind()
+            self.zero_args = None
             self.kernel_args[2:7] = (None,) * 5
 
     def __str__(self):
@@ -1085,89 +916,354 @@ def _get_sm_count():
     attributes = drv.Context.get_device().get_attributes()
     return attributes[drv.device_attribute.MULTIPROCESSOR_COUNT]
 
-
-def _fp_convert(src_data, src_type, dest_tensor, reduce_shape):
-
-    if reduce_shape:
-
-        kernel = _get_reduce_kernel(dest_tensor.dtype.str[1:])
-        blocks = _ceil_div(reduce_shape[1], 32)
-        kernel.prepared_async_call((blocks, 1, 1), (32, 1, 1),
-                                   dest_tensor.backend.stream,
-                                   dest_tensor.gpudata,
-                                   src_data,
-                                   reduce_shape[1],
-                                   reduce_shape[0]*reduce_shape[1])
-
-    else:
-        from neon.backends.nervanagpu import GPUTensor
-        from neon.backends.float_ew import _get_compound_kernel, _get_fast_ew_dims
-
-        # quick wrapper to convert raw fp32 scratch data to a destination tensor
-        shape, strides = _get_fast_ew_dims(dest_tensor.size)
-        kernel_args = [0,
-                       dest_tensor.gpudata, strides[0], strides[1],
-                       src_data, strides[0], strides[1],
-                       shape[1]]
-
-        kernel = _get_compound_kernel((
-            (GPUTensor, 0, dest_tensor.dtype.str[1:], 0, False),
-            (GPUTensor, 1, src_type, 0, False),
-            ('assign', 0, False, 32)),
-            dest_tensor.backend.compute_capability)
-        kernel.prepared_async_call((shape[0], 1, 1),
-                                   (32, 1, 1),
-                                   dest_tensor.backend.stream,
-                                   *kernel_args)
-
+# Pass through transform (for code simplification)
+class NoopTransform(object):
+    def __init__(self):
+        self.size = 0
+    def bind_params(self, A):
+        return A.gpudata
+    def execute(self):
+        pass
+    def unbind(self):
+        pass
 
 # fast axis=0 reduction kernel used for deterministic update
-@context_dependent_memoize
-def _get_reduce_kernel(dtype):
+class UpdateConvReduce(object):
+    def __init__(self, lib, gridMPQ, CTRSK):
+        blocks     = _ceil_div(CTRSK, 32)
+        PQCRSTK    = gridMPQ * CTRSK
+        self.mpq   = gridMPQ > 1
+        self.lib   = lib
+        self.size  = PQCRSTK * 4
+        self.args  = [(blocks, 1, 1), (32, 1, 1), None, None, None, 0, CTRSK, PQCRSTK]
 
-    _reduce_kernel = r"""
+    def bind_params(self, U, beta):
+        if self.mpq or beta or U.dtype.type != np.float32:
+            update_data    = self.lib.scratch_buffer_offset(self.size)
+            self.args[2:6] = (self.lib.stream, U.gpudata, update_data, beta)
+            self.kernel    = _get_update_conv_reduce_kernel(U.dtype.str[1:], beta != 0)
+            return update_data
+        self.kernel = None
+        return U.gpudata
+
+    def execute(self):
+        if self.kernel:
+            self.kernel.prepared_async_call(*self.args)
+
+    def unbind(self):
+        self.kernel    = None
+        self.args[2:5] = (None,) * 3
+
+
+@context_dependent_memoize
+def _get_update_conv_reduce_kernel(dtype, beta):
+
+    kernel_code = r"""
 %(common)s
 
-__global__ void reduce(%(type)s* out, const float* in, int CRSTK, int PQCRSTK)
+__global__ void update_conv_reduce(%(type)s* Out, const float* In, float beta, int CRSTK, int PQCRSTK)
 {
     int offset = blockIdx.x * 32 + threadIdx.x;
 
     if (offset < CRSTK)
     {
         float sum = 0.0f;
-        for (int i = offset; i < PQCRSTK; i += CRSTK)
+        int i0 = offset;
+        while (i0 < PQCRSTK)
         {
-            sum += __ldg(in + i);
+            int i1 = i0 + CRSTK;
+            int i2 = i1 + CRSTK;
+            int i3 = i2 + CRSTK;
+
+            sum += In[i0];
+            sum += i1 < PQCRSTK ? In[i1] : 0.0f;
+            sum += i2 < PQCRSTK ? In[i2] : 0.0f;
+            sum += i3 < PQCRSTK ? In[i3] : 0.0f;
+
+            i0 = i3 + CRSTK;
         }
-        out[offset] = %(cvt_out)s(sum);
+        Out[offset] = %(output)s;
     }
 }
 """
-    template_vals = {
-        "common": _common_round["nearest"].get(dtype, ""),
-        "type": _ew_types[dtype]["type"],
-    }
+    common  = _common_round["nearest"].get(dtype, "")
     if dtype == "f2":
-        template_vals["cvt_out"] = "fp32_to_fp16"
-    elif dtype == "f4":
-        template_vals["cvt_out"] = ""
-    elif dtype == "x2":
-        template_vals["cvt_out"] = "fp32_to_int16"
-    else:
-        raise TypeError("Missing reduction type")
+        common += _common_fp16_to_fp32
 
-    code = _reduce_kernel % template_vals
+    template_vals = {
+        "common"  : common,
+        "type"    : _ew_types[dtype]["type"],
+        "cvt_in"  : _ew_types[dtype]["cvt"],
+        "cvt_out" : _ew_types[dtype]["cvt_out"],
+    }
+    if beta:
+        output = "%(cvt_out)s(sum + %(cvt_in)s(Out[offset]) * beta)"
+    else:
+        output = "%(cvt_out)s(sum)"
+    template_vals["output"] = output % template_vals
+
+    code   = kernel_code % template_vals
     module = SourceModule(code)
-    kernel = module.get_function("reduce")
+    kernel = module.get_function("update_conv_reduce")
+    kernel.prepare("PPfII")
+    return kernel
+
+# fast axis=1 reduction kernel used for deterministic compounded batch norm mean
+class BatchNormSum(object):
+    def __init__(self, lib, K, gridMPQN):
+        self.lib   = lib
+        self.size  = K * gridMPQN * 4
+        self.args  = [(K, 1, 1), (256, 1, 1), None, None, None, gridMPQN]
+
+    def bind_params(self, bsum):
+        if bsum:
+            bsum_data    = self.lib.scratch_buffer_offset(self.size)
+            self.args[2:5] = (self.lib.stream, bsum.gpudata, bsum_data)
+            self.kernel    = _get_batchnorm_sum_kernel()
+            return bsum_data
+        self.kernel = None
+        return 0
+
+    def execute(self):
+        if self.kernel:
+            self.kernel.prepared_async_call(*self.args)
+
+    def unbind(self):
+        self.kernel    = None
+        self.args[2:5] = (None,) * 3
+
+
+@context_dependent_memoize
+def _get_batchnorm_sum_kernel():
+    kernel_code = r"""
+#define THREADS 256
+
+__global__ void batchnorm_sum(float* Out, const float* In, int n)
+{
+    const int tid  = threadIdx.x;
+    const int bid  = blockIdx.x;
+
+    __shared__ float sPartials[THREADS];
+
+    In += bid*n + tid;
+
+    float sum = 0.0f;
+    for (int i = tid; i < n; i += THREADS)
+    {
+        sum += *In;
+        In  += THREADS;
+    }
+    sPartials[tid] = sum;
+    __syncthreads();
+
+    #pragma unroll
+    for (int a = THREADS >> 1; a > 32; a >>= 1)
+    {
+        if ( tid < a )
+            sPartials[tid] += sPartials[tid + a];
+        __syncthreads();
+    }
+    if ( tid < 32 )
+    {
+        sum = sPartials[tid] + sPartials[tid + 32];
+
+        #pragma unroll
+        for (int i = 16; i > 0; i >>= 1)
+            sum += __shfl_xor(sum, i);
+
+        if ( tid == 0 )
+            Out[bid] = sum;
+    }
+}
+"""
+    module = SourceModule(kernel_code)
+    kernel = module.get_function("batchnorm_sum")
+    kernel.prepare("PPI")
+    return kernel
+
+
+# Convert scratch to output tensor or from input tensor to scratch
+class ConvertDataType(object):
+    def __init__(self, lib, scratch_dtype, size, out_mode=True):
+        # find efficent kernel dims
+        SMs = _get_sm_count() * 4
+        for depth in (8,7,6,5):
+            if size >> depth >= SMs:
+                break
+        blk_depth  = 1 << depth
+        blocks     = _ceil_div(size, blk_depth)
+        self.out   = out_mode
+        self.lib   = lib
+        self.dtype = scratch_dtype.str[1:]
+        self.size  = size * scratch_dtype.itemsize
+        self.args  = [(blocks, 1, 1), (32, 1, 1), None, None, None, blk_depth, size]
+
+    def bind_params(self, A):
+        a_dtype = A.dtype.str[1:]
+        if a_dtype != self.dtype:
+            cvt_data = self.lib.scratch_buffer_offset(self.size)
+            if self.out:
+                self.args[2:5] = (self.lib.stream, A.gpudata, cvt_data)
+                self.kernel    = _get_convert_dtype_kernel(a_dtype, self.dtype)
+            else:
+                self.args[2:5] = (self.lib.stream, cvt_data, A.gpudata)
+                self.kernel    = _get_convert_dtype_kernel(self.dtype, a_dtype)
+            return cvt_data
+        self.kernel = None
+        return A.gpudata
+
+    def execute(self):
+        if self.kernel:
+            self.kernel.prepared_async_call(*self.args)
+
+    def unbind(self):
+        self.kernel    = None
+        self.args[2:5] = (None,) * 3
+
+@context_dependent_memoize
+def _get_convert_dtype_kernel(otype, itype):
+    kernel_code = r"""
+#define THREADS 32
+
+%(common)s
+
+__global__ void convert_dtype(%(otype)s* Out, const %(itype)s* In, int blk_depth, int size)
+{
+    const int tid = threadIdx.x;
+    const int bid = blockIdx.x;
+
+    int offset = bid*blk_depth + tid;
+
+    int end = min(offset + blk_depth, size);
+
+    while (offset < end)
+    {
+        Out[offset] = %(cvt_out)s(%(cvt_in)s(In[offset]));
+        offset += THREADS;
+    }
+}
+"""
+    common  = _common_round["nearest"].get(otype, "")
+    if itype == "f2":
+        common += _common_fp16_to_fp32
+
+    code = kernel_code % {
+        "common"  : common,
+        "itype"   : _ew_types[itype]["type"],
+        "otype"   : _ew_types[otype]["type"],
+        "cvt_in"  : _ew_types[itype]["cvt"],
+        "cvt_out" : _ew_types[otype]["cvt_out"],
+    }
+    module = SourceModule(code)
+    kernel = module.get_function("convert_dtype")
     kernel.prepare("PPII")
     return kernel
 
 
+class FilterDimShuffle(object):
+    def __init__(self, lib, dtype, C, T, R, S, K):
+        gridC      = _ceil_div(C, 32)
+        gridK      = _ceil_div(K, 32)
+        self.lib   = lib
+        self.dim   = (C, T, R, S, K)
+        self.size  = int(np.prod(self.dim)) * dtype.itemsize
+        self.otype = dtype.str[1:]
+        self.args  = [(gridK, gridC, T*R*S), (32, 8, 1), None, None, None]
+        self.args.extend(_flatten([
+            T*R*S*K, R*S*K, S*K, K, T*R*S*C, R*S*C, S*C, C,
+            R*S, T, R, S, _magic32(T*R*S, R*S), _magic32(R*S, S)]))
+
+    def bind_params(self, F):
+        filter_data    = self.lib.scratch_buffer_offset(self.size)
+        self.args[2:5] = (self.lib.stream, filter_data, F.gpudata)
+        self.kernel    = _get_shuffle_kernel(self.otype, F.dtype.str[1:])
+        return filter_data
+
+    def execute(self):
+        self.kernel.prepared_async_call(*self.args)
+
+    def unbind(self):
+        self.kernel    = None
+        self.args[2:5] = (None,) * 3
+
+@context_dependent_memoize
+def _get_shuffle_kernel(otype, itype):
+
+    _shuffle_kernel = r"""
+%(common)s
+
+__global__ void filter_dimshuffle(
+    %(otype)s* out, const %(itype)s* in,
+    int TRSK, int RSK, int SK, int K,
+    int TRSC, int RSC, int SC, int C,
+    int RS, int T, int R, int S,
+    int magic_RS, int shift_RS,
+    int magic_S,  int shift_S)
+{
+    __shared__ %(otype)s tile[32][33];
+
+    int tx  = threadIdx.x;
+    int ty  = threadIdx.y;
+    int bk  = blockIdx.x;
+    int bc  = blockIdx.y;
+    int trs = blockIdx.z;
+
+    int k  = bk * 32 + tx;
+    int c  = bc * 32 + ty;
+
+    int t  = magic_RS * trs; t >>= shift_RS;
+    int rs = trs - t*RS;
+
+    int r = magic_S * rs; r >>= shift_S;
+    int s = rs - r*S;
+
+    for (int j = 0; j < 32; j += 8)
+    {
+        int cj = c + j;
+        if (cj < C && k < K)
+            tile[ty + j][tx] = %(cvt_out)s(in[ cj*TRSK + t*RSK + r*SK + s*K + k ]);
+    }
+    __syncthreads();
+
+    k = bk * 32 + ty;
+    c = bc * 32 + tx;
+
+    // Mirror RST
+    s = S - s - 1;
+    r = R - r - 1;
+    t = T - t - 1;
+
+    for (int i = 0; i < 32; i += 8)
+    {
+        int ki = k + i;
+        if (ki < K && c < C)
+            out[ ki*TRSC + t*RSC + r*SC + s*C + c ] = tile[tx][ty + i];
+    }
+}
+"""
+    # Allow fp32 in and fp16 out
+    cvt_out = ""
+    if otype != itype:
+        cvt_out = _ew_types[otype]["cvt_out"]
+
+    code = _shuffle_kernel % {
+        "common"  : _common_round["nearest"].get(otype, ""),
+        "itype"   : _ew_types[itype]["type"],
+        "otype"   : _ew_types[otype]["type"],
+        "cvt_out" : cvt_out,
+    }
+    module = SourceModule(code)
+    kernel = module.get_function("filter_dimshuffle")
+    kernel.prepare("PPIIIIIIIIIIIIIIII")
+    return kernel
+
+
+# Older kernel not currently in use.. but will be
 @context_dependent_memoize
 def _get_transpose_kernel(dtype):
 
     _transpose_kernel = r"""
-__global__ void transpose(%(type)s* out, const %(type)s* in, int rows, int cols)
+__global__ void filter_transpose(%(type)s* out, const %(type)s* in, int rows, int cols)
 {
     __shared__ %(type)s tile[32][33];
 
@@ -1199,68 +1295,8 @@ __global__ void transpose(%(type)s* out, const %(type)s* in, int rows, int cols)
 """
     code = _transpose_kernel % _ew_types[dtype]
     module = SourceModule(code)
-    kernel = module.get_function("transpose")
+    kernel = module.get_function("filter_transpose")
     kernel.prepare("PPII")
-    return kernel
-
-
-@context_dependent_memoize
-def _get_shuffle_kernel(dtype):
-
-    _shuffle_kernel = r"""
-__global__ void dimShuffle(
-    %(type)s* out, const %(type)s* in,
-    int TRSK, int RSK, int SK, int K,
-    int TRSC, int RSC, int SC, int C,
-    int RS, int T, int R, int S,
-    int magic_RS, int shift_RS,
-    int magic_S,  int shift_S)
-{
-    __shared__ %(type)s tile[32][33];
-
-    int tx  = threadIdx.x;
-    int ty  = threadIdx.y;
-    int bk  = blockIdx.x;
-    int bc  = blockIdx.y;
-    int trs = blockIdx.z;
-
-    int k  = bk * 32 + tx;
-    int c  = bc * 32 + ty;
-
-    int t  = magic_RS * trs; t >>= shift_RS;
-    int rs = trs - t*RS;
-
-    int r = magic_S * rs; r >>= shift_S;
-    int s = rs - r*S;
-
-    for (int j = 0; j < 32; j += 8)
-    {
-        int cj = c + j;
-        if (cj < C && k < K)
-            tile[ty + j][tx] = in[ cj*TRSK + t*RSK + r*SK + s*K + k ];
-    }
-    __syncthreads();
-
-    k = bk * 32 + ty;
-    c = bc * 32 + tx;
-
-    // Mirror RST
-    s = S - s - 1;
-    r = R - r - 1;
-    t = T - t - 1;
-
-    for (int i = 0; i < 32; i += 8)
-    {
-        int ki = k + i;
-        if (ki < K && c < C)
-            out[ ki*TRSC + t*RSC + r*SC + s*C + c ] = tile[tx][ty + i];
-    }
-}
-"""
-    code = _shuffle_kernel % _ew_types[dtype]
-    module = SourceModule(code)
-    kernel = module.get_function("dimShuffle")
-    kernel.prepare("PPIIIIIIIIIIIIIIII")
     return kernel
 
 
