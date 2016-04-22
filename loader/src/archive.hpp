@@ -74,14 +74,14 @@ public:
     ArchiveWriter(int batchSize, const char* repoDir, const char* archiveDir,
                   const char* indexFile, const char* metaFile,
                   const char* archivePrefix,
-                  bool shuffle, Media* media)
+                  bool shuffle, MediaParams* ingestParams)
     : _batchSize(batchSize),
       _repoDir(repoDir), _archiveDir(archiveDir),
       _indexFile(indexFile), _metaFile(metaFile),
       _archivePrefix(archivePrefix),
       _fileIdx(0), _itemCount(0), _started(false),
-      _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0),
-      _media(media) {
+      _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0) {
+        _media = Media::create(0, ingestParams);
         _writeThread = new WriteThread(this);
         _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle);
         if (Reader::exists(_archiveDir) == true) {
@@ -204,7 +204,8 @@ public:
                   const char* archivePrefix,
                   bool shuffle, bool reshuffle,
                   int startFileIdx,
-                  int subsetPercent, Media* media)
+                  int subsetPercent,
+                  MediaParams* ingestParams)
     : Reader(batchSize, repoDir, indexFile, shuffle, reshuffle, subsetPercent),
       _archiveDir(archiveDir), _indexFile(indexFile), _metaFile(metaFile),
       _archivePrefix(archivePrefix),
@@ -218,7 +219,7 @@ public:
                                                repoDir, archiveDir,
                                                indexFile, metaFile,
                                                archivePrefix,
-                                               shuffle, media);
+                                               shuffle, ingestParams);
         }
         _itemCount = *itemCount;
         assert(_itemCount != 0);

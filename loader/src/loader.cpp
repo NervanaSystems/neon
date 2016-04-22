@@ -70,10 +70,11 @@ unsigned int sum(char* data, unsigned int len) {
 }
 
 int single(Loader* loader, int epochCount, int minibatchCount,
-           int batchSize, int datumSize, int targetSize) {
+           int batchSize, int datumSize, int targetSize,
+           ImageParams* mediaParams, ImageIngestParams* ingestParams) {
     unsigned int sm = 0;
     Reader* reader = loader->getReader();
-    Media* media = loader->getMedia();
+    Media* media = Media::create(mediaParams, ingestParams);
     char* dataBuf = new char[datumSize];
     memset(dataBuf, 0, datumSize);
     CharBuffer dataBuffer(0);
@@ -99,6 +100,7 @@ int single(Loader* loader, int epochCount, int minibatchCount,
     }
 
     delete[] dataBuf;
+    delete media;
     return sm;
 }
 
@@ -160,7 +162,8 @@ int test(char* repoDir, char* indexFile,
                   &mediaParams, &deviceParams, &ingestParams);
     unsigned int singleSum = single(&loader, epochCount,
                                     minibatchCount, batchSize,
-                                    datumSize, targetSize);
+                                    datumSize, targetSize,
+                                    &mediaParams, &ingestParams);
     unsigned int multiSum = multi(&loader, epochCount,
                                   minibatchCount, batchSize,
                                   datumSize, targetSize);

@@ -32,7 +32,8 @@ public:
     DecodeThreadPool(int count, int batchSize,
                      int datumSize, int targetSize,
                      BufferPool& in, BufferPool& out,
-                     Device* device, Media* media)
+                     Device* device,
+                     MediaParams* mediaParams)
     : ThreadPool(count),
       _itemsPerThread((batchSize - 1) / count + 1),
       _in(in), _out(out), _endSignaled(0),
@@ -40,10 +41,12 @@ public:
       _bufferIndex(0), _batchSize(batchSize),
       _datumSize(datumSize),
       _targetSize(targetSize),
-      _device(device), _media(media) {
+      _device(device) {
         assert(_itemsPerThread * count >= _batchSize);
         assert(_itemsPerThread * (count - 1) < _batchSize);
+        _media = new Media*[count];
         for (int i = 0; i < count; i++) {
+            _media[i] = Media::create(mediaParams, 0);
             _startSignaled.push_back(0);
             _startInds.push_back(0);
             _endInds.push_back(0);
@@ -58,6 +61,10 @@ public:
             _manager->join();
             delete _manager;
         }
+        for (int i = 0; i < _count; i++) {
+            delete _media[i];
+        }
+        delete[] _media;
         // The other thread objects are freed in the destructor
         // of the parent class.
     }
@@ -134,7 +141,7 @@ protected:
             if (item == 0) {
                 return;
             }
-            _media->transform(item, itemSize, dataBuf, _datumSize);
+            _media[id]->transform(item, itemSize, dataBuf, _datumSize);
             dataBuf += _datumSize;
         }
 
@@ -243,7 +250,7 @@ private:
     int                         _datumSize;
     int                         _targetSize;
     Device*                     _device;
-    Media*                      _media;
+    Media**                     _media;
 };
 
 class ReadThread: public ThreadPool {
@@ -296,14 +303,12 @@ public:
     : _first(true),
       _batchSize(batchSize), _datumSize(datumSize), _targetSize(targetSize),
       _readBufs(0), _decodeBufs(0), _readThread(0), _decodeThreads(0),
-      _device(0), _reader(0), _media(0) {
+      _device(0), _reader(0), _mediaParams(mediaParams) {
         _device = Device::create(deviceParams);
-        _media = Media::create(mediaParams, ingestParams);
         _reader = new ArchiveReader(itemCount, batchSize, repoDir, archiveDir,
                                     indexFile, metaFile, archivePrefix,
                                     shuffle, reshuffle,
-                                    startFileIdx,
-                                    subsetPercent, _media);
+                                    startFileIdx, subsetPercent, ingestParams);
     }
 
     virtual ~Loader() {
@@ -313,7 +318,6 @@ public:
         delete _decodeThreads;
         delete _device;
         delete _reader;
-        delete _media;
     }
 
     int start() {
@@ -333,7 +337,7 @@ public:
             threadCount = std::min(threadCount, _batchSize);
             _decodeThreads = new DecodeThreadPool(threadCount,
                     _batchSize, _datumSize, _targetSize,
-                    *_readBufs, *_decodeBufs, _device, _media);
+                    *_readBufs, *_decodeBufs, _device, _mediaParams);
         } catch(std::bad_alloc&) {
             return -1;
         }
@@ -406,10 +410,6 @@ public:
         return _reader;
     }
 
-    Media* getMedia() {
-        return _media;
-    }
-
     Device* getDevice() {
         return _device;
     }
@@ -438,5 +438,5 @@ private:
     DecodeThreadPool*           _decodeThreads;
     Device*                     _device;
     Reader*                     _reader;
-    Media*                      _media;
+    MediaParams*                _mediaParams;
 };
