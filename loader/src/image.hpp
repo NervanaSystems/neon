@@ -225,8 +225,8 @@ void resizeInput(vector<char> &jpgdata, int maxDim){
 class Image: public Media {
 friend class Video;
 public:
-    Image(ImageParams *params, ImageIngestParams* ingestParams)
-    : _params(params), _ingestParams(ingestParams), _rngSeed(0) {
+    Image(ImageParams *params, ImageIngestParams* ingestParams, int id)
+    : _params(params), _ingestParams(ingestParams), _rngSeed(id) {
         assert(params->_mtype == IMAGE);
         assert((params->_channelCount == 1) || (params->_channelCount == 3));
     }

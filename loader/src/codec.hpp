@@ -55,7 +55,8 @@ public:
             throw std::runtime_error("Could not find media stream in input");
         }
 
-        int result = avcodec_open2(_codec, avcodec_find_decoder(_codec->codec_id), 0);
+        int result =
+            avcodec_open2(_codec, avcodec_find_decoder(_codec->codec_id), 0);
         if (result < 0) {
             throw std::runtime_error("Could not open decoder");
         }
@@ -81,13 +82,15 @@ public:
     }
 
 private:
-    void decodeFrame(AVPacket* packet, int stream, int itemSize, int sampleSize) {
+    void decodeFrame(AVPacket* packet, int stream,
+                     int itemSize, int sampleSize) {
         int frameFinished;
         if (packet->stream_index == stream) {
             AVFrame* frame = av_frame_alloc();
             int result = 0;
             if (_mediaType == AVMEDIA_TYPE_AUDIO) {
-                result = avcodec_decode_audio4(_codec, frame, &frameFinished, packet);
+                result = avcodec_decode_audio4(_codec, frame,
+                                               &frameFinished, packet);
             } else {
                 throw std::runtime_error("Unsupported media");
             }

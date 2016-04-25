@@ -57,11 +57,11 @@ public:
 
 class Video : public Media {
 public:
-   Video(VideoParams *params)
+   Video(VideoParams *params, int id)
     : _params(params) {
         assert(params->_mtype == VIDEO);
         assert(params->_frameParams._mtype == IMAGE);
-        _imgDecoder = new Image(&(_params->_frameParams), NULL);
+        _imgDecoder = new Image(&(_params->_frameParams), 0, id);
         _imgSize = params->_frameParams._width * params->_frameParams._height;
         _decodedSize = _imgSize * params->_frameParams._channelCount ;
         av_register_all();

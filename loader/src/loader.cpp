@@ -28,12 +28,13 @@
 
 #include "audio.hpp"
 
-Media* Media::create(MediaParams* params, MediaParams* ingestParams) {
+Media* Media::create(MediaParams* params, MediaParams* ingestParams, int id) {
     switch (params->_mtype) {
     case IMAGE:
 #if HAS_IMGLIB
         return new Image(reinterpret_cast<ImageParams*>(params),
-                         reinterpret_cast<ImageIngestParams*>(ingestParams));
+                         reinterpret_cast<ImageIngestParams*>(ingestParams),
+                         id);
 #else
         {
             string message = "OpenCV " UNSUPPORTED_MEDIA_MESSAGE;
@@ -42,7 +43,7 @@ Media* Media::create(MediaParams* params, MediaParams* ingestParams) {
 #endif
     case VIDEO:
 #if HAS_VIDLIB
-        return new Video(reinterpret_cast<VideoParams*>(params));
+        return new Video(reinterpret_cast<VideoParams*>(params), id);
 #else
         {
             string message = "Video " UNSUPPORTED_MEDIA_MESSAGE;
@@ -50,7 +51,7 @@ Media* Media::create(MediaParams* params, MediaParams* ingestParams) {
         }
 #endif
     case AUDIO:
-        return new Audio(reinterpret_cast<AudioParams*>(params));
+        return new Audio(reinterpret_cast<AudioParams*>(params), id);
     default:
         throw std::runtime_error("Unknown media type");
     }
@@ -74,7 +75,7 @@ int single(Loader* loader, int epochCount, int minibatchCount,
            ImageParams* mediaParams, ImageIngestParams* ingestParams) {
     unsigned int sm = 0;
     Reader* reader = loader->getReader();
-    Media* media = Media::create(mediaParams, ingestParams);
+    Media* media = Media::create(mediaParams, ingestParams, 0);
     char* dataBuf = new char[datumSize];
     memset(dataBuf, 0, datumSize);
     CharBuffer dataBuffer(0);

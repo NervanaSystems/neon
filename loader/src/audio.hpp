@@ -23,8 +23,8 @@ public:
 
 class Audio : public Media {
 public:
-    Audio(AudioParams *params)
-    : _params(params) {
+    Audio(AudioParams *params, int id)
+    : _params(params), _rngSeed(id) {
         _codec = new Codec(params);
     }
 
@@ -45,4 +45,5 @@ public:
 private:
     AudioParams*                _params;
     Codec*                      _codec;
+    unsigned int                _rngSeed;
 };

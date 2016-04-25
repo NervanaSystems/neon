@@ -81,7 +81,7 @@ public:
       _archivePrefix(archivePrefix),
       _fileIdx(0), _itemCount(0), _started(false),
       _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0) {
-        _media = Media::create(params, ingestParams);
+        _media = Media::create(params, ingestParams, 0);
         _writeThread = new WriteThread(this);
         _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle);
         if (Reader::exists(_archiveDir) == true) {

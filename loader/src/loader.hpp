@@ -46,7 +46,7 @@ public:
         assert(_itemsPerThread * (count - 1) < _batchSize);
         _media = new Media*[count];
         for (int i = 0; i < count; i++) {
-            _media[i] = Media::create(mediaParams, 0);
+            _media[i] = Media::create(mediaParams, 0, i);
             _startSignaled.push_back(0);
             _startInds.push_back(0);
             _endInds.push_back(0);
