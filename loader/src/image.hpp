@@ -34,10 +34,10 @@ using std::vector;
 #pragma once
 
 typedef struct {
-    Rect cropBox;
-    int angle;
-    float alpha;
-    bool flip;
+    Rect                        cropBox;
+    int                         angle;
+    float                       alpha;
+    bool                        flip;
 } AugParams;
 
 class ImageParams : public MediaParams {
@@ -223,6 +223,7 @@ void resizeInput(vector<char> &jpgdata, int maxDim){
 }
 
 class Image: public Media {
+friend class Video;
 public:
     Image(ImageParams *params, ImageIngestParams* ingestParams)
     : _params(params), _ingestParams(ingestParams), _rngSeed(0) {
@@ -233,51 +234,8 @@ public:
     void transform(char* item, int itemSize, char* buf, int bufSize) {
         Mat decodedImage;
         decode(item, itemSize, &decodedImage);
-        AugParams augParams = createRandomAugParams(decodedImage);
-        transformDecodedImage(decodedImage, buf, bufSize, augParams);
-    }
-
-    AugParams createRandomAugParams(Mat decodedImage) {
-        AugParams augParams;
-        _params->getRandomCrop(_rngSeed, decodedImage.size(), &(augParams.cropBox));
-        _params->getRandomAngle(_rngSeed, augParams.angle);
-        augParams.alpha = _params->getRandomContrast(_rngSeed);
-        augParams.flip = _params->doRandomFlip(_rngSeed);
-        return augParams;
-    }
-
-    void transformDecodedImage(Mat decodedImage, char* buf, int bufSize, AugParams &augParams){
-        Mat rotatedImage;
-        if (augParams.angle == 0) {
-            rotatedImage = decodedImage;
-        } else {
-            rotate(decodedImage, rotatedImage, augParams.angle);
-        }
-
-        Mat croppedImage = rotatedImage(augParams.cropBox);
-        auto innerSize = _params->getSize();
-        Mat resizedImage;
-        if (innerSize.width == augParams.cropBox.width && innerSize.height == augParams.cropBox.height) {
-            resizedImage = croppedImage;
-        } else {
-            resize(croppedImage, resizedImage, innerSize);
-        }
-        Mat flippedImage;
-        Mat *finalImage;
-
-        if (augParams.flip) {
-            cv::flip(resizedImage, flippedImage, 1);
-            finalImage = &flippedImage;
-        } else {
-            finalImage = &resizedImage;
-        }
-        Mat newImage;
-        if (augParams.alpha) {
-            finalImage->convertTo(newImage, -1, augParams.alpha);
-            finalImage = &newImage;
-        }
-
-        split(*finalImage, buf, bufSize);
+        createRandomAugParams(decodedImage.size());
+        transformDecodedImage(decodedImage, buf, bufSize);
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
@@ -374,6 +332,41 @@ private:
         }
     }
 
+    void transformDecodedImage(const Mat& decodedImage, char* buf, int bufSize) {
+        Mat rotatedImage;
+        if (_augParams.angle == 0) {
+            rotatedImage = decodedImage;
+        } else {
+            rotate(decodedImage, rotatedImage, _augParams.angle);
+        }
+
+        Mat croppedImage = rotatedImage(_augParams.cropBox);
+        auto innerSize = _params->getSize();
+        Mat resizedImage;
+        if ((innerSize.width == _augParams.cropBox.width) &&
+                (innerSize.height == _augParams.cropBox.height)) {
+            resizedImage = croppedImage;
+        } else {
+            resize(croppedImage, resizedImage, innerSize);
+        }
+        Mat flippedImage;
+        Mat *finalImage;
+
+        if (_augParams.flip) {
+            cv::flip(resizedImage, flippedImage, 1);
+            finalImage = &flippedImage;
+        } else {
+            finalImage = &resizedImage;
+        }
+        Mat newImage;
+        if (_augParams.alpha) {
+            finalImage->convertTo(newImage, -1, _augParams.alpha);
+            finalImage = &newImage;
+        }
+
+        split(*finalImage, buf, bufSize);
+    }
+
     void rotate(const Mat& input, Mat& output, int angle) {
         Point2i pt(input.cols / 2, input.rows / 2);
         Mat rot = cv::getRotationMatrix2D(pt, angle, 1.0);
@@ -405,28 +398,16 @@ private:
         cv::split(img, channels);
     }
 
-    void subtractMean(Mat& red, Mat& green, Mat& blue) {
-        // Deprecated
-        assert(0);
-        if (_params->_subtractMean == false) {
-            return;
-        }
-        red -= _params->_redMean;
-        green -= _params->_greenMean;
-        blue -= _params->_blueMean;
-    }
-
-    void subtractMean(Mat& gray) {
-        // Deprecated
-        assert(0);
-        if (_params->_subtractMean == false) {
-            return;
-        }
-        gray -= _params->_grayMean;
+    void createRandomAugParams(const Size2i& size) {
+        _params->getRandomCrop(_rngSeed, size, &(_augParams.cropBox));
+        _params->getRandomAngle(_rngSeed, _augParams.angle);
+        _augParams.alpha = _params->getRandomContrast(_rngSeed);
+        _augParams.flip = _params->doRandomFlip(_rngSeed);
     }
 
 private:
     ImageParams*                _params;
     ImageIngestParams*          _ingestParams;
     unsigned int                _rngSeed;
+    AugParams                   _augParams;
 };

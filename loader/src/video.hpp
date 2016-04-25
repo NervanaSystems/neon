@@ -83,7 +83,7 @@ public:
         avformat_find_stream_info(formatCtx, NULL);
 
         AVCodecContext* codecCtx = NULL;
-        int videoStream = _findVideoStream(codecCtx, formatCtx);
+        int videoStream = findVideoStream(codecCtx, formatCtx);
 
         AVCodec* pCodec = avcodec_find_decoder(codecCtx->codec_id);
         avcodec_open2(codecCtx, pCodec, NULL);
@@ -101,7 +101,6 @@ public:
         int frameFinished;
         AVPacket packet;
         int frameIdx = 0;
-        AugParams augParams;
         while (av_read_frame(formatCtx, &packet) >= 0) {
 
             if (packet.stream_index == videoStream) {
@@ -109,10 +108,10 @@ public:
                 AVFrame* pFrame = av_frame_alloc();
                 avcodec_decode_video2(codecCtx, pFrame, &frameFinished, &packet);
                 if (frameFinished) {
-                    _convertFrameFormat(codecCtx, pFormat, pFrame, pFrameRGB);
+                    convertFrameFormat(codecCtx, pFormat, pFrame, pFrameRGB);
                     Mat frame(pFrame->height, pFrame->width,
                               CV_8UC3, pFrameRGB->data[0]);
-                    _writeFrameToBuf(frame, buf, frameIdx, channelSize, augParams);
+                    writeFrameToBuf(frame, buf, frameIdx, channelSize);
 
                     frameIdx++;
                 }
@@ -139,7 +138,7 @@ private:
 
     }
 
-    int _findVideoStream(AVCodecContext* &codecCtx, AVFormatContext* formatCtx) {
+    int findVideoStream(AVCodecContext* &codecCtx, AVFormatContext* formatCtx) {
         for (int streamIdx = 0; streamIdx < (int) formatCtx->nb_streams; streamIdx++) {
             codecCtx = formatCtx->streams[streamIdx]->codec;
             if (codecCtx->coder_type == AVMEDIA_TYPE_VIDEO) {
@@ -149,8 +148,8 @@ private:
         return -1;
     }
 
-    void _convertFrameFormat(AVCodecContext* codecCtx, AVPixelFormat pFormat,
-                             AVFrame* &pFrame, AVFrame* &pFrameRGB) {
+    void convertFrameFormat(AVCodecContext* codecCtx, AVPixelFormat pFormat,
+                            AVFrame* &pFrame, AVFrame* &pFrameRGB) {
 
         struct SwsContext* imgConvertCtx = sws_getContext(
             codecCtx->width,
@@ -177,12 +176,12 @@ private:
         sws_freeContext(imgConvertCtx);
     }
 
-    void _writeFrameToBuf(Mat frame, char* buf, int frameIdx, int channelSize, AugParams& augParams) {
+    void writeFrameToBuf(Mat frame, char* buf, int frameIdx, int channelSize) {
         if (frameIdx == 0) {
-            augParams = _imgDecoder->createRandomAugParams(frame);
+            _imgDecoder->createRandomAugParams(frame.size());
         }
         char* imageBuf = new char[_decodedSize];
-        _imgDecoder->transformDecodedImage(frame, imageBuf, _decodedSize, augParams);
+        _imgDecoder->transformDecodedImage(frame, imageBuf, _decodedSize);
         Mat decodedBuf = Mat(1, _decodedSize, CV_8U, imageBuf);
 
         for(int c = 0; c < _params->_frameParams._channelCount; c++) {
