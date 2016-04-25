@@ -14,6 +14,7 @@
 */
 
 #include "media.hpp"
+#include "codec.hpp"
 
 class AudioParams : public MediaParams {
 public:
@@ -24,14 +25,17 @@ class Audio : public Media {
 public:
     Audio(AudioParams *params)
     : _params(params) {
+        _codec = new Codec(params);
     }
 
     virtual ~Audio() {
+        delete _codec;
     }
 
 public:
     void transform(char* item, int itemSize, char* buf, int bufSize) {
-        assert(_params != 0);
+        RawMedia* raw = _codec->decode(item, itemSize);
+        raw->copyData(buf, bufSize);
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
@@ -40,4 +44,5 @@ public:
 
 private:
     AudioParams*                _params;
+    Codec*                      _codec;
 };

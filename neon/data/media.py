@@ -31,8 +31,11 @@ class MediaType(object):
 class MediaParams(ct.Structure):
     _fields_ = [('mtype', ct.c_int)]
 
-    def datum_size(self):
+    def get_shape(self):
         raise NotImplementedError
+
+    def datum_size(self):
+        return np.prod(self.get_shape())
 
     def process(self, data):
         pass
@@ -82,9 +85,6 @@ class ImageParams(MediaParams):
     def get_shape(self):
         return (self.channel_count, self.height, self.width)
 
-    def datum_size(self):
-        return np.prod(self.get_shape())
-
     def process(self, data):
         if self.subtract_mean is False:
             return
@@ -130,12 +130,18 @@ class VideoParams(MediaParams):
         return (self.frame_params.channel_count, self.frames_per_clip,
                 self.frame_params.height, self.frame_params.width)
 
-    def datum_size(self):
-        return np.prod(self.get_shape())
-
 
 class AudioParams(MediaParams):
-    _fields_ = [('dummy', ct.c_int)]
+    _fields_ = [('channel_count', ct.c_int),
+                ('height', ct.c_int),
+                ('width', ct.c_int)]
+    _defaults_ = {}
 
     def __init__(self, **kwargs):
+        for key in kwargs:
+            if not hasattr(self, (key)):
+                raise ValueError('Unknown argument %s' % key)
         super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
+
+    def get_shape(self):
+        return (self.channel_count, self.height, self.width)

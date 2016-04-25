@@ -308,7 +308,8 @@ public:
         _reader = new ArchiveReader(itemCount, batchSize, repoDir, archiveDir,
                                     indexFile, metaFile, archivePrefix,
                                     shuffle, reshuffle,
-                                    startFileIdx, subsetPercent, ingestParams);
+                                    startFileIdx, subsetPercent,
+                                    mediaParams, ingestParams);
     }
 
     virtual ~Loader() {
