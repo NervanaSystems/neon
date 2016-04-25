@@ -1389,10 +1389,11 @@ class GeneralizedCost(NervanaObject):
         assert isinstance(in_obj, Layer)
         self.prev_layer = in_obj
         (_, self.nstep) = interpret_in_shape(in_obj.out_shape)
-        self.outputs = self.be.iobuf((1, self.nstep))
+        self.outputs = self.be.iobuf((1, self.nstep), persist_values=False)
         self.deltas = self.be.iobuf(in_obj.out_shape,
-                                    parallelism=self.prev_layer.parallelism)
-        self.cost = self.be.empty((1, 1))
+                                    parallelism=self.prev_layer.parallelism,
+                                    persist_values=False)
+        self.cost = self.be.empty((1, 1), persist_values=False)
 
     def get_cost(self, inputs, targets):
         """

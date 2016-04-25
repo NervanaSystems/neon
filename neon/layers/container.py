@@ -169,7 +169,8 @@ class Sequential(LayerContainer):
             ndelta_bufs = 4 if any([needs_extra_delta(l) for l in self.layers]) else 2
             if max_in_size != 0:
                 self.global_deltas = [self.be.iobuf(
-                    max_in_size, parallelism="Data") for _ in range(ndelta_bufs)]
+                    max_in_size, persist_values=False,
+                    parallelism="Data") for _ in range(ndelta_bufs)]
 
         for l in self.layers:
             l.set_deltas(self.global_deltas)

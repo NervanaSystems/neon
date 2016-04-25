@@ -543,13 +543,14 @@ class Backend(object):
             bufshape = (dim0, self.bsz)
 
         if shared is not None:
-            if shared.shape == bufshape:
-                return shared
-            else:
-                return shared.share(bufshape)
+            out_tsr = shared if shared.shape == bufshape else shared.share(bufshape)
         else:
-            return self.zeros(bufshape, dtype=dtype, name=name,
-                              persist_values=persist_values)
+            out_tsr = self.empty(bufshape, dtype=dtype, name=name, persist_values=persist_values)
+
+        if persist_values and shared is None:
+            out_tsr[:] = 0
+
+        return out_tsr
 
     def shared_iobuf_size(self, shape, parallelism):
         """

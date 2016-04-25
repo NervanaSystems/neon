@@ -300,8 +300,8 @@ class Misclassification(Metric):
     """
 
     def __init__(self):
-        self.preds = self.be.iobuf(1)
-        self.hyps = self.be.iobuf(1)
+        self.preds = self.be.iobuf(1, persist_values=False)
+        self.hyps = self.be.iobuf(1, persist_values=False)
         self.outputs = self.preds  # Contains per record metric
         self.metric_names = ['Top1Misclass']
 
