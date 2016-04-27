@@ -45,6 +45,13 @@ Additionally, there are several optional libraries.
 * To enable multi-threading operations on a CPU, install `OpenBLAS <http://www.openblas.net/>`__, then recompile numpy with links to openBLAS (see sample instructions `here <https://hunseblog.wordpress.com/2014/09/15/installing-numpy-and-openblas/>`_). While Neon will run on the CPU, you'll get far better performance using GPUs.
 * Enabling Neon to use GPUs requires installation of `CUDA SDK and drivers <https://developer.nvidia.com/cuda-downloads>`__. We support both `Maxwell <http://maxwell.nvidia.com/>`__ and `Kepler <http://www.nvidia.com/object/nvidia-kepler.html>`__ GPU architectures, but our backend is optimized for Maxwell GPUs. Remember to add the CUDA path to your environment variables.
 
+For GPU users, remember to add the CUDA path. For example, on Ubuntu:
+
+.. code-block:: bash
+
+    export PATH="/usr/local/cuda/bin:"$PATH
+    export LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib:/usr/local/lib:"$LD_LIBRARY_PATH
+
 Installation
 ~~~~~~~~~~~~
 
@@ -85,13 +92,6 @@ When you are finished, remember to deactivate the environment
 Congratulations, you have installed neon! Next, we recommend you learn
 how to run models in neon and walk through the MNIST multilayer
 perceptron tutorial.
-
-For GPU users, remember to add the CUDA path. For example, on Ubuntu:
-
-.. code-block:: bash
-
-    export PATH="/usr/local/cuda/bin:"$PATH
-    export LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib:/usr/local/lib:"$LD_LIBRARY_PATH
 
 
 Virtual Environment
