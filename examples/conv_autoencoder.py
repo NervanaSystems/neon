@@ -43,13 +43,14 @@ train = ArrayIterator(X_train, lshape=(1, 28, 28))
 init_uni = Uniform(low=-0.1, high=0.1)
 opt_gdm = GradientDescentMomentum(learning_rate=0.001, momentum_coef=0.9)
 
-# Define the layers
-layers = [Conv((4, 4, 8), init=init_uni, activation=Rectlin()),
+# Strided conv autoencoder
+bn = False
+layers = [Conv((4, 4, 8), init=init_uni, activation=Rectlin(), batch_norm=bn),
           Pooling(2),
-          Conv((4, 4, 32), init=init_uni, activation=Rectlin()),
+          Conv((4, 4, 32), init=init_uni, activation=Rectlin(), batch_norm=bn),
           Pooling(2),
-          Deconv(fshape=(4, 4, 8), init=init_uni, activation=Rectlin()),
-          Deconv(fshape=(3, 3, 8), init=init_uni, activation=Rectlin(), strides=2),
+          Deconv(fshape=(4, 4, 8), init=init_uni, activation=Rectlin(), batch_norm=bn),
+          Deconv(fshape=(3, 3, 8), init=init_uni, activation=Rectlin(), strides=2, batch_norm=bn),
           Deconv(fshape=(2, 2, 1), init=init_uni, strides=2, padding=1)]
 
 # Define the cost

@@ -301,6 +301,8 @@ class BpropCuda(KernelGroup):
                                  I.gpudata, filter_temp, O.gpudata, bsum_gpudata)
 
     def execute(self, repeat=1, unbind=True):
+        C = self.shuffle_args[12]
+        assert C >= 4, "C dim must be 4 or greater for CUDA C backprop kernel"
 
         shuffle_kernel = _get_shuffle_kernel(self.dtype.str[1:])
 

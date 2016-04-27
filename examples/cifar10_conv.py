@@ -52,11 +52,12 @@ elif args.datatype in [np.float16]:
                                       momentum_coef=0.9,
                                       stochastic_round=args.rounding)
 
-layers = [Conv((5, 5, 16), init=init_uni, activation=Rectlin(), batch_norm=True),
+bn = True
+layers = [Conv((5, 5, 16), init=init_uni, activation=Rectlin(), batch_norm=bn),
           Pooling((2, 2)),
-          Conv((5, 5, 32), init=init_uni, activation=Rectlin(), batch_norm=True),
+          Conv((5, 5, 32), init=init_uni, activation=Rectlin(), batch_norm=bn),
           Pooling((2, 2)),
-          Affine(nout=500, init=init_uni, activation=Rectlin(), batch_norm=True),
+          Affine(nout=500, init=init_uni, activation=Rectlin(), batch_norm=bn),
           Affine(nout=10, init=init_uni, activation=Softmax())]
 
 if args.datatype in [np.float32, np.float64]:
