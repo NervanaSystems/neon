@@ -100,6 +100,10 @@ public:
         return _bufs.size();
     }
 
+    char* getBuf(int idx) {
+        return _bufs[idx];
+    }
+
     int bufSize() {
         return _bufSize;
     }

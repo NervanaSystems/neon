@@ -15,6 +15,7 @@
 
 #include "media.hpp"
 #include "codec.hpp"
+#include "specgram.hpp"
 
 class AudioParams : public MediaParams {
 public:
@@ -26,16 +27,19 @@ public:
     Audio(AudioParams *params, int id)
     : _params(params), _rngSeed(id) {
         _codec = new Codec(params);
+        // TODO: get rid of hardcoding.
+        _specgram = new Specgram(1024, 128, 2);
     }
 
     virtual ~Audio() {
+        delete _specgram;
         delete _codec;
     }
 
 public:
     void transform(char* item, int itemSize, char* buf, int bufSize) {
         RawMedia* raw = _codec->decode(item, itemSize);
-        raw->copyData(buf, bufSize);
+        _specgram->generate(raw, buf, bufSize);
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
@@ -45,5 +49,6 @@ public:
 private:
     AudioParams*                _params;
     Codec*                      _codec;
+    Specgram*                   _specgram;
     unsigned int                _rngSeed;
 };
