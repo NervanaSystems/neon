@@ -72,7 +72,7 @@ Neon currently supports the following:
 -  Backends - :py:class:`NervanaGPU<neon.backends.nervanagpu.NervanaGPU>`, :py:class:`NervanaCPU<neon.backends.nervanacpu.NervanaCPU>`
 -  Datasets
 
-   -  Images: MNIST, CIFAR-10, Imagenet 1K, PASCAL VOC, Mini-Places2
+   -  Images: MNIST, CIFAR-10, ImageNet 1K, PASCAL VOC, Mini-Places2
    -  Text: IMDB, Penn Treebank, Shakespeare Text, bAbI, Hutter-prize
    -  Video: UCF101
    -  Others: flickr8k, flickr30k, COCO

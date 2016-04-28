@@ -76,7 +76,7 @@ The image caption data can be fetched in the following manner:
 
     # download dataset
     from neon.data import Flickr8k
-    data_path = Flickr8k.load_data()  # Other setnames are flickr30k and COCO
+    data_path = Flickr8k().load_data()  # Other setnames are Flickr30k and Coco
 
     # load data
     from neon.data import ImageCaption
@@ -87,7 +87,7 @@ Text
 
 For existing datasets (e.g. Penn Treebank, Hutter Prize, and
 Shakespeare), we have object classes for loading, and sometimes
-pre-processing, the data. The online source are stroed in the
+pre-processing, the data. The online source are stored in the
 ``__init__`` method. Some datasets (such as Penn Treebank) also accept a
 tokenizer (string) to parse the file. These datasets use ``gen_iterators()``
 to return a iterator (:py:class:`Text<neon.data.text.Text>`)

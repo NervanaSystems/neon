@@ -124,7 +124,7 @@ Recurrent Units (GRU) networks. Training datasets include:
 
 4. `Facebook bAbI <https://research.facebook.com/researchers/1543934539189348>`__: As set of 20 question & answer tasks, each with 1,000 training examples.
 
-5. `Flickr8k <http://nlp.cs.illinois.edu/HockenmaierGroup/8k-pictures.html>`__, `COCO <http://mscoco.org/>`__: Images with associated caption (sentences). Flickr8k consists of 8,092 images captioned by AmazonTurkers with ~40,000 captions. COCO has 328,000 images, each with 5captions. The COCO images also come with labeled objects using segmentation algorithms.
+5. `Flickr8k <http://nlp.cs.illinois.edu/HockenmaierGroup/8k-pictures.html>`__, `COCO <http://mscoco.org/>`__: Images with associated caption (sentences). Flickr8k consists of 8,092 images captioned by AmazonTurkers with ~40,000 captions. COCO has 328,000 images, each with 5 captions. The COCO images also come with labeled objects using segmentation algorithms.
 
 Example scripts
 ~~~~~~~~~~~~~~~

@@ -172,7 +172,7 @@ Macrobatching
 -------------
 
 If your data is too large to load directly into memory, use a
-macro-batching approach. In macrobatching, the data is loaded in smaller
+macrobatching approach. In macrobatching, the data is loaded in smaller
 batches, then split further into minibatches to feed the model.
 Currently, neon only supports macrobatching with image datasets using
 the :py:class:`.ImageLoader` class. However, future releases will
@@ -292,7 +292,7 @@ The batch writer can then be invoked by calling:
 ImageNet 1K tar files
 ^^^^^^^^^^^^^^^^^^^^^
 
-The Imagenet task is recognition task is described on the
+The ImageNet task is recognition task is described on the
 `ILSVRC <http://www.image-net.org/challenges/LSVRC/>`__ website. The
 1.3M training images, 50K validation images, and development kit are
 provided as TAR archives. Because the images are organized in a way that
@@ -361,7 +361,7 @@ Metafile
 A required metafile named ``macrobatch_meta`` is automatically generated
 by ``batch_writer.py``. This file instructs :py:class:`.ImageLoader`  on how many
 batches to consider. The metafile is a plain text file with a different
-attribute for each line. As an example, the metafile for the Imagenet
+attribute for each line. As an example, the metafile for the ImageNet
 dataset would look like this:
 
 .. code-block:: bash
@@ -510,7 +510,7 @@ examples for clarity.
 Typical setup for ImageNet
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Here is a typical setup for imagenet training. Randomly select a 224x224
+Here is a typical setup for ImageNet training. Randomly select a 224x224
 crop of an image randomly scaled so that its shortest side is between
 256 and 480, randomly flipped, shuffled. For testing, scale to various
 scales and take the whole image so that convolutional inference can be
