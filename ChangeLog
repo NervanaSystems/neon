@@ -13,7 +13,7 @@
 * fix some examples to use new arg override capability
 * improve performance for relu for small N
 * better support for arbitrary batch norm layer placement
-* documentation updates	[#210, #213, #236]
+* documentation updates [#210, #213, #236]
 
 ## v1.3.0 (2016-03-03):
 
