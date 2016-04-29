@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -19,7 +19,7 @@ from setuptools import setup, find_packages, Command
 import subprocess
 
 # Define version information
-VERSION = '1.3.0'
+VERSION = '1.4.0'
 FULLVERSION = VERSION
 write_version = True
 
@@ -34,7 +34,7 @@ except:
 
 if write_version:
     txt = "# " + ("-" * 77) + "\n"
-    txt += "# Copyright 2015 Nervana Systems Inc.\n"
+    txt += "# Copyright 2016 Nervana Systems Inc.\n"
     txt += "# Licensed under the Apache License, Version 2.0 "
     txt += "(the \"License\");\n"
     txt += "# you may not use this file except in compliance with the "

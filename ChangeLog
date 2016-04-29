@@ -1,5 +1,20 @@
 # ChangeLog
 
+## v1.4.0 (2016-04-29):
+
+### Modifications
+
+* VGG16 based Fast R-CNN model using winograd kernels
+* new, backward compatible, generic data loader
+* C3D video loader model trained on UCF101 dataset
+* Deep Dream example
+* add support for freebsd [#219]
+* make conv layer printout more informative [#222]
+* fix some examples to use new arg override capability
+* improve performance for relu for small N
+* better support for arbitrary batch norm layer placement
+* documentation updates	[#210, #213, #236]
+
 ## v1.3.0 (2016-03-03):
 
 ### Modifications
