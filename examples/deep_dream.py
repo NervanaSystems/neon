@@ -48,13 +48,13 @@ from neon.util.argparser import NeonArgparser
 default_overrides = dict(backend='cpu', batch_size=1)
 parser = NeonArgparser(__doc__, default_overrides=default_overrides)
 parser.add_argument("image", help="Base image to create dream on.")
-parser.add_argument("--dream_file", default=None, help="Save dream to named file.")
+parser.add_argument("--dream_file", default='dream_out.png', help="Save dream to named file.")
 args = parser.parse_args()
 
 
 # redirect the dream file to the path of output_file
 if args.output_file is None:
-    output_dir = args.work_dir
+    output_dir = parser.work_dir
 elif osp.isdir(args.output_file):
     output_dir = args.output_file
 else:
