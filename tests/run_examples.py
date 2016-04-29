@@ -18,7 +18,7 @@ CIFAR_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'CIFAR10/macrobatches')
 
 # skip examples that won't fit on a single GTX970 (ci1 box)
 FILES_TO_SKIP = ['timeseries_lstm.py', 'vgg_bn.py', 'fast_rcnn_alexnet.py',
-                 'i1k_msra.py']
+                 'i1k_msra.py', 'deep_dream.py']
 ADD_I1K_BATCH_DIR = ['alexnet.py', 'imagenet_allcnn.py', 'vgg_bn.py',
                      'i1k_msra.py']
 ADD_CIFAR_BATCH_DIR = ['cifar10_msra.py']
