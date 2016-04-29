@@ -16,6 +16,8 @@
 """
 This must be kept in sync with loader/media.hpp.
 """
+
+import math
 import numpy as np
 import ctypes as ct
 
@@ -132,16 +134,72 @@ class VideoParams(MediaParams):
 
 
 class AudioParams(MediaParams):
-    _fields_ = [('channel_count', ct.c_int),
-                ('height', ct.c_int),
-                ('width', ct.c_int)]
-    _defaults_ = {}
+    _fields_ = [('sampling_freq', ct.c_int),
+                # Whether input must be resampled.
+                ('resample', ct.c_bool),
+                # Maximum duration in seconds.
+                ('max_duration', ct.c_int),
+                ('overlap_percent', ct.c_int),
+                # Type of windowing.
+                ('window', ct.c_int),
+                ('scale_factor', ct.c_float),
+                # The rest are automatically computed.
+                ('window_size', ct.c_int),
+                ('overlap', ct.c_int),
+                ('stride', ct.c_int),
+                ('time_steps', ct.c_int),
+                ('num_freqs', ct.c_int)]
+    _defaults_ = {'resample': False,
+                  'overlap_percent': 30,
+                  'window': 1,
+                  'scale_factor': 1.0,
+                  'window_size': 0,
+                  'overlap': 0,
+                  'stride': 0,
+                  'time_steps': 0,
+                  'num_freqs': 0}
+    _windows_ = {'rectangular': 0,
+                 'hann': 1,
+                 'hamming': 2,
+                 'blackman': 3,
+                 'bartlett': 4}
 
     def __init__(self, **kwargs):
         for key in kwargs:
             if not hasattr(self, (key)):
                 raise ValueError('Unknown argument %s' % key)
+        for key, value in self._defaults_.iteritems():
+            setattr(self, key, value)
+        for key in ['window_size', 'time_steps', 'num_freqs',
+                    'overlap', 'stride']:
+            if getattr(self, key) != self._defaults_[key]:
+                raise ValueError('Argument %s must not be specified' % key)
         super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
+        self.set_shape()
+
+    def set_shape(self):
+        self.channel_count = 1
+        # Consider each frame as 10ms long.
+        samples_per_frame = self.sampling_freq // 100
+        # Get the closest power of 2.
+        log = int(math.log(samples_per_frame) / math.log(2))
+        min_pow = 2 ** log
+        max_pow = 2 ** (log + 1)
+
+        if (max_pow - samples_per_frame) < (samples_per_frame - min_pow):
+            self.window_size = max_pow
+        else:
+            self.window_size = min_pow
+
+        assert self.overlap_percent < 100
+        self.overlap = self.window_size * self.overlap_percent // 100
+        self.stride = self.window_size - self.overlap
+        self.time_steps = (
+            (self.max_duration * self.sampling_freq -
+             self.window_size) // self.stride) + 1
+        self.num_freqs = (self.window_size // 2) + 1
+        self.width = int(self.time_steps * self.scale_factor)
+        self.height = int(((self.window_size // 2) + 1) * self.scale_factor)
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)

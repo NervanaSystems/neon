@@ -17,9 +17,7 @@
 #include "codec.hpp"
 #include "specgram.hpp"
 
-class AudioParams : public MediaParams {
-public:
-    int                         _dummy;
+class AudioParams : public SignalParams {
 };
 
 class Audio : public Media {
@@ -27,8 +25,7 @@ public:
     Audio(AudioParams *params, int id)
     : _params(params), _rngSeed(id) {
         _codec = new Codec(params);
-        // TODO: get rid of hardcoding.
-        _specgram = new Specgram(1024, 128, 2);
+        _specgram = new Specgram(params);
     }
 
     virtual ~Audio() {
@@ -43,7 +40,6 @@ public:
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
-        assert(_params != 0);
     }
 
 private:

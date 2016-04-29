@@ -67,11 +67,11 @@ public:
             _raw.reset();
         }
 
-        int sampleSize = av_get_bytes_per_sample(_codec->sample_fmt);
-        assert(sampleSize >= 0);
+        _raw.setSampleSize(av_get_bytes_per_sample(_codec->sample_fmt));
+        assert(_raw.sampleSize() >= 0);
         AVPacket packet;
         while (av_read_frame(_format, &packet) >= 0) {
-            decodeFrame(&packet, stream, itemSize, sampleSize);
+            decodeFrame(&packet, stream, itemSize);
         }
 
         avcodec_close(_codec);
@@ -82,8 +82,7 @@ public:
     }
 
 private:
-    void decodeFrame(AVPacket* packet, int stream,
-                     int itemSize, int sampleSize) {
+    void decodeFrame(AVPacket* packet, int stream, int itemSize) {
         int frameFinished;
         if (packet->stream_index == stream) {
             AVFrame* frame = av_frame_alloc();
@@ -100,7 +99,7 @@ private:
             }
 
             if (frameFinished == true) {
-                int frameSize = frame->nb_samples * sampleSize;
+                int frameSize = frame->nb_samples * _raw.sampleSize();
                 if (_raw.bufSize() < _raw.dataSize() + frameSize) {
                     _raw.growBufs(itemSize);
                 }

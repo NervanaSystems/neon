@@ -13,46 +13,59 @@
  limitations under the License.
 */
 
+#include "media.hpp"
+
+#include <sstream>
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
 using cv::Mat;
 using cv::Range;
+using std::stringstream;
 
 class Specgram {
 public:
-    Specgram(int windowSize, int overlap, int sampleSize)
-    : _windowSize(windowSize), _overlap(overlap), _sampleSize(sampleSize) {
+    Specgram(SignalParams* params)
+    : _maxDuration(params->_maxDuration), _windowSize(params->_windowSize),
+      _stride(params->_stride), _timeSteps(params->_timeSteps),
+      _numFreqs(params->_numFreqs) {
         static_assert(sizeof(ushort) == 2, "ushort is not 2 bytes");
-        if (powerOfTwo(windowSize) == false) {
+        if (powerOfTwo(_windowSize) == false) {
             throw std::runtime_error("Window size must be a power of 2");
         }
 
-        // TODO: get rid of this assumption
-        assert(sampleSize == 2);
-        assert(windowSize > overlap);
-        _stride = windowSize - overlap;
-        _numFreqs = (windowSize / 2) + 1;
+        _maxSignalSize = params->_maxDuration * params->_samplingFreq;
     }
 
     void generate(RawMedia* raw, char* buf, int bufSize) {
-        int signalSize = raw->dataSize() / _sampleSize;
+        // TODO: get rid of this assumption
+        assert(raw->sampleSize() == 2);
+        assert(_timeSteps * _numFreqs == bufSize);
+        int signalSize = raw->dataSize() / raw->sampleSize();
+        if (signalSize > _maxSignalSize) {
+            stringstream ss;
+            ss << "Found example with duration larger than "
+               << _maxDuration << " seconds\n";
+            throw std::runtime_error(ss.str());
+        }
         assert(signalSize >= _windowSize);
         Mat signal(1, signalSize, CV_16UC1, (ushort*) raw->getBuf(0));
         Mat input;
         signal.convertTo(input, CV_32FC1);
         assert(input.cols == signalSize);
-        int count = ((input.cols - _windowSize) / _stride) + 1;
 
-        Mat image(count, _numFreqs, CV_8UC1);
+        Mat image(_timeSteps, _numFreqs, CV_8UC1);
+        int count = ((signalSize - _windowSize) / _stride) + 1;
+        assert(count <= _timeSteps);
         // TODO: do FFT in batch mode instead of looping.
         for (int i = 0; i < count; i++) {
             int startCol = i * _stride;
             int endCol = startCol + _windowSize;
-            assert(endCol <= input.cols);  
+            assert(endCol <= input.cols);
             Mat slice = input(Range::all(), Range(startCol, endCol));
-            // TODO: apply Hann window
+            // TODO: apply window
             Mat planes[] = {slice, Mat::zeros(slice.size(), CV_32FC1)};
             Mat compx;
             cv::merge(planes, 2, compx);
@@ -67,15 +80,19 @@ public:
             cv::log(mag, mag);
             cv::normalize(mag, mag, 0, 1, CV_MINMAX);
             mag *= 255;
-            
+
             Mat bytes;
             mag.convertTo(bytes, CV_8UC1);
             bytes.row(0).copyTo(image.row(i));
         }
+        // Pad the rest with zeros.
+        for (int i = count; i < _timeSteps; i++) {
+            image.row(i) = cv::Scalar::all(0);
+        }
 
-        Mat result(_numFreqs, count, CV_8UC1, buf);
+        Mat result(_numFreqs, _timeSteps, CV_8UC1, buf);
         cv::transpose(image, result);
-        cv::flip(result, result, 0);  
+        cv::flip(result, result, 0);
     }
 
 private:
@@ -87,11 +104,11 @@ private:
     }
 
 private:
-    // Window size, overlap and stride are in terms of samples.
+    int                         _maxDuration;
+    // Window size and stride are in terms of samples.
     int                         _windowSize;
-    int                         _overlap;
     int                         _stride;
-    // Sample size in bytes.
-    int                         _sampleSize;
+    int                         _timeSteps;
     int                         _numFreqs;
+    int                         _maxSignalSize;
 };

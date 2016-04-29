@@ -45,6 +45,21 @@ public:
     int                         _mtype;
 };
 
+class SignalParams : public MediaParams {
+public:
+    int                         _samplingFreq;
+    bool                        _resample;
+    int                         _maxDuration;
+    int                         _overlapPercent;
+    int                         _window;
+    float                       _scaleFactor;
+    int                         _windowSize;
+    int                         _overlap;
+    int                         _stride;
+    int                         _timeSteps;
+    int                         _numFreqs;
+};
+
 class Media {
 public:
     virtual ~Media() {
@@ -59,7 +74,7 @@ public:
 
 class RawMedia {
 public:
-    RawMedia() : _bufSize(0), _dataSize(0) {
+    RawMedia() : _bufSize(0), _dataSize(0), _sampleSize(0) {
     }
 
     virtual ~RawMedia() {
@@ -96,6 +111,10 @@ public:
         _bufSize += grow;
     }
 
+    void setSampleSize(int sampleSize) {
+        _sampleSize = sampleSize;
+    }
+
     int size() {
         return _bufs.size();
     }
@@ -110,6 +129,10 @@ public:
 
     int dataSize() {
         return _dataSize;
+    }
+
+    int sampleSize() {
+        return _sampleSize;
     }
 
     void copyData(char* buf, int bufSize) {
@@ -130,4 +153,5 @@ private:
     vector<char*>               _bufs;
     int                         _bufSize;
     int                         _dataSize;
+    int                         _sampleSize;
 };
