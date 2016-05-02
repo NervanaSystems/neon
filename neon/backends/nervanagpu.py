@@ -352,7 +352,7 @@ class GPUTensor(Tensor):
 
         elif isinstance(value, GPUTensor):
             # TODO: add an is_binary_compat like function
-            if self.is_contiguous and value.is_contiguous and self.dtype == value.dtype:
+            if self.is_contiguous and value.is_contiguous and self.dtype == value.dtype and self.shape == value.shape:
                 drv.memcpy_dtod_async(
                     self.gpudata, value.gpudata, self.nbytes, stream)
             else:
