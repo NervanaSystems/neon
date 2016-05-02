@@ -19,14 +19,8 @@
 #
 # Edit:  This example has now been updated to use the "preactivation" structure described in:
 # He et. al., "Identity Mappings in Deep Residual Networks", http://arxiv.org/abs/1603.05027
-# Prior to running, you need to write out padded cifar10 batches for ImageLoader to consume
 #
-# batch_writer.py --set_type cifar10 \
-#       --data_dir <path-to-save-batches> \
-#       --macro_size 10000 \
-#       --target_size 40
-#
-# Then run the example:
+# To run the example:
 #
 # cifar10_msra.py -r 0 -vv \
 #      --log <logfile> \
@@ -45,6 +39,7 @@
 # to be local to your machine (to avoid accessing the macrobatches over network if,
 # for example, your data_dir is in an NFS mounted location)
 
+import os
 from builtins import zip
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Kaiming
@@ -53,7 +48,7 @@ from neon.layers import MergeSum, SkipNode, BatchNorm
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
-from neon.data import ImageLoader
+from neon.data import DataLoader, ImageParams
 from neon.callbacks.callbacks import Callbacks, BatchNormTuneCallback
 
 # parse the command line arguments (generates the backend)
@@ -62,15 +57,36 @@ parser.add_argument('--depth', type=int, default=9,
                     help='depth of each stage (network depth will be 9n+2)')
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
-args = parser.parse_args()
 
-# setup data provider
-imgset_options = dict(inner_size=32, scale_range=40, aspect_ratio=110,
-                      repo_dir=args.data_dir, subset_pct=args.subset_pct)
-train = ImageLoader(set_name='train', shuffle=True, do_transforms=True, **imgset_options)
-test = ImageLoader(set_name='validation', shuffle=False, do_transforms=False, **imgset_options)
-tune_set = ImageLoader(set_name='train', shuffle=False, do_transforms=False, inner_size=32,
-                       scale_range=40, repo_dir=args.data_dir, subset_pct=20)
+
+def extract_images(out_dir, padded_size):
+    '''
+    Save CIFAR-10 dataset as PNG files
+    '''
+    import numpy as np
+    from neon.data import load_cifar10
+    from PIL import Image
+    dataset = dict()
+    dataset['train'], dataset['val'], _ = load_cifar10(out_dir, normalize=False)
+    pad_size = (padded_size - 32) / 2 if padded_size > 32 else 0
+    pad_width = ((0, 0), (pad_size, pad_size), (pad_size, pad_size))
+
+    for setn in ('train', 'val'):
+        data, labels = dataset[setn]
+
+        img_dir = os.path.join(out_dir, setn)
+        ulabels = np.unique(labels)
+        for ulabel in ulabels:
+            subdir = os.path.join(img_dir, str(ulabel))
+            if not os.path.exists(subdir):
+                os.makedirs(subdir)
+
+        for idx in range(data.shape[0]):
+            im = np.pad(data[idx].reshape((3, 32, 32)), pad_width, mode='mean')
+            im = np.uint8(np.transpose(im, axes=[1, 2, 0]).copy())
+            im = Image.fromarray(im)
+            path = os.path.join(img_dir, str(labels[idx][0]), str(idx) + '.png')
+            im.save(path, format='PNG')
 
 
 def conv_params(fsize, nfm, stride=1, relu=True, batch_norm=True):
@@ -104,6 +120,27 @@ def module_s2(nfm):
     sidepath = [Conv(**conv_params(1, nfm * 4, stride=2, relu=False, batch_norm=False))]
     module.append(MergeSum([sidepath, mainpath]))
     return module
+
+
+args = parser.parse_args()
+
+train_dir = os.path.join(args.data_dir, 'train')
+test_dir = os.path.join(args.data_dir, 'val')
+if not (os.path.exists(train_dir) and os.path.exists(test_dir)):
+    extract_images(args.data_dir, 40)
+
+# setup data provider
+shape = dict(channel_count=3, height=32, width=32)
+train_params = ImageParams(center=False, aspect_ratio=110, **shape)
+test_params = ImageParams(**shape)
+common = dict(target_size=1, nclasses=10)
+
+train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
+                   shuffle=True, subset_percent=args.subset_pct, **common)
+test = DataLoader(set_name='val', repo_dir=test_dir, media_params=test_params, **common)
+tune_set = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
+                      subset_percent=20, **common)
+
 
 # Structure of the deep residual part of the network:
 # args.depth modules of 2 convolutional layers each at feature map depths of 16, 32, 64

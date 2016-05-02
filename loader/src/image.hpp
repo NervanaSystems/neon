@@ -134,6 +134,11 @@ public:
         *  CROP BOX               *
         ***************************/
         float shortSide = std::min(inputSize.height, inputSize.width);
+        if (_scaleMin == 0) {
+            _scaleMin = shortSide;
+            _scaleMax = shortSide;
+        }
+
         if (_center) {
             agp->cropBox.width = shortSide * _width / (float) _scaleMin;
             agp->cropBox.height = shortSide * _height / (float) _scaleMin;
