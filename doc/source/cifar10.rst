@@ -118,7 +118,7 @@ Next we need a cost function to evaluate the output of the network. The cost fun
 
 Optimizer
 ---------
-We now have a cost function that we want to minimize, typically by following the negative gradient of the cost. This is called gradient descent. We do this iteratively over small batches of the data set, making it stochastic gradient decesent (SGD).
+We now have a cost function that we want to minimize, typically by following the negative gradient of the cost. This is called gradient descent. We do this iteratively over small batches of the data set, making it stochastic gradient descent (SGD).
 
 .. code-block:: python
 
@@ -129,7 +129,7 @@ We now have a cost function that we want to minimize, typically by following the
 Callbacks
 ---------
 
-To provide feedback during model training, users can specify a set of callbacks that are evaluated at the end of every iteration (minibatch) or pass through the dataset (epoch). Callbacks include evaluating the model on a validation set or computing missclassification percentage. There are also callbacks for saving to disk and for generating visualizations. Here we will set up a progress bar to monitor training.
+To provide feedback during model training, users can specify a set of callbacks that are evaluated at the end of every iteration (minibatch) or pass through the dataset (epoch). Callbacks include evaluating the model on a validation set or computing misclassification percentage. There are also callbacks for saving to disk and for generating visualizations. Here we will set up a progress bar to monitor training.
 
 .. code-block:: python
 
@@ -141,7 +141,7 @@ To provide feedback during model training, users can specify a set of callbacks 
 Training the model
 ------------------
 
-Now all the pieces are in place to run the network. We use the fit function and pass it a dataset, cost, optmizer, and the callbacks we set up.
+Now all the pieces are in place to run the network. We use the fit function and pass it a dataset, cost, optimizer, and the callbacks we set up.
 
 .. code-block:: python
 

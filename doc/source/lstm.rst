@@ -39,7 +39,7 @@ imdb data.
     from neon.data.text_preprocessing import pad_data
     from neon.data.dataiterator import ArrayIterator
 
-    # laod the imdb data
+    # load the imdb data
     data = load_imdb(path=args.data_dir)
 
     # perform pre-processing functions

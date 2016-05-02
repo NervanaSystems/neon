@@ -54,7 +54,7 @@ Layer buffer allocations
 
   * A layer infers input shape from previous layers and initializes buffers accordingly.
   * Pre-allocating activation buffers allows buffer reuse and reduces memory usage.
-  * Buffers will be reinitalized during the next fprop if the layer is reinstantiated.
+  * Buffers will be reinitialized during the next fprop if the layer is reinstantiated.
 
 * Parameter layers (``Linear``, ``Bias``, ``Convolution``, and ``BatchNorm``) maintain
   their own parameters ``W``, gradients ``dW``, and states ``states`` (for the optimizer).
@@ -91,7 +91,7 @@ Learning
   * a cost function to compute the error
   * callback object that configures whether to use a validation set and how frequent
     in the training to validate, whether to get progress bar display, etc. For more
-    information, please checkout neon fundamentals -- callbacks
+    information, see :doc:`neon fundamentals -- callbacks <callbacks>`.
 
 * During update, the model sends a list containing all layers with learnable parameters
   to the optimizer.

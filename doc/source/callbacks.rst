@@ -52,9 +52,9 @@ are enabled by default.
    :py:class:`MetricCallback<neon.callbacks.callbacks.MetricCallback>`, Computes a given `metric` every `epoch_freq` epochs. Can be enabled with the `--eval_freq [epoch_freq]` command line argument (metric must be passed to Callback)
    :py:class:`MultiLabelStatsCallback<neon.callbacks.callbacks.MultiLabelStatsCallback>`, Computes multi-label metrics (e.g. PrecisionRecall) every `epoch_freq` epochs
    :py:class:`HistCallback<neon.callbacks.callbacks.HistCallback>`, Collect histograms of weights of all layers once per minibatch/epoch. Histograms stored to hdf5 output file for visualization with `nvis` tool.
-   :py:class:`SaveBestStateCallback<neon.callbackss.callback.SaveBestStateCallback>`, Saves the best model so far (defined as the loss on the validation set) to the file provided in `path`.
+   :py:class:`SaveBestStateCallback<neon.callbacks.callback.SaveBestStateCallback>`, Saves the best model so far (defined as the loss on the validation set) to the file provided in `path`.
    :py:class:`EarlyStopCallback<neon.callbacks.callbacks.EarlyStopCallback>`, Halts training when a threshold is triggered (such as reaching a performance target)
-   :py:class:`DeconvCallback<neon.callbacks.callbacks.DeconvCallback>`, Stores projections of the activations back to pixel space using guided backpropogation `(Springenberg~, 2014) <http://arxiv.org/abs/1412.6806>`__. Used for visualization with the `nvis` tool.
+   :py:class:`DeconvCallback<neon.callbacks.callbacks.DeconvCallback>`, Stores projections of the activations back to pixel space using guided backpropagation `(Springenberg~, 2014) <http://arxiv.org/abs/1412.6806>`__. Used for visualization with the `nvis` tool.
 
 Callbacks are added in three different ways:
 

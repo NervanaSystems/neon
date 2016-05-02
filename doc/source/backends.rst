@@ -289,7 +289,7 @@ If an op-tree is obtained from a forward propagation process:
     # Create Autodiff object
     # - the object will be memoized and reused, so it's safe to call Autodiff on
     #   the same optree multiple times
-    # - when next_error is None, it will be se to be.ones() of the output shape,
+    # - when next_error is None, it will be set to be.ones() of the output shape,
     #   in neon, next_error is set to the next layer's back prop error
     ad = Autodiff(op_tree=f, be=be, next_error=None)
 
@@ -312,7 +312,7 @@ The gradient with respect to certain variables can be called from an
 -  ``get_grad_op_tree``: get the gradient optrees
 -  ``get_grad_tensor``: get the gradient tensors, it will allocate
    device memory
--  ``get_grad_asnumpyarray``: get gradients asnumpy array, it will
+-  ``get_grad_asnumpyarray``: get gradients as numpy array, it will
    allocate host memory
 
 Here is an example of |Autodiff| applied to a dynamically generated

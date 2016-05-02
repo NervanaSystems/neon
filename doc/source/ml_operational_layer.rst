@@ -77,7 +77,7 @@ Tensor Manipulation
     :py:meth:`neon.backends.Tensor.fill<.Tensor.fill>` |	Assign specified value to each element of this Tensor.
     :py:meth:`neon.backends.Tensor.transpose<.Tensor.transpose>` | Return a transposed view of the data.
     :py:meth:`neon.backends.Tensor.reshape<.Tensor.reshape>` | Adjusts the dimensions of the data to the specified shape.
-    :py:meth:`neon.backends.Backend.take<neon.backends.Backend.take>` | Select a subset of elements (based on provided indicies) from a supplied dimension
+    :py:meth:`neon.backends.Backend.take<neon.backends.Backend.take>` | Select a subset of elements (based on provided indices) from a supplied dimension
 
 
 Arithmetic Operations
@@ -177,7 +177,7 @@ tensor ``a`` along a specified ``axis`` dimension. If ``axis=None``
     :py:meth:`neon.backends.Backend.argmin<.Backend.argmin>` | Calculates the indices of the minimal element value along the ``axis`` dimension
     :py:meth:`neon.backends.Backend.argmax<.Backend.argmax>` | Calculates the indices of the maximal element value along the ``axis`` dimension
 
-Randon Number Generator
+Random Number Generator
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 Both the ``NervanaGPU`` and ``NervanaCPU`` backends use the numpy random
@@ -236,7 +236,7 @@ Operations
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Backend.onehot<.Backend.onehot>` | Generates a one-hot representation from a set of indicies (see :doc:`Loading data<loading_data>`)
+    :py:meth:`neon.backends.Backend.onehot<.Backend.onehot>` | Generates a one-hot representation from a set of indices (see :doc:`Loading data<loading_data>`)
     :py:meth:`neon.backends.Backend.fill_normal<.NervanaGPU.fill_normal>` | Fills a tensor with gaussian random variables
     :py:meth:`neon.backends.Backend.compound_dot<.Backend.compound_dot>` | Depending on the size of the input :math:`A`, :math:`B`, :math:`C`, performs :math:`\alpha A B + \beta C`
     :py:meth:`neon.backends.NervanaGPU.make_binary_mask<.NervanaGPU.make_binary_mask>` | Creates a randomized binary mask for dropout layers

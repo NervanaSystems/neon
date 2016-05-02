@@ -202,7 +202,7 @@ Inference
 ~~~~~~~~~
 
 Given a set of images such as those contained in the iterable
-``test_set``, we can fetch the ouput of the final model layer via
+``test_set``, we can fetch the output of the final model layer via
 
 .. code-block:: python
 

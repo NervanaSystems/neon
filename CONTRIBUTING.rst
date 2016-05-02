@@ -60,7 +60,7 @@ Contribution Process
 
 6. If necessary you may want to update and/or rebuild the documentation.
    This all exists under doc/source and is in 
-   `Sphinx Restructed Text format <http://sphinx-doc.org/rest.html>`_:
+   `Sphinx reStructuredText format <http://sphinx-doc.org/rest.html>`_:
 
 .. code-block:: bash
 
@@ -69,7 +69,7 @@ Contribution Process
 7. Commit your changes and push your feature branch to your github fork.  Be
    sure to add a descriptive message and reference the github issue associated
    with your task (ex. #1).  You will also want to rebase your commits down to
-   a single sensible commit to make things clean for the merge proces:
+   a single sensible commit to make things clean for the merge process:
 
 .. code-block:: bash
 
@@ -81,7 +81,7 @@ Contribution Process
    others to use.  You'll first need to ensure your feature branch contains the
    latest changes from master.  Furthermore, internal devs will need to assign
    the request to someone else for a code review.  You must also ensure there
-   are no erros when run through the items defined in step 5.
+   are no errors when run through the items defined in step 5.
 
 .. code-block:: bash
 

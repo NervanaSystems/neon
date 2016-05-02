@@ -32,16 +32,16 @@ reStructuredText for documentation).
 * All public class and function names must have docstrings, and these
   docstrings must conform to `Google Style Docstrings`_ as our API
   documentation is auto-generated from these.  To do this we utilize
-  the napoleon_ sphinx extensions.
+  the Napoleon_ Sphinx extensions.
 
 .. _PEP8: https://www.python.org/dev/peps/pep-0008/
 .. _Google Style Docstrings: http://google-styleguide.googlecode.com/svn/trunk/pyguide.html#Comments
-.. _napoleon: http://sphinxcontrib-napoleon.readthedocs.org/en/latest/index.html
+.. _Napoleon: http://sphinxcontrib-napoleon.readthedocs.org/en/latest/index.html
 
 Documentation Conventions
 -------------------------
 
-* Documents are created using `reStructured Text`_.
+* Documents are created using `reStructuredText`_.
 
 * Limit your docs to 2-3 levels of headings. 
 
@@ -51,6 +51,6 @@ Documentation Conventions
 
 * Every time you make a significant contribution, add a short description of it in the relevant document. 
 
-.. _reStructured Text: http://docutils.sourceforge.net/docs/ref/rst/restructuredtext.html
+.. _reStructuredText: http://docutils.sourceforge.net/docs/ref/rst/restructuredtext.html
 .. _autosummary: http://sphinx-doc.org/latest/ext/autosummary.html
 

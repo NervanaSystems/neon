@@ -60,7 +60,7 @@ G, B), for a total of :math:`32\times32\times3=3,072` features.
     train = ArrayIterator(X=X, y=y, nclass=10, lshape=(3,32,32))
 
 Importantly, the labels :math:`y` for classification should be integers from :math:`0` to :math:`K-1`,  where
-:math:`K` is the number of classes. These labels are stored in the backend in a one-hot representation. This means that if we have :math:`N` labels with :math:`K` classes, the labels will be sotred in a :math:`N \times K` binary matrix. Each column will be all zeros except at the :math:`k`-th element, which will be one. For example,
+:math:`K` is the number of classes. These labels are stored in the backend in a one-hot representation. This means that if we have :math:`N` labels with :math:`K` classes, the labels will be stored in a :math:`N \times K` binary matrix. Each column will be all zeros except at the :math:`k`-th element, which will be one. For example,
 
 .. math::
 
@@ -193,7 +193,7 @@ video, images, etc.).
 
 :py:class:`.ImageLoader` was created to provide a way to feed images
 from disk to neon with minimal latency. The module takes advantage of
-the high compressibility of images to conserve diskspace and disk to
+the high compressibility of images to conserve disk space and disk to
 host memory IO. ImageLoader uses a multithreaded library to hide the
 latency of decoding images, applying augmentation and/or
 transformations, and transferring the resulting outputs to device memory

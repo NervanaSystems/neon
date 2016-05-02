@@ -27,7 +27,7 @@ supports the following optimizers:
     :delim: |
 
     :py:class:`neon.optimizers.GradientDescentMomentum<neon.optimizers.optimizer.GradientDescentMomentum>` | `Stochastic gradient descent <http://ufldl.stanford.edu/tutorial/supervised/OptimizationStochasticGradientDescent/>`__ with `momentum <http://jmlr.org/proceedings/papers/v28/sutskever13.pdf>`__
-    :py:class:`neon.optimizers.RMSProp<neon.optimizers.optimizer.RMSProp>` | Root mean square propagation (see `Hinton's slides <http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf>`__)
+    :py:class:`neon.optimizers.RMSProp<neon.optimizers.optimizer.RMSProp>` | Root Mean Square propagation (see `Hinton's slides <http://www.cs.toronto.edu/~tijmen/csc321/slides/lecture_slides_lec6.pdf>`__)
     :py:class:`neon.optimizers.Adagrad<neon.optimizers.optimizer.Adagrad>` | `Adagrad <http://www.jmlr.org/papers/volume12/duchi11a/duchi11a.pdf>`__ method for adapting the learning rate
     :py:class:`neon.optimizers.Adadelta<neon.optimizers.optimizer.Adadelta>` | `Adadelta <http://arxiv.org/abs/1212.5701>`__ method for adapting the learning rate
     :py:class:`neon.optimizers.Adam<neon.optimizers.optimizer.Adam>` | `Adam <http://arxiv.org/pdf/1412.6980v8.pdf>`__ optimization algorithm
@@ -59,7 +59,7 @@ Stochastic Gradient Descent (SGD) has existed for awhile, but its
 usefulness in training deep neural networks has only recently been
 realized. SGD is similar to traditional gradient descent, except that
 the gradient updates are computed over a small subset of the total
-training data (i.e. a minibatch).
+training data (i.e., a minibatch).
 
 Given the parameters :math:`\theta`, the learning rate :math:`\alpha`, and the gradients :math:`\nabla J(\theta; x)`
 computed on the minibatch data :math:`x`, SGD updates the parameters via
@@ -84,14 +84,14 @@ Example usage:
 
     from neon.optimizers import GradientDescentMomentum
 
-    # use SGD with learnig rate 0.01 and momentum 0.9, while
+    # use SGD with learning rate 0.01 and momentum 0.9, while
     # clipping the gradients between -5 and 5.
     opt = GradientDescentMomentum(0.01, 0.9, gradient_clip_value = 5)
 
-RMS propogation
+RMS propagation
 ---------------
 
-Root mean square (RMS) propagation protects against vanishing and
+Root Mean Square (RMS) propagation protects against vanishing and
 exploding gradients. In RMSprop, the gradient is divided by a running
 average of recent gradients. Given the parameters :math:`\theta`, gradient :math:`\nabla J`, we keep a running average
 :math:`\mu` of the last :math:`1/\lambda` gradients squared. The update equations are then given by

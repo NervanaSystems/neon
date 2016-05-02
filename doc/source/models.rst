@@ -58,7 +58,7 @@ appropriate buffers are allocated with each layer's ``allocate()``
 method. Note that a model object can only be initialized once.
 
 During training, the model iterates through mini-batches of the dataset,
-calling the forward and backward propogation functions to compute the
+calling the forward and backward propagation functions to compute the
 gradients according to the provided ``cost`` and update the weights
 based on the ``optimizer``. The length of training is controlled by the
 ``num_epoch`` argument. Callbacks can also be configured to end training

@@ -58,7 +58,7 @@ backend.
 .. py:module:: neon.backends
 
 This module defines the computational backend of neon, either based on CPU or GPU
-hardware. Included are classes that implement neon's auto-differentation feature.
+hardware. Included are classes that implement neon's auto-differentiation feature.
 
 .. autosummary::
    :toctree: generated/
@@ -320,7 +320,7 @@ by providing a schedule.
 .. py:module:: neon.callbacks
 
 Callbacks are methods that are called at user-defined times during training. They can
-be scheduled to occur at the begining/end of training/minibatch/epoch. Callbacks can
+be scheduled to occur at the beginning/end of training/minibatch/epoch. Callbacks can
 be used to, for example, periodically report training loss or save weight histograms.
 
 .. autosummary::

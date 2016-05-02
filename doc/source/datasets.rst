@@ -76,7 +76,7 @@ The image caption data can be fetched in the following manner:
 
     # download dataset
     from neon.data import Flickr8k
-    data_path = Flickr8k().load_data()  # Other setnames are Flickr30k and Coco
+    data_path = Flickr8k().load_data()  # Other set names are Flickr30k and Coco
 
     # load data
     from neon.data import ImageCaption
