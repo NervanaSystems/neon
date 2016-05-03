@@ -168,6 +168,18 @@ can be directly loaded into memory.
 For more information on usage of these iterators, see the API
 documentation.
 
+Sequence data
+~~~~~~~~~~~~~
+For sequence data, where data are fed to the model across multiple time steps, the shape
+of the input data can depend on your usage.
+
+* Often, data such as sentences are encoded as a vector sequence of integers, where each integer corresponds to a word in the vocabulary. This encoding is often used in conjunction with embedding layers. In this case, the input data should be formatted to have shape :math:`(T, N)`, where :math:`T` is the number of time steps and :math:`N` is the batch size. The embedding layer takes this input and provides as output to a subsequent recurrent neural network data of shape :math:`(F, T * N)`, where :math:`F` is the number of features (in this case, the embedding dimension). For an example, see `imdb_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/imdb_lstm.py>`_.
+
+* When the sequence data uses a one-hot encoding, the input data should be formatted to have shape :math:`(F, T*N)`. For example, if sentences use a one-hot encoding with 50 possible characters, and each sentence is 60-characters long, the input data will have shape :math:`(F=50, 60*N)`. See the :py:class:`.Text` class, or the `char_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/char_lstm.py>`_ example.
+
+* Time series data should be formatted to have shape :math:`(F, T * N)`, where :math:`F` is the number of features. For an example, see `timeseries_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/timeseries_lstm.py>`_.
+
+
 Macrobatching
 -------------
 
@@ -531,5 +543,9 @@ performed.
                           inner_size=384,
                           scale_range=0,  # Force scaling to match inner_size
                           do_transforms=False)
+
+
+
+
 
 .. |ArrayIterator| replace:: :py:class:`.ArrayIterator`
