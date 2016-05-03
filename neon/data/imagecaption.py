@@ -345,6 +345,9 @@ class ImageCaptionTest(ImageCaption):
 
 
 class Flickr8k(Dataset):
+    """
+    Flickr8k dataset container.
+    """
     def __init__(self, path='.', max_images=-1):
         url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'
         super(Flickr8k, self).__init__('flickr8k.zip',
@@ -364,6 +367,9 @@ class Flickr8k(Dataset):
 
 
 class Flickr30k(Dataset):
+    """
+    Flickr30k dataset container.
+    """
     def __init__(self, path='.', max_images=-1):
         url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'
         super(Flickr30k, self).__init__('flickr30k.zip',
@@ -383,6 +389,9 @@ class Flickr30k(Dataset):
 
 
 class Coco(Dataset):
+    """
+    MSCOCO dataset container.
+    """
     def __init__(self, path='.', max_images=-1):
         url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'
         super(Coco, self).__init__('coco.zip',

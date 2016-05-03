@@ -310,7 +310,7 @@ class BranchNode(Layer):
 
 class SkipNode(Layer):
     """
-    Layer that allows pass-through
+    Layer that allows pass-through.
     """
 
     def __init__(self, name=None):
@@ -1139,7 +1139,7 @@ class Conv(CompoundLayer):
 class Deconv(CompoundLayer):
 
     """
-    Same as Conv layer, but implements a composite deconvolution layer
+    Same as Conv layer, but implements a composite deconvolution layer.
     """
 
     def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
@@ -1285,7 +1285,7 @@ class Dropout(Layer):
 class LookupTable(ParameterLayer):
 
     """
-    A lookup table layer or a word embedding layer
+    A lookup table layer or a word embedding layer.
 
     The layer converts a word into a dense representation. When given a sentence,
     which is a vector of words (as integers), a matrix of vectors/embeddings for
@@ -1478,7 +1478,7 @@ class GeneralizedCostMask(GeneralizedCost):
 class BatchNorm(Layer):
 
     """
-    A batch normalization layer as described in [Ioffe2015]_
+    A batch normalization layer as described in [Ioffe2015]_.
 
     Normalizes a batch worth of inputs by subtracting batch mean and
     dividing by batch variance.  Then scales by learned factor gamma and

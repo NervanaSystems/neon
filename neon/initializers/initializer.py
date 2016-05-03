@@ -100,7 +100,7 @@ class GlorotUniform(Initializer):
     a uniform distribution over a region whose bounds have been determined
     using the policy described in:
     "Understanding the difficulty of training deep feedforward neural networks"
-    (http://jmlr.org/proceedings/papers/v9/glorot10a/glorot10a.pdf)
+    (http://jmlr.org/proceedings/papers/v9/glorot10a/glorot10a.pdf).
 
     We normalize the range by the scaled average of the input dimension
     and the output dimension of the tensor in question.
@@ -133,7 +133,11 @@ class Xavier(Initializer):
 
 
 class Kaiming(Initializer):
-
+    """
+    A class for initializing parameter tensors with values drawn from
+    a zero-mean Gaussian distribution and standard deviation as
+    described in http://arxiv.org/pdf/1502.01852.pdf.
+    """
     def __init__(self, local=True, name="Kaiming"):
         super(Kaiming, self).__init__(name=name)
         self.local = local
@@ -145,6 +149,9 @@ class Kaiming(Initializer):
 
 
 class IdentityInit(Initializer):
+    """
+    A class for initializing parameter tensors with the identity function.
+    """
     def __init__(self, local=True, name="Identity"):
         super(IdentityInit, self).__init__(name=name)
         self.local = local

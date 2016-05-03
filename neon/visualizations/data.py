@@ -18,7 +18,7 @@ import numpy as np
 
 def create_minibatch_x(minibatches, minibatch_markers, epoch_axis):
     """
-    Helper function to build x axis for data captured per minibatch
+    Helper function to build x axis for data captured per minibatch.
 
     Arguments:
         minibatches (int): how many total minibatches
@@ -40,7 +40,7 @@ def create_minibatch_x(minibatches, minibatch_markers, epoch_axis):
 
 def create_epoch_x(points, epoch_freq, minibatch_markers, epoch_axis):
     """
-    Helper function to build x axis for points captured per epoch
+    Helper function to build x axis for points captured per epoch.
 
     Arguments:
         points (int): how many data points need a corresponding x axis points

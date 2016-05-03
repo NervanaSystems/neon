@@ -59,8 +59,9 @@ class NeonArgparser(configargparse.ArgumentParser):
     options to configure the logging module.
 
     Arguments:
-        desc (String) : Docstring from the calling function.
-        This will be used for the description of the command receiving the arguments.
+        desc (String) : Docstring from the calling function. This will be used
+                        for the description of the command receiving the
+                        arguments.
     """
     def __init__(self, *args, **kwargs):
         self._PARSED = False

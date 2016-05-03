@@ -18,7 +18,7 @@ from neon import NervanaObject
 class Transform(NervanaObject):
 
     """
-    Base class for activation or cost functions and their derivatives
+    Base class for activation or cost functions and their derivatives.
     """
     def __init__(self, name=None):
         super(Transform, self).__init__(name)

@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 
 class MNIST(Dataset):
+    """
+    MNIST dataset container.
+    """
     def __init__(self, path='.', subset_pct=100, normalize=True):
         super(MNIST, self).__init__('mnist.pkl.gz',
                                     'https://s3.amazonaws.com/img-datasets',
@@ -85,7 +88,7 @@ class MNIST(Dataset):
 
 class CIFAR10(Dataset):
     '''
-    CIFAR10 dataset container
+    CIFAR10 dataset container.
 
     Arguments:
         path (str): local path to copy data files

@@ -16,6 +16,9 @@ from neon.transforms.transform import Transform
 
 
 class Identity(Transform):
+    """
+    Identity activation function.
+    """
     def __init__(self, name=None):
         super(Identity, self).__init__(name)
 
@@ -28,7 +31,7 @@ class Identity(Transform):
 
 class Rectlin(Transform):
     """
-    ReLu activation function (Nair and  Hinton, ICML 2010)
+    ReLu activation function (Nair and  Hinton, ICML 2010).
     Can optionally set a slope which will make this a Leaky ReLu
     Computes the function f(x) = max(0, x)
     """
@@ -45,7 +48,7 @@ class Rectlin(Transform):
 
 class Explin(Transform):
     """
-    ELU activation function (Clevert, Unterthiner and Hochreiter, ICLR 2016 submission)
+    ELU activation function (Clevert, Unterthiner and Hochreiter, ICLR 2016 submission).
     """
     def __init__(self, alpha=1.0, name=None):
         super(Explin, self).__init__(name)
@@ -60,7 +63,7 @@ class Explin(Transform):
 
 class Normalizer(Transform):
     """
-    Normalize inputs by a fixed divisor
+    Normalize inputs by a fixed divisor.
     """
     def __init__(self, name=None, divisor=128.):
         super(Normalizer, self).__init__(name)

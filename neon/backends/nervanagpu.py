@@ -640,7 +640,7 @@ def memoize_stacks(func):
 
 class NervanaGPU(Backend):
     """
-    The primary interface class and factory for GPUTensors
+    The primary interface class and factory for GPUTensors.
 
     Arguments:
         stochastic_round (int or bool, optional): set to desired number of mantissa

@@ -19,7 +19,7 @@ import numpy as np
 class Cost(NervanaObject):
 
     """
-    Base class for the cost functions
+    Base class for the cost functions.
     """
 
     def __call__(self, y, t):
@@ -52,7 +52,7 @@ class Cost(NervanaObject):
 class Metric(Cost):
 
     """
-    Base class for Metric
+    Base class for Metric.
 
     Meant for non-smooth costs that we just want to check on validation.
     """
@@ -80,7 +80,7 @@ class Metric(Cost):
 class CrossEntropyBinary(Cost):
 
     """
-    Applies the binary cross entropy function
+    Applies the binary cross entropy function.
 
     Note:
         bprop assumes that shortcut is used to calculate derivative
@@ -129,7 +129,7 @@ class CrossEntropyBinary(Cost):
 class CrossEntropyMulti(Cost):
 
     """
-    Applies the multiclass cross entropy function
+    Applies the multiclass cross entropy function.
 
     Note:
         bprop assumes that shortcut is used to calculate derivative
@@ -181,7 +181,7 @@ class CrossEntropyMulti(Cost):
 class SumSquared(Cost):
 
     """
-    Applies the squared error cost function
+    Applies the squared error cost function.
     """
 
     def __init__(self):
@@ -196,7 +196,7 @@ class SumSquared(Cost):
 class MeanSquared(Cost):
 
     """
-    Applies the mean squared error cost function
+    Applies the mean squared error cost function.
     """
 
     def __init__(self):
@@ -213,7 +213,7 @@ class SmoothL1Loss(Cost):
     """
     A smooth L1 loss cost function from Fast-RCNN
     http://arxiv.org/pdf/1504.08083v2.pdf
-    L1 loss is less sensitive to the outlier than L2 loss used in RCNN
+    L1 loss is less sensitive to the outlier than L2 loss used in RCNN.
     """
 
     def smoothL1(self, x):
@@ -235,7 +235,7 @@ class SmoothL1Loss(Cost):
 class LogLoss(Metric):
 
     """
-    Compute logloss
+    Compute logloss.
     """
 
     def __init__(self):
@@ -260,7 +260,7 @@ class LogLoss(Metric):
 class TopKMisclassification(Metric):
 
     """
-    Compute logloss, top1, and topk misclassification error metric
+    Compute logloss, top1, and topk misclassification error metric.
     """
 
     def __init__(self, k):
@@ -298,7 +298,7 @@ class TopKMisclassification(Metric):
 class Misclassification(Metric):
 
     """
-    Compute the misclassification error metric
+    Compute the misclassification error metric.
     """
 
     def __init__(self):
@@ -329,7 +329,7 @@ class Misclassification(Metric):
 class Accuracy(Metric):
 
     """
-    Compute the accuracy metric
+    Compute the accuracy metric.
     """
 
     def __init__(self):
@@ -359,7 +359,7 @@ class Accuracy(Metric):
 
 class PrecisionRecall(Metric):
     """
-    Compute precision and recall metrics
+    Compute precision and recall metrics.
 
     Arguments:
         num_classes (int): Number of different output classes.
@@ -421,7 +421,7 @@ class ObjectDetection(Metric):
 
     """
     Compute the object deteciton metric includes object label accuracy, and
-    bounding box regression
+    bounding box regression.
     """
 
     def __init__(self):

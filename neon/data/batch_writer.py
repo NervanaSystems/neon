@@ -34,7 +34,7 @@ logger = logging.getLogger(__name__)
 class BatchWriter(object):
     """
     Parent class for batchwriter object for taking a set of input images and outputting
-    macrobatches for use with the ImageLoader data provider
+    macrobatches for use with the ImageLoader data provider.
 
     Arguments:
         out_dir (str): Directory to output the macrobatches

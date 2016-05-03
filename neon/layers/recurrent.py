@@ -31,7 +31,7 @@ def get_steps(x, shape):
 class Recurrent(ParameterLayer):
 
     """
-    Basic recurrent layer
+    Basic recurrent layer.
 
     Arguments:
         output_size (int): Number of hidden/output units
@@ -444,7 +444,7 @@ class LSTM(Recurrent):
 class GRU(Recurrent):
 
     """
-    Implementation of the Gated Recurrent Unit based on [Cho2014]
+    Implementation of the Gated Recurrent Unit based on [Cho2014].
 
     - It uses two gates: reset gate (r) and update gate (z)
     - The update gate (z) decides how much the activation is updated
@@ -729,7 +729,7 @@ class RecurrentOutput(Layer):
 class RecurrentSum(RecurrentOutput):
 
     """
-    A layer that sums over the recurrent layer outputs over time
+    A layer that sums over the recurrent layer outputs over time.
     """
     def configure(self, in_obj):
         super(RecurrentSum, self).configure(in_obj)
@@ -752,7 +752,7 @@ class RecurrentSum(RecurrentOutput):
 class RecurrentMean(RecurrentSum):
 
     """
-    A layer that gets the averaged recurrent layer outputs over time
+    A layer that gets the averaged recurrent layer outputs over time.
     """
     def configure(self, in_obj):
         super(RecurrentMean, self).configure(in_obj)
@@ -763,7 +763,7 @@ class RecurrentMean(RecurrentSum):
 class RecurrentLast(RecurrentOutput):
 
     """
-    A layer that only keeps the recurrent layer output at the last time step
+    A layer that only keeps the recurrent layer output at the last time step.
     """
 
     def fprop(self, inputs, inference=False):
@@ -783,7 +783,7 @@ class RecurrentLast(RecurrentOutput):
 class BiRNN(ParameterLayer):
 
     """
-    Basic Bi Directional Recurrent layer
+    Basic Bi Directional Recurrent layer.
 
     Arguments:
         output_size (int): Number of hidden/output units
@@ -1089,7 +1089,7 @@ class BiRNN(ParameterLayer):
 class BiLSTM(BiRNN):
 
     """
-    Long Short-Term Memory (LSTM)
+    Long Short-Term Memory (LSTM).
 
     Arguments:
         output_size (int): Number of hidden/output units
@@ -1359,7 +1359,7 @@ class BiLSTM(BiRNN):
 class DeepBiRNN(list):
 
     """
-    A stacked Bi-directional recurrent layer
+    A stacked Bi-directional recurrent layer.
 
     Arguments:
         nout (int, tuple): Desired size or shape of layer output
@@ -1384,7 +1384,7 @@ class DeepBiRNN(list):
 class DeepBiLSTM(list):
 
     """
-    A stacked Bi-directional LSTM layer
+    A stacked Bi-directional LSTM layer.
 
     Arguments:
         nout (int, tuple): Desired size or shape of layer output

@@ -32,8 +32,8 @@ def get_param_list(layer_list):
 class Optimizer(NervanaObject):
 
     '''
-    Optimizers will take a param, update, and state
-    will be responsible for keeping track of a schedule
+    Optimizers will take a param, update, and state and
+    will be responsible for keeping track of a schedule.
     '''
     def __init__(self, name=None):
         super(Optimizer, self).__init__(name=name)
@@ -172,7 +172,7 @@ class PolySchedule(Schedule):
 class GradientDescentMomentum(Optimizer):
 
     """
-    Stochastic gradient descent with momentum
+    Stochastic gradient descent with momentum.
     """
 
     def __init__(self, learning_rate, momentum_coef, stochastic_round=False,

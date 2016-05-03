@@ -219,6 +219,9 @@ class Text(NervanaDataIterator):
 
 
 class Shakespeare(Dataset):
+    """
+    Shakespeare data set from http://cs.stanford.edu/people/karpathy/char-rnn.
+    """
     def __init__(self, timesteps, path='.'):
         url = 'http://cs.stanford.edu/people/karpathy/char-rnn'
         super(Shakespeare, self).__init__('shakespeare_input.txt',
@@ -322,6 +325,9 @@ class HutterPrize(Dataset):
 
 
 class IMDB(Dataset):
+    """
+    IMDB data set.
+    """
     def __init__(self, vocab_size, sentence_length, path='.'):
         url = 'https://s3.amazonaws.com/text-datasets'
         super(IMDB, self).__init__('imdb.pkl',

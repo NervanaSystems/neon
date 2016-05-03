@@ -33,7 +33,7 @@ def flatten(item):
 class LayerContainer(Layer):
     """
     Layer containers are a generic class that are used to encapsulate groups of layers and
-    provide methods for propagating through the constituent layers, allocating memory
+    provide methods for propagating through the constituent layers, allocating memory.
     """
     @property
     def layers_to_optimize(self):
@@ -404,7 +404,7 @@ class MergeSum(Broadcast):
 class MergeBroadcast(Broadcast):
     """
     Branches a single incoming layer or object (broadcast) into multiple output paths that are
-    then combined again (merged)
+    then combined again (merged).
 
     Arguments:
         layers (list(list(Layer), LayerContainer): list of either layer lists,
