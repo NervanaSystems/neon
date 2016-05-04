@@ -330,16 +330,20 @@ be used to, for example, periodically report training loss or save weight histog
 
    neon.callbacks.callbacks.Callbacks
    neon.callbacks.callbacks.Callback
-   neon.callbacks.callbacks.SerializeModelCallback
+   neon.callbacks.callbacks.RunTimerCallback
    neon.callbacks.callbacks.TrainCostCallback
-   neon.callbacks.callbacks.LossCallback
-   neon.callbacks.callbacks.MetricCallback
-   neon.callbacks.callbacks.HistCallback
    neon.callbacks.callbacks.ProgressBarCallback
    neon.callbacks.callbacks.TrainLoggerCallback
+   neon.callbacks.callbacks.SerializeModelCallback
+   neon.callbacks.callbacks.LossCallback
+   neon.callbacks.callbacks.MetricCallback
+   neon.callbacks.callbacks.MultiLabelStatsCallback
+   neon.callbacks.callbacks.HistCallback
    neon.callbacks.callbacks.SaveBestStateCallback
    neon.callbacks.callbacks.EarlyStopCallback
    neon.callbacks.callbacks.DeconvCallback
+   neon.callbacks.callbacks.BatchNormTuneCallback
+   neon.callbacks.callbacks.WatchTickerCallback
 
 ``neon.visualizations``
 -----------------------
