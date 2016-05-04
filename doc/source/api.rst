@@ -355,11 +355,8 @@ This module generates visualizations using the ``nvis`` command line function.
    :toctree: generated/
    :nosignatures:
 
-   neon.visualizations.data.create_minibatch_x
-   neon.visualizations.data.create_epoch_x
-   neon.visualizations.data.h5_cost_data
-   neon.visualizations.figure.x_label
-   neon.visualizations.figure.cost_fig
+   neon.visualizations.data
+   neon.visualizations.figure
 
 
 ``neon.util``

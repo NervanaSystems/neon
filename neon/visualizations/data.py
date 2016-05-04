@@ -67,6 +67,10 @@ def h5_cost_data(filename, epoch_axis=True):
     """
     Read cost data from hdf5 file. Generate x axis data for each cost line.
 
+    Arguments:
+        filename (str): Filename with hdf5 cost data
+        epoch_axis (bool): whether to render epoch or minibatch as the integer step in the x axis
+
     Returns:
         list of tuples of (name, x data, y data)
     """
@@ -98,6 +102,16 @@ def h5_cost_data(filename, epoch_axis=True):
 
 
 def h5_hist_data(filename, epoch_axis=True):
+    """
+    Read histogram data from hdf5 file. Generate x axis data for each hist line.
+
+    Arguments:
+        filename (str): Filename with hdf5 cost data
+        epoch_axis (bool): whether to render epoch or minibatch as the integer step in the x axis
+
+    Returns:
+        list of tuples of (name, data, dh, dw, bins, offset)
+    """
     ret = list()
     with h5py.File(filename, "r") as f:
         if 'hist' in f:
@@ -151,6 +165,9 @@ def convert_rgb_to_bokehrgba(img_data, downsample=1):
 def h5_deconv_data(filename):
     """
     Read deconv visualization data from hdf5 file.
+
+    Arguments:
+        filename (str): Filename with hdf5 deconv data
 
     Returns:
         list of lists. Each inner list represents one layer, and consists of
