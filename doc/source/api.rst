@@ -68,6 +68,7 @@ hardware. Included are classes that implement neon's auto-differentiation featur
    neon.backends.backend.Tensor
    neon.backends.backend.Backend
    neon.backends.backend.OpTreeNode
+   neon.backends.backend.Block
    neon.backends.nervanacpu.CPUTensor
    neon.backends.nervanacpu.NervanaCPU
    neon.backends.nervanagpu.GPUTensor

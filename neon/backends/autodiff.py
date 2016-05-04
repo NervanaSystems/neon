@@ -477,8 +477,9 @@ class GradNode(object):
 
     def __init__(self, op_tree, ad):
         """
-        op_tree: the op_tree at this grad_node
-        ad: the autodiff object with global op_tree, next_error and dicts
+        Arguments:
+            op_tree (OpTreeNode or Tensor): the op_tree at this grad_node
+            ad (Autodiff): the autodiff object with global op_tree, next_error and dicts
         """
         # check op_tree
         assert op_tree is not None

@@ -64,7 +64,7 @@ class GPUTensor(Tensor):
                                   stochastic rouding.
 
     See also:
-        NervanaGPU class
+        :class:`NervanaGPU` class
 
     Notes:
         Unlike numpy, in this implementation we never collapse dimensions, and
@@ -181,7 +181,7 @@ class GPUTensor(Tensor):
 
     def __getitem__(self, index):
         """
-        Return a sliced view of an array
+        Return a sliced view of an array.
         """
         if not isinstance(index, tuple):
             # speed up common case of [:]
@@ -433,7 +433,7 @@ class GPUTensor(Tensor):
 
     def asbuffer(self):
         """
-        asbuffer returns buffer interface to gpu data
+        Returns buffer interface to gpu data.
         """
         return self.gpudata.as_buffer(self.nbytes)
 
@@ -451,18 +451,36 @@ class GPUTensor(Tensor):
         return view
 
     def fill(self, value):
+        """
+        Assign specified value to each element of this GPUTensor.
+
+        Arguments:
+            value (numeric): The value to be assigned to each element.
+
+        Return:
+            GPUTensor: updated view of the data.
+        """
         return self._assign(value)
 
     def copy(self, a):
+        """
+        Construct and return a deep copy of the Tensor passed.
+
+         Arguments:
+            a (Tensor): the object to copy
+
+        Returns:
+            GPUTensor: updated view of the data.
+        """
         return self._assign(a)
 
     def copy_from(self, a):
-        """ alias of copy"""
+        """ Alias of copy. """
         return self.set(a)
 
     def reshape(self, *shape):
         """
-        return a reshaped view
+        Return a reshaped view.
         """
         if isinstance(shape[0], (tuple, list)):
             shape = tuple(shape[0])
@@ -499,7 +517,7 @@ class GPUTensor(Tensor):
     @property
     def T(self):
         """
-        return a transposed view
+        Return a transposed view.
         """
         if len(self.shape) <= 2:
             shape = self.shape[::-1]
@@ -535,7 +553,7 @@ class GPUTensor(Tensor):
 
     def share(self, shape, dtype=None, name=None):
         """
-        return a view: ary, where ary.size <= self.size
+        Return a view: ary, where ary.size <= self.size.
         Allows easy sharing of temporary memory
         """
         size = np.prod(shape)
@@ -608,7 +626,7 @@ class GPUTensor(Tensor):
 
 def memoize_stacks(func):
     """
-    memoize the stacks using intrinsic_key_maps
+    Memoize the stacks using intrinsic_key_maps.
     """
     cache = {}
 
@@ -800,7 +818,7 @@ class NervanaGPU(Backend):
 
     def gen_rng(self, seed=None):
         """
-        Generate the random number generator on device and on host
+        Generate the random number generator on device and on host.
 
         Arguments:
             seed (int): random number generator seed
@@ -836,7 +854,7 @@ class NervanaGPU(Backend):
     def _gen_dev_randstate(self):
         """
         Generate a list of random uint32 numbers to seed the LFSR
-        states on device
+        states on device.
 
         Returns:
             np.array: return a vector of uint32 numbers
@@ -868,7 +886,7 @@ class NervanaGPU(Backend):
 
     def rng_set_state(self, rng_states):
         """
-        Set the RNG state for both the on device and on host RNGs
+        Set the RNG state for both the on device and on host RNGs.
 
         Arguments:
             rng_states (tuple of np.arrays): tuple with 2 elements
@@ -881,7 +899,7 @@ class NervanaGPU(Backend):
 
     def rng_get_state(self):
         """
-        Return the current state of the on-host and on-device RNGs
+        Return the current state of the on-host and on-device RNGs.
 
         Returns:
             (np.array, np.array): the on-host and on-device RNG state vectors,
@@ -916,7 +934,12 @@ class NervanaGPU(Backend):
 
     def fill_normal(self, ary, mean=0, stdv=1):
         """
-        Fills ary with gaussian noise with given mean and std dev.
+        Fill ary with normally distributed random numbers.
+
+        Arguments:
+            ary (Tensor): Tensor to fill with random values
+            mean (float): Mean value. Default 0
+            stdv (float): standard deviation value.  Default 1
         """
         self.pcg.fill_normal(p_gpuarray(ary.shape, ary.dtype, gpudata=ary.gpudata))
         if not all([mean==0, stdv==1]):
@@ -924,8 +947,8 @@ class NervanaGPU(Backend):
 
     def _get_rand_state_dev(self):
         """
-        similar to @context_dependent_memoize, with additional ability to reset
-        the random pool by `rng_reset`
+        Similar to @context_dependent_memoize, with additional ability to reset
+        the random pool by `rng_reset`.
 
         initialize our common pool of randomness (1/4 MB):
         MAX_THREADS_PER_MULTIPROCESSOR * 32 SMs (32 to be somewhat future proof
@@ -939,7 +962,7 @@ class NervanaGPU(Backend):
 
     def _buf_malloc(self, shape):
         """
-        returns a buffer of size shape, equivalent of calling be.empty(shape)
+        Returns a buffer of size shape, equivalent of calling be.empty(shape).
         """
         # create a list of buffers of the shape
         if shape not in self.buf:
@@ -956,8 +979,8 @@ class NervanaGPU(Backend):
 
     def _buf_free(self):
         """
-        move all tensors from self.buffer_active to self.buffer
-        the idea is to reuse those tensors for other optrees
+        Move all tensors from self.buffer_active to self.buffer
+        the idea is to reuse those tensors for other optrees.
         """
         for shape in self.buf_active:
             self.buf[shape].extend(self.buf_active[shape])
@@ -988,7 +1011,7 @@ class NervanaGPU(Backend):
     @memoize_stacks
     def _split_to_stacks(self, optree):
         """
-        split an optree to stacks
+        Split an optree to stacks.
         """
         # post-order traversal
         whole_stack = optree.traverse(list())
@@ -1143,7 +1166,11 @@ class NervanaGPU(Backend):
 
     def execute(self, optree):
         """
-        Execute the optree. Break optree into sub-optrees if necessary.
+        Execute the optree.
+
+        Arguments:
+            optree: (OpTreeNode): the OpTreeNode object that represents all
+                                  the operations
         """
         from neon.backends.float_ew import call_compound_kernel
 
@@ -1171,6 +1198,25 @@ class NervanaGPU(Backend):
               parallel=False, distributed=False, allocator=drv.mem_alloc):
         """
         Allocate the space for a GPUTensor
+
+        Arguments:
+            shape (int, list): The size of each dimension of the Tensor.
+
+            dtype (dtype, optional): Element data type.  If not specified we
+                                     use default_dtype value
+
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+
+            allocator (function, optional): Memory allocator.
+
+        Returns:
+            GPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype if dtype is None else dtype
         return GPUTensor(self, shape, dtype=dtype, name=name,
@@ -1180,7 +1226,27 @@ class NervanaGPU(Backend):
     def array(self, ary, dtype=None, name=None, persist_values=True,
               parallel=False, distributed=False, allocator=drv.mem_alloc):
         """
-        converts a numpy array to a GPUTensor
+        Converts a numpy array to a GPUTensor
+
+        Arguments:
+            ary (numpy.ndarray): The data structure containing element values
+                                 spread across a number of dimensions.  Python
+                                 built-in types like ints and lists are
+                                 supported.
+            dtype (dtype, optional): Element data type.  If not specified we
+                                     use default_dtype value ('float32'
+                                     unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+            allocator (function, optional): Memory allocator.
+
+        Returns:
+            GPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype if dtype is None else dtype
         if ary.ndim < self._min_dims:
@@ -1192,7 +1258,25 @@ class NervanaGPU(Backend):
     def zeros(self, shape, dtype=None, name=None, persist_values=True,
               parallel=False, distributed=False, allocator=drv.mem_alloc):
         """
-        Returns an array of the given shape and dtype filled with 0's.
+        Instantiate a new instance of the GPUTensor class setting each element
+        value to 0.
+
+        Arguments:
+            shape (list of ints): The size of each dimension of the Tensor.
+            dtype (dtype, optional): Element data type.  If not specified we
+                                     use default_dtype value ('float32'
+                                     unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+            allocator (function, optional): Memory allocator.
+
+        Returns:
+            GPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype if dtype is None else dtype
         return GPUTensor(self, shape, dtype=dtype, name=name,
@@ -1202,7 +1286,25 @@ class NervanaGPU(Backend):
     def ones(self, shape, dtype=None, name=None, persist_values=True,
              parallel=False, distributed=False, allocator=drv.mem_alloc):
         """
-        Returns an array of the given shape and dtype filled with 1's.
+        Instantiate a new instance of the GPUTensor class setting each element
+        value to 1.
+
+        Arguments:
+            shape (list of ints): The size of each dimension of the Tensor.
+            dtype (dtype, optional): Element data type.  If not specified we
+                                     use default_dtype value ('float32'
+                                     unless overridden).
+            persist_values (bool, optional): If set to True (the default), the
+                                             values assigned to this Tensor
+                                             will persist across multiple begin
+                                             and end calls.  Setting to False
+                                             may provide a performance increase
+                                             if values do not need to be
+                                             maintained across such calls
+            allocator (function, optional): Memory allocator.
+
+        Returns:
+            GPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype if dtype is None else dtype
         return GPUTensor(self, shape, dtype=dtype, name=name,
@@ -1211,7 +1313,16 @@ class NervanaGPU(Backend):
 
     def empty_like(self, other_ary, name=None):
         """
-        Returns an array with the same params as another
+        Instantiate a new instance of this backend's Tensor class, with the
+        shape taken from ary.
+
+        Arguments:
+            ary (tensor object): Tensor to inherit the dimensions of.
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
+
+        Returns:
+            Tensor: array object
         """
         return GPUTensor(self, other_ary.shape, dtype=other_ary.dtype,
                          name=name, persist_values=other_ary.persist_values,
@@ -1219,7 +1330,16 @@ class NervanaGPU(Backend):
 
     def zeros_like(self, other_ary, name=None):
         """
-        Returns an array with the same params as another
+        Instantiate a new instance of this backend's Tensor class, with the
+        shape taken from ary and populating each element with a value of 0.
+
+        Arguments:
+            ary (tensor object): Tensor to inherit the dimensions of.
+            dtype (data-type, optional): If present, specifies the underlying
+                                         type to employ for each element.
+
+        Returns:
+            Tensor: array object
         """
         return GPUTensor(self, other_ary.shape, dtype=other_ary.dtype,
                          name=name, persist_values=other_ary.persist_values,
@@ -1228,14 +1348,23 @@ class NervanaGPU(Backend):
 
     def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False, bsum=None, repeat=1, size=None):
         """
+        Doing following operations (* is dot product)
         C = alpha * A * B   + beta * C
         C = alpha * A.T * B + beta * C
-        C = alpha * A * B.T + beta * C
+        C = alpha * A * B.T + beta * C.
 
         relu: if true applied before output (and prior to beta addition)
 
         size: one of 32x128, 128x32, 64x128, 128x64, 128x128.  Sometimes the
               fastest tiling isn't chosen for you.
+
+        Arguments:
+            A, B (GPUTensor): input operands
+            C (GPUTensor): output
+            alpha (float): scale A*B term
+            beta (float): scale C term before sum
+            relu (bool): whether to apply ReLu before output
+            size(nxm): Sometimes the fastest tiling isn't chosen for you.
         """
         assert A.dtype.type == B.dtype.type == C.dtype.type
 
@@ -1951,7 +2080,7 @@ class NervanaGPU(Backend):
     def roipooling_fprop(self, I, rois, O, argmax, roi_count, fm_channel, fm_height, fm_width,
                             pooled_height, pooled_width, spatial_scale):
         """
-        Function to perform fprop of ROIPooling
+        Function to perform fprop of ROIPooling.
 
         Arguments:
             I (Tensor): (C, H, W, N)
@@ -1985,7 +2114,7 @@ class NervanaGPU(Backend):
     def roipooling_bprop(self, I, rois, O, argmax, roi_count, fm_channel, fm_height, fm_width,
                             pooled_height, pooled_width, spatial_scale):
         """
-        Function to perform bprop of ROIPooling
+        Function to perform bprop of ROIPooling.
 
         Arguments:
             I (Tensor): input errors (C, pooled_height, pooled_width, roi_count)
@@ -2072,17 +2201,20 @@ class NervanaGPU(Backend):
                           x, xsum, xvar,
                           gamma, eps, threads=None, repeat=1):
         """
-        delta_out (Tensor): Delta buffer (where to write the output deltas)
-        grad_gamma (Tensor): Gradient w.r.t. gamma
-        grad_beta (Tensor): Gradient w.r.t. beta
-        delta_in (Tensor): Delta buffer (where to get the input deltas)
-        x (Tensor): feedforward input
-        xsum (Tensor): Batch sum over PQN dimension
-        xvar (Tensor): Batch variance
-        gamma (Tensor): scale parameter
-        eps (float): constant for numerical stability
-        threads (int): Number of GPU threads
-        repeat (int): Repeats for benchmarking
+        Function to perform batch normalization forward pass.
+   
+        Arguments:
+            delta_out (Tensor): Delta buffer (where to write the output deltas)
+            grad_gamma (Tensor): Gradient w.r.t. gamma
+            grad_beta (Tensor): Gradient w.r.t. beta
+            delta_in (Tensor): Delta buffer (where to get the input deltas)
+            x (Tensor): feedforward input
+            xsum (Tensor): Batch sum over PQN dimension
+            xvar (Tensor): Batch variance
+            gamma (Tensor): scale parameter
+            eps (float): constant for numerical stability
+            threads (int): Number of GPU threads
+           repeat (int): Repeats for benchmarking
         """
         assert xsum.dtype.type is np.float32, "xsum should be fp32"
 
@@ -2136,12 +2268,12 @@ class NervanaGPU(Backend):
         Backward propagate lookup table layer.
 
         Arguments:
-            nin (integer): Number of input word_ids.
+            nin (int): Number of input word_ids.
             inputs (Tensor): Input tensor.
             error (Tensor): Error tensor.
             error_t (Tensor): Transposed error tensor.
             dW (Tensor): Gradient tensor (delta).
-            pad_idx (integer):
+            pad_idx (int):
             alpha (float):
             beta (float):
         """
@@ -2297,7 +2429,7 @@ class NervanaGPU(Backend):
 
     def init_mark(self):
         """
-        Generate a timing mark object
+        Generate a timing mark object.
 
         Returns:
             timing mark (pycude driver event)
@@ -2306,7 +2438,7 @@ class NervanaGPU(Backend):
 
     def record_mark(self, marker):
         """
-        Mark the current time
+        Mark the current time.
 
         Arguments:
             marker (time mark): timing mark generated by init_mark()
@@ -2315,7 +2447,7 @@ class NervanaGPU(Backend):
 
     def synchronize_mark(self, marker):
         """
-        Synchronize on the given marker
+        Synchronize on the given marker.
 
         Arguments:
             marker (time mark): timing mark generated by init_mark()
@@ -2324,7 +2456,7 @@ class NervanaGPU(Backend):
 
     def get_time(self, start, end):
         """
-        Return time between start and end marks
+        Return time between start and end marks.
 
         Arguments:
             start (time maker): start time mark
