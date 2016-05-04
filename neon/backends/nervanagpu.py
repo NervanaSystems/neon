@@ -440,6 +440,11 @@ class GPUTensor(Tensor):
     def take(self, indices, axis, out=None):
         """
         Take elements from an array along an axis.
+
+        Arguments:
+            indices (Tensor, numpy ndarray): indicies of elements to select
+            axis (int): axis across which to select the values
+            out (Tensor): Output Tensor to fill with selected values
         """
         if axis == 1:
             view = self.__getitem__((_none_slice, indices))
@@ -475,7 +480,15 @@ class GPUTensor(Tensor):
         return self._assign(a)
 
     def copy_from(self, a):
-        """ Alias of copy. """
+        """
+        Alias of copy.
+
+        Arguments:
+            a (Tensor): the object to copy
+
+        Returns:
+            GPUTensor: updated view of the data.
+        """
         return self.set(a)
 
     def reshape(self, *shape):

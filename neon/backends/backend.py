@@ -2192,6 +2192,9 @@ class OpTreeNode(tuple):
 
     @property
     def T(self):
+        """
+        Return a transposed view of the data.
+        """
         return OpTreeNode.build("transpose", self, None)
 
     def transpose(self, out=None):

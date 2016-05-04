@@ -318,7 +318,15 @@ class CPUTensor(Tensor):
         return self._assign(a)
 
     def copy_from(self, a):
-        """ Alias of copy. """
+        """
+        Alias of copy.
+
+        Arguments:
+            a (Tensor): the object to copy
+
+        Returns:
+            Tensor: new array object with the same values as input tensor
+        """
         return self._assign(a)
 
     def reshape(self, *shape):
