@@ -23,9 +23,9 @@ class AudioParams : public SignalParams {
 class Audio : public Media {
 public:
     Audio(AudioParams *params, int id)
-    : _params(params), _rngSeed(id) {
+    : _params(params) {
         _codec = new Codec(params);
-        _specgram = new Specgram(params);
+        _specgram = new Specgram(params, id);
     }
 
     virtual ~Audio() {
@@ -46,5 +46,4 @@ private:
     AudioParams*                _params;
     Codec*                      _codec;
     Specgram*                   _specgram;
-    unsigned int                _rngSeed;
 };

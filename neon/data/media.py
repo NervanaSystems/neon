@@ -151,6 +151,8 @@ class AudioParams(MediaParams):
                 ('time_scale_factor', ct.c_float),
                 # Used to scale the Y dimension of the spectrogram
                 ('freq_scale_factor', ct.c_float),
+                # Randomly stretch/shrink the X dimension by this percent
+                ('randomize_time_scale_by', ct.c_float),
                 # The rest are automatically computed
                 ('window_size', ct.c_int),
                 ('overlap', ct.c_int),
@@ -164,6 +166,7 @@ class AudioParams(MediaParams):
                   'window_func': 'hann',
                   'time_scale_factor': 1.0,
                   'freq_scale_factor': 1.0,
+                  'randomize_time_scale_by': 0.0,
                   'window_size': -1,
                   'overlap': -1,
                   'stride': -1,

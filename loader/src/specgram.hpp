@@ -24,14 +24,16 @@
 
 using cv::Mat;
 using cv::Range;
+using cv::Size;
 using std::stringstream;
 
 class Specgram {
 public:
-    Specgram(SignalParams* params)
+    Specgram(SignalParams* params, int id)
     : _clipDuration(params->_clipDuration), _windowSize(params->_windowSize),
       _stride(params->_stride), _timeSteps(params->_timeSteps),
-      _numFreqs(params->_numFreqs), _window(0) {
+      _numFreqs(params->_numFreqs),
+      _window(0), _rng(id) {
         static_assert(sizeof(short) == 2, "short is not 2 bytes");
         assert(_stride != 0);
         if (powerOfTwo(_windowSize) == false) {
@@ -54,6 +56,11 @@ public:
             createWindow(params->_windowType);
             hann(_windowSize - 1);
         }
+        assert(params->_randomizeTimeScaleBy >= 0);
+        assert(params->_randomizeTimeScaleBy < 100);
+        _scaleBy = params->_randomizeTimeScaleBy / 100.0;
+        _scaleMin = 1.0 - _scaleBy;
+        _scaleMax = 1.0 + _scaleBy;
     }
 
     virtual ~Specgram() {
@@ -93,9 +100,30 @@ public:
         Mat result(_numFreqs, _timeSteps, CV_8UC1, buf);
         cv::transpose(*_image, result);
         cv::flip(result, result, 0);
+        randomize(result);
     }
 
 private:
+    void randomize(Mat& img) {
+        if (_scaleBy > 0) {
+            float fx = _rng.uniform(_scaleMin, _scaleMax);
+            resize(img, fx);
+        }
+    }
+
+    void resize(Mat& img, float fx) {
+        Mat dst;
+        int inter = (fx > 1.0) ? CV_INTER_CUBIC : CV_INTER_AREA;
+        cv::resize(img, dst, Size(), fx, 1.0, inter);
+        assert(img.rows == dst.rows);
+        if (img.cols > dst.cols) {
+            dst.copyTo(img(Range::all(), Range(0, dst.cols)));
+            img(Range::all(), Range(dst.cols, img.cols)) = cv::Scalar::all(0);
+        } else {
+            dst(Range::all(), Range(0, img.cols)).copyTo(img);
+        }
+    }
+
     bool powerOfTwo(int num) {
         while (((num % 2) == 0) && (num > 1)) {
             num /= 2;
@@ -188,8 +216,12 @@ private:
     int                         _timeSteps;
     int                         _numFreqs;
     int                         _maxSignalSize;
+    float                       _scaleBy;
+    float                       _scaleMin;
+    float                       _scaleMax;
     char*                       _buf;
     Mat*                        _image;
     Mat*                        _window;
+    cv::RNG                     _rng;
     constexpr static double     PI = 3.14159265358979323846;
 };

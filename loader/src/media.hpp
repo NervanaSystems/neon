@@ -55,6 +55,7 @@ public:
     char                        _windowFunc[16];
     float                       _timeScaleFactor;
     float                       _freqScaleFactor;
+    float                       _randomizeTimeScaleBy;
     int                         _windowSize;
     int                         _overlap;
     int                         _stride;
