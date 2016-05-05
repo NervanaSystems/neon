@@ -371,5 +371,10 @@ of objects.
   :nosignatures:
 
   neon.util.argparser.NeonArgparser
+  neon.util.argparser.extract_valid_args
+  neon.util.compat
+  neon.util.persist.load_class
   neon.util.persist.load_obj
   neon.util.persist.save_obj
+  neon.util.modeldesc.ModelDescription
+  neon.util.yaml_parse

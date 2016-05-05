@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-'''
+"""
 Command line argument parser for neon deep learning library
 
 This is a wrapper around the configargparse ArgumentParser class.
@@ -20,7 +20,7 @@ It adds in the default neon command line arguments and allows
 additional arguments to be added using the argparse library
 methods.  Lower priority defaults can also be read from a configuration file
 (specified by the -c command line argument).
-'''
+"""
 
 import configargparse
 import logging
@@ -44,6 +44,7 @@ def extract_valid_args(args, func, startidx=0):
     Arguments:
         args (Namespace): a namespace of args from argparse
         func (Function): a function to inspect, to determine valid args
+        startidx (int): Start index
 
     Returns:
         dict of (arg, value) pairs from args that are valid for func
@@ -178,21 +179,25 @@ class NeonArgparser(configargparse.ArgumentParser):
         return
 
     def add_yaml_arg(self):
-        '''
+        """
         Add the yaml file argument, this is needed for scripts that
         parse the model config from yaml files
 
-        '''
+        """
         # yaml configuration file
         self.add_argument('yaml_file',
                           type=configargparse.FileType('r'),
                           help='neon model specification file')
 
     def add_argument(self, *args, **kwargs):
-        '''
+        """
         Method by which command line arguments are added to the parser.  Passed
         straight through to parent add_argument method.
-        '''
+
+        Arguments:
+            *args:
+            **kwargs:
+        """
         if self._PARSED:
             logger.warn('Adding arguments after arguments were parsed = '
                         'may need to rerun parse_args')
@@ -205,15 +210,17 @@ class NeonArgparser(configargparse.ArgumentParser):
     # we never use this alias from ConfigArgParse, but defining this here
     # prevents documentation indent warnings
     def add(self):
+        """ Ignored. """
         pass
 
     # we never use this alias from ConfigArgParse, but defining this here
     # prevents documentation indent warnings
     def add_arg(self):
+        """ Ignored. """
         pass
 
     def parse_args(self, gen_be=True):
-        '''
+        """
         Parse the command line arguments and setup neon
         runtime environment accordingly
 
@@ -223,7 +230,8 @@ class NeonArgparser(configargparse.ArgumentParser):
 
         Returns:
             namespace: contains the parsed arguments as attributes
-        '''
+
+        """
         args = super(NeonArgparser, self).parse_args()
         err_msg = None  # used for relaying exception to logger
 

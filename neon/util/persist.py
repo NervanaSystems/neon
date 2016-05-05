@@ -131,6 +131,20 @@ def load_class(ctype):
 
 
 def serialize(model, callbacks=None, datasets=None, dump_weights=True, keep_states=True):
+    """
+    Serialize the model, callbacks and datasets.
+
+    Arguments:
+        model (Model): Model object
+        callbacks (Callbacks, optional): Callbacks
+        datasets (iterable, optional): Datasets
+        dump_weights (bool, optional): Ignored
+        keep_states (bool, optional): Whether to save optimizer states too.
+
+    Returns:
+        dict: Model data, callbacks and datasets
+
+    """
     pdict = model.serialize(fn=None, keep_states=keep_states)
     if callbacks is not None:
         pdict['callbacks'] = callbacks.serialize()
