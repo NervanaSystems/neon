@@ -49,15 +49,18 @@ class SignalParams : public MediaParams {
 public:
     int                         _samplingFreq;
     bool                        _resample;
-    int                         _maxDuration;
+    int                         _clipDuration;
+    int                         _frameDuration;
     int                         _overlapPercent;
-    int                         _window;
-    float                       _scaleFactor;
+    char                        _windowFunc[16];
+    float                       _timeScaleFactor;
+    float                       _freqScaleFactor;
     int                         _windowSize;
     int                         _overlap;
     int                         _stride;
     int                         _timeSteps;
     int                         _numFreqs;
+    int                         _windowType;
 };
 
 class Media {

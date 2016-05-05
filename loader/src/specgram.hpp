@@ -29,20 +29,31 @@ using std::stringstream;
 class Specgram {
 public:
     Specgram(SignalParams* params)
-    : _maxDuration(params->_maxDuration), _windowSize(params->_windowSize),
+    : _clipDuration(params->_clipDuration), _windowSize(params->_windowSize),
       _stride(params->_stride), _timeSteps(params->_timeSteps),
-      _numFreqs(params->_numFreqs) {
-        static_assert(sizeof(ushort) == 2, "ushort is not 2 bytes");
+      _numFreqs(params->_numFreqs), _window(0) {
+        static_assert(sizeof(short) == 2, "short is not 2 bytes");
+        assert(_stride != 0);
         if (powerOfTwo(_windowSize) == false) {
             throw std::runtime_error("Window size must be a power of 2");
         }
 
-        _maxSignalSize = params->_maxDuration * params->_samplingFreq;
+        if (params->_resample == true) {
+            throw std::runtime_error("Resampling not implemented yet");
+        }
+
+        if ((params->_timeScaleFactor != 1.0) || (params->_freqScaleFactor != 1.0)) {
+            throw std::runtime_error("Scaling not implemented yet");
+        }
+
+        _maxSignalSize = params->_clipDuration * params->_samplingFreq / 1000;
         _buf = new char[4 *  _maxSignalSize];
         _image = new Mat(_timeSteps, _numFreqs, CV_8UC1);
-        _window = new Mat(1, _windowSize, CV_32FC1);
-        // TODO: pick the right window function
-        hann(_windowSize - 1);
+        if (params->_windowType != 0) {
+            _window = new Mat(1, _windowSize, CV_32FC1);
+            createWindow(params->_windowType);
+            hann(_windowSize - 1);
+        }
     }
 
     virtual ~Specgram() {
@@ -57,7 +68,7 @@ public:
         assert(_timeSteps * _numFreqs == bufSize);
         int rows = stridedSignal(raw);
         assert(rows <= _timeSteps);
-        Mat signal(rows, _windowSize, CV_16UC1, (ushort*) _buf);
+        Mat signal(rows, _windowSize, CV_16SC1, (short*) _buf);
         Mat input;
         signal.convertTo(input, CV_32FC1);
 
@@ -73,11 +84,8 @@ public:
         cv::magnitude(planes[0], planes[1], planes[0]);
         Mat mag = planes[0];
 
-        cv::log(mag, mag);
-        for (int i = 0; i < rows; i++) {
-            cv::normalize(mag.row(i), _image->row(i), 0, 255, CV_MINMAX, CV_8UC1);
-        }
-
+        cv::normalize(mag, (*_image)(Range(0, rows), Range::all()), 0, 255,
+                      CV_MINMAX, CV_8UC1);
         // Pad the rest with zeros.
         (*_image)(Range(rows, _image->rows), Range::all()) = cv::Scalar::all(0);
 
@@ -95,13 +103,56 @@ private:
         return (num == 1);
     }
 
+    void none(int) {
+    }
+
     void hann(int steps) {
         for (int i = 0; i <= steps; i++) {
             _window->at<float>(0, i) = 0.5 - 0.5 * cos((2.0 * PI * i) / steps);
         }
     }
 
+    void blackman(int steps) {
+        for (int i = 0; i <= steps; i++) {
+            _window->at<float>(0, i) = 0.42 -
+                                       0.5 * cos((2.0 * PI * i) / steps) +
+                                       0.08 * cos(4.0 * PI * i / steps);
+        }
+
+    }
+
+    void hamming(int steps) {
+        for (int i = 0; i <= steps; i++) {
+            _window->at<float>(0, i) = 0.54 - 0.46 * cos((2.0 * PI * i) / steps);
+        }
+    }
+
+    void bartlett(int steps) {
+        float half = steps / 2.0;
+        float inv = 2.0 / steps;
+        for (int i = 0; i <= steps; i++) {
+            _window->at<float>(0, i) = inv * (half - abs(i - half));
+        }
+    }
+
+    void createWindow(int windowType) {
+        typedef void(Specgram::*winFunc)(int);
+        winFunc funcs[] = {&Specgram::none, &Specgram::hann,
+                           &Specgram::blackman, &Specgram::hamming,
+                           &Specgram::bartlett};
+        assert(windowType >= 0);
+        if (windowType >= (int) (sizeof(funcs) / sizeof(funcs[0]))) {
+            throw std::runtime_error("Unsupported window function");
+        }
+        int steps = _windowSize - 1;
+        assert(steps > 0);
+        (this->*(funcs[windowType]))(steps);
+    }
+
     void applyWindow(Mat& signal) {
+        if (_window == 0) {
+            return;
+        }
         for (int i = 0; i < signal.rows; i++) {
             signal.row(i) = signal.row(i).mul((*_window));
         }
@@ -129,7 +180,8 @@ private:
     }
 
 private:
-    int                         _maxDuration;
+    // Maximum duration in milliseconds.
+    int                         _clipDuration;
     // Window size and stride are in terms of samples.
     int                         _windowSize;
     int                         _stride;

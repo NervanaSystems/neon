@@ -18,8 +18,11 @@ This must be kept in sync with loader/media.hpp.
 """
 
 import math
+import logging
 import numpy as np
 import ctypes as ct
+
+logger = logging.getLogger(__name__)
 
 
 class MediaType(object):
@@ -135,33 +138,42 @@ class VideoParams(MediaParams):
 
 class AudioParams(MediaParams):
     _fields_ = [('sampling_freq', ct.c_int),
-                # Whether input must be resampled.
+                # Whether input must be resampled
                 ('resample', ct.c_bool),
-                # Maximum duration in seconds.
-                ('max_duration', ct.c_int),
+                # Maximum duration in milliseconds
+                ('clip_duration', ct.c_int),
+                # Frame duration in milliseconds
+                ('frame_duration', ct.c_int),
                 ('overlap_percent', ct.c_int),
-                # Type of windowing.
-                ('window', ct.c_int),
-                ('scale_factor', ct.c_float),
-                # The rest are automatically computed.
+                # Type of windowing
+                ('window_func', ct.c_char * 16),
+                # Used to scale the X dimension of the spectrogram
+                ('time_scale_factor', ct.c_float),
+                # Used to scale the Y dimension of the spectrogram
+                ('freq_scale_factor', ct.c_float),
+                # The rest are automatically computed
                 ('window_size', ct.c_int),
                 ('overlap', ct.c_int),
                 ('stride', ct.c_int),
                 ('time_steps', ct.c_int),
-                ('num_freqs', ct.c_int)]
+                ('num_freqs', ct.c_int),
+                ('window_type', ct.c_int)]
     _defaults_ = {'resample': False,
+                  'frame_duration': 10,
                   'overlap_percent': 30,
-                  'window': 1,
-                  'scale_factor': 1.0,
-                  'window_size': 0,
-                  'overlap': 0,
-                  'stride': 0,
-                  'time_steps': 0,
-                  'num_freqs': 0}
-    _windows_ = {'rectangular': 0,
+                  'window_func': 'hann',
+                  'time_scale_factor': 1.0,
+                  'freq_scale_factor': 1.0,
+                  'window_size': -1,
+                  'overlap': -1,
+                  'stride': -1,
+                  'time_steps': -1,
+                  'num_freqs': -1,
+                  'window_type': -1}
+    _windows_ = {'none': 0,
                  'hann': 1,
-                 'hamming': 2,
-                 'blackman': 3,
+                 'blackman': 2,
+                 'hamming': 3,
                  'bartlett': 4}
 
     def __init__(self, **kwargs):
@@ -170,17 +182,19 @@ class AudioParams(MediaParams):
                 raise ValueError('Unknown argument %s' % key)
         for key, value in self._defaults_.iteritems():
             setattr(self, key, value)
-        for key in ['window_size', 'time_steps', 'num_freqs',
-                    'overlap', 'stride']:
+        super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
+        for key in ['window_size', 'overlap', 'stride', 'time_steps',
+                    'num_freqs', 'window_type']:
             if getattr(self, key) != self._defaults_[key]:
                 raise ValueError('Argument %s must not be specified' % key)
-        super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
+        if getattr(self, 'window_func') not in self._windows_.keys():
+            raise ValueError('Unknown window function: %s' %
+                             getattr(self, 'window_func'))
         self.set_shape()
 
     def set_shape(self):
         self.channel_count = 1
-        # Consider each frame as 10ms long.
-        samples_per_frame = self.sampling_freq // 100
+        samples_per_frame = self.sampling_freq * self.frame_duration // 1000
         # Get the closest power of 2.
         log = int(math.log(samples_per_frame) / math.log(2))
         min_pow = 2 ** log
@@ -191,15 +205,18 @@ class AudioParams(MediaParams):
         else:
             self.window_size = min_pow
 
+        real_frame_duration = 1000 * self.window_size // self.sampling_freq
+        logger.info('Effective frame duration: %dms', real_frame_duration)
         assert self.overlap_percent < 100
         self.overlap = self.window_size * self.overlap_percent // 100
         self.stride = self.window_size - self.overlap
         self.time_steps = (
-            (self.max_duration * self.sampling_freq -
+            (self.clip_duration * self.sampling_freq // 1000 -
              self.window_size) // self.stride) + 1
         self.num_freqs = (self.window_size // 2) + 1
-        self.width = int(self.time_steps * self.scale_factor)
-        self.height = int(((self.window_size // 2) + 1) * self.scale_factor)
+        self.width = int(self.time_steps * self.time_scale_factor)
+        self.height = int(((self.window_size // 2) + 1) * self.freq_scale_factor)
+        self.window_type = self._windows_[self.window_func]
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)
