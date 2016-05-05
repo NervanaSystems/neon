@@ -29,20 +29,20 @@ logger = logging.getLogger(__name__)
 
 class Model(NervanaObject):
     """
-    Basic model class which stores a list of layers describing the model. Can train the layer
-    weights on a dataset, evaluate on a test set and serialize the mode.
-    Additional functionality can be added to fit through callback functions.
+    Class which stores a list of layers describing the model. Can train the layer
+    weights on a dataset, evaluate on a test set and serialize the model.
+    Additional functionality can be added to the fit method through callback functions.
 
     Arguments:
-        layers: layer container, or a list of layers (that will be containerized),
+        layers: layer container, a list of layers (that will be containerized),
                 or a serialized model description
-        dataset (iterator): Data set (ignored, will be removed)
+        dataset (NervanaDataIterator): Data set (ignored, will be removed)
         weights_only (bool): set to True if you do not want to recreate layers
                              and states during deserialization from a serialized model
                              description.  Defaults to False.
         name (str): Model name.  Defaults to "model"
-        optimizer (Optimizer): Optimizer object which defines the learning rule
-                               for updating model parameters (ie DescentMomentum, AdaDelta)
+        optimizer (Optimizer): Optimizer object which defines the learning rule for updating
+                               model parameters (i.e., GradientDescentMomentum, Adadelta)
     """
 
     def __init__(self, layers, dataset=None, weights_only=False, name="model", optimizer=None):
@@ -75,6 +75,9 @@ class Model(NervanaObject):
 
     @property
     def layers_to_optimize(self):
+        """
+        Helper function to return the layers which will be optimized.
+        """
         return self.layers.layers_to_optimize
 
     def set_shortcut(self):
@@ -92,6 +95,14 @@ class Model(NervanaObject):
             pass
 
     def initialize(self, dataset, cost=None):
+        """
+        Propagate shapes through the layers to configure, then allocate space.
+
+        Arguments:
+            dataset (NervanaDataIterator): Dataset iterator to perform initialization on
+            cost (Cost): Defines the function which the model is minimizing based
+                         on the output of the last layer and the input labels.
+        """
         if self.initialized:
             return
 
@@ -122,14 +133,14 @@ class Model(NervanaObject):
         defined in optimizer.
 
         Arguments:
-            dataset (iterator): An iterable of minibatches where each
+            dataset (NervanaDataIterator): An iterable of minibatches where each
                 element is a (x, y) tuple where x is the input data and y are the labels.
                 x is of dimension (feature_size, batch_size)
                 y is of dimension (label_size, batch_size)
-                Length of the iterator is num_batches which is num_data / batch_size
+                Length of the iterator is num_batches which is num_data / batch_size.
             cost (Cost): Defines the function which the model is minimizing based
-                on the output of the last layer and the input labels
-            optimizer (Optimizer): Defines the learning rule for updating the model parameters
+                         on the output of the last layer and the input labels.
+            optimizer (Optimizer): Defines the learning rule for updating the model parameters.
             num_epochs: Number of times to iterate over the dataset.
             callbacks (Callbacks): Defines callbacks to run at the end of each mini-batch / epoch.
         """
@@ -159,7 +170,7 @@ class Model(NervanaObject):
         Helper function for fit which performs training on a dataset for one epoch.
 
         Arguments:
-            dataset (iterable): Dataset iterator to perform fit on
+            dataset (NervanaDataIterator): Dataset iterator to perform fit on
         """
         epoch = self.epoch_index
         self.total_cost[:] = 0
@@ -192,7 +203,7 @@ class Model(NervanaObject):
         Forward propagates a minibatch x through the model.
 
         Arguments:
-            x (Tensor): Input minibatch data
+            x (Tensor): Input minibatch data.
             inference (bool): Flag for performing training or inference
                 Only affects batch norm and dropout layers.
 
@@ -207,6 +218,9 @@ class Model(NervanaObject):
 
         Arguments:
             delta (Tensor): Derivative of cost with respect to the last layer's output
+
+        Returns:
+            Tensor: Deltas to propagate to the next layer
         """
         return self.layers.bprop(delta)
 
@@ -215,8 +229,11 @@ class Model(NervanaObject):
         Evaluates a model on a dataset according to an input metric.
 
         Arguments:
-            datasets (iterable): dataset to evaluate on.
+            datasets (NervanaDataIterator): dataset to evaluate on.
             metric (Cost): what function to evaluate dataset on.
+
+        Returns:
+            Host numpy array: the error of the final layer for the evaluation dataset
         """
         self.initialize(dataset)
         running_error = np.zeros((len(metric.metric_names)), dtype=np.float32)
@@ -240,7 +257,7 @@ class Model(NervanaObject):
         Get the activation outputs of the final model layer for the dataset
 
         Arguments:
-            dataset (iterable): Dataset iterator to perform fit on
+            dataset (NervanaDataIterator) Dataset iterator to perform fit on
 
         Returns:
             Host numpy array: the output of the final layer for the entire Dataset
@@ -271,6 +288,10 @@ class Model(NervanaObject):
         """
         Gets a description of the model required to reconstruct the model with
         no weights like from a yaml file.
+
+        Arguments:
+            get_weights:  (Default value = False)
+            keep_states:  (Default value = False)
 
         Returns:
             dict: Description of each component of the model.
@@ -324,6 +345,9 @@ class Model(NervanaObject):
         """
         .. deprecated:: 1.1.4
            Use :func:`load_params` instead
+
+        Arguments:
+            weight_path:
         """
         logger.warning('Calling deprecated load_weights function.  Use '
                        'load_params instead')
@@ -338,8 +362,7 @@ class Model(NervanaObject):
             model_dict (dict): dictionary describing the model including layers,
                                cost, optimizers, backend settings, etc.
                                generated by the serialize function
-            data (iterator):   Data set (ignored, will be removed)
-
+            data (NervanaDataIterator):   Data set (ignored, will be removed)
             load_states (bool):  if False, then only the weights will be loaded
                                  into a model in which the layers have already been
                                  created, otherwise will (re)create the layers from
@@ -414,39 +437,52 @@ class Model(NervanaObject):
 
     def set_batch_size(self, N):
         """
-        Set the actual minibatch size, so eventhough the buffers are allocated considering
+        Set the actual minibatch size, so even though the buffers are allocated considering
         excessive padding, the processing for some layers may be shortened.
         Currently most of the neon layers don't use that to control the processing. The
         interface is here only for when someone wants to set that information and experiment.
+
+        Arguments:
+            N:
+
+        Returns:
+
         """
         return self.layers.set_batch_size(N)
 
     def set_seq_len(self, S):
         """
-        Set the actual minibatch sequence length, so eventhough the buffers are allocated
+        Set the actual minibatch sequence length, so even though the buffers are allocated
         considering excessive padding, the processing for some layers may be shortened.
         Currently most of the neon layers don't use that to control the processing. The
         interface is here only for when someone wants to set that information and experiment.
+
+        Arguments:
+            S:
+
+        Returns:
+
         """
         return self.layers.set_seq_len(S)
 
     def benchmark(self, dataset, inference=False, cost=None, optimizer=None,
                   niterations=20, nskip=2):
         """
-        Measure runtime for computing fprop and bprop seperately, as well as
-        full minibatch run times. For inference case, only the fprop
+        Measure runtime for computing fprop and bprop separately, as well as
+        full minibatch run times. For inference case, only the fprop is measured.
 
         Arguments:
-              dataset (iterable): Dataset iterator to perform fit on
+             dataset (NervanaDataIterator) Dataset iterator to perform fit on
 
-              cost (Cost): Defines the function which the model is minimizing based
-                            on the output of the last layer and the input labels
+             cost (Cost): Defines the function which the model is minimizing based
+                          on the output of the last layer and the input labels
 
              niterations (optional, int): Number of minibatches to average over
 
-             nskip (optional, int): number of iterations at the beginning to skip
+             nskip (optional, int): Number of iterations at the beginning to skip
                                     when calculating the runtime statistics
-
+             inference (bool, optional): Is inference use case
+             optimizer (Optimizer): Defines the learning rule for updating the model parameters.
         Returns:
             dictionary with fprop, bprop run times
         """

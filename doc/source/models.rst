@@ -61,7 +61,7 @@ During training, the model iterates through mini-batches of the dataset,
 calling the forward and backward propagation functions to compute the
 gradients according to the provided ``cost`` and update the weights
 based on the ``optimizer``. The length of training is controlled by the
-``num_epoch`` argument. Callbacks can also be configured to end training
+``num_epochs`` argument. Callbacks can also be configured to end training
 when certain exit conditions are met.
 
 .. code-block:: python
