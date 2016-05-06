@@ -1284,7 +1284,8 @@ class ColorNoise(Layer):
 
     Notes:
 
-    .. [Krizhevsky2012] https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks
+    .. [Krizhevsky2012] https://papers.nips.cc/paper/\
+4824-imagenet-classification-with-deep-convolutional-neural-networks
     """
 
     def __init__(self, colorpca=None, colorstd=None, noise_coeff=0.1, name="ColorNoiseLayer"):
