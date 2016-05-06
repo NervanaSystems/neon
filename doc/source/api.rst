@@ -30,11 +30,11 @@ API for specific function definitions.
     :py:mod:`neon.backends` | Computational backend (CPU or GPU) | :doc:`neon backend<backends>`
     :py:mod:`neon.data` | Data loading and handling | :doc:`Data loading<loading_data>`, :doc:`Datasets<datasets>`
     :py:mod:`neon.models` | Model architecture | :doc:`Models<models>`
-    :py:mod:`neon.layers` | Layer objects | :doc:`Layers<layers>`, :doc:`Creating new layers<creating_new_layers>`
+    :py:mod:`neon.layers` | Layer objects | :doc:`Layers<layers>`, :doc:`Creating new layers<creating_new_layers>`, :doc:`Layer containers<layer_containers>`
     :py:mod:`neon.initializers` | Weight initializer methods | :doc:`Initializers<initializers>`
-    :py:mod:`neon.transforms` | Activation functions and Costs/Metrics | :doc:`Costs and Metrics<costs>`
+    :py:mod:`neon.transforms` | Activation functions and Costs/Metrics | :doc:`Activations<activations>`, :doc:`Costs and Metrics<costs>`
     :py:mod:`neon.callbacks` | Callbacks during model training | :doc:`Callbacks<callbacks>`
-    :py:mod:`neon.optimizers` | Learning algorithms | :doc:`Optimizers<optimizers>`
+    :py:mod:`neon.optimizers` | Learning algorithms | :doc:`Optimizers<optimizers>`, :doc:`Learning schedules<learning_schedules>`
     :py:mod:`neon.visualizations` | Visualization of training cost and weight histograms | :doc:`Visualizing results<tools>`
     :py:mod:`neon.util` | Utility module |
 
@@ -168,8 +168,13 @@ Common Layers
     neon.layers.layer.LookupTable
     neon.layers.layer.Activation
     neon.layers.layer.BatchNorm
+    neon.layers.layer.BatchNormAutodiff
     neon.layers.layer.Pooling
     neon.layers.layer.LRN
+    neon.layers.layer.DataTransform
+    neon.layers.layer.ColorNoise
+    neon.layers.layer.BranchNode
+    neon.layers.layer.SkipNode
 
 Convolutional Layers
 
@@ -195,6 +200,7 @@ Recurrent Layers
     neon.layers.recurrent.BiLSTM
     neon.layers.recurrent.DeepBiRNN
     neon.layers.recurrent.DeepBiLSTM
+    neon.layers.recurrent.RecurrentOutput
     neon.layers.recurrent.RecurrentSum
     neon.layers.recurrent.RecurrentMean
     neon.layers.recurrent.RecurrentLast
@@ -207,14 +213,15 @@ should use the other containers.
     :toctree: generated/
     :nosignatures:
 
-    neon.layers.layer.BranchNode
-    neon.layers.layer.SkipNode
     neon.layers.container.LayerContainer
     neon.layers.container.Sequential
     neon.layers.container.Tree
+    neon.layers.container.SingleOutputTree
+    neon.layers.container.Broadcast
+    neon.layers.container.MergeSum
     neon.layers.container.MergeBroadcast
     neon.layers.container.MergeMultistream
-
+    neon.layers.container.RoiPooling
 
 Generic cost layers are implemented in the following classes. Note that these
 classes subclass from `NervanaObject`, not any base layer class.

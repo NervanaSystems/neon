@@ -81,7 +81,7 @@ that model is constructed from a list of containers.
 .. figure:: assets/tree_container.png
 
 An example of how to create a branching model using a Tree container is
-provided in ``mnist_branch.py``.
+provided in `mnist_branch.py <https://github.com/NervanaSystems/neon/blob/master/examples/mnist_branch.py>`__.
 
 During training, the backpropagated errors of each branch are combined
 using the weighting parameters in the ``alphas`` list. By default, all

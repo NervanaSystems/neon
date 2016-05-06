@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def interpret_in_shape(xshape):
     """
     Helper function to interpret the tensor layout of preceding layer to handle non-recurrent,
-    recurrent, and local layers
+    recurrent, and local layers.
     """
     if isinstance(xshape, int):
         return (xshape, 1)
@@ -74,25 +74,25 @@ class Layer(NervanaObject):
 
     def nested_str(self, level=0):
         """
-        Utility function for displaying layer info with a given indentation level
+        Utility function for displaying layer info with a given indentation level.
 
         Arguments:
             level (int, optional): indentation level
+
+        Returns:
+            str: layer info at the given indentation level
         """
 
         return "  " * level + str(self)
 
     def configure(self, in_obj):
         """
-        sets shape based parameters of this layer given an input tuple or int
-        or input layer
+        Set shape based parameters of this layer given an input tuple, int
+        or input layer.
 
         Arguments:
-            in_obj (int, tuple, Layer or Tensor or dataset): object that provides shape
-                                                             information for layer
-
-        Returns:
-            (tuple): shape of output data
+            in_obj (int, tuple, Layer, Tensor or dataset): object that provides shape
+                                                           information for layer
         """
         if isinstance(in_obj, Layer):
             self.prev_layer = in_obj
@@ -110,11 +110,11 @@ class Layer(NervanaObject):
 
     def allocate(self, shared_outputs=None):
         """
-        Allocates output buffer to store activations from fprop.
+        Allocate output buffer to store activations from fprop.
         Don't reallocate if it already exists.
-        Only allocate space if layer owns its own output (i.e. bias, activation work in-place,
-        so do not own their output).
-        outputs can be allocated from a pre-allocated pool if shared_outputs is provided
+        Only allocate space if layer owns its own output (e.g., bias and activation work
+        in place, so do not own their output).
+        Outputs can be allocated from a pre-allocated pool if shared_outputs is provided.
 
         Arguments:
             shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
@@ -131,12 +131,11 @@ class Layer(NervanaObject):
         """
         Use pre-allocated (by layer containers) list of buffers for backpropagated error.
         Only set deltas for layers that own their own deltas
-        Only allocate space if layer owns its own deltas (i.e. bias, activation work in-place,
+        Only allocate space if layer owns its own deltas (e.g., bias and activation work in-place,
         so do not own their deltas).
 
         Arguments:
             delta_buffers (list): list of pre-allocated tensors (provided by layer container)
-
         """
         if self.next_layer is not None and self.next_layer.parallelism != self.parallelism:
             self.owns_delta = True
@@ -152,6 +151,12 @@ class Layer(NervanaObject):
             self.deltas = None
 
     def set_next(self, layer):
+        """
+        Set next_layer to provided layer.
+
+        Arguments:
+            layer (layer): Next layer
+        """
         self.next_layer = layer
 
     def fprop(self, inputs, inference=False):
@@ -196,21 +201,28 @@ class Layer(NervanaObject):
 
     def get_terminal(self):
         """
-        Used for recursively getting final nodes from layer containers
+        Used for recursively getting final nodes from layer containers.
         """
         return self
 
     def serialize(self):
         """
-        Get state parameters for this layer
+        Get state parameters for this layer.
 
         Returns:
-            ?: whatever data this model wants to receive in order to restore state
+            varies: whatever data this model wants to receive in order to restore state
         """
         if self.has_params:
             return self.get_params()
 
     def load_weights(self, pdict, load_states=True):
+        """
+        Load weights.
+
+        Arguments:
+            pdict:
+            load_states:  (Default value = True)
+        """
         self.set_params(pdict)
         if load_states:
             self.set_states(pdict)
@@ -226,18 +238,24 @@ class Layer(NervanaObject):
         pass
 
     def set_batch_size(self, N):
+        """
+        Set minibatch size.
+
+        Arguments:
+            N (int): minibatch size
+        """
         self.actual_bsz = N
 
     def set_seq_len(self, S):
+        """
+        Set sequence length.
+
+        Arguments:
+            S (int): sequence length
+        """
         self.actual_seq_len = S
 
     def get_description(self, **kwargs):
-        """
-        Get layer parameters. All parameters are needed for optimization, but
-        only Weights are serialized.
-
-        Arguments:
-        """
         return super(Layer, self).get_description(**kwargs)
 
 
@@ -270,9 +288,15 @@ class BranchNode(Layer):
             self.owns_output = False
 
     def fprop(self, inputs=None, inference=False):
-
         """
-        Passes output from preceding layer on without modification
+        Passes output from preceding layer on without modification.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
         """
         if self.outputs is None and inputs is not None:
             self.outputs = inputs
@@ -280,8 +304,8 @@ class BranchNode(Layer):
 
     def configure(self, in_obj):
         """
-        sets shape based parameters of this layer given an input tuple or int
-        or input layer
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
 
         Arguments:
             in_obj (int, tuple, Layer or Tensor): object that provides shape
@@ -297,6 +321,15 @@ class BranchNode(Layer):
         return self
 
     def set_deltas(self, delta_buffers):
+        """
+        Use pre-allocated (by layer containers) list of buffers for backpropagated error.
+        Only set deltas for layers that own their own deltas
+        Only allocate space if layer owns its own deltas (e.g., bias and activation work in-place,
+        so do not own their deltas).
+
+        Arguments:
+            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+        """
         if self.deltas is None:
             self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
             delta_buffers.reverse()
@@ -304,13 +337,27 @@ class BranchNode(Layer):
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
         Branch nodes should be skipped in bprop, since their deltas are shared
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
         """
         pass
 
 
 class SkipNode(Layer):
     """
-    Layer that allows pass-through.
+    Layer that allows pass-through as in [He2015]_.
+
+    Notes:
+
+    .. [He2015] http://arxiv.org/abs/1502.03167
     """
 
     def __init__(self, name=None):
@@ -320,14 +367,22 @@ class SkipNode(Layer):
     def fprop(self, inputs=None, inference=False, beta=0):
         """
         Passes output from preceding layer on without modification
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+            beta (float, optional): Scale to apply to the outputs
+
+        Returns:
+            Tensor: output data
         """
         self.outputs[:] = self.outputs * beta + inputs
         return self.outputs
 
     def configure(self, in_obj):
         """
-        sets shape based parameters of this layer given an input tuple or int
-        or input layer
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
 
         Arguments:
             in_obj (int, tuple, Layer or Tensor): object that provides shape
@@ -342,7 +397,17 @@ class SkipNode(Layer):
 
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
-        Skip nodes just pass back what they got
+        Skip nodes just pass back what they got.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
         """
         self.deltas[:] = self.deltas * beta + alpha * error
         return self.deltas
@@ -403,6 +468,17 @@ class Pooling(Layer):
                self.out_shape[0], self.out_shape[1], self.out_shape[2])
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(Pooling, self).configure(in_obj)
         if self.nglayer is None:
             assert isinstance(self.in_shape, tuple)
@@ -419,6 +495,15 @@ class Pooling(Layer):
         return self
 
     def set_deltas(self, delta_buffers):
+        """
+        Use pre-allocated (by layer containers) list of buffers for backpropagated error.
+        Only set deltas for layers that own their own deltas
+        Only allocate space if layer owns its own deltas (e.g., bias and activation work in-place,
+        so do not own their deltas).
+
+        Arguments:
+            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+        """
         super(Pooling, self).set_deltas(delta_buffers)
         if self.op == "max":
             self.argmax = self.be.empty(self.outputs.shape, dtype=np.uint8)
@@ -426,11 +511,35 @@ class Pooling(Layer):
             self.argmax = None
 
     def fprop(self, inputs, inference=False, beta=0.0):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+            beta (float, optional): scale to apply to the outputs
+
+        Returns:
+            Tensor: output data
+        """
         self.inputs = inputs
         self.be.fprop_pool(self.nglayer, inputs, self.outputs, self.argmax, beta=beta)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         self.be.bprop_pool(self.nglayer, error, self.deltas, self.argmax, alpha, beta)
         return self.deltas
 
@@ -471,6 +580,13 @@ class ParameterLayer(Layer):
         return cls(**pdict)
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(ParameterLayer, self).allocate(shared_outputs)
         if self.W is None:
             self.init_params(self.weight_shape)
@@ -499,7 +615,7 @@ class ParameterLayer(Layer):
 
     def get_params(self):
         """
-        Get layer parameters, gradients, and states for optimization
+        Get layer parameters, gradients, and states for optimization.
         """
         return ((self.W, self.dW), self.states)
 
@@ -509,11 +625,13 @@ class ParameterLayer(Layer):
     def get_description(self, get_weights=False, keep_states=True):
         """
         Get layer parameters. All parameters are needed for optimization, but
-        only Weights are serialized.
+        only weights are serialized.
 
         Arguments:
-            keep_states (bool): Control whether all parameters are returned
-                or just weights for serialization. Defaults to True.
+            get_weights (bool, optional): Control whether all parameters are returned or
+                                          just weights for serialization.
+            keep_states (bool, optional): Control whether all parameters are returned
+                or just weights for serialization.
         """
         serial_dict = super(ParameterLayer, self).get_description()
         if get_weights:
@@ -626,6 +744,17 @@ class Convolution(ParameterLayer):
         return ((fmt_string % fmt_tuple))
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(Convolution, self).configure(in_obj)
         if self.nglayer is None:
             assert isinstance(self.in_shape, tuple)
@@ -643,12 +772,36 @@ class Convolution(ParameterLayer):
         return self
 
     def fprop(self, inputs, inference=False, beta=0.0):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+            beta (float, optional): scale to apply to the outputs
+
+        Returns:
+            Tensor: output data
+        """
         self.inputs = inputs
         self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, beta=beta,
                            bsum=self.batch_sum)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         if self.deltas:
             self.be.bprop_conv(self.nglayer, self.W, error, self.deltas,
                                alpha=alpha, beta=beta)
@@ -708,6 +861,17 @@ class Deconvolution(ParameterLayer):
                self.out_shape[0], self.out_shape[1], self.out_shape[2])
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(Deconvolution, self).configure(in_obj)
         if self.nglayer is None:
             assert isinstance(self.in_shape, tuple)
@@ -729,6 +893,13 @@ class Deconvolution(ParameterLayer):
         fprop for deconv is equivalent to bprop for conv.
         bprop_conv takes in error and deltas as "E" and "grad_I"
         for deconv, bprop_conv will take in input as "E" and output as "grad_I"
+
+        Arguments:
+            inference (bool): is inference only
+            inputs (Tensor): input data
+
+        Returns:
+            Tensor: output data
         """
         self.inputs = inputs
         self.be.bprop_conv(layer=self.nglayer, F=self.W, E=inputs, grad_I=self.outputs,
@@ -740,6 +911,16 @@ class Deconvolution(ParameterLayer):
         bprop for deconv is equivalent to fprop for conv.
         fprop_conv takes input and output as "I" and "O".
         for deconv, fprop_conv will take error as input and delta as output
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
         """
         if self.deltas:
             self.be.fprop_conv(self.nglayer, error, self.W, self.deltas, alpha=alpha, beta=beta)
@@ -771,6 +952,17 @@ class Linear(ParameterLayer):
                self.name, self.nin, self.nout)
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(Linear, self).configure(in_obj)
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
         self.out_shape = (self.nout, self.nsteps)
@@ -781,6 +973,17 @@ class Linear(ParameterLayer):
         return self
 
     def fprop(self, inputs, inference=False, beta=0.0):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+            beta (float, optional): scale to apply to the outputs
+
+        Returns:
+            Tensor: output data
+        """
 
         self.inputs = inputs
         if self.actual_bsz is None and self.actual_seq_len is None:
@@ -799,6 +1002,19 @@ class Linear(ParameterLayer):
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         if self.deltas:
             self.be.compound_dot(A=self.W.T, B=error, C=self.deltas, alpha=alpha, beta=beta)
         self.be.compound_dot(A=error, B=self.inputs.T, C=self.dW)
@@ -832,6 +1048,17 @@ class Bias(ParameterLayer):
         return layer_string
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(Bias, self).configure(in_obj)
         self.out_shape = self.in_shape
         self.bias_size = self.in_shape[0]
@@ -840,6 +1067,16 @@ class Bias(ParameterLayer):
         return self
 
     def fprop(self, inputs, inference=False):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inference (bool): is inference only
+            inputs (Tensor): input data
+
+        Returns:
+            Tensor: output data
+        """
         self.outputs = self.inputs = inputs
         if self.y is None or self.y.base is not self.outputs:
             self.y = self.outputs.reshape((self.bias_size, -1))
@@ -847,6 +1084,15 @@ class Bias(ParameterLayer):
         return self.outputs
 
     def bprop(self, error):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         if self.deltas is None:
             self.deltas = error.reshape(self.y.shape)
         self.be.sum(self.deltas, axis=1, out=self.dW)
@@ -890,17 +1136,47 @@ class Activation(Layer):
         return cls(**pdict)
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(Activation, self).configure(in_obj)
         self.out_shape = self.in_shape
         (self.nout, _) = interpret_in_shape(self.in_shape)
         return self
 
     def fprop(self, inputs, inference=False):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
+        """
         self.outputs = self.inputs = inputs
         self.outputs[:] = self.transform(self.inputs)
         return self.outputs
 
     def bprop(self, error):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         self.deltas[:] = self.transform.bprop(self.outputs) * error
         return self.deltas
 
@@ -935,25 +1211,54 @@ class DataTransform(Layer):
         return cls(**pdict)
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(DataTransform, self).configure(in_obj)
         self.out_shape = self.in_shape
         (self.nout, _) = interpret_in_shape(self.in_shape)
         return self
 
     def fprop(self, inputs, inference=False):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
+        """
         self.outputs = self.inputs = inputs
         self.outputs[:] = self.transform(self.inputs)
         return self.outputs
 
     def bprop(self, *args):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            *args (Tensor): deltas back propagated from the adjacent higher layer
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         return None
 
 
 class ColorNoise(Layer):
 
     """
-    Implements colorspace noise perturbation as described in:
-    Krizhevsky et. al., "ImageNet Classification with Deep Convolutional Neural Networks"
+    Implements colorspace noise perturbation as described in [Krizhevsky2012]_.
 
     The colorpca and colorstd values are relatively robust across different imagesets.
     We use values provided by Krizhevsky in cuda-convnet2, but given a set of images in the
@@ -976,6 +1281,10 @@ class ColorNoise(Layer):
         noise_coeff (float, optional): standard deviation of gaussian noise used to
                                        perturb the color channels.  Defaults to 0.1
         name (str, optional): Layer name. Defaults to "ColorNoiseLayer"
+
+    Notes:
+
+    .. [Krizhevsky2012] https://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks
     """
 
     def __init__(self, colorpca=None, colorstd=None, noise_coeff=0.1, name="ColorNoiseLayer"):
@@ -1001,6 +1310,17 @@ class ColorNoise(Layer):
         return "ColorNoise Layer '%s': %d feature maps" % (self.name, self.nfm)
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(ColorNoise, self).configure(in_obj)
         self.out_shape = self.in_shape
         try:
@@ -1011,12 +1331,29 @@ class ColorNoise(Layer):
         return self
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(ColorNoise, self).allocate(shared_outputs)
         self.noise_buf = self.be.empty((self.nfm, self.be.bsz))  # C x N
         # This is an expanding matrix for broadcast along the HW dimensions
         self.bmat = self.be.array(np.tile(self.colorpca, (1, self.HW)).reshape(-1, self.nfm))
 
     def fprop(self, inputs, inference=False):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
+        """
         self.outputs = inputs
         if inference:
             return self.outputs
@@ -1027,6 +1364,15 @@ class ColorNoise(Layer):
         return self.outputs
 
     def bprop(self, *args):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            *args (Tensor): deltas back propagated from the adjacent higher layer
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         return None
 
 
@@ -1189,6 +1535,17 @@ class LRN(Layer):
         self.nglayer = None
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(LRN, self).configure(in_obj)
         if self.nglayer is None:
             assert isinstance(self.in_shape, tuple)
@@ -1201,10 +1558,27 @@ class LRN(Layer):
         return self
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(LRN, self).allocate(shared_outputs)
         self.denom = self.be.iobuf(self.in_shape)
 
     def fprop(self, inputs, inference=False):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
+        """
         self.inputs = inputs
         self.be.fprop_lrn(self.nglayer,
                           inputs, self.outputs, self.denom,
@@ -1212,6 +1586,15 @@ class LRN(Layer):
         return self.outputs
 
     def bprop(self, error):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         if self.deltas:
             self.be.bprop_lrn(self.nglayer,
                               self.inputs, self.outputs, error, self.deltas, self.denom,
@@ -1251,16 +1634,44 @@ class Dropout(Layer):
                self.name, self.nout, 100*self.keep, self.caffe_mode)
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(Dropout, self).configure(in_obj)
         self.out_shape = self.in_shape
         (self.nout, _) = interpret_in_shape(self.in_shape)
         return self
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(Dropout, self).allocate(shared_outputs)
         self.keep_mask = self.be.iobuf(self.out_shape, parallelism=self.parallelism)
 
     def fprop(self, inputs, inference=False):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
+        """
         self.outputs = self.inputs = inputs
         if inference:
             return self._fprop_inference(inputs)
@@ -1271,11 +1682,37 @@ class Dropout(Layer):
         return self.outputs
 
     def _fprop_inference(self, inputs):
+        """
+        Apply the forward pass transformation to the input data.
+
+        May skip any computation not needed for doing inference only.
+
+        Calling bprop subsequently is not valid.
+
+        Arguments:
+            inputs (Tensor): input data
+
+        Returns:
+            Tensor: output data
+        """
         if not self.caffe_mode:
             self.outputs[:] = inputs * self.keep
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         if not self.deltas:
             self.deltas = error
         self.deltas[:] = self.keep_mask * error * alpha * self._train_scaling + beta * error
@@ -1320,6 +1757,17 @@ class LookupTable(ParameterLayer):
             self.nin, self.embedding_dim, self.nin)
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(LookupTable, self).configure(in_obj)
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
         self.out_shape = (self.embedding_dim, self.nin)
@@ -1339,12 +1787,35 @@ class LookupTable(ParameterLayer):
             self.outputs_t = self.be.empty_like(self.outputs.T)
 
     def fprop(self, inputs, inference=False):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
+        """
         self.inputs[:] = inputs.reshape(self.inputs.shape)
         self.outputs_t[:] = self.W.take(self.inputs, axis=0)
         self.outputs[:] = self.outputs_t.T
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         if self.update:
             self.dW[:] = 0
             self.be.compound_bprop_lut(self.nin, self.inputs, error, self.outputs_t,
@@ -1407,6 +1878,7 @@ class GeneralizedCost(NervanaObject):
 
         Returns:
             Tensor containing cost
+
         """
         self.outputs[:] = self.costfunc(inputs, targets)
         self.cost_buffer[:] = self.be.mean(self.outputs, axis=1)
@@ -1519,6 +1991,17 @@ class BatchNorm(Layer):
                self.name, self.nin, self.nsteps, self.nfm)
 
     def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(BatchNorm, self).configure(in_obj)
         self.out_shape = self.in_shape
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
@@ -1526,6 +2009,13 @@ class BatchNorm(Layer):
         return self
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(BatchNorm, self).allocate(shared_outputs)
         self.y = self.outputs.reshape((self.nfm, -1))
         self.xvar = self.be.zeros((self.nfm, 1), dtype=self.stats_dtype)
@@ -1566,6 +2056,14 @@ class BatchNorm(Layer):
         y = xhat * gamma + beta
 
         Accumulate partial results to global mean and variance buffers used for inference.
+
+        Arguments:
+            inputs:
+            inference:  (Default value = False)
+            beta:  (Default value = 0.0)
+
+        Returns:
+            Tensor: output data
         """
         if self.inputs is None or self.inputs.base is not inputs:
             self.inputs = inputs.reshape((self.nfm, -1))
@@ -1593,6 +2091,16 @@ class BatchNorm(Layer):
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
         Compute gradients for learning gamma and beta as well as layer weights.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+
         """
         assert alpha == 1.0 and beta == 0.0
         if not self.error_view:
@@ -1615,9 +2123,9 @@ class BatchNorm(Layer):
         Get layer parameters.
 
         Arguments:
-            get_weights (bool): Control whether all parameters are returned or
-                                just weights for serialization. Defaults to True.
-            keep_states (bool): Controls whether the states should be returned
+            get_weights (bool, optional): Control whether all parameters are returned or
+                                          just weights for serialization.
+            keep_states (bool, optional): Controls whether the states should be returned
         """
         serial_dict = super(BatchNorm, self).get_description()
         if get_weights:
@@ -1686,6 +2194,13 @@ class BatchNormAutodiff(BatchNorm):
     def fprop(self, inputs, inference=False):
         """
         Compute the actual fprop from op-tree, update the global estimations
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
         """
         if inference:
             return self._fprop_inference(inputs)
@@ -1707,6 +2222,12 @@ class BatchNormAutodiff(BatchNorm):
         """
         Use Autodiff.back_prop_grad to back propagate gradients for the
         corresponding tensors.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
         """
         if not self.deltas:
             self.deltas = error.reshape((self.nfm, -1))
