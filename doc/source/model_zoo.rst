@@ -41,10 +41,10 @@ from 10 categories).
    :widths: 20, 40
    :escape: ~
 
-   mnist_mlp.py, Simple MLP model
-   mnist_branch.py, Small MLP with multiple branches
-   mnist_merge.py, MLP model that demonstrates merging
-   cifar10.py, Small MLP applied to natural images
+   `mnist_mlp.py <https://github.com/NervanaSystems/neon/blob/master/examples/mnist_mlp.py>`__, Simple MLP model
+   `mnist_branch.py <https://github.com/NervanaSystems/neon/blob/master/examples/mnist_branch.py>`__, Small MLP with multiple branches
+   `mnist_merge.py <https://github.com/NervanaSystems/neon/blob/master/examples/mnist_merge.py>`__, MLP model that demonstrates merging
+   `cifar10.py <https://github.com/NervanaSystems/neon/blob/master/examples/cifar10.py>`__, Small MLP applied to natural images
 
 Convolutional Neural Networks
 -----------------------------
@@ -75,14 +75,14 @@ adapted to any dataset.
    :escape: ~
    :delim: |
 
-   cifar10_allcnn.py| CIFAR-10| All-convolutional neural network
-   cifar10_conv.py| CIFAR-10| Small all-convolution network demonstrating use of fp16 data format
-   cifar10_msra.py| CIFAR-10| Deep residual network detailed in `He, 2015`_
-   alexnet.py| ImageNet| Implementation of `AlexNet`_
-   imagenet_allcnn.py| ImageNet| All-convolutional network based on `Springenberg, 2014`_
-   vgg_bn.py| ImageNet| Simplified version of the `VGG <http://arxiv.org/abs/1409.1556>`__ network (see model zoo for full implementation)
-   fast_rcnn_alexnet.py| PASCAL VOC| Fast region-based CNN (`R-CNN`_) for object localization and detection. Uses a pre-trained `AlexNet`_ to initialize the convolution layers.
-   conv_autoencoder.py| MNIST| Autoencoder convolutional network that reconstructs the image with deconvolutional layers
+   `cifar10_allcnn.py <https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_allcnn.py>`__| CIFAR-10| All-convolutional neural network
+   `cifar10_conv.py <https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_conv.py>`__| CIFAR-10| Small all-convolution network demonstrating use of fp16 data format
+   `cifar10_msra.py <https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_msra.py>`__| CIFAR-10| Deep residual network detailed in `He, 2015`_
+   `alexnet.py <https://github.com/NervanaSystems/neon/blob/master/examples/alexnet.py>`__| ImageNet| Implementation of `AlexNet`_
+   `imagenet_allcnn.py <https://github.com/NervanaSystems/neon/blob/master/examples/imagenet_allcnn.py>`__| ImageNet| All-convolutional network based on `Springenberg, 2014`_
+   `vgg_bn.py <https://github.com/NervanaSystems/neon/blob/master/examples/vgg_bn.py>`__| ImageNet| Simplified version of the `VGG <http://arxiv.org/abs/1409.1556>`__ network (see model zoo for full implementation)
+   `fast_rcnn <https://github.com/NervanaSystems/neon/tree/master/examples/fast-rcnn>`__| PASCAL VOC| Fast region-based CNN (`R-CNN`_) for object localization and detection. Uses a pre-trained VGG16 network trained on ImageI1K to initialize the convolution layers.
+   `conv_autoencoder.py <https://github.com/NervanaSystems/neon/blob/master/examples/conv_autoencoder.py>`__| MNIST| Autoencoder convolutional network that reconstructs the image with deconvolutional layers
 
 Model Zoo
 ~~~~~~~~~
@@ -139,13 +139,13 @@ recurrent networks.
    :escape: ~
    :delim: |
 
-   word_lstm.py | PTB (word) | `LSTM`_/GRU network for prediction
-   char_lstm.py | PTB (char) | `LSTM/GRU`_ network for prediction
-   char_rnn.py| PTB (char)| One-layer RNN with tanh units for prediction
-   text_generation_lstm.py| Shakespeare | Trains an LSTM network then demonstrates how to draw samples from the network
-   timeseries_lstm.py| Time series| Trains a network on a synthetic time series and generates sequences
-   imdb_lstm.py| IMDB| Performs sentiment analysis on IMDB (see `Li, 2015`_)
-   image_caption.py| Flickr, COCO| This model connects image features with sentences to learn how to caption unseen images. Uses precomputed VGG features and a sentence to train a LSTM. See `Karpathy Neural Talk`_.
+   `word_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/word_lstm.py>`__| PTB (word) | `LSTM`_/GRU network for prediction
+   `char_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/char_lstm.py>`__| PTB (char) | `LSTM/GRU`_ network for prediction
+   `char_rnn.py <https://github.com/NervanaSystems/neon/blob/master/examples/char_rnn.py>`__| PTB (char)| One-layer RNN with tanh units for prediction
+   `text_generation_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/text_generation_lstm.py>`__| Shakespeare | Trains an LSTM network then demonstrates how to draw samples from the network
+   `timeseries_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/timeseries_lstm.py>`__| Time series| Trains a network on a synthetic time series and generates sequences
+   `imdb_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/imdb_lstm.py>`__| IMDB| Performs sentiment analysis on IMDB (see `Li, 2015`_)
+   `image_caption.py <https://github.com/NervanaSystems/neon/blob/master/examples/image_caption.py>`__| Flickr, COCO| This model connects image features with sentences to learn how to caption unseen images. Uses precomputed VGG features and a sentence to train a LSTM. See `Karpathy Neural Talk`_.
 
 Model Zoo
 ~~~~~~~~~
