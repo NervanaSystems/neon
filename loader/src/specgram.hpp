@@ -32,7 +32,7 @@ public:
     Specgram(SignalParams* params, int id)
     : _clipDuration(params->_clipDuration), _windowSize(params->_windowSize),
       _stride(params->_stride), _timeSteps(params->_timeSteps),
-      _numFreqs(params->_numFreqs),
+      _numFreqs(params->_numFreqs), _addNoise(params->_addNoise),
       _window(0), _rng(id) {
         static_assert(sizeof(short) == 2, "short is not 2 bytes");
         assert(_stride != 0);
@@ -73,6 +73,7 @@ public:
         // TODO: get rid of this assumption
         assert(raw->sampleSize() == 2);
         assert(_timeSteps * _numFreqs == bufSize);
+        addNoise(raw);
         int rows = stridedSignal(raw);
         assert(rows <= _timeSteps);
         Mat signal(rows, _windowSize, CV_16SC1, (short*) _buf);
@@ -111,6 +112,18 @@ private:
         }
     }
 
+    void addNoise(RawMedia* raw) {
+        if (_addNoise == false) {
+            return;
+        }
+        const float noiseAmp = 100;
+        int sampleCount = raw->dataSize() / raw->sampleSize();
+        short* buf = (short*) raw->getBuf(0);
+        for (int i = 0; i < sampleCount; i++) {
+           buf[i] += short(noiseAmp * (float) _rng.gaussian(1.0));
+        }
+    }
+
     void resize(Mat& img, float fx) {
         Mat dst;
         int inter = (fx > 1.0) ? CV_INTER_CUBIC : CV_INTER_AREA;
@@ -146,7 +159,6 @@ private:
                                        0.5 * cos((2.0 * PI * i) / steps) +
                                        0.08 * cos(4.0 * PI * i / steps);
         }
-
     }
 
     void hamming(int steps) {
@@ -156,10 +168,8 @@ private:
     }
 
     void bartlett(int steps) {
-        float half = steps / 2.0;
-        float inv = 2.0 / steps;
         for (int i = 0; i <= steps; i++) {
-            _window->at<float>(0, i) = inv * (half - abs(i - half));
+            _window->at<float>(0, i) = 1.0 - 2.0 * fabs(i - steps / 2.0) / steps;
         }
     }
 
@@ -219,6 +229,7 @@ private:
     float                       _scaleBy;
     float                       _scaleMin;
     float                       _scaleMax;
+    bool                        _addNoise;
     char*                       _buf;
     Mat*                        _image;
     Mat*                        _window;
