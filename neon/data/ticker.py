@@ -28,8 +28,14 @@ class Task(NervanaObject):
 
     def fetch_io(self, time_steps):
         """
-        Generate inputs, outputs numpy tensor
-        pair of size appropriate for this minibatch
+        Generate inputs, outputs numpy tensor pair of size appropriate for this minibatch.
+
+        Arguments:
+            time_steps (int): Number of time steps in this minibatch.
+
+        Returns:
+            tuple: (input, output) tuple of numpy arrays.
+
         """
         columns = time_steps * self.be.bsz
         inputs = np.zeros((self.nin, columns))
@@ -38,8 +44,15 @@ class Task(NervanaObject):
 
     def fill_buffers(self, time_steps, inputs, outputs, in_tensor, out_tensor, mask):
         """
-        Do some logistical stuff to get our numpy arrays safely to device.
-        This can almost certainly be cleaned up.
+        Prepare data for delivery to device.
+
+        Arguments:
+            time_steps (int): Number of time steps in this minibatch.
+            inputs (numpy array): Inputs numpy array
+            outputs (numpy array): Outputs numpy array
+            in_tensor (Tensor): Device buffer holding inputs
+            out_tensor (Tensor): Device buffer holding outputs
+            mask (numpy array): Device buffer for the output mask
         """
         # Put inputs and outputs, which are too small, into properly shaped arrays
         columns = time_steps * self.be.bsz
@@ -59,8 +72,8 @@ class Task(NervanaObject):
 
 class CopyTask(Task):
     """
-    The copy task from the Neural Turing Machines paper:
-        http://arxiv.org/abs/1410.5401
+    Copy task from the Neural Turing Machines paper:
+        http://arxiv.org/abs/1410.5401.
 
     This version of the task is batched.
     All sequences in the same mini-batch are the same length,
@@ -74,11 +87,11 @@ class CopyTask(Task):
 
     def __init__(self, seq_len_max, vec_size):
         """
-        Set up the attributes that Ticker needs to see.
+        Set up the attributes that ticker needs to see.
 
-        Args:
-            seq_len_max (int): longest allowable sequence length
-            vec_size (int): width of the bit-vector to be copied (was 8 in paper)
+        Arguments:
+            seq_len_max (int): Longest allowable sequence length
+            vec_size (int): Width of the bit-vector to be copied (this was 8 in paper)
         """
 
         self.seq_len_max = seq_len_max
@@ -95,10 +108,10 @@ class CopyTask(Task):
         """
         Create a new minibatch of ticker copy task data.
 
-        Args:
-            in_tensor: device buffer holding inputs
-            out_tensor: device buffer holding outputs
-            mask: device buffer for the output mask
+        Arguments:
+            in_tensor (Tensor): Device buffer holding inputs
+            out_tensor (Tensor): Device buffer holding outputs
+            mask (numpy array): Device buffer for the output mask
         """
 
         # All sequences in a minibatch are the same length for convenience
@@ -133,20 +146,21 @@ class CopyTask(Task):
 
 class RepeatCopyTask(Task):
     """
-    The repeat copy task from the Neural Turing Machines paper:
-        http://arxiv.org/abs/1410.5401
+    Repeat Copy task from the Neural Turing Machines paper:
+        http://arxiv.org/abs/1410.5401.
 
-    See comments on CopyTask class for more details.
+    See Also:
+        See comments on :py:class:`~neon.data.ticker.CopyTask` class for more details.
     """
 
     def __init__(self, seq_len_max, repeat_count_max, vec_size):
         """
-        Set up the attributes that Ticker needs to see.
+        Set up the attributes that ticker needs to see.
 
-        Args:
-            seq_len_max (int): longest allowable sequence length
-            repeat_count_max (int): max number of repeats
-            vec_size (int): width of the bit-vector to be copied (was 8 in paper)
+        Arguments:
+            seq_len_max (int): Longest allowable sequence length
+            repeat_count_max (int): Max number of repeats
+            vec_size (int): Width of the bit-vector to be copied (was 8 in paper)
         """
 
         self.seq_len_max = seq_len_max
@@ -166,10 +180,10 @@ class RepeatCopyTask(Task):
         """
         Create a new minibatch of ticker repeat copy task data.
 
-        Args:
-            in_tensor: device buffer holding inputs
-            out_tensor: device buffer holding outputs
-            mask: device buffer for the output mask
+        Arguments:
+            in_tensor (Tensor): Device buffer holding inputs
+            out_tensor (Tensor): Device buffer holding outputs
+            mask (numpy array): Device buffer for the output mask
         """
         # All sequences in a minibatch are the same length for convenience
         seq_len = np.random.randint(1, self.seq_len_max + 1)
@@ -211,19 +225,20 @@ class RepeatCopyTask(Task):
 
 class PrioritySortTask(Task):
     """
-    The priority sort task from the Neural Turing Machines paper:
-        http://arxiv.org/abs/1410.5401
+    Priority Sort task from the Neural Turing Machines paper:
+        http://arxiv.org/abs/1410.5401.
 
-    See comments on CopyTask class for more details.
+    See Also:
+        See comments on :py:class:`~neon.data.ticker.CopyTask` class for more details.
     """
 
     def __init__(self, seq_len_max, vec_size):
         """
-        Set up the attributes that Ticker needs to see.
+        Set up the attributes that ticker needs to see.
 
-        Args:
-            seq_len_max (int): longest allowable sequence length
-            vec_size (int): width of the bit-vector to be copied (was 8 in paper)
+        Arguments:
+            seq_len_max (int): Longest allowable sequence length
+            vec_size (int): Width of the bit-vector to be copied (this was 8 in paper)
         """
 
         self.seq_len_max = seq_len_max
@@ -242,7 +257,7 @@ class PrioritySortTask(Task):
         """
         Create a new minibatch of ticker priority sort task data.
 
-        Args:
+        Arguments:
             in_tensor: device buffer holding inputs
             out_tensor: device buffer holding outputs
             mask: device buffer for the output mask
@@ -312,11 +327,11 @@ class Ticker(NervanaObject):
         """
         Construct a ticker dataset object.
 
-        Args:
-            Task is an object representing the task to be trained on
-                It contains information about input and output size,
-                sequence length, etc. It also implements a synthesize function,
-                which is used to generate the next minibatch of data.
+        Arguments:
+            task: An object representing the task to be trained on
+                  It contains information about input and output size,
+                  sequence length, etc. It also implements a synthesize function,
+                  which is used to generate the next minibatch of data.
         """
 
         self.task = task
@@ -346,11 +361,12 @@ class Ticker(NervanaObject):
         Yields:
             tuple : the next minibatch of data.
 
-        The second element of the tuple is itself a tuple (t,m) with:
-            t: the actual target as generated by the task object
-            m: the output mask to account for the difference between
-                the seq_length for this minibatch and the max seq_len,
-                which is also the number of columns in X,t, and m
+        Note:
+            The second element of the tuple is itself a tuple (t,m) with:
+                t: the actual target as generated by the task object
+                m: the output mask to account for the difference between
+                    the seq_length for this minibatch and the max seq_len,
+                    which is also the number of columns in X,t, and m
         """
 
         self.batch_index = 0

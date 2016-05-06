@@ -1,3 +1,18 @@
+# ----------------------------------------------------------------------------
+# Copyright 2016 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+
 from collections import Counter
 import numpy as np
 import os
@@ -11,7 +26,7 @@ class ImageCaption(NervanaDataIterator):
     This class loads in the sentences and CNN image features for image captioning
     that have been taken from Andrej Karpathy's
     `Deep Visual-Semantic Alignments <http://cs.stanford.edu/people/karpathy/deepimagesent/>`_
-    work and converted to pkl format to avoid using scipy for loading the .mat
+    work. They are converted to pkl format to avoid using scipy for loading the .mat
     image features.
 
     The dataset assumes the model takes the precomputed VGG features of an
@@ -271,17 +286,25 @@ class ImageCaption(NervanaDataIterator):
         os.chdir(owd)
 
     def _getImage(self, img):
-        """ Get image feature """
+        """
+        Get image feature
+
+        Arguments:
+            img:
+
+        Returns:
+
+        """
         return self.features[:, img['imgid']]
 
     def iterSentences(self):
-        """ Iterate over all sentences """
+        """Iterate over all sentences"""
         for img in self.sent_data:
             for sent in img['sentences']:
                 yield sent
 
     def iterImageSentencePair(self):
-        """ Iterate over all image sentence pairs where an image may be repeated """
+        """Iterate over all image sentence pairs where an image may be repeated"""
         for i, img in enumerate(self.sent_data):
             for sent in img['sentences']:
                 out = {}
@@ -290,7 +313,7 @@ class ImageCaption(NervanaDataIterator):
                 yield out
 
     def iterImageSentenceGroup(self):
-        """ Iterate over all image sentence groups """
+        """Iterate over all image sentence groups"""
         for i, img in enumerate(self.sent_data):
             out = {}
             out['image'] = self._getImage(img)
@@ -346,7 +369,7 @@ class ImageCaptionTest(ImageCaption):
 
 class Flickr8k(Dataset):
     """
-    Flickr8k dataset container.
+    Flickr8k data set from http://cs.stanford.edu/people/karpathy/cvpr2015.pdf
     """
     def __init__(self, path='.', max_images=-1):
         url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'
@@ -368,7 +391,7 @@ class Flickr8k(Dataset):
 
 class Flickr30k(Dataset):
     """
-    Flickr30k dataset container.
+    Flickr30k data set from http://cs.stanford.edu/people/karpathy/cvpr2015.pdf
     """
     def __init__(self, path='.', max_images=-1):
         url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'
@@ -390,7 +413,7 @@ class Flickr30k(Dataset):
 
 class Coco(Dataset):
     """
-    MSCOCO dataset container.
+    MSCOCO data set from http://cs.stanford.edu/people/karpathy/cvpr2015.pdf
     """
     def __init__(self, path='.', max_images=-1):
         url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/image-caption'

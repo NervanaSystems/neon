@@ -109,6 +109,11 @@ class ImageLoader(DataLoader):
     def configure(self, repo_dir, set_name, subset_pct):
         """
         Set up all dataset config options.
+
+        Arguments:
+            repo_dir (str): repository directory.
+            set_name (str): One of "train" or "validation".
+            subset_pct (int): Percentage of dataset to use.
         """
         assert (subset_pct > 0 and subset_pct <= 100), ('subset_pct must be between 0 and 100')
         assert(set_name in ['train', 'validation'])

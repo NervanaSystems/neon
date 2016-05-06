@@ -74,12 +74,12 @@ class PASCALVOC(Dataset):
     A base class for PASCAL VOC dataset object.
     Contains variables and functions that both training and testing dataset can use.
 
-    The structure of VOC is:
+    The structure of VOC is
         $VOC_ROOT: path/VOCdevkit/VOC2007
         $VOC_ROOT/ImageSet/Main/train.txt (or test.txt etc.): image index file
-        $VOC_ROOT/Annotations/*.xml: classes and bb for each image
+        $VOC_ROOT/Annotations/\*.xml: classes and bb for each image
 
-    Args:
+    Arguments:
         image_set (str) : 'trainval' or 'test'
         year (String) : e.g. '2007'
         path (String) : Path to data file
@@ -167,6 +167,14 @@ class PASCALVOC(Dataset):
         Fetch the pre-computed selective search data which are converted from
         the MAT files available from
         http://www.cs.berkeley.edu/~rbg/fast-rcnn-data/selective_search_data.tgz
+
+        Arguments:
+            dataset:
+            year:  (Default value = None)
+            path:  (Default value = ".")
+
+        Returns:
+
         """
         dataset = 'selective-search' if year is None else '-'.join(
             [dataset, year])
@@ -183,7 +191,7 @@ class PASCALVOC(Dataset):
 
     def load_pascal_roi_groundtruth(self):
         """
-        load the voc database ground truth ROIs
+        Load the VOC database ground truth ROIs.
         """
 
         return [self.load_pascal_annotation(img) for img in self.image_index]
@@ -253,43 +261,46 @@ class PASCALVOC(Dataset):
 class PASCALVOCTrain(PASCALVOC):
 
     """
-    Construct a PASCAL VOC dataset object for training
-    It will also load precomputed selective search results as ROIs.
+    PASCAL VOC 2007 and 2012 data set for training from
+    http://host.robots.ox.ac.uk/pascal/VOC/voc2007/index.html and
+    http://host.robots.ox.ac.uk/pascal/VOC/voc2012/index.html.
+    Construct a PASCAL VOC dataset object for training and load precomputed
+    selective search results as ROIs.
 
-    The structure of VOC is:
+    The structure of VOC is
         $VOC_ROOT: path/VOCdevkit/VOC2007
         $VOC_ROOT/ImageSet/Main/train.txt (or test.txt etc.): image index file
         $VOC_ROOT/Annotations/*.xml: classes and bb for each image
 
     Notes:
         1. ground truth bounding rp are 1-based pixel coordinates, need to
-            make it 0-based for input data
-        2. bounding box coordinate: (x_min, y_min, x_max, y_max)
+           make it 0-based for input data.
+        2. bounding box coordinate: (x_min, y_min, x_max, y_max).
         3. the preprocessed data will be saved into a cached file and re-use
-            if the same configuration is chosen
+           if the same configuration is chosen.
 
-    Args:
+    Arguments:
         image_set (str) : 'trainval' or 'test'
-        year (String) : e.g. '2007'
-        path (String) : Path to data file
-        add_flipped (Bool) : whether to augment the dataset with flipped images
-        overlap_thre (Float): the IOU threshold of bbox to be used for training
-        output_type (Int, optional): the type of data iterator will yield, to
-                                     provide data for FRCN or its variants
+        year (str) : e.g. '2007'
+        path (str) : Path to data file
+        add_flipped (bool) : whether to augment the dataset with flipped images
+        overlap_thre (float): the IOU threshold of bbox to be used for training
+        output_type (int, optional): the type of data iterator will yield, to
+                    provide data for FRCN or its variants
                     0 (normal FRCN model) -- X: (image, rois) Y: (labels, (bb targets,bb mask))
                     1 (label stream with ROI) -- X: (image, rois) Y: (labels)
                     2 (label stream no ROI) -- X: image Y: labels
-        n_mb (Int, optional): how many minibatch to iterate through, can use
+        n_mb (int, optional): how many minibatch to iterate through, can use
                               value smaller than nbatches for debugging
-        img_per_batch (Int, optional): how many images processed per batch
-        rois_per_img (Int, optional): how many rois to pool from each image
-        rois_random_sample  (Bool, optional): randomly sample the ROIs. Default
+        img_per_batch (int, optional): how many images processed per batch
+        rois_per_img (int, optional): how many rois to pool from each image
+        rois_random_sample  (bool, optional): randomly sample the ROIs. Default
                                               to be true. So although each image
                                               has many ROIs, only some are randomly
                                               sample for training. When set to False,
                                               it will just take the first rois_per_img
                                               for training
-        shuffle(Bool, optional): randomly shuffle the samples in each epoch
+        shuffle(bool, optional): randomly shuffle the samples in each epoch
         """
     # how many percentage should sample from the foreground obj
     FRCN_FG_FRAC = 0.25
@@ -590,6 +601,7 @@ class PASCALVOCTrain(PASCALVOC):
         return roi_ss
 
     def combine_gt_ss_roi(self):
+        """ """
         assert len(self.roi_gt) == len(self.roi_ss) == self.num_images, \
             'ROIs from GT and SS do not match the dataset images'
 
@@ -715,32 +727,35 @@ class PASCALVOCTrain(PASCALVOC):
 class PASCALVOCInference(PASCALVOC):
 
     """
+    PASCAL VOC 2007 and 2012 data set for testing and inference from
+    http://host.robots.ox.ac.uk/pascal/VOC/voc2007/index.html and
+    http://host.robots.ox.ac.uk/pascal/VOC/voc2012/index.html.
     Construct a PASCAL VOC dataset object for testing and inference
     It still loads precomputed selective search results as ROIs.
 
     Notes:
         1. The dataset iterator will use only batch size 1.
         2. The inference/test dataset will keep all the precomputed selective
-            search to run through the model
+            search to run through the model.
         3. The preprocessed data will be saved into a cached file and re-use
-            if the same configuration is chosen
+            if the same configuration is chosen.
 
-    Args:
-        image_set (str) : 'trainval' or 'test'
-        year (String) : e.g. '2007'
-        path (String) : Path to data file
-        n_mb (Int, optional): how many minibatch to iterate through, can use
-                              value smaller than nbatches for debugging
-        img_per_batch (Int, optional): how many images processed per batch
-        rois_per_img (Int, optional): how many rois to pool from each image
-        im_fm_scale: (Float, optional): how much the image is scaled down when
+    Arguments:
+        image_set (str): 'trainval' or 'test'.
+        year (str): e.g. '2007'.
+        path (str): Path to data file.
+        n_mb (int, optional): how many minibatch to iterate through, can use
+                              value smaller than nbatches for debugging.
+        img_per_batch (int, optional): how many images processed per batch.
+        rois_per_img (int, optional): how many rois to pool from each image.
+        im_fm_scale: (float, optional): how much the image is scaled down when
                                         reaching the feature map layer. This scale
                                         is used to remove duplicated ROIs once they
                                         are projected to the feature map scale.
-        shuffle(Bool, optional): randomly shuffle the samples in each epoch
+        shuffle(bool, optional): randomly shuffle the samples in each epoch
                                  not used when doing testing for accuracy metric,
                                  but used when using this dataset iterator to do
-                                 demo, it can pick images randomly inside the dataset
+                                 demo, it can pick images randomly inside the dataset.
     """
 
     FRCN_MIN_SCALE = 600
@@ -999,7 +1014,7 @@ class PASCALVOCInference(PASCALVOC):
     def post_processing(self, outputs, db):
         """
         A post processing on the network output (backend tensor) to get the final
-        bounding boxes and class predictions
+        bounding boxes and class predictions.
 
         The post processing is done in numpy
 
@@ -1088,17 +1103,16 @@ class PASCALVOCInference(PASCALVOC):
 
     def apply_nms(self, all_boxes, thresh):
         """
-        Apply non-maximum suppression to all predicted boxes output
+        Apply non-maximum suppression to all predicted boxes output.
 
         Arguments:
             all_boxes (ndarray, (N, 5)): detections over all classes and all images
                                          all_boxes[cls][image]
-                                        N x 5 array of detections in (x1, y1, x2, y2, score)
+                                         N x 5 array of detections in (x1, y1, x2, y2, score)
             thresh (int): a theshold to eliminate the overlapping boxes
 
         Returns:
             nms_boxes (ndarray): boxes after applying the supression
-
         """
         num_classes = len(all_boxes)
         num_images = len(all_boxes[0])
@@ -1119,14 +1133,14 @@ class PASCALVOCInference(PASCALVOC):
         """
         Apply non-maximum suppression (for each class indepdently) that rejects
         a region if it has an intersection-over-union (IoU) overlap with a higher
-        scoring selected region larger than a learned threshold
+        scoring selected region larger than a learned threshold.
 
         Arguments:
             detections (ndarray): N x 4 array for detected bounding boxes
             scores (ndarray): N x 1 array for scores associated with each box
             thre (int): a theshold to eliminate the overlapping boxes
 
-        Return:
+        Returns:
             keep (ndarray): indices to keep after applying supression
 
         """
@@ -1161,7 +1175,7 @@ class PASCALVOCInference(PASCALVOC):
     def evaluation(self, all_boxes, output_dir='output'):
         """
         Evaluations on all detections which are collected into:
-        all_boxes[cls][image] = N x 5 array of detections in (x1, y1, x2, y2, score)
+        all_boxes[cls][image] = N x 5 array of detections in (x1, y1, x2, y2, score).
         It will write outputs into text format.
         Then call voc_eval function outside of this step to generate mAP metric
         using the text files.
@@ -1206,7 +1220,7 @@ class PASCALVOCInference(PASCALVOC):
 
 def calculate_bb_overlap(rp, gt):
     """
-    calculate the overlaps between 2 list of bounding rp
+    Calculate the overlaps between 2 list of bounding rp.
 
     Arguments:
         rp (list): an array of region proposals, shape (R, 4)

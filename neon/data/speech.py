@@ -18,6 +18,7 @@ Defines speech dataset handling.
 
 
 class Speech(object):
+    """ Not implemented. """
 
     def __init__(self):
         raise NotImplementedError()

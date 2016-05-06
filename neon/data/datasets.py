@@ -169,48 +169,72 @@ class I1Kmeta(Dataset):
 
 # functions below are deprecated and will be removed in a future release
 def load_i1kmeta(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_i1kmeta  # noqa
     return load_i1kmeta(path)
 
 
 def _valid_path_append(path, *args):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import _valid_path_append  # noqa
     return _valid_path_append(path, *args)
 
 
 def fetch_dataset(url, sourcefile, destfile, totalsz):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import fetch_dataset  # noqa
     return fetch_dataset(url, sourcefile, destfile, totalsz)
 
 
 def load_mnist(path=".", normalize=True):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_mnist  # noqa
     return load_mnist(path=path, normalize=normalize)
 
 
 def _compute_zca_transform(imgs, filter_bias=0.1):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import _compute_zca_transform  # noqa
     return _compute_zca_transform(imgs, filter_bias=filter_bias)
 
 
 def zca_whiten(train, test, cache=None):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import zca_whiten  # noqa
     return zca_whiten(train, test, cache=cache)
 
 
 def global_contrast_normalize(X, scale=1., min_divisor=1e-8):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import global_contrast_normalize
     return global_contrast_normalize(X, scale=scale, min_divisor=min_divisor)
 
 
 def load_cifar10(path=".", normalize=True, contrast_normalize=False, whiten=False):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_cifar10  # noqa
     return load_cifar10(path=path,
@@ -220,65 +244,98 @@ def load_cifar10(path=".", normalize=True, contrast_normalize=False, whiten=Fals
 
 
 def load_babi(path=".", task='qa1_single-supporting-fact', subset='en'):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     raise NotImplemented('load_babi has been removed')
 
 
 def load_ptb_train(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_ptb_train  # noqa
     return load_ptb_train(path)
 
 
 def load_ptb_valid(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_ptb_valid  # noqa
     return load_ptb_valid(path)
 
 
 def load_ptb_test(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_ptb_test  # noqa
     return load_ptb_test(path)
 
 
 def load_hutter_prize(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_hutter_prize  # noqa
     return load_hutter_prize(path)
 
 
 def load_shakespeare(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_shakespeare  # noqa
     return load_shakespeare(path)
 
 
 def load_flickr8k(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_flickr8k  # noqa
     return load_flickr8k(path)
 
 
 def load_flickr30k(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_flickr30k  # noqa
     return load_flickr30k(path)
 
 
 def load_coco(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_coco  # noqa
     return load_coco(path)
 
 
 def load_imdb(path):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_imdb  # noqa
     return load_imdb(path)
 
 
 def load_text(dataset, path="."):
+    """
+    Deprecated, moved to neon.data.dataloaders.
+    """
     logger.error('This function has moved, import from neon.data.dataloaders')
     from neon.data.dataloaders import load_text  # noqa
     return load_text(dataset, path=path)

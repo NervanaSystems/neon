@@ -32,12 +32,21 @@ class NervanaDataIterator(NervanaObject):
         super(NervanaDataIterator, self).__init__(name)
 
     def nbatches(self):
+        """
+        Return the number of minibatches in this dataset.
+        """
         raise NotImplemented()
 
     def reset(self):
+        """
+        Reset the starting index of this dataset back to zero.
+        """
         raise NotImplemented()
 
     def __iter__(self):
+        """
+        Define a generator that can be used to iterate over this dataset.
+        """
         raise NotImplemented()
 
 
@@ -112,11 +121,14 @@ class ArrayIterator(NervanaDataIterator):
 
     @property
     def nbatches(self):
+        """
+        Return the number of minibatches in this dataset.
+        """
         return -((self.start - self.ndata) // self.be.bsz)
 
     def reset(self):
         """
-        For resetting the starting index of this dataset back to zero.
+        Reset the starting index of this dataset back to zero.
         Relevant for when one wants to call repeated evaluations on the dataset
         but don't want to wrap around for the last uneven minibatch
         Not necessary when ndata is divisible by batch size
@@ -125,7 +137,7 @@ class ArrayIterator(NervanaDataIterator):
 
     def __iter__(self):
         """
-        Defines a generator that can be used to iterate over this dataset.
+        Define a generator that can be used to iterate over this dataset.
 
         Yields:
             tuple: The next minibatch which includes both features and labels.

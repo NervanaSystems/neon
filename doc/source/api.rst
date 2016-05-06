@@ -108,10 +108,23 @@ Dataset objects for storing data from common modalities (e.g. Text), as well as 
   neon.data.imagecaption.Flickr8k
   neon.data.imagecaption.Flickr30k
   neon.data.imagecaption.Coco
+  neon.data.pascal_voc.PASCALVOC
+  neon.data.pascal_voc.PASCALVOCTrain
+  neon.data.pascal_voc.PASCALVOCInference
   neon.data.text.Text
   neon.data.text.Shakespeare
   neon.data.text.PTB
+  neon.data.text.HutterPrize
   neon.data.text.IMDB
+  neon.data.questionanswer.QA
+  neon.data.questionanswer.BABI
+  neon.data.ticker.Ticker
+  neon.data.ticker.Task
+  neon.data.ticker.CopyTask
+  neon.data.ticker.RepeatCopyTask
+  neon.data.ticker.PrioritySortTask
+  neon.data.speech.Speech
+  neon.data.video.Video
 
 ``neon.models``
 ---------------

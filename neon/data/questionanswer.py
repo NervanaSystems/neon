@@ -25,7 +25,7 @@ from neon.data.text_preprocessing import pad_sentences
 class QA(NervanaDataIterator):
     """
     A general QA container to take Q&A dataset, which has already been
-    vectorized and create a data iterator to feed data to training
+    vectorized and create a data iterator to feed data to training.
     """
     def __init__(self, story, query, answer):
         super(QA, self).__init__(name=None)
@@ -74,7 +74,7 @@ class BABI(Dataset):
     This class loads in the Facebook bAbI dataset and vectorizes them into stories,
     questions, and answers as described in:
     "Towards AI-Complete Question Answering: A Set of Prerequisite Toy Tasks"
-    http://arxiv.org/abs/1502.05698
+    http://arxiv.org/abs/1502.05698.
 
     """
     def __init__(self, path='.', task='qa1_single-supporting-fact', subset='en'):
@@ -83,7 +83,7 @@ class BABI(Dataset):
         For a particular task, the class will read both train and test files
         and combine the vocabulary.
 
-        Args:
+        Arguments:
             path (str): Directory to store the dataset
             task (str): a particular task to solve (all bAbI tasks are train
                         and tested separately)
@@ -138,7 +138,8 @@ class BABI(Dataset):
                   subset='en'):
         """
         Fetch the Facebook bAbI dataset and load it to memory.
-        Args:
+
+        Arguments:
             path (str, optional): Local directory in which to cache the raw
                                   dataset.  Defaults to current directory.
             task (str, optional): bAbI task to load
@@ -170,7 +171,7 @@ class BABI(Dataset):
         """
         Clean a block of data and split into lines.
 
-        Args:
+        Arguments:
             data (string) : String of bAbI data.
 
         Returns:
@@ -184,7 +185,7 @@ class BABI(Dataset):
         """
         Split a sentence into tokens including punctuation.
 
-        Args:
+        Arguments:
             sentence (string) : String of sentence to tokenize.
 
         Returns:
@@ -197,7 +198,7 @@ class BABI(Dataset):
         """
         Flatten a list of data.
 
-        Args:
+        Arguments:
             data (list) : List of list of words.
 
         Returns:
@@ -210,8 +211,9 @@ class BABI(Dataset):
         """
         Parse bAbI data into stories, queries, and answers.
 
-        Args:
-            babi_data (string) : String of bAbI data.
+        Arguments:
+            babi_data (string): String of bAbI data.
+            babi_file (string): Filename with bAbI data.
 
         Returns:
             list of tuples : List of (story, query, answer) words.
@@ -239,7 +241,7 @@ class BABI(Dataset):
         """
         Convert a list of words into vector form.
 
-        Args:
+        Arguments:
             words (list) : List of words.
 
         Returns:
@@ -252,7 +254,7 @@ class BABI(Dataset):
         """
         Create one-hot representation of an answer.
 
-        Args:
+        Arguments:
             answer (string) : The word answer.
 
         Returns:
@@ -266,7 +268,7 @@ class BABI(Dataset):
         """
         Convert (story, query, answer) word data into vectors.
 
-        Args:
+        Arguments:
             data (tuple) : Tuple of story, query, answer word data.
 
         Returns:
@@ -285,7 +287,7 @@ class BABI(Dataset):
 
     def compute_statistics(self):
         """
-        Compute vocab, word index, and max length of stories and queries
+        Compute vocab, word index, and max length of stories and queries.
         """
         all_data = self.train_parsed + self.test_parsed
         vocab = sorted(reduce(lambda x, y: x | y, (set(s + q + [a]) for s, q, a in all_data)))

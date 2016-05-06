@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Functions used to load commonly available datasets.
+Deprecated, use Datasets classes instead. Functions used to load commonly available datasets.
 """
 
 import logging
