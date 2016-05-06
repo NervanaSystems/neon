@@ -53,31 +53,54 @@ class NervanaDataIterator(NervanaObject):
 class ArrayIterator(NervanaDataIterator):
 
     """
-    This generic class defines an interface to iterate over minibatches of
-    data that has been preloaded into memory in the form of numpy arrays.
-    This may be used when the entire dataset is small enough to fit within memory.
+    The ArrayIterator class iterates over minibatches of data that
+    have been preloaded into memory in the form of numpy arrays. This may be used when
+    the entire dataset (e.g. CIFAR-10 or MNIST) is small enough to fit in memory. For example::
+
+        X = np.random.rand(10000, 3072)
+        y = np.random.randint(0, 10, 10000)
+        train = ArrayIterator(X=X, y=y, nclass=10, lshape=(3, 32, 32))
+
+    The above will create the ArrayIterator object. This object implements python's __iter__
+    method, and returns one minibatch of data, formatted as tuple of (input, label), with
+    each iteration. The minibatch size is controlled by the generated backend.
+
+    X should be an ndarray of shape (# example, # features). For images, the features should be
+    formatted in (channel, height, width) order. The `lshape` keyword indicates the local shape of
+    the images in (channel, height, width) format.
+
+    For classification tasks, the labels `y` should be integers from 0 to K-1, where K is the total
+    number of classes. When `y` is not provided, the input features themselves will be returned
+    as the target values (e.g. autoencoder).
+
+    In regression tasks, where `y` is not a categorical label, set `make_onehot` to `False`.
+    For example::
+
+        X = np.random.rand(1000, 1)
+        y = 2*X + 1
+        train = ArrayIterator(X=X, y=y, make_onehot=False)
+
+    For more information, see the Loading data section of the documentation.
     """
 
     def __init__(self, X, y=None, nclass=None, lshape=None, make_onehot=True, name=None):
         """
-        Implements loading of given data into backend tensor objects. If the
-        backend is specific to an accelarator device, the data is copied over
-        to that device.
+        During initialization, the input data will be converted to backend tensor objects
+        (e.g. CPUTensor or GPUTensor). If the backend uses the GPU, the data is copied over to the
+        device.
 
         Args:
-            X (ndarray, shape: [# examples, feature size]): Input features within the
+            X (ndarray, shape: [# examples, feature size]): Input features of the
                 dataset.
-            y (ndarray, shape:[# examples, 1], optional): Labels corresponding to the
-                input features.
-                If absent, the input features themselves will be returned as
-                target values (AutoEncoder)
-            nclass (int, optional): The number of possible types of labels.
-                (not necessary if not providing labels)
+            y (ndarray, shape:[# examples, 1 or feature size], optional): Labels corresponding to
+                the input features. If absent, the input features themselves will be returned as
+                target values (e.g. autoencoder)
+            nclass (int, optional): The number of classes in labels. Not necessary if
+                labels are not provided or where the labels are non-categorical.
             lshape (tuple, optional): Local shape for the input features
-                (e.g. height, width, channel for images)
-            make_onehot (bool, optional): True if y is a label that has to be converted to one hot
-                            False if y doesn't need to be converted to one hot
-                            (e.g. in a CAE)
+                (e.g. # channels, height, width)
+            make_onehot (bool, optional): True if y is a categorical label that has to be converted
+                to a one hot representation.
 
         """
         # Treat singletons like list so that iteration follows same syntax
@@ -91,6 +114,26 @@ class ArrayIterator(NervanaDataIterator):
 
         if make_onehot and nclass is None and y is not None:
             raise AttributeError('Must provide number of classes when creating onehot labels')
+
+        # if labels provided, they must have same # examples as the features
+        if y is not None:
+
+            assert all([y.shape[0] == x.shape[0] for x in X]), \
+                "Input features and labels must have equal number of examples."
+
+            # for classifiction, the labels must be from 0 .. K-1, where K=nclass
+            if make_onehot:
+                assert y.max() <= nclass-1 and y.min() >= 0, \
+                    "Labels must range from 0 to {} (nclass-1).".format(nclass-1)
+
+                assert (np.floor(y) == y).all(), \
+                    "Labels must only contain integers."
+
+        # if local shape is provided, then the product of lshape should match the
+        # number of features
+        if lshape is not None:
+            assert all([x.shape[1] == np.prod(lshape) for x in X]), \
+                    "product of lshape {} does not match input feature size".format(lshape)
 
         # store shape of the input data
         self.shape = [x.shape[1] if lshape is None else lshape for x in X]
@@ -128,16 +171,15 @@ class ArrayIterator(NervanaDataIterator):
 
     def reset(self):
         """
-        Reset the starting index of this dataset back to zero.
-        Relevant for when one wants to call repeated evaluations on the dataset
-        but don't want to wrap around for the last uneven minibatch
-        Not necessary when ndata is divisible by batch size
+        Resets the starting index of this dataset to zero. Useful for calling
+        repeated evaluations on the dataset without having to wrap around
+        the last uneven minibatch. Not necessary when data is divisible by batch size
         """
         self.start = 0
 
     def __iter__(self):
         """
-        Define a generator that can be used to iterate over this dataset.
+        Returns a new minibatch of data with each call.
 
         Yields:
             tuple: The next minibatch which includes both features and labels.
