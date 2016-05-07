@@ -1368,6 +1368,7 @@ class GeneralizedCost(NervanaObject):
         self.costfunc = costfunc
         self.outputs = None
         self.deltas = None
+        self.cost_buffer = self.be.empty((1, 1))
 
     @classmethod
     def gen_class(cls, pdict):
@@ -1408,9 +1409,8 @@ class GeneralizedCost(NervanaObject):
             Tensor containing cost
         """
         self.outputs[:] = self.costfunc(inputs, targets)
-        cost = self.be.empty((1, 1))
-        cost[:] = self.be.mean(self.outputs, axis=1)
-        self.cost = cost.get()
+        self.cost_buffer[:] = self.be.mean(self.outputs, axis=1)
+        self.cost = self.cost_buffer.get()
         return self.cost
 
     def get_errors(self, inputs, targets):
@@ -1455,9 +1455,8 @@ class GeneralizedCostMask(GeneralizedCost):
         targets, mask = targets_mask
         masked_input = inputs * mask
         self.outputs[:] = self.costfunc(masked_input, targets)
-        cost = self.be.empty((1, 1))
-        cost[:] = self.be.mean(self.outputs, axis=1)
-        self.cost = cost.get()
+        self.cost_buffer[:] = self.be.mean(self.outputs, axis=1)
+        self.cost = self.cost_buffer.get()
         return self.cost
 
     def get_errors(self, inputs, targets_mask):
