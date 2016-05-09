@@ -14,6 +14,10 @@
 # ----------------------------------------------------------------------------
 """
 Preprocess videos by resizing and splitting videos into clips.
+
+Usage:
+    python preprocess.py <video_dir> <data_split_file>
+                         <class_ind_file> <preprocessed_dir/split_dir>
 """
 
 import cv2

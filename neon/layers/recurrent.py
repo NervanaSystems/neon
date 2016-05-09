@@ -661,7 +661,6 @@ class GRU(Recurrent):
 
         Arguments:
             deltas (Tensor): error tensors for each time step of unrolling
-            do_acts (bool, optional): Carry out activations.  Defaults to True
             alpha (float, optional): scale to apply to input for activation
                                      gradient bprop.  Defaults to 1.0
             beta (float, optional): scale to apply to output activation
