@@ -1019,6 +1019,60 @@ class Linear(ParameterLayer):
         return self.deltas
 
 
+class BinaryLinear(Linear):
+
+    """
+    A binary fully connected layer implemented as the dot product of inputs
+    and binarized weights.
+
+    Arguments:
+        nout (int, tuple): Desired size or shape of layer output
+        init (Initializer, optional): Initializer object to use for
+            initializing layer weights
+        name (str, optional): Layer name. Defaults to "BinaryLinearLayer"
+    """
+
+    def __str__(self):
+        return "BinaryLinear Layer '%s': %d inputs, %d outputs" % (
+               self.name, self.nin, self.nout)
+
+    def allocate(self, shared_outputs=None):
+        super(BinaryLinear, self).allocate(shared_outputs)
+        self.Wb = self.be.empty_like(self.W)
+
+    def fprop(self, inputs, inference=False, beta=0.0):
+        self.inputs = inputs
+        self.be.binarize(self.W, self.Wb, stochastic=False)
+
+        not_binarized = self.be.zeros(self.inputs.shape)
+        not_binarized[:] = self.be.not_equal(self.be.absolute(self.inputs), 1)
+        if np.any(not_binarized.get()):
+            gemm = self.be.compound_dot
+        else:
+            gemm = self.be.xnor_compound_dot
+
+        if self.actual_bsz is None and self.actual_seq_len is None:
+            gemm(A=self.Wb, B=self.inputs, C=self.outputs, beta=beta,
+                 bsum=self.batch_sum)
+        else:
+            bsz = self.be.bsz if self.actual_bsz is None else self.actual_bsz
+            steps = self.nsteps if self.actual_seq_len is None else self.actual_seq_len
+
+            gemm(A=self.Wb,
+                 B=self.inputs[:, :bsz * steps],
+                 C=self.outputs[:, :bsz * steps],
+                 beta=beta,
+                 bsum=self.batch_sum)
+
+        return self.outputs
+
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        if self.deltas:
+            self.be.compound_dot(A=self.Wb.T, B=error, C=self.deltas, alpha=alpha, beta=beta)
+        self.be.compound_dot(A=error, B=self.inputs.T, C=self.dW)
+        return self.deltas
+
+
 class Bias(ParameterLayer):
 
     """
@@ -1320,6 +1374,44 @@ class Affine(CompoundLayer):
         self.append(Linear(nout, init, bsum=batch_norm, name=name,
                            parallelism=parallelism))
         self.add_postfilter_layers()
+
+
+class BinaryAffine(CompoundLayer):
+
+    """
+    A binary linear layer with a learned bias and activation, implemented
+    as a list composing separate linear, bias/batchnorm and activation layers.
+
+    Arguments:
+        nout (int, tuple): Desired size or shape of layer output
+        init (Initializer, optional): Initializer object to use for
+            initializing layer weights and bias
+        bias (Initializer): an initializer to use for bias parameters
+        activation (Transform): a transform object with fprop and bprop
+            functions to apply
+        name (str): the root name for the layer, suffixes are automatically
+            generated for the component layers
+
+    """
+
+    def __init__(self, nout, init, bias=None,
+                 batch_norm=False, activation=None, name=None):
+        super(BinaryAffine, self).__init__(bias=bias, batch_norm=batch_norm,
+                                           activation=activation, name=name)
+        self.append(BinaryLinear(nout, init, bsum=batch_norm, name=name))
+        self.add_postfilter_layers()
+
+    def add_postfilter_layers(self):
+        self.init_base_name()
+        if self.bias is not None:
+            name = self.base_name+'_bias'
+            self.append(Bias(init=self.bias, name=name))
+        if self.batch_norm:
+            name = self.base_name+'_sbnorm'
+            self.append(ShiftBatchNorm(name=name))
+        if self.activation is not None:
+            name = self.base_name + '_' + self.activation.classnm
+            self.append(Activation(transform=self.activation, name=name))
 
 
 class Conv(CompoundLayer):
@@ -1850,7 +1942,7 @@ class BatchNorm(Layer):
     .. [Ioffe2015] http://arxiv.org/abs/1502.03167
     """
 
-    def __init__(self, rho=0.9, eps=1e-3, name=None):
+    def __init__(self, rho=0.9, eps=1e-3, name=None, binary=False):
         super(BatchNorm, self).__init__(name)
         self.allparams = None
         self.x = None  # used to point to reshaped view of inputs
@@ -1867,6 +1959,7 @@ class BatchNorm(Layer):
         self.gmean = None
         self.gvar = None
         self.stats_dtype = np.float64 if self.be.default_dtype is np.float64 else np.float32
+        self.binary = binary
 
     def __str__(self):
         return "BatchNorm Layer '%s': %d inputs, %d steps, %d feature maps" % (
@@ -1957,8 +2050,9 @@ class BatchNorm(Layer):
             self.xsum[:] = self.be.sum(self.inputs, axis=1)
 
         self.be.compound_fprop_bn(
-            self.inputs, self.xsum, self.xvar, self.gmean, self.gvar,
-            self.gamma, self.beta, self.outputs, self.eps, self.rho, beta, self.relu)
+            self.inputs, self.xsum, self.xvar, self.gmean, self.gvar, self.gamma,
+            self.beta, self.outputs, self.eps, self.rho, beta, self.relu,
+            binary=self.binary)
 
         return self.outputs
 
@@ -1991,7 +2085,7 @@ class BatchNorm(Layer):
         self.be.compound_bprop_bn(self.deltas, self.grad_gamma, self.grad_beta,
                                   self.error_view,
                                   self.inputs, self.xsum, self.xvar, self.gamma,
-                                  self.eps)
+                                  self.eps, binary=self.binary)
         return self.deltas
 
     def get_params(self):
@@ -2124,3 +2218,27 @@ class BatchNormAutodiff(BatchNorm):
                           [self.deltas, self.grad_gamma, self.grad_beta])
 
         return error
+
+
+class ShiftBatchNorm(BatchNorm):
+
+    """
+    Shift based batch normalization.
+
+    Reference:
+        http://arxiv.org/pdf/1602.02830v3.pdf
+    """
+    def __init__(self, rho=0.99, eps=1e-6, name=None):
+        super(ShiftBatchNorm, self).__init__(rho, eps, name, binary=True)
+
+    def _fprop_inference(self, inputs, beta=0.0):
+        """
+        Apply one linear transformation that captures normalization, gamma scaling and beta shift.
+        """
+        input_ms = self.be.empty_like(inputs)
+        input_ms[:] = inputs - self.gmean
+        inv_v = self.be.empty_like(self.gvar)
+        inv_v[:] = 1.0 / self.be.sqrt(self.gvar + self.eps)
+        xhat = self.be.shift(input_ms, inv_v)
+        self.y[:] = self.y * beta + self.be.shift(xhat, self.gamma) + self.beta
+        return self.outputs

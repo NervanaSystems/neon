@@ -471,6 +471,7 @@ numpy_call_dict = {
     "tanh": lambda left: np.tanh(left),
     "tanh2": lambda left: (np.exp2(2. * left) - 1.) / (np.exp2(2. * left) + 1.),
     "transpose": lambda left: np.transpose(left),
+    "rint": lambda left: np.rint(left),
     # binary ops
     "add": lambda left, right: left + right,
     "sub": lambda left, right: left - right,
@@ -964,6 +965,31 @@ class NervanaCPU(Backend):
         if relu:
             self.Relu(tmp, tmp)
         np.add(C._tensor * beta, tmp, C._tensor)
+
+        return C
+
+    def xnor_compound_dot(self, A, B, C, beta=0.0, bsum=None):
+        """
+        Performs XNOR GEMM
+        C = A * B
+
+        Arguments:
+            A (Tensor): left-hand side operand.
+            B (Tensor): right-hand side operand.
+            C (Tensor): output operand
+        """
+
+        # checking type and shape
+        assert A.dtype == B.dtype == C.dtype
+
+        assert A.shape[0] == C.shape[0]
+        assert B.shape[1] == C.shape[1]
+        assert A.shape[1] == B.shape[0]
+
+        np.dot(A._tensor, B._tensor, C._tensor)
+
+        if bsum is not None:
+            bsum[:] = self.sum(C, 1)
 
         return C
 
@@ -1544,7 +1570,7 @@ class NervanaCPU(Backend):
                                     array_delta[c, h, w, int(idx)] += array_E[c, ph, pw, b_id]
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
-                          accumbeta=0.0, relu=False):
+                          accumbeta=0.0, relu=False, binary=False):
         """
         Function to perform batch normalization forward pass. Included
         for API compatibility with GPU compound kernel call.
@@ -1561,18 +1587,23 @@ class NervanaCPU(Backend):
             eps (float): constant for numerical stability
             rho (float): exponential window averaging constant
         """
-        xvar[:] = self.var(x, axis=1)
+        xvar[:] = self.var(x, axis=1, binary=binary)
         xsum[:] = xsum / x.shape[1]  # reuse xsum instead of computing xmean
-        xhat = (x - xsum) / self.sqrt(xvar + eps)
 
         gmean[:] = gmean * rho + (1.0 - rho) * xsum
         gvar[:] = gvar * rho + (1.0 - rho) * xvar
 
-        outputs = y.reshape(xhat.shape)
-        outputs[:] = xhat * gamma + beta
+        if binary:
+            xhat = self.shift(x - xsum, 1.0 / self.sqrt(xvar + eps))
+            outputs = y.reshape(xhat.shape)
+            outputs[:] = self.shift(xhat, gamma) + beta
+        else:
+            xhat = (x - xsum) / self.sqrt(xvar + eps)
+            outputs = y.reshape(xhat.shape)
+            outputs[:] = xhat * gamma + beta
 
     def compound_bprop_bn(self, delta_out, grad_gamma, grad_beta, delta_in, x, xsum, xvar,
-                          gamma, eps):
+                          gamma, eps, binary=False):
         """
         Function to perform batch normalization backward pass. Included
         for API compatibility with GPU compound kernel call.
@@ -1587,12 +1618,21 @@ class NervanaCPU(Backend):
             xvar (Tensor): Batch variance
             gamma (Tensor): scale parameter
             eps (float): constant for numerical stability
+            binary (bool): Binary shift based computations
         """
-        xhat = (x - xsum) / self.sqrt(xvar + eps)
+        if binary:
+            op = self.shift
+        else:
+            def multiply(left, right):
+                return left * right
+            op = multiply
+
+        inv_v = 1.0 / self.sqrt(xvar + eps)
+        xhat = op(x - xsum, inv_v)
         grad_gamma[:] = self.sum(xhat * delta_in, axis=1)
         grad_beta[:] = self.sum(delta_in, axis=1)
-        xtmp = (xhat * grad_gamma + grad_beta) / float(x.shape[1])
-        delta_out.reshape(delta_in.shape)[:] = gamma * (delta_in - xtmp) / self.sqrt(xvar + eps)
+        xtmp = (op(xhat, grad_gamma) + grad_beta) / float(x.shape[1])
+        delta_out.reshape(delta_in.shape)[:] = op(op(delta_in - xtmp, gamma), inv_v)
 
     def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0):
         """
@@ -1654,6 +1694,48 @@ class NervanaCPU(Backend):
             return np.maximum(ary, 0, out)
         else:
             return np.maximum(ary, 0)
+
+    def binarize(self, ary, out, stochastic=True):
+        """
+        Binarizes input array
+
+        Arguments:
+            ary: tensor
+            out: reference to output
+            stochastic: stochastic or deterministic
+        """
+        if stochastic:
+            out[:] = (ary + 1)/2.0
+            self.clip(out, 0, 1, out)
+            prob = self.array(np.random.uniform(0, 1, size=ary.shape))
+            self.less_equal(prob, out, out)
+        else:
+            self.greater_equal(ary, 0, out)
+        out[:] = 2 * out - 1
+        return out
+
+    def shift(self, ary, shift_ary, value=True, out=None):
+        """
+        Shifts input array
+
+        Arguments:
+            ary: tensor
+            shift_ary: tensor of shift amount
+            out: reference to output
+        """
+        if value:
+            exp = self.rint(self.safelog(self.absolute(shift_ary))/self.log(2))
+            ap2 = self.multiply(self.sgn(shift_ary), self.exp2(exp))
+        else:
+            ap2 = self.exp2(shift_ary)
+
+        if out is None:
+            if hasattr(ary, 'shape'):
+                out = self.empty_like(ary)
+            else:
+                out = self.empty((1, 1))
+        out[:] = self.multiply(ary, ap2)
+        return out
 
     def init_mark(self):
         """

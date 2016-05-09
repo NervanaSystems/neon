@@ -20,7 +20,7 @@ from neon import NervanaObject
 from neon.backends import gen_backend
 from neon.transforms import (CrossEntropyBinary, CrossEntropyMulti, SumSquared,
                              MeanSquared, Misclassification, PrecisionRecall,
-                             SmoothL1Loss)
+                             SmoothL1Loss, SquareHingeLoss)
 
 
 def pytest_generate_tests(metafunc):
@@ -296,6 +296,28 @@ def test_smoothL1_random_derivative(backend_default, fargs):
     compare_tensors(SmoothL1Loss(), outputs,
                     targets, expected_result,
                     deriv=True, tol=1e-5)
+
+"""
+    SquareHingeLoss
+"""
+
+
+def test_square_hinge(backend_default):
+    outputs = np.array([0.3, 0.7]).reshape((2, 1))
+    targets = np.array([0, 1]).reshape((2, 1))
+    shifted_targets = np.array([-1, 1]).reshape((2, 1))
+    expected_result = np.mean(np.square(np.maximum(1 - shifted_targets * outputs, 0)), axis=0)
+    compare_tensors(SquareHingeLoss(), outputs, targets, expected_result, tol=1e-7)
+
+
+def test_square_hinge_derivative(backend_default):
+    outputs = np.array([0.3, 0.7]).reshape((2, 1))
+    targets = np.array([0, 1]).reshape((2, 1))
+    shifted_targets = np.array([-1, 1]).reshape((2, 1))
+    expected_result = -1 * shifted_targets * np.maximum(1 - shifted_targets * outputs, 0)
+    compare_tensors(SquareHingeLoss(), outputs,
+                    targets, expected_result, deriv=True, tol=1e-7)
+
 
 if __name__ == '__main__':
     be = gen_backend(backend='gpu', batch_size=50)

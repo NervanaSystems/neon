@@ -404,6 +404,23 @@ class PolySchedule(Schedule):
         return float(learning_rate * (1. - epoch // self.total_epochs) ** self.power)
 
 
+class ShiftSchedule(Schedule):
+    """
+    Binary shift learning rate schedule.
+
+    Arguments:
+        interval (int): interval in epochs the learning rate is shifted
+        shift_size (int): amount to shift
+    """
+    def __init__(self, interval, shift_size=1):
+        self.interval = interval
+        self.shift_size = shift_size
+
+    def get_learning_rate(self, learning_rate, epoch):
+        total_shift = -1 * self.shift_size * int(epoch/self.interval)
+        return float(self.be.shift(learning_rate, total_shift, value=False).get())
+
+
 class GradientDescentMomentum(Optimizer):
 
     """
@@ -853,6 +870,66 @@ class Adam(Optimizer):
             v[:] = v * self.beta_2 + (1. - self.beta_2) * grad * grad
 
             param[:] = param - l * m / (self.be.sqrt(v) + self.epsilon)
+
+
+class ShiftAdaMax(Optimizer):
+
+    """
+    Shift based AdaMax. http://arxiv.org/pdf/1602.02830v3.pdf
+    """
+
+    def __init__(self, stochastic_round=False, learning_rate=0.002, beta_1=0.9, beta_2=0.999,
+                 epsilon=1e-8, schedule=Schedule(), name="ShiftAdaMax"):
+        """
+        Args:
+            stochastic_round (bool): Set this to True for stochastic rounding.
+                                     If False rounding will be to nearest.
+                                     If True will perform stochastic rounding using default width.
+                                     Only affects the gpu backend.
+            learning_rate (float): the multiplicative coefficient of updates
+            beta_1 (float): Adam parameter beta1
+            beta_2 (float): Adam parameter beta2
+            epsilon (float): numerical stability parameter
+            schedule (neon.optimizers.optimizer.Schedule, optional): Learning rate schedule.
+                                                                     Defaults to a constant.
+        """
+        super(ShiftAdaMax, self).__init__(name=name)
+        self.beta_1 = beta_1
+        self.beta_2 = beta_2
+        self.epsilon = epsilon
+        self.learning_rate = learning_rate
+        self.stochastic_round = stochastic_round
+        self.schedule = schedule
+
+    def optimize(self, layer_list, epoch):
+        """
+        Apply the learning rule to all the layers and update the states.
+
+        Arguments:
+            param_list (list): a list of tuples of the form ((param, grad), state),
+                corresponding to parameters, grads, and states of layers to be updated
+            epoch (int): the current epoch, needed for the Schedule object.
+        """
+        t = epoch + 1
+        lrate = self.schedule.get_learning_rate(self.learning_rate, epoch)
+        l = lrate / (1 - self.beta_1 ** t)
+
+        param_list = get_param_list(layer_list)
+
+        for (param, grad), states in param_list:
+            param.rounding = self.stochastic_round
+            if len(states) == 0:
+                # running_1st_mom, running_2nd_mom
+                states.extend([self.be.zeros_like(grad) for i in range(3)])
+
+            grad = grad / self.be.bsz
+            m, v, inv_v = states
+            m[:] = m * self.beta_1 + (1. - self.beta_1) * grad
+            v[:] = self.be.maximum(v * self.beta_2, self.be.absolute(grad))
+
+            inv_v[:] = 1.0 / (v + self.epsilon)
+            param[:] = param - self.be.shift(self.be.shift(m, inv_v), l)
+            self.be.clip(param, -1, 1, param)
 
 
 class MultiOptimizer(Optimizer):

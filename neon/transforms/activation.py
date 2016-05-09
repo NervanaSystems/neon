@@ -336,3 +336,20 @@ class Logistic(Transform):
 
         """
         return self.bprop_func(y)
+
+
+class Sign(Transform):
+    """
+    Sign activation function.
+    Computes the function f(x) = Sign(x).
+    Uses straight-through estimator for bprop.
+    """
+    def __init__(self, name=None):
+        super(Sign, self).__init__(name)
+
+    def __call__(self, x):
+        self.inputs = self.be.array(x.get())
+        return self.be.binarize(x, x, stochastic=False)
+
+    def bprop(self, x):
+        return self.be.less_equal(self.be.absolute(self.inputs), 1)

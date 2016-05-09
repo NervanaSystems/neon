@@ -15,7 +15,8 @@
 
 import numpy as np
 
-from neon.optimizers import Schedule, ExpSchedule, PowerSchedule, StepSchedule
+from neon.optimizers import (Schedule, ExpSchedule, PowerSchedule, StepSchedule,
+                             ShiftSchedule)
 
 
 def test_schedule(backend_default):
@@ -89,3 +90,15 @@ def test_exp_schedule(backend_default):
     for epoch in range(10):
         lr = sch.get_learning_rate(learning_rate=lr_init, epoch=epoch)
         assert np.allclose(lr, lr_init / (1. + decay * epoch))
+
+
+def test_shift_schedule(backend_default):
+    """
+    Test binary shift learning rate schedule
+    """
+    lr_init = 0.1
+    interval = 1
+    sch = ShiftSchedule(interval)
+    for epoch in range(10):
+        lr = sch.get_learning_rate(learning_rate=lr_init, epoch=epoch)
+        assert np.allclose(lr, lr_init / (2 ** epoch))

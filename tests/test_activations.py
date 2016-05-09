@@ -17,7 +17,7 @@ Test of the activation functions
 from math import tanh as true_tanh
 import numpy as np
 from neon import NervanaObject
-from neon.transforms import Identity, Rectlin, Softmax, Tanh, Logistic
+from neon.transforms import Identity, Rectlin, Softmax, Tanh, Logistic, Sign
 from utils import allclose_with_out
 
 
@@ -205,9 +205,18 @@ def test_logistic(backend_default):
 
 
 def test_logistic_derivative(backend_default):
-        # bprop is on the output
+    # bprop is on the output
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     inputs = 1.0 / (1.0 + np.exp(-inputs))
     outputs = inputs * (1.0 - inputs)
     compare_tensors(Logistic(shortcut=False),
                     inputs, outputs, deriv=True, tol=1e-7)
+
+"""Sign
+"""
+
+
+def test_sign(backend_default):
+    inputs = np.array([-1, -.5, 0, .5, 1]).reshape((5, 1))
+    outputs = np.array([-1, -1, 1, 1, 1]).reshape((5, 1))
+    compare_tensors(Sign(), inputs, outputs, tol=0)

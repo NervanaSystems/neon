@@ -227,6 +227,29 @@ class SmoothL1Loss(Cost):
         self.funcgrad = lambda y, t: self.smoothL1grad(y - t)
 
 
+class SquareHingeLoss(Cost):
+
+    """
+    Applies the square hinge loss cost function
+    """
+
+    def squarehinge(self, y, t):
+        t = 2 * t - 1
+        return self.be.mean(self.be.square(self.be.maximum(self.margin - t * y, 0)), axis=0)
+
+    def squarehingegrad(self, y, t):
+        t = 2 * t - 1
+        return -2 * t * self.be.maximum(self.margin - t * y, 0)/float(y.shape[0])
+
+    def __init__(self, margin=1):
+        """
+        Initialize the square hinge loss cost function
+        """
+        self.margin = margin
+        self.func = lambda y, t: self.squarehinge(y, t)
+        self.funcgrad = lambda y, t: self.squarehingegrad(y, t)
+
+
 class Metric(Cost):
 
     """

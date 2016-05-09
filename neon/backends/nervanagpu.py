@@ -20,6 +20,7 @@ from builtins import round
 import os
 import sys
 import numpy as np
+import math
 import pycuda.driver as drv
 import logging
 from pycuda.tools import context_dependent_memoize
@@ -33,7 +34,7 @@ from neon import logger as neon_logger
 from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
-from neon.backends.kernels.cuda import pooling, roipooling
+from neon.backends.kernels.cuda import pooling, roipooling, binary
 from neon.util.persist import get_cache_dir
 from scikits.cuda import cublas
 
@@ -1718,6 +1719,65 @@ class NervanaGPU(Backend):
 
         return C
 
+    def xnor_compound_dot(self, A, B, C, beta=0.0, bsum=None):
+        """
+        Performs XNOR GEMM
+        C = A * B
+
+        Arguments:
+            A (Tensor): left-hand side operand.
+            B (Tensor): right-hand side operand.
+            C (Tensor): output operand
+        """
+
+        # checking type and shape
+        assert A.dtype == B.dtype == C.dtype
+        assert A.shape[0] == C.shape[0]
+        assert B.shape[1] == C.shape[1]
+        assert A.shape[1] == B.shape[0]
+
+        # kernel restriction
+        assert A.shape[1] % 32 == 0
+
+        blocks = lambda x: max(int(math.ceil(x)), 1)
+
+        pack_rows_kernel = binary.pack_rows()
+        PACK_ROW_BLOCK_SIZE = 64
+        Ab = self.empty((A.shape[0], int(A.shape[1]/32)), dtype=np.uint32)
+        pack_rows_params = [
+            (blocks(Ab.shape[0] * Ab.shape[1]/PACK_ROW_BLOCK_SIZE), 1),
+            (PACK_ROW_BLOCK_SIZE, 1, 1),
+            self.stream,
+            A.gpudata, Ab.gpudata, Ab.shape[0] * Ab.shape[1]
+        ]
+        pack_rows_kernel.prepared_async_call(*pack_rows_params)
+
+        pack_cols_kernel = binary.pack_cols()
+        PACK_COL_BLOCK_SIZE = 32
+        Bb = self.empty((int(B.shape[0]/32), B.shape[1]), dtype=np.uint32)
+        pack_cols_params = [
+            (blocks(B.shape[1]/PACK_COL_BLOCK_SIZE), blocks(B.shape[0]/PACK_COL_BLOCK_SIZE), 1),
+            (PACK_COL_BLOCK_SIZE, PACK_COL_BLOCK_SIZE, 1),
+            self.stream,
+            B.gpudata, Bb.gpudata, B.shape[0], B.shape[1]
+        ]
+        pack_cols_kernel.prepared_async_call(*pack_cols_params)
+
+        xnor_kernel = binary.XNOR_gemm()
+        XNOR_BLOCK_SIZE = 16
+        xnor_params = [
+            (blocks(B.shape[1]/XNOR_BLOCK_SIZE), blocks(A.shape[0]/XNOR_BLOCK_SIZE), 1),
+            (XNOR_BLOCK_SIZE, XNOR_BLOCK_SIZE, 1),
+            self.stream,
+            Ab.gpudata, Bb.gpudata, C.gpudata, A.shape[0], Ab.shape[1], B.shape[1]
+        ]
+        xnor_kernel.prepared_async_call(*xnor_params)
+
+        if bsum is not None:
+            bsum[:] = self.sum(C, 1)
+
+        return C
+
     def make_binary_mask(self, out, keepthresh=0.5):
         """
         Create a binary mask for dropout layers.
@@ -1755,6 +1815,39 @@ class NervanaGPU(Backend):
             OpTreeNode: the resulting op-tree
         """
         return self.less_equal(self.rand(), keep, out=out)
+
+    def shift(self, ary, shift_ary, value=True, out=None):
+        """
+        Shifts input array
+
+        Arguments:
+            ary: tensor
+            shift_ary: tensor of shift amount
+            out: reference to output
+        """
+        if not hasattr(ary, 'shape'):
+            ary = self.array(np.array(ary))
+
+        if not hasattr(shift_ary, 'shape'):
+            shift_ary = self.array(np.array(shift_ary))
+
+        if out is None:
+            out = self.empty_like(ary)
+
+        blocks = lambda x: max(int(math.ceil(x)), 1)
+
+        shift_kernel = binary.shift()
+        SHIFT_BLOCK_SIZE = 64
+        sizeary = ary.shape[0] * ary.shape[1]
+        shift_params = [
+            (blocks(sizeary/SHIFT_BLOCK_SIZE), 1),
+            (SHIFT_BLOCK_SIZE, 1, 1),
+            self.stream,
+            ary.gpudata, shift_ary.gpudata, out.gpudata, value, sizeary, shift_ary.shape[0], shift_ary.shape[1]
+        ]
+        shift_kernel.prepared_async_call(*shift_params)
+
+        return out
 
     def compensated_sum(self, sum_tensor, cmp_tensor, add_tensor, cmp_scale=1.0, add_scale=1.0):
         from neon.backends.float_ew import _get_compensated_sum_kernel, _get_fast_ew_dims
@@ -2265,7 +2358,8 @@ class NervanaGPU(Backend):
 
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
-                          accumbeta=0.0, relu=False, threads=None, repeat=1):
+                          accumbeta=0.0, relu=False, threads=None, repeat=1,
+                          binary=False):
         """
         Function to perform compound kernel call for batch normalization
         forward pass.
@@ -2282,9 +2376,10 @@ class NervanaGPU(Backend):
             eps (float): constant for numerical stability
             rho (float): exponential window averaging constant
             accumbeta (float): value to scale output by before accumulating
-            relu (bool): Compuound ReLU activation in kernel
+            relu (bool): Compound ReLU activation in kernel
             threads (int): Number of GPU threads
             repeat (int): Repeats for benchmarking
+            binary (bool): Binary shift based computations
         """
         assert xsum.dtype.type is np.float32
 
@@ -2306,7 +2401,8 @@ class NervanaGPU(Backend):
         params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
                   y.gpudata, xvar.gpudata, gmean.gpudata, gvar.gpudata,
                   x.gpudata, xsum.gpudata, gmean.gpudata, gvar.gpudata,
-                  gamma.gpudata, beta.gpudata, eps, rho, accumbeta, N, relu]
+                  gamma.gpudata, beta.gpudata, eps, rho, accumbeta, N,
+                  relu, binary]
 
         from neon.backends.float_ew import _get_bn_fprop_kernel
 
@@ -2315,8 +2411,8 @@ class NervanaGPU(Backend):
         self._execute_bn(kernel, params, repeat, x.nbytes * 2, N)
 
     def compound_bprop_bn(self, delta_out, grad_gamma, grad_beta, delta_in,
-                          x, xsum, xvar,
-                          gamma, eps, threads=None, repeat=1):
+                          x, xsum, xvar, gamma, eps, threads=None,
+                          repeat=1, binary=False):
         """
         Function to perform batch normalization forward pass.
 
@@ -2331,7 +2427,8 @@ class NervanaGPU(Backend):
             gamma (Tensor): scale parameter
             eps (float): constant for numerical stability
             threads (int): Number of GPU threads
-           repeat (int): Repeats for benchmarking
+            repeat (int): Repeats for benchmarking
+            binary (bool): Binary shift based computations
         """
         assert xsum.dtype.type is np.float32, "xsum should be fp32"
 
@@ -2346,7 +2443,7 @@ class NervanaGPU(Backend):
 
         params = [(K, 1, 1), (threads, 1, 1), x.backend.stream,
                   delta_out.gpudata, grad_gamma.gpudata, grad_beta.gpudata, delta_in.gpudata,
-                  x.gpudata, xsum.gpudata, xvar.gpudata, gamma.gpudata, eps, N]
+                  x.gpudata, xsum.gpudata, xvar.gpudata, gamma.gpudata, eps, N, binary]
 
         from neon.backends.float_ew import _get_bn_bprop_kernel
 
@@ -2896,6 +2993,24 @@ class NervanaGPU(Backend):
             msecs = end.time_since(start) / repeat
             bandwidth = a.nbytes * 2 / (msecs * 1024 * 1024)
             neon_logger.display("%7.3f msecs %4.0f GBps copy_transpose" % (msecs, bandwidth))
+
+    def binarize(self, ary, out, stochastic=True):
+        """
+        Binarizes input array
+
+        Arguments:
+            ary: tensor
+            out: reference to output
+            stochastic: stochastic or deterministic
+        """
+        if stochastic:
+            out[:] = (ary + 1)/2.0
+            self.clip(out, 0, 1, out)
+            self.less_equal(self.rand(), out, out)
+        else:
+            self.greater_equal(ary, 0, out)
+        out[:] = 2 * out - 1
+        return out
 
     def init_mark(self):
         """

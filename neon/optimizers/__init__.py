@@ -13,5 +13,5 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from neon.optimizers.optimizer import (GradientDescentMomentum, RMSProp, Adagrad,
-                                       Adadelta, Adam, Schedule, StepSchedule, PowerSchedule,
-                                       ExpSchedule, PolySchedule, MultiOptimizer)
+                                       Adadelta, Adam, ShiftAdaMax, Schedule, StepSchedule, PowerSchedule,
+                                       ExpSchedule, PolySchedule, ShiftSchedule, MultiOptimizer)

@@ -20,6 +20,8 @@ from neon.backends.cuda_templates import (_common_round,
                                           _ew_types,
                                           _common_fp16_to_fp32,
                                           _ew_strings)
+
+from neon.backends.kernels.cuda.binary import shift_element
 from neon.backends.util.source_module import SourceModule
 
 @context_dependent_memoize
@@ -63,12 +65,14 @@ def _get_bn_fprop_kernel(dtype, threads, compute_capability):
 #define THREADS %(threads)s
 
 %(common)s
+%(binary)s
 
 __global__ void batchnorm_fprop (
     %(type)s* y_out, float* xvar_out, float* gmean_out, float* gvar_out,
     const %(type)s* x_in, const float* xsum_in, const float* gmean_in,
     const float* gvar_in, const float* gamma_in, const float* beta_in,
-    const float eps, const float rho, const float accumbeta, const int N, const int relu)
+    const float eps, const float rho, const float accumbeta, const int N,
+    const int relu, bool binary)
 {
     %(share)s
 
@@ -89,7 +93,11 @@ __global__ void batchnorm_fprop (
         x_in0 += THREADS;
 
         x -= xmean;
-        xvar += x * x;
+        if (binary) {
+            xvar += shift_element(x, x, true);
+        } else {
+            xvar += x * x;
+        }
     }
     %(red)s
 
@@ -122,15 +130,36 @@ __global__ void batchnorm_fprop (
 
         x_in -= THREADS*4;
 
-        float xhat0 = (x0 - xmean) * xvar_rcp_sqrt;
-        float xhat1 = (x1 - xmean) * xvar_rcp_sqrt;
-        float xhat2 = (x2 - xmean) * xvar_rcp_sqrt;
-        float xhat3 = (x3 - xmean) * xvar_rcp_sqrt;
+        float xhat0 = 0.0f;
+        float xhat1 = 0.0f;
+        float xhat2 = 0.0f;
+        float xhat3 = 0.0f;
 
-        float y0 = xhat0 * gamma + beta;
-        float y1 = xhat1 * gamma + beta;
-        float y2 = xhat2 * gamma + beta;
-        float y3 = xhat3 * gamma + beta;
+        float y0 = 0.0f;
+        float y1 = 0.0f;
+        float y2 = 0.0f;
+        float y3 = 0.0f;
+        if (binary) {
+            xhat0 = shift_element(x0 - xmean, xvar_rcp_sqrt, true);
+            xhat1 = shift_element(x1 - xmean, xvar_rcp_sqrt, true);
+            xhat2 = shift_element(x2 - xmean, xvar_rcp_sqrt, true);
+            xhat3 = shift_element(x3 - xmean, xvar_rcp_sqrt, true);
+
+            y0 = shift_element(xhat0, gamma, true) + beta;
+            y1 = shift_element(xhat1, gamma, true) + beta;
+            y2 = shift_element(xhat2, gamma, true) + beta;
+            y3 = shift_element(xhat3, gamma, true) + beta;
+        } else {
+            xhat0 = (x0 - xmean) * xvar_rcp_sqrt;
+            xhat1 = (x1 - xmean) * xvar_rcp_sqrt;
+            xhat2 = (x2 - xmean) * xvar_rcp_sqrt;
+            xhat3 = (x3 - xmean) * xvar_rcp_sqrt;
+
+            y0 = xhat0 * gamma + beta;
+            y1 = xhat1 * gamma + beta;
+            y2 = xhat2 * gamma + beta;
+            y3 = xhat3 * gamma + beta;
+        }
 
         if (relu)
         {
@@ -172,6 +201,7 @@ __global__ void batchnorm_fprop (
 
     code = code % {
         "common"    : common_code,
+        "binary"    : shift_element(),
         "share"     : shr_code,
         "red"       : red_code,
         "threads"   : threads,
@@ -184,7 +214,7 @@ __global__ void batchnorm_fprop (
     }
     module = SourceModule(code, options=["--use_fast_math"])
     kernel = module.get_function("batchnorm_fprop")
-    kernel.prepare("PPPPPPPPPPfffII")
+    kernel.prepare("PPPPPPPPPPfffIII")
     kernel.name = "batchnorm_fprop"
     return kernel
 
@@ -242,12 +272,13 @@ def _get_bn_bprop_kernel(dtype, threads, compute_capability):
 #define THREADS %(threads)s
 
 %(common)s
+%(binary)s
 
 __global__ void batchnorm_bprop (
     %(type)s* delta_out, float* grad_gamma_out, float* grad_beta_out,
     const %(type)s* delta_in, const %(type)s* x_in, const float* xsum_in,
     const float* xvar_in, const float* gamma_in,
-    const float eps, const int N)
+    const float eps, const int N, bool binary)
 {
     %(share)s
 
@@ -274,7 +305,12 @@ __global__ void batchnorm_bprop (
         float d = %(cvt)s(__ldg(d_in0));
         d_in0 += THREADS;
 
-        float xhat = (x - xmean) * xvar_rcp_sqrt;
+        float xhat = 0.0f;
+        if (binary) {
+            xhat = shift_element(x - xmean, xvar_rcp_sqrt, true);
+        } else {
+            xhat = (x - xmean) * xvar_rcp_sqrt;
+        }
 
         grad_gamma += xhat * d;
         grad_beta  += d;
@@ -308,20 +344,52 @@ __global__ void batchnorm_bprop (
         x_in1 -= THREADS*4;
         d_in1 -= THREADS*4;
 
-        float xhat0 = (x0 - xmean) * xvar_rcp_sqrt;
-        float xhat1 = (x1 - xmean) * xvar_rcp_sqrt;
-        float xhat2 = (x2 - xmean) * xvar_rcp_sqrt;
-        float xhat3 = (x3 - xmean) * xvar_rcp_sqrt;
+        float xhat0 = 0.0f;
+        float xhat1 = 0.0f;
+        float xhat2 = 0.0f;
+        float xhat3 = 0.0f;
 
-        float xtmp0 = (xhat0 * grad_gamma + grad_beta) * rcpN;
-        float xtmp1 = (xhat1 * grad_gamma + grad_beta) * rcpN;
-        float xtmp2 = (xhat2 * grad_gamma + grad_beta) * rcpN;
-        float xtmp3 = (xhat3 * grad_gamma + grad_beta) * rcpN;
+        float xtmp0 = 0.0f;
+        float xtmp1 = 0.0f;
+        float xtmp2 = 0.0f;
+        float xtmp3 = 0.0f;
 
-        float delta0 = gamma * (d0 - xtmp0) * xvar_rcp_sqrt;
-        float delta1 = gamma * (d1 - xtmp1) * xvar_rcp_sqrt;
-        float delta2 = gamma * (d2 - xtmp2) * xvar_rcp_sqrt;
-        float delta3 = gamma * (d3 - xtmp3) * xvar_rcp_sqrt;
+        float delta0 = 0.0f;
+        float delta1 = 0.0f;
+        float delta2 = 0.0f;
+        float delta3 = 0.0f;
+
+        if (binary) {
+            xhat0 = shift_element(x0 - xmean, xvar_rcp_sqrt, true);
+            xhat1 = shift_element(x1 - xmean, xvar_rcp_sqrt, true);
+            xhat2 = shift_element(x2 - xmean, xvar_rcp_sqrt, true);
+            xhat3 = shift_element(x3 - xmean, xvar_rcp_sqrt, true);
+
+            xtmp0 = (shift_element(xhat0, grad_gamma, true) + grad_beta) * rcpN;
+            xtmp1 = (shift_element(xhat1, grad_gamma, true) + grad_beta) * rcpN;
+            xtmp2 = (shift_element(xhat2, grad_gamma, true) + grad_beta) * rcpN;
+            xtmp3 = (shift_element(xhat3, grad_gamma, true) + grad_beta) * rcpN;
+
+            delta0 = shift_element(shift_element(d0 - xtmp0, gamma, true), xvar_rcp_sqrt, true);
+            delta1 = shift_element(shift_element(d1 - xtmp1, gamma, true), xvar_rcp_sqrt, true);
+            delta2 = shift_element(shift_element(d2 - xtmp2, gamma, true), xvar_rcp_sqrt, true);
+            delta3 = shift_element(shift_element(d3 - xtmp3, gamma, true), xvar_rcp_sqrt, true);
+        } else {
+            xhat0 = (x0 - xmean) * xvar_rcp_sqrt;
+            xhat1 = (x1 - xmean) * xvar_rcp_sqrt;
+            xhat2 = (x2 - xmean) * xvar_rcp_sqrt;
+            xhat3 = (x3 - xmean) * xvar_rcp_sqrt;
+
+            xtmp0 = (xhat0 * grad_gamma + grad_beta) * rcpN;
+            xtmp1 = (xhat1 * grad_gamma + grad_beta) * rcpN;
+            xtmp2 = (xhat2 * grad_gamma + grad_beta) * rcpN;
+            xtmp3 = (xhat3 * grad_gamma + grad_beta) * rcpN;
+
+            delta0 = gamma * (d0 - xtmp0) * xvar_rcp_sqrt;
+            delta1 = gamma * (d1 - xtmp1) * xvar_rcp_sqrt;
+            delta2 = gamma * (d2 - xtmp2) * xvar_rcp_sqrt;
+            delta3 = gamma * (d3 - xtmp3) * xvar_rcp_sqrt;
+        }
 
         %(delta0_out)s
         %(delta1_out)s
@@ -345,6 +413,7 @@ __global__ void batchnorm_bprop (
 
     code = code % {
         "common"         : common_code,
+        "binary"         : shift_element(),
         "share"          : shr_code,
         "red"            : red_code,
         "threads"        : threads,
@@ -357,6 +426,6 @@ __global__ void batchnorm_bprop (
     }
     module = SourceModule(code, options=["--use_fast_math"])
     kernel = module.get_function("batchnorm_bprop")
-    kernel.prepare("PPPPPPPPfI")
+    kernel.prepare("PPPPPPPPfII")
     kernel.name = "batchnorm_bprop"
     return kernel

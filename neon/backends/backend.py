@@ -33,9 +33,9 @@ class OpCollection(object):
     zero_operand_ops = {"rand", "onehot"}
     unary_ops = {"finite", "neg", "abs", "sgn", "sqrt", "sqr", "exp", "log",
                  "exp2", "log2", "sig", "sig2", "tanh", "tanh2", "transpose",
-                 "safelog"}
+                 "safelog", "rint", "binarize"}
     binary_ops = {"assign", "add", "sub", "mul", "div", "eq", "ne", "lt", "le",
-                  "gt", "ge", "pow", "minimum", "maximum", "dot"}
+                  "gt", "ge", "pow", "minimum", "maximum", "dot", "shift"}
     reduction_ops = {"sum", "max", "min", "argmax", "argmin"}
     float_ops = zero_operand_ops | unary_ops | binary_ops
     ew_ops = float_ops - {'dot', 'transpose'}
@@ -697,6 +697,18 @@ class Backend(AbstractBackend):
         """
         return OpTreeNode.build("dot", a, b, out=out)
 
+    def xnor_compound_dot(self, A, B, C, beta=0.0):
+        """
+        Performs XNOR GEMM
+        C = A * B
+
+        Arguments:
+            A (Tensor): left-hand side operand.
+            B (Tensor): right-hand side operand.
+            C (Tensor): output operand
+        """
+        raise NotImplementedError()
+
     def add(self, a, b, out=None):
         """
         Perform element-wise addition on the operands, storing the resultant
@@ -1069,6 +1081,35 @@ class Backend(AbstractBackend):
         """
         return OpTreeNode.build("finite", a, None, out=out)
 
+    def rint(self, a, out=None):
+        """
+        Perform element-wise rounding to nearest int.
+
+        Arguments:
+            a (Tensor): input to be transformed.
+            out (Tensor, optional): where the result will be stored. If out is
+                                    None, only the op-tree will be returned.
+
+        Returns:
+            OpTreeNode: the resulting op-tree
+        """
+        return OpTreeNode.build("rint", a, None, out=out)
+
+    def binarize(self, a, stochastic=True, out=None):
+        """
+        Perform element-wise binarization.
+
+        Arguments:
+            a (Tensor): input to be transformed.
+            stochastic (Bool, optional): stochastic or deterministic
+            out (Tensor, optional): where the result will be stored. If out is
+                                    None, only the op-tree will be returned.
+
+        Returns:
+            OpTreeNode: the resulting op-tree
+        """
+        return OpTreeNode.build("binarize", a, None, stochastic=stochastic, out=out)
+
     def equal(self, a, b, out=None):
         """
         Performs element-wise equality testing on each element of left and
@@ -1204,6 +1245,25 @@ class Backend(AbstractBackend):
             OpTreeNode: the resulting op-tree
         """
         return OpTreeNode.build("minimum", a, b, out=out)
+
+    def shift(self, a, b, value=True, out=None):
+        """
+        Performs element-wise shift based on corresponding elements of left
+        and right, storing the result in out. Positive is left shift, and
+        negative is right shift. Each operand is assumed to be the same shape
+        (or broadcastable as such).
+
+        Arguments:
+            a (Tensor, numeric): left-hand side operand.
+            b (Tensor, numeric): right-hand side operand.
+            value (int): shift by value or exponent
+            out (Tensor, optional): where the result will be stored. If out is
+                                    None, only the op-tree will be returned.
+
+        Returns:
+            OpTreeNode: the resulting op-tree
+        """
+        return OpTreeNode.build("shift", a, b, value=value, out=out)
 
     def clip(self, a, a_min, a_max, out=None):
         """
@@ -1359,7 +1419,7 @@ class Backend(AbstractBackend):
             return self.multiply(self.sum(a), 1.0 / (shape[0] * shape[1]), out=out)
         return self.multiply(self.sum(a, axis=axis), 1.0 / shape[axis], out=out)
 
-    def var(self, a, axis=None, partial=None, out=None, keepdims=True):
+    def var(self, a, axis=None, partial=None, out=None, keepdims=True, binary=False):
         """
         Calculates the variance of the elements along the specified
         axes.
@@ -1379,9 +1439,16 @@ class Backend(AbstractBackend):
         Returns:
             OpTreeNode: the resulting op-tree
         """
+        if binary:
+            def self_shift(x):
+                return self.shift(x, x)
+            op = self_shift
+        else:
+            op = self.square
+
         if axis is None:
-            return self.mean(self.square(a - self.mean(a)), out=out)
-        return self.mean(self.square(a - self.mean(a, axis=axis)), axis=axis, out=out)
+            return self.mean(op(a - self.mean(a)), out=out)
+        return self.mean(op(a - self.mean(a, axis=axis)), axis=axis, out=out)
 
     def std(self, a, axis=None, partial=None, out=None, keepdims=True):
         """

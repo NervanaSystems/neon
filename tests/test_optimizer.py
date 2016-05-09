@@ -21,7 +21,8 @@ import copy
 
 from neon import NervanaObject
 from neon.backends import gen_backend
-from neon.optimizers import GradientDescentMomentum, RMSProp, Adadelta, Adam, Adagrad
+from neon.optimizers import (GradientDescentMomentum, RMSProp, Adadelta, Adam, Adagrad,
+                             ShiftAdaMax)
 from neon.optimizers import MultiOptimizer
 from neon.layers import Conv, Affine, LSTM, GRU
 from neon.initializers import Gaussian, Constant
@@ -139,6 +140,41 @@ def test_adam(backend_default):
     param_list = [
         ((wrap(param), wrap(grad)), [wrap(states[0]), wrap(states[1])])]
     compare_tensors(adam, param_list, param2, tol=1e-7, epoch=epoch)
+
+
+def test_shift_adamax(backend_default):
+    shiftadamax = ShiftAdaMax()
+    param = np.random.rand(200, 128)
+    param2 = copy.deepcopy(param)
+    grad = 0.01 * np.random.rand(200, 128)
+    grad2 = grad / 128.
+    states = [0.01 * np.random.rand(200, 128),
+              0.01 * np.random.rand(200, 128),
+              0.01 * np.random.rand(200, 128)]
+    states2 = [copy.deepcopy(states[0]),
+               copy.deepcopy(states[1])]
+    epoch = 1
+    t = epoch + 1
+    l = shiftadamax.learning_rate / (1 - shiftadamax.beta_1 ** t)
+    m, v = states2
+    m[:] = m * shiftadamax.beta_1 + (1. - shiftadamax.beta_1) * grad2
+    v[:] = np.maximum(v * shiftadamax.beta_2, np.absolute(grad2))
+    inv_v = np.random.rand(200, 128)
+    inv_v[:] = 1.0 / (v + shiftadamax.epsilon)
+
+    def safelog(left):
+        return np.log(np.maximum(left, np.exp(-50.)))
+
+    def shift(ary, shift_ary):
+        exp = np.rint(safelog(np.absolute(shift_ary))/np.log(2))
+        ap2 = np.multiply(np.sign(shift_ary), np.exp2(exp))
+        return np.multiply(ary, ap2)
+
+    param2[:] = param2 - shift(shift(m, inv_v), l)
+    np.clip(param2, -1, 1, param2)
+    param_list = [
+        ((wrap(param), wrap(grad)), [wrap(states[0]), wrap(states[1]), wrap(states[2])])]
+    compare_tensors(shiftadamax, param_list, param2, tol=1e-4, epoch=epoch)
 
 
 def test_multi_optimizer(backend_default):
