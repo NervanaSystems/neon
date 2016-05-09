@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Class definitions for stock data sets
+Class definitions for image data sets.
 """
 
 import cPickle
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 class MNIST(Dataset):
     """
-    MNIST dataset container.
+    MNIST data set from http://yann.lecun.com/exdb/mnist/
     """
     def __init__(self, path='.', subset_pct=100, normalize=True):
         super(MNIST, self).__init__('mnist.pkl.gz',
@@ -45,10 +45,10 @@ class MNIST(Dataset):
         """
         Fetch the MNIST dataset and load it into memory.
 
-        Args:
+        Arguments:
             path (str, optional): Local directory in which to cache the raw
                                   dataset.  Defaults to current directory.
-            normalize (bool, optional): whether to scale values between 0 and 1.
+            normalize (bool, optional): Whether to scale values between 0 and 1.
                                         Defaults to True.
 
         Returns:
@@ -87,16 +87,16 @@ class MNIST(Dataset):
 
 
 class CIFAR10(Dataset):
-    '''
-    CIFAR10 dataset container.
+    """
+    CIFAR10 data set from https://www.cs.toronto.edu/~kriz/cifar.html
 
     Arguments:
-        path (str): local path to copy data files
-        normalize (bool): flag to normalize data
-        whiten (bool): flag to apply whitening transform
-        pad_classes (bool): flag to pad out class count to 16
-                            for compatibility with conv layers on GPU
-    '''
+        path (str): Local path to copy data files.
+        normalize (bool): Flag to normalize data.
+        whiten (bool): Flag to apply whitening transform.
+        pad_classes (bool): Flag to pad out class count to 16
+                            for compatibility with conv layers on GPU.
+    """
     def __init__(self, path='.', subset_pct=100, normalize=True,
                  contrast_normalize=False, whiten=False, pad_classes=False):
         super(CIFAR10, self).__init__('cifar-10-python.tar.gz',
@@ -114,7 +114,7 @@ class CIFAR10(Dataset):
         """
         Fetch the CIFAR-10 dataset and load it into memory.
 
-        Args:
+        Arguments:
             path (str, optional): Local directory in which to cache the raw
                                   dataset.  Defaults to current directory.
             normalize (bool, optional): Whether to scale values between 0 and 1.
@@ -188,7 +188,7 @@ class CIFAR10(Dataset):
     @staticmethod
     def _compute_zca_transform(imgs, filter_bias=0.1):
         """
-        Compute the zca whitening transform matrix
+        Compute the zca whitening transform matrix.
         """
         logger.info("Computing ZCA transform matrix")
         meanX = np.mean(imgs, 0)
@@ -230,7 +230,7 @@ class CIFAR10(Dataset):
     @staticmethod
     def global_contrast_normalize(X, scale=1., min_divisor=1e-8):
         """
-        Subtract mean and normalize by vector norm
+        Subtract mean and normalize by vector norm.
         """
 
         X = X - X.mean(axis=1)[:, np.newaxis]

@@ -18,6 +18,7 @@ Defines video dataset handling.
 
 
 class Video(object):
+    """ Not implemented. """
 
     def __init__(self):
         raise NotImplementedError()

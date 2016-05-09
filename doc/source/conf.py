@@ -32,7 +32,7 @@ extensions = [
 ]
 
 # Autodoc settings
-autodoc_default_flags = ['members', 'undoc-members', 'inherited-members']
+autodoc_default_flags = ['members', 'undoc-members', 'inherited-members', 'show-inheritance']
 
 # Autosummary settings
 autosummary_generate = True

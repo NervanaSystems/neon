@@ -22,7 +22,7 @@ import struct
 
 
 def convert_file(iopair, keylist):
-    '''
+    """
     Function for converting from an imageset batch cpickle file into a
     flat binary with a choice of keys.
     Input file is cpickled dict with the following fields:
@@ -33,10 +33,10 @@ def convert_file(iopair, keylist):
     The following condition should be true (a label for each jpeg)
         len(dict['data']) == len(dict['labels']['l_id'])
 
-    Args:
-        iopair (tuple) : Names of input and output files.
-        keylist(list) : A list of keys to be used in the flat binary file.
-    '''
+    Arguments:
+        iopair(tuple): Names of input and output files.
+        keylist(list): A list of keys to be used in the flat binary file.
+    """
     ifname, ofname = iopair
     with open(ifname, 'r') as ifp:
         print "Converting ", ifname

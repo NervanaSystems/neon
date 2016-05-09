@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-'''
-Tools for parsing NEON model definition files (YAML formatted) and
-generating NEON model objects from the definition.
-'''
+"""
+Tools for parsing neon model definition files (YAML formatted) and
+generating neon model objects from the definition.
+"""
 
 from copy import deepcopy
 import numpy as np
@@ -60,6 +60,7 @@ def create_objects(root_yaml,
 
         be_type (str): backend either 'gpu', 'mgpu' or 'cpu'
 
+        batch_size (int): Batch size.
         rng_seed (None or int): random number generator seed
 
         device_id (int): for GPU backends id of device to use

@@ -38,11 +38,11 @@ class Text(NervanaDataIterator):
         """
         Construct a text dataset object.
 
-        Args:
+        Arguments:
             time_steps (int) : Length of a sequence.
             path (str) : Path to text file.
             vocab (python.set) : A set of unique tokens.
-            tokenizer (object) : Tokenizer object.
+            tokenizer (function) : Tokenizer function.
             onehot_input (boolean): One-hot representation of input
         """
         super(Text, self).__init__(name=None)
@@ -94,9 +94,9 @@ class Text(NervanaDataIterator):
         """
         Create separate files for training and validation.
 
-        Args:
-            path (str) : Path to data file.
-            valid_split (float) : Fraction of data to set aside for validation.
+        Arguments:
+            path(str): Path to data file.
+            valid_split(float, optional): Fraction of data to set aside for validation.
 
         Returns:
             str, str : Paths to train file and validation file
@@ -128,9 +128,10 @@ class Text(NervanaDataIterator):
         """
         Map string to a list of tokens.
 
-        Args:
-            string (str) : String to be tokenized.
-            token (object) : Tokenizer object.
+        Arguments:
+            string(str): String to be tokenized.
+            token(object): Tokenizer object.
+            tokenizer (function) : Tokenizer function.
 
         Returns:
             list : A list of tokens
@@ -146,8 +147,9 @@ class Text(NervanaDataIterator):
         """
         Construct vocabulary from the given tokens.
 
-        Args:
-            tokens (list) : List of tokens.
+        Arguments:
+            tokens(list): List of tokens.
+            vocab:  (Default value = None)
 
         Returns:
             python.set : A set of unique tokens
@@ -162,6 +164,9 @@ class Text(NervanaDataIterator):
 
     @staticmethod
     def pad_sentences(sentences, sentence_length=None, dtype=np.int32, pad_val=0.):
+        """
+        Deprecated, use neon.data.text_preprocessing.pad_sentences.
+        """
         logger.error('pad_sentances in the Text class is deprecated.  This function'
                      'is now in neon.data.text_preprocessing.')
         return pad_sentences(sentences,
@@ -172,6 +177,9 @@ class Text(NervanaDataIterator):
     @staticmethod
     def pad_data(path, vocab_size=20000, sentence_length=100, oov=2,
                  start=1, index_from=3, seed=113, test_split=0.2):
+        """
+        Deprecated, use neon.data.text_preprocessing.pad_data.
+        """
         logger.error('pad_data in the Text class is deprecated.  This function'
                      'is now in neon.data.text_preprocessing')
         return pad_data(path,
@@ -185,7 +193,7 @@ class Text(NervanaDataIterator):
 
     def reset(self):
         """
-        For resetting the starting index of this dataset back to zero.
+        Reset the starting index of this dataset back to zero.
         Relevant for when one wants to call repeated evaluations on the dataset
         but don't want to wrap around for the last uneven minibatch
         Not necessary when ndata is divisible by batch size
@@ -245,15 +253,15 @@ class Shakespeare(Dataset):
 
 
 class PTB(Dataset):
-    '''
-    Penn Tree Bank data set
+    """
+    Penn Treebank data set from http://arxiv.org/pdf/1409.2329v5.pdf
 
     Arguments:
         timesteps (int): number of timesteps to embed the data
         onehot_input (bool):
         tokenizer (str): name of the tokenizer function within this
                          class to use on the data
-    '''
+    """
     def __init__(self, timesteps, path='.',
                  onehot_input=True,
                  tokenizer=None):
@@ -279,12 +287,32 @@ class PTB(Dataset):
 
     @staticmethod
     def newline_tokenizer(s):
+        """
+        Tokenizer which breaks on newlines.
+
+        Arguments:
+            s (str): String to tokenize.
+
+        Returns:
+            str: String with "<eos>" in place of newlines.
+
+        """
         # replace newlines with '<eos>' so that
         # the newlines count as words
         return s.replace('\n', '<eos>').split()
 
     @staticmethod
     def gen_filename(phase):
+        """
+        Filename generator.
+
+        Arguments:
+            phase(str): Phase
+
+        Returns:
+            string: ptb.<phase>.txt
+
+        """
         return 'ptb.%s.txt' % phase
 
     def load_data(self):
@@ -313,6 +341,9 @@ class PTB(Dataset):
 
 
 class HutterPrize(Dataset):
+    """
+    Hutter Prize data set from http://prize.hutter1.net/
+    """
     def __init__(self, path='.'):
         super(HutterPrize, self).__init__('enwik8.zip',
                                           'http://mattmahoney.net/dc',
@@ -326,7 +357,7 @@ class HutterPrize(Dataset):
 
 class IMDB(Dataset):
     """
-    IMDB data set.
+    IMDB data set from http://www.aclweb.org/anthology/P11-1015..
     """
     def __init__(self, vocab_size, sentence_length, path='.'):
         url = 'https://s3.amazonaws.com/text-datasets'

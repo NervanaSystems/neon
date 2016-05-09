@@ -306,6 +306,9 @@ grad_map = {
 def memoize_autodiff(func):
     """
     Memoize to avoid rebuilding of the gradient tree.
+
+    Arguments:
+        func (Function): Function to memoize.
     """
     cache = {}
 
@@ -314,6 +317,12 @@ def memoize_autodiff(func):
         """
         If params in the caches, return results directly. Othewise, add to cache
         and return the results.
+
+        Arguments:
+            op_tree (OpTreeNode): the op-tree to supply to the func.
+            be (Backend): computation backend to supply to the func.
+            next_error (Tensor or OpTreeNode, optional): next layer's error to
+                                                         supply to the func.
         """
         key = (op_tree.key(), be, next_error)
         if key not in cache:
@@ -375,6 +384,9 @@ class Autodiff(object):
         self.cleanup()
 
     def cleanup(self):
+        """
+        Perform cleanup on object deletion.
+        """
         if self.grad_node is not None:
             self.grad_node.cleanup()
         self.grad_node = None
@@ -477,8 +489,9 @@ class GradNode(object):
 
     def __init__(self, op_tree, ad):
         """
-        op_tree: the op_tree at this grad_node
-        ad: the autodiff object with global op_tree, next_error and dicts
+        Arguments:
+            op_tree (OpTreeNode or Tensor): the op_tree at this grad_node
+            ad (Autodiff): the autodiff object with global op_tree, next_error and dicts
         """
         # check op_tree
         assert op_tree is not None
@@ -518,6 +531,9 @@ class GradNode(object):
         self.cleanup()
 
     def cleanup(self):
+        """
+        Perform cleanup on object deletion.
+        """
         self.op_tree = None
         self.grad_op_tree = None
         self.ad = None
@@ -532,7 +548,7 @@ class GradNode(object):
 
     def build_grad(self):
         """
-        actually back-propagate the gradient
+        Actually back-propagate the gradient.
         """
         # self.grad_op_tree shall be set by ad or parent grad_node
         assert self.grad_op_tree is not None

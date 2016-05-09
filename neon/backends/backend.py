@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Defines Tensor and Backend class
+Defines Tensor and Backend class.
 """
 
 import numpy as np
@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 class OpCollection(object):
     """
-    A collection of the set of operation strings
+    A collection of the set of operation strings.
     """
     zero_operand_ops = {"rand", "onehot"}
     unary_ops = {"finite", "neg", "abs", "sgn", "sqrt", "sqr", "exp", "log",
@@ -48,7 +48,7 @@ class Tensor(object):
         backend (Backend): backend of the tensor.
         shape (tuple, optional): shape of the tensor.
         dtype (numpy.ndtype, optional): underlying data type of the elements.
-        name (str, optional): name indentifying the tensor (used in printing).
+        name (str, optional): name identifying the tensor (used in printing).
         persist_values (bool, optional): If set to True (the default), the
                                          values assigned to this Tensor will
                                          persist across multiple begin and
@@ -58,7 +58,7 @@ class Tensor(object):
                                          across such calls
 
     See also:
-        GPUTensor class, Tensor class
+        :class:`GPUTensor` class, :class:`Tensor` class
 
     Notes:
         Unlike numpy, in this implementation we never collapse dimensions, and
@@ -216,7 +216,7 @@ class Tensor(object):
 
     def take(self, indices, axis, out=None):
         """
-        Select a subset of elements from an array across an axis
+        Select a subset of elements from an array across an axis.
 
         Arguments:
             indices (Tensor, numpy ndarray): indicies of elements to select
@@ -467,7 +467,7 @@ class Backend(object):
 
     def output_dim(self, X, S, padding, strides, pooling=False):
         """
-        compute along 1 dimension, with these sizes, what will be the output dimension
+        Compute along 1 dimension, with these sizes, what will be the output dimension.
 
         Arguments:
             X (int): input data dimension
@@ -494,11 +494,14 @@ class Backend(object):
     def set_caffe_compat(self):
         """
         Set flag to make layers compatible with caffe in terms of conv and pool
-        layer output size determination and dropout layer implementation
+        layer output size determination and dropout layer implementation.
         """
         self.compat_mode = 'caffe'
 
     def check_caffe_compat(self):
+        """
+        Check whether compatibility mode is set to 'caffe'.
+        """
         return self.compat_mode == 'caffe'
 
     def iobuf(self, dim0, x=None, dtype=None, name=None, persist_values=True,
@@ -586,7 +589,7 @@ class Backend(object):
     def revert_tensor(self, tensor):
         """
         Reverts a tensor to its original state after being distributed by
-        distribute_data
+        distribute_data.
 
         Arguments:
             tensor: Tensor to be reverted
@@ -596,7 +599,7 @@ class Backend(object):
     def gen_rng(self, seed=None):
         """
         Setup the random number generator(s) and store the state
-        in self.init_rng_state
+        in self.init_rng_state.
 
         Arguments:
             seed (int or None): RNG seed, if the seed is None,
@@ -609,7 +612,7 @@ class Backend(object):
 
     def rng_get_state(self, state):
         """
-        Get the random number generator state to a specific state
+        Get the random number generator state to a specific state.
 
         Returns a tuple since some backends have multiple RNG states
         (e.g. on-host and on-device)
@@ -629,7 +632,7 @@ class Backend(object):
 
     def rng_set_state(self, state):
         """
-        Set the random number generator state to a specific state
+        Set the random number generator state to a specific state.
 
         Arguments:
             state (np.array): array which is used to define the RNG
@@ -649,7 +652,7 @@ class Backend(object):
 
     def begin(self, block, identifier):
         """
-        Signal the start of a block of repeated computation (ex. at the start
+        Signal the start of a block of repeated computation (at the start
         of a loop).  This operation can be used to help the compiler optimize
         instruction performance, but has no direct effect on calculations.
         It must be book-ended by a corresponding Backend.end() call.
@@ -663,14 +666,14 @@ class Backend(object):
                               epoch number, mini-batch number, and so forth.
 
         See Also:
-            :py:func:`~neon.backends.backend.Backend.end`,
+            :py:func:`~neon.backends.backend.Backend.end`
         """
         pass
 
     def end(self, block, identifier):
         """
         Signal the corresponding end of a block of repeated computation
-        (ex. at the end of a loop).  This operation can be used to help the
+        (at the end of a loop).  This operation can be used to help the
         compiler optimize performance, but has no direct effect on
         calculations.  It must be preceded by a corresponding Backend.begin()
         call.
@@ -683,7 +686,7 @@ class Backend(object):
                               epoch number, mini-batch number, and so forth.
 
         See Also:
-            :py:func:`~neon.backends.backend.Backend.begin`,
+            :py:func:`~neon.backends.backend.Backend.begin`
         """
         pass
 
@@ -726,9 +729,9 @@ class Backend(object):
             NotImplementedError: Can't be instantiated directly.
 
         See Also:
-            :py:func:`~neon.backends.Backend.array`,
-            :py:func:`~neon.backends.Backend.zeros`,
-            :py:func:`~neon.backends.Backend.ones`
+            :py:func:`~neon.backends.backend.Backend.array`,
+            :py:func:`~neon.backends.backend.Backend.zeros`,
+            :py:func:`~neon.backends.backend.Backend.ones`
         """
         raise NotImplementedError()
 
@@ -769,9 +772,9 @@ class Backend(object):
             NotImplementedError: Can't be instantiated directly.
 
         See Also:
-            :py:func:`~neon.backends.Backend.empty`,
-            :py:func:`~neon.backends.Backend.zeros`,
-            :py:func:`~neon.backends.Backend.ones`
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.zeros`,
+            :py:func:`~neon.backends.backend.Backend.ones`
         """
         raise NotImplementedError()
 
@@ -779,7 +782,7 @@ class Backend(object):
               parallel=False, distributed=False):
         """
         Instantiate a new instance of this backend's Tensor class, populating
-        Each element with a value of 0.
+        each element with a value of 0.
 
         Arguments:
             shape (int, list): length of each dimension of the Tensor.
@@ -810,9 +813,9 @@ class Backend(object):
             NotImplementedError: Can't be instantiated directly.
 
         See Also:
-            :py:func:`~neon.backends.Backend.empty`,
-            :py:func:`~neon.backends.Backend.ones`,
-            :py:func:`~neon.backends.Backend.array`
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
         """
         raise NotImplementedError()
 
@@ -820,7 +823,7 @@ class Backend(object):
              parallel=False, distributed=False):
         """
         Instantiate a new instance of this backend's Tensor class, populating
-        Each element with a value of 1.
+        each element with a value of 1.
 
         Arguments:
             shape (int, list): length of each dimension of the Tensor.
@@ -882,9 +885,9 @@ class Backend(object):
             NotImplementedError: Can't be instantiated directly.
 
         See Also:
-            :py:func:`~neon.backends.Backend.empty`,
-            :py:func:`~neon.backends.Backend.ones`,
-            :py:func:`~neon.backends.Backend.array`
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
         """
         raise NotImplementedError()
 
@@ -912,9 +915,9 @@ class Backend(object):
             NotImplementedError: Can't be instantiated directly.
 
         See Also:
-            :py:func:`~neon.backends.Backend.empty`,
-            :py:func:`~neon.backends.Backend.ones`,
-            :py:func:`~neon.backends.Backend.array`
+            :py:func:`~neon.backends.backend.Backend.empty`,
+            :py:func:`~neon.backends.backend.Backend.ones`,
+            :py:func:`~neon.backends.backend.Backend.array`
         """
         raise NotImplementedError()
 
@@ -940,7 +943,7 @@ class Backend(object):
         Perform one of the following operations (* is dot product)
         C = alpha * A * B   + beta * C
         C = alpha * A.T * B + beta * C
-        C = alpha * A * B.T + beta * C
+        C = alpha * A * B.T + beta * C.
 
         relu: if true, applied before output (and prior to beta addition)
 
@@ -961,9 +964,9 @@ class Backend(object):
     def batched_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False):
         """
         Perform one of the following operations:
-        1. For fprop: A(K, C), B(X,C,N), C(X,K,N) --> call batched_dot(A, B, C)
-        2. For bprop: A(K, C), B(X,K,N), C(X,C,N) --> call batched_dot(A.T, B, C)
-        3. For update: A(X,K,N), B(X,C,N), C(K,C) --> call batched_dot(A, B.T, C)
+        1 For fprop: A(K, C), B(X,C,N), C(X,K,N) --> call batched_dot(A, B, C)
+        2 For bprop: A(K, C), B(X,K,N), C(X,C,N) --> call batched_dot(A.T, B, C)
+        3 For update: A(X,K,N), B(X,C,N), C(K,C) --> call batched_dot(A, B.T, C)
 
         Arguments:
             A (Tensor): left-hand input operand
@@ -1711,7 +1714,7 @@ class Backend(object):
 
     def onehot(self, indices, axis, out=None):
         """
-        Generate optree for converting `indices` to a onehot representation
+        Generate optree for converting `indices` to a onehot representation.
 
         Arguments:
             indices (Tensor): Elements must be of numpy integer type for gpu
@@ -1800,7 +1803,7 @@ class Backend(object):
     def fprop_conv(self, layer, I, F, O, alpha=1.0, relu=False, repeat=1):
         """
         Forward propagate the inputs of a convolutional network layer to
-        produce output
+        produce output.
 
         Arguments:
             layer: the conv layer as a parameter object
@@ -1964,12 +1967,12 @@ class Backend(object):
         Backward propagate lookup table layer.
 
         Arguments:
-            nin (integer): Number of input word_ids.
+            nin (int): Number of input word_ids.
             inputs (Tensor): Input tensor.
             error (Tensor): Error tensor.
             error_t (Tensor): Transposed error tensor.
             dW (Tensor): Gradient tensor (delta).
-            pad_idx (integer):
+            pad_idx (int):
             alpha (float):
             beta (float):
         """
@@ -2165,7 +2168,7 @@ class OpTreeNode(tuple):
 
     def traverse(self, stack):
         """
-        Post order walk op tree and produce postfix stack
+        Post order walk op tree and produce postfix stack.
 
         Arguments:
             stack (list): user shall give empty list like `list()`, then it's
@@ -2189,6 +2192,9 @@ class OpTreeNode(tuple):
 
     @property
     def T(self):
+        """
+        Return a transposed view of the data.
+        """
         return OpTreeNode.build("transpose", self, None)
 
     def transpose(self, out=None):
@@ -2202,7 +2208,7 @@ class OpTreeNode(tuple):
     @staticmethod
     def optree_to_list(optree):
         """
-        convert optree to list of lists recursively
+        Convert optree to list of lists recursively.
         """
         if isinstance(optree, OpTreeNode):
             return list(map(OpTreeNode.optree_to_list, optree))
@@ -2212,7 +2218,7 @@ class OpTreeNode(tuple):
     @staticmethod
     def list_to_optree(l):
         """
-        convert list to optree recursively
+        Convert list to optree recursively.
         """
         if isinstance(l, list):
             return OpTreeNode(*map(OpTreeNode.list_to_optree, l))
@@ -2222,7 +2228,7 @@ class OpTreeNode(tuple):
     @property
     def shape(self):
         """
-        return the shape of the OpTreeNode
+        Return the shape of the OpTreeNode.
         """
 
         if isinstance(self, OpTreeNode):
@@ -2265,7 +2271,7 @@ class OpTreeNode(tuple):
 
     def pp(self):
         """
-        Pretty print of the optree
+        Pretty print of the optree.
 
         Arguments:
             node (OpTreeNode): the top node of the op-tree to print

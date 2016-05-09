@@ -19,7 +19,7 @@ from neon.util.persist import load_class
 def get_steps(x, shape):
     """
     Convert a (feature_size, steps * batch_size) array
-    into a [(feature_size, batch_size)] * steps list of views
+    into a [(feature_size, batch_size)] * steps list of views.
     """
     steps = shape[1]
     if x is None:
@@ -71,6 +71,17 @@ class Recurrent(ParameterLayer):
         self.init_inner = init_inner
 
     def configure(self, in_obj):
+        """
+        Set shape based parameters of this layer given an input tuple, int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer, Tensor or dataset): object that provides shape
+                                                           information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(Recurrent, self).configure(in_obj)
         (self.nin, self.nsteps) = self.in_shape
         self.out_shape = (self.nout, self.nsteps)
@@ -80,6 +91,13 @@ class Recurrent(ParameterLayer):
         return self
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(Recurrent, self).allocate(shared_outputs)
         self.h = get_steps(self.outputs, self.out_shape)
         self.h_prev = self.h[-1:] + self.h[:-1]
@@ -91,6 +109,15 @@ class Recurrent(ParameterLayer):
             self.init_params(self.weight_shape)
 
     def set_deltas(self, delta_buffers):
+        """
+        Use pre-allocated (by layer containers) list of buffers for backpropagated error.
+        Only set deltas for layers that own their own deltas
+        Only allocate space if layer owns its own deltas (e.g., bias and activation work in-place,
+        so do not own their deltas).
+
+        Arguments:
+            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+        """
         super(Recurrent, self).set_deltas(delta_buffers)
         self.out_deltas_buffer = self.deltas
         self.out_delta = get_steps(self.out_deltas_buffer, self.in_shape)
@@ -242,6 +269,13 @@ class Recurrent(ParameterLayer):
         return self.out_deltas_buffer
 
     def load_weights(self, pdict, load_states=True):
+        """
+        Load weights.
+
+        Arguments:
+            pdict:
+            load_states:  (Default value = True)
+        """
         super(Recurrent, self).load_weights(pdict, load_states)
         # Do this for each activation member
         lcfg = pdict['config']
@@ -254,7 +288,7 @@ class LSTM(Recurrent):
 
     """
     Long Short-Term Memory (LSTM) layer based on
-    Hochreiter, S. and J. Schmidhuber, Neural Computation 9(8): 1735-80 (1997).
+    Hochreiter and Schmidhuber, Neural Computation 9(8): 1735-80 (1997).
 
     Arguments:
         output_size (int): Number of hidden/output units
@@ -288,6 +322,13 @@ class LSTM(Recurrent):
         self.ngates = 4  # Input, Output, Forget, Cell
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(LSTM, self).allocate(shared_outputs)
         # indices for slicing gate buffers
         (ifo1, ifo2) = (0, self.nout * 3)
@@ -444,13 +485,13 @@ class LSTM(Recurrent):
 class GRU(Recurrent):
 
     """
-    Implementation of the Gated Recurrent Unit based on [Cho2014].
+    Implementation of the Gated Recurrent Unit based on [Cho2014]_.
 
     - It uses two gates: reset gate (r) and update gate (z)
     - The update gate (z) decides how much the activation is updated
     - The reset gate (r) decides how much to reset (when r = 0) from the previous activation
     - Activation (h_t) is a linear interpolation (by z) between the previous
-        activation (h_t-1) and the new candidate activation ( h_can )
+      activation (h_t-1) and the new candidate activation ( h_can )
     - r and z are computed the same way, using different weights
     - gate activation function and unit activation function are usually different
     - gate activation is usually logistic
@@ -466,10 +507,10 @@ class GRU(Recurrent):
         init_inner (Initializer, optional): Function for initializing the model's recurrent
                                             parameters.  If absent, will default to using same
                                             initializer provided to init.
-        activation (Transform): Activation function for the input modulation
-        gate_activation (Transform): Activation function for the gates
+        activation (Transform): Activation function for the input modulation.
+        gate_activation (Transform): Activation function for the gates.
         reset_cells (bool): default to be False to make the layer stateful,
-                            set to True to be stateless
+                            set to True to be stateless.
         name (str, optional): name to refer to this layer as.
 
     Attributes:
@@ -483,12 +524,12 @@ class GRU(Recurrent):
     References:
 
         * Learning phrase representations using rnn encoder-decoder for
-          statistical machine translation `[Cho2014]`_
+          statistical machine translation [Cho2014]_
         * Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling
-          `[Chung2014]`_
+          [Chung2014]_
 
-    .. _[Cho2014]: http://arxiv.org/abs/1406.1078
-    .. _[Chung2014]: http://arxiv.org/pdf/1412.3555v1.pdf
+    .. [Cho2014] http://arxiv.org/abs/1406.1078
+    .. [Chung2014] http://arxiv.org/pdf/1412.3555v1.pdf
     """
 
     def __init__(self, output_size, init, init_inner=None, activation=None,
@@ -499,6 +540,13 @@ class GRU(Recurrent):
         self.ngates = 3  # r, z, h candidate
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(GRU, self).allocate(shared_outputs)
         self.h_prev_bprop = [0] + self.h[:-1]
 
@@ -609,7 +657,7 @@ class GRU(Recurrent):
     def bprop(self, deltas, alpha=1.0, beta=0.0):
         """
         Backpropagation of errors, output delta for previous layer, and calculate the update on
-            model params
+            model params.
 
         Arguments:
             deltas (Tensor): error tensors for each time step of unrolling
@@ -696,12 +744,32 @@ class RecurrentOutput(Layer):
             self.name, self.nin, self.nsteps, self.nin)
 
     def configure(self, in_obj):
+        """
+        Set shape based parameters of this layer given an input tuple, int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer, Tensor or dataset): object that provides shape
+                                                           information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(RecurrentOutput, self).configure(in_obj)
         (self.nin, self.nsteps) = self.in_shape
         self.out_shape = (self.nin, 1)
         return self
 
     def set_deltas(self, delta_buffers):
+        """
+        Use pre-allocated (by layer containers) list of buffers for backpropagated error.
+        Only set deltas for layers that own their own deltas
+        Only allocate space if layer owns its own deltas (e.g., bias and activation work in-place,
+        so do not own their deltas).
+
+        Arguments:
+            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+        """
         super(RecurrentOutput, self).set_deltas(delta_buffers)
         self.deltas_buffer = self.deltas
         if self.deltas:
@@ -732,11 +800,33 @@ class RecurrentSum(RecurrentOutput):
     A layer that sums over the recurrent layer outputs over time.
     """
     def configure(self, in_obj):
+        """
+        Set shape based parameters of this layer given an input tuple, int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer, Tensor or dataset): object that provides shape
+                                                           information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(RecurrentSum, self).configure(in_obj)
         self.sumscale = 1.
         return self
 
     def fprop(self, inputs, inference=False):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+            beta (int):  (Default value = 0.0)
+
+        Returns:
+            Tensor: output data
+        """
         self.init_buffers(inputs)
         self.outputs.fill(0)
         for x in self.xs:
@@ -744,6 +834,19 @@ class RecurrentSum(RecurrentOutput):
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         for delta in self.deltas:
             delta[:] = alpha * self.sumscale * error + delta * beta
         return self.deltas_buffer
@@ -755,6 +858,17 @@ class RecurrentMean(RecurrentSum):
     A layer that gets the averaged recurrent layer outputs over time.
     """
     def configure(self, in_obj):
+        """
+        Set shape based parameters of this layer given an input tuple, int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer, Tensor or dataset): object that provides shape
+                                                           information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(RecurrentMean, self).configure(in_obj)
         self.sumscale = 1. / self.nsteps
         return self
@@ -767,11 +881,34 @@ class RecurrentLast(RecurrentOutput):
     """
 
     def fprop(self, inputs, inference=False):
+        """
+        Passes output from preceding layer on without modification.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+
+        Returns:
+            Tensor: output data
+        """
         self.init_buffers(inputs)
         self.outputs[:] = self.xs[-1]
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
         if self.deltas:
             # RNN/LSTM layers don't allocate new hidden units delta buffers and they overwrite it
             # while doing bprop. So, init with zeros here.
@@ -831,6 +968,17 @@ class BiRNN(ParameterLayer):
                 self.name, self.nin, self.nout, self.nsteps)
 
     def configure(self, in_obj):
+        """
+        Set shape based parameters of this layer given an input tuple, int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer, Tensor or dataset): object that provides shape
+                                                           information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
         super(BiRNN, self).configure(in_obj)
         (self.nin, self.nsteps) = self.in_shape
 
@@ -850,6 +998,13 @@ class BiRNN(ParameterLayer):
         return self
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(BiRNN, self).allocate(shared_outputs)
 
         nout = self.o_shape[0]
@@ -871,6 +1026,15 @@ class BiRNN(ParameterLayer):
             self.init_params(self.weight_shape)
 
     def set_deltas(self, delta_buffers):
+        """
+        Use pre-allocated (by layer containers) list of buffers for backpropagated error.
+        Only set deltas for layers that own their own deltas
+        Only allocate space if layer owns its own deltas (e.g., bias and activation work in-place,
+        so do not own their deltas).
+
+        Arguments:
+            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+        """
         super(BiRNN, self).set_deltas(delta_buffers)
         self.out_deltas_buffer = self.deltas
         nin = self.i_shape[0]
@@ -1129,6 +1293,13 @@ class BiLSTM(BiRNN):
                self.name, self.nin, self.nout, self.nsteps)
 
     def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
         super(BiLSTM, self).allocate(shared_outputs)
         nout = self.o_shape[0]
         # indices for slicing gate buffers

@@ -22,6 +22,9 @@ logger = logging.getLogger(__name__)
 
 
 class Indexer(NervanaObject):
+    """
+    Create index file for dataloader.
+    """
     def __init__(self, path, index_file, pattern='*'):
         self.path = path
         assert os.path.isabs(index_file)
@@ -29,6 +32,9 @@ class Indexer(NervanaObject):
         self.pattern = pattern
 
     def run(self):
+        """
+        Create index file for dataloader.
+        """
         if os.path.exists(self.index_file):
             return
         logger.warning('%s not found. Attempting to create...' % self.index_file)

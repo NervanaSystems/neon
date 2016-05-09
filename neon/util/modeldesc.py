@@ -22,7 +22,7 @@ from neon.util.persist import load_obj
 class ModelDescription(dict):
     """
     Container class for the model serialization dictionary.  Provides
-    helper methods for searching and manipulating the dicitonary.
+    helper methods for searching and manipulating the dictionary.
 
     Arguments:
         pdict (dict or str): the configuration dictionary generated
@@ -36,19 +36,19 @@ class ModelDescription(dict):
 
     @property
     def version(self):
-        '''
-        Print neon version
+        """
+        Print neon version.
 
         Returns:
             str: version string
 
-        '''
+        """
         return self['neon_version']
 
     def layers(self, field='name', regex=None):
-        '''
+        """
         Print out the layer names in the model with some
-        options for filtering the results
+        options for filtering the results.
 
         Arguments:
             field (str, optional): the configuration field to file against
@@ -59,13 +59,27 @@ class ModelDescription(dict):
         Example:
             layers(field='name', regex='conv') will return all layers
             with the name containing "conv"
-        '''
+        """
         if regex is not None:
             regex = re.compile(regex)
         return self.find_layers(self['model']['config'], field, regex=regex)
 
     @staticmethod
     def find_layers(layers, field, regex=None):
+        """
+        Print out the layer names in the model with some
+        options for filtering the results.
+
+        Arguments:
+            layers (dict): model configuration dictionary
+            field (str, optional): the configuration field to file against
+                                   (e.g. layer 'name')
+            regex (str, optional): regular expression to apply to field
+                                   to file the results (e.g. "conv")
+
+        Returns:
+            list of dict: Layer config dictionary
+        """
         matches = []
         for l in layers['layers']:
             if field in l['config']:
@@ -90,6 +104,16 @@ class ModelDescription(dict):
 
     @staticmethod
     def find_by_name(layers, layer_name):
+        """
+        Find a layer by its name.
+
+        Arguments:
+            layers (dict): model configuration dictionary
+            layer_name (str) name of the layer
+
+        Returns:
+            dict: Layer config dictionary
+        """
         for l in layers['layers']:
             if 'name' in l['config'] and l['config']['name'] == layer_name:
                     return l
