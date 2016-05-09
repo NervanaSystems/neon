@@ -26,7 +26,7 @@ import glob
 import numpy as np
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Gaussian
-from neon.layers import Conv, Pooling, GeneralizedCost, Affine, Dropout
+from neon.layers import Conv, Pooling, GeneralizedCost, Affine, BiRNN, RecurrentMean
 from neon.optimizers import Adadelta
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
@@ -67,7 +67,7 @@ args = parser.parse_args()
 train_idx, val_idx = create_index_files(args.data_dir)
 
 common_params = dict(sampling_freq=22050, clip_duration=31000, frame_duration=20)
-train_params = AudioParams(add_noise=True, **common_params)
+train_params = AudioParams(add_noise=True, randomize_time_scale_by=5, **common_params)
 val_params = AudioParams(**common_params)
 common = dict(target_size=1, nclasses=10, repo_dir=args.data_dir)
 train = DataLoader(set_name='genres-train', media_params=train_params,
@@ -78,18 +78,11 @@ init = Gaussian(scale=0.01)
 layers = [Conv((5, 5, 64), init=init, activation=Rectlin(),
                strides=dict(str_h=2, str_w=4)),
           Pooling(2, strides=2),
-          Conv((5, 5, 128), init=init, batch_norm=True, activation=Rectlin(),
-               strides=dict(str_h=1, str_w=4)),
-          Pooling(2, strides=2),
-          Conv((3, 3, 256), init=init, batch_norm=True, activation=Rectlin()),
-          Pooling(2, strides=2),
-          Conv((3, 3, 512), init=init, batch_norm=True, activation=Rectlin()),
-          Pooling(2, strides=2),
-          Conv((2, 2, 1024), init=init, batch_norm=True, activation=Rectlin()),
-          Pooling(2, strides=2),
-          Conv((2, 2, 2048), init=init, batch_norm=True, activation=Rectlin()),
-          Dropout(),
-          Affine(256, init=init, batch_norm=True, activation=Rectlin()),
+          Conv((5, 5, 64), init=init, batch_norm=True, activation=Rectlin(),
+               strides=dict(str_h=1, str_w=2)),
+          BiRNN(256, init=init, activation=Rectlin(), reset_cells=True),
+          RecurrentMean(),
+          Affine(128, init=init, batch_norm=True, activation=Rectlin()),
           Affine(nout=common['nclasses'], init=init, activation=Softmax())]
 
 model = Model(layers=layers)

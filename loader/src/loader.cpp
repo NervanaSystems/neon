@@ -26,7 +26,9 @@
 #include "video.hpp"
 #endif
 
+#if HAS_AUDLIB
 #include "audio.hpp"
+#endif
 
 Media* Media::create(MediaParams* params, MediaParams* ingestParams, int id) {
     switch (params->_mtype) {
@@ -51,7 +53,14 @@ Media* Media::create(MediaParams* params, MediaParams* ingestParams, int id) {
         }
 #endif
     case AUDIO:
+#if HAS_AUDLIB
         return new Audio(reinterpret_cast<AudioParams*>(params), id);
+#else
+        {
+            string message = "Audio " UNSUPPORTED_MEDIA_MESSAGE;
+            throw std::runtime_error(message);
+        }
+#endif
     default:
         throw std::runtime_error("Unknown media type");
     }

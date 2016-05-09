@@ -980,7 +980,12 @@ class BiRNN(ParameterLayer):
             (tuple): shape of output data
         """
         super(BiRNN, self).configure(in_obj)
-        (self.nin, self.nsteps) = self.in_shape
+        if len(self.in_shape) >= 3:
+            (K, P, Q) = self.in_shape
+            self.nin = K * P
+            self.nsteps = Q
+        else:
+            (self.nin, self.nsteps) = self.in_shape
 
         self.out_shape = (2 * self.nout, self.nsteps)
         self.gate_shape = (2 * self.nout * self.ngates, self.nsteps)

@@ -32,6 +32,7 @@ ifeq ($(shell pkg-config --exists opencv; echo $$?), 0)
 	IMGLIBS     := $(shell pkg-config --libs-only-l opencv)
 ifeq ($(shell pkg-config --exists libavutil libavformat libavcodec libswscale; echo $$?), 0)
 	VIDFLAG     := -DHAS_VIDLIB
+	AUDFLAG     := -DHAS_AUDLIB
 	VIDLDIR     := $(shell pkg-config --libs-only-L libavutil libavformat libavcodec libswscale)
 	VIDLIBS     := -lavutil -lavformat -lavcodec -lswscale
 endif

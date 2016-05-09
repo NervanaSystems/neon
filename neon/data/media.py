@@ -220,7 +220,7 @@ class AudioParams(MediaParams):
              self.window_size) // self.stride) + 1
         self.num_freqs = (self.window_size // 2) + 1
         self.width = int(self.time_steps * self.time_scale_factor)
-        self.height = int(((self.window_size // 2) + 1) * self.freq_scale_factor)
+        self.height = int(self.num_freqs * self.freq_scale_factor)
         self.window_type = self._windows_[self.window_func]
 
     def get_shape(self):
