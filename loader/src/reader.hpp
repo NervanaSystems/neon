@@ -90,27 +90,6 @@ public:
     vector<IndexElement*>       _elements;
 };
 
-class Metadata {
-public:
-    void addElement(string& line) {
-        std::istringstream ss(line);
-        string key, val;
-        std::getline(ss, key, ',');
-        std::getline(ss, val, ',');
-        _map[key] = val;
-    }
-
-    int getItemCount() {
-        if (_map.count("nrec") == 0) {
-            throw std::runtime_error("Error in metadata\n");
-        }
-        return atoi(_map["nrec"].c_str());
-    }
-
-private:
-    map<string, string>         _map;
-};
-
 class Reader {
 public:
     Reader(int batchSize, const char* repoDir, const char* indexFile,

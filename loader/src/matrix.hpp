@@ -38,7 +38,7 @@ public:
         Mat output = Mat(width, height, elemType, data);
         cv::transpose(input, output);
 #else
-#warning ("OpenCV support not built-in")
+#warning ("OpenCV support not built-in. Certain features will not work.")
         string message = "OpenCV " UNSUPPORTED_MEDIA_MESSAGE;
         throw std::runtime_error(message);
 #endif

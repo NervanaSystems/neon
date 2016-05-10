@@ -73,7 +73,6 @@ class DataLoader(NervanaDataIterator):
             self.index_file = index_file
         if not os.path.isabs(self.index_file):
             self.index_file = os.path.join(parent_dir, self.index_file)
-        self.meta_file = os.path.join(parent_dir, set_name + '-metadata.csv')
         self.shuffle = shuffle
         self.reshuffle = reshuffle
         self.datum_dtype = datum_dtype
@@ -151,7 +150,6 @@ class DataLoader(NervanaDataIterator):
             ct.c_char_p(self.repo_dir.encode()),
             ct.c_char_p(self.archive_dir.encode()),
             ct.c_char_p(self.index_file.encode()),
-            ct.c_char_p(self.meta_file.encode()),
             ct.c_char_p(self.archive_prefix.encode()),
             self.shuffle, self.reshuffle,
             self.macro_start,

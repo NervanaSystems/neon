@@ -163,12 +163,11 @@ int test(char* repoDir, char* indexFile,
 
     string archiveDir(repoDir);
     archiveDir += "-ingested";
-    string metaFile = "";
     CpuParams deviceParams(0, 0, dataBuffer, targetBuffer);
     ImageIngestParams ingestParams(false, true, 0, 0);
     Loader loader(&itemCount, batchSize, repoDir, archiveDir.c_str(),
-                  indexFile, metaFile.c_str(),
-                  "archive-", false, false, 0, datumSize, targetSize, 100,
+                  indexFile, "archive-",
+                  false, false, 0, datumSize, targetSize, 100,
                   &mediaParams, &deviceParams, &ingestParams);
     unsigned int singleSum = single(&loader, epochCount,
                                     minibatchCount, batchSize,
