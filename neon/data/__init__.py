@@ -14,6 +14,7 @@
 # ----------------------------------------------------------------------------
 
 from neon.data.dataiterator import NervanaDataIterator, DataIterator, ArrayIterator
+from neon.data.hdf5iterator import HDF5Iterator, HDF5IteratorOneHot, HDF5IteratorAutoencoder
 from neon.data.datasets import Dataset
 from neon.data.dataloaders import (load_mnist, load_cifar10, load_babi, load_flickr8k,
                                    load_flickr30k, load_coco, load_i1kmeta, load_text,
