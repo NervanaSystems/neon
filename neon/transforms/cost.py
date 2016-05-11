@@ -198,31 +198,25 @@ class MeanSquared(Cost):
 class SmoothL1Loss(Cost):
 
     """
-    Smooth L1 cost function.
-
-    The L1 loss is less sensitive to outliers than the L2 loss.
-    See `Girshick 2015 <http://arxiv.org/pdf/1504.08083v2.pdf>`__. This
-    cost is used for training object localization models such as Fast-RCNN.
+    A smooth L1 loss cost function from Fast-RCNN
+    http://arxiv.org/pdf/1504.08083v2.pdf
+    L1 loss is less sensitive to the outlier than L2 loss used in RCNN
     """
 
     def smoothL1(self, x):
-        """
-        Returns the Smooth-L1 cost
-        """
-        return (0.5 * self.be.square(x) * (self.be.absolute(x) < 1) +
-                (self.be.absolute(x) - 0.5) * (self.be.absolute(x) >= 1))
+        return (0.5 * self.be.square(x) * self._sigma2 * (self.be.absolute(x) < 1/self._sigma2) +
+                (self.be.absolute(x) - 0.5/self._sigma2) * (self.be.absolute(x) >= 1/self._sigma2))
 
     def smoothL1grad(self, x):
-        """
-        Returns the gradient of the Smooth-L1 cost.
-        """
-        return (x * (self.be.absolute(x) < 1) + self.be.sgn(x) *
-                (self.be.absolute(x) >= 1))
+        return (x * self._sigma2 * (self.be.absolute(x) < 1/self._sigma2) +
+                self.be.sgn(x) * (self.be.absolute(x) >= 1/self._sigma2))
 
-    def __init__(self):
+    def __init__(self, sigma=1.0):
         """
         Define the cost function and its gradient as lambda functions.
         """
+        self.sigma = sigma
+        self._sigma2 = self.be.square(sigma)
         self.func = lambda y, t: self.be.sum(self.smoothL1(y - t), axis=0)
         self.funcgrad = lambda y, t: self.smoothL1grad(y - t)
 

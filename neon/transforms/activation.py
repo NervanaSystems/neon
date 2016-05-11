@@ -236,6 +236,26 @@ class Softmax(Transform):
         return 1
 
 
+class PixelwiseSoftmax(Transform):
+    """
+    Pixelwise SoftMax activation function.
+    Computes the function f(x_k) = exp(x_k) / sum_i(exp(x_i))
+    """
+    def __init__(self, c, name=None, epsilon=2**-23):
+        super(PixelwiseSoftmax, self).__init__(name)
+        self.epsilon = epsilon
+        self.c = c
+
+    def __call__(self, x):
+        y = x.reshape((self.c, -1))
+        y[:] = (self.be.reciprocal(self.be.sum(self.be.exp(y - self.be.max(y, axis=0)), axis=0)) *
+                self.be.exp(y - self.be.max(y, axis=0)))
+        return x
+
+    def bprop(self, x):
+        return 1
+
+
 class Tanh(Transform):
     """
     Hyperbolic tangent activation function, :math:`f(x) = \\tanh(x)`.

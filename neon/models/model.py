@@ -271,30 +271,43 @@ class Model(NervanaObject):
         running_error /= nprocessed
         return running_error
 
-    def get_outputs(self, dataset):
+    def get_outputs(self, dataset, n_mb=None):
         """
         Get the activation outputs of the final model layer for the dataset
 
         Arguments:
-            dataset (NervanaDataIterator) Dataset iterator to perform fit on
+            dataset (iterable): Dataset iterator to perform fit on
 
         Returns:
             Host numpy array: the output of the final layer for the entire Dataset
         """
         self.initialize(dataset)
         dataset.reset()  # Move "pointer" back to beginning of dataset
-        n = dataset.nbatches
+        if n_mb is None:
+            n = dataset.nbatches
+        else:
+            n = n_mb
+
         x = self.layers.layers[-1].outputs
         assert not isinstance(x, list), "Can not get_outputs with Branch terminal"
         Ypred = None
         for idx, (x, t) in enumerate(dataset):
             x = self.fprop(x, inference=True)
+
+            # initialize Ypred for each output in x
             if Ypred is None:
-                (dim0, dim1) = x.shape
-                Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)
-                nsteps = dim1 // self.be.bsz
-            cur_batch = slice(idx * dim1, (idx + 1) * dim1)
-            Ypred[cur_batch] = x.get().T
+                for i, xi in enumerate(x):
+                    (dim0, dim1) = xi.shape
+                    Ypred[i] = np.empty((n * dim1, dim0), dtype=x.dtype)
+                    nsteps = dim1 / self.be.bsz
+
+            for i, xi in enumerate(x):
+                (dim0, dim1) = xi.shape
+                cur_batch = slice(idx * dim1, (idx + 1) * dim1)
+                Ypred[i][cur_batch] = xi.get().T
+
+            if idx > n:
+                break
 
         # Handle the recurrent case.
         if nsteps != 1:

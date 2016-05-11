@@ -31,7 +31,7 @@ from neon import NervanaObject, logger as neon_logger
 from neon.data import NervanaDataIterator, Ticker
 from neon.util.compat import PY3
 from neon.util.persist import load_obj, save_obj, load_class
-from neon.layers import Convolution, BatchNorm
+from neon.layers import Convolution, BatchNorm, Multicost
 
 logger = logging.getLogger(__name__)
 
@@ -642,6 +642,54 @@ class TrainCostCallback(Callback):
         mean_cost = sum(self.cost_history) / len(self.cost_history)
         mbstart = callback_data['time_markers/minibatch'][epoch - 1] if epoch > 0 else 0
         callback_data['cost/train'][mbstart + minibatch] = mean_cost
+
+class TrainMulticostCallback(Callback):
+    """
+    Callback for computing average training cost periodically during training.
+    """
+    def __init__(self, wsz=10):
+        super(TrainMulticostCallback, self).__init__(epoch_freq=1)
+        self.wsz = wsz
+
+    def on_train_begin(self, callback_data, model, epochs):
+        """
+        Called when training is about to begin
+
+        Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
+            epochs (int): Total epochs
+        """
+        # get number of costs
+        assert isinstance(model.cost, Multicost), "Cost must be a Multicost"
+        self.ncosts = len(model.cost.costs)
+
+        # preallocate space for the number of minibatches in the whole run
+        points = callback_data['config'].attrs['total_minibatches']
+        callback_data.create_dataset("multicost/train", (points, self.ncosts), dtype='float64')
+
+        # make sure our window size is less than or equal to total number of minibatches
+        self.wsz = min(points, self.wsz)
+        self.cost_history = deque([], maxlen=self.wsz)
+
+        # clue in the data reader to use the 'minibatch' time_markers
+        callback_data['multicost/train'].attrs['time_markers'] = 'minibatch'
+
+    def on_minibatch_end(self, callback_data, model, epoch, minibatch):
+        """
+        Called when minibatch is about to end
+
+        Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
+            epoch (int): index of current epoch
+            minibatch (int): index of minibatch that is ending
+        """
+        costs = np.array([c.cost for c in model.cost.costs])
+        self.cost_history.append(costs)
+        mean_cost = sum(self.cost_history) / len(self.cost_history)
+        mbstart = callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+        callback_data['multicost/train'][mbstart + minibatch, :] = mean_cost.squeeze()
 
 
 class LossCallback(Callback):
