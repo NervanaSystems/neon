@@ -72,28 +72,17 @@ endif
 DOC_DIR := doc
 DOC_PUB_RELEASE_PATH := $(DOC_PUB_PATH)/$(RELEASE)
 
-# Maxwell assembler project related
-MAXAS_SRC_URL := https://github.com/NervanaSystems/maxas.git
-MAXAS_DL_DIR := $(VIRTUALENV_DIR)/maxas
-MAXAS := $(VIRTUALENV_DIR)/bin/maxas.pl
-MAXAS_PLIB := PERL5LIB=$(VIRTUALENV_DIR)/maxas/lib
-
-# GPU Kernel compilation related
-KERNEL_BUILDER := neon/backends/make_kernels.py
-KERNEL_BUILDER_BUILD_OPTS := --kernels
-KERNEL_BUILDER_CLEAN_OPTS := --clean
-
 # neon compiled objects
 DATA_LOADER := loader
 
-.PHONY: default env maxas kernels sysinstall sysinstall_nodeps neon_install \
-	    sysdeps sysuninstall clean_py clean_maxas clean_so clean_kernels \
+.PHONY: default env sysinstall sysinstall_nodeps neon_install \
+	    sysdeps sysuninstall clean_py clean_so \
 	    clean test coverage style lint check doc html release examples \
 	    serialize_check $(DATA_LOADER)
 
 default: env
 
-env: $(ACTIVATE) kernels $(DATA_LOADER)
+env: $(ACTIVATE) $(DATA_LOADER)
 
 $(ACTIVATE): requirements.txt gpu_requirements.txt vis_requirements.txt
 	@echo "Updating virtualenv dependencies in: $(VIRTUALENV_DIR)..."
@@ -123,39 +112,12 @@ endif
 	@touch $(ACTIVATE)
 	@echo
 
-maxas: $(MAXAS_DL_DIR)
-ifeq ($(HAS_GPU), true)
-	@cd $(MAXAS_DL_DIR) && git pull >/dev/null 2>&1
-	@test -f $(MAXAS) ||\
-		{ echo "Installing maxas..." &&\
-		  mkdir -p $(dir $(MAXAS)) &&\
-		  ln -s ../maxas/bin/maxas.pl $(MAXAS) ;\
-		  echo "";\
-		}
-endif
-
-$(MAXAS_DL_DIR):
-ifeq ($(HAS_GPU), true)
-	@test -d $(MAXAS_DL_DIR) ||\
-		{ echo "Cloning maxas repo..." ;\
-		  git clone $(MAXAS_SRC_URL) $(MAXAS_DL_DIR) ;\
-		  echo "";\
-		}
-endif
-
-kernels: maxas
-ifeq ($(HAS_GPU), true)
-	@$(MAXAS_PLIB) PATH=$(dir $(MAXAS)):$$PATH \
-		$(KERNEL_BUILDER) $(KERNEL_BUILDER_BUILD_OPTS)
-	@echo
-endif
-
 $(DATA_LOADER):
 	-@cd $(DATA_LOADER) && $(MAKE) bin/loader.so HAS_GPU=$(HAS_GPU)
 
 # TODO: handle kernel/.so compilation via setup.py directly
-sysinstall_nodeps: kernels $(DATA_LOADER) neon_install
-sysinstall: sysdeps kernels $(DATA_LOADER) neon_install
+sysinstall_nodeps: $(DATA_LOADER) neon_install
+sysinstall: sysdeps $(DATA_LOADER) neon_install
 neon_install:
 	@echo "Installing neon system wide..."
 	@pip install .
@@ -189,22 +151,7 @@ clean_so:
 	@cd $(DATA_LOADER) && $(MAKE) clean
 	@echo
 
-clean_maxas:
-ifeq ($(HAS_GPU), true)
-	@echo "Cleaning maxas installation and repo files..."
-	@rm -f $(MAXAS)
-	@rm -rf $(MAXAS_DL_DIR)
-	@echo
-endif
-
-clean_kernels:
-ifeq ($(HAS_GPU), true)
-	@echo "Cleaning compiled gpu kernel files..."
-	@test -f $(ACTIVATE) && . $(ACTIVATE); $(KERNEL_BUILDER) $(KERNEL_BUILDER_CLEAN_OPTS)
-	@echo
-endif
-
-clean: clean_py clean_so clean_maxas clean_kernels
+clean: clean_py clean_so
 	@echo "Removing virtual environment files..."
 	@rm -rf $(VIRTUALENV_DIR)
 	@echo

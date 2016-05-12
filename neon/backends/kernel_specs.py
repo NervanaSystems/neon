@@ -27,6 +27,7 @@ sass_dir  = os.path.join(base_dir, "kernels", "sass")
 pre_dir   = os.path.join(base_dir, "kernels", "pre")
 cubin_dir = os.path.join(base_dir, "kernels", "cubin")
 dump_dir  = os.path.join(base_dir, "kernels", "dump")
+maxas_dir = os.path.join(base_dir, "kernels", "maxas")
 
 
 kernels = {
@@ -652,10 +653,9 @@ def get_kernel(base_name, options=None):
 
     arch = "sm_%d%d" % (major, minor)
 
-    # Need a way to handle sysinstall
-    libprefix = "PERL5LIB=%s" % (os.path.join(os.environ['VIRTUAL_ENV'], 'maxas', 'lib'))
-    maxas_i = [libprefix, "maxas.pl -i"]
-    maxas_p = [libprefix, "maxas.pl -p"]
+    libprefix = "PERL5LIB=%s" % (maxas_dir)
+    maxas_i = [libprefix, os.path.join(maxas_dir, "maxas.pl") + " -i"]
+    maxas_p = [libprefix, os.path.join(maxas_dir, "maxas.pl") + " -p"]
 
     kernel_spec = kernels[base_name]
     kernel_name = base_name
