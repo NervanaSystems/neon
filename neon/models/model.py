@@ -493,7 +493,7 @@ class Model(NervanaObject):
         self.cost = cost
         self.initialize(dataset, cost)
         self.optimizer = optimizer
-        self.total_cost = self.be.empty((1, 1))
+        self.total_cost = np.empty((1, 1))
         self.total_cost[:] = 0
 
         # iterate through minibatches of the dataset
