@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -96,7 +96,7 @@ def hist_fig(hist_data, plot_height, plot_width, x_range=None, epoch_axis=True):
                  x_axis_label=x_label(epoch_axis),
                  x_range=x_range,
                  y_range=(offset, offset + bins))
-    fig.image(image=[hdata], x=[0],  y=[offset], dw=[dw], dh=[dh], palette="Spectral11")
+    fig.image(image=[hdata], x=[0], y=[offset], dw=[dw], dh=[dh], palette="Spectral11")
     return fig
 
 
@@ -153,8 +153,8 @@ def deconv_figs(layer_name, layer_data, fm_max=8, plot_size=120):
         deconv_fig = image_fig(deconv_data, img_h, img_w, x_range, y_range, plot_size)
 
         title = "{}_fmap_{:04d}".format(layer_name, fm_num)
-        vis_keys[fm_num] = "vis_"+title
-        img_keys[fm_num] = "img_"+title
+        vis_keys[fm_num] = "vis_" + title
+        img_keys[fm_num] = "img_" + title
 
         fig_dict[vis_keys[fm_num]] = deconv_fig
         fig_dict[img_keys[fm_num]] = img_fig

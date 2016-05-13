@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,14 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from builtins import map
+
 import numpy as np
 import os
 import re
 import tarfile
 
+from neon import logger as neon_logger
 from neon.data.dataiterator import NervanaDataIterator
 from neon.data.datasets import Dataset
 from neon.data.text_preprocessing import pad_sentences
+from functools import reduce
 
 
 class QA(NervanaDataIterator):
@@ -31,7 +35,7 @@ class QA(NervanaDataIterator):
         super(QA, self).__init__(name=None)
         self.story, self.query, self.answer = story, query, answer
         self.ndata = len(self.story)
-        self.nbatches = self.ndata/self.be.bsz
+        self.nbatches = self.ndata // self.be.bsz
         self.story_length = self.story.shape[1]
         self.query_length = self.query.shape[1]
         self.shape = [(self.story_length, 1), (self.query_length, 1)]
@@ -50,7 +54,7 @@ class QA(NervanaDataIterator):
         self.answer = self.answer[shuf_idx]
 
         while self.batch_index < self.nbatches:
-            batch = slice(self.batch_index*self.be.bsz, (self.batch_index+1)*self.be.bsz)
+            batch = slice(self.batch_index * self.be.bsz, (self.batch_index + 1) * self.be.bsz)
             story_tensor = self.be.array(self.story[batch].T.copy())
             query_tensor = self.be.array(self.query[batch].T.copy())
             answer_tensor = self.be.array(self.answer[batch].T.copy())
@@ -100,8 +104,8 @@ class BABI(Dataset):
         self.task = task
         self.subset = subset
 
-        print 'Preparing bAbI dataset or extracting from %s' % path
-        print 'Task is %s/%s' % (subset, task)
+        neon_logger.display('Preparing bAbI dataset or extracting from %s' % path)
+        neon_logger.display('Task is %s/%s' % (subset, task))
         self.tasks = [
             'qa1_single-supporting-fact',
             'qa2_two-supporting-facts',
@@ -123,7 +127,7 @@ class BABI(Dataset):
             'qa18_size-reasoning',
             'qa19_path-finding',
             'qa20_agents-motivations'
-            ]
+        ]
         assert task in self.tasks, "given task is not in the bAbI dataset"
 
         self.train_file, self.test_file = self.load_data(path, task)
@@ -178,7 +182,7 @@ class BABI(Dataset):
             list : List of cleaned lines of bAbI data.
         """
         split_lines = data.split('\n')[:-1]
-        return [line.decode('utf-8').strip() for line in split_lines]
+        return [line.strip() for line in split_lines]
 
     @staticmethod
     def tokenize(sentence):
@@ -296,5 +300,5 @@ class BABI(Dataset):
         self.vocab_size = len(vocab) + 2
         self.word_to_index = dict((c, i + 1) for i, c in enumerate(vocab))
         self.index_to_word = dict((i + 1, c) for i, c in enumerate(vocab))
-        self.story_maxlen = max(map(len, (s for s, _, _ in all_data)))
-        self.query_maxlen = max(map(len, (q for _, q, _ in all_data)))
+        self.story_maxlen = max(list(map(len, (s for s, _, _ in all_data))))
+        self.query_maxlen = max(list(map(len, (q for _, q, _ in all_data))))

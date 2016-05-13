@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,18 +15,22 @@
 """
 Utility functions for Fast-RCNN model and demo.
 """
-import os
-import cPickle
-import numpy as np
 
-from neon.data.datasets import Dataset
-from neon.initializers import Gaussian, Constant, Xavier
-from neon.transforms import Rectlin, Softmax, Identity
-from neon.models import Model
-from neon.layers import Conv, Pooling, Affine, Dropout, RoiPooling, BranchNode, Tree
-from neon.util.persist import load_obj
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from builtins import zip  # noqa
+import os  # noqa
+import numpy as np  # noqa
+from neon import logger as neon_logger  # noqa
+from neon.data.datasets import Dataset  # noqa
+from neon.initializers import Gaussian, Constant, Xavier  # noqa
+from neon.transforms import Rectlin, Softmax, Identity  # noqa
+from neon.models import Model  # noqa
+from neon.layers import Conv, Pooling, Affine, Dropout, RoiPooling, BranchNode, Tree  # noqa
+from neon.util.compat import pickle  # noqa
+from neon.util.persist import load_obj  # noqa
 
-from voc_eval import voc_eval
+from voc_eval import voc_eval  # noqa
 
 # how the indices in the bounding box array map to cooridnates
 BB_XMIN_IDX = 0
@@ -129,13 +133,13 @@ def load_vgg_weights(model, path):
     if not os.path.exists(filepath):
         Dataset.fetch_dataset(url, filename, filepath, size)
 
-    print 'De-serializing the pre-trained VGG16 model...'
+    neon_logger.display('De-serializing the pre-trained VGG16 model...')
     pdict = load_obj(filepath)
 
     param_layers = [l for l in model.layers.layers[0].layers[0].layers]
     param_dict_list = pdict['model']['config']['layers']
     for layer, ps in zip(param_layers, param_dict_list):
-        print layer.name, ps['config']['name']
+        neon_logger.display("{}".format(layer.name, ps['config']['name']))
         layer.load_weights(ps, load_states=True)
 
 
@@ -143,7 +147,7 @@ def run_voc_eval(annopath, imagesetfile, year, image_set, classes, output_dir):
     aps = []
     # The PASCAL VOC metric changed in 2010
     use_07_metric = True if int(year) < 2010 else False
-    print 'VOC07 metric? ' + ('Yes' if use_07_metric else 'No')
+    neon_logger.display('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
     for i, cls in enumerate(classes):
         if cls == '__background__':
             continue
@@ -153,7 +157,7 @@ def run_voc_eval(annopath, imagesetfile, year, image_set, classes, output_dir):
         rec, prec, ap = voc_eval(filepath, annopath, imagesetfile, cls,
                                  output_dir, ovthresh=0.5, use_07_metric=use_07_metric)
         aps += [ap]
-        print('AP for {} = {:.4f}'.format(cls, ap))
+        neon_logger.display('AP for {} = {:.4f}'.format(cls, ap))
         with open(os.path.join(output_dir, cls + '_pr.pkl'), 'w') as f:
-            cPickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
-    print('Mean AP = {:.4f}'.format(np.mean(aps)))
+            pickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f, 2)
+    neon_logger.display('Mean AP = {:.4f}'.format(np.mean(aps)))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -62,4 +62,5 @@ opt = MultiOptimizer({'default': optimizer_one,
 # configure callbacks
 callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 
-mlp.fit(train_set, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+mlp.fit(train_set, optimizer=opt, num_epochs=args.epochs,
+        cost=cost, callbacks=callbacks)

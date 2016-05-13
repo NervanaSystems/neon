@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,7 +16,9 @@
 """
 Generalized gradient testing applied to different layers and activations
 """
+from builtins import range
 import numpy as np
+from neon import logger as neon_logger
 
 
 def sweep_epsilon(layer, inp, pert_rng, out_shape=None, lshape=None,
@@ -41,14 +43,14 @@ def sweep_epsilon(layer, inp, pert_rng, out_shape=None, lshape=None,
     loss_scale = np.random.random(out_shape) * 2.0 - 1.0
 
     # select pert_frac fraction of inps to perturb
-    pert_cnt = int(np.ceil(inpa.size*pert_frac))
+    pert_cnt = int(np.ceil(inpa.size * pert_frac))
     pert_inds = np.random.permutation(inpa.size)[0:pert_cnt]
 
     layer.be.rng_reset()  # reset to same initial rng state
 
     min_max_diff = -1.0
     min_max_pert = None
-    print 'epsilon, max diff'
+    neon_logger.display('epsilon, max diff')
     for epsilon in pert_rng:
         (max_abs, max_rel) = general_gradient_comp(layer,
                                                    inp,
@@ -60,8 +62,8 @@ def sweep_epsilon(layer, inp, pert_rng, out_shape=None, lshape=None,
         if min_max_diff < 0 or max_abs < min_max_diff:
             min_max_diff = max_abs
             min_max_pert = epsilon
-        print '%e %e %e' % (epsilon, max_abs, max_rel)
-    print 'Min max diff : %e at Pert. Mag. %e' % (min_max_diff, min_max_pert)
+        neon_logger.display('%e %e %e' % (epsilon, max_abs, max_rel))
+        neon_logger.display('Min max diff : %e at Pert. Mag. %e' % (min_max_diff, min_max_pert))
     return (min_max_pert, min_max_diff)
 
 
@@ -102,7 +104,7 @@ def general_gradient_comp(layer,
 
     inp_pert = inp.copy()
     if pert_inds is None:
-        pert_inds = range(inp.size)
+        pert_inds = list(range(inp.size))
     for pert_ind in pert_inds:
         save_val = inp_pert.flat[pert_ind]
         # add/subtract perturbations to input
@@ -122,9 +124,9 @@ def general_gradient_comp(layer,
         out_neg = layer.fprop(inpa).get().copy()
 
         # calculate the loss on outputs
-        loss_pos = np.sum(loss_scale*out_pos)
-        loss_neg = np.sum(loss_scale*out_neg)
-        grad_est = 0.5*(loss_pos-loss_neg)/epsilon
+        loss_pos = np.sum(loss_scale * out_pos)
+        loss_neg = np.sum(loss_scale * out_neg)
+        grad_est = 0.5 * (loss_pos - loss_neg) / epsilon
 
         # reset input
         inp_pert.flat[pert_ind] = save_val
@@ -139,15 +141,15 @@ def general_gradient_comp(layer,
         if (abs(grad_est) + abs(bprop_val)) == 0.0:
             rel_err = 0.0
         else:
-            rel_err = abs_err/(abs(grad_est) + abs(bprop_val))
+            rel_err = float(abs_err) / (abs(grad_est) + abs(bprop_val))
         if rel_err > max_rel_err:
             max_rel_err = rel_err
             max_rel_vals = [grad_est, bprop_val]
 
-    print 'Worst case diff %e, vals grad: %e, bprop: %e' % (max_abs_err,
-                                                            max_abs_vals[0],
-                                                            max_abs_vals[1])
-    print 'Worst case diff %e, vals grad: %e, bprop: %e' % (max_rel_err,
-                                                            max_rel_vals[0],
-                                                            max_rel_vals[1])
+    neon_logger.display('Worst case diff %e, vals grad: %e, bprop: %e' % (max_abs_err,
+                                                                          max_abs_vals[0],
+                                                                          max_abs_vals[1]))
+    neon_logger.display('Worst case diff %e, vals grad: %e, bprop: %e' % (max_rel_err,
+                                                                          max_rel_vals[0],
+                                                                          max_rel_vals[1]))
     return (max_abs_err, max_rel_err)

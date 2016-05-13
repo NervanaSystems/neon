@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,17 +16,15 @@
 """
 Process macro batches of data in a pipelined fashion.
 """
-
+from builtins import range, str, zip
 import logging
-
 from glob import glob
 import gzip
 import numpy as np
 import os
 import tarfile
 import ctypes as ct
-
-from neon.util.compat import range
+from neon import logger as neon_logger
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +102,7 @@ class BatchWriter(object):
         subdirs = glob(os.path.join(self.image_dir, '*'))
         self.label_names = sorted([os.path.basename(x) for x in subdirs])
 
-        indexes = range(len(self.label_names))
+        indexes = list(range(len(self.label_names)))
         self.label_dict = {k: v for k, v in zip(self.label_names, indexes)}
 
         tlines = []
@@ -161,16 +159,16 @@ class BatchWriter(object):
         npts = -(-len(imfiles) // self.macro_size)
         starts = [i * self.macro_size for i in range(npts)]
         imfiles = [imfiles[s:s + self.macro_size] for s in starts]
-        labels = [{k: v[s:s + self.macro_size] for k, v in labels.iteritems()} for s in starts]
+        labels = [{k: v[s:s + self.macro_size] for k, v in labels.items()} for s in starts]
 
         for i, jpeg_file_batch in enumerate(imfiles):
             bfile = os.path.join(self.out_dir, '%s%d.cpio' % (self.batch_prefix, offset + i))
             label_batch = labels[i]['l_id']
             if os.path.exists(bfile):
-                print("File %s exists, skipping..." % (bfile))
+                neon_logger.display("File %s exists, skipping..." % (bfile))
             else:
                 self.write_individual_batch(bfile, label_batch, jpeg_file_batch)
-                print("Wrote batch %d" % (i))
+                neon_logger.display("Wrote batch %d" % (i))
 
             # Check the batchfile for the max item value
             batch_max_item = self.writerlib.read_max_item(ct.c_char_p(bfile))
@@ -206,12 +204,12 @@ class BatchWriter(object):
             filelist = [self.train_file, self.val_file]
             startlist = [self.train_start, self.val_start]
         for sname, fname, start in zip(namelist, filelist, startlist):
-            print("Writing %s %s %s" % (sname, fname, start))
+            neon_logger.display("Writing %s %s %s" % (sname, fname, start))
             if fname is not None and os.path.exists(fname):
                 imgs, labels = self.parse_file_list(fname)
                 self.write_batches(start, labels, imgs)
             else:
-                print("Skipping %s, file missing" % (sname))
+                neon_logger.display("Skipping %s, file missing" % (sname))
         # Get the max item size and store it for meta file
         self.save_meta()
 
@@ -258,7 +256,7 @@ class BatchWriterI1K(BatchWriter):
         for setn in ('train', 'val'):
             img_dir = os.path.join(self.out_dir, setn)
 
-            print("Extracting %s files" % (setn))
+            neon_logger.display("Extracting %s files" % (setn))
             toptar = getattr(self, setn + '_tar')
             label_dict = getattr(self, setn + '_labels')
             name_slice = slice(None, 9) if setn == 'train' else slice(15, -5)
@@ -286,9 +284,9 @@ class BatchWriterI1K(BatchWriter):
         for setn in ('train', 'val'):
             img_dir = os.path.join(self.out_dir, setn)
             csvfile = getattr(self, setn + '_file')
-            print("Getting %s file list" % (setn))
+            neon_logger.display("Getting %s file list" % (setn))
             if os.path.exists(csvfile) and not overwrite:
-                print("File %s exists, not overwriting" % (csvfile))
+                neon_logger.display("File %s exists, not overwriting" % (csvfile))
                 continue
             flines = []
 
@@ -340,9 +338,9 @@ class BatchWriterCSV(BatchWriter):
     def run(self):
         if not os.path.exists(self.out_dir):
             os.makedirs(self.out_dir)
-        print("Writing train macrobatches")
+        neon_logger.display("Writing train macrobatches")
         self.write_batches(self.train_start, self.labels['train'], self.imgs['train'])
-        print("Writing validation macrobatches")
+        neon_logger.display("Writing validation macrobatches")
         self.write_batches(self.val_start, self.labels['val'], self.imgs['val'])
         self.save_meta()
 
@@ -350,7 +348,7 @@ class BatchWriterCSV(BatchWriter):
 class BatchWriterCIFAR10(BatchWriterI1K):
 
     def post_init(self):
-        self.pad_size = (self.target_size - 32) / 2 if self.target_size > 32 else 0
+        self.pad_size = ((self.target_size - 32) // 2) if self.target_size > 32 else 0
         self.pad_width = ((0, 0), (self.pad_size, self.pad_size), (self.pad_size, self.pad_size))
 
         self.validation_pct = None

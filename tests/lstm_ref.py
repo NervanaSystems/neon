@@ -6,10 +6,12 @@ The adaptation includes
   - being able to read out intermediate values to compare with another LSTM
     implementation
 """
+from builtins import input, range
 import numpy as np
+from neon import logger as neon_logger
 
 
-class LSTM:
+class LSTM(object):
 
     @staticmethod
     def init(input_size, hidden_size):
@@ -29,7 +31,7 @@ class LSTM:
         X should be of shape (n,b,input_size), where n = length of sequence, b = batch size
         """
         n, b, input_size = X.shape
-        d = WLSTM.shape[1] / 4  # hidden size
+        d = WLSTM.shape[1] // 4  # hidden size
         if c0 is None:
             c0 = np.zeros((b, d))
         if h0 is None:
@@ -45,7 +47,7 @@ class LSTM:
         IFOGf = np.zeros((n, b, d * 4))  # after nonlinearity
         C = np.zeros((n, b, d))  # cell content
         Ct = np.zeros((n, b, d))  # tanh of cell content
-        for t in xrange(n):
+        for t in range(n):
             # concat [x,h] as input to the LSTM
             prevh = Hout[t - 1] if t > 0 else h0
             Hin[t, :, 0] = 1  # bias
@@ -110,7 +112,7 @@ class LSTM:
         if dhn is not None:
             dHout[n - 1] += dhn.copy()
 
-        for t in reversed(xrange(n)):
+        for t in reversed(range(n)):
             tanhCt = Ct[t]
             dIFOGf[t, :, 2 * d:3 * d] = tanhCt * dHout[t]
             # backprop tanh non-linearity first then continue backprop
@@ -208,9 +210,9 @@ def checkSequentialMatchesBatch():
     # sequential forward
     cprev = c0
     hprev = h0
-    caches = [{} for t in xrange(n)]
+    caches = [{} for t in range(n)]
     Hcat = np.zeros((n, b, d))
-    for t in xrange(n):
+    for t in range(n):
         xt = X[t:t + 1]
         _, cprev, hprev, cache = LSTM.forward(xt, WLSTM, cprev, hprev)
         caches[t] = cache
@@ -235,7 +237,7 @@ def checkSequentialMatchesBatch():
     dh0 = np.zeros_like(h0)
     dcnext = None
     dhnext = None
-    for t in reversed(xrange(n)):
+    for t in reversed(range(n)):
         dht = dH[t].reshape(1, b, d)
         dx, dWLSTMt, dcprev, dhprev = LSTM.backward(
             dht, caches[t], dcnext, dhnext)
@@ -249,11 +251,12 @@ def checkSequentialMatchesBatch():
             dh0 = dhprev
 
     # and make sure the gradients match
-    print 'Making sure batched version agrees with sequential version: (should all be True)'
-    print np.allclose(BdX, dX)
-    print np.allclose(BdWLSTM, dWLSTM)
-    print np.allclose(Bdc0, dc0)
-    print np.allclose(Bdh0, dh0)
+    neon_logger.display('Making sure batched version agrees with sequential version: '
+                        '(should all be True)')
+    neon_logger.display(np.allclose(BdX, dX))
+    neon_logger.display(np.allclose(BdWLSTM, dWLSTM))
+    neon_logger.display(np.allclose(Bdc0, dc0))
+    neon_logger.display(np.allclose(Bdh0, dh0))
 
 
 def checkBatchGradient():
@@ -285,12 +288,12 @@ def checkBatchGradient():
     tocheck = [X, WLSTM, c0, h0]
     grads_analytic = [dX, dWLSTM, dc0, dh0]
     names = ['X', 'WLSTM', 'c0', 'h0']
-    for j in xrange(len(tocheck)):
+    for j in range(len(tocheck)):
         mat = tocheck[j]
         dmat = grads_analytic[j]
         name = names[j]
         # gradcheck
-        for i in xrange(mat.size):
+        for i in range(mat.size):
             old_val = mat.flat[i]
             mat.flat[i] = old_val + delta
             loss0 = fwd()
@@ -299,7 +302,7 @@ def checkBatchGradient():
             mat.flat[i] = old_val
 
             grad_analytic = dmat.flat[i]
-            grad_numerical = (loss0 - loss1) / (2 * delta)
+            grad_numerical = (loss0 - loss1) / float(2 * delta)
 
             if grad_numerical == 0 and grad_analytic == 0:
                 rel_error = 0  # both are zero, OK.
@@ -309,7 +312,7 @@ def checkBatchGradient():
                 status = 'VAL SMALL WARNING'
             else:
                 rel_error = (abs(grad_analytic - grad_numerical) /
-                             abs(grad_numerical + grad_analytic))
+                             abs(float(grad_numerical + grad_analytic)))
                 status = 'OK'
                 if rel_error > rel_error_thr_warning:
                     status = 'WARNING'
@@ -317,13 +320,13 @@ def checkBatchGradient():
                     status = '!!!!! NOTOK'
 
             # print stats
-            print('%s checking param %s index %s (val = %+8f), analytic = %+8f,' +
-                  'numerical = %+8f, relative error = %+8f'
-                  % (status, name, repr(np.unravel_index(i, mat.shape)), old_val,
-                     grad_analytic, grad_numerical, rel_error))
+            neon_logger.display('%s checking param %s index %s (val = %+8f), analytic = %+8f,' +
+                                'numerical = %+8f, relative error = %+8f'
+                                % (status, name, repr(np.unravel_index(i, mat.shape)), old_val,
+                                   grad_analytic, grad_numerical, rel_error))
 
 if __name__ == "__main__":
     checkSequentialMatchesBatch()
-    raw_input('check OK, press key to continue to gradient check')
+    input('check OK, press key to continue to gradient check')
     checkBatchGradient()
-    print 'every line should start with OK. Have a nice day!'
+    neon_logger.display('every line should start with OK. Have a nice day!')

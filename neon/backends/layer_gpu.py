@@ -1,4 +1,4 @@
-# Copyright 2014 Nervana Systems Inc. All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,16 +18,18 @@ but they also cache all the computed params for complex layers.
 TODO: clean up merge with CPU layers
 TODO: remove any non-param caching code, neon layers should replace benchmark code.
 """
+from __future__ import division
+from builtins import object, range, str
 import logging
+from math import ceil
 import numpy as np
+from operator import mul
 import pycuda.driver as drv
+from pycuda.tools import context_dependent_memoize
+import sys
+from neon import logger as neon_logger
 from neon.backends import kernel_specs
 from neon.backends import convolution
-from pycuda.tools import context_dependent_memoize
-from operator import mul
-from math import ceil
-import sys
-
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +104,7 @@ class Layer(object):
     def scale_weights(self, scale):
 
         mean = self.get_activation_mean()
-        self.weights[:] *= scale/mean
+        self.weights[:] *= scale / mean
 
     def fprop(self, fprop_in, scale_weights=0):
         if self.fprop_in is None and fprop_in:
@@ -119,7 +121,7 @@ class Layer(object):
         return bprop_in
 
     def grad_descent(self):
-        self.weights[:] += self.updat_out*self.learning_rate
+        self.weights[:] += self.updat_out * self.learning_rate
 
     def get_activation_mean(self):
         return self._get_mean(self.fprop_out, self.act_stats, self.dimO2)
@@ -157,7 +159,7 @@ class Layer(object):
 
         buf1    = buf[0:1, 0:1]
         buf[:]  = self.lib.sum(abs(ary.reshape(shape)), axis=1)
-        buf1[:] = self.lib.sum(buf, axis=0) * (1.0/ary.size)
+        buf1[:] = self.lib.sum(buf, axis=0) * (1.0 / ary.size)
         return float(buf1.get()[0, 0])
 
     def _get_max(self, ary, buf, shape):
@@ -168,21 +170,21 @@ class Layer(object):
         return float(buf1.get()[0, 0])
 
     def fprop_stats(self):
-        print("fprop:%10.5f mean %11.5f max %s"
+        neon_logger.display("fprop:%10.5f mean %11.5f max %s"
               % (self.get_activation_mean(), self.get_activation_max(), self))
 
     def bprop_stats(self):
         if self.bprop_out is not None:
-            print("bprop:%10.5f mean %11.5f max %s"
+            neon_logger.display("bprop:%10.5f mean %11.5f max %s"
                   % (self.get_delta_mean(), self.get_delta_max(), self))
 
         if self.weights is not None:
             up_mean, up_max = (self.get_update_mean(), self.get_update_max())
             wt_mean, wt_max = (self.get_weight_mean(), self.get_weight_max())
-            rt_mean, rt_max = (0.0001 * up_mean/wt_mean, 0.0001 * up_max/wt_max)
-            print("updat:%10.5f mean %11.5f max %s" % (up_mean, up_max, self))
-            print("weigh:%10.5f mean %11.5f max" % (wt_mean, wt_max))
-            print("ratio:%10.5f mean %11.5f max" % (rt_mean, rt_max))
+            rt_mean, rt_max = (0.0001 * up_mean / wt_mean, 0.0001 * up_max / wt_max)
+            neon_logger.display("updat:%10.5f mean %11.5f max %s" % (up_mean, up_max, self))
+            neon_logger.display("weigh:%10.5f mean %11.5f max" % (wt_mean, wt_max))
+            neon_logger.display("ratio:%10.5f mean %11.5f max" % (rt_mean, rt_max))
 
     @staticmethod
     def create(lib, conf, prev_layer, dtype):
@@ -256,8 +258,8 @@ class DataLayer(Layer):
         self.DHW = (D, H, W)
         self.dimI   = (C, D, H, W, N)
         self.dimO   = (C, D, H, W, N)
-        self.dimI2  = (C*D*H*W, N)
-        self.dimO2  = (C*D*H*W, N)
+        self.dimI2  = (C * D * H * W, N)
+        self.dimO2  = (C * D * H * W, N)
         self.sizeO  = reduce(mul, self.dimO, 1)
         self.sizeI  = self.sizeO
 
@@ -384,10 +386,10 @@ class ConvLayer(Layer):
         self.dimF   = (C, T, R, S, K)
         self.dimFb  = (K, T, R, S, C)
         self.dimO   = (K, M, P, Q, N)
-        self.dimI2  = (C*D*H*W, N)
-        self.dimF2  = (C*T*R*S, K)
-        self.dimF2t = (K, C*T*R*S)
-        self.dimO2  = (K*M*P*Q, N)
+        self.dimI2  = (C * D * H * W, N)
+        self.dimF2  = (C * T * R * S, K)
+        self.dimF2t = (K, C * T * R * S)
+        self.dimO2  = (K * M * P * Q, N)
         self.dimS   = (K, 1)
         self.sizeI  = reduce(mul, self.dimI, 1)
         self.sizeF  = reduce(mul, self.dimF, 1)
@@ -395,7 +397,7 @@ class ConvLayer(Layer):
         self.nOut   = reduce(mul, self.MPQ, 1) * K
 
         # flop count for benchmarking
-        self.flops = P*Q*M*K*N*C*R*S*T * 2.0
+        self.flops = P * Q * M * K * N * C * R * S * T * 2.0
 
         args = (lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
                 pad_d, pad_h, pad_w, str_d, str_h, str_w)
@@ -416,7 +418,7 @@ class ConvLayer(Layer):
 
         ####### Winograd ###########
         elif lib.enable_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
-            from winograd_conv import (FpropWinograd_2x2_3x3, BpropWinograd_2x2_3x3, UpdateWinograd_3x3_2x2,
+            from .winograd_conv import (FpropWinograd_2x2_3x3, BpropWinograd_2x2_3x3, UpdateWinograd_3x3_2x2,
                                        FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
 
             # Temp for now till we can autotune
@@ -438,7 +440,7 @@ class ConvLayer(Layer):
             else:
                 self.bprop_kernels = BpropWinograd_2x2_3x3(*args)
 
-            if N >=4 and (C < 8 or H*W > 112*112):
+            if N >= 4 and (C < 8 or H * W > 112 * 112):
                 self.updat_kernels = convolution.UpdateDirect(*args)
             elif winograd == 4:
                 self.updat_kernels = UpdateWinograd_3x3_4x4(*args)
@@ -543,8 +545,8 @@ class DeconvLayer(ConvLayer):
         D = T = 1
 
         # Cannot get exact, e.g. because not unique
-        H = (P-1) * str_h - 2 * pad_h + R
-        W = (Q-1) * str_w - 2 * pad_w + S
+        H = (P - 1) * str_h - 2 * pad_h + R
+        W = (Q - 1) * str_w - 2 * pad_w + S
 
         super(DeconvLayer, self).__init__(
             lib, dtype,
@@ -616,10 +618,10 @@ class PoolLayer(Layer):
             str_w = S
 
         if str_c < J or str_d < T or str_h < R or str_w < S:
-            self.overlap = (ceil(float(J)/str_c) *
-                            ceil(float(T)/str_d) *
-                            ceil(float(R)/str_h) *
-                            ceil(float(S)/str_w))
+            self.overlap = (ceil(float(J) / str_c) *
+                            ceil(float(T) / str_d) *
+                            ceil(float(R) / str_h) *
+                            ceil(float(S) / str_w))
         else:
             self.overlap = 0.0
 
@@ -652,25 +654,25 @@ class PoolLayer(Layer):
         self.dimI   = (C, D, H, W, N)
         self.dimO   = (K, M, P, Q, N)
         self.dimF2  = None
-        self.dimI2  = (C*D*H*W, N)
-        self.dimO2  = (K*M*P*Q, N)
+        self.dimI2  = (C * D * H * W, N)
+        self.dimO2  = (K * M * P * Q, N)
         self.sizeI  = reduce(mul, self.dimI, 1)
         self.sizeO  = reduce(mul, self.dimO, 1)
         self.nOut   = reduce(mul, self.MPQ, 1) * K
 
         # precompute some multiplications for fast constant memory access
-        WN   = W*N
-        HWN  = H*WN
-        DHWN = D*HWN
-        DH   = D*H
-        RS   = R*S
-        RST  = T*RS
-        JRST = J*RST
-        QN   = Q*N
-        PQN  = P*QN
-        MPQN = M*PQN
+        WN   = W * N
+        HWN  = H * WN
+        DHWN = D * HWN
+        DH   = D * H
+        RS   = R * S
+        RST  = T * RS
+        JRST = J * RST
+        QN   = Q * N
+        PQN  = P * QN
+        MPQN = M * PQN
 
-        assert JRST+32 < 2**16, "Integer division is faster with 16bit numerators"
+        assert JRST + 32 < 2**16, "Integer division is faster with 16bit numerators"
 
         sb_large = {
             #SB  shlP maskP shrP shlQ maskQ shrQ maskN shrN
@@ -696,7 +698,7 @@ class PoolLayer(Layer):
         if N == 1:
             super_block = 0
         elif N < 32:
-            super_block = len(bin(N-1))-2
+            super_block = len(bin(N - 1)) - 2
         else:
             super_block = 5
         super_block = 1 << (5 - super_block)
@@ -714,17 +716,17 @@ class PoolLayer(Layer):
         supQ = _ceil_div(Q, 1 << sb_params[3])
 
         # precompute the magic numbers and shift amounts for integer division
-        magic_RST = _magic32(JRST+32, RST)
-        magic_RS  = _magic32(RST+32, RS)
-        magic_S   = _magic32(RS+32, S)
-        magic_P   = _magic32(M*supP, supP)
+        magic_RST = _magic32(JRST + 32, RST)
+        magic_RS  = _magic32(RST + 32, RS)
+        magic_S   = _magic32(RS + 32, S)
+        magic_P   = _magic32(M * supP, supP)
 
         fprop_name = "fprop_" + op
         bprop_name = "bprop_" + op
 
         threads = 32 if super_block > 1 else N
 
-        self.fprop_kernel = [fprop_name, (supQ, supP*M, K), (threads, 1, 1), _flatten([
+        self.fprop_kernel = [fprop_name, (supQ, supP * M, K), (threads, 1, 1), _flatten([
             N, W, H, D, C, WN, HWN, DHWN,
             P, Q, magic_P, QN, PQN, MPQN,
             pad_c, pad_d, pad_h, pad_w,
@@ -762,7 +764,7 @@ class PoolLayer(Layer):
                 supH = _ceil_div(H, 1 << sb_params[0])
                 supW = _ceil_div(W, 1 << sb_params[3])
 
-                magic_H = _magic32(D*supH, supH)
+                magic_H = _magic32(D * supH, supH)
 
                 maxLutSize = \
                     _ceil_div(S, str_w) * \
@@ -770,9 +772,9 @@ class PoolLayer(Layer):
                     _ceil_div(T, str_d) * \
                     _ceil_div(J, str_c)
 
-                #print (supW, D*supH, C), sb_params, maxLutSize
+                #neon_logger.display((supW, D*supH, C), sb_params, maxLutSize)
 
-                self.bprop_kernel = [bprop_name, (supW, D*supH, C), (threads, 1, 1), _flatten([
+                self.bprop_kernel = [bprop_name, (supW, D * supH, C), (threads, 1, 1), _flatten([
                     N, W, H, D, C, WN, HWN, DHWN, magic_H,
                     pad_w, pad_h, pad_d, pad_c,
                     str_w, str_h, str_d, str_c,
@@ -802,7 +804,7 @@ class PoolLayer(Layer):
 
                 self.bprop_lut_size = lut_size * 4 * 2
         else:
-            self.bprop_kernel = [bprop_name, (supQ, supP*M, K), (threads, 1, 1), _flatten([
+            self.bprop_kernel = [bprop_name, (supQ, supP * M, K), (threads, 1, 1), _flatten([
                 N, W, H, D, C, WN, HWN, DHWN,
                 P, Q, magic_P, QN, PQN, MPQN,
                 pad_c, pad_d, pad_h, pad_w,
@@ -858,8 +860,8 @@ class Inception(Layer):
 
         self.dimI  = (C, D, H, W, N)
         self.dimO  = (K, M, P, Q, N)
-        self.dimI2 = (C*D*H*W, N)
-        self.dimO2 = (K*M*P*Q, N)
+        self.dimI2 = (C * D * H * W, N)
+        self.dimO2 = (K * M * P * Q, N)
         self.sizeI = reduce(mul, self.dimI, 1)
         self.sizeO = reduce(mul, self.dimO, 1)
         self.nOut  = reduce(mul, self.MPQ, 1) * K
@@ -877,7 +879,7 @@ class Inception(Layer):
         out = "Inception: NCK: (%d, %d, %d) DHW:%s MPQ:%s\n" % (self.N, self.C, self.K,
                                                                 self.DHW, self.MPQ)
         for i, part in enumerate(self.partitions):
-            out += "  Part%d:\n" % (i+1)
+            out += "  Part%d:\n" % (i + 1)
             for layer in part:
                 out += "    %s\n" % layer
         return out.rstrip()
@@ -889,7 +891,7 @@ class Inception(Layer):
         for part in self.partitions:
             for layer in part:
                 if layer is part[-1]:
-                    layer.init_activations(self.fprop_out[K:K+layer.K, ...])
+                    layer.init_activations(self.fprop_out[K:K + layer.K, ...])
                     K += layer.K
                 else:
                     layer.init_activations()
@@ -929,7 +931,7 @@ class Inception(Layer):
 
         K = self.K
         for part in self.partitions[::-1]:
-            part_bprop_in = bprop_in[K-part[-1].K:K, ...]
+            part_bprop_in = bprop_in[K - part[-1].K:K, ...]
             K -= part[-1].K
             for layer in part[::-1]:
                 if part is not self.partitions[-1] and layer is part[0]:
@@ -993,9 +995,9 @@ class BatchNorm(Layer):
             self.Q     = W
             self.dimI  = (C, D, H, W, N)
             self.dimO  = (C, D, H, W, N)
-            self.dimO2 = (C*D*H*W, N)
-            self.dim2  = (C, D*H*W*N)
-            self.nOut  = C*D*H*W
+            self.dimO2 = (C * D * H * W, N)
+            self.dim2  = (C, D * H * W * N)
+            self.nOut  = C * D * H * W
 
         elif nIn is not None:
 
@@ -1009,7 +1011,7 @@ class BatchNorm(Layer):
         else:
             raise ValueError("missing C or nIn")
 
-        self.rcp_depth = 1.0/self.dim2[1]
+        self.rcp_depth = 1.0 / self.dim2[1]
 
     def __str__(self):
         return ("BatchNorm: (%d, %d)" % self.dim2)

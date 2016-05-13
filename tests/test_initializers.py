@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -52,7 +52,7 @@ def test_array(backend_default, args):
     dim1, dim2 = args
     shape = (dim1, dim2)
 
-    Wloc = be.array(np.arange(shape[0]*shape[1]).reshape(shape))
+    Wloc = be.array(np.arange(shape[0] * shape[1]).reshape(shape))
     Wdev = be.empty(shape)
 
     init = Array(Wdev)

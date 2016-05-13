@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,10 +15,13 @@
 """
 Defines text datatset preprocessing routines
 """
-
-import cPickle
-import numpy as np
-import re
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from builtins import map  # noqa
+from builtins import range  # noqa
+import numpy as np  # noqa
+import re  # noqa
+from neon.util.compat import pickle  # noqa
 
 
 def clean_string(string):
@@ -54,9 +57,8 @@ def pad_sentences(sentences, sentence_length=None, dtype=np.int32, pad_val=0.):
 
 def pad_data(path, vocab_size=20000, sentence_length=100, oov=2,
              start=1, index_from=3, seed=113, test_split=0.2):
-
     f = open(path, 'rb')
-    X, y = cPickle.load(f)
+    X, y = pickle.load(f)
     f.close()
 
     np.random.seed(seed)
@@ -78,11 +80,11 @@ def pad_data(path, vocab_size=20000, sentence_length=100, oov=2,
     if oov is not None:
         X = [[oov if w >= vocab_size else w for w in x] for x in X]
 
-    X_train = X[:int(len(X)*(1-test_split))]
-    y_train = y[:int(len(X)*(1-test_split))]
+    X_train = X[:int(len(X) * (1 - test_split))]
+    y_train = y[:int(len(X) * (1 - test_split))]
 
-    X_test = X[int(len(X)*(1-test_split)):]
-    y_test = y[int(len(X)*(1-test_split)):]
+    X_test = X[int(len(X) * (1 - test_split)):]
+    y_test = y[int(len(X) * (1 - test_split)):]
 
     X_train = pad_sentences(X_train, sentence_length=sentence_length)
     y_train = np.array(y_train).reshape((len(y_train), 1))
@@ -127,7 +129,7 @@ def get_paddedXY(X, y, vocab_size=20000, sentence_length=100, oov=2,
 def get_google_word2vec_W(fname, vocab, vocab_size=50000, index_from=3):
     f = open(fname, 'rb')
     header = f.readline()
-    vocab1_size, embedding_dim = map(int, header.split())
+    vocab1_size, embedding_dim = list(map(int, header.split()))
     binary_len = np.dtype('float32').itemsize * embedding_dim
     vocab_size = min(len(vocab) + index_from, vocab_size)
     W = np.zeros((vocab_size, embedding_dim))

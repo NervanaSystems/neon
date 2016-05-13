@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -47,6 +47,7 @@ Notes:
 
 """
 
+from neon import logger as neon_logger
 from neon.backends import gen_backend
 from neon.data import PASCALVOCTrain
 from neon.transforms import CrossEntropyMulti, SmoothL1Loss, ObjectDetection
@@ -55,13 +56,14 @@ from neon.optimizers import GradientDescentMomentum, MultiOptimizer
 from neon.callbacks.callbacks import Callbacks
 from neon.layers import Multicost, GeneralizedCost, GeneralizedCostMask
 from neon.util.persist import save_obj
-
 from util import load_vgg_weights, create_frcn_model, scale_bbreg_weights
 
 # main script
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args(gen_be=False)
 
 # Override save path if None
@@ -82,10 +84,10 @@ n_mb = None
 img_per_batch = args.batch_size
 rois_per_img = 64
 frcn_fine_tune = False
-learning_rate_scale = 1.0/10
+learning_rate_scale = 1.0 / 10
 
 if frcn_fine_tune is True:
-    learning_rate_scale = 1.0/16
+    learning_rate_scale = 1.0 / 16
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
@@ -93,7 +95,7 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 # setup training dataset
 train_set = PASCALVOCTrain('trainval', '2007', path=args.data_dir, n_mb=n_mb,
                            img_per_batch=img_per_batch, rois_per_img=rois_per_img,
-                           add_flipped=False)
+                           add_flipped=False, subset_pct=args.subset_pct)
 test_set = PASCALVOCTrain('test', '2007', path=args.data_dir, n_mb=n_mb,
                           img_per_batch=img_per_batch, rois_per_img=rois_per_img,
                           add_flipped=False)
@@ -102,7 +104,8 @@ test_set = PASCALVOCTrain('test', '2007', path=args.data_dir, n_mb=n_mb,
 model = create_frcn_model(frcn_fine_tune)
 
 # setup optimizer
-opt_w = GradientDescentMomentum(0.001 * learning_rate_scale, 0.9, wdecay=0.0005)
+opt_w = GradientDescentMomentum(
+    0.001 * learning_rate_scale, 0.9, wdecay=0.0005)
 opt_b = GradientDescentMomentum(0.002 * learning_rate_scale, 0.9)
 
 optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b})
@@ -123,15 +126,18 @@ model.fit(train_set, optimizer=optimizer,
 
 # Fast R-CNN model requires scale the bbox regression branch linear layer weights
 # before saving the model
-model = scale_bbreg_weights(model, train_set.bbtarget_means, train_set.bbtarget_stds)
+model = scale_bbreg_weights(
+    model, train_set.bbtarget_means, train_set.bbtarget_stds)
 
 save_obj(model.serialize(keep_states=True), args.save_path)
 
-print 'running eval...'
+neon_logger.display('running eval...')
 metric_train = model.eval(train_set, metric=ObjectDetection())
-print 'Train: label accuracy - {}%, object deteciton logloss - {}'.format(metric_train[0]*100,
-                                                                          metric_train[1])
+neon_logger.display(
+    'Train: label accuracy - {}%, object detection logloss - {}'.format(metric_train[0] * 100,
+                                                                        metric_train[1]))
 
 metric_test = model.eval(test_set, metric=ObjectDetection())
-print 'Test: label accuracy - {}%, object deteciton logloss - {}'.format(metric_test[0]*100,
-                                                                         metric_test[1])
+neon_logger.display(
+    'Test: label accuracy - {}%, object detection logloss - {}'.format(metric_test[0] * 100,
+                                                                       metric_test[1]))

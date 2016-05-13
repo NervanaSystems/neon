@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -17,6 +17,7 @@
 Small CIFAR10 based MLP with fully connected layers.
 """
 
+from neon import logger as neon_logger
 from neon.data import ArrayIterator, load_cifar10
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, Affine
@@ -49,6 +50,8 @@ mlp = Model(layers=layers)
 # configure callbacks
 callbacks = Callbacks(mlp, eval_set=test, **args.callback_args)
 
-mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+mlp.fit(train, optimizer=opt_gdm, num_epochs=args.epochs,
+        cost=cost, callbacks=callbacks)
 
-print('Misclassification error = %.1f%%' % (mlp.eval(test, metric=Misclassification())*100))
+neon_logger.display('Misclassification error = %.1f%%' %
+                    (mlp.eval(test, metric=Misclassification()) * 100))

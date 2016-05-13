@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,8 +15,9 @@
 """
 Convolution layer tests
 """
+from builtins import zip
 import numpy as np
-from neon import NervanaObject
+from neon import NervanaObject, logger as neon_logger
 from neon.layers import Sequential, Conv, Pooling, MergeBroadcast, Affine
 from neon.initializers.initializer import Gaussian, Constant
 from neon.transforms import Rectlin, Softmax
@@ -106,7 +107,7 @@ def test_branch_model(backend_gpu):
     inp = neon_layer.be.array(inpa)
 
     neon_layer.allocate()
-    print neon_layer.nested_str()
+    neon_logger.display(neon_layer.nested_str())
     neon_layer.layers[0].prev_layer = True
     neon_layer.allocate_deltas()
     neon_layer.layers[0].set_deltas([be.iobuf(inshape)])
@@ -161,7 +162,7 @@ def test_branch_model(backend_gpu):
     neon_out_ref = x.get()
     assert allclose_with_out(neon_out, neon_out_ref, rtol=0)
 
-    print "Beginning Back prop"
+    neon_logger.display("Beginning Back prop")
     erra = np.random.random(neon_out.shape)
     err = be.array(erra)
     for ll in reversed(neon_layer.layers[8:]):
@@ -203,7 +204,7 @@ def test_branch_model_fork(backend_gpu):
     inp = neon_layer.be.array(inpa)
 
     neon_layer.allocate()
-    print neon_layer.nested_str()
+    neon_logger.display(neon_layer.nested_str())
     neon_layer.layers[0].layers[0].prev_layer = True
     neon_layer.allocate_deltas()
     neon_layer.layers[0].layers[0].set_deltas([be.iobuf(inshape)])
@@ -272,7 +273,7 @@ def test_branch_model_fork(backend_gpu):
     neon_out_ref2 = branch2.fprop(main2_out).get()
     assert allclose_with_out(neon_out_ref2, neon_out[1])
 
-    print "Beginning Back prop"
+    neon_logger.display("Beginning Back prop")
     erra = [np.random.random(d.shape) for d in neon_out]
     err = [be.array(d) for d in erra]
     neon_layer.layers[0].layers[0].deltas = be.iobuf(inshape)

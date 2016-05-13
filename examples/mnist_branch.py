@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -39,6 +39,8 @@ The topology of the network is:
  data
 
 """
+
+from neon import logger as neon_logger
 from neon.callbacks.callbacks import Callbacks
 from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Gaussian
@@ -99,7 +101,8 @@ cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),
                  weights=[1, 0., 0.])
 
 # setup optimizer
-optimizer = GradientDescentMomentum(0.1, momentum_coef=0.9, stochastic_round=args.rounding)
+optimizer = GradientDescentMomentum(
+    0.1, momentum_coef=0.9, stochastic_round=args.rounding)
 
 # initialize model object
 alphas = [1, 0.25, 0.25]
@@ -109,9 +112,11 @@ mlp = Model(layers=SingleOutputTree([p1, p2, p3], alphas=alphas))
 callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 
 # run fit
-mlp.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+mlp.fit(train_set, optimizer=optimizer,
+        num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 # TODO: introduce Multicost metric support.  The line below currently fails
 # since the Misclassification metric expects a single Tensor not a list of
 # Tensors
-print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
+neon_logger.display('Misclassification error = %.1f%%' %
+                    (mlp.eval(valid_set, metric=Misclassification()) * 100))

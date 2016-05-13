@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 """
 Pooling layer tests
 """
+from builtins import range
 import itertools as itt
 import numpy as np
 from neon import NervanaObject
@@ -44,7 +45,7 @@ def pytest_generate_tests(metafunc):
             in_sz_rng = [8]
         fargs_ = []
         for fs in fs_rng:
-            stride_rng = set([1, fs/2, fs])
+            stride_rng = set([1, fs // 2, fs])
             fargs_.append(itt.product(fs_rng, nifm_rng, pad_rng, stride_rng, in_sz_rng, bsz_rng))
         fargs = itt.chain(*fargs_)
         metafunc.parametrize('poolargs', fargs)
@@ -73,8 +74,8 @@ def ref_pooling(inp, inp_shape, fshape, padding, strides, be, ncheck=None):
 
     if padding > 0:
         padded_shape = (inp_lshape[0],
-                        inp_lshape[1]+2*padding,
-                        inp_lshape[2]+2*padding,
+                        inp_lshape[1] + 2 * padding,
+                        inp_lshape[2] + 2 * padding,
                         inp_lshape[-1])
         inp_pad = np.zeros(padded_shape)
         inp_pad[:, padding:-padding, padding:-padding, :] = inpa[:, 0:, 0:, :]
@@ -84,9 +85,9 @@ def ref_pooling(inp, inp_shape, fshape, padding, strides, be, ncheck=None):
     out_exp = np.zeros(outshape)
     for indC in range(outshape[0]):
         for indh in range(outshape[1]):
-            hrng = (indh*strides[0], indh*strides[0] + fshape[0])
+            hrng = (indh * strides[0], indh * strides[0] + fshape[0])
             for indw in range(outshape[2]):
-                wrng = (indw*strides[1], indw*strides[1] + fshape[1])
+                wrng = (indw * strides[1], indw * strides[1] + fshape[1])
                 for cnt, indb in enumerate(check_inds):
                     inp_check = inp_pad[indC, hrng[0]:hrng[1], wrng[0]:wrng[1], indb]
                     out_exp[indC, indh, indw, cnt] = np.max(inp_check)
@@ -112,7 +113,7 @@ def test_padding(backend_default, poolargs):
 
     out = neon_layer.fprop(inp).get()
 
-    ncheck = [0, batch_size/2, batch_size-1]
+    ncheck = [0, batch_size // 2, batch_size - 1]
 
     (out_exp, check_inds) = ref_pooling(inp, inp.lshape,
                                         (fshape, fshape),

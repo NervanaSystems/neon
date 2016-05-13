@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from __future__ import division
+from builtins import str, zip
 from collections import OrderedDict
 import logging
 
 from neon import __version__ as __neon_version__
-from neon import NervanaObject
+from neon import NervanaObject, logger as neon_logger
 from neon.backends.backend import Block
 from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj, save_obj, load_class
@@ -63,7 +65,7 @@ class Model(NervanaObject):
         if type(layers) in (ModelDescription, dict):
             # load up the model from a serialized file (dataset could be None here)
             self.deserialize(layers, load_states=(not weights_only))
-        elif type(layers) is str:
+        elif isinstance(layers, (str, bytes)):
             self.load_params(layers, load_states=(not weights_only))
         else:
             # Wrap the list of layers in a Sequential container if a raw list of layers
@@ -243,8 +245,8 @@ class Model(NervanaObject):
             x = self.fprop(x, inference=True)
 
             # This logic is for handling partial batch sizes at the end of the dataset
-            nsteps = x.shape[1] / self.be.bsz if not isinstance(x, list) else \
-                x[0].shape[1] / self.be.bsz
+            nsteps = x.shape[1] // self.be.bsz if not isinstance(x, list) else \
+                x[0].shape[1] // self.be.bsz
 
             bsz = min(dataset.ndata - nprocessed, self.be.bsz)
             running_error += metric(x, t, calcrange=slice(0, nsteps * bsz)) * nsteps * bsz
@@ -273,14 +275,14 @@ class Model(NervanaObject):
             if Ypred is None:
                 (dim0, dim1) = x.shape
                 Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)
-                nsteps = dim1 / self.be.bsz
+                nsteps = dim1 // self.be.bsz
             cur_batch = slice(idx * dim1, (idx + 1) * dim1)
             Ypred[cur_batch] = x.get().T
 
         # Handle the recurrent case.
         if nsteps != 1:
             b, s = (self.be.bsz, nsteps)
-            Ypred = Ypred.reshape((n, s, b, -1)).transpose(0, 2, 1, 3).copy().reshape(n*b, s, -1)
+            Ypred = Ypred.reshape((n, s, b, -1)).transpose(0, 2, 1, 3).copy().reshape(n * b, s, -1)
 
         return Ypred[:dataset.ndata]
 
@@ -487,9 +489,8 @@ class Model(NervanaObject):
             dictionary with fprop, bprop run times
         """
         # initialize model
-        if inference is False:
-            assert cost is not None and optimizer is not None, "Need cost and optimizer to \
-                                                                benchmark bprop and update"
+        if inference is False and cost is not None and optimizer is not None:
+            raise RuntimeError("Need cost and optimizer to benchmark bprop and update")
         self.cost = cost
         self.initialize(dataset, cost)
         self.optimizer = optimizer
@@ -543,19 +544,19 @@ class Model(NervanaObject):
         header = ('Func', 'Mean', 'Median', 'Min', 'Max', 'Units')
         stats = tuple(stat.lower() for stat in header[1:-1])
 
-        fmt_titles = '| {:^11} '*len(header) + '|'
-        fmt_nums = '| {func:<11} ' + '|  {%s:<10.5g} '*len(stats) % (stats) + '| {units:^11} |'
+        fmt_titles = '| {:^11} ' * len(header) + '|'
+        fmt_nums = '| {func:<11} ' + '|  {%s:<10.5g} ' * len(stats) % (stats) + '| {units:^11} |'
 
         head_str = fmt_titles.format(*header)
-        sep = '-'*len(head_str)
+        sep = '-' * len(head_str)
         head_str = sep + '\n' + head_str + '\n' + sep
-        print(head_str)
+        neon_logger.display(head_str)
         out_stats = {}
         for step in times:
             timesu = np.array(times[step][nskip:])  # in ms
             out_stats[step] = {}
             for stat in stats:
                 out_stats[step][stat] = getattr(np, stat)(timesu)
-            print(fmt_nums.format(units='msec', func=step, **out_stats[step]))
-        print(sep)
+            neon_logger.display(fmt_nums.format(units='msec', func=step, **out_stats[step]))
+        neon_logger.display(sep)
         return out_stats

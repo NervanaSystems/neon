@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -20,6 +20,7 @@ Simplified version of VGG model B, D, or E:
  - removes convolutional inference
 """
 
+from builtins import range
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.backends import gen_backend
 from neon.initializers import Constant, GlorotUniform
@@ -87,7 +88,7 @@ valmetric = TopKMisclassification(k=5)
 callbacks = Callbacks(mlp, eval_set=test, metric=valmetric, **args.callback_args)
 
 # create learning rate schedules and optimizers
-weight_sched = Schedule(range(14, 75, 15), 0.1)
+weight_sched = Schedule(list(range(14, 75, 15)), 0.1)
 opt_gdm = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sched)
 opt_biases = GradientDescentMomentum(0.02, 0.9, schedule=weight_sched)
 opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})

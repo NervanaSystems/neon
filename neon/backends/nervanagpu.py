@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,7 +15,8 @@
 """
 Our GPU based backend interface and tensor data structure.
 """
-
+from __future__ import division
+from builtins import range, round
 import os
 import sys
 import numpy as np
@@ -28,7 +29,7 @@ from struct import unpack_from
 from pytools import memoize_method
 from functools import wraps
 from math import log
-
+from neon import logger as neon_logger
 from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
@@ -105,7 +106,7 @@ class GPUTensor(Tensor):
             for dim in shape:
                 size *= dim
         except TypeError:
-            assert isinstance(shape, (int, long, np.integer))
+            assert isinstance(shape, (int, np.integer))
             size = shape
             shape = (shape, 1)
 
@@ -133,7 +134,7 @@ class GPUTensor(Tensor):
         if gpudata is None:
             # print "allocate!"
             if size:
-                # print(drv.mem_get_info())
+                # (drv.mem_get_info())
                 self.gpudata = allocator(self.nbytes)
             else:
                 self.gpudata = None
@@ -503,7 +504,7 @@ class GPUTensor(Tensor):
             shape = shape + (1, )
 
         if -1 in shape:
-            missing_dim = -self.size / np.prod(shape)
+            missing_dim = -self.size // np.prod(shape)
             shape = tuple([missing_dim if x == -1 else x for x in shape])
 
         if shape == self.shape:
@@ -692,7 +693,7 @@ class NervanaGPU(Backend):
 
     # size of the RNG pool on device
     # currently this is hard wired
-    _RNG_POOL_SIZE = (3*2048*32, 1)
+    _RNG_POOL_SIZE = (3 * 2048 * 32, 1)
     def __init__(self,
                  rng_seed=None,
                  default_dtype=np.float32,
@@ -783,7 +784,7 @@ class NervanaGPU(Backend):
             self.hist_offset = hist_offset
             self.hist_map = dict()
             self.hist_idx = 0
-            self.hist_max = 4*4096
+            self.hist_max = 4 * 4096
             self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
             drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
 
@@ -892,7 +893,7 @@ class NervanaGPU(Backend):
         state_save = self.rng.get_state()
 
         # smaller number for 32bit systems
-        maxexp = 32 if sys.maxint > 2**32 else 30
+        maxexp = 32 if sys.maxsize > 2**32 else 30
 
         # draw _RNG_POOL_SIZE 32 bit ints to seed LFSR on device
         # lower bound 1 to avoid seeding LFSR with 0
@@ -970,7 +971,7 @@ class NervanaGPU(Backend):
             stdv (float): standard deviation value.  Default 1
         """
         self.pcg.fill_normal(p_gpuarray(ary.shape, ary.dtype, gpudata=ary.gpudata))
-        if not all([mean==0, stdv==1]):
+        if not all([mean == 0, stdv == 1]):
             ary[:] = ary * stdv + mean
 
     def _get_rand_state_dev(self):
@@ -1518,9 +1519,9 @@ class NervanaGPU(Backend):
 
         kernel = kernel_specs.get_kernel("_".join((clss, op, size)), vec_opt)
         params = [
-            (1, gridA, gridB), (kernel.threads, 1, 1), self.stream,
+            (1, int(gridA), int(gridB)), (kernel.threads, 1, 1), self.stream,
             C.gpudata, A.gpudata, B.gpudata, alpha, beta, flags,
-            lda, ldb, ldc, m, n, k,
+            int(lda), int(ldb), int(ldc), int(m), int(n), int(k),
             0, 0, 0, 0]
 
         # Warmup
@@ -1540,7 +1541,7 @@ class NervanaGPU(Backend):
             end.synchronize()
             msecs = end.time_since(start) / repeat
             gflops = (m * n * k * 2.0) / (msecs * 1000000.0)
-            print("%7.3f msecs %4.0f gflops (%s_%s: %d,%d,%d) size:%s grid:(%d,%d)" %
+            neon_logger.display("%7.3f msecs %4.0f gflops (%s_%s: %d,%d,%d) size:%s grid:(%d,%d)" %
                  (msecs, gflops, clss, op, m, n, k, size, gridA, gridB))
             if repeat > 1:
                 return msecs, gflops
@@ -1682,9 +1683,8 @@ class NervanaGPU(Backend):
             end.record(self.stream)
             end.synchronize()
             msecs = end.time_since(start) / repeat
-            gflops = (batch_loops * batch_grid * m * n * k * 2.0) / \
-                (msecs * 1000000.0)
-            print("%7.3f msecs %4.0f gflops (%s_%s: %d,%d,%d) size:%s grid:(%d,%d,%d) loops:%d" %
+            gflops = (batch_loops * batch_grid * m * n * k * 2.0) / (msecs * 1000000.0)
+            neon_logger.display("%7.3f msecs %4.0f gflops (%s_%s: %d,%d,%d) size:%s grid:(%d,%d,%d) loops:%d" %
                   (msecs, gflops, clss, op, m, n, k, size, batch_grid, gridA, gridB, batch_loops))
             if repeat > 1:
                 return gflops
@@ -1911,8 +1911,8 @@ class NervanaGPU(Backend):
             msecs  = end.time_since(start) / repeat
             gflops = layer.flops / (msecs * 1000000.0)
             #if layer.TRS[2] == 3:
-            print("%7.3f msecs %5.0f gflops %6.0f (%s: %s)" %
-                  (msecs, gflops, layer.flops/1000000.0, op, layer))
+            neon_logger.display("%7.3f msecs %5.0f gflops %6.0f (%s: %s)" %
+                  (msecs, gflops, layer.flops / 1000000.0, op, layer))
             return msecs, gflops
         return 0, 0
 
@@ -1968,7 +1968,7 @@ class NervanaGPU(Backend):
         Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
         """
         assert J % 2 == 1, "Only support odd LRN window size"
-        pad_c = J / 2
+        pad_c = J // 2
         op = 'lrn'
         lrn_opts = dict(T=1, R=1, S=1,
                         pad_c=pad_c,
@@ -2076,7 +2076,7 @@ class NervanaGPU(Backend):
             end.record(self.stream)
             end.synchronize()
             msecs = end.time_since(start) / repeat
-            print("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
+            neon_logger.display("%7.3f msecs (%s) grid:%s" % (msecs, layer, kernel_args[1]))
 
     def pool_layer(self, dtype,
                    op, N, C,
@@ -2164,7 +2164,7 @@ class NervanaGPU(Backend):
             end.record(self.stream)
             end.synchronize()
             msecs = end.time_since(start) / repeat
-            print("%7.3f msecs (%s)" % (msecs, layer))
+            neon_logger.display("%7.3f msecs (%s)" % (msecs, layer))
 
 
     def roipooling_fprop(self, I, rois, O, argmax, roi_count, fm_channel, fm_height, fm_width,
@@ -2187,7 +2187,7 @@ class NervanaGPU(Backend):
         assert argmax.dtype == np.int32
 
         def get_blocks(N, thread):
-            return (N + thread - 1) / thread
+            return (N + thread - 1) // thread
 
         layer_dtype = I.dtype
 
@@ -2222,7 +2222,7 @@ class NervanaGPU(Backend):
         assert argmax.dtype == np.int32
 
         def get_blocks(N, thread):
-            return (N + thread - 1) / thread
+            return (N + thread - 1) // thread
 
         layer_dtype = I.dtype
 
@@ -2285,7 +2285,7 @@ class NervanaGPU(Backend):
 
         kernel = _get_bn_fprop_kernel(x.dtype.str[1:], threads, self.compute_capability)
 
-        self._execute_bn(kernel, params, repeat, x.nbytes*2, N)
+        self._execute_bn(kernel, params, repeat, x.nbytes * 2, N)
 
     def compound_bprop_bn(self, delta_out, grad_gamma, grad_beta, delta_in,
                           x, xsum, xvar,
@@ -2325,7 +2325,7 @@ class NervanaGPU(Backend):
 
         kernel = _get_bn_bprop_kernel(x.dtype.str[1:], threads, self.compute_capability)
 
-        self._execute_bn(kernel, params, repeat, x.nbytes*4, N)
+        self._execute_bn(kernel, params, repeat, x.nbytes * 4, N)
 
     def _execute_bn(self, kernel, params, repeat, size, N):
 
@@ -2349,7 +2349,7 @@ class NervanaGPU(Backend):
             blocks = params[0][0]
             threads = params[1][0]
             occup = blocks * threads / (128.0 * _get_sm_count())
-            print("%7.3f msecs %4.0f GBps %s(%d,%d,%d) %.1f" %
+            neon_logger.display("%7.3f msecs %4.0f GBps %s(%d,%d,%d) %.1f" %
                   (msecs, bandwidth, kernel.name, blocks, N, threads, occup))
 
 
@@ -2383,13 +2383,13 @@ class NervanaGPU(Backend):
             for kernel_id in range(5):
                 threads = 512
                 if kernel_id in [1, 3]:
-                    blocks = vocab_size / (threads * 2)
+                    blocks = vocab_size // (threads * 2)
                     if vocab_size % (threads * 2):
                         blocks = blocks + 1
                 elif kernel_id == 2:
                     blocks = 1
                 else:
-                    blocks = error.shape[1] / threads
+                    blocks = error.shape[1] // threads
                     if error.shape[1] % threads:
                         blocks = blocks + 1
 
@@ -2484,11 +2484,11 @@ class NervanaGPU(Backend):
         assert a.gpudata != out.gpudata
 
         if axes is None:
-            axes = tuple(range(len(a.shape)-1,-1,-1))
+            axes = tuple(range(len(a.shape) - 1,-1,-1))
         elif type(axes) is not tuple:
             axes = tuple(axes)
 
-        assert all(out.shape[i]==a.shape[x] for i,x in enumerate(axes))
+        assert all(out.shape[i] == a.shape[x] for i,x in enumerate(axes))
 
         from neon.backends.convolution import _get_copy_transpose_kernel
 
@@ -2514,8 +2514,8 @@ class NervanaGPU(Backend):
             end.record(self.stream)
             end.synchronize()
             msecs = end.time_since(start) / repeat
-            bandwidth = a.nbytes*2 / (msecs * 1024 * 1024)
-            print("%7.3f msecs %4.0f GBps copy_transpose" % (msecs, bandwidth))
+            bandwidth = a.nbytes * 2 / (msecs * 1024 * 1024)
+            neon_logger.display("%7.3f msecs %4.0f GBps copy_transpose" % (msecs, bandwidth))
 
     def init_mark(self):
         """

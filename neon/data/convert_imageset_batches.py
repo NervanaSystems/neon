@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,13 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from builtins import range, zip  # noqa
 
-import cPickle
-from functools import partial
-from glob import glob
-from multiprocessing import Pool
-import os
-import struct
+from functools import partial  # noqa
+from glob import glob  # noqa
+from multiprocessing import Pool  # noqa
+import os  # noqa
+import struct  # noqa
+from neon import logger as neon_logger  # noqa
+from neon.util.compat import pickle  # noqa
 
 
 def convert_file(iopair, keylist):
@@ -38,9 +42,9 @@ def convert_file(iopair, keylist):
         keylist(list): A list of keys to be used in the flat binary file.
     """
     ifname, ofname = iopair
-    with open(ifname, 'r') as ifp:
-        print "Converting ", ifname
-        tdata = cPickle.load(ifp)
+    with open(ifname, 'rb') as ifp:
+        neon_logger.display("Converting {}".format(ifname))
+        tdata = pickle.load(ifp)
         jpegs = tdata['data']
         labels = tdata['labels']
         num_imgs = len(jpegs)
@@ -70,4 +74,4 @@ ofiles = [fname.replace(IPATH, OPATH) for fname in ifiles]
 keylist = ['l_id']
 
 pool = Pool(processes=8)
-pool.map(partial(convert_file, keylist=keylist), zip(ifiles, ofiles))
+pool.map(partial(convert_file, keylist=keylist), list(zip(ifiles, ofiles)))

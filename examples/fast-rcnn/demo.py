@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -39,9 +39,11 @@ Notes:
     ~/nervana/data/VOCDevkit/VOC<year>/inference_< >.pkl
 
 """
+
 import os
 import numpy as np
 from PIL import Image
+from neon import logger as neon_logger
 from neon.data.pascal_voc import PASCAL_VOC_CLASSES
 from neon.data import PASCALVOCInference
 from neon.util.argparser import NeonArgparser
@@ -52,8 +54,8 @@ try:
     import matplotlib.pyplot as plt
     plt.switch_backend('agg')
 except ImportError:
-    print('matplotlib needs to be installed manually to generate plots needed '
-          'for this example.  Skipping plot generation')
+    neon_logger.display('matplotlib needs to be installed manually to generate plots needed '
+                        'for this example.  Skipping plot generation')
     do_plots = False
 
 # parse the command line arguments
@@ -96,7 +98,7 @@ NMS_THRESH = 0.3
 for mb_idx, (x, db) in enumerate(valid_set):
 
     im = np.array(Image.open(db['img_file']))  # This is RGB order
-    print db['img_id']
+    neon_logger.display(db['img_id'])
 
     outputs = model.fprop(x, inference=True)
 
@@ -111,7 +113,7 @@ for mb_idx, (x, db) in enumerate(valid_set):
 
         # pick out scores and bboxes replated to this class
         cls_ind = PASCAL_VOC_CLASSES.index(cls)
-        cls_boxes = boxes[:, 4*cls_ind:4*(cls_ind + 1)]
+        cls_boxes = boxes[:, 4 * cls_ind:4 * (cls_ind + 1)]
         cls_scores = scores[cls_ind]
         # only keep that ones with high enough scores
         keep = np.where(cls_scores >= CONF_THRESH)[0]
@@ -122,7 +124,8 @@ for mb_idx, (x, db) in enumerate(valid_set):
         cls_boxes = cls_boxes[keep]
         cls_scores = cls_scores[keep]
 
-        keep = valid_set.nonmaximum_suppression(cls_boxes, cls_scores, NMS_THRESH)
+        keep = valid_set.nonmaximum_suppression(
+            cls_boxes, cls_scores, NMS_THRESH)
 
         # keep these after nms
         cls_boxes = cls_boxes[keep]
@@ -133,7 +136,7 @@ for mb_idx, (x, db) in enumerate(valid_set):
         if len(inds) == 0:
             continue
 
-        print 'detect {}'.format(cls)
+        neon_logger.display('detect {}'.format(cls))
 
         if do_plots:
             for i in inds:
@@ -145,7 +148,7 @@ for mb_idx, (x, db) in enumerate(valid_set):
                                   bbox[2] - bbox[0],
                                   bbox[3] - bbox[1], fill=False,
                                   edgecolor='red', linewidth=3.5)
-                    )
+                )
                 ax.text(bbox[0], bbox[1] - 2,
                         '{:s} {:.3f}'.format(cls, score),
                         bbox=dict(facecolor='blue', alpha=0.5),

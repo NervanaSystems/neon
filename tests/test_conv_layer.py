@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 """
 Convolution layer tests
 """
+from builtins import range
 import itertools as itt
 import numpy as np
 from neon import NervanaObject
@@ -248,7 +249,7 @@ def test_conv_rand(backend_default, rand_convargs):
     # fprop calculation
     ref_layer.fprop(inpa.T, permute=True)
     ref_out_perm = ref_layer.y
-    atol = 4*np.max(np.abs(ref_out - ref_out_perm))
+    atol = 4 * np.max(np.abs(ref_out - ref_out_perm))
 
     # compare ref and neon layer fprop outputs
     # using the empirically determined atol
@@ -277,10 +278,10 @@ def test_conv_rand(backend_default, rand_convargs):
     ref_deltas_perm = ref_layer.berror_nopad.T
     ref_dW_perm = ref_layer.updates
 
-    atol = 4*np.max(np.abs(ref_deltas - ref_deltas_perm))
+    atol = 4 * np.max(np.abs(ref_deltas - ref_deltas_perm))
     assert allclose_with_out(ref_deltas, neon_deltas, atol=atol, rtol=1.e-4)
 
-    atol = 4*np.max(np.abs(ref_dW - ref_dW_perm))
+    atol = 4 * np.max(np.abs(ref_dW - ref_dW_perm))
     assert allclose_with_out(ref_dW.T, neon_dW, atol=atol, rtol=1.e-4)
     return
 
@@ -311,16 +312,16 @@ class ConvLayerRef(object):
         self.ifmheight, self.ifmwidth = ifmshape_nopad
         self.ifmshape_nopad = ifmshape_nopad
         self.padding = padding
-        self.ifmshape = (self.ifmheight + 2*padding, self.ifmwidth + 2*padding)
+        self.ifmshape = (self.ifmheight + 2 * padding, self.ifmwidth + 2 * padding)
         self.fshape = fshape
 
         self.stride = strides
         self.fheight, self.fwidth = fshape
-        self.ofmheight = (self.ifmshape[0] - self.fheight) / strides + 1
-        self.ofmwidth = (self.ifmshape[1] - self.fwidth) / strides + 1
+        self.ofmheight = (self.ifmshape[0] - self.fheight) // strides + 1
+        self.ofmwidth = (self.ifmshape[1] - self.fwidth) // strides + 1
         ofmshape = (self.ofmheight, self.ofmwidth)
-        self.ifmsize = self.ifmshape[0]*self.ifmshape[1]
-        self.ifmsize_nopad = self.ifmshape_nopad[0]*self.ifmshape_nopad[1]
+        self.ifmsize = self.ifmshape[0] * self.ifmshape[1]
+        self.ifmsize_nopad = self.ifmshape_nopad[0] * self.ifmshape_nopad[1]
         self.ofmsize = self.ofmheight * self.ofmwidth
         self.nout = self.ofmsize * nofm
 
@@ -332,7 +333,7 @@ class ConvLayerRef(object):
         self.gprime = get_prime(g)
         self.z = np.zeros((mbs, self.nout), dtype=dtypeu)
         self.y = np.zeros((mbs, self.nout), dtype=dtypeu)
-        ofmstarts = np.array(range(0, (self.ofmsize * nofm), self.ofmsize))
+        ofmstarts = np.array(list(range(0, (self.ofmsize * nofm), self.ofmsize)))
         self.ofmlocs = np.zeros((self.ofmsize, nofm), dtype='i32')
         for dst in range(self.ofmsize):
             self.ofmlocs[dst, :] = ofmstarts + dst
@@ -348,7 +349,7 @@ class ConvLayerRef(object):
         self.pos = pos
         if self.pos > 0:
             self.bpropbuf = np.zeros((mbs, self.fsize), dtype=dtypeu)
-            self.berror = np.zeros((mbs, self.ifmsize*nifm), dtype=dtypeu)
+            self.berror = np.zeros((mbs, self.ifmsize * nifm), dtype=dtypeu)
             self.berrorshards = np.zeros((self.fheight * self.fwidth, mbs,
                                           self.ifmsize * nifm), dtype=dtypeu)
 

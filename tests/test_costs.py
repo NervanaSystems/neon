@@ -1,4 +1,4 @@
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -214,7 +214,7 @@ def test_precision_recall(backend_default):
 def test_precision_recall_binarize(backend_default):
     be = NervanaObject.be
     be.bsz = 4
-    preds = np.array([[0.2,  0.9,  0.01, 1],
+    preds = np.array([[0.2, 0.9, 0.01, 1],
                       [0.75, 0.05, 0.44, 0],
                       [0.05, 0.05, 0.55, 0]])
     targets = np.array([[0, 1, 0, 1],

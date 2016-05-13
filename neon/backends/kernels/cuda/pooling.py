@@ -1,3 +1,4 @@
+from builtins import str
 from pycuda.tools import context_dependent_memoize
 from neon.backends import cuda_templates
 
@@ -23,9 +24,9 @@ def map_string2func(funcname, clss, compute_capability):
     """
     Helper function that converts string function names to function calls
     """
-    if "_get_"+funcname not in globals():
+    if "_get_" + funcname not in globals():
         raise AttributeError("kernel type '" + funcname + "' not understood")
-    return globals()["_get_"+funcname](clss, compute_capability)
+    return globals()["_get_" + funcname](clss, compute_capability)
 
 
 # this template is used to hide variables that are only defined conditionally.

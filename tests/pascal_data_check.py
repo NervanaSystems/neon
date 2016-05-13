@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,16 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
 import logging
 import numpy as np
 import os
-import pickle
 
 from neon.backends import gen_backend
-from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.data import PASCALVOC
 from neon.data.datasets import Dataset
+from neon.util.argparser import NeonArgparser, extract_valid_args
+from neon.util.compat import pickle
 
 logging.basicConfig(level=20)
 logger = logging.getLogger()

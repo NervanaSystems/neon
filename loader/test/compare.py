@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -24,6 +24,8 @@ run as follows:
 python compare.py -e1 -r0 -bcpu -w <place where data lives>
 
 """
+from __future__ import print_function
+from builtins import range, str, zip
 import os
 import numpy as np
 from neon.data import ArrayIterator
@@ -70,8 +72,8 @@ def load_dataset(basepath, datadir, shuffle):
     if not os.path.exists(path):
         process(basepath)
     subdirs = glob(os.path.join(path, '*'))
-    labelnames = sorted(map(lambda x: os.path.basename(x), subdirs))
-    inds = range(len(labelnames))
+    labelnames = sorted([os.path.basename(x) for x in subdirs])
+    inds = list(range(len(labelnames)))
     labeldict = {key: val for key, val in zip(labelnames, inds)}
     lines = []
     for subdir in subdirs:

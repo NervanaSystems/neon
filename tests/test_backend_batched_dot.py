@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -20,6 +20,7 @@ against numpy.
 In NervanaGPU, it supports both N as inside dimension or as outer dimension.
 In NervanaCPU, it only supports N as inside dimension, since this is what we use.
 """
+from builtins import range
 import numpy as np
 import pytest
 
@@ -51,17 +52,17 @@ def run_batched_dot(lib, I, E, W, X, dtype):
     devU = lib.zeros(W.shape, dtype=dtype)
 
     if lib.__class__.__name__.endswith("CPU"):
-        lib.batched_dot(devW,   devI,   devO)  # fprop
-        lib.batched_dot(devW.T, devE,   devB)  # bprop
-        lib.batched_dot(devE,   devI.T, devU)  # update
+        lib.batched_dot(devW, devI, devO)  # fprop
+        lib.batched_dot(devW.T, devE, devB)  # bprop
+        lib.batched_dot(devE, devI.T, devU)  # update
     elif lib.__class__.__name__.endswith("GPU"):
-        lib.batched_dot(devW,   devI,   devO, size=size)  # fprop
-        lib.batched_dot(devW.T, devE,   devB, size=size)  # bprop
-        lib.batched_dot(devE,   devI.T, devU, size=size)  # update
+        lib.batched_dot(devW, devI, devO, size=size)  # fprop
+        lib.batched_dot(devW.T, devE, devB, size=size)  # bprop
+        lib.batched_dot(devE, devI.T, devU, size=size)  # update
     else:
         for i in range(X):
-            devO[i] = np.dot(W,    I[i])  # fprop
-            devB[i] = np.dot(W.T,  E[i])  # bprop
+            devO[i] = np.dot(W, I[i])  # fprop
+            devB[i] = np.dot(W.T, E[i])  # bprop
             devU += np.dot(E[i], I[i].T)  # update
 
     return devO, devB, devU

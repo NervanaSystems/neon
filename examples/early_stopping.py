@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -18,8 +18,8 @@ Example that trains an MLP using early stopping.
 Training will stop when the stopping condition is satisfied
 or when num_epochs has been reached, whichever is first.
 """
-import os
 
+import os
 from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine

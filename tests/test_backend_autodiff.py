@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,6 +14,7 @@
 # ----------------------------------------------------------------------------
 # pylint: skip-file
 
+from builtins import range, zip
 import itertools
 import numpy as np
 
@@ -65,7 +66,7 @@ def get_numerical_gradient(f, tensors, delta=1e-5):
     return gradients
 
 
-class Funcs():
+class Funcs(object):
 
     """
     A collection of functions to be tested
@@ -103,7 +104,7 @@ class Funcs():
 
 def pytest_generate_tests(metafunc):
     # number of test to repeat
-    test_indices = range(1)
+    test_indices = list(range(1))
 
     # test params
     test_funcs = [

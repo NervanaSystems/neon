@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 '''
 Test of the recurrent outputs layers.
 '''
+from builtins import range
 import itertools as itt
 import numpy as np
 
@@ -80,8 +81,8 @@ def test_recurrent_sum(backend_default, refgruargs):
     out_comp = np.zeros(out.shape)
     err_comp = np.zeros(inp.shape)
     for i in range(seq_len):
-        out_comp[:] = out_comp + inp[:, i*batch_size:(i+1)*batch_size]
-        err_comp[:, i*batch_size:(i+1)*batch_size] = out.get()
+        out_comp[:] = out_comp + inp[:, i * batch_size:(i + 1) * batch_size]
+        err_comp[:, i * batch_size:(i + 1) * batch_size] = out.get()
     assert np.allclose(out_comp, out.get())
     assert np.allclose(err_comp, err.get())
 
@@ -128,9 +129,9 @@ def test_recurrent_mean(backend_default, refgruargs):
     out_comp = np.zeros(out.shape)
     err_comp = np.zeros(inp.shape)
     for i in range(seq_len):
-        out_comp[:] = out_comp + inp[:, i*batch_size:(i+1)*batch_size]
-        err_comp[:, i*batch_size:(i+1)*batch_size] = out.get()/seq_len
-    out_comp[:] /= seq_len
+        out_comp[:] = out_comp + inp[:, i * batch_size:(i + 1) * batch_size]
+        err_comp[:, i * batch_size:(i + 1) * batch_size] = out.get() / float(seq_len)
+    out_comp[:] /= float(seq_len)
 
     assert np.allclose(out_comp, out.get())
     assert np.allclose(err_comp, err.get())
@@ -161,7 +162,7 @@ def test_recurrent_last(backend_default, refgruargs):
     assert np.all(out.get() == np.ones((nin, batch_size)))
     assert np.all(err[:, -batch_size:] == inp.get()[:, -batch_size:])
     assert np.all(
-        err[:, :-batch_size] == np.zeros((nin, (seq_len-1)*batch_size)))
+        err[:, :-batch_size] == np.zeros((nin, (seq_len - 1) * batch_size)))
 
     # random
     rinp = np.random.random((nin, batch_size))

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc. All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,6 +16,8 @@
 """
 Floating point elementwise operations on GPU.
 """
+from __future__ import division
+from builtins import range, str
 import os.path
 import re
 import traceback as tb
@@ -26,6 +28,7 @@ from pytools import memoize
 # from pytools import memoize_method
 # import pycuda.driver as drv # commented for stylecheck
 
+from neon import logger as neon_logger
 import neon.backends.nervanagpu as ng
 from neon.backends.util.source_module import SourceModule
 from neon.backends.cuda_templates import (_ew_template,
@@ -111,13 +114,13 @@ def _print_tree(node, level=0):
     """
 
     if type(node) is list:
-        print ("    " * level) + ", ".join(str(s) for s in node[0:3])
+        neon_logger.display(("    " * level) + ", ".join(str(s) for s in node[0:3]))
         if len(node) > 3:
             _print_tree(node[3], level + 1)
         if len(node) > 4:
             _print_tree(node[4], level + 1)
     else:
-        print ("    " * level) + str(node)
+        neon_logger.display(("    " * level) + str(node))
 
 
 def _post_order(node, stack=None):
@@ -757,7 +760,7 @@ def call_compound_kernel(rand_state, compute_capability, *args):
                     if shape[1] == 1:
                         strides[axis] = 0
 
-                kernel_args.extend((arg.gpudata, strides[0], strides[1]))
+                kernel_args.extend((int(arg.gpudata), int(strides[0]), int(strides[1])))
 
                 # fancy indexing/take
                 if arg.take_array:
@@ -775,7 +778,7 @@ def call_compound_kernel(rand_state, compute_capability, *args):
                 take_axis = 0
 
             type_args.append(
-                (ng.GPUTensor, indx, arg.dtype.str[1:], take_axis, shape[axis]==1))
+                (ng.GPUTensor, indx, arg.dtype.str[1:], take_axis, shape[axis] == 1))
 
             shape_stack.append(shape)
 
@@ -822,7 +825,7 @@ def call_compound_kernel(rand_state, compute_capability, *args):
                 if op_name == "assign":
 
                     # the axis dim is the thread loop stop condition
-                    kernel_args.append(max_shape[axis])
+                    kernel_args.append(int(max_shape[axis]))
 
                     rounding = out.rounding
 
@@ -882,7 +885,7 @@ def call_compound_kernel(rand_state, compute_capability, *args):
 
                 # Allow a new axis size if doing post reduction broadcast.
                 # So we need to know the axis size prior to reduction.
-                kernel_args.append(shape[axis])
+                kernel_args.append(int(shape[axis]))
                 type_args.append((op_name, op_cnt))
 
                 # reduce the current shape
@@ -920,8 +923,8 @@ def call_compound_kernel(rand_state, compute_capability, *args):
 
         # call the kernel with the number of blocks set as the size of the off-axis
         # Maxwell does well with 32 thread sized blocks, no need to autotune.
-        # for a in kernel_args: print a
-        kernel.prepared_async_call((max_shape[1 - axis], 1, 1),
+        # for a in kernel_args: print (a)
+        kernel.prepared_async_call((int(max_shape[1 - axis]), 1, 1),
                                    (threads, 1, 1), out.backend.stream,
                                    *kernel_args, shared_size=shared)
 
@@ -929,7 +932,7 @@ def call_compound_kernel(rand_state, compute_capability, *args):
         end.record(out.backend.stream)
         end.synchronize()
         msecs = end.time_since(start) / repeat
-        print("%7.3f msecs shape(%d,%d) blk,thd(%d,%d) %s" % (
+        neon_logger.display("%7.3f msecs shape(%d,%d) blk,thd(%d,%d) %s" % (
             msecs, max_shape[0], max_shape[1], max_shape[1 - axis], threads, kernel.name))
 
     return out
@@ -1148,7 +1151,7 @@ def _compute_hist(tensor, hist, nbins=64, offset=-48):
 
     blocks = max(1, int(strides) // threads)
 
-    kernel_args = [hist, tensor.gpudata, strides, size]
+    kernel_args = [hist, tensor.gpudata, int(strides), size]
     hist_kern = _get_hist_kernel(tensor.dtype.str, nbins, offset)
     hist_kern.prepared_call((blocks, 1, 1), (threads, 1, 1), *kernel_args)
 

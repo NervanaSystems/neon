@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,32 +16,34 @@
 Contains various functions and wrappers to make code Python 2 and Python 3
 compatible.
 """
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
 
-import sys
-import logging
+import sys  # noqa
+import logging  # noqa
 
 
 logger = logging.getLogger(__name__)
 PY3 = (sys.version_info[0] >= 3)
 
-# keep range calls consistent between python 2 and 3
-# note: if you need a list and not an iterator you can do list(range(x))
-range = range
 if not PY3:
-    logger.info("using xrange as range")
-    range = xrange
-
-# keep cPickle, Queue, StringIO import consistent between python 2 and 3 (where
-# each was renamed)
-if not PY3:
-    import cPickle as the_pickle
-    import Queue as the_queue
-    from StringIO import StringIO
+    import cPickle as the_pickle  # noqa
 else:
-    import pickle as the_pickle
-    import queue as the_queue
-    from io import StringIO
-
+    import pickle as the_pickle  # noqa
 pickle = the_pickle
-queue = the_queue
-StringIO = StringIO
+
+
+def pickle_load(filepath):
+    """
+    Py2Py3 compatible Pickle load
+
+    Arguments:
+        filepath (str): File containing pickle data stream to load
+
+    Returns:
+        Unpickled object
+    """
+    if PY3:
+        return pickle.load(filepath, encoding='latin1')
+    else:
+        return pickle.load(filepath)

@@ -1,4 +1,4 @@
-# Copyright 2014 Nervana Systems Inc. All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,7 +14,9 @@
 """
 Python code to wrap convolution kernels
 """
-
+from __future__ import division
+from builtins import object, range
+from future.utils import native_str
 import numpy as np
 import pycuda.driver as drv
 from pycuda.tools import context_dependent_memoize
@@ -129,15 +131,15 @@ class FpropCuda(KernelGroup):
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
 
-        magic_PQ = _magic64(P*Q)
+        magic_PQ = _magic64(P * Q)
         magic_Q = _magic64(Q)
-        magic_S = _magic32(R*S+32, S)
+        magic_S = _magic32(R * S + 32, S)
         HWN = H * W * N
         RST = R * S * T
         KRST = K * RST
         PQ = P * Q
         PQN = PQ * N
-        self.RS = R*S
+        self.RS = R * S
 
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
         block = (8, 8, 1)
@@ -195,17 +197,17 @@ class BpropCuda(KernelGroup):
 
         assert N % 32 == 0, "N dim must be multiple of 32"
 
-        magic_HW = _magic64(H*W)
+        magic_HW = _magic64(H * W)
         magic_W = _magic64(W)
-        magic_RS = _magic32(R*S*T+32, R*S)
-        magic_S = _magic32(R*S+32, S)
+        magic_RS = _magic32(R * S * T + 32, R * S)
+        magic_S = _magic32(R * S + 32, S)
         HW = H * W
         HWN = HW * N
         RST = R * S * T
         CRST = C * RST
         PQ = P * Q
         PQN = PQ * N
-        self.RS = R*S
+        self.RS = R * S
 
         grid = (HW * (-(-N // 32)), -(-C // 32), 1)
         block = (8, 8, 1)
@@ -215,7 +217,7 @@ class BpropCuda(KernelGroup):
                                        HW, 0, 0,
                                        magic_HW, magic_W, magic_S])
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
-        self.shared = R*S*T * 4 * 2
+        self.shared = R * S * T * 4 * 2
 
         self.filter_trans = FilterDimShuffle(lib, dtype, C, T, R, S, K)
         self.output_trans = CompoundOps(lib, dtype, C, HWN)
@@ -274,8 +276,8 @@ class UpdateCuda(KernelGroup):
         CRSTK = KRST * C
         PQ = P * Q
         PQN = PQ * N
-        magic_S = _magic32(R*S+32, S)
-        self.RS = R*S
+        magic_S = _magic32(R * S + 32, S)
+        self.RS = R * S
 
         if lib.deterministic:
             grid_P = 1
@@ -290,7 +292,7 @@ class UpdateCuda(KernelGroup):
         magic_PQ = _magic64(pq_blocks)
         magic_Q = _magic64(grid_Q)
 
-        grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
+        grid = (pq_blocks * (-(-K // 32)), (-(-(C * RS) // 32)), 1)
         block = (8, 32, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
                                        str_w, str_h, pad_w, pad_h,
@@ -383,17 +385,17 @@ class XpropDirect(KernelGroup):
         gridPQNw   = P * gridQNw
         gridMPQNw  = M * gridPQNw
         gridMPQ    = M * P * Q
-        grid       = (gridMPQ*k, gridK//k, gridN)
+        grid       = (gridMPQ * k, gridK // k, gridN)
 
         self.kernel_opts = tuple()
         self.kernel_name = kname
         self.kernel_args = [grid, (threads,1,1), None, None, None, None, None, None, None, None, None]
         self.kernel_args.extend(_flatten([
-            N, K, D, H, W, W*N, H*W*N, D*H*W*N,
+            N, K, D, H, W, W * N, H * W * N, D * H * W * N,
             C, TRSK, TRS, RS, T, R, S, magic_RS, magic_S,
             pad_d, pad_h, pad_w, str_d, str_h, str_w,
             P2, Q, PQk, Qk, k, magic_PQk, magic_Qk, magic_k,
-            Q*N, P*Q*N, M*P*Q*N, gridNw, gridQNw, gridPQNw, gridMPQNw ]))
+            Q * N, P * Q * N, M * P * Q * N, gridNw, gridQNw, gridPQNw, gridMPQNw ]))
 
         self.shared = TRS * 4 * 2
         self.bsum   = BatchNormSum(self.lib, K, gridMPQNw)
@@ -457,8 +459,8 @@ class XpropDirect(KernelGroup):
         magic_RS   = _magic32(TRS, RS)
         magic_S    = _magic32(RS,   S)
 
-        gridMPQ = gridM*gridP*gridQ
-        grid    = (gridMPQ*nk, gridK//k, gridN//n)
+        gridMPQ = gridM * gridP * gridQ
+        grid    = (gridMPQ * nk, gridK // k, gridN // n)
 
         options = list()
         if     N == 1: options.append("N1")
@@ -472,20 +474,20 @@ class XpropDirect(KernelGroup):
         self.kernel_args.extend(_flatten([
             C, D, H, W, N, K, M, P, Q,
             str_d, str_h, str_w, pad_d, pad_h, pad_w,
-            D*H*W*N, H*W*N, W*N, M*P*Q*N, P*Q*N, Q*N,
+            D * H * W * N, H * W * N, W * N, M * P * Q * N, P * Q * N, Q * N,
             PQnk, Qnk, nk, n, k, magic_PQnk, magic_Qnk, magic_nk, magic_k,
-            max(K-32,0), K*32*self.dtype.itemsize, TRSK, TRS, RS, S, magic_RS, magic_S,
-            gridP2, gridQ, gridN, gridQ*gridN, gridP*gridQ*gridN, gridMPQ*gridN,
+            max(K - 32,0), K * 32 * self.dtype.itemsize, TRSK, TRS, RS, S, magic_RS, magic_S,
+            gridP2, gridQ, gridN, gridQ * gridN, gridP * gridQ * gridN, gridMPQ * gridN,
             superM, superP, superQ, superN,
             shiftM, shiftP, shiftQ, shiftN,
             SuperM, SuperP, SuperQ, SuperN ]))
 
-        self.bsum = BatchNormSum(self.lib, K, gridMPQ*gridN)
+        self.bsum = BatchNormSum(self.lib, K, gridMPQ * gridN)
 
         if N >= 32:
-            self.shared = (T*R*S + 1) * 4 * 2
+            self.shared = (T * R * S + 1) * 4 * 2
         else:
-            self.shared = T*R*S * 4 * (32 >> shiftN)
+            self.shared = T * R * S * 4 * (32 >> shiftN)
 
     def bind_params(self, I, F, O,
         X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
@@ -526,7 +528,7 @@ class FpropDirect(XpropDirect):
 
         # The filters may still be in fp32 so we potentially need to dynamically quantize
         if dtype.itemsize != 4:
-            self.filter_trans = ConvertDataType(lib, dtype, C*T*R*S*K, out_mode=False)
+            self.filter_trans = ConvertDataType(lib, dtype, C * T * R * S * K, out_mode=False)
         # if kernel is sconv then no need for any transform in fprop.
         else:
             self.filter_trans = NoopTransform()
@@ -581,18 +583,19 @@ class UpdateDirect(KernelGroup):
 
         SMs = _get_sm_count()
 
-        self.autotune_key = " ".join(str(x) for x in (
+        self.autotune_key = " ".join(native_str(x) for x in (
             "direct_updat_64x32", SMs, dtype.itemsize, lib.deterministic > 0,
             N, C, K, D, H, W, T, R, S, M, P, Q ))
 
-        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
+        # insert Python version in filename to avoid Py2/Py3 incompatibilities in shelve
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune%d.db" % sys.version_info[0])
         self.init()
 
         lib.set_scratch_size(self.output_trans.size)
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 5 Tflops on 24 SMs
-        self.warmup = min(max(int(2e12 / (M*P*Q*K*N*C*T*R*S*2.0) * (SMs / 24.0)), 1), 5000)
+        self.warmup = min(max(int(2e12 / (M * P * Q * K * N * C * T * R * S * 2.0) * (SMs / 24.0)), 1), 5000)
 
     def init(self, autotune=False):
 
@@ -678,7 +681,7 @@ class UpdateDirect(KernelGroup):
             loopXp = N * loopX * itemsize
             options.append("SN")
 
-        gridMPQ = GM*strideP*strideQ
+        gridMPQ = GM * strideP * strideQ
 
         # If output grid is 1, don't use atomics.  Kernel is deterministic by default
         if gridMPQ == 1 or self.lib.deterministic:
@@ -689,7 +692,7 @@ class UpdateDirect(KernelGroup):
             self.output_trans = UpdateConvReduce(self.lib, 1, CTRSK)
             self.zero = True
 
-        grid = (gridMPQ*kc, GC//c, GK//k)
+        grid = (gridMPQ * kc, GC // c, GK // k)
 
         self.kernel_opts = tuple(options)
         self.kernel_name = "%s_direct_updat_64x32" % self.clss
@@ -697,12 +700,12 @@ class UpdateDirect(KernelGroup):
         self.kernel_args.extend(_flatten([
             C, D, H, W, N, K, M, P, Q,
             str_d, str_h, str_w, pad_d, pad_h, pad_w,
-            D*H*W*N, H*W*N, W*N, M*P*Q*N*16*itemsize, M*P*Q*N, P*Q*N, Q*N,
+            D * H * W * N, H * W * N, W * N, M * P * Q * N * 16 * itemsize, M * P * Q * N, P * Q * N, Q * N,
             PQkc, Qkc, kc, c, k, magic_PQkc, magic_Qkc, magic_kc, magic_c,
             CTRSK, CTRS, TRS, RS, S, magic_TRS, magic_RS, magic_S,
             superM, superP, superQ, superN, shiftM, shiftP, shiftQ,
-            strideP, strideQ, strideP*strideQ, GP, GQ,
-            loopX, loopXp, loopQ, loopQp, blockN, blockN*itemsize ]))
+            strideP, strideQ, strideP * strideQ, GP, GQ,
+            loopX, loopXp, loopQ, loopQp, blockN, blockN * itemsize ]))
 
     def autotune(self, I, E, O):
 
@@ -728,11 +731,11 @@ class UpdateDirect(KernelGroup):
         small_set = GP * GQ <= 512
 
         results = []
-        sys.stdout.write("Autotune " + str(self))
+        sys.stdout.write("Autotune " + native_str(self))
         progress = 0
         for threshold in (True, False):
-            for strideP in range(1, self.GP+1):
-                for strideQ in range(1, self.GQ+1):
+            for strideP in range(1, self.GP + 1):
+                for strideQ in range(1, self.GQ + 1):
                     if progress % 32 == 0:
                         sys.stdout.write('.')
                         sys.stdout.flush()
@@ -876,7 +879,7 @@ def _ceil_div(x, y):
 
 
 def _closest_divisor(val, div, maxdiv=8):
-    return -sorted([(abs(i-div), -i) for i in range(1, maxdiv) if val % i == 0])[0][1]
+    return -sorted([(abs(i - div), -i) for i in range(1, maxdiv) if val % i == 0])[0][1]
 
 
 @context_dependent_memoize
@@ -1062,7 +1065,7 @@ __global__ void batchnorm_sum(float* Out, const float* In, int N)
 class CompoundOps(object):
     def __init__(self, lib, dtype, K, N):
         for threads in (1024,512,256,128):
-            if N >= threads*8:
+            if N >= threads * 8:
                 break
         self.threads = threads
         self.dtype   = dtype.str[1:]
@@ -1300,10 +1303,10 @@ class FilterDimShuffle(object):
         self.dim   = (C, T, R, S, K)
         self.size  = int(np.prod(self.dim)) * dtype.itemsize
         self.otype = dtype.str[1:]
-        self.args  = [(gridK, gridC, T*R*S), (32, 8, 1), None, None, None]
+        self.args  = [(gridK, gridC, T * R * S), (32, 8, 1), None, None, None]
         self.args.extend(_flatten([
-            T*R*S*K, R*S*K, S*K, K, T*R*S*C, R*S*C, S*C, C,
-            R*S, T, R, S, _magic32(T*R*S, R*S), _magic32(R*S, S)]))
+            T * R * S * K, R * S * K, S * K, K, T * R * S * C, R * S * C, S * C, C,
+            R * S, T, R, S, _magic32(T * R * S, R * S), _magic32(R * S, S)]))
 
     def bind_params(self, F):
         filter_data    = self.lib.scratch_buffer_offset(self.size)
@@ -1435,7 +1438,7 @@ __global__ void filter_transpose(%(type)s* out, const %(type)s* in, int rows, in
 @context_dependent_memoize
 def _get_copy_transpose_kernel(dtype, shape, axes=None):
 
-    src = range(len(shape))
+    src = list(range(len(shape)))
     dst = list(axes)
 
     src_dim = src[-1]
@@ -1469,14 +1472,14 @@ def _get_copy_transpose_kernel(dtype, shape, axes=None):
     src2 = [s for s in src if s != dst_dim]
 
     # get the name of the first compound index
-    blkx_name = compound_idx = "".join(str(x) for x in src2)
+    blkx_name = compound_idx = "".join(native_str(x) for x in src2)
 
     # generate the magic number math to extract all indeces
     while len(src2) > 1:
 
         idx1 = src2[0]
         del src2[0]
-        idx2 = "".join(str(i) for i in src2)
+        idx2 = "".join(native_str(i) for i in src2)
         div = reduce(mul, (grid_shape[i] for i in src2), 1)
 
         params.extend(p % idx2 for p in ("int magic_%s", "int shift_%s", "int div_%s"))
@@ -1616,7 +1619,7 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
     # print code
     module = SourceModule(code)
     kernel = module.get_function("copy_transpose")
-    kernel.prepare("PP" + "I"*len(params))
+    kernel.prepare("PP" + "I" * len(params))
 
     grid_x = grid_shape[src_dim]
     grid_y = grid_shape[dst_dim]

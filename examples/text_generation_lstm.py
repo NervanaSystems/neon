@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -22,8 +22,10 @@ Reference:
     Generating sequences with recurrent neural networks `[Graves2014]`_
 .. _[Graves2014]: http://arxiv.org/pdf/1308.0850.pdf
 """
-import numpy as np
 
+from builtins import range
+import numpy as np
+from neon import logger as neon_logger
 from neon.data import Text
 from neon.data.dataloaders import load_shakespeare
 from neon.initializers import Uniform
@@ -67,13 +69,15 @@ model = Model(layers=layers)
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
-optimizer = RMSProp(gradient_clip_value=gradient_clip_value, stochastic_round=args.rounding)
+optimizer = RMSProp(gradient_clip_value=gradient_clip_value,
+                    stochastic_round=args.rounding)
 
 # configure callbacks
 callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
 
 # fit and validate
-model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+model.fit(train_set, optimizer=optimizer,
+          num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 
 def sample(prob):
@@ -116,4 +120,4 @@ for i in range(num_predict):
     x[int(pred), 0] = 1
     y = model_new.fprop(x)
 
-print ''.join(seed_tokens + text)
+neon_logger.display(''.join(seed_tokens + text))

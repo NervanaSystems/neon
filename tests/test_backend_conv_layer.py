@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -20,12 +20,13 @@ The numpy implementation is different from what is done underneath NervanaCPU to
 be a valid checking. It requires externally pad the input, while NervanaCPU does
 not require so
 """
+from builtins import range
 import itertools as itt
 import numpy as np
 import pytest
-from operator import mul
-from utils import allclose_with_out
 from timeit import default_timer
+from utils import allclose_with_out
+from neon import logger as neon_logger
 
 
 def slicable(dim, pad=0):
@@ -37,7 +38,7 @@ def slicable(dim, pad=0):
         dim (tuple): dimensions list in a tuple
         pad (int):  how many pixel paddings
     """
-    dim0 = reduce(mul, dim[:-1], 1) + pad
+    dim0 = np.prod(dim[:-1]) + pad
     return (dim0, dim[-1])
 
 
@@ -85,7 +86,7 @@ def run_backend_conv(lib, layer, I, F, E, dtype):
     lib.fprop_conv(layer, beI, beF, beO)
 
     beB = lib.zeros(layer.dimI, dtype=dtype)
-    lib.bprop_conv(layer,  beF, beE, beB)
+    lib.bprop_conv(layer, beF, beE, beB)
 
     beU = lib.zeros(layer.dimF, dtype=dtype)
     lib.update_conv(layer, beI, beE, beU)
@@ -190,8 +191,8 @@ def test_conv_layer(fargs_tests, backend_pair):
     ncO, ncB, ncU = run_backend_conv(nc, conv_nc, beI, beF, beE, dtype)
     end_cpu = default_timer()
 
-    print("gputime: %s, cputime %s" %
-          (end_gpu - start_gpu, end_cpu - start_cpu))
+    neon_logger.display("gputime: %s, cputime %s" %
+                        (end_gpu - start_gpu, end_cpu - start_cpu))
 
     # ======numpy===========
     # cpu output arrays
@@ -228,7 +229,7 @@ def test_conv_layer(fargs_tests, backend_pair):
             ("bprop", ngB, ncB.reshape(dimI), cpuB[:-1, :].reshape(dimI), W),
             ("update", ngU, ncU.reshape(dimF), cpuU.reshape(dimF), S)):
 
-        print(op)
+        neon_logger.display(op)
         ncAnp = ncA.get().astype(np.float32)
         ngAnp = ngA.get().astype(np.float32)
         ncdif = cpuA - ncAnp
@@ -236,8 +237,8 @@ def test_conv_layer(fargs_tests, backend_pair):
         maxval = abs(cpuA).max()
         ncmaxdif = abs(ncdif).max()
         ngmaxdif = abs(ngdif).max()
-        ncRatio = ncmaxdif / maxval
-        ngRatio = ngmaxdif / maxval
+        ncRatio = ncmaxdif / float(maxval)
+        ngRatio = ngmaxdif / float(maxval)
 
         assert ncRatio < 1e-5
         assert ngRatio < 1e-5

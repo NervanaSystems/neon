@@ -20,6 +20,7 @@ Usage:
                          <class_ind_file> <preprocessed_dir/split_dir>
 """
 
+from builtins import object, next, str
 import cv2
 import logging
 import math
@@ -34,7 +35,7 @@ def check_opencv_version(major):
     return cv2.__version__.startswith(major)
 
 
-class VideoPreprocessor():
+class VideoPreprocessor(object):
     """
     Utility class for preprocessing videos.
 
@@ -98,7 +99,7 @@ class VideoPreprocessor():
         if np.isnan(fps):
             fps = 25
         frame_count = video.get(cap_prop_frame_count)
-        num_clips = math.floor(frame_count/self.num_frames_per_clip)
+        num_clips = math.floor(frame_count / self.num_frames_per_clip)
 
         clip_idx = 0
         frame_idx = 0

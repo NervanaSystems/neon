@@ -21,18 +21,18 @@
 # the run is continued for 1 epoch using the serialized file at epoch 3 to initialize
 # the model.  The output of both runs are compared.
 
-datadir=$1
+datadir =$1
 if [ -z "$datadir" ] ; then
     echo "Must supply a data directory"
     exit 1
 fi
 
-python tests/serialization/alexnet.py -b gpu -s alexnet_run1.prm --serialize 1 -e 3 \
-        -H 2 -r 1 -w $datadir
+python tests / serialization / alexnet.py - b gpu - s alexnet_run1.prm - -serialize 1 - e 3 \
+        - H 2 - r 1 - w $datadir
 
-python tests/serialization/alexnet.py -b gpu -s alexnet_run2.prm --serialize 1 \
-        -e 3 -H 2 -r 1 -w $datadir \
-        --model_file alexnet_run1_1.prm
+python tests / serialization / alexnet.py - b gpu - s alexnet_run2.prm - -serialize 1 \
+        - e 3 - H 2 - r 1 - w $datadir \
+        - -model_file alexnet_run1_1.prm
 
-python tests/serialization/compare_models.py alexnet_run1_2.prm alexnet_run2_2.prm
+python tests / serialization / compare_models.py alexnet_run1_2.prm alexnet_run2_2.prm
 exit $?

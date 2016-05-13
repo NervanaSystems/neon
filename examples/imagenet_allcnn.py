@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -62,16 +62,16 @@ layers = []
 layers.append(DataTransform(transform=Normalizer(divisor=128.)))
 
 layers.append(Conv((11, 11, 96), init=init_uni, activation=relu, strides=4, padding=1))
-layers.append(Conv((1, 1, 96),   init=init_uni, activation=relu, strides=1))
-layers.append(Conv((3, 3, 96),   init=init_uni, activation=relu, strides=2,  padding=1))  # 54->27
+layers.append(Conv((1, 1, 96), init=init_uni, activation=relu, strides=1))
+layers.append(Conv((3, 3, 96), init=init_uni, activation=relu, strides=2, padding=1))   # 54->27
 
-layers.append(Conv((5, 5, 256),  init=init_uni, activation=relu, strides=1))              # 27->23
-layers.append(Conv((1, 1, 256),  init=init_uni, activation=relu, strides=1))
-layers.append(Conv((3, 3, 256),  init=init_uni, activation=relu, strides=2,  padding=1))  # 23->12
+layers.append(Conv((5, 5, 256), init=init_uni, activation=relu, strides=1))             # 27->23
+layers.append(Conv((1, 1, 256), init=init_uni, activation=relu, strides=1))
+layers.append(Conv((3, 3, 256), init=init_uni, activation=relu, strides=2, padding=1))  # 23->12
 
-layers.append(Conv((3, 3, 384),  init=init_uni, activation=relu, strides=1,  padding=1))
-layers.append(Conv((1, 1, 384),  init=init_uni, activation=relu, strides=1))
-layers.append(Conv((3, 3, 384),  init=init_uni, activation=relu, strides=2,  padding=1))  # 12->6
+layers.append(Conv((3, 3, 384), init=init_uni, activation=relu, strides=1, padding=1))
+layers.append(Conv((1, 1, 384), init=init_uni, activation=relu, strides=1))
+layers.append(Conv((3, 3, 384), init=init_uni, activation=relu, strides=2, padding=1))  # 12->6
 
 layers.append(Dropout(keep=0.5))
 layers.append(Conv((3, 3, 1024), init=init_uni, activation=relu, strides=1, padding=1))

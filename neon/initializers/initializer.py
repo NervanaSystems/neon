@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
 import numpy as np
 
 from neon import NervanaObject
@@ -131,7 +130,7 @@ class Xavier(Initializer):
 
     def fill(self, param):
         fan_in = param.shape[0 if self.local else 1]
-        scale = np.sqrt(3./fan_in)
+        scale = np.sqrt(3. / fan_in)
         param[:] = self.be.rng.uniform(-scale, scale, param.shape)
 
 
@@ -147,7 +146,7 @@ class Kaiming(Initializer):
 
     def fill(self, param):
         fan_in = param.shape[0 if self.local else 1]
-        scale = np.sqrt(2./fan_in)
+        scale = np.sqrt(2. / fan_in)
         param[:] = self.be.rng.normal(0, scale, param.shape)
 
 

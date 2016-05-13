@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,7 +16,6 @@
 """
 Generalized gradient testing applied to lrn layer
 """
-
 import itertools as itt
 import numpy as np
 from neon import NervanaObject
@@ -67,7 +66,7 @@ def lrnorm(backend_cpu64, lrnargs):
     sz = nin * nin * nifm * batch_size
     epsilon = 1.0e-5
     # make sure perturbation can never change the max element
-    inp = np.arange(sz)*2.5*epsilon
+    inp = np.arange(sz) * 2.5 * epsilon
     # shuffle
     np.random.shuffle(inp)
     inp = inp.reshape((nin * nin * nifm, batch_size))
@@ -77,7 +76,7 @@ def lrnorm(backend_cpu64, lrnargs):
 
     pert_frac = 0.1  # test 10% of the inputs
     # select pert_frac fraction of inps to perturb
-    pert_cnt = int(np.ceil(inp.size*pert_frac))
+    pert_cnt = int(np.ceil(inp.size * pert_frac))
     pert_inds = np.random.permutation(inp.size)[0:pert_cnt]
 
     (max_abs, max_rel) = general_gradient_comp(layer,
@@ -99,7 +98,7 @@ def test_lrn_large_inp(backend_cpu64):
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     be = NervanaObject.be
 
-    shape = (nifm*nin*nin, batch_size)
+    shape = (nifm * nin * nin, batch_size)
     shape_full = (nifm, nin, nin, batch_size)
 
     inp_rng = 1.0e5
@@ -137,5 +136,5 @@ def test_lrn_large_inp(backend_cpu64):
     out_p = layer.fprop(be.array(inp_p)).get()[ind_pert]
     out_m = layer.fprop(be.array(inp_m)).get()[ind_pert]
 
-    grad_est = 0.5*(out_p - out_m)/epsilon
+    grad_est = 0.5 / float(epsilon) * (out_p - out_m)
     assert np.abs(grad_est - bprop_delta) < 1e-12

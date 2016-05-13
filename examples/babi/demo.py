@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -24,9 +24,11 @@ Usage:
     use -t to specify which bAbI task to run
     python examples/babi/demo.py -t 1 --rlayer_type gru --model_weights babi.p
 """
-import numpy as np
 
+from builtins import input, range
+import numpy as np
 from util import create_model, babi_handler
+from neon import logger as neon_logger
 from neon.backends import gen_backend
 from neon.data import BABI, QA
 from neon.data.text import Text
@@ -34,7 +36,7 @@ from neon.util.argparser import NeonArgparser, extract_valid_args
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument('-t', '--task', type=int, default='1', choices=xrange(1, 21),
+parser.add_argument('-t', '--task', type=int, default='1', choices=range(1, 21),
                     help='the task ID to train/test on from bAbI dataset (1-20)')
 parser.add_argument('--rlayer_type', default='gru', choices=['gru', 'lstm'],
                     help='type of recurrent layer to use (gru or lstm)')
@@ -68,26 +70,27 @@ def vectorize(words, max_len):
                                        max_len))
 
 
-print "\nThe vocabulary set from this task has {} words:".format(babi.vocab_size)
-print stitch_sentence(babi.vocab)
-print "\nExample from test set:"
-print "\nStory"
-print stitch_sentence(ex_story)
-print "Question"
-print stitch_sentence(ex_question)
-print "\nAnswer"
-print ex_answer
+neon_logger.display(
+    "\nThe vocabulary set from this task has {} words:".format(babi.vocab_size))
+neon_logger.display(stitch_sentence(babi.vocab))
+neon_logger.display("\nExample from test set:")
+neon_logger.display("\nStory")
+neon_logger.display(stitch_sentence(ex_story))
+neon_logger.display("Question")
+neon_logger.display(stitch_sentence(ex_question))
+neon_logger.display("\nAnswer")
+neon_logger.display(ex_answer)
 
 while True:
     # ask user for story and question
     story_lines = []
-    line = raw_input("\nPlease enter a story:\n")
+    line = input("\nPlease enter a story:\n")
     while line != "":
         story_lines.append(line)
-        line = raw_input()
+        line = input()
     story = ("\n".join(story_lines)).strip()
 
-    question = raw_input("Please enter a question:\n")
+    question = input("Please enter a question:\n")
 
     # convert user input into a suitable network input
     s = vectorize(story, babi.story_maxlen)
@@ -102,7 +105,7 @@ while True:
     max_probs = probs[max_indices]
     sorted_idx = max_indices[np.argsort(max_probs, axis=0)]
 
-    print "\nAnswer:"
+    neon_logger.display("\nAnswer:")
     for idx in reversed(sorted_idx):
         idx = int(idx)
-        print babi.index_to_word[idx], float(probs[idx])
+        neon_logger.display(babi.index_to_word[idx], float(probs[idx]))

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 """
 Utility functions for bAbI example and demo.
 """
+
 from neon.data import BABI
 from neon.initializers import GlorotUniform, Uniform, Orthonormal
 from neon.layers import Affine, GRU, LookupTable, MergeMultistream, LSTM

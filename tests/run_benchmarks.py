@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # this script runs all examples and checks that they all
 # run without throwing and exception
+from __future__ import print_function
 import os
 import sys
 from glob import glob
@@ -19,7 +20,7 @@ benchmarks = glob('examples/convnet-benchmarks/*.py')
 results = []
 for ex in benchmarks:
     for dt_arg in ['f16', 'f32']:
-        print(ex, dt_arg)
+        print((ex, dt_arg))
         ex_bn = os.path.basename(ex)
         cmd = "python {} -d {}".format(ex, dt_arg)
 

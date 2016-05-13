@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 """
 For machine generated datasets.
 """
+from builtins import range
 
 import numpy as np
 
@@ -350,7 +351,7 @@ class Ticker(NervanaObject):
         self.shape = (self.nin, self.task.time_steps_max)
 
         # Initialize the inputs, the outputs, and the mask
-        self.dev_X = self.be.iobuf((self.nin,  self.task.time_steps_max))
+        self.dev_X = self.be.iobuf((self.nin, self.task.time_steps_max))
         self.dev_y = self.be.iobuf((self.nout, self.task.time_steps_max))
         self.mask = self.be.iobuf((self.nout, self.task.time_steps_max))
 

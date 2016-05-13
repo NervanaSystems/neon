@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,17 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
-import logging
+from builtins import range
 import numpy as np
 import os
 
 from neon import NervanaObject
+from neon import logger as neon_logger
 from neon.data import ArrayIterator, load_mnist
 from neon.data.text import Text
-
-logging.basicConfig(level=20)
-logger = logging.getLogger()
 
 
 def test_dataset(backend_default, data):
@@ -33,7 +30,7 @@ def test_dataset(backend_default, data):
 
     for i in range(2):
         for X_batch, y_batch in train_set:
-            print X_batch.shape, y_batch.shape
+            neon_logger.display("Xshape: {}, yshape: {}".format(X_batch.shape, y_batch.shape))
         train_set.index = 0
 
 
@@ -74,8 +71,8 @@ def test_text(backend_default):
         # batch
         for batch in range(bsz):
             sent = ''.join(chars[batch::bsz])
-            start = i*time_steps + batch * time_steps * train_set.nbatches
-            sent_ref = text_data[start:start+time_steps]
+            start = i * time_steps + batch * time_steps * train_set.nbatches
+            sent_ref = text_data[start:start + time_steps]
             assert sent == sent_ref
 
     valid_start = int(len(text_data) * (1 - valid_split))
@@ -86,9 +83,9 @@ def test_text(backend_default):
                  for x in np.argmax(X_batch.get(), axis=0).tolist()]
         for batch in range(bsz):
             sent = ''.join(chars[batch::bsz])
-            start = i*time_steps + batch * time_steps * \
+            start = i * time_steps + batch * time_steps * \
                 valid_set.nbatches + valid_start
-            sent_ref = text_data[start:start+time_steps]
+            sent_ref = text_data[start:start + time_steps]
             assert sent == sent_ref
 
     os.remove(data_path)

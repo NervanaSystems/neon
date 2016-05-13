@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -29,6 +29,7 @@ from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
 from neon.util.persist import load_obj, save_obj
+from neon import logger as neon_logger
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -37,7 +38,7 @@ parser.add_argument('--resume', action='store_true',
 args = parser.parse_args()
 
 if args.backend == 'mgpu':
-    batch_size = 32*8  # for some reason bs 128 does not work with bias layers
+    batch_size = 32 * 8  # for some reason bs 128 does not work with bias layers
 else:
     batch_size = 32
 
@@ -64,13 +65,13 @@ pool3s2p1 = dict(fshape=3, padding=1, strides=2, op='max')
 def inception(kvals, name):
     (p1, p2, p3, p4) = kvals
 
-    branch1 = [Conv((1, 1, p1[0]), name=name+'1x1', **common)]
-    branch2 = [Conv((1, 1, p2[0]), name=name+'3x3_reduce', **common),
-               Conv((3, 3, p2[1]), name=name+'3x3', **commonp1)]
-    branch3 = [Conv((1, 1, p3[0]), name=name+'5x5_reduce', **common),
-               Conv((5, 5, p3[1]), name=name+'5x5', **commonp2)]
-    branch4 = [Pooling(op="max", name=name+'pool', **pool3s1p1),
-               Conv((1, 1, p4[0]), name=name+'pool_proj', **common)]
+    branch1 = [Conv((1, 1, p1[0]), name=name + '1x1', **common)]
+    branch2 = [Conv((1, 1, p2[0]), name=name + '3x3_reduce', **common),
+               Conv((3, 3, p2[1]), name=name + '3x3', **commonp1)]
+    branch3 = [Conv((1, 1, p3[0]), name=name + '5x5_reduce', **common),
+               Conv((5, 5, p3[1]), name=name + '5x5', **commonp2)]
+    branch4 = [Pooling(op="max", name=name + 'pool', **pool3s1p1),
+               Conv((1, 1, p4[0]), name=name + 'pool_proj', **common)]
     return MergeBroadcast(layers=[branch1, branch2, branch3, branch4], merge="depth")
 
 
@@ -78,7 +79,7 @@ def main_branch(branch_nodes):
     return [Conv((7, 7, 64), padding=3, strides=2, name='conv1/7x7_s2', **common),
             Pooling(name="pool1/3x3_s2", **pool3s2p1),
             Conv((1, 1, 64), name='conv2/3x3_reduce', **common),
-            Conv((3, 3, 192), name="conv2/3x3",  **commonp1),
+            Conv((3, 3, 192), name="conv2/3x3", **commonp1),
             Pooling(name="pool2/3x3_s2", **pool3s2p1),
             inception([(64, ), (96, 128), (16, 32), (32, )], name='inception_3a/'),
             inception([(128,), (128, 192), (32, 96), (64, )], name='inception_3b/'),
@@ -102,12 +103,12 @@ def aux_branch(bnode, ind):
     # TODO put dropout back in
     nm = 'loss%d/' % ind
     return [bnode,
-            Pooling(fshape=5, strides=3, op="avg", name=nm+'ave_pool'),
-            Conv((1, 1, 128), name=nm+'conv', **common),
-            Affine(nout=1024, init=init1, activation=relu, bias=bias, name=nm+'fc'),
-            Dropout(keep=1.0, name=nm+'drop_fc'),
+            Pooling(fshape=5, strides=3, op="avg", name=nm + 'ave_pool'),
+            Conv((1, 1, 128), name=nm + 'conv', **common),
+            Affine(nout=1024, init=init1, activation=relu, bias=bias, name=nm + 'fc'),
+            Dropout(keep=1.0, name=nm + 'drop_fc'),
             Affine(nout=1000, init=init1, activation=Softmax(),
-                   bias=Constant(0), name=nm+'classifier')]
+                   bias=Constant(0), name=nm + 'classifier')]
 
 
 # setup cost function as CrossEntropy
@@ -120,7 +121,7 @@ if not args.resume:
     # build the model from scratch and run it
 
     # Now construct the model
-    branch_nodes = [BranchNode(name='branch' + str(i)) for i in range(2)]
+    branch_nodes = [BranchNode(name='branch{}'.format(i)) for i in (0, 1)]
     main1 = main_branch(branch_nodes)
     aux1 = aux_branch(branch_nodes[0], ind=1)
     aux2 = aux_branch(branch_nodes[1], ind=2)
@@ -165,7 +166,7 @@ im.set(im_save)
 out_fprop = model.fprop(im)
 out_fprop_save2 = [x.get() for x in out_fprop]
 for x, y in zip(out_fprop_save, out_fprop_save2):
-    assert np.max(np.abs(x-y)) == 0.0, '2 fprop iterations do not match'
+    assert np.max(np.abs(x - y)) == 0.0, '2 fprop iterations do not match'
 
 # run fit fot 1 minibatch
 # have to do this by hand
@@ -187,15 +188,15 @@ else:
 
     # compare the initial fprops
     for x, y in zip(run1[0], out_fprop_save):
-        assert np.max(np.abs(x-y)) == 0.0, 'Deserialized model not matching serialized model'
+        assert np.max(np.abs(x - y)) == 0.0, 'Deserialized model not matching serialized model'
 
     # and post extra training fprops
     for x, y in zip(run1[1], out_fprop_save2):
-        if np.max(np.abs(x-y)) != 0.0:
-            print np.max(np.abs(x-y))
+        if np.max(np.abs(x - y)) != 0.0:
+            neon_logger.error('Max Diff: {}'.format(np.max(np.abs(x - y))))
             raise ValueError('Deserialized training not matching serialized training')
 
     # see if the single epoch of optimization had any real effect
     for x, y in zip(out_fprop_save, out_fprop_save2):
-        assert np.max(np.abs(x-y)) > 0.0, 'Training had no effect on model'
-    print 'passed'
+        assert np.max(np.abs(x - y)) > 0.0, 'Training had no effect on model'
+    neon_logger.display('passed')

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from __future__ import division
+from builtins import map, range, str, zip
 from collections import deque
 import h5py
 import inspect
@@ -24,8 +26,9 @@ import time
 from timeit import default_timer
 import weakref
 
-from neon import NervanaObject
+from neon import NervanaObject, logger as neon_logger
 from neon.data import NervanaDataIterator, Ticker
+from neon.util.compat import PY3
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.layers import Convolution, BatchNorm
 logger = logging.getLogger(__name__)
@@ -479,8 +482,8 @@ class Callback(NervanaObject):
             return None
         eval_freq = callback_data[cost_key].attrs['epoch_freq']
         if (epoch + 1) % eval_freq == 0:
-            return dict(cost=callback_data[cost_key][epoch/eval_freq],
-                        time=callback_data[time_key][epoch/eval_freq],
+            return dict(cost=callback_data[cost_key][epoch // eval_freq],
+                        time=callback_data[time_key][epoch // eval_freq],
                         costnm=self.costnm)
 
 
@@ -627,7 +630,7 @@ class TrainCostCallback(Callback):
         """
         self.cost_history.append(model.cost.cost)
         mean_cost = sum(self.cost_history) / len(self.cost_history)
-        mbstart = callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+        mbstart = callback_data['time_markers/minibatch'][epoch - 1] if epoch > 0 else 0
         callback_data['cost/train'][mbstart + minibatch] = mean_cost
 
 
@@ -656,8 +659,8 @@ class LossCallback(Callback):
             model (Model): model object
             epochs (int): Total epochs
         """
-        callback_data.create_dataset("cost/loss", (epochs/self.epoch_freq,))
-        callback_data.create_dataset("time/loss", (epochs/self.epoch_freq,))
+        callback_data.create_dataset("cost/loss", (epochs // self.epoch_freq,))
+        callback_data.create_dataset("time/loss", (epochs // self.epoch_freq,))
         callback_data["cost/loss"].attrs['time_markers'] = 'epoch_freq'
         callback_data["cost/loss"].attrs['epoch_freq'] = self.epoch_freq
 
@@ -678,14 +681,14 @@ class LossCallback(Callback):
             x = model.fprop(x, inference=True)
             bsz = min(self.eval_set.ndata - nprocessed, self.be.bsz)
             model.cost.get_cost(x, t)
-            nsteps = x.shape[1] / self.be.bsz if not isinstance(x, list) else \
-                x[0].shape[1] / self.be.bsz
-            costbuf = model.cost.outputs[:, :bsz*nsteps]
+            nsteps = x.shape[1] // self.be.bsz if not isinstance(x, list) else \
+                x[0].shape[1] // self.be.bsz
+            costbuf = model.cost.outputs[:, :bsz * nsteps]
             nprocessed += bsz
-            self.loss[:] = self.loss + self.be.sum(costbuf, axis=1)/nsteps
+            self.loss[:] = self.loss + self.be.sum(costbuf, axis=1) / nsteps
             mean_cost = float(self.loss.get() / nprocessed)
-        callback_data["time/loss"][epoch/self.epoch_freq] = (default_timer() - start_loss)
-        callback_data["cost/loss"][epoch/self.epoch_freq] = mean_cost
+        callback_data["time/loss"][epoch // self.epoch_freq] = (default_timer() - start_loss)
+        callback_data["cost/loss"][epoch // self.epoch_freq] = mean_cost
 
 
 class MetricCallback(Callback):
@@ -718,7 +721,7 @@ class MetricCallback(Callback):
         callback_data.create_group("metrics")
         for met in self.metric.metric_names:
             group_name = "metrics/%s" % met
-            callback_data.create_dataset(group_name, (epochs/self.epoch_freq,))
+            callback_data.create_dataset(group_name, (epochs // self.epoch_freq,))
             callback_data[group_name].attrs['time_markers'] = 'epoch_freq'
             callback_data[group_name].attrs['epoch_freq'] = self.epoch_freq
 
@@ -737,7 +740,7 @@ class MetricCallback(Callback):
             logger.info('%s: %s', self.metric_desc, ", ".join(map(str, stats.flatten())))
 
             for ind, met in enumerate(self.metric.metric_names):
-                callback_data["metrics/%s" % met][epoch/self.epoch_freq] = stats[ind]
+                callback_data["metrics/%s" % met][epoch // self.epoch_freq] = stats[ind]
 
 
 class MultiLabelStatsCallback(Callback):
@@ -794,10 +797,10 @@ class MultiLabelStatsCallback(Callback):
             for i, label in enumerate(self.labels):
                 metric_text = "["
                 for k, metric in enumerate(self.metric.metric_names):
-                    metric_text += "%s: %d%% " % (metric, running_stats[i][k]*100.0)
+                    metric_text += "%s: %d%% " % (metric, running_stats[i][k] * 100.0)
 
                 metric_text += "] -> %s\n" % label
-                sys.stdout.write(metric_text.encode('utf-8'))
+                sys.stdout.write(metric_text)
                 sys.stdout.flush()
 
 
@@ -843,7 +846,7 @@ class HistCallback(Callback):
         if self.plot_per_mini:
             prev_epochs_minibatches = 0
             if epoch > 0:
-                prev_epochs_minibatches = callback_data['time_markers/minibatch'][epoch-1]
+                prev_epochs_minibatches = callback_data['time_markers/minibatch'][epoch - 1]
 
             timestamp = prev_epochs_minibatches + minibatch
             self._save_hist_data(callback_data, model, timestamp)
@@ -936,15 +939,18 @@ class ProgressBarCallback(Callback):
         mb_complete = minibatch + 1
         if (now - self.last_update > self.update_thresh_s or mb_complete == self.nbatches):
             self.last_update = now
-            mbstart = callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+            mbstart = callback_data['time_markers/minibatch'][epoch - 1] if epoch > 0 else 0
             train_cost = callback_data['cost/train'][mbstart + minibatch]
 
             progress_string = get_progress_string("Train", epoch, mb_complete, self.nbatches,
                                                   train_cost, now - self.start_epoch)
             # clear the last line
-            sys.stdout.write('\r' + ' '*self._last_strlen + '\r')
+            sys.stdout.write('\r' + ' ' * self._last_strlen + '\r')
             # print the new line
-            sys.stdout.write(progress_string.encode('utf-8'))
+            if PY3:
+                sys.stdout.write(progress_string)
+            else:
+                sys.stdout.write(progress_string.encode("utf-8"))
             self._last_strlen = len(progress_string)
             sys.stdout.flush()
 
@@ -960,7 +966,7 @@ class ProgressBarCallback(Callback):
         _eil = self._get_cached_epoch_loss(callback_data, model, epoch, 'loss')
         if _eil:
             progress_string = " [%s %.2f, %.2fs]" % (_eil['costnm'], _eil['cost'], _eil['time'])
-            sys.stdout.write(progress_string.encode('utf-8'))
+            sys.stdout.write(progress_string)
             sys.stdout.flush()
         sys.stdout.write('\n')
 
@@ -995,7 +1001,7 @@ class TrainLoggerCallback(Callback):
         """
         logger.info("Model:\n%s", model)
 
-    def on_minibatch_end(self,  callback_data, model, epoch, minibatch):
+    def on_minibatch_end(self, callback_data, model, epoch, minibatch):
         """
         Called when minibatch is about to end
 
@@ -1005,7 +1011,7 @@ class TrainLoggerCallback(Callback):
             epoch (int): index of current epoch
             minibatch (int): index of minibatch that is ending
         """
-        mbstart = callback_data['time_markers/minibatch'][epoch-1] if epoch > 0 else 0
+        mbstart = callback_data['time_markers/minibatch'][epoch - 1] if epoch > 0 else 0
         train_cost = callback_data['cost/train'][mbstart + minibatch]
         logger.info("Epoch %d Minibatch %d complete. Train cost: %f", epoch, minibatch, train_cost)
 
@@ -1050,7 +1056,7 @@ class SaveBestStateCallback(Callback):
         """
         _eil = self._get_cached_epoch_loss(callback_data, model, epoch, 'loss')
         if _eil:
-            if _eil['cost'] < self.best_cost or self.best_cost is None:
+            if self.best_cost is None or _eil['cost'] < self.best_cost:
                 # TODO: switch this to a general seralization op
                 save_obj(model.serialize(keep_states=True), self.best_path)
                 self.best_cost = _eil['cost']
@@ -1122,7 +1128,7 @@ class DeconvCallback(Callback):
         bar_width = int(float(curr) / total * max_bar_width)
         s = u'Visualization  [{} |{:<%s}| {:4}/{:<4} {}, {:.2f}s]' % max_bar_width
         progress_string = s.format(tag, blockchar * bar_width, curr, total, unit, time)
-        sys.stdout.write('\r' + progress_string.encode('utf-8'))
+        sys.stdout.write('\r' + progress_string)
         sys.stdout.flush()
 
     def on_train_end(self, callback_data, model):
@@ -1212,7 +1218,7 @@ class DeconvCallback(Callback):
         n_imgs = len(imgs_to_store)
         if n_imgs:
             img_data = img_batch_data[:, imgs_to_store].get()
-            img_store = callback_data.create_group('deconv/img/batch_'+str(batch_ind))
+            img_store = callback_data.create_group('deconv/img/batch_' + str(batch_ind))
 
             # Store uint8 HWC formatted data for plotting
             img_hwc8 = img_store.create_dataset("HWC_uint8", (H, W, C, n_imgs),
@@ -1267,7 +1273,7 @@ class DeconvCallback(Callback):
                 if curr_max_act > act_data['activation'][fm]:
                     act_data['activation'][fm] = curr_max_act
                     act_data['batch_img'][fm] = batch_ind, img_ind
-                    act_data['fm_loc'][fm] = argmax / self.be.bsz
+                    act_data['fm_loc'][fm] = argmax // self.be.bsz
                     imgs_to_store.add(img_ind)
 
         return list(imgs_to_store)
@@ -1409,18 +1415,18 @@ class WatchTickerCallback(Callback):
             # take the maximum of those, which is the total number of timesteps
             # divide by batch size to get time steps in one sequence for this minibatch
             # add 1 for indexing purposes
-            columns = 1 + (np.max(t[1].get().nonzero()[1]) / self.be.bsz)
+            columns = 1 + (np.max(t[1].get().nonzero()[1]) // self.be.bsz)
 
             # Print out the name and pretty version of each of X, y, and mask
             for name, item in zip(["Inputs", "Outputs", "Targets"],
                                   [x, y, t[0]]):
 
-                print name
+                neon_logger.display(name)
 
                 # Only get the first sequence in the minibatch
                 # There is no bias here - sequences are randomly generated
                 printable = item.get()[:, ::self.be.bsz]
-                print printable[:, :columns]
+                neon_logger.display(printable[:, :columns])
 
             # Only do this for one minibatch - it's a diagnostic tool, not a log
             break

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,11 +15,10 @@
 """
 Defines basic input datatset types.
 """
-import logging
+from builtins import range, zip
 import numpy as np
 
-from neon import NervanaObject
-logger = logging.getLogger(__name__)
+from neon import NervanaObject, logger
 
 
 class NervanaDataIterator(NervanaObject):
@@ -123,8 +122,8 @@ class ArrayIterator(NervanaDataIterator):
 
             # for classifiction, the labels must be from 0 .. K-1, where K=nclass
             if make_onehot:
-                assert y.max() <= nclass-1 and y.min() >= 0, \
-                    "Labels must range from 0 to {} (nclass-1).".format(nclass-1)
+                assert y.max() <= nclass - 1 and y.min() >= 0, \
+                    "Labels must range from 0 to {} (nclass-1).".format(nclass - 1)
 
                 assert (np.floor(y) == y).all(), \
                     "Labels must only contain integers."
@@ -133,7 +132,7 @@ class ArrayIterator(NervanaDataIterator):
         # number of features
         if lshape is not None:
             assert all([x.shape[1] == np.prod(lshape) for x in X]), \
-                    "product of lshape {} does not match input feature size".format(lshape)
+                "product of lshape {} does not match input feature size".format(lshape)
 
         # store shape of the input data
         self.shape = [x.shape[1] if lshape is None else lshape for x in X]
@@ -150,7 +149,7 @@ class ArrayIterator(NervanaDataIterator):
             return (self.be.array(z.reshape((-1, 1)), dtype=np.int32), self.be.iobuf(nclass),
                     lambda _in, _out: self.be.onehot(_in, axis=0, out=_out))
 
-        self.Xdev, self.Xbuf, self.unpack_func = zip(*[transpose_gen(x) for x in X])
+        self.Xdev, self.Xbuf, self.unpack_func = list(zip(*[transpose_gen(x) for x in X]))
 
         # Shallow copies for appending, iterating
         self.dbuf, self.hbuf = list(self.Xdev), list(self.Xbuf)
@@ -216,16 +215,13 @@ class DataIterator(ArrayIterator):
 
 if __name__ == '__main__':
     from neon.data import load_mnist
-    (X_train, y_train), (X_test, y_test) = load_mnist()
+    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
 
-    from neon.backends.nervanagpu import NervanaGPU
-    ng = NervanaGPU(0, device_id=1)
+    from neon.backends import gen_backend
+    be = gen_backend('gpu', batch_size=128)
 
-    NervanaObject.be = ng
-    ng.bsz = 128
-    train_set = ArrayIterator(
-        [X_test[:1000], X_test[:1000]], y_test[:1000], nclass=10)
+    train_set = ArrayIterator(X_test[:1000], y_test[:1000], nclass=nclass)
     for i in range(3):
         for bidx, (X_batch, y_batch) in enumerate(train_set):
-            print bidx, train_set.start
+            logger.display("{}".format((bidx, train_set.start)))
             pass

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -32,6 +32,7 @@ Usage:
 import os
 import random
 import numpy as np
+from neon import logger as neon_logger
 from neon.util.argparser import NeonArgparser
 from neon.data import DataLoader, VideoParams, ImageParams
 
@@ -88,7 +89,7 @@ pred = get_model_pred(args.model_file, test_set)
 video_pred = accumulate_video_pred(pred)
 
 top1acc, top5acc = 0.0, 0.0
-for video_name, (label, prob_list) in video_pred.items():
+for video_name, (label, prob_list) in list(video_pred.items()):
     # Sample 10 random clips per each video and average probabilities
     sample = random.sample(prob_list, 10)
     avg_prob = np.sum(sample, axis=0) / len(sample)
@@ -99,5 +100,5 @@ for video_name, (label, prob_list) in video_pred.items():
     if label in set(top5pred):
         top5acc += 1
 
-print "Top 1 Accuracy: {} Top 5 Accuracy: {}".format(top1acc/len(video_pred),
-                                                     top5acc/len(video_pred))
+neon_logger.display("Top 1 Accuracy: {} Top 5 Accuracy: {}".format(top1acc / len(video_pred),
+                                                                   top5acc / len(video_pred)))

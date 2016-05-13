@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -30,10 +30,11 @@ The following are made sure to be the same in both LSTMs
     -   the data shape inside LSTM (neon) is input_size, seq_len * batch_size
 
 """
+from builtins import range
 import itertools as itt
 import numpy as np
 
-from neon import NervanaObject
+from neon import NervanaObject, logger as neon_logger
 from neon.initializers.initializer import Constant, Gaussian
 from neon.layers.recurrent import LSTM
 from neon.transforms import Logistic, Tanh
@@ -108,7 +109,7 @@ def check_lstm(seq_len, input_size, hidden_size,
                 activation=Tanh(),
                 gate_activation=Logistic())
 
-    inp = np.random.rand(*input_shape)*inp_moms[1] + inp_moms[0]
+    inp = np.random.rand(*input_shape) * inp_moms[1] + inp_moms[0]
     inpa = lstm.be.array(inp)
     # run neon fprop
     lstm.configure((input_size, seq_len))
@@ -123,8 +124,8 @@ def check_lstm(seq_len, input_size, hidden_size,
 
     # make ref weights and biases with neon model
     WLSTM[0, :] = lstm.b.get().T
-    WLSTM[1:input_size+1, :] = lstm.W_input.get().T
-    WLSTM[input_size+1:] = lstm.W_recur.get().T
+    WLSTM[1:input_size + 1, :] = lstm.W_input.get().T
+    WLSTM[input_size + 1:] = lstm.W_recur.get().T
 
     # transpose input X and do fprop
     inp_ref = inp.copy().T.reshape(seq_len, batch_size, input_size)
@@ -137,25 +138,25 @@ def check_lstm(seq_len, input_size, hidden_size,
     Ct_ref = batch_cache['Ct'].reshape(seq_len * batch_size, hidden_size).T
 
     # compare results
-    print '====Verifying IFOG===='
+    neon_logger.display('====Verifying IFOG====')
     allclose_with_out(lstm.ifog_buffer.get(),
                       IFOGf_ref,
                       rtol=0.0,
                       atol=1.5e-5)
 
-    print '====Verifying cell states===='
+    neon_logger.display('====Verifying cell states====')
     allclose_with_out(lstm.c_act_buffer.get(),
                       Ct_ref,
                       rtol=0.0,
                       atol=1.5e-5)
 
-    print '====Verifying hidden states===='
+    neon_logger.display('====Verifying hidden states====')
     allclose_with_out(lstm.outputs.get(),
                       Hout_ref,
                       rtol=0.0,
                       atol=1.5e-5)
 
-    print 'fprop is verified'
+    neon_logger.display('fprop is verified')
 
     # now test the bprop
     # generate random deltas tensor
@@ -171,38 +172,38 @@ def check_lstm(seq_len, input_size, hidden_size,
     (dX_ref, dWLSTM_ref, dc0_ref, dh0_ref) = lstm_ref.backward(deltas_ref,
                                                                batch_cache)
     dWrecur_ref = dWLSTM_ref[-hidden_size:, :]
-    dWinput_ref = dWLSTM_ref[1:input_size+1, :]
+    dWinput_ref = dWLSTM_ref[1:input_size + 1, :]
     db_ref = dWLSTM_ref[0, :]
     dX_ref = dX_ref.reshape(seq_len * batch_size, input_size).T
 
     # compare results
-    print 'Making sure neon LSTM match numpy LSTM in bprop'
-    print '====Verifying update on W_recur===='
+    neon_logger.display('Making sure neon LSTM match numpy LSTM in bprop')
+    neon_logger.display('====Verifying update on W_recur====')
 
     assert allclose_with_out(dWrecur_neon,
                              dWrecur_ref.T,
                              rtol=0.0,
                              atol=1.5e-5)
 
-    print '====Verifying update on W_input===='
+    neon_logger.display('====Verifying update on W_input====')
     assert allclose_with_out(dWinput_neon,
                              dWinput_ref.T,
                              rtol=0.0,
                              atol=1.5e-5)
 
-    print '====Verifying update on bias===='
+    neon_logger.display('====Verifying update on bias====')
     assert allclose_with_out(db_neon.flatten(),
                              db_ref,
                              rtol=0.0,
                              atol=1.5e-5)
 
-    print '====Verifying output delta===='
+    neon_logger.display('====Verifying output delta====')
     assert allclose_with_out(lstm.out_deltas_buffer.get(),
                              dX_ref,
                              rtol=0.0,
                              atol=1.5e-5)
 
-    print 'bprop is verified'
+    neon_logger.display('bprop is verified')
 
     return
 
@@ -241,7 +242,7 @@ def gradient_check_ref(seq_len, input_size, hidden_size, batch_size,
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     input_shape = (seq_len, input_size, batch_size)
     # hidden_shape = (seq_len, hidden_size, batch_size)
-    (inp_bl, nz_inds) = sparse_rand(input_shape, frac=1.0/input_shape[1])
+    (inp_bl, nz_inds) = sparse_rand(input_shape, frac=1.0 / float(input_shape[1]))
     inp_bl = np.random.randn(*input_shape)
 
     # convert input matrix from neon to ref code format
@@ -257,7 +258,7 @@ def gradient_check_ref(seq_len, input_size, hidden_size, batch_size,
     (Hout, cprev, hprev, cache) = lstm_ref.forward(inp_bl, WLSTM)
 
     # scale Hout by random matrix...
-    rand_scale = np.random.random(Hout.shape)*2.0 - 1.0
+    rand_scale = np.random.random(Hout.shape) * 2.0 - 1.0
     rand_scale = dtypeu(rand_scale)
 
     # line below would be the loss function
@@ -280,10 +281,10 @@ def gradient_check_ref(seq_len, input_size, hidden_size, batch_size,
         (Hout_neg, cprev, hprev, cache) = lstm_ref.forward(inp_pert, WLSTM)
 
         # calculate the loss on outputs
-        loss_pos = np.sum(rand_scale*Hout_pos)
-        loss_neg = np.sum(rand_scale*Hout_neg)
+        loss_pos = np.sum(rand_scale * Hout_pos)
+        loss_neg = np.sum(rand_scale * Hout_neg)
 
-        grads_est.flat[pert_ind] = 0.5*(loss_pos-loss_neg)/epsilon
+        grads_est.flat[pert_ind] = 0.5 / float(epsilon) * (loss_pos - loss_neg)
 
         # reset input
         inp_pert.flat[pert_ind] = save_val
@@ -307,7 +308,7 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
     # This is necessary for 32 bit computations
 
     min_max_err = -1.0  # minimum max error
-    print 'Perturb mag, max grad diff'
+    neon_logger.display('Perturb mag, max grad diff')
     for pert_exp in range(-5, 0):
         # need to generate the scaling and input outside
         # having an issue with the random number generator
@@ -315,7 +316,7 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
         # function
         input_shape = (input_size, seq_len * batch_size)
         output_shape = (hidden_size, seq_len * batch_size)
-        rand_scale = np.random.random(output_shape)*2.0 - 1.0
+        rand_scale = np.random.random(output_shape) * 2.0 - 1.0
 
         inp = np.random.randn(*input_shape)
 
@@ -327,8 +328,8 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
                                            epsilon=pert_mag,
                                            rand_scale=rand_scale,
                                            inp_bl=inp)
-        dd = np.max(np.abs(grad_est-deltas))
-        print '%e, %e' % (pert_mag, dd)
+        dd = np.max(np.abs(grad_est - deltas))
+        neon_logger.display('%e, %e' % (pert_mag, dd))
         if min_max_err < 0.0 or dd < min_max_err:
             min_max_err = dd
         # reset the seed so models are same in each run
@@ -336,8 +337,8 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
         NervanaObject.be.rng_reset()
 
     # check that best value of worst case error is less than threshold
-    print 'Worst case error %e with perturbation %e' % (min_max_err, pert_mag)
-    print 'Threshold %e' % (threshold)
+    neon_logger.display('Worst case error %e with perturbation %e' % (min_max_err, pert_mag))
+    neon_logger.display('Threshold %e' % (threshold))
     assert min_max_err < threshold
 
 
@@ -389,10 +390,10 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
         out_neg = lstm.fprop(lstm.be.array(inp_pert)).get()
 
         # calculate the loss with perturbations
-        loss_pos = np.sum(rand_scale*out_pos)
-        loss_neg = np.sum(rand_scale*out_neg)
+        loss_pos = np.sum(rand_scale * out_pos)
+        loss_neg = np.sum(rand_scale * out_neg)
         # compute the gradient estimate
-        grad = 0.5*(loss_pos-loss_neg)/epsilon
+        grad = 0.5 / float(epsilon) * (loss_pos - loss_neg)
 
         grads_est.flat[pert_ind] = grad
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -18,8 +18,9 @@
 Convolutional autoencoder example network for MNIST data set
 """
 
+from builtins import range
 import numpy as np
-
+from neon import logger as neon_logger
 from neon.data import ArrayIterator, load_mnist
 from neon.initializers import Uniform
 from neon.layers import Conv, Pooling, GeneralizedCost, Deconv
@@ -49,8 +50,10 @@ layers = [Conv((4, 4, 8), init=init_uni, activation=Rectlin(), batch_norm=bn),
           Pooling(2),
           Conv((4, 4, 32), init=init_uni, activation=Rectlin(), batch_norm=bn),
           Pooling(2),
-          Deconv(fshape=(4, 4, 8), init=init_uni, activation=Rectlin(), batch_norm=bn),
-          Deconv(fshape=(3, 3, 8), init=init_uni, activation=Rectlin(), strides=2, batch_norm=bn),
+          Deconv(fshape=(4, 4, 8), init=init_uni,
+                 activation=Rectlin(), batch_norm=bn),
+          Deconv(fshape=(3, 3, 8), init=init_uni,
+                 activation=Rectlin(), strides=2, batch_norm=bn),
           Deconv(fshape=(2, 2, 1), init=init_uni, strides=2, padding=1)]
 
 # Define the cost
@@ -62,7 +65,8 @@ model = Model(layers=layers)
 callbacks = Callbacks(model, **args.callback_args)
 
 # Fit the model
-model.fit(train, optimizer=opt_gdm, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+model.fit(train, optimizer=opt_gdm, num_epochs=args.epochs,
+          cost=cost, callbacks=callbacks)
 
 # Plot the reconstructed digits
 try:
@@ -70,13 +74,14 @@ try:
     fi = 0
     nrows = 10
     ncols = 12
-    test = np.zeros((28*nrows, 28*ncols))
+    test = np.zeros((28 * nrows, 28 * ncols))
     idxs = [(row, col) for row in range(nrows) for col in range(ncols)]
     for row, col in idxs:
         im = model.layers.layers[-1].outputs.get()[:, fi].reshape((28, 28))
-        test[28*row:28*(row+1):, 28*col:28*(col+1)] = im
+        test[28 * row:28 * (row + 1):, 28 * col:28 * (col + 1)] = im
         fi = fi + 1
     pyplot.matshow(test, cmap=cm.gray)
     pyplot.savefig('Reconstructed.png')
 except ImportError:
-    print 'matplotlib needs to be manually installed to generate plots'
+    neon_logger.display(
+        'matplotlib needs to be manually installed to generate plots')

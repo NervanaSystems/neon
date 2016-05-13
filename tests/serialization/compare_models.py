@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,9 +16,10 @@
 
 import argparse
 import os
-import pickle
 import sys
 
+from neon import logger as neon_logger
+from neon.util.compat import pickle
 from neon.util.modeldesc import ModelDescription
 
 
@@ -49,7 +50,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if not compare_files(args.file1, args.file2):
-        print 'ERROR: Models do not match!'
+        neon_logger.error('Models do not match!')
         sys.exit(1)
     else:
-        print 'Match'
+        neon_logger.display('Models match')

@@ -21,7 +21,7 @@ Let's get you started using Neon to build deep learning models!
 Requirements
 ~~~~~~~~~~~~
 
-Neon runs on **Python 2.7** and we support Linux and Mac OS X machines.
+Neon runs on **Python 2.7** or **Python 3.4+** and we support Linux and Mac OS X machines.
 Before install, please ensure you have recent versions of the following
 packages (different system names shown):
 
@@ -31,7 +31,7 @@ packages (different system names shown):
    :escape: ~
 
    python-pip, pip, Tool to install python dependencies
-   python-virtualenv, virtualenv, Allows creation of isolated environments
+   python-virtualenv (*), virtualenv (*), Allows creation of isolated environments ((*): This is required only for Python 2.7 installs. With Python3: test for presence of ``venv`` with ``python3 -m venv -h``)
    libhdf5-dev, h5py, Enables loading of hdf5 formats
    libyaml-dev, pyaml, Parses YAML format inputs
    pkg-config, pkg-config, Retrieves information about installed libraries
@@ -66,10 +66,22 @@ setup neon in this manner, run the following commands:
 .. code-block:: bash
 
     git clone https://github.com/NervanaSystems/neon.git
-    cd neon && make
+    cd neon; make
 
-This will install the files in the ``neon/.venv/`` directory. To activate the virtual
-environment, type
+This will install the files in the ``neon/.venv/`` directory and will use the python version in the
+default PATH.  To instead force a Python2 or Python3 install, supply this as an optional parameter:
+
+.. code-block:: bash
+
+   make python2
+
+Or:
+
+.. code-block:: bash
+
+   make python3
+
+To activate the virtual environment, type
 
 .. code-block:: bash
 

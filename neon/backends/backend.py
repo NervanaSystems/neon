@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,10 +15,11 @@
 """
 Defines Tensor and Backend class.
 """
-
-import numpy as np
+from __future__ import division
+from builtins import hex, map, object, range, str
 import logging
 from math import ceil
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -396,6 +397,9 @@ class Tensor(object):
     def __eq__(self, other):
         return OpTreeNode.build("eq", self, other)
 
+    def __hash__(self):
+        return id(self)
+
     def __ne__(self, other):
         return OpTreeNode.build("ne", self, other)
 
@@ -478,13 +482,13 @@ class Backend(object):
         """
 
         if self.check_caffe_compat() and pooling:
-            size = int(ceil(float(X - S + 2 * padding)/strides)) + 1
-            if padding > 0 and (size - 1)*strides >= X + padding:
+            size = int(ceil((float(X - S + 2 * padding) / strides))) + 1
+            if padding > 0 and (size - 1) * strides >= X + padding:
                 # decrement size if last pooling op is completely in padding
                 size -= 1
         else:
             # normal neon output size determination
-            size = (X - S + 2 * padding)/strides + 1
+            size = ((X - S + 2 * padding) // strides) + 1
 
         if pooling and padding >= S:
             raise ValueError("Padding dim %d incompatible with filter size %d" % (padding, S))
@@ -2221,7 +2225,7 @@ class OpTreeNode(tuple):
         Convert list to optree recursively.
         """
         if isinstance(l, list):
-            return OpTreeNode(*map(OpTreeNode.list_to_optree, l))
+            return OpTreeNode(*list(map(OpTreeNode.list_to_optree, l)))
         else:
             return l
 
@@ -2386,4 +2390,4 @@ class Block(object):
         bprop: start of backward propagation call for a particular minibatch
         update: start of parameter update call for a particular minibatch
     """
-    epoch, minibatch, fprop, bprop, update = range(5)
+    epoch, minibatch, fprop, bprop, update = list(range(5))

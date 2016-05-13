@@ -10,6 +10,7 @@ The adaptation includes
   - being able to read out hashable values to compare with another GRU
     implementation
 """
+from builtins import range
 
 import numpy as np
 
@@ -83,7 +84,7 @@ class GRU(object):
         hs_list = np.zeros((self.hidden_size, seq_len))
 
         # forward pass, compute outputs, t indexes time
-        for t in xrange(seq_len):
+        for t in range(seq_len):
             # For every variable V, Vbar represents the pre-activation version
             # For every variable Q, Qnext represents that variable at time t+1
             # where t is understood from context
@@ -94,19 +95,19 @@ class GRU(object):
             # The r gate, which modulates how much signal from h[t-1] goes to
             # the candidate
             rbars[t] = np.dot(self.Wxr, xs[t]) + \
-                np.dot(self.Rhr, hs[t-1]) + self.br
-            rs[t] = 1 / (1 + np.exp(-rbars[t]))
+                np.dot(self.Rhr, hs[t - 1]) + self.br
+            rs[t] = 1.0 / (1 + np.exp(-rbars[t]))
             # TODO: use an already existing sigmoid function
 
             # The z gate, which interpolates between candidate and h[t-1] to
             # compute h[t]
             zbars[t] = np.dot(self.Wxz, xs[t]) + \
-                np.dot(self.Rhz, hs[t-1]) + self.bz
-            zs[t] = 1 / (1 + np.exp(-zbars[t]))
+                np.dot(self.Rhz, hs[t - 1]) + self.bz
+            zs[t] = 1.0 / (1 + np.exp(-zbars[t]))
 
             # The candidate, which is computed and used as described above.
             cbars[t] = np.dot(
-                self.Wxc, xs[t]) + np.dot(self.Rhc, np.multiply(rs[t], hs[t-1])) + self.bc
+                self.Wxc, xs[t]) + np.dot(self.Rhc, np.multiply(rs[t], hs[t - 1])) + self.bc
             cs[t] = np.tanh(cbars[t])
 
             # TODO: get rid of this
@@ -114,7 +115,7 @@ class GRU(object):
 
             # Compute new h by interpolating between candidate and old h
             hs[t] = np.multiply(
-                cs[t], zs[t]) + np.multiply(hs[t-1], ones - zs[t])
+                cs[t], zs[t]) + np.multiply(hs[t - 1], ones - zs[t])
 
             hs_list[:, t] = hs[t].flatten()
 
@@ -146,7 +147,7 @@ class GRU(object):
         dc_list = np.zeros((self.hidden_size, seq_len))
 
         # go backwards through time
-        for t in reversed(xrange(seq_len)):
+        for t in reversed(range(seq_len)):
 
             # For every variable X, dX represents dC/dX
             # For variables that influence C at multiple time steps,
@@ -155,7 +156,7 @@ class GRU(object):
 
             # h[t] influences the cost in 5 ways:
             # through the interpolation using z at t+1
-            dha = np.multiply(dhnext, ones - zs[t+1])
+            dha = np.multiply(dhnext, ones - zs[t + 1])
 
             # through transformation by weights into rbar
             dhb = np.dot(self.Rhr.T, drbarnext)
@@ -164,7 +165,7 @@ class GRU(object):
             dhc = np.dot(self.Rhz.T, dzbarnext)
 
             # through transformation by weights into cbar
-            dhd = np.multiply(rs[t+1], np.dot(self.Rhc.T, dcbarnext))
+            dhd = np.multiply(rs[t + 1], np.dot(self.Rhc.T, dcbarnext))
 
             # through bp errors
             dhe = dh_list[t]
@@ -178,8 +179,8 @@ class GRU(object):
             # backprop through tanh
             dcbar = np.multiply(dc, ones - np.square(cs[t]))
 
-            dr = np.multiply(hs[t-1], np.dot(self.Rhc.T, dcbar))
-            dz = np.multiply(dh, (cs[t] - hs[t-1]))
+            dr = np.multiply(hs[t - 1], np.dot(self.Rhc.T, dcbar))
+            dz = np.multiply(dh, (cs[t] - hs[t - 1]))
 
             # backprop through sigmoids
             drbar = np.multiply(dr, np.multiply(rs[t], (ones - rs[t])))
@@ -189,9 +190,9 @@ class GRU(object):
             dWxz += np.dot(dzbar, xs[t].T)
             dWxc += np.dot(dcbar, xs[t].T)
 
-            dRhr += np.dot(drbar, hs[t-1].T)
-            dRhz += np.dot(dzbar, hs[t-1].T)
-            dRhc += np.dot(dcbar, np.multiply(rs[t], hs[t-1]).T)
+            dRhr += np.dot(drbar, hs[t - 1].T)
+            dRhz += np.dot(dzbar, hs[t - 1].T)
+            dRhc += np.dot(dcbar, np.multiply(rs[t], hs[t - 1]).T)
 
             dbr += drbar
             dbc += dcbar

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -32,8 +32,10 @@ Usage:
                                        --save_path UCF101-C3D.p
 """
 
+from builtins import range
 import os
 import numpy as np
+from neon import logger as neon_logger
 from neon.layers import GeneralizedCost
 from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
 from neon.transforms import CrossEntropyMulti, Accuracy
@@ -75,7 +77,7 @@ model = create_network()
 callbacks = Callbacks(model, eval_set=test, **args.callback_args)
 
 # gradient descent with momentum, weight decay, and learning rate decay schedule
-learning_rate_sched = Schedule(range(6, args.epochs, 6), 0.1)
+learning_rate_sched = Schedule(list(range(6, args.epochs, 6)), 0.1)
 opt_gdm = GradientDescentMomentum(0.003, 0.9, wdecay=0.005, schedule=learning_rate_sched)
 opt_biases = GradientDescentMomentum(0.006, 0.9, schedule=learning_rate_sched)
 opt = MultiOptimizer({'default': opt_gdm, 'Bias': opt_biases})
@@ -85,5 +87,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 # output accuracies
-print('Train Accuracy = %.1f%%' % (model.eval(train, metric=Accuracy()) * 100))
-print('Test Accuracy = %.1f%%' % (model.eval(test, metric=Accuracy()) * 100))
+neon_logger.display('Train Accuracy = %.1f%%' %
+                    (model.eval(train, metric=Accuracy()) * 100))
+neon_logger.display('Test Accuracy = %.1f%%' %
+                    (model.eval(test, metric=Accuracy()) * 100))

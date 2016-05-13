@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -17,7 +17,6 @@
 Small CIFAR10 based convolutional neural network adapted from neon examples
 for use in serialization testing.
 """
-
 import numpy as np
 from neon.data import ArrayIterator, load_cifar10
 from neon.initializers import Uniform
@@ -27,6 +26,7 @@ from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Misclassification, Rectlin, Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
+from neon import logger as neon_logger
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -39,7 +39,7 @@ num_epochs = args.epochs
 
 (X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
 
-Nmax = X_train.shape[0]/args.batch_size
+Nmax = X_train.shape[0] // args.batch_size
 Nmax *= args.batch_size
 X_train = X_train[0:Nmax, :]
 y_train = y_train[0:Nmax, :]
@@ -53,7 +53,7 @@ if args.datatype in [np.float32, np.float64]:
                                       momentum_coef=0.9,
                                       stochastic_round=args.rounding)
 elif args.datatype in [np.float16]:
-    opt_gdm = GradientDescentMomentum(learning_rate=0.01/cost_scale,
+    opt_gdm = GradientDescentMomentum(learning_rate=0.01 / cost_scale,
                                       momentum_coef=0.9,
                                       stochastic_round=args.rounding)
 
@@ -72,9 +72,10 @@ elif args.datatype in [np.float16]:
 model = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(model,  eval_set=test, **args.callback_args)
+callbacks = Callbacks(model, eval_set=test, **args.callback_args)
 
 # callbacks = Callbacks.load_callbacks(callbacks.get_description(), model, data=[train, test])
 model.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
-print 'Misclassification error = %.1f%%' % (model.eval(test, metric=Misclassification())*100)
+error_rate = model.eval(test, metric=Misclassification())
+neon_logger.display('Misclassification error = %.1f%%' % (error_rate * 100))

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright 2015 Nervana Systems Inc. All rights reserved.
+# Copyright 2015-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,16 +13,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from __future__ import division
+from builtins import range
 import numpy as np
 #from ipdb import set_trace
 from struct import pack, unpack
+from neon import logger as neon_logger
 
 def ceil_div(x, y):
     return -(-x // y)
 
 def out_dim(S, X, padding, strides):
-    return ceil_div(X - S + 1 + 2*padding, strides)
+    return ceil_div(X - S + 1 + 2 * padding, strides)
 
 def strip_mantissa(val):
     i = unpack('I', pack('f', val))[0] & 0x7f800000
@@ -36,7 +38,7 @@ def immediate(val):
 
 def quantize(ary, bits, sign=1):
     maxval = float(np.max(np.absolute(ary)))
-    scale  = strip_mantissa(maxval) / float(1 << (bits-sign-1))
+    scale  = strip_mantissa(maxval) / float(1 << (bits - sign - 1))
     ary    = np.around(ary * (1.0 / scale)).astype(np.int64)
     return ary, np.float64(scale)
 
@@ -54,7 +56,7 @@ def fconv_slice(q, S, X, padding, strides):
         dif = x2 - X + 1
         f2 -= dif
         x2 -= dif
-    return (slice(f1, f2+1), slice(x1, x2+1), f2 - f1 + 1)
+    return (slice(f1, f2 + 1), slice(x1, x2 + 1), f2 - f1 + 1)
 
 def bconv_slice(x, S, Q, padding, strides):
     qs = x - (S - padding - 1)
@@ -71,7 +73,7 @@ def bconv_slice(x, S, Q, padding, strides):
                 lastE = q
     if firstF is None:
         return (slice(0,0,1), slice(0,0,1), 0)
-    return (slice(firstF,lastF+1,strides), slice(firstE,lastE+1,1), 0)
+    return (slice(firstF,lastF + 1,strides), slice(firstE,lastE + 1,1), 0)
 
 def xprop_direct(I, F, O, padding, strides, backward=False):
 
@@ -158,20 +160,20 @@ I_4x4_3x3 = (
     [ 0.0,  4.0,  0.0, -5.0, 0.0, 1.0]]),
 
     np.array([
-    [ 1.0,  0.0,     -5.0/4.0,  0.0,      1.0/4.0, 0.0],
-    [ 0.0,  2.0/3.0,  2.0/3.0, -1.0/6.0, -1.0/6.0, 0.0],
-    [ 0.0, -2.0/3.0,  2.0/3.0,  1.0/6.0, -1.0/6.0, 0.0],
-    [ 0.0, -1.0/12., -1.0/24.,  1.0/12.,  1.0/24., 0.0],
-    [ 0.0,  1.0/12., -1.0/24., -1.0/12.,  1.0/24., 0.0],
+    [ 1.0,  0.0,     -5.0 / 4.0,  0.0,      1.0 / 4.0, 0.0],
+    [ 0.0,  2.0 / 3.0,  2.0 / 3.0, -1.0 / 6.0, -1.0 / 6.0, 0.0],
+    [ 0.0, -2.0 / 3.0,  2.0 / 3.0,  1.0 / 6.0, -1.0 / 6.0, 0.0],
+    [ 0.0, -1.0 / 12., -1.0 / 24.,  1.0 / 12.,  1.0 / 24., 0.0],
+    [ 0.0,  1.0 / 12., -1.0 / 24., -1.0 / 12.,  1.0 / 24., 0.0],
     [ 0.0,  4.0,      0.0,     -5.0,      0.0,     1.0]]),
 
     np.array([
-    [ 441.0/400.0,         0.0, -137.0/50.00,         0.0, 1.0, 0.0],
-    [ 0.0,         -63.0/40.00,   -9.0/4.000,    7.0/10.0, 1.0, 0.0],
-    [ 0.0,          63.0/40.00,   -9.0/4.000,   -7.0/10.0, 1.0, 0.0],
-    [ 0.0,        -147.0/200.0,  -49.0/100.0,    3.0/2.00, 1.0, 0.0],
-    [ 0.0,         147.0/200.0,  -49.0/100.0,   -3.0/2.00, 1.0, 0.0],
-    [ 0.0,         441.0/400.0,          0.0, -137.0/50.0, 0.0, 1.0]]),
+    [ 441.0 / 400.0,         0.0, -137.0 / 50.00,         0.0, 1.0, 0.0],
+    [ 0.0,         -63.0 / 40.00,   -9.0 / 4.000,    7.0 / 10.0, 1.0, 0.0],
+    [ 0.0,          63.0 / 40.00,   -9.0 / 4.000,   -7.0 / 10.0, 1.0, 0.0],
+    [ 0.0,        -147.0 / 200.0,  -49.0 / 100.0,    3.0 / 2.00, 1.0, 0.0],
+    [ 0.0,         147.0 / 200.0,  -49.0 / 100.0,   -3.0 / 2.00, 1.0, 0.0],
+    [ 0.0,         441.0 / 400.0,          0.0, -137.0 / 50.0, 0.0, 1.0]]),
 
     np.array([
     [ 0.87890625,  0,          -2.640625,  0,        1, 0 ],
@@ -192,11 +194,11 @@ I_4x4_3x3 = (
 
 F_4x4_3x3 = (
     np.array([
-    [  1.0/4.0,  0.0,      0.0     ],
-    [ -1.0/6.0, -1.0/6.0, -1.0/6.0 ],
-    [ -1.0/6.0,  1.0/6.0, -1.0/6.0 ],
-    [  1.0/24.,  1.0/12.,  1.0/6.0 ],
-    [  1.0/24., -1.0/12.,  1.0/6.0 ],
+    [  1.0 / 4.0,  0.0,      0.0     ],
+    [ -1.0 / 6.0, -1.0 / 6.0, -1.0 / 6.0 ],
+    [ -1.0 / 6.0,  1.0 / 6.0, -1.0 / 6.0 ],
+    [  1.0 / 24.,  1.0 / 12.,  1.0 / 6.0 ],
+    [  1.0 / 24., -1.0 / 12.,  1.0 / 6.0 ],
     [  0.0,      0.0,      1.0     ]]),
 
     np.array([
@@ -216,11 +218,11 @@ F_4x4_3x3 = (
     [ 0.0,  0.0,  1.0 ]]),
 
     np.array([
-    [  400.0/441.00,          0.0,        0.0 ],
-    [ -625.0/1078.0, -125.0/308.0, -25.0/88.0 ],
-    [ -625.0/1078.0,  125.0/308.0, -25.0/88.0 ],
-    [   25.0/198.00,   25.0/132.0,  25.0/88.0 ],
-    [   25.0/198.00,  -25.0/132.0,  25.0/88.0 ],
+    [  400.0 / 441.00,          0.0,        0.0 ],
+    [ -625.0 / 1078.0, -125.0 / 308.0, -25.0 / 88.0 ],
+    [ -625.0 / 1078.0,  125.0 / 308.0, -25.0 / 88.0 ],
+    [   25.0 / 198.00,   25.0 / 132.0,  25.0 / 88.0 ],
+    [   25.0 / 198.00,  -25.0 / 132.0,  25.0 / 88.0 ],
     [           0.0,          0.0,        1.0 ]]),
 
     np.array([
@@ -245,10 +247,10 @@ O_4x4_3x3 = (
     [ 0.0, 1.0, -1.0, 8.0, -8.0, 1.0 ]]),
 
     np.array([
-    [ 1.0/4.0, -1.0/6.0, -1.0/6.0, 1.0/24.,  1.0/24., 0.0 ],
-    [ 0.0,     -1.0/6.0,  1.0/6.0, 1.0/12., -1.0/12., 0.0 ],
-    [ 0.0,     -1.0/6.0, -1.0/6.0, 1.0/6.0,  1.0/6.0, 0.0 ],
-    [ 0.0,     -1.0/6.0,  1.0/6.0, 1.0/3.0, -1.0/3.0, 1.0 ]]),
+    [ 1.0 / 4.0, -1.0 / 6.0, -1.0 / 6.0, 1.0 / 24.,  1.0 / 24., 0.0 ],
+    [ 0.0,     -1.0 / 6.0,  1.0 / 6.0, 1.0 / 12., -1.0 / 12., 0.0 ],
+    [ 0.0,     -1.0 / 6.0, -1.0 / 6.0, 1.0 / 6.0,  1.0 / 6.0, 0.0 ],
+    [ 0.0,     -1.0 / 6.0,  1.0 / 6.0, 1.0 / 3.0, -1.0 / 3.0, 1.0 ]]),
 
     np.array([
     [ 1.0, 1.0,  1.0, 1.0,  1.0, 0.0 ],
@@ -258,9 +260,9 @@ O_4x4_3x3 = (
 
     np.array([
     [ 1.0,       1.0000,        1.0000,      1.0,       1.0, 0.0 ],
-    [ 0.0,   7.0/10.000,   -7.0/10.000,  3.0/2.0,  -3.0/2.0, 0.0 ],
-    [ 0.0,  49.0/100.00,   49.0/100.00,  9.0/4.0,   9.0/4.0, 0.0 ],
-    [ 0.0, 343.0/1000.0, -343.0/1000.0, 27.0/8.0, -27.0/8.0, 1.0 ]]),
+    [ 0.0,   7.0 / 10.000,   -7.0 / 10.000,  3.0 / 2.0,  -3.0 / 2.0, 0.0 ],
+    [ 0.0,  49.0 / 100.00,   49.0 / 100.00,  9.0 / 4.0,   9.0 / 4.0, 0.0 ],
+    [ 0.0, 343.0 / 1000.0, -343.0 / 1000.0, 27.0 / 8.0, -27.0 / 8.0, 1.0 ]]),
 
     np.array([
     [ 1, 1,            1,           1,      1,     0 ],
@@ -277,11 +279,11 @@ O_4x4_3x3 = (
     [ 0,                  0,                  0,                 1,                ]]).T,
 )
 
-rcp3  = 1.0/3.0
-rcp4  = 1.0/4.0
-rcp6  = 1.0/6.0
-rcp12 = 1.0/12.0
-rcp24 = 1.0/24.0
+rcp3  = 1.0 / 3.0
+rcp4  = 1.0 / 4.0
+rcp6  = 1.0 / 6.0
+rcp12 = 1.0 / 12.0
+rcp24 = 1.0 / 24.0
 
 def trans_I_4x4_3x3(Iw, I, minimal=False, trans=False):
     if minimal:
@@ -308,17 +310,17 @@ def trans_I_4x4_3x3(Iw, I, minimal=False, trans=False):
     # [ 0.0,         147.0/200.0,  -49.0/100.0,   -3.0/2.00, 1.0, 0.0],
     # [ 0.0,         441.0/400.0,          0.0, -137.0/50.0, 0.0, 1.0]]),
 
-            t0 = I[4,:] - I[2,:]*2.25
-            t1 = I[3,:] - I[1,:]*2.25
-            t2 = I[4,:] - I[2,:]*0.390625
-            t3 = I[3,:] - I[1,:]*0.390625
+            t0 = I[4,:] - I[2,:] * 2.25
+            t1 = I[3,:] - I[1,:] * 2.25
+            t2 = I[4,:] - I[2,:] * 0.390625
+            t3 = I[3,:] - I[1,:] * 0.390625
 
-            O[0,:] = I[0,:]*0.87890625 - I[2,:]*2.640625 + I[4,:]
-            O[1,:] = t0 + t1*0.625
-            O[2,:] = t0 - t1*0.625
-            O[3,:] = t2 + t3*1.5
-            O[4,:] = t2 - t3*1.5
-            O[5,:] = I[1,:]*0.87890625 - I[3,:]*2.640625 + I[5,:]
+            O[0,:] = I[0,:] * 0.87890625 - I[2,:] * 2.640625 + I[4,:]
+            O[1,:] = t0 + t1 * 0.625
+            O[2,:] = t0 - t1 * 0.625
+            O[3,:] = t2 + t3 * 1.5
+            O[4,:] = t2 - t3 * 1.5
+            O[5,:] = I[1,:] * 0.87890625 - I[3,:] * 2.640625 + I[5,:]
 
 
 
@@ -369,15 +371,15 @@ def trans_F_4x4_3x3(Fw, F, minimal=False, trans=False):
 
         for O, I in ((T0, F), (T1, T0.T)):
 
-            t0 =  25.0/88.0    * I[2,:]
-            t1 = -625.0/1078.0 * I[0,:] - t0
-            t2 =  25.0/198.0   * I[0,:] + t0
+            t0 =  25.0 / 88.0    * I[2,:]
+            t1 = -625.0 / 1078.0 * I[0,:] - t0
+            t2 =  25.0 / 198.0   * I[0,:] + t0
 
-            O[0,:] = I[0,:] * 400.0/441.00
-            O[1,:] = t1 - 125.0/308.0 * I[1,:]
-            O[2,:] = t1 + 125.0/308.0 * I[1,:]
-            O[3,:] = t2 + 25.0/132.0  * I[1,:]
-            O[4,:] = t2 - 25.0/132.0  * I[1,:]
+            O[0,:] = I[0,:] * 400.0 / 441.00
+            O[1,:] = t1 - 125.0 / 308.0 * I[1,:]
+            O[2,:] = t1 + 125.0 / 308.0 * I[1,:]
+            O[3,:] = t2 + 25.0 / 132.0  * I[1,:]
+            O[4,:] = t2 - 25.0 / 132.0  * I[1,:]
             O[5,:] = I[2,:]
 
             # t0 =  rcp6  * I[2,:]
@@ -419,9 +421,9 @@ def trans_O_4x4_3x3(Mw, minimal=False, trans=False):
             t3 = I[3,:] - I[4,:]
 
             O[0,:] = t0 + t1  + I[0,:]
-            O[1,:] = t2*0.625       + t3*1.500
-            O[2,:] = t0*0.390625    + t1*2.250
-            O[3,:] = t2*0.244140625 + t3*3.375 + I[5,:]
+            O[1,:] = t2 * 0.625       + t3 * 1.500
+            O[2,:] = t0 * 0.390625    + t1 * 2.250
+            O[3,:] = t2 * 0.244140625 + t3 * 3.375 + I[5,:]
 
             # t0 = I[1,:] + I[2,:]
             # t1 = I[3,:] + I[4,:]
@@ -465,12 +467,12 @@ def trans_F_3x3_4x4(Fw, F, minimal=False, trans=False):
             # [ 0,                  0,                  0,                 1,                ]]).T,
 
             t0 = I[2,:] * 0.26890756302521
-            t1 = I[0,:] *-0.688403361344538 - t0
+            t1 = I[0,:] * -0.688403361344538 - t0
             t2 = I[0,:] * 0.119514472455649 + t0
             t3 = I[1,:] * 0.430252100840336 + I[3,:] * 0.168067226890756
             t4 = I[1,:] * 0.179271708683473 + I[3,:] * 0.403361344537815
 
-            O[0,:] = I[0,:]*1.13777777777778
+            O[0,:] = I[0,:] * 1.13777777777778
             O[1,:] = t1 - t3
             O[2,:] = t1 + t3
             O[3,:] = t2 + t4
@@ -525,12 +527,12 @@ def trans_F_3x3_4x4(Fw, F, minimal=False, trans=False):
     else:
         Fw[:] = np.dot( np.dot(O_4x4_3x3[trans[0]].T, F), O_4x4_3x3[trans[1]] )
 
-f400_441  = immediate(400.0/441.0)
-f625_1078 = immediate(625.0/1078.0)
-f25_198   = immediate(25.0/198.0)
-f125_308  = immediate(125.0/308.0)
-f25_132   = immediate(25.0/132.0)
-f25_88    = immediate(25.0/88.0)
+f400_441  = immediate(400.0 / 441.0)
+f625_1078 = immediate(625.0 / 1078.0)
+f25_198   = immediate(25.0 / 198.0)
+f125_308  = immediate(125.0 / 308.0)
+f25_132   = immediate(25.0 / 132.0)
+f25_88    = immediate(25.0 / 88.0)
 
 def trans_O_3x3_4x4(Mw, minimal=False, trans=False):
     if minimal:
@@ -550,7 +552,7 @@ def trans_O_3x3_4x4(Mw, minimal=False, trans=False):
 
             O[0,:] = I[0,:] + t0 + t1
             O[1,:] = 0.625 * (I[1,:] - I[2,:]) + 1.5 * (I[3,:] - I[4,:])
-            O[2,:] = 0.390625*t0 + 2.25*t1 + I[5,:]
+            O[2,:] = 0.390625 * t0 + 2.25 * t1 + I[5,:]
 
             # {400.0/441.00, -625.0/1078.0, -625.0/1078.0, 25.0/198.00, 25.0/198.00, 0.},
             # {0.,           -125.0/308.0,   125.0/308.0,  25.0/132.0, -25.0/132.0,  0.},
@@ -596,7 +598,7 @@ def trans_O_3x3_4x4(Mw, minimal=False, trans=False):
         return np.dot( np.dot(F_4x4_3x3[trans[0]].T, Mw), F_4x4_3x3[trans[1]] )
 
 def image_slice(x, X, B, D, pad=0):
-    start = x*B - pad
+    start = x * B - pad
     stop  = start + D
     pad = [0,0]
     if start < 0:
@@ -766,7 +768,7 @@ def updat_winograd(I, E, U, padding, minimal=False, trans=False, inner=True):
 
 ### Test Code ###
 
-np.set_printoptions(threshold=8192*4, linewidth=600, formatter={'float':lambda x: "%6.3f" % x})
+np.set_printoptions(threshold=8192 * 4, linewidth=600, formatter={'float':lambda x: "%6.3f" % x})
 
 minimal = 0
 trans = (4,4)
@@ -781,7 +783,7 @@ padding = 0, 0  # 0-2
 P = out_dim(R, Y, padding[0], strides[0])
 Q = out_dim(S, X, padding[1], strides[1])
 
-print P, Q
+neon_logger.display("{}".format(P, Q))
 
 dimI = (C,Y,X,N)
 dimF = (C,R,S,K)
@@ -802,7 +804,7 @@ if ones:
 
     # for p,q in np.ndindex((P,Q)):
     #     for n in range(N):
-    #         E[:,p,q,n] = range(K)
+    #         E[:,p,q,n] = list(range(K))
 
     # for c in range(C):
     #     for n in range(N):
@@ -841,9 +843,9 @@ difO = Od - Ow
 difB = Bd - Bw
 difU = Ud - Uw
 
-print abs(difO).max()/Od.max()
-print abs(difB).max()/Bd.max()
-print abs(difU).max()/Ud.max()
+neon_logger.display(abs(difO).max() / Od.max())
+neon_logger.display(abs(difB).max() / Bd.max())
+neon_logger.display(abs(difU).max() / Ud.max())
 
 # print Bd[0,:,:,0]
 # print Bw[0,:,:,0]

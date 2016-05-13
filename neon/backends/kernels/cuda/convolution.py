@@ -605,17 +605,17 @@ __global__ void conv_%(operation)s(
     magic = _magic64(filter_size)
 
     code = code % {
-        "filter_size":          filter_size,
-        "magic_filter_size":    magic[0],
-        "shift_filter_size":    magic[1],
-        "type":                 _ew_types[dtype]["type"],
-        "lut_code":             lut_code,
-        "bsum_code":            bsum_code,
-        "operation":            operation,
-        "a_name":               a_name,
-        "b_name":               b_name,
-        "filter_load_cond":     filter_load_cond,
-        "check_filter_cond":    check_filter_cond
+        "filter_size": filter_size,
+        "magic_filter_size": magic[0],
+        "shift_filter_size": magic[1],
+        "type": _ew_types[dtype]["type"],
+        "lut_code": lut_code,
+        "bsum_code": bsum_code,
+        "operation": operation,
+        "a_name": a_name,
+        "b_name": b_name,
+        "filter_load_cond": filter_load_cond,
+        "check_filter_cond": check_filter_cond
     }
 
     options = ["--use_fast_math"]

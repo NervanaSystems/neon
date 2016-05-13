@@ -1,6 +1,7 @@
+from builtins import range
 import numpy as np
 import pytest
-from neon import NervanaObject
+from neon import NervanaObject, logger
 
 
 @pytest.mark.hasgpu
@@ -19,7 +20,7 @@ def test_sr(backend_gpu):
     C[:] = A + B
     C_host = C.get()
     # make sure everything is either 1. (rounded down 1 bit) or 1.5 (rounded up 1 bit)
-    print C_host
+    logger.display("Rounded Buf: {}".format(C_host))
     assert sum([C_host.flatten()[i] in [1., 1.5] for i in range(n**2)]) == n**2
     assert sum([C_host.flatten()[i] in [1.5] for i in range(n**2)]) > .1 * n**2
     assert sum([C_host.flatten()[i] in [1.] for i in range(n**2)]) > .7 * n**2

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -19,7 +19,7 @@ import pkgutil
 import sys
 import appdirs
 
-from neon.util.compat import pickle
+from neon.util.compat import pickle, pickle_load
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ def save_obj(obj, save_path):
     logger.debug("serializing object to: %s", save_path)
     ensure_dirs_exist(save_path)
 
-    pickle.dump(obj, open(save_path, 'wb'), -1)
+    pickle.dump(obj, open(save_path, 'wb'), 2)
 
 
 def load_obj(load_path):
@@ -103,14 +103,14 @@ def load_obj(load_path):
         load_path = os.path.expandvars(os.path.expanduser(load_path))
         if load_path.endswith('.gz'):
             import gzip
-            load_path = gzip.open(load_path)
+            load_path = gzip.open(load_path, 'rb')
         else:
-            load_path = open(load_path)
+            load_path = open(load_path, 'rb')
     fname = load_path.name
 
     logger.debug("deserializing object from:  %s", fname)
     try:
-        return pickle.load(load_path)
+        return pickle_load(load_path)
     except AttributeError:
         msg = ("Problems deserializing: %s.  Its possible the interface "
                "for this object has changed since being serialized.  You "

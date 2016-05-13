@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,14 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
-import h5py
-from collections import defaultdict
-import numpy as np
-import cPickle
-import os
-
-from neon.data.text_preprocessing import clean_string
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from builtins import range  # noqa
+import h5py  # noqa
+from collections import defaultdict  # noqa
+import numpy as np  # noqa
+import os  # noqa
+from neon import logger as neon_logger  # noqa
+from neon.data.text_preprocessing import clean_string  # noqa
+from neon.util.compat import pickle  # noqa
 
 
 def build_data_train(path='.', filepath='labeledTrainData.tsv', vocab_file=None,
@@ -113,20 +115,20 @@ def build_data_train(path='.', filepath='labeledTrainData.tsv', vocab_file=None,
         reviews_text.attrs['nrows'] = nsamples
         reviews_text.attrs['nclass'] = nclass
         reviews_text.attrs['class_distribution'] = counts
-        print "vocabulary size - ", vocab_size
-        print "# of samples - ", nsamples
-        print "# of classes", nclass
-        print "class distribution - ", ratings, counts
-        sen_counts = zip(sen_len, sen_len_counts)
+        neon_logger.display("vocabulary size - ", vocab_size)
+        neon_logger.display("# of samples - " + nsamples)
+        neon_logger.display("# of classes" + nclass)
+        neon_logger.display("class distribution - " + ratings + counts)
+        sen_counts = list(zip(sen_len, sen_len_counts))
         sen_counts = sorted(sen_counts, key=lambda kv: kv[1], reverse=True)
-        print "sentence length - ", len(sen_len), sen_len, sen_len_counts
+        neon_logger.display("sentence length - " + len(sen_len) + sen_len + sen_len_counts)
 
         # WARNING: assume vocab is of order ~4-5 million words.
         # sort the vocab , re-assign ids by its frequency. Useful for downstream tasks
         # only done for train data
         if build_vocab:
             vocab_sorted = sorted(
-                vocab.items(), key=lambda kv: kv[1], reverse=True)
+                list(vocab.items()), key=lambda kv: kv[1], reverse=True)
             vocab = {}
             for i, t in enumerate(zip(*vocab_sorted)[0]):
                 vocab[t] = i
@@ -147,17 +149,18 @@ def build_data_train(path='.', filepath='labeledTrainData.tsv', vocab_file=None,
                 nvalid += 1
         reviews_text.attrs['ntrain'] = ntrain
         reviews_text.attrs['nvalid'] = nvalid
-        print "# of train - {0}, # of valid - {1}".format(reviews_text.attrs['ntrain'],
-                                                          reviews_text.attrs['nvalid'])
+        neon_logger.display(
+            "# of train - {0}, # of valid - {1}".format(reviews_text.attrs['ntrain'],
+                                                        reviews_text.attrs['nvalid']))
         # close open files
         h5f.close()
         f.close()
 
     if not os.path.exists(fname_vocab):
         rev_vocab = {}
-        for wrd, wrd_id in vocab.iteritems():
+        for wrd, wrd_id in vocab.items():
             rev_vocab[wrd_id] = wrd
-        print "vocabulary from IMDB dataset is saved into {}".format(fname_vocab)
-        cPickle.dump((vocab, rev_vocab), open(fname_vocab, 'wb'))
+        neon_logger.display("vocabulary from IMDB dataset is saved into {}".format(fname_vocab))
+        pickle.dump((vocab, rev_vocab), open(fname_vocab, 'wb'), 2)
 
     return fname_h5, fname_vocab

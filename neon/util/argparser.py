@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -21,7 +21,6 @@ additional arguments to be added using the argparse library
 methods.  Lower priority defaults can also be read from a configuration file
 (specified by the -c command line argument).
 """
-
 import configargparse
 import logging
 from logging.handlers import RotatingFileHandler
@@ -50,7 +49,7 @@ def extract_valid_args(args, func, startidx=0):
         dict of (arg, value) pairs from args that are valid for func
     """
     func_args = inspect.getargspec(func).args[startidx:]
-    return dict((k, v) for k, v in vars(args).items() if k in func_args)
+    return dict((k, v) for k, v in list(vars(args).items()) if k in func_args)
 
 
 class NeonArgparser(configargparse.ArgumentParser):
@@ -238,7 +237,7 @@ class NeonArgparser(configargparse.ArgumentParser):
         # set up the logging
         # max thresh is 50 (critical only), min is 10 (debug or higher)
         try:
-            log_thresh = max(10, 40 - args.verbose*10)
+            log_thresh = max(10, 40 - args.verbose * 10)
         except (AttributeError, TypeError):
             # if defaults are not set or not -v given
             # for latter will get type error

@@ -23,17 +23,20 @@ Usage:
     python deep_dream.py <image> --output <output_location>
 
 """
+
+from builtins import object, range, round, zip
 import numpy as np
 import os.path as osp
 from PIL import Image
 import sys
 import warnings
+from neon import logger as neon_logger
 
 try:
     from scipy.ndimage import zoom
 except ImportError as err:
-    print("Running this example requires scipy packages.")
-    print("try activating your virtualenv then: pip install scipy")
+    neon_logger.display("Running this example requires scipy packages.")
+    neon_logger.display("try activating your virtualenv then: pip install scipy")
     sys.exit(1)
 
 from neon.models import Model
@@ -48,7 +51,8 @@ from neon.util.argparser import NeonArgparser
 default_overrides = dict(backend='cpu', batch_size=1)
 parser = NeonArgparser(__doc__, default_overrides=default_overrides)
 parser.add_argument("image", help="Base image to create dream on.")
-parser.add_argument("--dream_file", default='dream_out.png', help="Save dream to named file.")
+parser.add_argument("--dream_file", default='dream_out.png',
+                    help="Save dream to named file.")
 args = parser.parse_args()
 
 
@@ -60,7 +64,8 @@ elif osp.isdir(args.output_file):
 else:
     output_dir = osp.dirname(args.output_file)
 
-args.dream_file = osp.expanduser(osp.join(output_dir, osp.basename(args.dream_file)))
+args.dream_file = osp.expanduser(
+    osp.join(output_dir, osp.basename(args.dream_file)))
 RGB_MEAN = np.array([104.4, 119.2, 126.8])[:, np.newaxis, np.newaxis]
 
 
@@ -128,7 +133,8 @@ class DeepImage(object):
 
     def as_image(self):
         if self.i_dirty:
-            self.image = (self.tensor[::-1] + RGB_MEAN).astype(np.uint8).transpose(1, 2, 0)
+            self.image = (
+                self.tensor[::-1] + RGB_MEAN).astype(np.uint8).transpose(1, 2, 0)
             self.i_dirty = False
         return Image.fromarray(self.image.clip(0, 255).astype(np.uint8))
 
@@ -150,7 +156,7 @@ class DeepImage(object):
         self.i_dirty = True
 
     def save_image(self, filename):
-        print("Saving {}".format(filename))
+        neon_logger.display("Saving {}".format(filename))
         self.as_image().save(filename)
 
 
@@ -172,17 +178,19 @@ def zoom_to(tsr, to_shape):
 def deepdream(image, iter_n=10, octave_n=4, octave_scale=1.4, name="Deep Dream"):
     model = DreamModel(model_path=args.data_dir)
     detail = None
-    scales = [octave_scale ** -o for o in reversed(range(octave_n))]
+    scales = [octave_scale ** -o for o in reversed(list(range(octave_n)))]
 
     for o_idx, scale in enumerate(scales):
-        octave_shape = (3, round(image.shape[1] * scale), round(image.shape[2] * scale))
+        octave_shape = (
+            3, round(image.shape[1] * scale), round(image.shape[2] * scale))
         octave_base = zoom_to(image.as_tensor(), octave_shape)
-        detail = np.zeros_like(octave_base) if detail is None else zoom_to(detail, octave_shape)
+        detail = np.zeros_like(octave_base) if detail is None else zoom_to(
+            detail, octave_shape)
 
         dream = DeepImage(octave_base + detail)
         model.initialize(dream)
 
-        for i in xrange(iter_n):
+        for i in range(iter_n):
             dream.take_step(model)
             ofile = get_numbered_file(args.dream_file, o_idx * iter_n + i)
             dream.save_image(ofile)

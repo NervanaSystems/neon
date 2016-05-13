@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,8 +16,10 @@
 """
 Utility functions for testing
 """
+from builtins import range, zip
 import numpy as np
 import numpy.random as nprnd
+from neon import logger as neon_logger
 from neon.backends.backend import Tensor
 
 
@@ -29,7 +31,7 @@ def sparse_rand(shape, frac=0.05, round_up=False):
     # True to get a binary matrix, i.e. elements
     # are either set to 0 or 1
     num_el = np.prod(shape)
-    inds = nprnd.permutation(num_el)[0:int(frac*num_el)]
+    inds = nprnd.permutation(num_el)[0:int(frac * num_el)]
 
     # draw frac*num_el random numbers
     vals = nprnd.random(inds.size)
@@ -47,23 +49,23 @@ def allclose_with_out(x, y, atol=0.0, rtol=1.0e-5):
     # before returning
     ac = np.allclose(x, y, rtol=rtol, atol=atol)
     if not ac:
-        dd = np.abs(x-y)
-        print 'abs errors: %e [%e, %e] Abs Thresh = %e' \
-              % (np.median(dd), np.min(dd), np.max(dd), atol)
+        dd = np.abs(x - y)
+        neon_logger.display('abs errors: %e [%e, %e] Abs Thresh = %e'
+                            % (np.median(dd), np.min(dd), np.max(dd), atol))
         amax = np.argmax(dd)
-        print 'worst case: %e %e' % (x.flat[amax], y.flat[amax])
-        dd = np.abs(dd - atol)/np.abs(y)
-        print 'rel errors: %e [%e, %e] Rel Thresh = %e' \
-              % (np.median(dd), np.min(dd), np.max(dd), rtol)
+        neon_logger.display('worst case: %e %e' % (x.flat[amax], y.flat[amax]))
+        dd = np.abs(dd - atol) / np.abs(y)
+        neon_logger.display('rel errors: %e [%e, %e] Rel Thresh = %e'
+                            % (np.median(dd), np.min(dd), np.max(dd), rtol))
         amax = np.argmax(dd)
-        print 'worst case: %e %e' % (x.flat[amax], y.flat[amax])
+        neon_logger.display('worst case: %e %e' % (x.flat[amax], y.flat[amax]))
     return ac
 
 
 def symallclose(x, y, rtol=1.0e-5):
     # symetric relative allclose function
     # checks abs(x-y)/(abs(x) + abs(y))
-    dd = np.divide(np.abs(x-y), np.abs(x) + np.abs(y))
+    dd = np.divide(np.abs(x - y), np.abs(x) + np.abs(y))
     return all(np.less_equal(dd, rtol))
 
 
@@ -209,7 +211,7 @@ def gen_backend_tensors(backends, tensor_dims, flags=None, dtype=np.float32):
     return backend_tensors
 
 
-class BackendPool():
+class BackendPool(object):
     """
     Cache and reuse backend for testing. Useful for testing multiple expressions
     per backend. A backend is identified by the backend module and dtype.

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# Copyright 2015 Nervana Systems Inc. All rights reserved.
+# Copyright 2015-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,16 +13,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from __future__ import division
+from builtins import range
 import numpy as np
 #from ipdb import set_trace
 from struct import pack, unpack
+from neon import logger as neon_logger
 
 def ceil_div(x, y):
     return -(-x // y)
 
 def out_dim(S, X, padding, strides):
-    return ceil_div(X - S + 1 + 2*padding, strides)
+    return ceil_div(X - S + 1 + 2 * padding, strides)
 
 def strip_mantissa(val):
     i = unpack('I', pack('f', val))[0] & 0x7f800000
@@ -31,7 +33,7 @@ def strip_mantissa(val):
 
 def quantize(ary, bits):
     maxval = float(np.max(np.absolute(ary)))
-    scale  = strip_mantissa(maxval) / float(1 << bits-2)
+    scale  = strip_mantissa(maxval) / float(1 << bits - 2)
     ary    = np.around(ary * (1.0 / scale)).astype(np.int64)
     return ary, np.float32(scale)
 
@@ -49,7 +51,7 @@ def fconv_slice(q, S, X, padding, strides):
         dif = x2 - X + 1
         f2 -= dif
         x2 -= dif
-    return (slice(f1, f2+1), slice(x1, x2+1), f2 - f1 + 1)
+    return (slice(f1, f2 + 1), slice(x1, x2 + 1), f2 - f1 + 1)
 
 def bconv_slice(x, S, Q, padding, strides):
     qs = x - (S - padding - 1)
@@ -66,7 +68,7 @@ def bconv_slice(x, S, Q, padding, strides):
                 lastE = q
     if firstF is None:
         return (slice(0,0,1), slice(0,0,1), 0)
-    return (slice(firstF,lastF+1,strides), slice(firstE,lastE+1,1), 0)
+    return (slice(firstF,lastF + 1,strides), slice(firstE,lastE + 1,1), 0)
 
 def xprop_direct(I, F, O, padding, strides, backward=False):
 
@@ -137,12 +139,12 @@ I_2x2_3x3 = np.array([
     [ 0.0,  1.0,  1.0,  0.0 ],
     [ 0.0, -1.0,  1.0,  0.0 ],
     [ 0.0,  1.0,  0.0, -1.0 ]])
-F_2x2_3x3= np.array([
+F_2x2_3x3 = np.array([
     [ 1.0,  0.0, 0.0 ],
     [ 0.5,  0.5, 0.5 ],
     [ 0.5, -0.5, 0.5 ],
     [ 0.0,  0.0, 1.0 ]])
-O_2x2_3x3= np.array([
+O_2x2_3x3 = np.array([
     [ 1.0, 1.0,  1.0,  0.0 ],
     [ 0.0, 1.0, -1.0, -1.0 ]]) #, dtype=np.float32
 
@@ -209,11 +211,11 @@ def trans_F_2x2_3x3(Fw, F, minimal=False):
 
         for O, I in ((T0, F), (T1, T0.T)):
 
-            t0 = (I[0,:] + I[2,:])*0.5
+            t0 = (I[0,:] + I[2,:]) * 0.5
 
             O[0,:] = I[0,:]
-            O[1,:] = t0 + I[1,:]*0.5
-            O[2,:] = t0 - I[1,:]*0.5
+            O[1,:] = t0 + I[1,:] * 0.5
+            O[2,:] = t0 - I[1,:] * 0.5
             O[3,:] = I[2,:]
 
         Fw[:] = T1.T
@@ -326,8 +328,8 @@ def trans_F_3x3_2x2(Fw, F, minimal=False):
         for O, I in ((T0, F), (T1, T0.T)):
 
             O[0,:] =  I[0,:]
-            O[1,:] = (I[0,:] + I[1,:])*0.5
-            O[2,:] = (I[0,:] - I[1,:])*0.5
+            O[1,:] = (I[0,:] + I[1,:]) * 0.5
+            O[2,:] = (I[0,:] - I[1,:]) * 0.5
             O[3,:] =  I[1,:]
 
         Fw[:] = T1.T
@@ -379,7 +381,7 @@ def trans_O_3x3_2x2(Mw, minimal=False):
         return np.dot( np.dot(O_3x3_2x2, Mw), O_3x3_2x2.T )
 
 def image_slice(x, X, B, D, pad=0):
-    start = x*B - pad
+    start = x * B - pad
     stop  = start + D
     pad = [0,0]
     if start < 0:
@@ -452,15 +454,15 @@ def xprop_winograd(I, F, O, padding, minimal=False, backward=False):
 
     # Iterate over the convovled result in the pointwise space and apply inverse transform
     for y in range(Yw):
-        p    = y*B
+        p    = y * B
         plen = 2 if p + 1 < P else 1
         for x in range(Xw):
-            q  = x*B
+            q  = x * B
             qlen = 2 if q + 1 < Q else 1
             for k in range(K):
                 for n in range(N):
                     # Toss out any points that don't fit
-                    O[k,p:p+plen,q:q+qlen,n] = trans_O_2x2_3x3(Mw[:,:,k,y,x,n], minimal)[0:plen,0:qlen]
+                    O[k,p:p + plen,q:q + qlen,n] = trans_O_2x2_3x3(Mw[:,:,k,y,x,n], minimal)[0:plen,0:qlen]
 
 
 
@@ -537,7 +539,7 @@ def updat_winograd(I, E, U, padding, minimal=False, inner=False):
 
 ### Test Code ###
 
-np.set_printoptions(threshold=8192*4, linewidth=600, formatter={'float':lambda x: "%6.3f" % x})
+np.set_printoptions(threshold=8192 * 4, linewidth=600, formatter={'float':lambda x: "%6.3f" % x})
 
 minimal = 1
 ones = 0
@@ -597,9 +599,9 @@ difO = Od - Ow
 difB = Bd - Bw
 difU = Ud - Uw
 
-print abs(difO).max()/Od.max()
-print abs(difB).max()/Bd.max()
-print abs(difU).max()/Ud.max()
+neon_logger.display(abs(difO).max() / Od.max())
+neon_logger.display(abs(difB).max() / Bd.max())
+neon_logger.display(abs(difU).max() / Ud.max())
 
 # print Bd[0,:,:,0]
 # print Bw[0,:,:,0]

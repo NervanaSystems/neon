@@ -13,16 +13,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from __future__ import division
+from builtins import range
 import numpy as np
 #from ipdb import set_trace
 from struct import pack, unpack
+from neon import logger as neon_logger
 
 def ceil_div(x, y):
     return -(-x // y)
 
 def out_dim(S, X, padding, strides):
-    return ceil_div(X - S + 1 + 2*padding, strides)
+    return ceil_div(X - S + 1 + 2 * padding, strides)
 
 def strip_mantissa(val):
     i = unpack('I', pack('f', val))[0] & 0x7f800000
@@ -36,7 +38,7 @@ def immediate(val):
 
 def quantize(ary, bits, sign=1):
     maxval = float(np.max(np.absolute(ary)))
-    scale  = strip_mantissa(maxval) / float(1 << (bits-sign-1))
+    scale  = strip_mantissa(maxval) / float(1 << (bits - sign - 1))
     ary    = np.around(ary * (1.0 / scale)).astype(np.int64)
     return ary, np.float64(scale)
 
@@ -54,7 +56,7 @@ def fconv_slice(q, S, X, padding, strides):
         dif = x2 - X + 1
         f2 -= dif
         x2 -= dif
-    return (slice(f1, f2+1), slice(x1, x2+1), f2 - f1 + 1)
+    return (slice(f1, f2 + 1), slice(x1, x2 + 1), f2 - f1 + 1)
 
 def bconv_slice(x, S, Q, padding, strides):
     qs = x - (S - padding - 1)
@@ -71,7 +73,7 @@ def bconv_slice(x, S, Q, padding, strides):
                 lastE = q
     if firstF is None:
         return (slice(0,0,1), slice(0,0,1), 0)
-    return (slice(firstF,lastF+1,strides), slice(firstE,lastE+1,1), 0)
+    return (slice(firstF,lastF + 1,strides), slice(firstE,lastE + 1,1), 0)
 
 def xprop_direct(I, F, O, padding, strides, backward=False):
 
@@ -150,11 +152,11 @@ I_2x2_5x5 = (
 
 F_2x2_5x5 = (
     np.array([
-    [    64.0/81.0,        0.0,       0.0,      0.0,      0.0 ],
-    [ -128.0/243.0, -32.0/81.0, -8.0/27.0, -2.0/9.0, -1.0/6.0 ],
-    [ -128.0/243.0,  32.0/81.0, -8.0/27.0,  2.0/9.0, -1.0/6.0 ],
-    [   32.0/243.0,  16.0/81.0,  8.0/27.0,  4.0/9.0,  2.0/3.0 ],
-    [   32.0/243.0, -16.0/81.0,  8.0/27.0, -4.0/9.0,  2.0/3.0 ],
+    [    64.0 / 81.0,        0.0,       0.0,      0.0,      0.0 ],
+    [ -128.0 / 243.0, -32.0 / 81.0, -8.0 / 27.0, -2.0 / 9.0, -1.0 / 6.0 ],
+    [ -128.0 / 243.0,  32.0 / 81.0, -8.0 / 27.0,  2.0 / 9.0, -1.0 / 6.0 ],
+    [   32.0 / 243.0,  16.0 / 81.0,  8.0 / 27.0,  4.0 / 9.0,  2.0 / 3.0 ],
+    [   32.0 / 243.0, -16.0 / 81.0,  8.0 / 27.0, -4.0 / 9.0,  2.0 / 3.0 ],
     [          0.0,        0.0,       0.0,      0.0,      1.0 ]]),
 )
 
@@ -179,10 +181,10 @@ def trans_I_2x2_5x5(Iw, I, minimal=False, trans=False):
             # 4*2 + 4*6 = 30
 
             O[0,:] = I[0,:]
-            O[1,:] = I[0,:] + I[1,:]*0.75
-            O[2,:] = I[0,:] - I[1,:]*0.75
-            O[3,:] = I[0,:] + I[1,:]*1.50
-            O[4,:] = I[0,:] - I[1,:]*1.50
+            O[1,:] = I[0,:] + I[1,:] * 0.75
+            O[2,:] = I[0,:] - I[1,:] * 0.75
+            O[3,:] = I[0,:] + I[1,:] * 1.50
+            O[4,:] = I[0,:] - I[1,:] * 1.50
             O[5,:] = I[1,:]
 
         Iw[:] = T1.T
@@ -201,13 +203,13 @@ def trans_F_2x2_5x5(Fw, F, minimal=False, trans=False):
 
             # 14*5 + 14*6 = 154
 
-            t0 = I[2,:] * 8.0/27.0
-            t1 = I[1,:] * 32.0/81.0   + I[3,:] * 2.0/9.0
-            t2 = I[1,:] * 16.0/81.0   + I[3,:] * 4.0/9.0
-            t3 = I[0,:] *-128.0/243.0 - I[4,:] * 1.0/6.0 - t0
-            t4 = I[0,:] * 32.0/243.0  + I[4,:] * 2.0/3.0 + t0
+            t0 = I[2,:] * 8.0 / 27.0
+            t1 = I[1,:] * 32.0 / 81.0   + I[3,:] * 2.0 / 9.0
+            t2 = I[1,:] * 16.0 / 81.0   + I[3,:] * 4.0 / 9.0
+            t3 = I[0,:] * -128.0 / 243.0 - I[4,:] * 1.0 / 6.0 - t0
+            t4 = I[0,:] * 32.0 / 243.0  + I[4,:] * 2.0 / 3.0 + t0
 
-            O[0,:] = I[0,:] * 64.0/81.0
+            O[0,:] = I[0,:] * 64.0 / 81.0
             O[1,:] = t3 - t1
             O[2,:] = t3 + t1
             O[3,:] = t4 + t2
@@ -255,7 +257,7 @@ def image_slice(x, X, B):
     return slice(x0,x1,1), (0,0)
 
 def output_slice(x, P, B, D, pad):
-    p0 = x*B + pad - 4
+    p0 = x * B + pad - 4
     p1 = p0 + D
     if p0 < 0:
         m0 = -p0
@@ -349,7 +351,7 @@ def xprop_winograd(I, F, O, padding, minimal=False, trans=False, backward=False)
 
 ### Test Code ###
 
-np.set_printoptions(threshold=8192*4, linewidth=600, formatter={'float':lambda x: "%4.0f" % x})
+np.set_printoptions(threshold=8192 * 4, linewidth=600, formatter={'float':lambda x: "%4.0f" % x})
 
 minimal = 1
 trans = (0,0)
@@ -364,7 +366,7 @@ padding = 2, 2  # 0-2
 P = out_dim(R, Y, padding[0], strides[0])
 Q = out_dim(S, X, padding[1], strides[1])
 
-print P, Q
+neon_logger.display("{}".format(P, Q))
 
 dimI = (C,Y,X,N)
 dimF = (C,R,S,K)
@@ -418,8 +420,8 @@ xprop_winograd(E, F, Bw, padding, minimal=minimal, trans=trans, backward=True)
 difO = Od - Ow
 difB = Bd - Bw
 
-print abs(difO).max()/Od.max()
-print abs(difB).max()/Bd.max()
+neon_logger.display(abs(difO).max() / Od.max())
+neon_logger.display(abs(difB).max() / Bd.max())
 
 # print Od[0,:,:,0]
 # print Ow[0,:,:,0]

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -26,14 +26,13 @@ Usage:
                                       --model_weights <trained_pickle_file>
 """
 
+from builtins import map, range, zip
 import cv2
 import numpy as np
 import os
-
 from neon.backends import gen_backend
 from neon.data import DataLoader, VideoParams, ImageParams
 from neon.util.argparser import NeonArgparser, extract_valid_args
-
 from network import create_network
 
 # parse the command line arguments
@@ -69,7 +68,7 @@ label_index = {}
 with open(args.class_ind_file) as label_index_file:
     for line in label_index_file:
         index, label = line.split()
-        label_index[int(index)-1] = label
+        label_index[int(index) - 1] = label
 
 
 def print_label_on_image(frame, top_labels):
@@ -92,8 +91,8 @@ def print_label_on_image(frame, top_labels):
         text_size = cv2.getTextSize(label, font, font_scale, thickness)[0]
         prob_size = cv2.getTextSize(prob, font, font_scale, thickness)[0]
         prob_offset = (prob_size[0] + extra_space[0], 0)
-        text_top = tuple(map(sum, zip(rect_pt, extra_space)))
-        rect_ops_pt = tuple(map(sum, zip(text_top, text_size, extra_space, prob_offset)))
+        text_top = tuple(map(sum, list(zip(rect_pt, extra_space))))
+        rect_ops_pt = tuple(map(sum, list(zip(text_top, text_size, extra_space, prob_offset))))
         text_bot = (text_top[0], rect_ops_pt[1] - extra_space[1])
         prob_bot = (text_top[0] + text_size[0] + extra_space[0], text_bot[1])
         cv2.rectangle(frame, rect_pt, rect_ops_pt, rect_color, thickness=cv2.cv.CV_FILLED)

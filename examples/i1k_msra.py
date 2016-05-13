@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -19,6 +19,8 @@ For running complete alexnet
 alexnet.py -e 90 -eval 1 -s <save-path> -w <path-to-saved-batches>
 """
 
+from builtins import zip
+from neon import logger as neon_logger
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Kaiming
 from neon.layers import Conv, Pooling, GeneralizedCost, Activation
@@ -52,15 +54,17 @@ elif args.depth in (3, 102, 152):
 elif args.depth in (4, 98, 138):
     stages = (3, 7, 35, 3)
 else:
-    print "Bad depth parameter"
+    neon_logger.display("Bad depth parameter")
     sys.exit()
 
 # setup data provider
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        subset_pct=args.subset_pct)
-train = ImageLoader(set_name='train', scale_range=(256, 480), shuffle=True, **img_set_options)
-test = ImageLoader(set_name='validation', scale_range=0, do_transforms=False, **img_set_options)
+train = ImageLoader(set_name='train', scale_range=(
+    256, 480), shuffle=True, **img_set_options)
+test = ImageLoader(set_name='validation', scale_range=0,
+                   do_transforms=False, **img_set_options)
 
 
 def conv_params(fsize, nfm, strides=1, relu=True, batch_norm=True):
@@ -76,7 +80,8 @@ def module_factory(nfm, stride=1):
     nfm_out = nfm * 4 if args.bottleneck else nfm
     use_skip = True if stride == 1 else False
     stride = abs(stride)
-    sidepath = [SkipNode() if use_skip else Conv(**conv_params(1, nfm_out, stride, False))]
+    sidepath = [SkipNode() if use_skip else Conv(
+        **conv_params(1, nfm_out, stride, False))]
 
     if args.bottleneck:
         mainpath = [Conv(**conv_params(1, nfm)),
@@ -94,15 +99,19 @@ layers = [Conv(**conv_params(7, 64, strides=2)),
 
 
 # Structure of the deep residual part of the network:
-# args.depth modules of 2 convolutional layers each at feature map depths of 64, 128, 256, 512
-nfms = list(itt.chain.from_iterable([itt.repeat(2**(x + 6), r) for x, r in enumerate(stages)]))
-strides = [-1] + [1 if cur == prev else 2 for cur, prev in zip(nfms[1:], nfms[:-1])]
+# args.depth modules of 2 convolutional layers each at feature map depths
+# of 64, 128, 256, 512
+nfms = list(itt.chain.from_iterable(
+    [itt.repeat(2**(x + 6), r) for x, r in enumerate(stages)]))
+strides = [-1] + [1 if cur == prev else 2 for cur,
+                  prev in zip(nfms[1:], nfms[:-1])]
 
 for nfm, stride in zip(nfms, strides):
     layers.append(module_factory(nfm, stride))
 
 layers.append(Pooling('all', op='avg'))
-layers.append(Conv(**conv_params(1, train.nclass, relu=False, batch_norm=False)))
+layers.append(
+    Conv(**conv_params(1, train.nclass, relu=False, batch_norm=False)))
 layers.append(Activation(Softmax()))
 model = Model(layers=layers)
 
@@ -111,6 +120,8 @@ opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
 
 # configure callbacks
 valmetric = TopKMisclassification(k=5)
-callbacks = Callbacks(model, eval_set=test, metric=valmetric, **args.callback_args)
+callbacks = Callbacks(model, eval_set=test,
+                      metric=valmetric, **args.callback_args)
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
-model.fit(train, optimizer=opt, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+model.fit(train, optimizer=opt, num_epochs=args.epochs,
+          cost=cost, callbacks=callbacks)

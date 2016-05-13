@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -22,6 +22,7 @@ Reference:
 ..  _[Springenberg2015]: http://arxiv.org/pdf/1412.6806.pdf
 """
 
+from neon import logger as neon_logger
 from neon.initializers import Gaussian
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost
@@ -33,7 +34,8 @@ from neon.util.argparser import NeonArgparser
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument("--learning_rate", default=0.05, help="initial learning rate")
+parser.add_argument("--learning_rate", default=0.05,
+                    help="initial learning rate")
 parser.add_argument("--weight_decay", default=0.001, help="weight decay")
 parser.add_argument('--deconv', action='store_true',
                     help='save visualization data from deconvolution')
@@ -59,7 +61,8 @@ opt_gdm = GradientDescentMomentum(learning_rate=float(args.learning_rate), momen
 relu = Rectlin()
 conv = dict(init=init_uni, batch_norm=False, activation=relu)
 convp1 = dict(init=init_uni, batch_norm=False, activation=relu, padding=1)
-convp1s2 = dict(init=init_uni, batch_norm=False, activation=relu, padding=1, strides=2)
+convp1s2 = dict(init=init_uni, batch_norm=False,
+                activation=relu, padding=1, strides=2)
 
 layers = [Dropout(keep=.8),
           Conv((3, 3, 96), **convp1),
@@ -91,5 +94,7 @@ callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
 if args.deconv:
     callbacks.add_deconv_callback(train_set, valid_set)
 
-mlp.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
-print('Misclassification error = %.1f%%' % (mlp.eval(valid_set, metric=Misclassification())*100))
+mlp.fit(train_set, optimizer=opt_gdm, num_epochs=num_epochs,
+        cost=cost, callbacks=callbacks)
+neon_logger.display('Misclassification error = %.1f%%' %
+                    (mlp.eval(valid_set, metric=Misclassification()) * 100))

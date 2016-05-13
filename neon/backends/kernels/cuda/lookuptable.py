@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from future.utils import native_str
 from pycuda.tools import context_dependent_memoize
 
 from neon.backends.cuda_templates import _ew_types
@@ -247,12 +248,12 @@ __global__ void sort_inputs4(
 }
 """
     code = code % {
-        "threads":          block_size,
-        "store_blocksum":   (1 if kernel_id == 1 else 0)
+        "threads": block_size,
+        "store_blocksum": (1 if kernel_id == 1 else 0)
     }
     module = SourceModule(code, options=["--use_fast_math"])
 
-    function_name = "sort_inputs" + str(kernel_id)
+    function_name = "sort_inputs" + native_str(kernel_id)
     kernel = module.get_function(function_name)
     kernel.prepare("PPPPII")
     kernel.name = "sort_inputs"

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 """
 Convolution layer tests
 """
+from builtins import zip
 import numpy as np
 from neon import NervanaObject
 from neon.layers import Sequential, Conv, MergeSum, SkipNode, Activation
@@ -97,7 +98,6 @@ def mergesum_test_config(be, modfunc, use_stride=1):
     inp = be.array(inpa)
 
     neon_seq.allocate()
-    # print neon_layer.nested_str()
     # neon_layer.layers[0].prev_layer = True
     neon_seq.allocate_deltas()
     neon_out = neon_seq.fprop(inp).get()
@@ -126,8 +126,6 @@ def mergesum_test_config(be, modfunc, use_stride=1):
 
     # need to have bsum false for this test to be valid
     assert allclose_with_out(neon_out_ref.get(), neon_out, rtol=0)
-    print "Fprop matching"
-    print "Beginning Back prop"
     erra = np.random.random(neon_out.shape)
     err = be.array(erra)
 

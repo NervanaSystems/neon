@@ -1,7 +1,10 @@
+from __future__ import print_function
+from neon import logger as neon_logger
+
 try:
     from pycuda.compiler import SourceModule as pycSourceModule
 except ImportError:
-    print("PyCUDA module not found")
+    neon_logger.display("PyCUDA module not found")
 from neon.util.persist import get_cache_dir
 
 

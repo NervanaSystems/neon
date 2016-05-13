@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -24,7 +24,7 @@ To run this script, first activate the virtualenv and then run
 
 Some of the commonly used arguments to this script are:
 
-    -b | --backend [gpu | cpu] : backend to use (currently gpu backend only works on Maxwell GPUs)
+    -b | --backend [gpu | cpu] : backend to use (gpu backend works on Maxwell and Kepler GPUs)
 
     -e | --epochs [ epochs ] : number of epochs to run fit
 
@@ -32,7 +32,7 @@ Some of the commonly used arguments to this script are:
                                             float only works with cpu backend
 
     -l | --log [ LOGFILE ] : log file for messages, use the -v option to control logging level, if
-                             this optionn is not set then log messages will only go to the screen
+                             this option is not set then log messages will only go to the screen
 
     -v[vv] | --verbose : verbosity level
 
@@ -45,11 +45,12 @@ For details of all the command line arguments run this script with the --help op
 import sys
 import yaml
 
+from neon import logger
 from neon.backends import gen_backend
+from neon.callbacks.callbacks import Callbacks
 import neon.data
 from neon.util.argparser import NeonArgparser
 from neon.util.yaml_parse import create_objects
-from neon.callbacks.callbacks import Callbacks
 
 
 def parse_args():
@@ -116,7 +117,7 @@ def load_data(data_dir="."):
             test = ImageLoader(repo_dir=data_dir, inner_size=224, scale_range=(256, 256),
                                set_name='validation', do_transforms=False)
         except (OSError, IOError, ValueError) as err:
-            print err
+            logger.error(err)
             sys.exit(0)
     else:
         if 'dataset' not in root_yaml:

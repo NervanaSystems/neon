@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -42,11 +42,13 @@ Notes:
 The mAP evaluation script is adapted from:
 https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc351be7f145499f
 """
+
+from builtins import range
 import sys
 import os
 import numpy as np
 import heapq
-
+from neon import logger as neon_logger
 from neon.data.pascal_voc import PASCAL_VOC_CLASSES, PASCALVOCInference
 from neon.util.argparser import NeonArgparser
 from util import create_frcn_model, run_voc_eval
@@ -87,16 +89,16 @@ max_per_image = 100
 thresh = -np.inf * np.ones(num_classes)
 # top_scores will hold one minheap of scores per class (used to enforce
 # the max_per_set constraint)
-top_scores = [[] for _ in xrange(num_classes)]
+top_scores = [[] for _ in range(num_classes)]
 # all detections are collected into:
 #    all_boxes[cls][image] = N x 5 array of detections in
 #    (x1, y1, x2, y2, score)
-all_boxes = [[[] for _ in xrange(num_images)]
-             for _ in xrange(num_classes)]
+all_boxes = [[[] for _ in range(num_images)]
+             for _ in range(num_classes)]
 
 NMS_THRESH = 0.3
 
-print 'total batches {}'.format(valid_set.nbatches)
+neon_logger.display('total batches {}'.format(valid_set.nbatches))
 
 last_strlen = 0
 # iterate through minibatches of the dataset
@@ -104,8 +106,8 @@ for mb_idx, (x, db) in enumerate(valid_set):
 
     # print testing progress
     prt_str = "Finished: {} / {}".format(mb_idx, valid_set.nbatches)
-    sys.stdout.write('\r' + ' '*last_strlen + '\r')
-    sys.stdout.write(prt_str.encode('utf-8'))
+    sys.stdout.write('\r' + ' ' * last_strlen + '\r')
+    sys.stdout.write(prt_str)
     last_strlen = len(prt_str)
     sys.stdout.flush()
 
@@ -121,11 +123,12 @@ for mb_idx, (x, db) in enumerate(valid_set):
 
         # pick out scores and bboxes replated to this class
         cls_ind = PASCAL_VOC_CLASSES.index(cls)
-        cls_boxes = boxes[:, 4*cls_ind:4*(cls_ind + 1)]
+        cls_boxes = boxes[:, 4 * cls_ind:4 * (cls_ind + 1)]
         cls_scores = scores[cls_ind]
         # only keep that ones with high enough scores
         # and use gt_class being 0 as the ss ROIs, not the gt ones
-        keep = np.where((cls_scores.reshape(-1, 1) > thresh[cls_ind]) & (db['gt_classes'] == 0))[0]
+        keep = np.where((cls_scores.reshape(-1, 1) >
+                         thresh[cls_ind]) & (db['gt_classes'] == 0))[0]
         if len(keep) == 0:
             continue
 
@@ -148,17 +151,18 @@ for mb_idx, (x, db) in enumerate(valid_set):
         all_boxes[cls_ind][mb_idx] = np.hstack((cls_boxes, cls_scores[:, np.newaxis])).astype(
             np.float32, copy=False)
 
-for j in xrange(1, num_classes):
-    for i in xrange(num_images):
+for j in range(1, num_classes):
+    for i in range(num_images):
         if len(all_boxes[j][i]) > 0:
             inds = np.where(all_boxes[j][i][:, -1] > thresh[j])[0]
             all_boxes[j][i] = all_boxes[j][i][inds, :]
 
-print '\nApplying NMS to all detections'
+neon_logger.display('\nApplying NMS to all detections')
 all_boxes = valid_set.apply_nms(all_boxes, NMS_THRESH)
 
-print 'Evaluating detections'
+neon_logger.display('Evaluating detections')
 output_dir = 'frcn_output'
-annopath, imagesetfile = valid_set.evaluation(all_boxes, os.path.join(args.data_dir, output_dir))
+annopath, imagesetfile = valid_set.evaluation(
+    all_boxes, os.path.join(args.data_dir, output_dir))
 run_voc_eval(annopath, imagesetfile, year, image_set, PASCAL_VOC_CLASSES,
              os.path.join(args.data_dir, output_dir))

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
+from builtins import range
 import itertools as itt
 import numpy as np
 
@@ -61,7 +61,7 @@ def pytest_generate_tests(metafunc):
             nifm_rng = [8, 16]
             fs_rng = [3]
             nofm_rng = [4]
-            rng_max_rng = [eps, eps*10, 1.0, 1e6, 1e10]
+            rng_max_rng = [eps, eps * 10, 1.0, 1e6, 1e10]
             wrng = [[0.0, 1.0], [-1.0, 0.0], [-1.0, 1.0]]
         else:
             indim_rng = [16]
@@ -258,7 +258,7 @@ class DeconvRefLayer(object):
         self.z = np.zeros((mbs, self.nout), dtype=dtypeu)
         self.y = np.zeros((mbs, self.nout), dtype=dtypeu)
         ofmstarts = np.array(
-            range(0, (self.ofmsize * self.nofm), self.ofmsize))
+            list(range(0, (self.ofmsize * self.nofm), self.ofmsize)))
         self.ofmlocs = np.zeros((self.ofmsize, self.nofm), dtype='i32')
         for dst in range(self.ofmsize):
             self.ofmlocs[dst, :] = ofmstarts + dst

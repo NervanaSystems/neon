@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -28,19 +28,23 @@
   https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit?usp=sharing
 
 """
-from prepare import build_data_train
-from neon.backends import gen_backend
-from neon.data import ArrayIterator
-from neon.initializers import Uniform, GlorotUniform, Array
-from neon.layers import GeneralizedCost, Affine, Dropout, LookupTable, LSTM, RecurrentSum
-from neon.models import Model
-from neon.optimizers import Adagrad
-from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti, Accuracy
-from neon.util.argparser import NeonArgparser, extract_valid_args
-from neon.callbacks.callbacks import Callbacks
-from neon.data.text_preprocessing import get_paddedXY, get_google_word2vec_W
-import h5py
-import cPickle
+
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from prepare import build_data_train  # noqa
+from neon import logger as neon_logger  # noqa
+from neon.backends import gen_backend  # noqa
+from neon.data import ArrayIterator  # noqa
+from neon.initializers import Uniform, GlorotUniform, Array  # noqa
+from neon.layers import GeneralizedCost, Affine, Dropout, LookupTable, LSTM, RecurrentSum  # noqa
+from neon.models import Model  # noqa
+from neon.optimizers import Adagrad  # noqa
+from neon.transforms import Logistic, Tanh, Softmax, CrossEntropyMulti, Accuracy  # noqa
+from neon.util.argparser import NeonArgparser, extract_valid_args  # noqa
+from neon.util.compat import pickle  # noqa
+from neon.callbacks.callbacks import Callbacks  # noqa
+from neon.data.text_preprocessing import get_paddedXY, get_google_word2vec_W  # noqa
+import h5py  # noqa
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -80,10 +84,11 @@ fname_h5, fname_vocab = build_data_train(filepath=args.review_file,
 # play around with google-news word vectors for init
 if args.use_w2v:
     w2v_file = args.w2v
-    vocab, rev_vocab = cPickle.load(open(fname_vocab, 'rb'))
+    vocab, rev_vocab = pickle.load(open(fname_vocab, 'rb'))
     init_emb_np, embedding_dim, _ = get_google_word2vec_W(w2v_file, vocab,
                                                           vocab_size=vocab_size, index_from=3)
-    print "Done loading the Word2Vec vectors: embedding size - {}".format(embedding_dim)
+    neon_logger.display(
+        "Done loading the Word2Vec vectors: embedding size - {}".format(embedding_dim))
     embedding_update = True
     init_emb = Array(val=be.array(init_emb_np))
 else:
@@ -145,5 +150,5 @@ model.fit(train_set,
           callbacks=callbacks)
 
 # eval model
-print "\nTrain Accuracy -", 100 * model.eval(train_set, metric=metric)
-print "Test Accuracy -", 100 * model.eval(valid_set, metric=metric)
+neon_logger.display("\nTrain Accuracy -" + 100 * model.eval(train_set, metric=metric))
+neon_logger.display("Test Accuracy -" + 100 * model.eval(valid_set, metric=metric))

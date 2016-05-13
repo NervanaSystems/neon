@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,7 +16,8 @@
 Our CPU based backend interface and tensor data structure. Our implementation
 wraps :mod:`numpy` ndarray and related operations
 """
-
+from __future__ import division
+from builtins import object, range, round, str, zip
 import numpy as np
 import logging
 import time
@@ -91,7 +92,7 @@ class CPUTensor(Tensor):
             for dim in self.shape:
                 size *= dim
         except TypeError:
-            assert isinstance(self.shape, (int, long, np.integer))
+            assert isinstance(self.shape, (int, np.integer))
             size = self.shape
             self.shape = (self.shape,)
 
@@ -209,7 +210,7 @@ class CPUTensor(Tensor):
         for int and uint types, when overflow happens
 
         Arguments:
-            value (GPUTensor, OpTreeNode, numeric): the value to be assigned.
+            value (CPUTensor, OpTreeNode, numeric): the value to be assigned.
 
         """
         if isinstance(value, (CPUTensor, OpTreeNode)):
@@ -423,7 +424,7 @@ class CPUTensor(Tensor):
     #         ary=self._tensor.repeat(repeats, axis))
 
 
-class CustomNumpy:
+class CustomNumpy(object):
 
     @staticmethod
     def argmax(x, axis=1, keepdims=True):
@@ -622,7 +623,7 @@ class NervanaCPU(Backend):
             numpy_ind0 = optree[2][0]['idx']._tensor.squeeze()
 
             numpy_ind_len = numpy_ind0.size
-            numpy_ind1 = range(numpy_ind_len)
+            numpy_ind1 = list(range(numpy_ind_len))
 
             # ind for indexing
             numpy_ind = np.zeros((2, numpy_ind_len), dtype=np.int32)
@@ -1150,7 +1151,7 @@ class NervanaCPU(Backend):
         Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
         """
         assert J % 2 == 1, "Only support odd LRN window size"
-        pad_c = J / 2
+        pad_c = J // 2
         op = 'lrn'
         # Bunch of defaults since we're only interested in the k-axis
         lrn_opts = dict(T=1, R=1, S=1,
@@ -1395,7 +1396,7 @@ class NervanaCPU(Backend):
                         sliceB = array_delta[patch_in].reshape((-1, N))
                         if op == "max":
                             max_n = array_argmax[patch_out]
-                            sliceB[max_n, range(N)] += array_E[patch_out]
+                            sliceB[max_n, list(range(N))] += array_E[patch_out]
                         elif op == "avg":
                             sliceB += array_E[patch_out] * (1.0 / sliceB.shape[0])
                         else:
@@ -1411,12 +1412,12 @@ class NervanaCPU(Backend):
         roi_offset: how far hstart is from 0
         """
         hstart = int(np.floor(float(h) * stride))
-        hend = int(np.ceil(float(h+1) * stride))
+        hend = int(np.ceil(float(h + 1) * stride))
 
         hstart = min(max(hstart + roi_offset, 0), H)
         hend = min(max(hend + roi_offset, 0), H)
 
-        return slice(hstart, hend), hend-hstart
+        return slice(hstart, hend), hend - hstart
 
     def roipooling_fprop(self, I, rois, O, argmax, roi_count, C, H, W,
                          pooled_height, pooled_width, spatial_scale):
@@ -1446,7 +1447,7 @@ class NervanaCPU(Backend):
         array_argmax[:] = -1
 
         # combine the feature map with ROIs
-        for b_id in xrange(roi_count):
+        for b_id in range(roi_count):
             [idx, xmin, ymin, xmax, ymax] = array_rois[b_id]
             xmin = int(round(xmin * spatial_scale))
             xmax = int(round(xmax * spatial_scale))
@@ -1455,14 +1456,14 @@ class NervanaCPU(Backend):
             roi_width = max(xmax - xmin + 1, 1)
             roi_height = max(ymax - ymin + 1, 1)
 
-            stride_h = float(roi_height)/float(pooled_height)
-            stride_w = float(roi_width)/float(pooled_width)
+            stride_h = float(roi_height) / float(pooled_height)
+            stride_w = float(roi_width) / float(pooled_width)
 
-            for h_out in xrange(pooled_height):
+            for h_out in range(pooled_height):
                 sliceh, lenh = self._roipooling_slice(h_out, stride_h, H, ymin)
                 if sliceh.stop <= sliceh.start:
                     continue
-                for w_out in xrange(pooled_width):
+                for w_out in range(pooled_width):
                     slicew, lenw = self._roipooling_slice(w_out, stride_w, W, xmin)
                     if slicew.stop <= slicew.start:
                         continue
@@ -1502,7 +1503,7 @@ class NervanaCPU(Backend):
         array_argmax = argmax._tensor.reshape(C, pooled_height, pooled_width, roi_count)
         array_delta[:] = 0
 
-        for b_id in xrange(roi_count):
+        for b_id in range(roi_count):
             [idx, xmin, ymin, xmax, ymax] = array_rois[b_id]
             xmin = int(round(xmin * spatial_scale))
             xmax = int(round(xmax * spatial_scale))
@@ -1511,12 +1512,12 @@ class NervanaCPU(Backend):
             roi_width = max(xmax - xmin + 1, 1)
             roi_height = max(ymax - ymin + 1, 1)
 
-            stride_h = float(roi_height)/float(pooled_height)
-            stride_w = float(roi_width)/float(pooled_width)
+            stride_h = float(roi_height) / float(pooled_height)
+            stride_w = float(roi_width) / float(pooled_width)
 
             # iterate all the w, h (from feature map) that fall into this ROIs
-            for w in range(xmin, xmax+1):
-                for h in range(ymin, ymax+1):
+            for w in range(xmin, xmax + 1):
+                for h in range(ymin, ymax + 1):
                     phstart = int(np.floor(float(h - ymin) / stride_h))
                     phend = int(np.ceil(float(h - ymin + 1) / stride_h))
                     pwstart = int(np.floor(float(w - xmin) / stride_w))
@@ -1686,4 +1687,4 @@ class NervanaCPU(Backend):
         Returns:
             time elapsed between start and end time marks in milliseconds
         """
-        return (end['time'] - start['time'])*1000.0
+        return (end['time'] - start['time']) * 1000.0

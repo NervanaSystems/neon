@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -22,6 +22,8 @@ Reference:
 .. _[Karpathy]: http://github.com/karpathy/char-rnn
 """
 
+from builtins import range
+from neon import logger as neon_logger
 from neon.backends import gen_backend
 from neon.data.text import Text
 from neon.data.dataloaders import load_ptb_train, load_ptb_test
@@ -74,7 +76,7 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 
 model = Model(layers=layers)
 
-learning_rate_sched = Schedule(range(10, args.epochs), .97)
+learning_rate_sched = Schedule(list(range(10, args.epochs)), .97)
 optimizer = RMSProp(gradient_clip_value=gradient_clip_value,
                     stochastic_round=args.rounding,
                     schedule=learning_rate_sched)
@@ -93,4 +95,5 @@ ypred = model.get_outputs(valid_set)
 shape = (valid_set.nbatches, args.batch_size, time_steps)
 prediction = ypred.argmax(2).reshape(shape).transpose(1, 0, 2)
 fraction_correct = (prediction == valid_set.y).mean()
-print 'Misclassification error = %.1f%%' % ((1-fraction_correct)*100)
+neon_logger.display('Misclassification error = %.1f%%' %
+                    ((1 - fraction_correct) * 100))

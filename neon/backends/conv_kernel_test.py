@@ -12,9 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from __future__ import division
+from builtins import str
 import numpy         as np
 import pycuda.driver as drv
+from neon import logger as neon_logger
 from neon.backends.nervanagpu import NervanaGPU
 from neon.backends.nervanacpu import NervanaCPU
 
@@ -33,7 +35,7 @@ update_kernels = (UpdateCuda, UpdateDirect, UpdateWinograd_3x3_2x2, UpdateWinogr
 ng = NervanaGPU()
 nc = NervanaCPU()
 
-print(drv.Context.get_current().get_device().name())
+neon_logger.display(drv.Context.get_current().get_device().name())
 
 out =  0
 ones = 0
@@ -216,7 +218,7 @@ for config in configs:
                     pad_d, pad_h, pad_w,
                     str_d, str_h, str_w, override)
 
-            print(kernel)
+            neon_logger.display(kernel)
 
             back = False
             if kernelClass in fprop_kernels:
@@ -349,9 +351,9 @@ for config in configs:
                 bad = ratio > 0.01 or ratio2 > 0.01
 
                 if bad:
-                    print("=================FAIL==============")
+                    neon_logger.display("=================FAIL==============")
 
-                print("%17.12f %17.12f %s" % (ratio, ratio2, str(opt)))
+                neon_logger.display("%17.12f %17.12f %s" % (ratio, ratio2, str(opt)))
 
                 if bad: exit()
 

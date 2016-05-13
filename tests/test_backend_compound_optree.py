@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -13,7 +13,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 # pylint: skip-file
-
 import itertools
 import numpy as np
 import pytest
@@ -22,7 +21,7 @@ from neon import NervanaObject
 from utils import call_func, gen_backend_tensors, tensors_allclose
 
 
-class TestFuncs():
+class TestFuncs(object):
 
     """
     A collection of functions to be tested
@@ -55,7 +54,7 @@ def pytest_generate_tests(metafunc):
     Test generator
     """
     # number of test to repeat
-    test_indices = range(1)
+    test_indices = [0]
 
     # test params
     test_funcs = [

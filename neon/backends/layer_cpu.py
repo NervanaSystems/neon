@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,9 +15,12 @@
 """
 CPU backend layers
 """
+from __future__ import division
+from builtins import object, range
 import math
 from operator import mul
 import numpy as np
+from functools import reduce
 
 
 def ceil_div(x, y):
@@ -112,7 +115,7 @@ class ConvLayer(object):
             dif = x2 - X + 1
             lastF -= dif
             x2 -= dif
-        return (slice(firstF, lastF+1), slice(qs, x2+1), lastF-firstF+1)
+        return (slice(firstF, lastF + 1), slice(qs, x2 + 1), lastF - firstF + 1)
 
     def bprop_slice(self, x, S, Q, padding, strides):
         qs = x - (S - padding - 1)
@@ -129,7 +132,7 @@ class ConvLayer(object):
                     lastE = q
         if firstF is None:
             return (slice(0, 0, 1), slice(0, 0, 1), 0)
-        return (slice(firstF, lastF+1, strides), slice(firstE, lastE+1, 1), 0)
+        return (slice(firstF, lastF + 1, strides), slice(firstE, lastE + 1, 1), 0)
 
     def compound_ops(self, O, X, bias, bsum, relu, brelu, slope):
         if bias is not None:
@@ -174,11 +177,11 @@ class ConvLayer(object):
             K = F.shape[-1]
             if backward:
                 # CxHWN = CxK . KxHWN
-                F = F.reshape((C,  K))
+                F = F.reshape((C, K))
                 I = I.reshape((K, -1))
             else:
                 # KxHWN = CxK.T . CxHWN
-                F = F.reshape((C,  K)).T
+                F = F.reshape((C, K)).T
                 I = I.reshape((C, -1))
 
             if beta:
@@ -208,10 +211,10 @@ class ConvLayer(object):
                     slicedI = I[:, sliceD, sliceH, sliceW, :].reshape((-1, N))
 
                     if beta:
-                        O[:, m, p, q, :] = alpha * np.dot(slicedF.T,  slicedI) + \
-                                           beta * X[:, m, p, q, :]
+                        O[:, m, p, q, :] = alpha * np.dot(slicedF.T, slicedI) + \
+                            beta * X[:, m, p, q, :]
                     else:
-                        O[:, m, p, q, :] = np.dot(slicedF.T,  slicedI)
+                        O[:, m, p, q, :] = np.dot(slicedF.T, slicedI)
 
         if not beta:
             self.compound_ops(O, X, bias, bsum, relu, brelu, slope)
@@ -437,4 +440,4 @@ class PoolLayer(object):
                 if firstI is None:
                     firstI = x
                 lastI = x
-        return (slice(firstI, lastI+1), lastI-firstI+1)
+        return (slice(firstI, lastI + 1), lastI - firstI + 1)

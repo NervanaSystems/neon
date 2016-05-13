@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,11 +15,12 @@
 """
 To test pool layer operations between NervanaGPU, NervanaCPU against numpy.
 """
+from builtins import range
 import itertools as itt
 import numpy as np
 import pytest
 
-from operator import mul
+from neon import logger as neon_logger
 from utils import allclose_with_out
 
 # how many times to repeat the fprop and bprop
@@ -31,7 +32,7 @@ def sliceable(dim, pad=0):
     collapse outer dimensions into one and preserve inner dimension
     this allows for easy cpu operations in numpy
     """
-    dim0 = reduce(mul, dim[:-1], 1) + pad
+    dim0 = np.prod(dim[:-1]) + pad
     return (dim0, dim[-1])
 
 
@@ -121,7 +122,7 @@ def run_numpy_pool(op, cpuI, cpuE, dytpe, be_layer):
                                 cpuB[idx[b_idx[n]], n] += cpuE[k, m, p, q, n]
                         elif op == "avg":
                             cpuO[k, m, p, q, :] = np.mean(cpuI[idx, :], axis=0)
-                            cpuB[idx, :] += cpuE[k, m, p, q, :] * (1.0/len(idx))
+                            cpuB[idx, :] += cpuE[k, m, p, q, :] * (1.0 / len(idx))
                         elif op == "l2":
                             cpuO[k, m, p, q, :] = np.sqrt(
                                 np.sum(cpuI[idx, :] ** 2, axis=0))
@@ -199,7 +200,7 @@ def test_pool_layer(poolargs, backend_pair_bench):
             ("fprop", ngO, ncO, cpuO),
             ("bprop", ngB, ncB.reshape(dimI), cpuB[:-1, :].reshape(dimI))):
 
-        print opA
+        neon_logger.display(opA)
         assert allclose_with_out(ngA.get(), ncA.get(), rtol=0, atol=1e-4)
         assert allclose_with_out(ncA.get(), cpuA, rtol=0, atol=1e-5)
 

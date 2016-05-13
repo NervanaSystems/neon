@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from builtins import range, zip
 from neon.layers.layer import ParameterLayer, Layer
 from neon.util.persist import load_class
 
@@ -253,7 +254,7 @@ class Recurrent(ParameterLayer):
                   self.in_deltas, self.prev_in_deltas, self.out_delta)
 
         for (xs, hs, h_prev, h_delta, in_deltas,
-             prev_in_deltas, out_delta) in reversed(zip(*params)):
+             prev_in_deltas, out_delta) in reversed(list(zip(*params))):
 
             in_deltas[:] = self.activation.bprop(hs) * in_deltas
             self.be.compound_dot(self.W_recur.T, in_deltas, h_delta)
@@ -450,7 +451,7 @@ class LSTM(Recurrent):
 
         for (h_delta, in_deltas, prev_in_deltas,
              i, f, o, g, ifog_delta, i_delta, f_delta, o_delta, g_delta,
-             c_delta, c_delta_prev, c_prev, c_act) in reversed(zip(*params)):
+             c_delta, c_delta_prev, c_prev, c_act) in reversed(list(zip(*params))):
 
             # current cell delta
             c_delta[:] = c_delta + self.activation.bprop(c_act) * (o * in_deltas)
@@ -686,7 +687,7 @@ class GRU(Recurrent):
                   self.h_delta, self.in_deltas, self.prev_in_deltas)
 
         for (r, z, hcan, rh_prev, h_prev, r_delta, z_delta, hcan_delta, rz_delta,
-             rzhcan_delta, h_delta, in_deltas, prev_in_deltas) in reversed(zip(*params)):
+             rzhcan_delta, h_delta, in_deltas, prev_in_deltas) in reversed(list(zip(*params))):
 
             # hcan_delta
             hcan_delta[:] = self.activation.bprop(hcan) * in_deltas * z
@@ -961,7 +962,7 @@ class BiRNN(ParameterLayer):
     def __str__(self):
         if self.split_inputs:
             return "BiRNN Layer '%s': (%d inputs) * 2, (%d outputs) * 2, %d steps" % (
-                self.name, self.nin/2, self.nout, self.nsteps)
+                self.name, self.nin // 2, self.nout, self.nsteps)
         else:
             return "BiRNN Layer '%s': %d inputs, (%d outputs) * 2, %d steps" % (
                 self.name, self.nin, self.nout, self.nsteps)
@@ -990,7 +991,7 @@ class BiRNN(ParameterLayer):
         self.o_shape = (self.nout, self.nsteps)
         self.g_shape = (self.nout * self.ngates, self.nsteps)
         self.i_shape = (
-            self.nin/2, self.nsteps) if self.split_inputs else (self.nin, self.nsteps)
+            self.nin // 2, self.nsteps) if self.split_inputs else (self.nin, self.nsteps)
 
         if self.weight_shape is None:
             self.weight_shape = (self.nout, self.nin)
@@ -1085,7 +1086,7 @@ class BiRNN(ParameterLayer):
         """
         (nout, nin) = (self.o_shape[0], self.i_shape[0])
         self.g_nout = self.ngates * nout
-        Wshape = (2*(nin+nout+1), self.g_nout)
+        Wshape = (2 * (nin + nout + 1), self.g_nout)
         doFill = False
 
         # Weights: input, recurrent, bias
@@ -1099,22 +1100,22 @@ class BiRNN(ParameterLayer):
             assert self.dW.shape == Wshape
 
         self.W_input_f = self.W[:nin].reshape((self.g_nout, nin))
-        self.W_input_b = self.W[nin:2*nin].reshape((self.g_nout, nin))
+        self.W_input_b = self.W[nin:2 * nin].reshape((self.g_nout, nin))
 
-        self.W_recur_f = self.W[2*nin:2*nin+nout].reshape((self.g_nout, nout))
+        self.W_recur_f = self.W[2 * nin:2 * nin + nout].reshape((self.g_nout, nout))
         self.W_recur_b = self.W[
-            2*nin+nout:2*nin+2*nout].reshape((self.g_nout, nout))
+            2 * nin + nout:2 * nin + 2 * nout].reshape((self.g_nout, nout))
 
         self.b_f = self.W[-2:-1].reshape((self.g_nout, 1))
         self.b_b = self.W[-1:].reshape((self.g_nout, 1))
 
         self.dW_input_f = self.dW[:nin].reshape(self.W_input_f.shape)
-        self.dW_input_b = self.dW[nin:2*nin].reshape(self.W_input_b.shape)
+        self.dW_input_b = self.dW[nin:2 * nin].reshape(self.W_input_b.shape)
 
         self.dW_recur_f = self.dW[
-            2*nin:2*nin+nout].reshape(self.W_recur_f.shape)
+            2 * nin:2 * nin + nout].reshape(self.W_recur_f.shape)
         self.dW_recur_b = self.dW[
-            2*nin+nout:2*nin+2*nout].reshape(self.W_recur_b.shape)
+            2 * nin + nout:2 * nin + 2 * nout].reshape(self.W_recur_b.shape)
 
         self.db_f = self.dW[-2:-1].reshape(self.b_f.shape)
         self.db_b = self.dW[-1:].reshape(self.b_b.shape)
@@ -1171,7 +1172,7 @@ class BiRNN(ParameterLayer):
             self.be.compound_dot(self.W_recur_f, h_prev, h, beta=1.0)
             h[:] = self.activation(h + self.b_f)
 
-        for (h, h_next, xs) in reversed(zip(self.h_b, self.h_next, self.xs_b)):
+        for (h, h_next, xs) in reversed(list(zip(self.h_b, self.h_next, self.xs_b))):
             self.be.compound_dot(self.W_input_b, xs, h)
             self.be.compound_dot(self.W_recur_b, h_next, h, beta=1.0)
             h[:] = self.activation(h + self.b_b)
@@ -1215,7 +1216,7 @@ class BiRNN(ParameterLayer):
         self.out_deltas_buffer[:] = 0
         # errors propagate from right to left
         for (xs, hs, h_prev, in_deltas,
-             prev_in_deltas, out_delta) in reversed(zip(*params_f)):
+             prev_in_deltas, out_delta) in reversed(list(zip(*params_f))):
 
             in_deltas[:] = self.activation.bprop(hs) * in_deltas
             self.be.compound_dot(
@@ -1380,7 +1381,7 @@ class BiLSTM(BiRNN):
             self.c_b[0][:] = 0
 
         params_f = (self.h_f, self.h_prev, self.xs_f, self.ifog_f, self.ifo_f,
-                    self.i_f, self.f_f, self.o_f,  self.g_f, self.c_f, self.c_prev, self.c_act_f)
+                    self.i_f, self.f_f, self.o_f, self.g_f, self.c_f, self.c_prev, self.c_act_f)
         params_b = (self.h_b, self.h_next, self.xs_b, self.ifog_b, self.ifo_b,
                     self.i_b, self.f_b, self.o_b, self.g_b, self.c_b, self.c_next, self.c_act_b)
 
@@ -1396,7 +1397,8 @@ class BiLSTM(BiRNN):
             c_act[:] = self.activation(c)
             h[:] = o * c_act
 
-        for (h, h_next, xs, ifog, ifo, i, f, o, g, c, c_next, c_act) in reversed(zip(*params_b)):
+        for (h, h_next, xs, ifog, ifo, i, f, o, g, c, c_next, c_act) in \
+                reversed(list(zip(*params_b))):
             self.be.compound_dot(self.W_recur_b, h_next, ifog)
             self.be.compound_dot(self.W_input_b, xs, ifog, beta=1.0)
             ifog[:] = ifog + self.b_b
@@ -1461,7 +1463,7 @@ class BiLSTM(BiRNN):
         for (in_deltas, prev_in_deltas,
              i, f, o, g,
              ifog_delta, i_delta, f_delta, o_delta, g_delta,
-             c_delta, c_delta_prev, c_prev, c_act) in reversed(zip(*params_f)):
+             c_delta, c_delta_prev, c_prev, c_act) in reversed(list(zip(*params_f))):
 
             # current cell delta
             c_delta[:] = c_delta + \
@@ -1547,7 +1549,7 @@ class DeepBiRNN(list):
             raise ValueError("Depth is <= 0.")
 
         self.append(BiRNN(nout, init, init_inner, activation, reset_cells, split_inputs=False))
-        for i in range(depth-1):
+        for i in range(depth - 1):
             self.append(BiRNN(nout, init, init_inner, activation, reset_cells, split_inputs=True))
 
 
@@ -1574,7 +1576,7 @@ class DeepBiLSTM(list):
         self.append(
             BiLSTM(nout, init, init_inner, activation, gate_activation,
                    reset_cells, split_inputs=False))
-        for i in range(depth-1):
+        for i in range(depth - 1):
             self.append(
                 BiLSTM(nout, init, init_inner, activation, gate_activation,
                        reset_cells, split_inputs=True))

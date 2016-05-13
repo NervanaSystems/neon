@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -47,7 +47,10 @@ Usage:
     use -t to specify which bAbI task to run
     python examples/babi/train.py -e 20 --rlayer_type gru --save_path babi_lstm.p -t 1
 """
+
+from builtins import range
 from util import create_model, babi_handler
+from neon import logger as neon_logger
 from neon.backends import gen_backend
 from neon.data import QA
 from neon.layers import GeneralizedCost
@@ -58,7 +61,7 @@ from neon.util.argparser import NeonArgparser, extract_valid_args
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument('-t', '--task', type=int, default='1', choices=xrange(1, 21),
+parser.add_argument('-t', '--task', type=int, default='1', choices=range(1, 21),
                     help='the task ID to train/test on from bAbI dataset (1-20)')
 parser.add_argument('--rlayer_type', default='gru', choices=['gru', 'lstm'],
                     help='type of recurrent layer to use (gru or lstm)')
@@ -94,5 +97,7 @@ model.fit(train_set,
           callbacks=callbacks)
 
 # output accuracies
-print('Train Accuracy = %.1f%%' % (model.eval(train_set, metric=Accuracy())*100))
-print('Test Accuracy = %.1f%%' % (model.eval(valid_set, metric=Accuracy())*100))
+neon_logger.display('Train Accuracy = %.1f%%' %
+                    (model.eval(train_set, metric=Accuracy()) * 100))
+neon_logger.display('Test Accuracy = %.1f%%' %
+                    (model.eval(valid_set, metric=Accuracy()) * 100))

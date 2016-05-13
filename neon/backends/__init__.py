@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,7 +15,6 @@
 """
 Defines gen_backend function
 """
-
 import atexit
 import logging
 import os
@@ -93,8 +92,8 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
         from neon.backends.util import check_gpu
         gpuflag = (check_gpu.get_compute_capability(device_id) >= 3.0)
         if gpuflag is False:
-            raise RuntimeError("Device " + str(device_id) + " does not have CUDA compute " +
-                               "capability 3.0 or greater")
+            raise RuntimeError("Device {} does not have CUDA"
+                               " compute capability 3.0 or greater".format(device_id))
         if backend == 'gpu':
             from neon.backends.nervanagpu import NervanaGPU
             # init gpu

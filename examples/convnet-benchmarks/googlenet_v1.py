@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -33,13 +33,14 @@ from neon.transforms import Rectlin, CrossEntropyMulti
 from neon.models import Model
 from neon.data import ArrayIterator
 import numpy as np
+
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 NervanaObject.be.enable_winograd = 4
 
 # setup data provider
-X_train = np.random.uniform(-1, 1, (128, 3*224*224))
+X_train = np.random.uniform(-1, 1, (128, 3 * 224 * 224))
 y_train = np.random.uniform(-1, 1, (128, 1000))
 train = ArrayIterator(X_train, y_train, nclass=1000, lshape=(3, 224, 224))
 
@@ -58,8 +59,8 @@ def inception(kvals):
     (p1, p2, p3, p4) = kvals
 
     branch1 = [Conv((1, 1, p1[0]), **common)]
-    branch2 = [Conv((1, 1, p2[0]), **common),  Conv((3, 3, p2[1]), **commonp1)]
-    branch3 = [Conv((1, 1, p3[0]), **common),  Conv((5, 5, p3[1]), **commonp2)]
+    branch2 = [Conv((1, 1, p2[0]), **common), Conv((3, 3, p2[1]), **commonp1)]
+    branch3 = [Conv((1, 1, p3[0]), **common), Conv((5, 5, p3[1]), **commonp2)]
     branch4 = [Pooling(op="max", **pool3s1p1), Conv((1, 1, p4[0]), **common)]
     return MergeBroadcast(layers=[branch1, branch2, branch3, branch4], merge="depth")
 
@@ -83,7 +84,7 @@ model = Model(layers=[
     Pooling(fshape=7, strides=1, op="avg"),
     Affine(nout=1000, init=init1)])
 
-weight_sched = Schedule([22, 44, 65], (1/250.)**(1/3.))
+weight_sched = Schedule([22, 44, 65], (1 / 250.)**(1 / 3.))
 opt_gdm = GradientDescentMomentum(0.01, 0.0, wdecay=0.0005, schedule=weight_sched)
 opt = MultiOptimizer({'default': opt_gdm})
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())

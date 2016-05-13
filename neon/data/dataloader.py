@@ -12,16 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
+from builtins import range
 import ctypes as ct
 import logging
 import numpy as np
 import os
 import atexit
 
-from media import MediaParams
-from indexer import Indexer
-from dataiterator import NervanaDataIterator
+from .media import MediaParams
+from .indexer import Indexer
+from .dataiterator import NervanaDataIterator
 
 logger = logging.getLogger(__name__)
 
@@ -144,19 +144,19 @@ class DataLoader(NervanaDataIterator):
         datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
         target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
         if self.ingest_params is None:
-            ingest_params = None
+            ingest_params = ct.POINTER(MediaParams)()
         else:
             ingest_params = ct.POINTER(MediaParams)(self.ingest_params)
         self.loader = self.loaderlib.start(
             ct.byref(self.item_count), self.bsz,
-            ct.c_char_p(self.repo_dir),
-            ct.c_char_p(self.archive_dir),
-            ct.c_char_p(self.index_file),
-            ct.c_char_p(self.meta_file),
-            ct.c_char_p(self.archive_prefix),
+            ct.c_char_p(self.repo_dir.encode()),
+            ct.c_char_p(self.archive_dir.encode()),
+            ct.c_char_p(self.index_file.encode()),
+            ct.c_char_p(self.meta_file.encode()),
+            ct.c_char_p(self.archive_prefix.encode()),
             self.shuffle, self.reshuffle,
             self.macro_start,
-            datum_nbytes, target_nbytes,
+            ct.c_int(datum_nbytes), ct.c_int(target_nbytes),
             self.subset_percent,
             ct.POINTER(MediaParams)(self.media_params),
             ct.POINTER(DeviceParams)(self.device_params),

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from __future__ import division
+from builtins import range, str, zip
 import logging
 import numpy as np
 
@@ -29,7 +31,7 @@ def interpret_in_shape(xshape):
     Helper function to interpret the tensor layout of preceding layer to handle non-recurrent,
     recurrent, and local layers.
     """
-    if isinstance(xshape, int):
+    if isinstance(xshape, (int, np.integer)):
         return (xshape, 1)
     else:
         if len(xshape) == 2:
@@ -104,7 +106,7 @@ class Layer(NervanaObject):
             if isinstance(in_obj, (tuple, int, list)):
                 self.in_shape = in_obj  # input is a shape tuple or int directly
             elif isinstance(in_obj, Tensor):
-                self.in_shape = (in_obj.shape[0], in_obj.shape[1] / self.be.bsz)
+                self.in_shape = (in_obj.shape[0], in_obj.shape[1] // self.be.bsz)
             else:
                 self.in_shape = in_obj.shape  # This is a dataset
 
@@ -277,7 +279,7 @@ class BranchNode(Layer):
         if name in cls.instances:
             return cls.instances[name]
         else:
-            return Layer.__new__(cls, name=name)
+            return Layer.__new__(cls)
 
     def __init__(self, name=None):
         # don't init if this is not a new instance
@@ -1291,7 +1293,7 @@ class ColorNoise(Layer):
         self.noise_buf = None
         # Assume that colorpca is BGR component column eigvectors
         if colorpca is None:
-            colorpca = [[0.39731118,  0.70119634, -0.59200296],
+            colorpca = [[0.39731118, 0.70119634, -0.59200296],
                         [-0.81698062, -0.02354167, -0.5761844],
                         [0.41795513, -0.71257945, -0.56351045]]
         colorpca = np.array(colorpca).reshape(3, 3).astype(np.float32)
@@ -1405,10 +1407,10 @@ class CompoundLayer(list):
     def add_postfilter_layers(self):
         self.init_base_name()
         if self.bias is not None:
-            name = self.base_name+'_bias'
+            name = self.base_name + '_bias'
             self.append(Bias(init=self.bias, name=name))
         if self.batch_norm:
-            name = self.base_name+'_bnorm'
+            name = self.base_name + '_bnorm'
             self.append(BatchNorm(name=name))
         if self.activation is not None:
             name = self.base_name + '_' + self.activation.classnm
@@ -1622,14 +1624,14 @@ class Dropout(Layer):
         self.keep_mask = None
         self.caffe_mode = self.be.check_caffe_compat()
         if self.caffe_mode:
-            self._train_scaling = 1.0/keep  # scaling factor during training
+            self._train_scaling = 1.0 / keep  # scaling factor during training
         else:
             self._train_scaling = 1.0  # override scaling factor to retain binary mask
         self.owns_output = False
 
     def __str__(self):
         return "Dropout Layer '%s': %d inputs and outputs, keep %d%% (caffe_compat %s)" % (
-               self.name, self.nout, 100*self.keep, self.caffe_mode)
+               self.name, self.nout, 100 * self.keep, self.caffe_mode)
 
     def configure(self, in_obj):
         """
@@ -2136,7 +2138,7 @@ class BatchNorm(Layer):
 
     def set_params(self, pdict):
         if type(pdict['params']) is dict:
-            for key, val in pdict['params'].iteritems():
+            for key, val in pdict['params'].items():
                 if isinstance(getattr(self, key), Tensor):
                     getattr(self, key).set(val)
                 else:

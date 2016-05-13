@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -29,7 +29,8 @@ TODO:
     - make use of empty_like
     - intrinsic key for caching
 """
-
+from __future__ import division
+from builtins import object, range, zip
 from neon.backends.backend import OpTreeNode, Tensor
 import numpy as np
 from functools import wraps
@@ -38,7 +39,7 @@ _scalar_types = {int, float, np.float16, np.float32, np.uint8, np.int8,
                  np.uint16, np.int16, np.uint32, np.int32}
 
 
-class GradUtil():
+class GradUtil(object):
 
     """
     Utility class for calculating gradients.

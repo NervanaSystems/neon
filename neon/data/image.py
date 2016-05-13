@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,16 +15,21 @@
 """
 Class definitions for image data sets.
 """
+from __future__ import division
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from builtins import range, str  # noqa
 
-import cPickle
-import gzip
-import logging
-import numpy as np
-import os
-import tarfile
+import gzip  # noqa
+import logging  # noqa
+import numpy as np  # noqa
+import os  # noqa
+import tarfile  # noqa
 
-from neon.data.datasets import Dataset
-from neon.data.dataiterator import ArrayIterator
+from neon.util.compat import pickle  # noqa
+from neon.util.compat import pickle_load  # noqa
+from neon.data.datasets import Dataset  # noqa
+from neon.data.dataiterator import ArrayIterator  # noqa
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +64,7 @@ class MNIST(Dataset):
             self.fetch_dataset(self.url, self.filename, filepath, self.size)
 
         with gzip.open(filepath, 'rb') as mnist:
-            (X_train, y_train), (X_test, y_test) = cPickle.load(mnist)
+            (X_train, y_train), (X_test, y_test) = pickle_load(mnist)
             X_train = X_train.reshape(-1, 784)
             X_test = X_test.reshape(-1, 784)
 
@@ -135,7 +140,7 @@ class CIFAR10(Dataset):
         Xlist, ylist = [], []
         for batch in train_batches:
             with open(batch, 'rb') as f:
-                d = cPickle.load(f)
+                d = pickle_load(f)
                 Xlist.append(d['data'])
                 ylist.append(d['labels'])
 
@@ -143,7 +148,7 @@ class CIFAR10(Dataset):
         y_train = np.vstack(ylist)
 
         with open(os.path.join(batchdir, 'test_batch'), 'rb') as f:
-            d = cPickle.load(f)
+            d = pickle_load(f)
             X_test, y_test = d['data'], d['labels']
 
         y_train = y_train.reshape(-1, 1)
@@ -213,13 +218,13 @@ class CIFAR10(Dataset):
         """
         if cache and os.path.isfile(cache):
             with open(cache, 'rb') as f:
-                (meanX, W) = cPickle.load(f)
+                (meanX, W) = pickle_load(f)
         else:
             meanX, W = CIFAR10._compute_zca_transform(train)
             if cache:
                 logger.info("Caching ZCA transform matrix")
                 with open(cache, 'wb') as f:
-                    cPickle.dump((meanX, W), f)
+                    pickle.dump((meanX, W), f, 2)
 
         logger.info("Applying ZCA whitening transform")
         train_w = np.dot(train - meanX, W)

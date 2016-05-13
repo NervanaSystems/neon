@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -52,7 +52,7 @@ def deserialize(fn, datasets=None, inference=False):
     if 'train' in datasets:
         data_iter = datasets['train']
     else:
-        key = datasets.keys()[0]
+        key = list(datasets.keys())[0]
         data_iter = datasets[key]
         logger.warn('Could not find training set iterator'
                     'using %s instead' % key)

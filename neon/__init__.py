@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,6 +15,8 @@
 """
 Nervana's deep learning library
 """
+from __future__ import print_function
+from builtins import zip
 
 try:
     from neon.version import VERSION as __version__  # noqa
@@ -26,6 +28,17 @@ except ImportError:
 from copy import deepcopy
 import inspect
 import logging
+
+
+DISPLAY_LEVEL_NUM = 41
+logging.addLevelName(DISPLAY_LEVEL_NUM, "DISPLAY")
+
+
+def display(self, message, *args, **kwargs):
+    if self.isEnabledFor(DISPLAY_LEVEL_NUM):
+        self._log(DISPLAY_LEVEL_NUM, message, args, **kwargs)
+
+logging.Logger.display = display
 
 # setup a preliminary stream based logger
 logging.basicConfig(level=logging.ERROR)
@@ -41,9 +54,9 @@ def get_args(func):
     args = list(reversed(args))
 
     while len(defaults) != len(args):
-        defaults+=(None,)
+        defaults += (None,)
 
-    return dict(zip(args, defaults))
+    return dict(list(zip(args, defaults)))
 
 
 class NervanaObject(object):
@@ -62,7 +75,7 @@ class NervanaObject(object):
 
     def __init__(self, name=None):
         if name is None:
-            name = self.classnm + '_' + str(self.__counter)
+            name = '{}_{}'.format(self.classnm, self.__counter)
         self.name = name
         self._desc = None
         type(self).__counter += 1

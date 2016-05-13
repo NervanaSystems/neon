@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.  All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 # set empty to prevent any implicit rules from firing.
 .SUFFIXES:
 
-# where our installed python packages will live
+# Choose default Python version; overrideable with "make python2" or "make python3".
+PYTHON_VERSION := $(shell python --version 2>&1  | cut -c8)
 VIRTUALENV_DIR := .venv
-VIRTUALENV_EXE := virtualenv -p python2.7  # use pyvenv for python3 install
 ACTIVATE := $(VIRTUALENV_DIR)/bin/activate
 
 # get release version info
@@ -75,10 +75,26 @@ DOC_PUB_RELEASE_PATH := $(DOC_PUB_PATH)/$(RELEASE)
 # neon compiled objects
 DATA_LOADER := loader
 
-.PHONY: default env sysinstall sysinstall_nodeps neon_install \
+ifeq ($(PYTHON_VERSION), 2)
+	VIRTUALENV_EXE := virtualenv -p python2.7
+	PYLINT3K_ARGS := --disable=no-absolute-import
+else
+	VIRTUALENV_EXE := python3 -m venv
+	PYLINT3K_ARGS :=
+endif
+
+.PHONY: python2 python3 default env sysinstall sysinstall_nodeps neon_install \
 	    sysdeps sysuninstall clean_py clean_so \
-	    clean test coverage style lint check doc html release examples \
+	    clean test coverage style lint lint3k check doc html release examples \
 	    serialize_check $(DATA_LOADER)
+
+python2: VIRTUALENV_EXE := virtualenv -p python2.7
+python2: PYLINT3K_ARGS := --disable=no-absolute-import
+python2: default
+
+python3: VIRTUALENV_EXE := python3 -m venv
+python3: PYLINT3K_ARGS :=
+python3: default
 
 default: env
 
@@ -187,10 +203,15 @@ coverage: env
 
 style: env
 	@. $(ACTIVATE); flake8 $(STYLE_CHECK_OPTS) $(STYLE_CHECK_DIRS)
+	@. $(ACTIVATE); pylint --reports=n --py3k $(PYLINT3K_ARGS) --ignore=.venv *
 	@echo
 
 lint: env
 	@. $(ACTIVATE); pylint --output-format=colorized neon
+	@echo
+
+lint3k: env
+	@. $(ACTIVATE); pylint --py3k $(PYLINT3K_ARGS) --ignore=.venv *
 	@echo
 
 check: env

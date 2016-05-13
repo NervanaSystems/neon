@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 # pylint: skip-file
-
+from builtins import range, zip
 import numpy as np
 import pprint
 import pytest
@@ -22,7 +22,7 @@ from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
 
 
-class CustomFunc:
+class CustomFunc(object):
 
     @staticmethod
     def sig(x):
@@ -58,7 +58,7 @@ class CustomFunc:
 
 
 @pytest.mark.usefixtures("backend_default")
-class TestAutodiff:
+class TestAutodiff(object):
 
     def setup(self):
         self.m = 2  # row
@@ -122,12 +122,12 @@ class TestAutodiff:
         # give variable name to the tensors
         count = 0
         for tensor in tensors:
-            exec('x%s = tensor' % count) in globals(), locals()
+            exec(('x%s = tensor' % count), globals(), locals())
             count += 1
 
         # execute
         result = None
-        exec('result = ' + f_str)
+        result = eval(f_str)
 
         return result
 
@@ -150,7 +150,7 @@ class TestAutodiff:
             count += 1
         # build op_tree
         f = None
-        exec('f = %s' % f_str)
+        f = eval(f_str)
         # evaluate op tree
         f_val = be.empty(f.shape)
         f_val[:] = f

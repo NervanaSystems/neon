@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,11 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from builtins import zip
 import numpy as np
 import re
-
-
 from neon.util.persist import load_obj
+from neon import logger as neon_logger
 
 
 class ModelDescription(dict):
@@ -140,7 +140,7 @@ class ModelDescription(dict):
 
         if type_o1 is dict:
             if set(o1.keys()) != set(o2.keys()):
-                print 'Missing keys'
+                neon_logger.display('Missing keys')
                 return False
             for key in o1:
                 if key == 'name':

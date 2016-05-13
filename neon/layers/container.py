@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+
+from builtins import range, str, zip
 import numpy as np
 import itertools as itt
 from operator import add
@@ -19,6 +21,7 @@ from operator import add
 from neon import NervanaObject
 from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform
 from neon.util.persist import load_class
+from functools import reduce
 
 
 def flatten(item):
@@ -57,9 +60,9 @@ class LayerContainer(Layer):
         Returns:
             str: layer info at the given indentation level
         """
-        padstr = '\n' + '  '*level
+        padstr = '\n' + '  ' * level
         ss = '  ' * level + self.classnm + padstr
-        ss += padstr.join([l.nested_str(level+1) for l in self.layers])
+        ss += padstr.join([l.nested_str(level + 1) for l in self.layers])
         return ss
 
     @classmethod
@@ -160,7 +163,7 @@ class Sequential(LayerContainer):
         super(Sequential, self).__init__(name)
 
         self.layers = [l for l in flatten(layers)]
-        self._layers = filter(lambda x: type(x) not in (BranchNode,), self.layers)
+        self._layers = [x for x in self.layers if type(x) not in (BranchNode,)]
         root = self._layers[0]
         assert (root.owns_output or
                 type(root) in [Dropout, DataTransform]), "Sequential root must own outputs"
@@ -339,7 +342,7 @@ class Tree(LayerContainer):
             str: layer info at the given indentation level
         """
         ss = self.classnm + '\n'
-        ss += '\n'.join([l.nested_str(level+1) for l in self.layers])
+        ss += '\n'.join([l.nested_str(level + 1) for l in self.layers])
         return ss
 
     def configure(self, in_obj):
@@ -402,7 +405,7 @@ class Tree(LayerContainer):
         Returns:
             Tensor: deltas to propagate to the adjacent lower layer
         """
-        for l, e, a, b in reversed(zip(self.layers, error, self.alphas, self.betas)):
+        for l, e, a, b in reversed(list(zip(self.layers, error, self.alphas, self.betas))):
             l.bprop(e, alpha=a, beta=b)
 
     def get_terminal(self):
@@ -686,8 +689,9 @@ class MergeBroadcast(Broadcast):
         self.betas[-1] = beta
         if self.error_views is None:
             self.error_views = self.get_partitions(error, self.slices)
-        for l, e, a, b in reversed(zip(self.layers, self.error_views, self.alphas, self.betas)):
-            l.bprop(e, alpha=a*alpha, beta=b)
+        for l, e, a, b in reversed(list(zip(self.layers, self.error_views, self.alphas,
+                                            self.betas))):
+            l.bprop(e, alpha=a * alpha, beta=b)
         return self.deltas
 
 

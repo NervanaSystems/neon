@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,7 +15,7 @@
 import logging
 import numpy as np
 
-from neon import NervanaObject
+from neon import NervanaObject, logger as neon_logger
 
 logging.basicConfig(level=20)
 logger = logging.getLogger()
@@ -30,13 +30,13 @@ def test_dropout(backend_default):
     mask = ng.empty((6, 4))
 
     logger.info("FPROP")
-    print d_array2.get()
+    neon_logger.display(d_array2.get())
     # d_array2[:] = ng.dropout(0.5) * d_array2
     ng.make_binary_mask(mask, keepthresh=0.5)
     d_array2[:] = mask * d_array2
-    print d_array2.get()
+    neon_logger.display(d_array2.get())
 
     logger.info("BPROP")
-    print d_error.get()
+    neon_logger.display(d_error.get())
     d_error[:] = (d_array2 != 0) * d_error
-    print d_error.get()
+    neon_logger.display(d_error.get())

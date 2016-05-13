@@ -14,6 +14,7 @@ The adaptation includes
   - being able to read out hashable values to compare with another recurrent
     implementation
 """
+from builtins import range
 
 import numpy as np
 
@@ -40,11 +41,11 @@ class Recurrent(object):
         nin = inputs[0].shape[0]
 
         # forward pass
-        for t in xrange(seq_len):
+        for t in range(seq_len):
             xs[t] = np.matrix(inputs[t])
             # hidden state
             hs[t] = np.tanh(
-                np.dot(self.Wxh, xs[t]) + np.dot(self.Whh, hs[t-1]) + self.bh)
+                np.dot(self.Wxh, xs[t]) + np.dot(self.Whh, hs[t - 1]) + self.bh)
             hs_list[:, t] = hs[t].flatten()
 
         # backward pass: compute gradients going backwards
@@ -57,7 +58,7 @@ class Recurrent(object):
         dh_list_out = np.zeros_like(dh_list)
         dout_list = np.zeros((nin, seq_len))
 
-        for t in reversed(xrange(seq_len)):
+        for t in reversed(range(seq_len)):
             dh = dh_list[t] + dhnext  # backprop into h
             dh_list_out[t] = dh
             # import pdb;pdb.set_trace()
@@ -65,7 +66,7 @@ class Recurrent(object):
             dhraw = np.multiply(dh, (1 - np.square(hs[t])))
             dbh += dhraw
             dWxh += np.dot(dhraw, xs[t].T)
-            dWhh += np.dot(dhraw, hs[t-1].T)
+            dWhh += np.dot(dhraw, hs[t - 1].T)
             dhnext = np.dot(self.Whh.T, dhraw)
             dout = np.dot(self.Wxh.T, dhraw)
             dout_list[:, t] = dout.flatten()

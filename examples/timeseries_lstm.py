@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -23,6 +23,8 @@ Usage:
 Then look at the PNG plots generated.
 
 """
+
+from builtins import object, range
 import numpy as np
 import math
 from neon.backends import gen_backend
@@ -32,7 +34,7 @@ from neon.models import Model
 from neon.optimizers import RMSProp
 from neon.transforms import Logistic, Tanh, Identity, MeanSquared
 from neon.callbacks.callbacks import Callbacks
-from neon import NervanaObject
+from neon import NervanaObject, logger as neon_logger
 from neon.util.argparser import NeonArgparser, extract_valid_args
 
 
@@ -40,8 +42,8 @@ do_plots = True
 try:
     import matplotlib.pyplot as plt
 except ImportError:
-    print('matplotlib needs to be installed manually to generate plots needed '
-          'for this example.  Skipping plot generation')
+    neon_logger.display('matplotlib needs to be installed manually to generate plots needed '
+                        'for this example.  Skipping plot generation')
     do_plots = False
 
 
@@ -77,13 +79,17 @@ class TimeSeries(object):
 
         sin_scale = 2 if curvetype is 'Lissajous1' else 1
 
-        def y_x(x): return 4.0/5 * math.sin(x/sin_scale)
+        def y_x(x):
+            return 4.0 / 5 * math.sin(x / sin_scale)
 
-        def y_y(x): return 4.0/5 * math.cos(x/2)
+        def y_y(x):
+            return 4.0 / 5 * math.cos(x / 2)
 
         self.data = np.zeros((self.nsamples, 2))
-        self.data[:, 0] = np.asarray([y_x(xs) for xs in self.x]).astype(np.float32)
-        self.data[:, 1] = np.asarray([y_y(xs) for xs in self.x]).astype(np.float32)
+        self.data[:, 0] = np.asarray([y_x(xs)
+                                      for xs in self.x]).astype(np.float32)
+        self.data[:, 1] = np.asarray([y_y(xs)
+                                      for xs in self.x]).astype(np.float32)
 
         L = len(self.data)
         c = int(L * (1 - divide))
@@ -127,7 +133,8 @@ class DataIteratorSequence(NervanaObject):
 
         target_steps = time_steps if return_sequences else 1
         # pre-allocate the device buffer to provide data for each minibatch
-        # buffer size is nfeatures x (times * batch_size), which is handled by backend.iobuf()
+        # buffer size is nfeatures x (times * batch_size), which is handled by
+        # backend.iobuf()
         self.X_dev = self.be.iobuf((self.nfeatures, time_steps))
         self.y_dev = self.be.iobuf((self.nfeatures, target_steps))
 
@@ -139,15 +146,17 @@ class DataIteratorSequence(NervanaObject):
 
             # calculate how many batches
             self.nsamples -= extra_examples
-            self.nbatches = self.nsamples / (self.be.bsz * time_steps)
+            self.nbatches = self.nsamples // (self.be.bsz * time_steps)
             self.ndata = self.nbatches * self.be.bsz * time_steps  # no leftovers
 
             # y is the lagged version of X
             y = np.concatenate((X[forward:], X[:forward]))
             self.y_series = y
             # reshape this way so sequence is continuous along the batches
-            self.X = X.reshape(self.be.bsz, self.nbatches, time_steps, self.nfeatures)
-            self.y = y.reshape(self.be.bsz, self.nbatches, time_steps, self.nfeatures)
+            self.X = X.reshape(self.be.bsz, self.nbatches,
+                               time_steps, self.nfeatures)
+            self.y = y.reshape(self.be.bsz, self.nbatches,
+                               time_steps, self.nfeatures)
         else:
             self.X = rolling_window(X, time_steps)
             self.X = self.X[:-1]
@@ -161,7 +170,7 @@ class DataIteratorSequence(NervanaObject):
 
             # calculate how many batches
             self.nsamples -= extra_examples
-            self.nbatches = self.nsamples / (self.be.bsz)
+            self.nbatches = self.nsamples // self.be.bsz
             self.ndata = self.nbatches * self.be.bsz
             self.y_series = self.y
 
@@ -185,9 +194,12 @@ class DataIteratorSequence(NervanaObject):
         """
         self.batch_index = 0
         while self.batch_index < self.nbatches:
-            # get the data for this batch and reshape to fit the device buffer shape
-            X_batch = self.X[:, self.batch_index].reshape(self.X_dev.shape[::-1]).T.copy()
-            y_batch = self.y[:, self.batch_index].reshape(self.y_dev.shape[::-1]).T.copy()
+            # get the data for this batch and reshape to fit the device buffer
+            # shape
+            X_batch = self.X[:, self.batch_index].reshape(
+                self.X_dev.shape[::-1]).T.copy()
+            y_batch = self.y[:, self.batch_index].reshape(
+                self.y_dev.shape[::-1]).T.copy()
 
             # make the data for this batch as backend tensor
             self.X_dev.set(X_batch)
@@ -256,24 +268,31 @@ if __name__ == '__main__':
         args.callback_args['serialize'] = 1
 
     # create synthetic data as a whole series
-    time_series = TimeSeries(npoints, ncycles=ncycles, curvetype=args.curvetype)
+    time_series = TimeSeries(npoints, ncycles=ncycles,
+                             curvetype=args.curvetype)
 
-    # use data iterator to feed X, Y. return_sequence determines training strategy
-    train_set = DataIteratorSequence(time_series.train, seq_len, return_sequences=return_sequences)
-    valid_set = DataIteratorSequence(time_series.test, seq_len, return_sequences=return_sequences)
+    # use data iterator to feed X, Y. return_sequence determines training
+    # strategy
+    train_set = DataIteratorSequence(
+        time_series.train, seq_len, return_sequences=return_sequences)
+    valid_set = DataIteratorSequence(
+        time_series.test, seq_len, return_sequences=return_sequences)
 
     # define weights initialization
     init = GlorotUniform()  # Uniform(low=-0.08, high=0.08)
 
-    # define model: model is different for the 2 strategies (sequence target or not)
+    # define model: model is different for the 2 strategies (sequence target
+    # or not)
     if return_sequences is True:
         layers = [
-            LSTM(hidden, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=False),
+            LSTM(hidden, init, activation=Logistic(),
+                 gate_activation=Tanh(), reset_cells=False),
             Affine(train_set.nfeatures, init, bias=init, activation=Identity())
         ]
     else:
         layers = [
-            LSTM(hidden, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=True),
+            LSTM(hidden, init, activation=Logistic(),
+                 gate_activation=Tanh(), reset_cells=True),
             RecurrentLast(),
             Affine(train_set.nfeatures, init, bias=init, activation=Identity())
         ]
@@ -292,9 +311,12 @@ if __name__ == '__main__':
               callbacks=callbacks)
 
     # =======visualize how the model does on validation set==============
-    # run the trained model on train and valid dataset and see how the outputs match
-    train_output = model.get_outputs(train_set).reshape(-1, train_set.nfeatures)
-    valid_output = model.get_outputs(valid_set).reshape(-1, valid_set.nfeatures)
+    # run the trained model on train and valid dataset and see how the outputs
+    # match
+    train_output = model.get_outputs(
+        train_set).reshape(-1, train_set.nfeatures)
+    valid_output = model.get_outputs(
+        valid_set).reshape(-1, valid_set.nfeatures)
     train_target = train_set.y_series
     valid_target = valid_set.y_series
 
@@ -302,36 +324,41 @@ if __name__ == '__main__':
     terr = err(train_output, train_target)
     verr = err(valid_output, valid_target)
 
-    print 'terr = %g, verr = %g' % (terr, verr)
+    neon_logger.display('terr = %g, verr = %g' % (terr, verr))
 
     if do_plots:
         plt.figure()
-        plt.plot(train_output[:, 0], train_output[:, 1], 'bo', label='prediction')
+        plt.plot(train_output[:, 0], train_output[
+                 :, 1], 'bo', label='prediction')
         plt.plot(train_target[:, 0], train_target[:, 1], 'r.', label='target')
         plt.legend()
         plt.title('Neon on training set')
         plt.savefig('neon_series_training_output.png')
 
         plt.figure()
-        plt.plot(valid_output[:, 0], valid_output[:, 1], 'bo', label='prediction')
+        plt.plot(valid_output[:, 0], valid_output[
+                 :, 1], 'bo', label='prediction')
         plt.plot(valid_target[:, 0], valid_target[:, 1], 'r.', label='target')
         plt.legend()
         plt.title('Neon on validation set')
         plt.savefig('neon_series_validation_output.png')
 
     # =====================generate sequence ==================================
-    # when generating sequence, set sequence length to 1, since it doesn't make a difference
+    # when generating sequence, set sequence length to 1, since it doesn't
+    # make a difference
     be.bsz = 1
     seq_len = 1
 
     if return_sequences is True:
         layers = [
-            LSTM(hidden, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=False),
+            LSTM(hidden, init, activation=Logistic(),
+                 gate_activation=Tanh(), reset_cells=False),
             Affine(train_set.nfeatures, init, bias=init, activation=Identity())
         ]
     else:
         layers = [
-            LSTM(hidden, init, activation=Logistic(), gate_activation=Tanh(), reset_cells=False),
+            LSTM(hidden, init, activation=Logistic(),
+                 gate_activation=Tanh(), reset_cells=False),
             RecurrentLast(),
             Affine(train_set.nfeatures, init, bias=init, activation=Identity())
         ]
@@ -359,7 +386,8 @@ if __name__ == '__main__':
 
     if do_plots:
         plt.figure()
-        plt.plot(output_seq[:, 0], output_seq[:, 1], 'b.-', label='generated sequence')
+        plt.plot(output_seq[:, 0], output_seq[:, 1],
+                 'b.-', label='generated sequence')
         plt.plot(seed[:, 0], seed[:, 1], 'r.', label='seed sequence')
         plt.legend()
         plt.title('neon generated sequence')

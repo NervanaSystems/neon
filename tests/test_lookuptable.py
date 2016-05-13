@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,10 +15,12 @@
 '''
 Test of a LookupTable layer, which is often being used for word embedding
 '''
+from builtins import range, zip
 import itertools as itt
 import numpy as np
 from neon.backends import gen_backend
 from neon import NervanaObject
+from neon import logger as neon_logger
 from neon.initializers.initializer import GlorotUniform
 from neon.layers.layer import LookupTable
 
@@ -40,7 +42,7 @@ def pytest_generate_tests(metafunc):
             nout_rng = [3, 33]
             vocab_size = [10, 34]
         fargs = itt.product(nin_rng, nout_rng, vocab_size, bsz_rng)
-        print fargs
+        neon_logger.display('{}'.format(fargs))
         metafunc.parametrize('basic_linargs', fargs)
 
 
@@ -55,7 +57,7 @@ def test_lookuptable_zeros_error(backend_default, basic_linargs):
     layer = LookupTable(
         vocab_size=vocab_size, embedding_dim=nout, init=init_glorot)
 
-    inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
+    inp = np.random.random_integers(0, vocab_size - 1, size=nin * batch_size)
     layer.configure(nin)
     layer.allocate()
     layer.prev_layer = True  # Hack to force delta buffer allocation
@@ -64,7 +66,7 @@ def test_lookuptable_zeros_error(backend_default, basic_linargs):
     inputs = layer.be.array(inp.reshape((nin, batch_size)))
     out = layer.fprop(inputs).get()
     W = layer.W.get()
-    for i in range(nin*batch_size):
+    for i in range(nin * batch_size):
         assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.zeros((nout, nin * batch_size)))
@@ -86,7 +88,7 @@ def test_lookuptable_ones_error(backend_default, basic_linargs):
     layer = LookupTable(
         vocab_size=vocab_size, embedding_dim=nout, init=init_glorot)
 
-    inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
+    inp = np.random.random_integers(0, vocab_size - 1, size=nin * batch_size)
     layer.configure(nin)
     layer.allocate()
     layer.prev_layer = True  # Hack to force delta buffer allocation
@@ -95,7 +97,7 @@ def test_lookuptable_ones_error(backend_default, basic_linargs):
     inputs = layer.be.array(inp.reshape((nin, batch_size)))
     out = layer.fprop(inputs).get()
     W = layer.W.get()
-    for i in range(nin*batch_size):
+    for i in range(nin * batch_size):
         assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.ones((nout, nin * batch_size)))
@@ -121,7 +123,7 @@ def test_lookuptable_rand_error(backend_default, basic_linargs):
     layer = LookupTable(
         vocab_size=vocab_size, embedding_dim=nout, init=init_glorot)
 
-    inp = np.random.random_integers(0, vocab_size-1, size=nin*batch_size)
+    inp = np.random.random_integers(0, vocab_size - 1, size=nin * batch_size)
     layer.configure(nin)
     layer.allocate()
     layer.prev_layer = True  # Hack to force delta buffer allocation
@@ -130,7 +132,7 @@ def test_lookuptable_rand_error(backend_default, basic_linargs):
     inputs = layer.be.array(inp.reshape((nin, batch_size)))
     out = layer.fprop(inputs).get()
     W = layer.W.get()
-    for i in range(nin*batch_size):
+    for i in range(nin * batch_size):
         assert np.all(W[inp[i]].T == out[:, i])
 
     err = dtypeu(np.random.random((nout, nin * batch_size)))

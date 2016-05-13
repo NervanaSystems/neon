@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -24,12 +24,11 @@ Arguments:
                      in the exception raised by neon if it detects that the
                      data cache global mean is of the old format
 """
-
 import argparse
 import os
 import numpy as np
 from neon.util.persist import load_obj, save_obj
-
+from neon import logger as neon_logger
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -51,12 +50,12 @@ if __name__ == '__main__':
     sz = dc['img_size']
     gm = dc['global_mean']
 
-    if len(gm.shape) != 2 or (gm.shape[0] != sz*sz*3 or gm.shape[1] != 1):
-        raise ValueError('global mean shape %s does not match format expected' % str(gm.shape))
+    if len(gm.shape) != 2 or (gm.shape[0] != sz * sz * 3 or gm.shape[1] != 1):
+        raise ValueError('global mean shape {} does not match format expected'.format(gm.shape))
 
     # Collapse the full tensor mean into channel means and correct the order (RGB <-> BGR)
     dc['global_mean'] = np.mean(gm.reshape(3, -1), axis=1).reshape(3, 1)[::-1]
 
     save_obj(dc, cache_file)
 
-    print '%s updated to new format' % cache_file
+    neon_logger.display('%s updated to new format' % cache_file)

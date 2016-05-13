@@ -1,4 +1,4 @@
-# Copyright 2014 Nervana Systems Inc. All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,9 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 import numpy as np
 import pytest
+from neon import logger as neon_logger
 
 
 def slicable(dim, pad=0):
@@ -74,27 +74,27 @@ def lrn_helper(dtype, ones, cpu, alpha, beta, ascale, bpower,
     ng.fprop_lrn(layer_g, devI, devO, devD, alpha, beta, ascale, bpower)  # I, O, denom
     nc.fprop_lrn(layer_c, cccI, cccO, cccD, None, None, ascale, bpower)  # CPU has no alpha, beta
 
-    print "== denom =="
-    print "CPU fprop"
-    print cccD.get().reshape(C*D*H*W, N)[0:4, 0:4]
-    print "GPU fprop"
-    print devD.get().reshape(C*D*H*W, N)[0:4, 0:4]
+    neon_logger.display("== denom ==")
+    neon_logger.display("CPU fprop")
+    neon_logger.display(cccD.get().reshape(C * D * H * W, N)[0:4, 0:4])
+    neon_logger.display("GPU fprop")
+    neon_logger.display(devD.get().reshape(C * D * H * W, N)[0:4, 0:4])
 
-    print "== output =="
-    print "CPU fprop"
-    print cccO.get().reshape(C*D*H*W, N)[0:4, 0:4]
-    print "GPU fprop"
-    print devO.get().reshape(C*D*H*W, N)[0:4, 0:4]
+    neon_logger.display("== output ==")
+    neon_logger.display("CPU fprop")
+    neon_logger.display(cccO.get().reshape(C * D * H * W, N)[0:4, 0:4])
+    neon_logger.display("GPU fprop")
+    neon_logger.display(devO.get().reshape(C * D * H * W, N)[0:4, 0:4])
 
     # I, O, E, delta, denom
     ng.bprop_lrn(layer_g, devI, devO, devE, devB, devD, alpha, beta, ascale, bpower)
     nc.bprop_lrn(layer_c, cccI, cccO, cccE, cccB, cccD, None, None, ascale, bpower)
 
-    print "== bprop =="
-    print "CPU bprop"
-    print cccB.get().reshape(C*D*H*W, N)[0:4, 0:4]
-    print "GPU bprop"
-    print devB.get().reshape(C*D*H*W, N)[0:4, 0:4]
+    neon_logger.display("== bprop ==")
+    neon_logger.display("CPU bprop")
+    neon_logger.display(cccB.get().reshape(C * D * H * W, N)[0:4, 0:4])
+    neon_logger.display("GPU bprop")
+    neon_logger.display(devB.get().reshape(C * D * H * W, N)[0:4, 0:4])
 
 
 if __name__ == '__main__':

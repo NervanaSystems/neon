@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,12 +15,14 @@
 """
 Convolution layer tests
 """
+from builtins import zip
 import numpy as np
 from neon import NervanaObject
 from neon.backends import gen_backend
 from neon.layers import Sequential, Conv, Pooling, BranchNode, Affine, Tree
 from neon.initializers.initializer import Gaussian, Constant
 from neon.transforms import Rectlin
+from neon import logger as neon_logger
 
 init1 = Gaussian(scale=0.01)
 relu = Rectlin()
@@ -96,7 +98,7 @@ def test_branch_model():
     ref_out = [r.fprop(inp_middle).get() for r in ref_layers[1:]]
 
     for h, r in zip(neon_out, ref_out):
-        difference = np.max(np.abs(h-r))
+        difference = np.max(np.abs(h - r))
         assert(difference < 1e-9)
 
     # Back prop
@@ -116,13 +118,13 @@ def test_branch_model():
         r.layers[0].set_deltas([be.iobuf(_inshape)])
 
     joined_err = be.iobuf(ref_layers[0].out_shape)
-    branch_errs = [r.bprop(e, a) for r, e, a in reversed(zip(ref_layers[1:], err, alphas))]
+    branch_errs = [r.bprop(e, a) for r, e, a in reversed(list(zip(ref_layers[1:], err, alphas)))]
     joined_err[:] = branch_errs[0] + branch_errs[1]
 
     err_ref = ref_layers[0].bprop(joined_err).get()
 
     difference = np.max(np.abs(err_ref - errp))
-    print difference
+    neon_logger.display("Max difference: {}".format(difference))
     assert(difference < 1e-9)
 
 

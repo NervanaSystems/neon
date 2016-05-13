@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from __future__ import division
+from builtins import str
 from neon import NervanaObject
 import numpy as np
 
@@ -188,8 +190,7 @@ class SumSquared(Cost):
         """
         Initialize the squared error cost functions
         """
-        self.func = lambda y, t: self.be.sum(
-            self.be.square(y - t), axis=0) / 2.
+        self.func = lambda y, t: self.be.sum(self.be.square(y - t), axis=0) / 2.
         self.funcgrad = lambda y, t: (y - t)
 
 
@@ -203,9 +204,8 @@ class MeanSquared(Cost):
         """
         Initialize the mean squared error cost function
         """
-        self.func = lambda y, t: self.be.mean(
-            self.be.square(y - t), axis=0) / 2.
-        self.funcgrad = lambda y, t: (y - t)/y.shape[0]
+        self.func = lambda y, t: self.be.mean(self.be.square(y - t), axis=0) / 2.
+        self.funcgrad = lambda y, t: (y - t) / y.shape[0]
 
 
 class SmoothL1Loss(Cost):
@@ -407,12 +407,10 @@ class PrecisionRecall(Metric):
         self.token_stats[:, 2] = self.be.sum(t, axis=1)
 
         # Precision
-        self.outputs[:, 0] = self.token_stats[:, 0] / (self.token_stats[:, 1] +
-                                                       self.eps)
+        self.outputs[:, 0] = self.token_stats[:, 0] / (self.token_stats[:, 1] + self.eps)
 
         # Recall
-        self.outputs[:, 1] = self.token_stats[:, 0] / (self.token_stats[:, 2] +
-                                                       self.eps)
+        self.outputs[:, 1] = self.token_stats[:, 0] / (self.token_stats[:, 2] + self.eps)
 
         return self.outputs.get().mean(axis=0)
 
@@ -420,7 +418,7 @@ class PrecisionRecall(Metric):
 class ObjectDetection(Metric):
 
     """
-    Compute the object deteciton metric includes object label accuracy, and
+    Compute the object detection metric includes object label accuracy, and
     bounding box regression.
     """
 

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc.
+# Copyright 2014-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -58,7 +58,7 @@ class Text(NervanaDataIterator):
         extra_tokens = len(tokens) % (self.be.bsz * time_steps)
         if extra_tokens:
             tokens = tokens[:-extra_tokens]
-        self.nbatches = len(tokens) / (self.be.bsz * time_steps)
+        self.nbatches = len(tokens) // (self.be.bsz * time_steps)
         self.ndata = self.nbatches * self.be.bsz  # no leftovers
 
         self.vocab = sorted(self.get_vocab(tokens, vocab))
@@ -124,7 +124,7 @@ class Text(NervanaDataIterator):
         return train_path, valid_path
 
     @staticmethod
-    def get_tokens(string,  tokenizer=None):
+    def get_tokens(string, tokenizer=None):
         """
         Map string to a list of tokens.
 
@@ -269,7 +269,7 @@ class PTB(Dataset):
         self.filemap = {'train': 5101618,
                         'test': 449945,
                         'valid': 399782}
-        keys = self.filemap.keys()
+        keys = list(self.filemap.keys())
         filenames = [self.gen_filename(phase) for phase in keys]
         sizes = [self.filemap[phase] for phase in keys]
         super(PTB, self).__init__(filenames,

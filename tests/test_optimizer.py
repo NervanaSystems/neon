@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -16,7 +16,6 @@
 '''
 Test of the optimizers
 '''
-
 import numpy as np
 import copy
 
@@ -76,7 +75,7 @@ def test_rmsprop(backend_default):
     state = states[0]
     decay = rms.decay_rate
     denom = np.sqrt(decay * state + np.square(grad2) * (1.0 - decay) + rms.epsilon) + rms.epsilon
-    param2[:] -= grad2 * rms.learning_rate / denom
+    param2[:] -= grad2 * float(rms.learning_rate) / denom
     param_list = [((wrap(param), wrap(grad)), [wrap(states[0])])]
     compare_tensors(rms, param_list, param2, tol=1e-7)
 
@@ -96,7 +95,7 @@ def test_adadelta(backend_default):
     decay = ada.decay
     states2[0][:] = states2[0] * decay + (1. - decay) * grad2 * grad2
     states2[2][:] = np.sqrt(
-        (states2[1] + ada.epsilon) / (states2[0] + ada.epsilon)) * grad2
+        (states2[1] + float(ada.epsilon)) / (states2[0] + ada.epsilon)) * grad2
     states2[1][:] = states2[1] * decay + (1. - decay) * states2[2] * states2[2]
     param2[:] -= states2[2]
     param_list = [
@@ -114,7 +113,7 @@ def test_adagrad(backend_default):
     states2 = [copy.deepcopy(states[0])]
     states2[0][:] = states2[0] + np.square(grad2)
     denom = np.sqrt(states2[0] + ada.epsilon)
-    param2[:] -= grad2 * ada.learning_rate / denom
+    param2[:] -= grad2 * float(ada.learning_rate) / denom
     param_list = [
         ((wrap(param), wrap(grad)), [wrap(states[0])])]
     compare_tensors(ada, param_list, param2, tol=1e-7)
@@ -132,7 +131,7 @@ def test_adam(backend_default):
                copy.deepcopy(states[1])]
     epoch = 1
     t = epoch + 1
-    l = adam.learning_rate * np.sqrt(1 - adam.beta_2 ** t) / (1 - adam.beta_1 ** t)
+    l = adam.learning_rate * np.sqrt(1. - adam.beta_2 ** t) / (1. - adam.beta_1 ** t)
     m, v = states2
     m[:] = m * adam.beta_1 + (1. - adam.beta_1) * grad2
     v[:] = v * adam.beta_2 + (1. - adam.beta_2) * grad2 * grad2

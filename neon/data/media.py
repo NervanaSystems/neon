@@ -16,12 +16,11 @@
 """
 This must be kept in sync with loader/media.hpp.
 """
-
 import numpy as np
 import ctypes as ct
 
 
-class MediaType:
+class MediaType(object):
     unknown = -1
     image = 0
     video = 1
@@ -76,7 +75,7 @@ class ImageParams(MediaParams):
         for key in kwargs:
             if not hasattr(self, (key)):
                 raise ValueError('Unknown argument %s' % key)
-        for key, value in self._defaults_.iteritems():
+        for key, value in self._defaults_.items():
             setattr(self, key, value)
         super(ImageParams, self).__init__(mtype=MediaType.image, **kwargs)
 
@@ -112,7 +111,7 @@ class ImageIngestParams(MediaParams):
         for key in kwargs:
             if not hasattr(self, (key)):
                 raise ValueError('Unknown argument %s' % key)
-        for key, value in self._defaults_.iteritems():
+        for key, value in self._defaults_.items():
             setattr(self, key, value)
         super(ImageIngestParams, self).__init__(mtype=MediaType.image, **kwargs)
 

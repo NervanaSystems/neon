@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -20,15 +20,19 @@ $ python examples/imdb/inference.py --model_weights imdb.p --vocab_file imdb.voc
 
 """
 
-from neon.backends import gen_backend
-from neon.initializers import Uniform, GlorotUniform
-from neon.layers import LSTM, Affine, Dropout, LookupTable, RecurrentSum
-from neon.models import Model
-from neon.transforms import Logistic, Tanh, Softmax
-from neon.util.argparser import NeonArgparser, extract_valid_args
-from neon.data.text_preprocessing import clean_string
-import cPickle
-import numpy as np
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from builtins import input  # noqa
+import numpy as np  # noqa
+from neon import logger as neon_logger  # noqa
+from neon.backends import gen_backend  # noqa
+from neon.initializers import Uniform, GlorotUniform  # noqa
+from neon.layers import LSTM, Affine, Dropout, LookupTable, RecurrentSum  # noqa
+from neon.models import Model  # noqa
+from neon.transforms import Logistic, Tanh, Softmax  # noqa
+from neon.util.argparser import NeonArgparser, extract_valid_args  # noqa
+from neon.util.compat import pickle  # noqa
+from neon.data.text_preprocessing import clean_string  # noqa
 
 
 # parse the command line arguments
@@ -72,9 +76,9 @@ layers = [
 
 
 # load the weights
-print "Initialized the models - "
+neon_logger.display("Initialized the models - ")
 model_new = Model(layers=layers)
-print "Loading the weights from {0}".format(args.model_weights)
+neon_logger.display("Loading the weights from {0}".format(args.model_weights))
 
 model_new.load_params(args.model_weights)
 model_new.initialize(dataset=(sentence_length, batch_size))
@@ -86,11 +90,11 @@ oov = 2
 start = 1
 index_from = 3
 pad_char = 0
-vocab, rev_vocab = cPickle.load(open(args.vocab_file, 'rb'))
+vocab, rev_vocab = pickle.load(open(args.vocab_file, 'rb'))
 
 
 while True:
-    line = raw_input('Enter a Review from testData.tsv file \n')
+    line = input('Enter a Review from testData.tsv file \n')
 
     # clean the input
     tokens = clean_string(line).strip().split()
@@ -107,6 +111,6 @@ while True:
     xdev[:] = xbuf.T.copy()
     y_pred = model_new.fprop(xdev, inference=True)  # inference flag dropout
 
-    print "Sent - {0}".format(xbuf)
-    print "Pred - {0} ".format(y_pred.get().T)
-    print '-' * 100
+    neon_logger.display("Sent - {0}".format(xbuf))
+    neon_logger.display("Pred - {0} ".format(y_pred.get().T))
+    neon_logger.display('-' * 100)

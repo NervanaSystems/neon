@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,13 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-'''
+"""
 General functions for running the unit tests via pytest.
-'''
-
+"""
 import itertools
 import numpy as np
 import pytest
+import re
 
 from neon.backends import gen_backend
 from neon.backends.nervanacpu import NervanaCPU
@@ -144,9 +144,8 @@ def idfunc(vals):
     '''
     Print out a human readable format for the parameterized tests
     '''
-    dtype = str(vals[1])
-    dtype = dtype.split("numpy.")[1].strip("'>")
-    return vals[0] + '_' + dtype
+    dtype = re.compile('float\d\d').search('{}'.format(vals[1])).group()
+    return '{}_{}'.format(vals[0], dtype)
 
 
 gpu_cpu_32_16 = itertools.product(['gpu', 'cpu'], [np.float16, np.float32])

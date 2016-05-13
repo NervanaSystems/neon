@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,14 +15,15 @@
 '''
 Test of the ROI pooling layer
 '''
+from builtins import range, round
 import itertools as itt
 import numpy as np
-
-from neon.backends import gen_backend
-from neon import NervanaObject
 from timeit import default_timer as timeit
 
-spatial_scale = 1.0/16
+from neon import NervanaObject, logger as neon_logger
+from neon.backends import gen_backend
+
+spatial_scale = 1.0 / 16
 
 
 def _fprop_slice_np(h, stride, H, roi_offset):
@@ -34,12 +35,12 @@ def _fprop_slice_np(h, stride, H, roi_offset):
     roi_offset: how far hstart is from 0
     """
     hstart = int(np.floor(float(h) * stride))
-    hend = int(np.ceil(float(h+1) * stride))
+    hend = int(np.ceil(float(h + 1) * stride))
 
     hstart = min(max(hstart + roi_offset, 0), H)
     hend = min(max(hend + roi_offset, 0), H)
 
-    return slice(hstart, hend), hend-hstart
+    return slice(hstart, hend), hend - hstart
 
 
 def pytest_generate_tests(metafunc):
@@ -70,7 +71,7 @@ def bprop_roipooling_ref(fm, rois, error, fm_channel, fm_height, fm_width,
     delta = np.zeros(feature_maps.shape).reshape(fm_channel, fm_height, fm_width, bsz)
 
     # combine the feature map with ROIs
-    for b_id in xrange(rois_per_batch):
+    for b_id in range(rois_per_batch):
         [idx, xmin, ymin, xmax, ymax] = rois[b_id]
         xmin = int(round(xmin * spatial_scale))
         xmax = int(round(xmax * spatial_scale))
@@ -79,14 +80,14 @@ def bprop_roipooling_ref(fm, rois, error, fm_channel, fm_height, fm_width,
         roi_width = max(xmax - xmin + 1, 1)
         roi_height = max(ymax - ymin + 1, 1)
 
-        stride_h = float(roi_height)/float(H)
-        stride_w = float(roi_width)/float(W)
+        stride_h = float(roi_height) / float(H)
+        stride_w = float(roi_width) / float(W)
 
-        for h_out in xrange(H):
+        for h_out in range(H):
             sliceh, lenh = _fprop_slice_np(h_out, stride_h, fm_height, ymin)
             if sliceh.stop <= sliceh.start:
                 continue
-            for w_out in xrange(W):
+            for w_out in range(W):
                 slicew, lenw = _fprop_slice_np(w_out, stride_w, fm_width, xmin)
                 if slicew.stop <= slicew.start:
                     continue
@@ -98,7 +99,7 @@ def bprop_roipooling_ref(fm, rois, error, fm_channel, fm_height, fm_width,
                     delta_view = delta[:, sliceh, slicew, int(idx)].reshape(
                         fm_channel, -1)
                     delta_view[
-                        range(fm_channel), max_idx] += error_in[:, h_out, w_out, b_id]
+                        list(range(fm_channel)), max_idx] += error_in[:, h_out, w_out, b_id]
                     delta[:, sliceh, slicew, int(idx)] = delta_view.reshape(fm_channel,
                                                                             lenh,
                                                                             lenw)
@@ -113,7 +114,7 @@ def fprop_roipooling_ref(fm, rois, fm_channel, fm_height, fm_width, bsz, rois_pe
     outputs = np.zeros((fm_channel, H, W, rois_per_batch))
 
     # combine the feature map with ROIs
-    for b_id in xrange(rois_per_batch):
+    for b_id in range(rois_per_batch):
         [idx, xmin, ymin, xmax, ymax] = rois[b_id]
         xmin = int(round(xmin * spatial_scale))
         xmax = int(round(xmax * spatial_scale))
@@ -125,11 +126,11 @@ def fprop_roipooling_ref(fm, rois, fm_channel, fm_height, fm_width, bsz, rois_pe
         stride_h = float(roi_height) / H
         stride_w = float(roi_width) / W
 
-        for h_out in xrange(H):
+        for h_out in range(H):
             sliceh, _ = _fprop_slice_np(h_out, stride_h, fm_height, ymin)
             if sliceh.stop <= sliceh.start:
                 continue
-            for w_out in xrange(W):
+            for w_out in range(W):
                 slicew, _ = _fprop_slice_np(w_out, stride_w, fm_width, xmin)
                 if slicew.stop <= slicew.start:
                     continue
@@ -150,7 +151,7 @@ def test_roipooling_fprop_random(backend_default, fargs):
         (img_fm_c, img_fm_h, img_fm_w, bsz)).reshape(-1, bsz)
     rois_per_batch = rois_per_image * bsz
 
-    rois_idx = np.vstack([i*np.ones((rois_per_image, 1)) for i in range(bsz)])
+    rois_idx = np.vstack([i * np.ones((rois_per_image, 1)) for i in range(bsz)])
     rois = np.random.random((rois_per_batch, 4)) * min(img_fm_h, img_fm_w)
 
     rois = np.zeros((rois_per_batch, 4))
@@ -181,7 +182,7 @@ def test_roipooling_fprop_random(backend_default, fargs):
     start_time = timeit()
     be.roipooling_fprop(input_dev, rois_dev, outputs_dev, argmax_dev, rois_per_batch,
                         img_fm_c, img_fm_h, img_fm_w, roi_size, roi_size, spatial_scale)
-    print "Nervana backend roipooling fprop (sec): {}".format(timeit() - start_time)
+    neon_logger.display("Nervana backend roipooling fprop (sec): {}".format(timeit() - start_time))
 
     outputs_be = outputs_dev.get().reshape(-1, rois_per_batch)
     assert np.allclose(outputs_np, outputs_be, atol=1e-6, rtol=0)
@@ -195,7 +196,7 @@ def test_roipooling_fprop_ref(backend_default, rois=None, inputs=None, outputs_r
     (bsz, img_fm_c, img_fm_h, img_fm_w) = inputs.shape
     (rois_per_batch, _, roi_size, _) = outputs_ref.shape
     outputs_ref_in = outputs_ref.reshape(rois_per_batch, -1).T
-    rois_per_image = rois_per_batch / bsz
+    rois_per_image = rois_per_batch // bsz
     feature_maps = inputs.reshape(bsz, -1).T.astype(np.float, order='C')
 
     # run the numpy roi fprop (function inside this test script)
@@ -221,7 +222,7 @@ def test_roipooling_fprop_ref(backend_default, rois=None, inputs=None, outputs_r
 
     outputs_backend = outputs_dev.get().reshape(-1, rois_per_batch)
 
-    print "Nervana backend roipooling fprop (sec): {}".format(timeit() - start_time)
+    neon_logger.display("Nervana backend roipooling fprop (sec): {}".format(timeit() - start_time))
 
     assert np.allclose(outputs_ref_in, outputs_backend, atol=1e-6, rtol=0)
 
@@ -233,16 +234,16 @@ def test_roipooling_bprop_random(backend_default, fargs):
     # generate a random feature map and some random ROIs
     feature_map_size = img_fm_c * img_fm_h * img_fm_w * bsz
 
-    feature_maps = np.array(range(feature_map_size)).reshape(
+    feature_maps = np.array(list(range(feature_map_size))).reshape(
         (img_fm_c, img_fm_h, img_fm_w, bsz))
     input_errors = np.zeros(
         (img_fm_c, roi_size, roi_size, rois_per_batch))
 
     range_num = roi_size * roi_size
-    input_errors[0, :, :, rois_per_batch-1] = np.array(
-        range(range_num)).reshape(input_errors[0, :, :, rois_per_batch-1].shape)
+    input_errors[0, :, :, rois_per_batch - 1] = np.array(
+        list(range(range_num))).reshape(input_errors[0, :, :, rois_per_batch - 1].shape)
 
-    rois_idx = np.vstack([i*np.ones((rois_per_image, 1)) for i in range(bsz)])
+    rois_idx = np.vstack([i * np.ones((rois_per_image, 1)) for i in range(bsz)])
     rois = np.random.random((rois_per_batch, 4)) * min(img_fm_h, img_fm_w)
 
     # use full frame as ROI
@@ -277,7 +278,7 @@ def test_roipooling_bprop_random(backend_default, fargs):
     be.roipooling_bprop(input_error_dev, rois_dev, output_error_dev, argmax_dev,
                         rois_per_batch, img_fm_c, img_fm_h, img_fm_w, roi_size,
                         roi_size, spatial_scale)
-    print "Nervana backend roipooling bprop (sec): {}".format(timeit() - start_time)
+    neon_logger.display("Nervana backend roipooling bprop (sec): {}".format(timeit() - start_time))
 
     assert output_error_dev.get().reshape(
         img_fm_c, img_fm_h, img_fm_w, bsz)[:, :, :, 0].sum() == 0
@@ -328,7 +329,7 @@ def test_roipooling_bprop_ref(backend_default, rois=None, inputs=None, outputs_f
     be.roipooling_bprop(input_error_dev, rois_dev, output_error_dev, argmax_dev,
                         rois_per_batch, img_fm_c, img_fm_h, img_fm_w, roi_size,
                         roi_size, spatial_scale)
-    print "NervanaGPU roipooling bprop (sec): {}".format(timeit() - start_time)
+    neon_logger.display("NervanaGPU roipooling bprop (sec): {}".format(timeit() - start_time))
     outputs_backend = output_error_dev.get()
 
     assert np.allclose(outputs_fprop_ref_in, outputs_backend, atol=1e-6, rtol=0)

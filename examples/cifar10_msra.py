@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -45,6 +45,7 @@
 # to be local to your machine (to avoid accessing the macrobatches over network if,
 # for example, your data_dir is in an NFS mounted location)
 
+from builtins import range, zip
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Kaiming
 from neon.layers import Conv, Pooling, GeneralizedCost, Activation, Affine
@@ -106,7 +107,7 @@ def module_s2(nfm):
 
 # Structure of the deep residual part of the network:
 # args.depth modules of 2 convolutional layers each at feature map depths of 16, 32, 64
-nfms = [2**(stage + 4) for stage in sorted(range(3) * args.depth)]
+nfms = [2**(stage + 4) for stage in sorted(list(range(3)) * args.depth)]
 strides = [1 if cur == prev else 2 for cur, prev in zip(nfms[1:], nfms[:-1])]
 
 # Now construct the network

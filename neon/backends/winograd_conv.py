@@ -1,4 +1,4 @@
-# Copyright 2014 Nervana Systems Inc. All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,18 +14,21 @@
 """
 Python code to wrap convolution kernels
 """
+from __future__ import division
+from builtins import range
+from future.utils import native_str
 
 import sys
 import logging
 import numpy as np
 import pycuda.driver as drv
 from pycuda.tools import context_dependent_memoize
-import kernel_specs
+from . import kernel_specs
 from neon.backends.cuda_templates import _common_round, _common_fp16_to_fp32, _ew_types
 from neon.backends.util.source_module import SourceModule
 import os.path
 import shelve
-from convolution import (
+from .convolution import (
     KernelGroup, NoopTransform, UpdateConvReduce, BatchNormSum, ConvertDataType, FilterDimShuffle,
     _get_sm_count, _ceil_div, _magic64, _div64, _magic32, _flatten, _closest_divisor)
 
@@ -46,13 +49,14 @@ class XpropWinograd_2x2_3x3(KernelGroup):
 
         SMs = _get_sm_count()
 
-        self.autotune_key = " ".join(str(x) for x in (op + "_2x2_3x3",
+        self.autotune_key = " ".join(native_str(x) for x in (op + "_2x2_3x3",
            SMs, dtype.itemsize, N, C, K, H, W, P, Q))
-        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
+        # insert Python version in filename to avoid Py2/Py3 incompatibilities in shelve
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune%d.db" % sys.version_info[0])
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 10 Tflops on 24 SMs
-        self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
+        self.warmup = min(max(int(5e12 / (P * Q * K * N * C * 9 * 2.0) * (SMs / 24.0)), 1), 1000)
 
         if filter_extern is None:
             self.init()
@@ -88,7 +92,7 @@ class XpropWinograd_2x2_3x3(KernelGroup):
         if N == 1:
             shiftN = 0
         elif N < 32:
-            shiftN = len(bin(N-1))-2
+            shiftN = len(bin(N - 1)) - 2
         else:
             shiftN = 5
         blockN = 1 << shiftN
@@ -117,9 +121,9 @@ class XpropWinograd_2x2_3x3(KernelGroup):
         magic_Qnk = _magic64(Qnk)
         magic_nk  = _magic32(Qnk, nk)
         magic_k   = _magic32(nk,   k)
-        gridPQ    = gridP*gridQ
+        gridPQ    = gridP * gridQ
 
-        grid  = (gridPQ*nk, gridK//k, gridN//n)
+        grid  = (gridPQ * nk, gridK // k, gridN // n)
         block = (256, 1, 1)
 
         options = list()
@@ -136,13 +140,13 @@ class XpropWinograd_2x2_3x3(KernelGroup):
 
         self.kernel_args = [ grid, block, None, None, None, None, None, None, None, None, None ]
         self.kernel_args.extend( _flatten([
-            C, H, P, pad_h, pad_w, H*W*N, W*N, P*Q*N, Q*N,
+            C, H, P, pad_h, pad_w, H * W * N, W * N, P * Q * N, Q * N,
             Qnk, nk, n, k, magic_Qnk, magic_nk, magic_k,
-            R*S*K, 4*R*S*K*itemsize, 4*H*W*N*itemsize,
-            gridK, gridP2, gridQ, gridN, gridQ*gridN, gridPQ*gridN,
+            R * S * K, 4 * R * S * K * itemsize, 4 * H * W * N * itemsize,
+            gridK, gridP2, gridQ, gridN, gridQ * gridN, gridPQ * gridN,
             superP, superQ, superN, shiftP, shiftQ, shiftN ]))
 
-        self.bsum = BatchNormSum(self.lib, K, gridPQ*gridN)
+        self.bsum = BatchNormSum(self.lib, K, gridPQ * gridN)
 
     def autotune(self, I, F, O):
 
@@ -250,7 +254,7 @@ class BpropWinograd_2x2_3x3(XpropWinograd_2x2_3x3):
 
         # Swap C<=>K and HW<=>PQ, invert padding
         super(BpropWinograd_2x2_3x3, self).__init__("bprop", lib, dtype,
-            N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, filter_extern, bprop=True)
+            N, K, C, P, Q, H, W, 2 - pad_h, 2 - pad_w, filter_extern, bprop=True)
 
     def init(self, autotune=0, filter_extern=0):
 
@@ -297,16 +301,18 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
 
         SMs = _get_sm_count()
 
-        self.autotune_key = [str(x) for x in ("update_3x3_2x2",
+        self.autotune_key = [native_str(x) for x in ("update_3x3_2x2",
            SMs, 0, dtype.itemsize, N, C, K, H, W, P, Q)]
-        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
+
+        # insert Python version in filename to avoid Py2/Py3 incompatibilities in shelve
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune%d.db" % sys.version_info[0])
         self.init()
 
         lib.set_scratch_size(self.image_trans.size, self.output_trans.size)
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 10 Tflops on 24 SMs
-        self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
+        self.warmup = min(max(int(5e12 / (P * Q * K * N * C * 9 * 2.0) * (SMs / 24.0)), 1), 1000)
 
     def init(self, autotune=False):
 
@@ -347,12 +353,12 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
 
             autotune_db.close()
 
-        loopXI  = N * (strideX*blkXI - 1)
-        loopXE  = N * (strideX*blkX  - 1)
+        loopXI  = N * (strideX * blkXI - 1)
+        loopXE  = N * (strideX * blkX  - 1)
         Np      = N     * self.dtype.itemsize
-        XNp     = W*N   * self.dtype.itemsize
-        XN2p    = W*N*2 * self.dtype.itemsize
-        QNp     = Q*N   * self.dtype.itemsize
+        XNp     = W * N   * self.dtype.itemsize
+        XN2p    = W * N * 2 * self.dtype.itemsize
+        QNp     = Q * N   * self.dtype.itemsize
 
         gridK  = _ceil_div(K, 32)
         gridC  = _ceil_div(C, 32)
@@ -372,7 +378,7 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         magic_Qkc   = _magic64(Qkc)
         magic_kc    = _magic32(Qkc, kc)
         magic_c     = _magic32(kc, c_size)
-        CRSK        = C*R*S*K
+        CRSK        = C * R * S * K
 
         self.blocksCK = gridK * gridC
 
@@ -380,14 +386,14 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         if external:
             # External Image transform
             options.append("IX")
-            WN  = GX*N
-            HWN = GY*WN
+            WN  = GX * N
+            HWN = GY * WN
             self.image_trans = UpdateImage_3x3_2x2(
                 self.lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
         else:
             # Internal Image transform
-            WN     = W*N
-            HWN    = H*WN
+            WN     = W * N
+            HWN    = H * WN
             superI = superE
             self.image_trans = NoopTransform()
 
@@ -409,7 +415,7 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         self.kernel_args.extend(_flatten([
             H, W, P, Q, C, K, N, pad_h, pad_w,
             GY, GX, GYS, GXS, superI, superE, loopXI, loopXE, loopN, strideY, strideX,
-            WN, HWN, Q*N, P*Q*N, S*K, R*S*K, Np, XNp, XN2p, QNp,
+            WN, HWN, Q * N, P * Q * N, S * K, R * S * K, Np, XNp, XN2p, QNp,
             CPQkc, PQkc, Qkc, kc, c_size, k_size,
             magic_CPQkc, magic_PQkc, magic_Qkc, magic_kc, magic_c, CRSK ]))
 
@@ -441,12 +447,12 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
 
         # TODO: this needs more pruning, it takes too long for large HW
         results = []
-        sys.stdout.write("Autotune " + str(self))
+        sys.stdout.write("Autotune " + native_str(self))
         progress = 0
         for threshold in (True, False):
             for external in modes:
-                for strideY in range(1, self.GYS+1):
-                    for strideX in range(1, self.GXS+1):
+                for strideY in range(1, self.GYS + 1):
+                    for strideX in range(1, self.GXS + 1):
                         if progress % 32 == 0:
                             sys.stdout.write('.')
                             sys.stdout.flush()
@@ -497,7 +503,7 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         # add a copy if this layer has small strides
         # deterministic vs non-determ should make no speed difference here
         if settings[0] * settings[1] <= 8:
-            self.autotune_key[2] = str(1 - int(self.autotune_key[2]))
+            self.autotune_key[2] = native_str(1 - int(self.autotune_key[2]))
             autotune_key = " ".join(self.autotune_key)
             autotune_db[autotune_key] = settings
 
@@ -557,13 +563,14 @@ class XpropWinograd_4x4_3x3(KernelGroup):
 
         SMs = _get_sm_count()
 
-        self.autotune_key = " ".join(str(x) for x in (op + "_4x4_3x3",
+        self.autotune_key = " ".join(native_str(x) for x in (op + "_4x4_3x3",
            SMs, dtype.itemsize, N, C, K, H, W, P, Q))
-        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
+        # insert Python version in filename to avoid Py2/Py3 incompatibilities in shelve
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune%d.db" % sys.version_info[0])
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 10 Tflops on 24 SMs
-        self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
+        self.warmup = min(max(int(5e12 / (P * Q * K * N * C * 9 * 2.0) * (SMs / 24.0)), 1), 1000)
 
         if external is None:
             self.init()
@@ -597,7 +604,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         if N == 1:
             shlN = 0
         elif N < 32:
-            shlN = len(bin(N-1))-2
+            shlN = len(bin(N - 1)) - 2
         else:
             shlN = 5
 
@@ -622,7 +629,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         k    = _closest_divisor(GK, 4)
 
         self.kernel_args = [
-            (GYS*GXS*k, GK//k, GN), (640, 1, 1), None,
+            (GYS * GXS * k, GK // k, GN), (640, 1, 1), None,
             None, None, None, None, None, None, None, None ]
 
         #print GYS, GXS, GYS*GXS*GK*GN, GYS*GXS*GK*GN/24.0, k
@@ -633,25 +640,25 @@ class XpropWinograd_4x4_3x3(KernelGroup):
             options.append(("Q", Q))
             options.append(("N", N))
 
-            Xk = GXS*k
+            Xk = GXS * k
 
             magic_GXS2 = _magic64(GXS2)
             magic_Xk   = _magic64(Xk)
             magic_k    = _magic32(Xk, k)
 
-            self.image_size   = itemsize*1152*C*GXS*GYS*GN
+            self.image_size   = itemsize * 1152 * C * GXS * GYS * GN
             self.image_args   = [
-                ( GN, GYS*GXS, C ), (32,1,1), None, None, None,
+                ( GN, GYS * GXS, C ), (32,1,1), None, None, None,
                 H, W, N, pad_h, pad_w,
                 GXS, GYS2, GXS2, magic_GXS2[0], magic_GXS2[1],
                 shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
-                H*W*N, W*N, GYS*GXS*C*1152, GXS*C*1152, C*1152]
+                H * W * N, W * N, GYS * GXS * C * 1152, GXS * C * 1152, C * 1152]
 
             self.kernel_args.extend( _flatten([
                 C, K, N, Xk, k, magic_Xk, magic_k,
-                C*1152, GXS*C*1152, GYS*GXS*C*1152,
-                P, Q, Q*N, P*Q*N, P*Q*N*15,
-                maskN, shlX, shlY, supX, supY, GN, GXS*GN, GYS*GXS*GN ]))
+                C * 1152, GXS * C * 1152, GYS * GXS * C * 1152,
+                P, Q, Q * N, P * Q * N, P * Q * N * 15,
+                maskN, shlX, shlY, supX, supY, GN, GXS * GN, GYS * GXS * GN ]))
 
         else:
             self.kernel_name = "%s_winograd_4x4_3x3_32x32" % self.clss
@@ -662,20 +669,20 @@ class XpropWinograd_4x4_3x3(KernelGroup):
 
             self.image_size = 0
 
-            Xk       = GXS2*k
+            Xk       = GXS2 * k
             magic_Xk = _magic64(Xk)
             magic_k  = _magic32(Xk, k)
 
             self.kernel_args.extend( _flatten([
-                C, K, N, H, W, H*W*N, W*N, GYS2, GXS,
+                C, K, N, H, W, H * W * N, W * N, GYS2, GXS,
                 Xk, k, magic_Xk, magic_k,
-                P, Q, Q*N, P*Q*N, P*Q*N*15,
+                P, Q, Q * N, P * Q * N, P * Q * N * 15,
                 maskN, shlX, shlY, supX, supY,
-                pad_w, pad_h, R*S*K, R*S*K*2*itemsize, H*W*N*2*itemsize,
-                GN, GXS*GN, GYS*GXS*GN ]))
+                pad_w, pad_h, R * S * K, R * S * K * 2 * itemsize, H * W * N * 2 * itemsize,
+                GN, GXS * GN, GYS * GXS * GN ]))
 
         self.kernel_opts = tuple(options)
-        self.bsum = BatchNormSum(self.lib, K, GYS*GXS*GN)
+        self.bsum = BatchNormSum(self.lib, K, GYS * GXS * GN)
 
     def autotune(self, I, F, O):
 
@@ -780,7 +787,7 @@ class FpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
         if self.external:
             self.filter_trans = FpropFilter_4x4_3x3(self.lib, self.dtype, C, K)
         elif self.dtype.itemsize != 4:
-            self.filter_trans = ConvertDataType(self.lib, self.dtype, C*9*K, out_mode=False)
+            self.filter_trans = ConvertDataType(self.lib, self.dtype, C * 9 * K, out_mode=False)
         else:
             self.filter_trans = NoopTransform()
 
@@ -795,7 +802,7 @@ class BpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
                  str_d, str_h, str_w, external=None):
 
         super(BpropWinograd_4x4_3x3, self).__init__(
-                 "bprop", lib, dtype, N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, external, bprop=True)
+                 "bprop", lib, dtype, N, K, C, P, Q, H, W, 2 - pad_h, 2 - pad_w, external, bprop=True)
 
     def init(self, autotune=0, external=1):
 
@@ -826,16 +833,18 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
 
         SMs = _get_sm_count()
 
-        self.autotune_key = [str(x) for x in ("update_3x3_4x4",
+        self.autotune_key = [native_str(x) for x in ("update_3x3_4x4",
            SMs, 0, dtype.itemsize, N, C, K, H, W, P, Q)]
-        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
+
+        # insert Python version in filename to avoid Py2/Py3 incompatibilities in shelve
+        self.autotune_db_file = os.path.join(lib.cache_dir, "autotune%d.db" % sys.version_info[0])
         self.init()
 
         lib.set_scratch_size(self.image_size, self.delta_size, self.output_trans.size)
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 10 Tflops on 24 SMs
-        self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
+        self.warmup = min(max(int(5e12 / (P * Q * K * N * C * 9 * 2.0) * (SMs / 24.0)), 1), 1000)
 
     def init(self, autotune=False):
 
@@ -846,14 +855,14 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         if N == 1:
             shlN = 0
         elif N < 16:
-            shlN = len(bin(N-1))-2
+            shlN = len(bin(N - 1)) - 2
         else:
             shlN = 4
 
         GC32 = _ceil_div(C, 32)
         GK32 = _ceil_div(K, 32)
-        GC16 = _ceil_div(GC32*32, 16)
-        GK16 = _ceil_div(GK32*32, 16)
+        GC16 = _ceil_div(GC32 * 32, 16)
+        GK16 = _ceil_div(GK32 * 32, 16)
         GY   = _ceil_div(P, 4)
         GX   = _ceil_div(Q, 4)
 
@@ -890,33 +899,33 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         shift_k = groupK - 1
         shift_n = groupN - 1
 
-        X2cn       = GXS2*groupC*groupN
-        Xkn        = GXS*groupK*groupN
+        X2cn       = GXS2 * groupC * groupN
+        Xkn        = GXS * groupK * groupN
         magic_X2cn = _magic64(X2cn)
         magic_Xkn  = _magic64(Xkn)
 
-        self.image_size = GC32*GY*GX*N*1152*itemsize
+        self.image_size = GC32 * GY * GX * N * 1152 * itemsize
         self.image_args = [
-            ( GYS*GXS*groupC*groupN, GN16//groupN, GC16//groupC ), (256,1,1), None, None, None,
+            ( GYS * GXS * groupC * groupN, GN16 // groupN, GC16 // groupC ), (256,1,1), None, None, None,
             C, H, W, N, pad_h, pad_w,
             GY, GX, GXS, GYS2, X2cn, magic_X2cn[0], magic_X2cn[1], shift_c, shift_n,
             shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
-            H*W*N, W*N, GY*GX*N*1152, GX*N*1152, N*1152]
+            H * W * N, W * N, GY * GX * N * 1152, GX * N * 1152, N * 1152]
 
-        self.delta_size = GK32*GY*GX*N*1152*itemsize
+        self.delta_size = GK32 * GY * GX * N * 1152 * itemsize
         self.delta_args = [
-            ( GYS*GXS*groupK*groupN, GN16//groupN, GK16//groupK ), (256,1,1), None, None, None,
+            ( GYS * GXS * groupK * groupN, GN16 // groupN, GK16 // groupK ), (256,1,1), None, None, None,
             K, P, Q, N, GY, GX,
             Xkn, magic_Xkn[0], magic_Xkn[1], shift_k, shift_n,
             shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
-            P*Q*N, Q*N, GY*GX*N*1152, GX*N*1152, N*1152]
+            P * Q * N, Q * N, GY * GX * N * 1152, GX * N * 1152, N * 1152]
 
         Gc = _closest_divisor(GC32, 4)
         Gk = _closest_divisor(GK32, 4)
         GC = GC32 // Gc
         GK = GK32 // Gk
-        kc = Gk*Gc
-        YXN  = GY*GX*N
+        kc = Gk * Gc
+        YXN  = GY * GX * N
         YXN2 = self.YXN2 = _ceil_div(YXN, 2)
 
         self.maxYXN2 = max(1, YXN2 // N)
@@ -941,7 +950,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         magic_sYXN    = _magic64(strideYXN)
         magic_kc      = _magic64(kc)
         magic_c       = _magic32(kc, Gc)
-        CRSK          = C*R*S*K
+        CRSK          = C * R * S * K
 
         # If output grid is 1, don't use atomics.  Kernel is deterministic by default
         options = list()
@@ -958,13 +967,13 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         self.kernel_opts = tuple(options)
         self.kernel_name = "%s_winograd_3x3_4x4_32x32" % self.clss
         self.kernel_args = [
-            (strideYXN*Gk*Gc, GC, GK), (640, 1, 1), None,
+            (strideYXN * Gk * Gc, GC, GK), (640, 1, 1), None,
             None, None, None, 1.0]
 
         self.kernel_args.extend( _flatten([
             K, C, Gk, Gc, kc, magic_kc, magic_c, YXN2, strideYXN, magic_sYXN,
-            strideYXN*2*1152*itemsize, YXN, YXN*1152, R*S*K, CRSK,
-            K*4, S*K*4, (R*S*K*15 - S*K*2)*4 ]))
+            strideYXN * 2 * 1152 * itemsize, YXN, YXN * 1152, R * S * K, CRSK,
+            K * 4, S * K * 4, (R * S * K * 15 - S * K * 2) * 4 ]))
 
     def autotune(self, I, E, O):
 
@@ -984,7 +993,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         small_set   = self.YXN2 < 512
         YXN2        = float(self.YXN2)
         results     = []
-        sys.stdout.write("Autotune " + str(self))
+        sys.stdout.write("Autotune " + native_str(self))
         progress = 0
         for threshold in (True, False):
             for strideYXN in range(1, self.maxYXN2 + 1):
@@ -997,7 +1006,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
                 # gemm loop count filter
                 depth   = YXN2 / strideYXN
 
-                filters = blocks >= block_slots and blocks <= 24*block_slots and depth >= 32.0
+                filters = blocks >= block_slots and blocks <= 24 * block_slots and depth >= 32.0
 
                 # In case we filter out all settings, run though the loops again
                 # this time looking only at settings that didn't pass.
@@ -1033,7 +1042,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         # add a copy if this layer has small strides
         # deterministic vs non-determ should make no speed difference here
         if strideYXN <= 8:
-            self.autotune_key[2] = str(1 - int(self.autotune_key[2]))
+            self.autotune_key[2] = native_str(1 - int(self.autotune_key[2]))
             autotune_key = " ".join(self.autotune_key)
             autotune_db[autotune_key] = strideYXN
 
@@ -1093,7 +1102,7 @@ class UpdateImage_3x3_2x2(object):
         if N == 1:
             shlN = 0
         elif N < 16:
-            shlN = len(bin(N-1))-2
+            shlN = len(bin(N - 1)) - 2
         else:
             shlN = 4
 
@@ -1127,7 +1136,7 @@ class UpdateImage_3x3_2x2(object):
 
         gridC  = _ceil_div(C, 32)
 
-        GC  = _ceil_div(gridC*32, 16)
+        GC  = _ceil_div(gridC * 32, 16)
         GYS = _ceil_div(P, blkY)
         GXS = _ceil_div(Q, blkX)
         GN  = _ceil_div(N, blkN)
@@ -1148,13 +1157,13 @@ class UpdateImage_3x3_2x2(object):
         self.dtype = dtype.str[1:]
         self.dim   = (gridC, GY, GX, N, 4, 4, 32)
         self.size  = int(np.prod(self.dim)) * dtype.itemsize
-        self.args  = [(GYS*GXS*groupC*groupN, GN//groupN, GC//groupC),
+        self.args  = [(GYS * GXS * groupC * groupN, GN // groupN, GC // groupC),
                      (256,1,1), None, None, None,
                      C, H, W, N, pad_h, pad_w,
                      GY, GX, GXS, GYS2, X2cn,
                      magic_X2cn[0], magic_X2cn[1], shift_c, shift_n,
                      shlY, shlX, maskY, shrY, maskX, shrX, shlN, maskN,
-                     H*W*N, W*N, GY*GX*N*512, GX*N*512, N*512 ]
+                     H * W * N, W * N, GY * GX * N * 512, GX * N * 512, N * 512 ]
 
     def bind_params(self, I):
         self.data      = self.lib.scratch_buffer_offset(self.size)
@@ -1788,8 +1797,8 @@ class FpropFilterTransform(FilterTransform):
 
         GK32 = _ceil_div(K, 32)
 
-        self.dim  = (GK32, C, R+Rt-1, S+St-1, 32)
-        self.args = [ (GK32,C,1), (32,1,1), None, None, None, R*S*K, S*K, K, C ]
+        self.dim  = (GK32, C, R + Rt - 1, S + St - 1, 32)
+        self.args = [ (GK32,C,1), (32,1,1), None, None, None, R * S * K, S * K, K, C ]
 
         super(FpropFilterTransform, self).__init__(lib, dtype, "fprop", Rt, St, R, S, mode)
 
@@ -1798,11 +1807,11 @@ class BpropFilterTransform(FilterTransform):
 
         GC32 = _ceil_div(C, 32)
         GK32 = _ceil_div(K, 32)
-        GC16 = _ceil_div(GC32*32, 16)
+        GC16 = _ceil_div(GC32 * 32, 16)
         GK16 = _ceil_div(K, 16)
 
-        self.dim  = (GC32, K, R+Rt-1, S+St-1, 32)
-        self.args = [ (GK16,GC16,1), (256,1,1), None, None, None, R*S*K, S*K, K, C ]
+        self.dim  = (GC32, K, R + Rt - 1, S + St - 1, 32)
+        self.args = [ (GK16,GC16,1), (256,1,1), None, None, None, R * S * K, S * K, K, C ]
 
         super(BpropFilterTransform, self).__init__(lib, dtype, "bprop", Rt, St, R, S, mode)
 
@@ -2067,7 +2076,7 @@ __global__ void %(prop)s_filter_%(trans_name)s(
         "trans_name" : trans_name,
         "trans_code" : trans_code,
         "prop"       : prop,
-        "RSt"        : (R+Rt-1)*(S+St-1),
+        "RSt"        : (R + Rt - 1) * (S + St - 1),
         "R"          : R,
         "S"          : S,
     }

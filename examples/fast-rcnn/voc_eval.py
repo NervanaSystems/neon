@@ -22,10 +22,14 @@ The mAP evaluation script and various util functions are from:
 https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc351be7f145499f
 """
 
-import xml.etree.ElementTree as ET
-import os
-import cPickle
-import numpy as np
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from builtins import range  # noqa
+import xml.etree.ElementTree as ET  # noqa
+import os  # noqa
+import numpy as np  # noqa
+from neon import logger as neon_logger  # noqa
+from neon.util.compat import pickle  # noqa
 
 
 def parse_rec(filename):
@@ -119,7 +123,7 @@ def voc_eval(detpath,
         os.mkdir(cachedir)
     cachefile = os.path.join(cachedir, 'annots.pkl')
     # read list of images
-    with open(imagesetfile, 'r') as f:
+    with open(imagesetfile, 'rb') as f:
         lines = f.readlines()
     imagenames = [x.strip() for x in lines]
 
@@ -129,16 +133,17 @@ def voc_eval(detpath,
         for i, imagename in enumerate(imagenames):
             recs[imagename] = parse_rec(annopath.format(imagename))
             if i % 100 == 0:
-                print 'Reading annotation for {:d}/{:d}'.format(
-                    i + 1, len(imagenames))
+                neon_logger.display('Reading annotation for {:d}/{:d}'.format(
+                    i + 1, len(imagenames)))
         # save
-        print 'Saving cached annotations to {:s}'.format(cachefile)
-        with open(cachefile, 'w') as f:
-            cPickle.dump(recs, f)
+        neon_logger.display(
+            'Saving cached annotations to {:s}'.format(cachefile))
+        with open(cachefile, 'wb') as f:
+            pickle.dump(recs, f, 2)
     else:
         # load
-        with open(cachefile, 'r') as f:
-            recs = cPickle.load(f)
+        with open(cachefile, 'rb') as f:
+            recs = pickle.load(f)
 
     # extract gt objects for this class
     class_recs = {}
@@ -155,7 +160,7 @@ def voc_eval(detpath,
 
     # read dets
     detfile = detpath.format(classname)
-    with open(detfile, 'r') as f:
+    with open(detfile, 'rb') as f:
         lines = f.readlines()
 
     splitlines = [x.strip().split(' ') for x in lines]

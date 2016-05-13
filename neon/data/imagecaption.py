@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from builtins import range
 
 from collections import Counter
 import numpy as np
 import os
 
+from neon import logger as neon_logger
 from neon.data.dataiterator import NervanaDataIterator
 from neon.data.datasets import Dataset
 
@@ -50,7 +52,7 @@ class ImageCaption(NervanaDataIterator):
         super(ImageCaption, self).__init__(name=None)
 
         self.path = path
-        print 'Reading train images and sentences from %s' % self.path
+        neon_logger.display('Reading train images and sentences from %s' % self.path)
         self.read_images('train')
         self.load_vocab()
 
@@ -67,11 +69,11 @@ class ImageCaption(NervanaDataIterator):
         self.ndata = self.nbatches * self.be.bsz
 
         self.X = np.zeros((len(trainSents), self.max_sentence_length))
-        self.y = np.zeros((len(trainSents), self.max_sentence_length+1))
+        self.y = np.zeros((len(trainSents), self.max_sentence_length + 1))
         self.images = np.vstack(trainImgs)
 
-        self.sent_length = np.array([len(x)+1 for x in trainSents])
-        self.sent_ends = np.arange(self.max_sentence_length+1)[:, np.newaxis]
+        self.sent_length = np.array([len(x) + 1 for x in trainSents])
+        self.sent_ends = np.arange(self.max_sentence_length + 1)[:, np.newaxis]
         for sent_idx, sent in enumerate(trainSents):
             self.X[sent_idx, :len(sent)] = [self.vocab_to_index[word] for word in sent]
         self.y[:, :-1] = self.X
@@ -90,14 +92,15 @@ class ImageCaption(NervanaDataIterator):
         # Count words and keep words greater than threshold
         word_counts = Counter(words)
 
-        vocab = [self.end_token] + [word for word in word_counts.keys() if word_counts[word] >= 5]
+        vocab = [self.end_token] + \
+                [word for word in list(word_counts.keys()) if word_counts[word] >= 5]
         self.vocab_size = len(vocab)
         self.vocab_to_index = dict((c, i) for i, c in enumerate(vocab))
         self.index_to_vocab = dict((i, c) for i, c in enumerate(vocab))
 
         # Compute optional bias vector for initializing final linear layer bias
         word_counts[self.end_token] = len(sentences)
-        self.bias_init = np.array([1.0*word_counts[self.index_to_vocab[i]]
+        self.bias_init = np.array([1.0 * word_counts[self.index_to_vocab[i]]
                                    for i in self.index_to_vocab]).reshape((self.vocab_size, 1))
         self.bias_init /= np.sum(self.bias_init)
         self.bias_init = np.log(self.bias_init)
@@ -108,9 +111,9 @@ class ImageCaption(NervanaDataIterator):
         self.dev_image = self.be.iobuf(self.image_size)
         self.dev_imageT = self.be.empty(self.dev_image.shape[::-1])
         self.dev_X = self.be.iobuf((self.vocab_size, self.max_sentence_length))
-        self.dev_y = self.be.iobuf((self.vocab_size, self.max_sentence_length+1))
+        self.dev_y = self.be.iobuf((self.vocab_size, self.max_sentence_length + 1))
         # Create mask to deal with variable length sentences
-        self.dev_y_mask = self.be.iobuf((self.vocab_size, self.max_sentence_length+1))
+        self.dev_y_mask = self.be.iobuf((self.vocab_size, self.max_sentence_length + 1))
         self.y_mask = np.zeros(self.dev_y_mask.shape,
                                dtype=np.uint8).reshape(self.vocab_size,
                                                        self.max_sentence_length + 1, -1)
@@ -120,13 +123,13 @@ class ImageCaption(NervanaDataIterator):
         self.dev_lblT = self.be.empty(self.dev_lbl.shape[::-1])
         self.dev_lblflat = self.dev_lbl.reshape((1, self.dev_lbl.size))
 
-        self.dev_y_lbl = self.be.iobuf(self.max_sentence_length+1, dtype=np.int32)
+        self.dev_y_lbl = self.be.iobuf(self.max_sentence_length + 1, dtype=np.int32)
         self.dev_y_lblT = self.be.empty(self.dev_y_lbl.shape[::-1])
         self.dev_y_lblflat = self.dev_y_lbl.reshape((1, self.dev_y_lbl.size))
 
         self.shape = [self.image_size, (self.vocab_size, self.max_sentence_length)]
-        print "Vocab size: %d, Max sentence length: %d" % (self.vocab_size,
-                                                           self.max_sentence_length)
+        neon_logger.display("Vocab size: %d, Max sentence length: %d" % (self.vocab_size,
+                                                                         self.max_sentence_length))
 
     def read_images(self, split):
         """
@@ -156,10 +159,10 @@ class ImageCaption(NervanaDataIterator):
         self.X, self.y, self.images = (self.X[shuf_idx], self.y[shuf_idx], self.images[shuf_idx])
         self.sent_length = self.sent_length[shuf_idx]
 
-        for batch_idx in xrange(self.nbatches):
+        for batch_idx in range(self.nbatches):
 
-            start = batch_idx*self.be.bsz
-            end = (batch_idx+1)*self.be.bsz
+            start = batch_idx * self.be.bsz
+            end = (batch_idx + 1) * self.be.bsz
 
             # image_batch = self.images[start:end].T.astype(np.float32, order='C')
             self.dev_imageT.set(self.images[start:end])
@@ -201,9 +204,9 @@ class ImageCaption(NervanaDataIterator):
             prob = prob.get()
         words = [self.index_to_vocab[x] for x in np.argmax(prob, axis=0).tolist()]
 
-        for sent_index in xrange(self.be.bsz):
+        for sent_index in range(self.be.bsz):
             sent = []
-            for i in xrange(self.max_sentence_length):
+            for i in range(self.max_sentence_length):
                 word = words[self.be.bsz * i + sent_index]
                 sent.append(word)
                 if (i > 0 and word == self.end_token) or i >= 20:
@@ -228,7 +231,7 @@ class ImageCaption(NervanaDataIterator):
         for mb_idx, (x, t) in enumerate(self):
             y.fill(0)
             # Repeatedly generate next word in sentence and choose max prob word each time.
-            for step in range(1, self.max_sentence_length+1):
+            for step in range(1, self.max_sentence_length + 1):
                 prob = model.fprop((x[0], y), inference=True).get()[:, :-self.be.bsz].copy()
                 pred = np.argmax(prob, axis=0)
                 prob.fill(0)
@@ -261,7 +264,7 @@ class ImageCaption(NervanaDataIterator):
         bleu_script_url = 'https://raw.githubusercontent.com/karpathy/neuraltalk/master/eval/'
         bleu_script = 'multi-bleu.perl'
 
-        print "Writing output and reference sents to dir %s" % self.path
+        neon_logger.display("Writing output and reference sents to dir %s" % self.path)
 
         output_f = open(output_file, 'w+')
         for sent in sents:
@@ -281,7 +284,7 @@ class ImageCaption(NervanaDataIterator):
         if not os.path.exists(bleu_script):
             Dataset.fetch_dataset(bleu_script_url, bleu_script, bleu_script, 6e6)
         bleu_command = 'perl multi-bleu.perl reference < output'
-        print "Executing bleu eval script: ", bleu_command
+        neon_logger.display("Executing bleu eval script: {}".format(bleu_command))
         os.system(bleu_command)
         os.chdir(owd)
 
@@ -328,7 +331,7 @@ class ImageCaptionTest(ImageCaption):
 
     def __init__(self, path):
         self.path = path
-        print 'Reading test images and sentences from %s' % self.path
+        neon_logger.display('Reading test images and sentences from %s' % self.path)
         # Load vocab using training set and then load test set
         self.read_images('train')
         self.load_vocab()
@@ -356,10 +359,10 @@ class ImageCaptionTest(ImageCaption):
                           second tuple contains list of reference sentences and
                           placeholder for mask.
         """
-        for batch_idx in xrange(self.nbatches):
+        for batch_idx in range(self.nbatches):
 
-            start = batch_idx*self.be.bsz
-            end = (batch_idx+1)*self.be.bsz
+            start = batch_idx * self.be.bsz
+            end = (batch_idx + 1) * self.be.bsz
 
             image_batch = self.images[start:end, :].T.astype(np.float32, order='C')
             self.dev_image.set(image_batch)

@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
+from __future__ import division
+from builtins import range
 from neon import NervanaObject
 from neon.util.persist import load_class
 import numpy as np
@@ -64,7 +65,7 @@ class Optimizer(NervanaObject):
             grad_list = [grad for (param, grad), states in param_list]
             grad_square_sums = sum(self.be.sum(self.be.square(grad)) for grad in grad_list)
             grad_norm = self.be.zeros((1, 1))
-            grad_norm[:] = self.be.sqrt(grad_square_sums)/self.be.bsz
+            grad_norm[:] = self.be.sqrt(grad_square_sums) / self.be.bsz
             scale_factor = clip_norm / max(float(grad_norm.get()), float(clip_norm))
         return scale_factor
 
@@ -166,7 +167,7 @@ class PolySchedule(Schedule):
         self.power = power
 
     def get_learning_rate(self, learning_rate, epoch):
-        return float(learning_rate * (1. - (epoch / self.total_epochs)) ** self.power)
+        return float(learning_rate * (1. - epoch // self.total_epochs) ** self.power)
 
 
 class GradientDescentMomentum(Optimizer):

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -24,6 +24,7 @@ $ python examples/imdb_lstm.py -e 2 -eval 1 --rlayer_type lstm
 
 """
 
+from neon import logger as neon_logger
 from neon.backends import gen_backend
 from neon.data.dataloaders import load_imdb
 from neon.data.dataiterator import ArrayIterator
@@ -63,16 +64,16 @@ path = load_imdb(path=args.data_dir)
                                                         vocab_size=vocab_size,
                                                         sentence_length=sentence_length)
 
-print "Vocab size - ", vocab_size
-print "Sentence Length - ", sentence_length
-print "# of train sentences", X_train.shape[0]
-print "# of test sentence", X_test.shape[0]
+neon_logger.display("Vocab size - {}".format(vocab_size))
+neon_logger.display("Sentence Length - {}".format(sentence_length))
+neon_logger.display("# of train sentences {}".format(X_train.shape[0]))
+neon_logger.display("# of test sentence {}".format(X_test.shape[0]))
 
 train_set = ArrayIterator(X_train, y_train, nclass=2)
 valid_set = ArrayIterator(X_test, y_test, nclass=2)
 
 # weight initialization
-uni = Uniform(low=-0.1/embedding_dim, high=0.1/embedding_dim)
+uni = Uniform(low=-0.1 / embedding_dim, high=0.1 / embedding_dim)
 g_uni = GlorotUniform()
 
 if args.rlayer_type == 'lstm':
@@ -84,7 +85,8 @@ elif args.rlayer_type == 'bilstm':
 elif args.rlayer_type == 'rnn':
     rlayer = Recurrent(hidden_size, g_uni, activation=Tanh(), reset_cells=True)
 elif args.rlayer_type == 'birnn':
-    rlayer = DeepBiRNN(hidden_size, g_uni, activation=Tanh(), depth=1, reset_cells=True)
+    rlayer = DeepBiRNN(hidden_size, g_uni, activation=Tanh(),
+                       depth=1, reset_cells=True)
 
 
 layers = [
@@ -98,14 +100,16 @@ layers = [
 model = Model(layers=layers)
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
-optimizer = Adagrad(learning_rate=0.01, gradient_clip_value=gradient_clip_value)
+optimizer = Adagrad(learning_rate=0.01,
+                    gradient_clip_value=gradient_clip_value)
 
 # configure callbacks
 callbacks = Callbacks(model, eval_set=valid_set, **args.callback_args)
 
 # train model
-model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
+model.fit(train_set, optimizer=optimizer,
+          num_epochs=args.epochs, cost=cost, callbacks=callbacks)
 
 # eval model
-print "Train Accuracy - ", 100 * model.eval(train_set, metric=Accuracy())
-print "Test  Accuracy - ", 100 * model.eval(valid_set, metric=Accuracy())
+neon_logger.display("Train Accuracy - {}".format(100 * model.eval(train_set, metric=Accuracy())))
+neon_logger.display("Test  Accuracy - {}".format(100 * model.eval(valid_set, metric=Accuracy())))

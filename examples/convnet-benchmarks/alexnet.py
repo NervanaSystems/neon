@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -30,13 +30,14 @@ from neon.transforms import Rectlin, Softmax, CrossEntropyMulti
 from neon.models import Model
 from neon.data import ArrayIterator
 import numpy as np
+
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 NervanaObject.be.enable_winograd = 4
 
 # setup data provider
-X_train = np.random.uniform(-1, 1, (128, 3*224*224))
+X_train = np.random.uniform(-1, 1, (128, 3 * 224 * 224))
 y_train = np.random.uniform(-1, 1, (128, 1000))
 train = ArrayIterator(X_train, y_train, nclass=1000, lshape=(3, 224, 224))
 
@@ -54,7 +55,7 @@ layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01),
           Affine(nout=1000, init=Gaussian(scale=0.01), activation=Softmax())]
 model = Model(layers=layers)
 
-weight_sched = Schedule([22, 44, 65], (1/250.)**(1/3.))
+weight_sched = Schedule([22, 44, 65], (1 / 250.)**(1 / 3.))
 opt_gdm = GradientDescentMomentum(0.01, 0.0, wdecay=0.0005, schedule=weight_sched)
 opt = MultiOptimizer({'default': opt_gdm})
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())

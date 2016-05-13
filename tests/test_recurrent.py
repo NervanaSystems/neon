@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -29,11 +29,12 @@ The following are made sure to be the same in both recurrent layers
     -   the data shape inside recurrent_ref is seq_len, input_size, 1
     -   the data shape inside recurrent (neon) is feature, seq_len * batch_size
 """
+from builtins import range
 
 import itertools as itt
 import numpy as np
 
-from neon import NervanaObject
+from neon import NervanaObject, logger as neon_logger
 from neon.initializers.initializer import Constant, Gaussian
 from neon.layers import Recurrent
 from neon.transforms import Tanh
@@ -112,7 +113,7 @@ def check_rnn(seq_len, input_size, hidden_size,
 
     # ========= generate data =================
     # generate random input tensor
-    inp = np.random.rand(*input_shape)*inp_moms[1] + inp_moms[0]
+    inp = np.random.rand(*input_shape) * inp_moms[1] + inp_moms[0]
     inpa = rnn.be.array(inp)
     # generate random deltas tensor
     deltas = np.random.randn(*output_shape)
@@ -150,33 +151,33 @@ def check_rnn(seq_len, input_size, hidden_size,
     db_neon = rnn.db.get()
 
     # comparing outputs
-    print '====Verifying hidden states===='
-    print allclose_with_out(rnn.outputs.get(),
-                            h_ref_list,
-                            rtol=0.0,
-                            atol=1.0e-5)
-    print 'fprop is verified'
+    neon_logger.display('====Verifying hidden states====')
+    neon_logger.display(allclose_with_out(rnn.outputs.get(),
+                                          h_ref_list,
+                                          rtol=0.0,
+                                          atol=1.0e-5))
+    neon_logger.display('fprop is verified')
 
-    print '====Verifying update on W and b ===='
-    print 'dWxh'
+    neon_logger.display('====Verifying update on W and b ====')
+    neon_logger.display('dWxh')
     assert allclose_with_out(dWxh_neon,
                              dWxh_ref,
                              rtol=0.0,
                              atol=1.0e-5)
-    print 'dWhh'
+    neon_logger.display('dWhh')
     assert allclose_with_out(dWhh_neon,
                              dWhh_ref,
                              rtol=0.0,
                              atol=1.0e-5)
 
-    print '====Verifying update on bias===='
-    print 'db'
+    neon_logger.display('====Verifying update on bias====')
+    neon_logger.display('db')
     assert allclose_with_out(db_neon,
                              db_ref,
                              rtol=0.0,
                              atol=1.0e-5)
 
-    print 'bprop is verified'
+    neon_logger.display('bprop is verified')
 
     return
 
@@ -211,7 +212,7 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
     # This is necessary for 32 bit computations
 
     min_max_err = -1.0  # minimum max error
-    print 'Perturb mag, max grad diff'
+    neon_logger.display('Perturb mag, max grad diff')
     for pert_exp in range(-5, 0):
         # need to generate the scaling and input outside
         # having an issue with the random number generator
@@ -220,7 +221,7 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
         input_shape = (input_size, seq_len * batch_size)
         output_shape = (hidden_size, seq_len * batch_size)
 
-        rand_scale = np.random.random(output_shape)*2.0 - 1.0
+        rand_scale = np.random.random(output_shape) * 2.0 - 1.0
         inp = np.random.randn(*input_shape)
 
         pert_mag = 10.0**pert_exp
@@ -231,8 +232,8 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
                                            epsilon=pert_mag,
                                            rand_scale=rand_scale,
                                            inp_bl=inp)
-        dd = np.max(np.abs(grad_est-deltas))
-        print '%e, %e' % (pert_mag, dd)
+        dd = np.max(np.abs(grad_est - deltas))
+        neon_logger.display('%e, %e' % (pert_mag, dd))
         if min_max_err < 0.0 or dd < min_max_err:
             min_max_err = dd
         # reset the seed so models are same in each run
@@ -240,8 +241,8 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
         NervanaObject.be.rng_reset()
 
     # check that best value of worst case error is less than threshold
-    print 'Worst case error %e with perturbation %e' % (min_max_err, pert_mag)
-    print 'Threshold %e' % (threshold)
+    neon_logger.display('Worst case error %e with perturbation %e' % (min_max_err, pert_mag))
+    neon_logger.display('Threshold %e' % (threshold))
     assert min_max_err < threshold
 
 
@@ -293,10 +294,10 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
         out_neg = rnn.fprop(rnn.be.array(inp_pert)).get()
 
         # calculate the loss with perturbations
-        loss_pos = np.sum(rand_scale*out_pos)
-        loss_neg = np.sum(rand_scale*out_neg)
+        loss_pos = np.sum(rand_scale * out_pos)
+        loss_neg = np.sum(rand_scale * out_neg)
         # compute the gradient estimate
-        grad = 0.5*(loss_pos-loss_neg)/epsilon
+        grad = 0.5 * (loss_pos - loss_neg) / epsilon
 
         grads_est.flat[pert_ind] = grad
 

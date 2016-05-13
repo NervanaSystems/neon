@@ -23,7 +23,7 @@ See the [new features](https://github.com/NervanaSystems/neon/blob/master/Change
 * [Local install and dependencies](http://neon.nervanasys.com/docs/latest/installation.html)
 
 On a Mac OSX or Linux machine, enter the following to download and install
-neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/installation.html)), and use it to train your first multi-layer perceptron.
+neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/installation.html)), and use it to train your first multi-layer perceptron. To force a python2 or python3 install, replace `make` below with either `make python2` or `make python3`.
 
 ```bash
     git clone https://github.com/NervanaSystems/neon.git

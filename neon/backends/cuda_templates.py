@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014 Nervana Systems Inc. All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ Templates for cuda kernels:
     _float_ops:            unary and binary element operations
     _reduction_ops:        sum, max, min, argmax, argmin
 """
+from builtins import zip
 
 # RAND_POOL_SIZE set to 65536 == 2048 * 32
 

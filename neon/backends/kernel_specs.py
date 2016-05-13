@@ -1,4 +1,4 @@
-# Copyright 2014 Nervana Systems Inc. All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,12 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from builtins import str
 import re
 import os.path
 import subprocess
 import pycuda.driver as drv
 from pycuda.tools import context_dependent_memoize
+from neon import logger as neon_logger
 from neon.util.persist import get_cache_dir
 
 # helpful for kernel development
@@ -636,9 +637,9 @@ def run_command(cmdlist):
     if proc.returncode:
         raise RuntimeError("Error(%d):\n%s\n%s" % (proc.returncode, cmd, err))
     if debug:
-        print cmd
-        if out: print out
-        if err: print err
+        neon_logger.display(cmd)
+        if out: neon_logger.display(out)
+        if err: neon_logger.display(err)
 
 @context_dependent_memoize
 def get_kernel(base_name, options=None):

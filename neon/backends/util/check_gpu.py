@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -14,6 +14,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 # pylint: skip-file
+from builtins import range, str
+from neon import logger as neon_logger
 
 
 def get_compute_capability(device_id=None, verbose=False):
@@ -37,19 +39,19 @@ def get_compute_capability(device_id=None, verbose=False):
         import pycuda.driver as drv
     except ImportError:
         if verbose:
-            print("PyCUDA module not found")
+            neon_logger.display("PyCUDA module not found")
         return 0
     try:
         drv.init()
     except pycuda._driver.RuntimeError as e:
-        print("PyCUDA Runtime error: {0}".format(str(e)))
+        neon_logger.display("PyCUDA Runtime error: {0}".format(str(e)))
         return 0
 
     major_string = pycuda._driver.device_attribute.COMPUTE_CAPABILITY_MAJOR
     minor_string = pycuda._driver.device_attribute.COMPUTE_CAPABILITY_MINOR
     full_version = []
     if device_id is None:
-        device_id = range(drv.Device.count())
+        device_id = list(range(drv.Device.count()))
     elif isinstance(device_id, int):
         device_id = [device_id]
 
@@ -59,7 +61,7 @@ def get_compute_capability(device_id=None, verbose=False):
         full_version += [major + minor / 10.]
 
     if verbose:
-        print "Found GPU(s) with compute capability:", full_version
+        neon_logger.display("Found GPU(s) with compute capability: {}".format(full_version))
 
     return max(full_version)
 
@@ -79,20 +81,20 @@ def get_device_count(verbose=False):
         import pycuda.driver as drv
     except ImportError:
         if verbose:
-            print("PyCUDA module not found")
+            neon_logger.display("PyCUDA module not found")
         return 0
     try:
         drv.init()
     except pycuda._driver.RuntimeError as e:
-        print("PyCUDA Runtime error: {0}".format(str(e)))
+        neon_logger.display("PyCUDA Runtime error: {0}".format(str(e)))
         return 0
 
     count = drv.Device.count()
 
     if verbose:
-        print "Found %d GPU(s)", count
+        neon_logger.display("Found {} GPU(s)".format(count))
 
     return count
 
 if __name__ == '__main__':
-    print get_compute_capability(verbose=False)
+    neon_logger.display(get_compute_capability(verbose=False))

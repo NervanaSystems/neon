@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -13,7 +13,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 # pylint: skip-file
-
 import numpy as np
 import pytest
 from neon.backends import gen_backend
@@ -128,17 +127,17 @@ def test_rng_funcs(backend_default):
 
     # there should be infinitesmial chance for x1 to equal x2
     # this assert is to make sure the rng is doing something
-    assert np.max(np.abs(x2-x1)) > 0
+    assert np.max(np.abs(x2 - x1)) > 0
 
     be.rng_reset()
     be.make_binary_mask(out=x)
     x1_2 = x.get().copy()
 
-    assert np.max(np.abs(x1-x1_2)) == 0.0
+    assert np.max(np.abs(x1 - x1_2)) == 0.0
 
     be.rng_reset()
     be.rng_set_state(r1)
     be.make_binary_mask(out=x)
     x2_2 = x.get().copy()
 
-    assert np.max(np.abs(x2-x2_2)) == 0.0
+    assert np.max(np.abs(x2 - x2_2)) == 0.0

@@ -1,5 +1,5 @@
 #!/usr/bin/python
-# Copyright 2014 Nervana Systems Inc. All rights reserved.
+# Copyright 2014-2016 Nervana Systems Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +12,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
+from __future__ import division
+from builtins import range
 import numpy           as np
 import pycuda.driver   as drv
+from neon import logger as neon_logger
 from neon.backends.nervanagpu import NervanaGPU
 from neon.backends.layer_gpu  import Layer, DataLayer, ConvLayer, PoolLayer, FullLayer, Inception, BatchNorm
 
@@ -42,7 +44,7 @@ verbose     = 0
 
 ng = NervanaGPU(bench=layer_bench)
 
-print(drv.Context.get_current().get_device().name())
+neon_logger.display(drv.Context.get_current().get_device().name())
 
 # common convolutional layer settings
 conv11    = { "R":11, "S":11, "pad_h":2, "pad_w":2, "str_h":4, "str_w":4 }
@@ -453,9 +455,9 @@ for net in nets:
         # only first run needs a big warmup
         networks[net][0]["warmup"] = 1
 
-        print("------------------------------------------------")
-        print("Benchmarking: " + name)
-        print("------------------------------------------------")
+        neon_logger.display("------------------------------------------------")
+        neon_logger.display("Benchmarking: " + name)
+        neon_logger.display("------------------------------------------------")
 
         layers = []
         prev_layer = None
@@ -497,7 +499,7 @@ for net in nets:
 
         for i, layer in enumerate(layers):
             if verbose:
-                print(layer)
+                neon_logger.display(layer)
 
             # Intitalize buffers.  Alernate shared delta buffer.
             # One layer can't have the same buffer for both error in and error out.
@@ -508,8 +510,8 @@ for net in nets:
 
         if verbose:
             remain, total = drv.mem_get_info()
-            print("%.3fGB of %.3fGB Allocated (%.3fGB Remaining)" %
-                  ((total-remain)/1024.**3, total/1024.**3, remain/1024.**3))
+            neon_logger.display("%.3fGB of %.3fGB Allocated (%.3fGB Remaining)" %
+                  ((total - remain) / 1024.**3, total / 1024.**3, remain / 1024.**3))
 
         if zeros:
             layers[0].init_data()
@@ -535,7 +537,7 @@ for net in nets:
 
         # We throw away the first two runs as it includes pycuda kernel loading times and clock warmup.
         # So add 1 to our loop count.
-        for loop in range(loops+warmup):
+        for loop in range(loops + warmup):
 
             loop = loop - warmup + 1
             if loop < 0: loop = 0
@@ -556,7 +558,7 @@ for net in nets:
             end.record()
             end.synchronize()
             msecs = end.time_since(start)
-            print("fprop(%2d): %8.3f msecs %8.3f gflops" %
+            neon_logger.display("fprop(%2d): %8.3f msecs %8.3f gflops" %
                   (loop, msecs, flops / (msecs * 1000000.0)))
             if loop > 0:
                 fprop_time  += msecs
@@ -577,7 +579,7 @@ for net in nets:
             end.record()
             end.synchronize()
             msecs = end.time_since(start)
-            print("bprop(%2d): %8.3f msecs %8.3f gflops" %
+            neon_logger.display("bprop(%2d): %8.3f msecs %8.3f gflops" %
                   (loop, msecs, flops / (msecs * 1000000.0)))
             if loop > 0:
                 bprop_time  += msecs
@@ -585,17 +587,17 @@ for net in nets:
 
         if loops > 0:
 
-            print("---------------------------------------------")
-            print(name + " Results:")
-            print("---------------------------------------------")
-            print("Avg(%d) fprop: %8.3f msecs %.3f gflops" %
-                  (loops, fprop_time/loops, fprop_flops / (fprop_time * 1000000.0)))
+            neon_logger.display("---------------------------------------------")
+            neon_logger.display(name + " Results:")
+            neon_logger.display("---------------------------------------------")
+            neon_logger.display("Avg(%d) fprop: %8.3f msecs %.3f gflops" %
+                  (loops, fprop_time / loops, fprop_flops / (fprop_time * 1000000.0)))
 
-            print("Avg(%d) bprop: %8.3f msecs %.3f gflops" %
-                  (loops, bprop_time/loops, bprop_flops / (bprop_time * 1000000.0)))
+            neon_logger.display("Avg(%d) bprop: %8.3f msecs %.3f gflops" %
+                  (loops, bprop_time / loops, bprop_flops / (bprop_time * 1000000.0)))
 
             fprop_time  += bprop_time
             fprop_flops += bprop_flops
 
-            print("Avg(%d) total: %8.3f msecs %.3f gflops\n\n" %
-                  (loops, fprop_time/loops, fprop_flops / (fprop_time * 1000000.0)))
+            neon_logger.display("Avg(%d) total: %8.3f msecs %.3f gflops\n\n" %
+                  (loops, fprop_time / loops, fprop_flops / (fprop_time * 1000000.0)))

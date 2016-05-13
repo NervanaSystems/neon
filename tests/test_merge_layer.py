@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,6 +15,7 @@
 '''
 Test of the merge layer with linear layers
 '''
+from builtins import zip
 import itertools as itt
 import numpy as np
 
@@ -83,8 +84,8 @@ def test_concat_sequence_l1_l1(backend_default, allrand_args):
     be = NervanaObject.be
 
     init_unif = Uniform(low=w_rng[0], high=w_rng[1])
-    layers = [Sequential(Affine(nout=nout, init=init_unif)) for _ in range(2)]
-    inputs = [be.array(dtypeu(np.random.random((nin, batch_size*step))))
+    layers = [Sequential(Affine(nout=nout, init=init_unif)) for _ in (0, 1)]
+    inputs = [be.array(dtypeu(np.random.random((nin, batch_size * step))))
               for step in steps]
     merge = MergeMultistream(layers, merge="recurrent")
     assert(len(inputs) == len(layers))
@@ -99,7 +100,7 @@ def test_concat_sequence_l1_l1(backend_default, allrand_args):
 
     assert np.allclose(out, out_exp, atol=1e-3)
 
-    err_lst = [dtypeu(np.random.random((nout, batch_size*step))) for step in steps]
+    err_lst = [dtypeu(np.random.random((nout, batch_size * step))) for step in steps]
     err_concat = be.array(np.concatenate(err_lst, axis=1))
     merge.bprop(err_concat)
     dW_exp_lst = [np.dot(err, inp.get().T) for (err, inp) in zip(err_lst, inputs)]

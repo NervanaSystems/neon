@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2015-2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -79,7 +79,7 @@ def test_mlp(backend_cpu64, mlpargs):
     epsilon = 1.0e-5
     pert_frac = 0.1  # test 10% of the inputs
     # select pert_frac fraction of inps to perturb
-    pert_cnt = int(np.ceil(inp.size*pert_frac))
+    pert_cnt = int(np.ceil(inp.size * pert_frac))
     pert_inds = np.random.permutation(inp.size)[0:pert_cnt]
 
     (max_abs, max_rel) = general_gradient_comp(layer,
