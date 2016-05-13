@@ -19,10 +19,10 @@ import sys
 import logging
 import numpy as np
 import pycuda.driver as drv
-from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 import kernel_specs
 from neon.backends.cuda_templates import _common_round, _common_fp16_to_fp32, _ew_types
+from neon.backends.util.source_module import SourceModule
 import os.path
 import shelve
 from convolution import (

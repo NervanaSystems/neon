@@ -1,5 +1,3 @@
-
-from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 from neon.backends import cuda_templates
 
@@ -8,6 +6,7 @@ from neon.backends.cuda_templates import (_common_fp16_to_fp32,
                                           _common_max_abs,
                                           _common_kepler,
                                           _ew_types)
+from neon.backends.util.source_module import SourceModule
 
 """
 CUDA kernels for pooling layers, with support for max pooling and average pooling.

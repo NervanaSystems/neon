@@ -1,7 +1,7 @@
-from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 from neon.backends.cuda_templates import _ew_types
 from neon.backends.layer_gpu import _magic64
+from neon.backends.util.source_module import SourceModule
 
 """
 CUDA kernels for convolutional layers. This code will return one of 3 kernels:

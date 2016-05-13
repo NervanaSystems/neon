@@ -1,4 +1,3 @@
-from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 
 # from neon.backends.cuda_templates import (_ew_template,
@@ -21,7 +20,7 @@ from neon.backends.cuda_templates import (_common_round,
                                           _ew_types,
                                           _common_fp16_to_fp32,
                                           _ew_strings)
-
+from neon.backends.util.source_module import SourceModule
 
 @context_dependent_memoize
 def _get_bn_fprop_kernel(dtype, threads, compute_capability):

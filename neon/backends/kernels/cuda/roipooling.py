@@ -18,7 +18,7 @@
 # Licensed under The MIT License [see fast-rcnn/LICENSE for details]
 # Written by Ross Girshick
 # ------------------------------------------------------------------
-from pycuda.compiler import SourceModule
+from neon.backends.util.source_module import SourceModule
 from pycuda.tools import context_dependent_memoize
 
 """

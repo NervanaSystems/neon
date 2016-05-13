@@ -17,10 +17,10 @@ Python code to wrap convolution kernels
 
 import numpy as np
 import pycuda.driver as drv
-from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 from neon.backends import kernel_specs
 from neon.backends.cuda_templates import _common_round, _ew_types, _common_fp16_to_fp32
+from neon.backends.util.source_module import SourceModule
 from math import ceil
 from operator import mul
 import sys

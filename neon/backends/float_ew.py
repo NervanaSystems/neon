@@ -16,19 +16,18 @@
 """
 Floating point elementwise operations on GPU.
 """
-
 import os.path
 import re
 import traceback as tb
 import numpy as np
-from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 from pytools import memoize
+
 # from pytools import memoize_method
 # import pycuda.driver as drv # commented for stylecheck
 
 import neon.backends.nervanagpu as ng
-
+from neon.backends.util.source_module import SourceModule
 from neon.backends.cuda_templates import (_ew_template,
                                           _stage_template,
                                           _fin_template,

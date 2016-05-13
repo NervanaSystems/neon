@@ -17,10 +17,31 @@ import logging
 import os
 import pkgutil
 import sys
+import appdirs
 
 from neon.util.compat import pickle
 
 logger = logging.getLogger(__name__)
+
+
+def get_cache_dir(subdir=None):
+    """
+    Function for getting cache directory to store reused files like kernels, or scratch space
+    for autotuning, etc.
+    """
+    cache_dir = os.environ.get("NEON_CACHE_DIR")
+
+    if cache_dir is None:
+        cache_dir = appdirs.user_cache_dir("neon", "neon")
+
+    if subdir:
+        subdir = subdir if isinstance(subdir, list) else [subdir]
+        cache_dir = os.path.join(cache_dir, *subdir)
+
+    if not os.path.exists(cache_dir):
+        os.makedirs(cache_dir)
+
+    return cache_dir
 
 
 def ensure_dirs_exist(path):

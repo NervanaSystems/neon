@@ -17,17 +17,20 @@ import os.path
 import subprocess
 import pycuda.driver as drv
 from pycuda.tools import context_dependent_memoize
+from neon.util.persist import get_cache_dir
 
 # helpful for kernel development
 debug = 0
 
 base_dir  = os.path.dirname(__file__)
-ptx_dir   = os.path.join(base_dir, "kernels", "ptx")
-sass_dir  = os.path.join(base_dir, "kernels", "sass")
-pre_dir   = os.path.join(base_dir, "kernels", "pre")
-cubin_dir = os.path.join(base_dir, "kernels", "cubin")
-dump_dir  = os.path.join(base_dir, "kernels", "dump")
 maxas_dir = os.path.join(base_dir, "kernels", "maxas")
+sass_dir  = os.path.join(base_dir, "kernels", "sass")
+
+ptx_dir   = get_cache_dir(['kernels', 'ptx'])
+pre_dir   = get_cache_dir(['kernels', 'pre'])
+cubin_dir = get_cache_dir(['kernels', 'cubin'])
+dump_dir  = get_cache_dir(['kernels', 'dump'])
+
 
 
 kernels = {
@@ -597,9 +600,6 @@ def get_ptx_file(kernel_spec, kernel_name, arch):
     else:
         share = ""
 
-    if not os.path.exists(ptx_dir):
-        os.mkdir(ptx_dir)
-
     kernel_text = _kernel_template.format(arch, kernel_name, kernel_params, thread_spec, share, args_spec)
     kernel_ptx  = os.path.join(ptx_dir, kernel_name + ".ptx")
 
@@ -631,16 +631,15 @@ def extract_includes(name, includes=None):
     return includes
 
 def run_command(cmdlist):
-    cmdline = " ".join(cmdlist)
-    proc = subprocess.Popen(cmdline, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    code = proc.wait()
-    if code:
-        error = proc.stderr.read()
-        raise RuntimeError("Error(%d):\n%s\n%s" % (code, cmdline, error))
+    cmd  = " ".join(cmdlist)
+    proc = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    out, err = proc.communicate()
+    if proc.returncode:
+        raise RuntimeError("Error(%d):\n%s\n%s" % (proc.returncode, cmd, err))
     if debug:
-        out = proc.stdout.read()
-        print cmdline
+        print cmd
         if out: print out
+        if err: print err
 
 @context_dependent_memoize
 def get_kernel(base_name, options=None):
@@ -685,8 +684,6 @@ def get_kernel(base_name, options=None):
     sass_file  = os.path.join(sass_dir, sass_name)
     cubin_file = os.path.join(cubin_dir, cubin_name)
 
-    if not os.path.exists(cubin_dir):
-        os.mkdir(cubin_dir)
     if not os.path.exists(sass_file):
         raise RuntimeError("Missing: %s for kernel: %s" % (sass_name, kernel_name))
 
@@ -706,8 +703,6 @@ def get_kernel(base_name, options=None):
             break
 
     if debug:
-        if not os.path.exists(pre_dir):  os.mkdir(pre_dir)
-        if not os.path.exists(dump_dir): os.mkdir(dump_dir)
         pre_file  = os.path.join(pre_dir,  kernel_name + "_pre.sass")
         dump_file = os.path.join(dump_dir, kernel_name + "_dump.sass")
         pre_age   = os.path.getmtime(pre_file)  if os.path.exists(pre_file)  else 0
@@ -738,7 +733,6 @@ def get_kernel(base_name, options=None):
     func   = module.get_function(kernel_name)
     func.prepare(sig)
     func.threads = kernel_spec["threads"]
-    # print("Loaded: " + kernel_name)
     return func
 
 

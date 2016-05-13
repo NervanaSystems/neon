@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from pycuda.compiler import SourceModule
 from pycuda.tools import context_dependent_memoize
 
 from neon.backends.cuda_templates import _ew_types
+from neon.backends.util.source_module import SourceModule
 
 """
 CUDA kernels for lookup table layers. Kernels are only given for bprop, since

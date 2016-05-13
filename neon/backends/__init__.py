@@ -31,8 +31,7 @@ from neon.backends.util.check_gpu import get_device_count
 def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
                 max_devices=get_device_count(), compat_mode=None,
-                deterministic_update=None, deterministic=None,
-                cache_dir=os.path.join(os.path.expanduser('~'), 'nervana/cache')):
+                deterministic_update=None, deterministic=None):
     """
     Construct and return a backend instance of the appropriate type based on
     the arguments given. With no parameters, a single CPU core, float32
@@ -62,7 +61,6 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                                      layer output sizes will match that of caffe as will
                                      the dropout layer implementation
         deterministic (bool, optional): if set to true, all operations will be done deterministically.
-        cache_dir (str, optional): a location for the backend to cache tuning parameters.
 
     Returns:
         Backend: newly constructed backend instance of the specifed type.
@@ -104,8 +102,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                             stochastic_round=stochastic_round,
                             device_id=device_id,
                             compat_mode=compat_mode,
-                            deterministic=deterministic,
-                            cache_dir=cache_dir)
+                            deterministic=deterministic)
         else:
             try:
                 from mgpu.nervanamgpu import NervanaMGPU
@@ -115,8 +112,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                                  stochastic_round=stochastic_round,
                                  num_devices=max_devices,
                                  compat_mode=compat_mode,
-                                 deterministic=deterministic,
-                                 cache_dir=cache_dir)
+                                 deterministic=deterministic)
             except ImportError:
                 logger.error("Multi-GPU support is a premium feature "
                              "available exclusively through the Nervana cloud."
