@@ -65,11 +65,11 @@ if args.datatype in [np.float32, np.float64]:
 elif args.datatype in [np.float16]:
     cost = GeneralizedCost(costfunc=CrossEntropyMulti(scale=cost_scale))
 
-mlp = Model(layers=layers)
+model = Model(layers=layers)
 
 # configure callbacks
-callbacks = Callbacks(mlp, eval_set=test, **args.callback_args)
+callbacks = Callbacks(model, eval_set=test, **args.callback_args)
 
-mlp.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+model.fit(train, optimizer=opt_gdm, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
 
-print 'Misclassification error = %.1f%%' % (mlp.eval(test, metric=Misclassification())*100)
+print 'Misclassification error = %.1f%%' % (model.eval(test, metric=Misclassification())*100)
