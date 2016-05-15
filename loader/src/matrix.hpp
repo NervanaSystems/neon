@@ -20,16 +20,14 @@ using cv::Mat;
 
 #define UNSUPPORTED_MEDIA_MESSAGE "support not built-in. Please install the " \
                                   "pre-requisites and re-run the installer."
-template <typename Type>
 class Matrix {
 public:
-    static void transpose(Type* data, int height, int width) {
+    static void transpose(char* data, int height, int width, int elemLen) {
 #if HAS_IMGLIB
         int elemType;
-        if (sizeof(Type) == 1) {
+        if (elemLen == 1) {
             elemType = CV_8UC1;
-        } else if (sizeof(Type) == 4) {
-            width /= 4;
+        } else if (elemLen == 4) {
             elemType = CV_32F;
         } else {
             throw std::runtime_error("Unsupported type in transpose\n");

@@ -72,7 +72,6 @@ def create_index_files(data_dir, train_percent=80):
 
 
 def run(train, test):
-    common = dict(target_size=1, nclasses=2)
     init = Gaussian(scale=0.01)
     layers = [Conv((3, 3, 128), init=init, activation=Rectlin(),
                    strides=dict(str_h=1, str_w=2)),

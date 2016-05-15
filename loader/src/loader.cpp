@@ -147,18 +147,23 @@ int test(char* repoDir, char* indexFile,
          int batchSize, int nchan, int height, int width) {
 #if HAS_IMGLIB
     int datumSize = nchan * height * width;
-    int targetSize = 4;
+    int targetSize = 1;
+    int datumTypeSize = 1;
+    int targetTypeSize = 4;
+    int targetConversion = 1;
     int epochCount = 2;
     int minibatchCount = 65;
     int itemCount = 0;
+    int datumLen = datumSize * datumTypeSize;
+    int targetLen = targetSize * targetTypeSize;
 
-    ImageParams mediaParams(3, 30, 30, true, false, 0, 0, 0, 0, 0, 0, 0,
+    ImageParams mediaParams(nchan, height, width, true, false, 0, 0, 0, 0, 0, 0, 0,
                             false, 0, 0, 0, 0);
     char* dataBuffer[2];
     char* targetBuffer[2];
     for (int i = 0; i < 2; i++) {
-        dataBuffer[i] = new char[batchSize * datumSize];
-        targetBuffer[i] = new char[batchSize * targetSize];
+        dataBuffer[i] = new char[batchSize * datumLen];
+        targetBuffer[i] = new char[batchSize * targetLen];
     }
 
     string archiveDir(repoDir);
@@ -167,15 +172,16 @@ int test(char* repoDir, char* indexFile,
     ImageIngestParams ingestParams(false, true, 0, 0);
     Loader loader(&itemCount, batchSize, repoDir, archiveDir.c_str(),
                   indexFile, "archive-",
-                  false, false, 0, datumSize, targetSize, 100,
+                  false, false, 0, datumSize, datumTypeSize,
+                  targetSize, targetTypeSize, targetConversion, 100,
                   &mediaParams, &deviceParams, &ingestParams);
     unsigned int singleSum = single(&loader, epochCount,
                                     minibatchCount, batchSize,
-                                    datumSize, targetSize,
+                                    datumLen, targetLen,
                                     &mediaParams, &ingestParams);
     unsigned int multiSum = multi(&loader, epochCount,
                                   minibatchCount, batchSize,
-                                  datumSize, targetSize);
+                                  datumLen, targetLen);
     for (int i = 0; i < 2; i++) {
         delete[] dataBuffer[i];
         delete[] targetBuffer[i];
@@ -192,8 +198,8 @@ int test(char* repoDir, char* indexFile,
 
 int main(int argc, char** argv) {
     int nchan = 3;
-    int height = 30;
-    int width = 30;
+    int height = 32;
+    int width = 32;
     int batchSize = 128;
     if (argc < 3) {
         printf("Usage: %s repo_dir index_file\n", argv[0]);

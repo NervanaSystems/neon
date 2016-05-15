@@ -41,8 +41,12 @@ class DataLoader(NervanaDataIterator):
     minibatches of generic data.
     """
 
+    _converters_ = {'no_conversion': 0,
+                    'ascii_to_binary': 1}
+
     def __init__(self, set_name, repo_dir,
                  media_params, target_size,
+                 target_conversion='ascii_to_binary',
                  index_file=None,
                  shuffle=False, reshuffle=False,
                  datum_dtype=np.uint8, target_dtype=np.int32,
@@ -50,6 +54,9 @@ class DataLoader(NervanaDataIterator):
                  ingest_params=None):
         if onehot is True and nclasses is None:
             raise ValueError('nclasses must be specified for one-hot labels')
+        if target_conversion not in self._converters_:
+            raise ValueError('Unknown target type %s' % target_conversion)
+
         self.set_name = set_name
         repo_dir = os.path.expandvars(os.path.expanduser(repo_dir))
         if not os.path.exists(repo_dir):
@@ -67,6 +74,7 @@ class DataLoader(NervanaDataIterator):
         self.shape = media_params.get_shape()
         self.datum_size = media_params.datum_size()
         self.target_size = target_size
+        self.target_conversion = self._converters_[target_conversion]
         if index_file is None:
             self.index_file = set_name + '-index.csv'
         else:
@@ -130,17 +138,14 @@ class DataLoader(NervanaDataIterator):
         """
         Launch background threads for loading the data.
         """
-        # Limited to a single integer label for now.
-        assert self.target_size == 1
-        assert np.dtype(self.target_dtype).itemsize == 4
         if not os.path.exists(self.archive_dir):
             logger.warning('%s not found. Triggering data ingest...' % self.archive_dir)
             os.makedirs(self.archive_dir)
         if self.item_count.value == 0:
             indexer = Indexer(self.repo_dir, self.index_file)
             indexer.run()
-        datum_nbytes = self.datum_size * np.dtype(self.datum_dtype).itemsize
-        target_nbytes = self.target_size * np.dtype(self.target_dtype).itemsize
+        datum_dtype_size = np.dtype(self.datum_dtype).itemsize
+        target_dtype_size = np.dtype(self.target_dtype).itemsize
         if self.ingest_params is None:
             ingest_params = ct.POINTER(MediaParams)()
         else:
@@ -153,7 +158,9 @@ class DataLoader(NervanaDataIterator):
             ct.c_char_p(self.archive_prefix.encode()),
             self.shuffle, self.reshuffle,
             self.macro_start,
-            ct.c_int(datum_nbytes), ct.c_int(target_nbytes),
+            ct.c_int(self.datum_size), ct.c_int(datum_dtype_size),
+            ct.c_int(self.target_size), ct.c_int(target_dtype_size),
+            ct.c_int(self.target_conversion),
             self.subset_percent,
             ct.POINTER(MediaParams)(self.media_params),
             ct.POINTER(DeviceParams)(self.device_params),

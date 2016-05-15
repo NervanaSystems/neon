@@ -137,7 +137,7 @@ private:
         assert(_alloc == true);
         _size = getLevel() + inc;
         // Allocate a bit more to minimize reallocations.
-        _size += _size / 10;
+        _size += _size / 8;
         T* data = alloc();
         memcpy(data, _data, getLevel() * sizeof(T));
         dealloc(_data);

@@ -192,7 +192,7 @@ class AudioParams(MediaParams):
                     'num_freqs', 'window_type']:
             if getattr(self, key) != self._defaults_[key]:
                 raise ValueError('Argument %s must not be specified' % key)
-        if getattr(self, 'window_func') not in self._windows_.keys():
+        if getattr(self, 'window_func') not in self._windows_:
             raise ValueError('Unknown window function: %s' %
                              getattr(self, 'window_func'))
         self.set_shape()

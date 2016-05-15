@@ -38,6 +38,11 @@ using std::stringstream;
 using std::vector;
 using std::map;
 
+enum ConversionType {
+    NO_CONVERSION = 0,
+    ASCII_TO_BINARY = 1
+};
+
 class IndexElement {
 public:
     IndexElement() {
@@ -133,8 +138,10 @@ class FileReader : public Reader {
 public:
     FileReader(int* itemCount, int batchSize,
                const char* repoDir, const char* indexFile,
-               bool shuffle)
-    : Reader(batchSize, repoDir, indexFile, shuffle, false, 100), _itemIdx(0) {
+               bool shuffle, int targetTypeSize, int targetConversion)
+    : Reader(batchSize, repoDir, indexFile, shuffle, false, 100), _itemIdx(0),
+      _targetTypeSize(targetTypeSize), _targetConversion(targetConversion) {
+        static_assert(sizeof(int) == 4, "int is not 4 bytes");
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
@@ -171,20 +178,31 @@ public:
         off_t size = stats.st_size;
         if (*dataBufLen < size) {
             // Allocate a bit more than what we need right now.
-            resize(dataBuf, dataBufLen, size + size / 10);
+            resize(dataBuf, dataBufLen, size + size / 8);
         }
         _ifs.open(path, ios::binary);
         _ifs.read(*dataBuf, size);
         _ifs.close();
         *dataLen = size;
         // Read the targets.
-        // Limit to a single integer for now.
-        if (*targetBufLen < (int) sizeof(int)) {
-            resize(targetBuf, targetBufLen, sizeof(int));
+        if (_targetConversion == NO_CONVERSION) {
+            *targetLen = elem->_targets[0].size();
+            if (*targetBufLen < *targetLen) {
+                resize(targetBuf, targetBufLen, *targetLen);
+            }
+            memcpy(*targetBuf, elem->_targets[0].c_str(), *targetLen);
+        } else if (_targetConversion == ASCII_TO_BINARY) {
+            // For now, assume that binary targets are 4 bytes long.
+            assert(_targetTypeSize == 4);
+            if (*targetBufLen < _targetTypeSize) {
+                resize(targetBuf, targetBufLen, _targetTypeSize);
+            }
+            int label = std::atoi(elem->_targets[0].c_str());
+            memcpy(*targetBuf, &label, sizeof(int));
+            *targetLen = _targetTypeSize;
+        } else {
+            throw std::runtime_error("Unknown conversion specified for target\n");
         }
-        int label = atoi(elem->_targets[0].c_str());
-        memcpy(*targetBuf, &label, sizeof(int));
-        *targetLen = sizeof(int);
         return 0;
     }
 
@@ -237,4 +255,6 @@ private:
     Index                       _index;
     int                         _itemIdx;
     ifstream                    _ifs;
+    int                         _targetTypeSize;
+    int                         _targetConversion;
 };

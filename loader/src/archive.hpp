@@ -74,7 +74,8 @@ public:
     ArchiveWriter(int batchSize, const char* repoDir, const char* archiveDir,
                   const char* indexFile, const char* archivePrefix,
                   bool shuffle,
-                  MediaParams* params, MediaParams* ingestParams)
+                  MediaParams* params, MediaParams* ingestParams,
+                  int targetTypeSize, int targetConversion)
     : _batchSize(batchSize),
       _repoDir(repoDir), _archiveDir(archiveDir),
       _indexFile(indexFile),
@@ -83,7 +84,8 @@ public:
       _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0) {
         _media = Media::create(params, ingestParams, 0);
         _writeThread = new WriteThread(this);
-        _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle);
+        _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle,
+                                 targetTypeSize, targetConversion);
         if (Reader::exists(_archiveDir) == true) {
             return;
         }
@@ -188,7 +190,9 @@ public:
                   int startFileIdx,
                   int subsetPercent,
                   MediaParams* params,
-                  MediaParams* ingestParams)
+                  MediaParams* ingestParams,
+                  int targetTypeSize,
+                  int targetConversion)
     : Reader(batchSize, repoDir, indexFile, shuffle, reshuffle, subsetPercent),
       _archiveDir(archiveDir), _indexFile(indexFile),
       _archivePrefix(archivePrefix),
@@ -199,10 +203,9 @@ public:
             // Create a writer just in case. It will only be used if archive
             // files are missing or damaged.
             _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT,
-                                               repoDir, archiveDir,
-                                               indexFile, archivePrefix,
-                                               shuffle,
-                                               params, ingestParams);
+                    repoDir, archiveDir, indexFile, archivePrefix,
+                    shuffle, params, ingestParams,
+                    targetTypeSize, targetConversion);
         }
         _itemCount = *itemCount;
         assert(_itemCount != 0);

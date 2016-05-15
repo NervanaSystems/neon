@@ -30,7 +30,8 @@
 class DecodeThreadPool : public ThreadPool {
 public:
     DecodeThreadPool(int count, int batchSize,
-                     int datumSize, int targetSize,
+                     int datumSize, int datumTypeSize,
+                     int targetSize, int targetTypeSize,
                      BufferPool& in, BufferPool& out,
                      Device* device,
                      MediaParams* mediaParams)
@@ -39,8 +40,10 @@ public:
       _in(in), _out(out), _endSignaled(0),
       _manager(0), _stopManager(false), _managerStopped(false), _inputBuf(0),
       _bufferIndex(0), _batchSize(batchSize),
-      _datumSize(datumSize),
-      _targetSize(targetSize),
+      _datumSize(datumSize), _datumTypeSize(datumTypeSize),
+      _targetSize(targetSize), _targetTypeSize(targetTypeSize),
+      _datumLen(datumSize * datumTypeSize),
+      _targetLen(targetSize * targetTypeSize),
       _device(device) {
         assert(_itemsPerThread * count >= _batchSize);
         assert(_itemsPerThread * (count - 1) < _batchSize);
@@ -52,7 +55,6 @@ public:
             _endInds.push_back(0);
             _dataOffsets.push_back(0);
             _targetOffsets.push_back(0);
-            _targetSpans.push_back(0);
         }
     }
 
@@ -104,9 +106,8 @@ protected:
         }
 
         _endInds[id] = _startInds[id] + itemCount;
-        _dataOffsets[id] = _startInds[id] * _datumSize;
-        _targetOffsets[id] = _startInds[id] * _targetSize;
-        _targetSpans[id] = itemCount * _targetSize;
+        _dataOffsets[id] = _startInds[id] * _datumLen;
+        _targetOffsets[id] = _startInds[id] * _targetLen;
         while (_done == false) {
             work(id);
         }
@@ -134,23 +135,27 @@ protected:
         // write into non-overlapping regions.
         BufferPair& outBuf = _out.getForWrite();
         char* dataBuf = outBuf.first->_data + _dataOffsets[id];
-        // Handle the data.
+        char* targetBuf = outBuf.second->_data + _targetOffsets[id];
         for (int i = start; i < end; i++) {
+            // Handle the data.
             int itemSize = 0;
             char* item = _inputBuf->first->getItem(i, itemSize);
             if (item == 0) {
                 return;
             }
-            _media[id]->transform(item, itemSize, dataBuf, _datumSize);
-            dataBuf += _datumSize;
-        }
+            _media[id]->transform(item, itemSize, dataBuf, _datumLen);
+            dataBuf += _datumLen;
 
-        // Handle the targets.
-        char* targetDst = outBuf.second->_data + _targetOffsets[id];
-        int targetSize = 0;
-        char* targetSrc = _inputBuf->second->getItem(start, targetSize);
-        assert(targetSize == _targetSize);
-        memcpy(targetDst, targetSrc, _targetSpans[id]);
+            // Handle the targets.
+            int targetLen = 0;
+            char* target = _inputBuf->second->getItem(i, targetLen);
+            memcpy(targetBuf, target, targetLen);
+            if (_targetLen > targetLen) {
+                // Pad the rest of the buffer with zeros.
+                memset(targetBuf + targetLen, 0, _targetLen - targetLen);
+            }
+            targetBuf += _targetLen;
+        }
 
         {
             lock_guard<mutex> lock(_mutex);
@@ -183,10 +188,10 @@ protected:
             }
             // At this point, we have decoded data for the whole minibatch.
             BufferPair& outBuf = _out.getForWrite();
-            // TODO: The transpose operation needs to be aware of the
-            // underlying data type's size.
-            Matrix<char>::transpose(outBuf.first->_data,
-                                    _batchSize, _datumSize);
+            Matrix::transpose(outBuf.first->_data, _batchSize,
+                              _datumSize, _datumTypeSize);
+            Matrix::transpose(outBuf.second->_data, _batchSize,
+                              _targetSize, _targetTypeSize);
             // Copy to device.
             _device->copyData(_bufferIndex, outBuf.first->_data,
                               outBuf.first->_size);
@@ -246,9 +251,14 @@ private:
     vector<int>                 _endInds;
     vector<int>                 _dataOffsets;
     vector<int>                 _targetOffsets;
-    vector<int>                 _targetSpans;
     int                         _datumSize;
+    int                         _datumTypeSize;
     int                         _targetSize;
+    int                         _targetTypeSize;
+    // Datum length in bytes.
+    int                         _datumLen;
+    // Target length in bytes.
+    int                         _targetLen;
     Device*                     _device;
     Media**                     _media;
 };
@@ -295,12 +305,16 @@ public:
            const char* indexFile, const char* archivePrefix,
            bool shuffle, bool reshuffle,
            int startFileIdx,
-           int datumSize, int targetSize, int subsetPercent,
+           int datumSize, int datumTypeSize,
+           int targetSize, int targetTypeSize,
+           int targetConversion, int subsetPercent,
            MediaParams* mediaParams,
            DeviceParams* deviceParams,
            MediaParams* ingestParams)
     : _first(true),
-      _batchSize(batchSize), _datumSize(datumSize), _targetSize(targetSize),
+      _batchSize(batchSize),
+      _datumSize(datumSize), _datumTypeSize(datumTypeSize),
+      _targetSize(targetSize), _targetTypeSize(targetTypeSize),
       _readBufs(0), _decodeBufs(0), _readThread(0), _decodeThreads(0),
       _device(0), _reader(0), _mediaParams(mediaParams) {
         _device = Device::create(deviceParams);
@@ -308,7 +322,8 @@ public:
                                     indexFile, archivePrefix,
                                     shuffle, reshuffle,
                                     startFileIdx, subsetPercent,
-                                    mediaParams, ingestParams);
+                                    mediaParams, ingestParams,
+                                    targetTypeSize, targetConversion);
     }
 
     virtual ~Loader() {
@@ -323,20 +338,21 @@ public:
     int start() {
         _first = true;
         try {
-            // TODO: Read buffers could be smaller because we
-            // usually deal with compressed data.
-            _readBufs = new BufferPool(_batchSize * _datumSize,
-                                       _batchSize * _targetSize);
+            int dataLen = _batchSize * _datumSize * _datumTypeSize;
+            int targetLen = _batchSize * _targetSize * _targetTypeSize;
+            // Start the read buffers off with a reasonable size. They will
+            // get resized as needed.
+            _readBufs = new BufferPool(dataLen / 8, targetLen);
             _readThread = new ReadThread(*_readBufs, _reader);
             bool pinned = (_device->_type != CPU);
-            _decodeBufs = new BufferPool(_batchSize * _datumSize,
-                                         _batchSize * _targetSize, pinned);
+            _decodeBufs = new BufferPool(dataLen, targetLen, pinned);
             int numCores = thread::hardware_concurrency();
             int itemsPerThread = (_batchSize - 1) /  numCores + 1;
             int threadCount =  (_batchSize - 1) / itemsPerThread + 1;
             threadCount = std::min(threadCount, _batchSize);
-            _decodeThreads = new DecodeThreadPool(threadCount,
-                    _batchSize, _datumSize, _targetSize,
+            _decodeThreads = new DecodeThreadPool(threadCount, _batchSize,
+                    _datumSize, _datumTypeSize,
+                    _targetSize, _targetTypeSize,
                     *_readBufs, *_decodeBufs, _device, _mediaParams);
         } catch(std::bad_alloc&) {
             return -1;
@@ -431,7 +447,9 @@ private:
     bool                        _first;
     int                         _batchSize;
     int                         _datumSize;
+    int                         _datumTypeSize;
     int                         _targetSize;
+    int                         _targetTypeSize;
     BufferPool*                 _readBufs;
     BufferPool*                 _decodeBufs;
     ReadThread*                 _readThread;
