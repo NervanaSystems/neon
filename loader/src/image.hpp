@@ -13,6 +13,7 @@
  limitations under the License.
 */
 
+#pragma once
 #include <string.h>
 #include <stdlib.h>
 #include <fstream>
@@ -31,8 +32,6 @@ using cv::Size2i;
 using cv::Scalar_;
 using std::ofstream;
 using std::vector;
-
-#pragma once
 
 typedef struct {
     Rect cropBox;
@@ -224,7 +223,7 @@ void resizeInput(vector<char> &jpgdata, int maxDim){
     // is equal to maxDim.  equivalent to "512x512^>" for maxDim=512 geometry argument in
     // imagemagick
 
-    Mat image = Mat(1, jpgdata.size(), CV_8UC3, &jpgdata[0]);
+    Mat image(1, jpgdata.size(), CV_8UC3, &jpgdata[0]);
     Mat decodedImage = cv::imdecode(image, CV_LOAD_IMAGE_COLOR);
 
     int minDim = std::min(decodedImage.rows, decodedImage.cols);
@@ -355,10 +354,10 @@ public:
 private:
     void decode(char* item, int itemSize, Mat* dst) {
         if (_params->_channelCount == 1) {
-            Mat image = Mat(1, itemSize, CV_8UC1, item);
+            Mat image(1, itemSize, CV_8UC1, item);
             cv::imdecode(image, CV_LOAD_IMAGE_GRAYSCALE, dst);
         } else if (_params->_channelCount == 3) {
-            Mat image = Mat(1, itemSize, CV_8UC3, item);
+            Mat image(1, itemSize, CV_8UC3, item);
             cv::imdecode(image, CV_LOAD_IMAGE_COLOR, dst);
         } else {
             stringstream ss;

@@ -102,8 +102,9 @@ public:
         _writeThread->stop();
         delete _writeThread;
         delete _reader;
-        delete _targetBuf;
-        delete _dataBuf;
+        delete[] _targetBuf;
+        delete[] _dataBuf;
+        delete _media;
     }
 
     void waitFor(string& name) {

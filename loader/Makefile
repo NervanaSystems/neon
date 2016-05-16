@@ -18,8 +18,9 @@ SRCS            := $(wildcard src/*.hpp)
 CFLAGS          := -Wall -Wno-deprecated-declarations -O3 -std=c++11
 CFLAGSDBG       := -g -Wall -O0 -std=c++11
 CC              := g++
-LOADER          := bin/loader
-LOADERSO        := bin/loader.so
+THREAD_TEST     := bin/thread_test
+DECODE_TEST     := bin/decode_test
+LOADER_SO       := bin/loader.so
 UNAME_S         := $(shell uname -s)
 ifeq ($(UNAME_S), FreeBSD)
 	CC          := clang++
@@ -44,7 +45,7 @@ LIBS            := $(IMGLIBS) $(VIDLIBS)
 
 ifeq ($(HAS_GPU), true)
 ifeq ($(CUDA_ROOT),)
-	CUDA_ROOT   := $(patsubst %/bin/nvcc,%, $(realpath $(shell which nvcc)))
+	CUDA_ROOT   := $(patsubst %/bin/nvcc,%, $(shell which nvcc))
 endif
 
 	GPUFLAG     := -DHAS_GPU
@@ -61,19 +62,19 @@ $(shell mkdir -p bin)
 
 .PHONY: clean
 
-all: $(LOADER) $(LOADERSO)
+all: $(THREAD_TEST) $(DECODE_TEST) $(LOADER_SO)
 
-$(LOADER): src/loader.cpp $(SRCS)
+$(THREAD_TEST): test/thread_test.cpp src/loader.cpp $(SRCS)
 	@echo "Building $@..."
-	$(CC) -o $@ -DSTANDALONE $(CFLAGSDBG) $(GPUFLAG) $(MEDIAFLAGS) $< $(INC) $(LDIR) $(LIBS)
+	$(CC) -o $@ $(CFLAGSDBG) $(GPUFLAG) $(MEDIAFLAGS) $< $(INC) -Isrc $(LDIR) $(LIBS)
 
-test/decode_test: test/decode_test.cpp $(SRCS)
+$(DECODE_TEST): test/decode_test.cpp $(SRCS)
 	@echo "Building $@..."
-	$(CC) -o $@ -DSTANDALONE $(CFLAGSDBG) $(MEDIAFLAGS) $< $(INC) -Isrc $(LDIR) $(LIBS)
+	$(CC) -o $@ $(CFLAGSDBG) $(MEDIAFLAGS) $< $(INC) -Isrc $(LDIR) $(LIBS)
 
-$(LOADERSO): src/loader.cpp $(SRCS)
+$(LOADER_SO): src/loader.cpp $(SRCS)
 	@echo "Building $@..."
 	$(CC) -shared -o $@ -fPIC $(CFLAGS) $(GPUFLAG) $(MEDIAFLAGS) $< $(INC) $(LDIR) $(LIBS)
 
 clean:
-	@rm -vf *.o $(LOADER) $(LOADERSO)
+	@rm -vf *.o $(THREAD_TEST) $(DECODE_TEST) $(LOADER_SO)

@@ -36,7 +36,7 @@ int main (int argc, char **argv) {
 
     int label_idx = *reinterpret_cast<int *>(&labels[0]);
     // We'll do 10 decodings of the same image;
-    Image decoder(imgp, iip);
+    Image decoder(imgp, iip, 0);
     int num_decode = 10;
     int num_pixels = imgp->getSize().area() * 3;
     ByteVect outbuf(num_pixels * num_decode);
