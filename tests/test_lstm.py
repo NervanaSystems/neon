@@ -37,8 +37,8 @@ from neon import NervanaObject
 from neon.initializers.initializer import Constant, Gaussian
 from neon.layers.recurrent import LSTM
 from neon.transforms import Logistic, Tanh
-from tests.lstm_ref import LSTM as RefLSTM
-from tests.utils import sparse_rand, allclose_with_out
+from lstm_ref import LSTM as RefLSTM
+from utils import sparse_rand, allclose_with_out
 
 
 def pytest_generate_tests(metafunc):

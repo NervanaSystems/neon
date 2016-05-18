@@ -757,13 +757,8 @@ class NervanaGPU(Backend):
         self.warmup = False
 
         # store histograms for batched memcpy
-        self.hist_bins = hist_bins
-        self.hist_offset = hist_offset
-        self.hist_map = dict()
-        self.hist_idx = 0
-        self.hist_max = 4*4096
-        self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
-        drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
+        self.hist_bins, self.hist_offset = None, None
+        self.set_hist_buffers(hist_bins, hist_offset)
 
         # Fall back to CUDA C kernels on older (pre-Maxwell) GPU generations
         self.compute_capability = drv.Device(self.device_id).compute_capability()
@@ -782,6 +777,16 @@ class NervanaGPU(Backend):
 
         self.enable_winograd = enable_winograd
         self.cache_dir = get_cache_dir()
+
+    def set_hist_buffers(self, hist_bins, hist_offset):
+        if (hist_bins != self.hist_bins or hist_offset != self.hist_offset):
+            self.hist_bins = hist_bins
+            self.hist_offset = hist_offset
+            self.hist_map = dict()
+            self.hist_idx = 0
+            self.hist_max = 4*4096
+            self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
+            drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
 
     def scratch_buffer_init(self):
         self.scratch_offset = 0

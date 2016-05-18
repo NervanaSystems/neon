@@ -1,18 +1,20 @@
 import numpy as np
-from neon.backends import gen_backend
+import pytest
+from neon import NervanaObject
 
 
-def test_sr(device_id):
+@pytest.mark.hasgpu
+def test_sr(backend_gpu):
     """
     Performs stochastic rounding with 1 bit mantissa for an addition operation
     and checks that the resulting array is rounded correctly
     """
-    gpu = gen_backend(backend='gpu', stochastic_round=False, device_id=device_id)
+    be = NervanaObject.be
     n = 10
-    A = gpu.ones((n, n), dtype=np.float16)
-    B = gpu.ones((n, n), dtype=np.float16)
-    gpu.multiply(B, 0.1, out=B)
-    C = gpu.ones((n, n), dtype=np.float16)
+    A = be.ones((n, n), dtype=np.float16)
+    B = be.ones((n, n), dtype=np.float16)
+    be.multiply(B, 0.1, out=B)
+    C = be.ones((n, n), dtype=np.float16)
     C.rounding = 1
     C[:] = A + B
     C_host = C.get()

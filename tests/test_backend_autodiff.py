@@ -19,8 +19,7 @@ import numpy as np
 
 from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
-from neon.backends.tests.utils import call_func, gen_backend_tensors
-from neon.backends.tests.utils import tensors_allclose
+from utils import call_func, gen_backend_tensors, tensors_allclose
 
 
 def get_audiff_gradient(f, be, tensors):

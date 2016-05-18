@@ -20,7 +20,7 @@ from neon import NervanaObject
 from neon.layers import Sequential, Conv, Pooling, MergeBroadcast, Affine
 from neon.initializers.initializer import Gaussian, Constant
 from neon.transforms import Rectlin, Softmax
-from tests.utils import allclose_with_out
+from utils import allclose_with_out
 
 init1 = Gaussian(scale=0.01)
 relu = Rectlin()

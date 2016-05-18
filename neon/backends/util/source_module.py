@@ -2,8 +2,8 @@ try:
     from pycuda.compiler import SourceModule as pycSourceModule
 except ImportError:
     print("PyCUDA module not found")
-
 from neon.util.persist import get_cache_dir
+
 
 class SourceModule(pycSourceModule):
     """

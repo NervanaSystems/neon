@@ -21,6 +21,8 @@ import numpy as np
 import pytest
 
 from neon.backends import gen_backend
+from neon.backends.nervanacpu import NervanaCPU
+
 
 def pytest_addoption(parser):
     '''
@@ -31,14 +33,17 @@ def pytest_addoption(parser):
     parser.addoption("--device_id", type=int, default=0, help="GPU device to use")
     return
 
+
 @pytest.fixture
 def device_id(request):
     return request.config.getoption("--device_id")
 
+
 @pytest.fixture(scope='session')
 def data():
-   path_to_data = '~/nervana/data/'
-   return path_to_data
+    path_to_data = '~/nervana/data/'
+    return path_to_data
+
 
 def get_backend(request, datatype=np.float32):
     be = gen_backend(backend=request.param,
@@ -49,6 +54,7 @@ def get_backend(request, datatype=np.float32):
     if request.param == 'gpu':
         be.enable_winograd = 2 if be.enable_winograd else be.enable_winograd
     return be
+
 
 @pytest.fixture(scope='module', params=['gpu', 'cpu'])
 def backend_default(request):
@@ -71,6 +77,7 @@ def backend_default(request):
     # backend or use the NervanaObject.be global
     return be
 
+
 @pytest.fixture(scope='module', params=['gpu'])
 def backend_gpu(request):
     '''
@@ -92,6 +99,27 @@ def backend_gpu(request):
     # backend or use the NervanaObject.be global
     return be
 
+
+@pytest.fixture(scope='module', params=['cpu'])
+def backend_cpu(request):
+    '''
+    Fixture that returns a cpu backend using 32 bit dtype.
+    For use in tests like gradient checking whihch need higher
+    precision
+    '''
+    be = get_backend(request, datatype=np.float32)
+
+    # add a cleanup call - will run after all tests in module are done
+    def cleanup():
+        be = request.getfuncargvalue('backend_cpu')
+        del be
+    request.addfinalizer(cleanup)
+
+    # tests using this fixture can access the backend object from
+    # backend or use the NervanaObject.be global
+    return be
+
+
 @pytest.fixture(scope='module', params=['cpu'])
 def backend_cpu64(request):
     '''
@@ -111,6 +139,7 @@ def backend_cpu64(request):
     # backend or use the NervanaObject.be global
     return be
 
+
 def idfunc(vals):
     '''
     Print out a human readable format for the parameterized tests
@@ -119,7 +148,10 @@ def idfunc(vals):
     dtype = dtype.split("numpy.")[1].strip("'>")
     return vals[0] + '_' + dtype
 
-gpu_cpu_32_16 = itertools.product(['gpu','cpu'], [np.float16, np.float32])
+
+gpu_cpu_32_16 = itertools.product(['gpu', 'cpu'], [np.float16, np.float32])
+
+
 @pytest.fixture(scope='module', params=list(gpu_cpu_32_16), ids=idfunc)
 def backend_tests(request):
     '''
@@ -140,3 +172,48 @@ def backend_tests(request):
     # tests using this fixture can access the backend object from
     # backend or use the NervanaObject.be global
     return be
+
+def get_backend_pair(device_id, dtype=np.float32, bench=False):
+    from neon.backends.nervanagpu import NervanaGPU
+    ng = NervanaGPU(default_dtype=dtype, bench=bench, device_id=device_id)
+    nc = NervanaCPU(default_dtype=dtype)
+    return (ng, nc)
+
+@pytest.fixture(scope='module')
+def backend_pair(request):
+    ng, nc = get_backend_pair(device_id=request.config.getoption("--device_id"))
+
+    def cleanup():
+        ng, nc = request.getfuncargvalue('backend_pair')
+        del ng
+        del nc
+    request.addfinalizer(cleanup)
+
+    return (ng, nc)
+
+
+@pytest.fixture(scope='module')
+def backend_pair_bench(request):
+    ng, nc = get_backend_pair(device_id=request.config.getoption("--device_id"), bench=True)
+
+    def cleanup():
+        ng, nc = request.getfuncargvalue('backend_pair_bench')
+        del ng
+        del nc
+    request.addfinalizer(cleanup)
+
+    return (ng, nc)
+
+
+@pytest.fixture(scope='module', params=[np.float16, np.float32])
+def backend_pair_dtype(request):
+    ng, nc = get_backend_pair(dtype=request.param,
+                              device_id=request.config.getoption("--device_id"))
+
+    def cleanup():
+        ng, nc = request.getfuncargvalue('backend_pair_dtype')
+        del ng
+        del nc
+    request.addfinalizer(cleanup)
+
+    return (ng, nc)

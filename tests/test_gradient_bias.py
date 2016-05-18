@@ -22,7 +22,7 @@ import numpy as np
 from neon import NervanaObject
 from neon.layers.layer import Bias
 from neon.initializers.initializer import Gaussian
-from tests.grad_funcs import general_gradient_comp
+from grad_funcs import general_gradient_comp
 
 
 # add a reset methods to the layer classes

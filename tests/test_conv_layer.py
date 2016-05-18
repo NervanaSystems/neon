@@ -20,7 +20,7 @@ import numpy as np
 from neon import NervanaObject
 from neon.layers.layer import Convolution
 from neon.initializers.initializer import Uniform
-from tests.utils import allclose_with_out
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):

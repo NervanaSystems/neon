@@ -16,10 +16,10 @@
 
 import itertools
 import numpy as np
+import pytest
 
 from neon import NervanaObject
-from neon.backends.tests.utils import call_func, gen_backend_tensors
-from neon.backends.tests.utils import tensors_allclose
+from utils import call_func, gen_backend_tensors, tensors_allclose
 
 
 class TestFuncs():
@@ -28,40 +28,26 @@ class TestFuncs():
     A collection of functions to be tested
     """
     @staticmethod
-    def func_reduction_mix_axis_0(be, x0, x1, x2, x3):
-        f1 = be.mean(x0, axis=0, keepdims=True)
-        f2 = (be.max(x1, axis=0, keepdims=True) + be.min(x1, axis=0, keepdims=True))
+    def func_dot_reduction_mix(be, x0, x1, x2, x3, x4):
+        f1 = be.std(be.var(x0, axis=0, keepdims=True), axis=1, keepdims=True)
+        f2 = (be.max(x1, axis=0, keepdims=True) +
+              be.min(x1, axis=0, keepdims=True))
         f3 = be.std(x2, keepdims=True)
-        if be is np:
-            f4 = be.argmax(x3, axis=0).reshape(-1, x3.shape[1])
-        else:
-            f4 = be.argmax(x3, axis=0, keepdims=True)
-        x4 = be.empty((4, x0.shape[1]))
-        x4[0, :] = f1
-        x4[1, :] = f2
-        x4[2, :] = f3
-        x4[3, :] = f4
-        return x4
+        f4 = be.dot(1.0 / x3, x4 / x2)
+        f5 = be.dot(x3, x4 - x0)
+        f6 = be.dot(x2 / f4, f5 + x3)
+        return f1 + f2 + f3 + f4 + 1.0 / (be.dot(f5, f6))
 
     @staticmethod
-    def func_reduction_mix_axis_1(be, x0, x1, x2, x3):
-        f1 = be.mean(x0, axis=1, keepdims=True)
-        f2 = (be.max(x1, axis=1, keepdims=True) + be.min(x1, axis=1, keepdims=True))
-        f3 = be.std(x2, axis=1, keepdims=True)
-        if be is np:
-            f4 = be.argmax(x3, axis=1).reshape(x3.shape[0], -1)
-        else:
-            f4 = be.argmax(x3, axis=1, keepdims=True)
-
-        if be is np:
-            x4 = np.hstack([f1, f2, f3, f4])
-        else:
-            x4 = be.empty((x0.shape[0], 4))
-            x4[:, 0] = f1
-            x4[:, 1] = f2
-            x4[:, 2] = f3
-            x4[:, 3] = f4
-        return x4
+    def func_dot_reduction_transpose_mix(be, x0, x1, x2, x3, x4):
+        f1 = be.std(be.var(x0, axis=0, keepdims=True), axis=1, keepdims=True)
+        f2 = (be.max(x1, axis=0, keepdims=True) +
+              be.min(x1, axis=0, keepdims=True))
+        f3 = be.std(x2, keepdims=True).T
+        f4 = be.dot(1.0 / x3, (x4 / x2).T).T
+        f5 = be.dot(x3, (x4 - x0).T)
+        f6 = be.dot(x2 / f4.T, f5 + x3).T
+        return f1 + f2 + f3 + f4 + 1.0 / (be.dot(f5, f6))
 
 
 def pytest_generate_tests(metafunc):
@@ -73,11 +59,11 @@ def pytest_generate_tests(metafunc):
 
     # test params
     test_funcs = [
-        TestFuncs.func_reduction_mix_axis_0,
-        TestFuncs.func_reduction_mix_axis_1
+        TestFuncs.func_dot_reduction_mix,
+        TestFuncs.func_dot_reduction_transpose_mix,
     ]
     test_tensor_flags = ['pos_rand', 'neg_rand', 'rand']
-    test_tensor_dims = [(2, 2), (10, 32), (50, 50), (50, 128)]
+    test_tensor_dims = [(2, 2)]
 
     # generate params for testing
     if 'custom_args' in metafunc.fixturenames:
@@ -89,6 +75,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("custom_args", fargs)
 
 
+@pytest.mark.hasgpu
 def test_vs_numpy(backend_tests, custom_args):
     test_idx, f, flag, dim = custom_args
 
@@ -97,9 +84,9 @@ def test_vs_numpy(backend_tests, custom_args):
     dtype = be.default_dtype
 
     # tensors
-    tensors = gen_backend_tensors([np, be], [dim] * 4, [flag] * 4, dtype=dtype)
+    tensors = gen_backend_tensors([np, be], [dim] * 5, [flag] * 5, dtype=dtype)
 
-    # compare function values
+    # compare function value and gradient
     numpy_func_val = call_func(f, np, tensors[0])
     backend_func_val = call_func(f, be, tensors[1])
 

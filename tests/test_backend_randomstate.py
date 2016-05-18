@@ -15,11 +15,12 @@
 # pylint: skip-file
 
 import numpy as np
-
+import pytest
 from neon.backends import gen_backend
-from neon.backends.tests.utils import tensors_allclose
+from utils import tensors_allclose
 
 
+@pytest.mark.hasgpu
 def test_gpu_randomstate(device_id):
     # run 1
     be = gen_backend(backend='gpu', rng_seed=100, device_id=device_id)
@@ -107,6 +108,7 @@ def test_cpu_randomstate():
     del(be)
 
 
+@pytest.mark.hasgpu
 def test_rng_funcs(backend_default):
     # like the tests above but also tests the rng_get_state and rng_set_state funcs
     be = backend_default

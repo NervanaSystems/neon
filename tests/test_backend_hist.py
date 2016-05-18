@@ -14,10 +14,9 @@
 
 import numpy as np
 import itertools as itt
-from neon.backends.nervanacpu import NervanaCPU
-from neon.backends.nervanagpu import NervanaGPU
-from neon.backends.tests.utils import tensors_allclose
+import pytest
 from neon.backends.util import check_gpu
+from utils import tensors_allclose
 
 
 def ref_hist(inp, nbins=64, offset=-48):
@@ -39,71 +38,6 @@ def ref_hist(inp, nbins=64, offset=-48):
     if (np_hist.ndim < 2):
         np_hist = np_hist.reshape(1, np_hist.size)
     return np_hist
-
-
-def test_edge_cases(device_id):
-    """
-    Test several edge cases related to min/max bin, and rounding.
-
-    Also test backend dump_hist_data functionality.
-    """
-    gpuflag = (check_gpu.get_compute_capability(0) >= 3.0)
-    if gpuflag is False:
-        raise RuntimeError("Device does not have CUDA compute capability 3.0 or greater")
-    ng = NervanaGPU(device_id=device_id)
-    nc = NervanaCPU()
-    # edge case test
-    np_ref = dict()
-    inputs = [
-        ("edges", np.array([2 ** -48, 2 ** 15], dtype=np.float32)),
-        ("rounding", np.array([2 ** 5, 63.99998856, 2 ** 6, 2 ** -3, 2 ** -4,
-                               0.11262291, 92.22483826], dtype=np.float32)),
-        ("fp16 rounding", np.array([45.21875], dtype=np.float16))
-    ]
-    for tag, inp in inputs:
-        np_ref[tag] = ref_hist(inp)
-        for be in [ng, nc]:
-            be_inp = be.array(inp)
-            be_hist = be_inp.hist(tag)
-            assert tensors_allclose(np_ref[tag], be_hist), tag + str(be)
-
-    # dump_hist_data test
-    for be in [ng, nc]:
-        be_hist_data, be_hist_map = be.dump_hist_data()
-        for tag, inp in inputs:
-            be_data = be_hist_data[be_hist_map[tag]]
-            assert tensors_allclose(np_ref[tag], be_data), tag + str(be)
-
-    del(ng)
-    del(nc)
-
-
-def test_hist(nbin_offset_dim_dtype_inp, device_id):
-    """
-    Compare the nervanagpu and nervanacpu hist implementation to the reference
-    implementation above.
-
-    Parameterized test case, uses pytest_generate_test to enumerate dim_dtype_inp
-    tuples that drive the test.
-    """
-
-    (nbins, offset), dim, dtype, (name, inp_gen) = nbin_offset_dim_dtype_inp
-
-    gpuflag = (check_gpu.get_compute_capability(0) >= 3.0)
-    if gpuflag is False:
-        raise RuntimeError("Device does not have CUDA compute capability 3.0 or greater")
-
-    ng = NervanaGPU(hist_bins=nbins, hist_offset=offset, device_id=device_id)
-    nc = NervanaCPU(hist_bins=nbins, hist_offset=offset)
-
-    np_inp = inp_gen(dim).astype(dtype)
-    np_hist = ref_hist(np_inp, nbins=nbins, offset=offset)
-    for be in [ng, nc]:
-        be_inp = be.array(np_inp, dtype=dtype)
-        be_hist = be_inp.hist(name)
-        assert tensors_allclose(np_hist, be_hist)
-    del(ng)
-    del(nc)
 
 
 def pytest_generate_tests(metafunc):
@@ -151,3 +85,66 @@ def pytest_generate_tests(metafunc):
     if 'nbin_offset_dim_dtype_inp' in metafunc.fixturenames:
         fargs = itt.product(bin_offs, dims, dtypes, inputs)
         metafunc.parametrize("nbin_offset_dim_dtype_inp", fargs)
+
+
+@pytest.mark.hasgpu
+def test_edge_cases(backend_pair):
+    """
+    Test several edge cases related to min/max bin, and rounding.
+
+    Also test backend dump_hist_data functionality.
+    """
+    gpuflag = (check_gpu.get_compute_capability(0) >= 3.0)
+    if gpuflag is False:
+        raise RuntimeError("Device does not have CUDA compute capability 3.0 or greater")
+    ng, nc = backend_pair
+
+    # edge case test
+    np_ref = dict()
+    inputs = [
+        ("edges", np.array([2 ** -48, 2 ** 15], dtype=np.float32)),
+        ("rounding", np.array([2 ** 5, 63.99998856, 2 ** 6, 2 ** -3, 2 ** -4,
+                               0.11262291, 92.22483826], dtype=np.float32)),
+        ("fp16 rounding", np.array([45.21875], dtype=np.float16))
+    ]
+    for tag, inp in inputs:
+        np_ref[tag] = ref_hist(inp)
+        for be in [ng, nc]:
+            be_inp = be.array(inp)
+            be_hist = be_inp.hist(tag)
+            assert tensors_allclose(np_ref[tag], be_hist), tag + str(be)
+
+    # dump_hist_data test
+    for be in [ng, nc]:
+        be_hist_data, be_hist_map = be.dump_hist_data()
+        for tag, inp in inputs:
+            be_data = be_hist_data[be_hist_map[tag]]
+            assert tensors_allclose(np_ref[tag], be_data), tag + str(be)
+
+
+@pytest.mark.hasgpu
+def test_hist(nbin_offset_dim_dtype_inp, backend_pair):
+    """
+    Compare the nervanagpu and nervanacpu hist implementation to the reference
+    implementation above.
+
+    Parameterized test case, uses pytest_generate_test to enumerate dim_dtype_inp
+    tuples that drive the test.
+    """
+
+    (nbins, offset), dim, dtype, (name, inp_gen) = nbin_offset_dim_dtype_inp
+
+    gpuflag = (check_gpu.get_compute_capability(0) >= 3.0)
+    if gpuflag is False:
+        raise RuntimeError("Device does not have CUDA compute capability 3.0 or greater")
+
+    ng, nc = backend_pair
+    ng.set_hist_buffers(nbins, offset)
+    nc.set_hist_buffers(nbins, offset)
+
+    np_inp = inp_gen(dim).astype(dtype)
+    np_hist = ref_hist(np_inp, nbins=nbins, offset=offset)
+    for be in [ng, nc]:
+        be_inp = be.array(np_inp, dtype=dtype)
+        be_hist = be_inp.hist(name)
+        assert tensors_allclose(np_hist, be_hist)

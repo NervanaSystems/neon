@@ -373,7 +373,7 @@ class XpropDirect(KernelGroup):
         TRS   = T * RS
         TRSK  = K * TRS
         k     = _closest_divisor(gridK, 128 // blockK)
-        P2    = max(P // 2, 1)
+        P2    = P // 2
         Q2    = Q * 2
         Qk    = Q2 * k
         PQk   = P * Q * k
@@ -442,7 +442,7 @@ class XpropDirect(KernelGroup):
         gridQ   = _ceil_div(Q, blockQ)
         gridN   = _ceil_div(N, blockN)
         gridK   = _ceil_div(K, 64)
-        gridP2  = max(gridP // 2, 1)
+        gridP2  = gridP // 2
         gridQ2  = gridQ * 2
 
         RS       = R * S

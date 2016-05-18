@@ -17,11 +17,10 @@ To test pool layer operations between NervanaGPU, NervanaCPU against numpy.
 """
 import itertools as itt
 import numpy as np
-from operator import mul
+import pytest
 
-from neon.backends.nervanagpu import NervanaGPU
-from neon.backends.nervanacpu import NervanaCPU
-from tests.utils import allclose_with_out
+from operator import mul
+from utils import allclose_with_out
 
 # how many times to repeat the fprop and bprop
 repeat = 5
@@ -29,7 +28,7 @@ repeat = 5
 
 def sliceable(dim, pad=0):
     """
-    colapse outer dimensions into one and preserve inner dimension
+    collapse outer dimensions into one and preserve inner dimension
     this allows for easy cpu operations in numpy
     """
     dim0 = reduce(mul, dim[:-1], 1) + pad
@@ -139,21 +138,19 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('poolargs', fargs)
 
 
-def test_pool_layer(poolargs, device_id):
+@pytest.mark.hasgpu
+def test_pool_layer(poolargs, backend_pair_bench):
 
     op = poolargs[0]
 
     dtype = np.float32
-
-    ng = NervanaGPU(stochastic_round=False, bench=True, device_id=device_id)
-    nc = NervanaCPU()
+    ng, nc = backend_pair_bench
 
     N, C = 32, 32
     D, H, W = 1, 32, 32
     J, T, R, S = 2, 1, 3, 3
     padding_j, padding_d, padding_h, padding_w = 0, 0, 0, 0
     strides_j, strides_d, strides_h, strides_w = 2, 1, 2, 2
-    # op = 'max'
 
     pool_ng = ng.pool_layer(
         dtype,
@@ -206,7 +203,6 @@ def test_pool_layer(poolargs, device_id):
         assert allclose_with_out(ngA.get(), ncA.get(), rtol=0, atol=1e-4)
         assert allclose_with_out(ncA.get(), cpuA, rtol=0, atol=1e-5)
 
-    del ng, nc
 
 if __name__ == '__main__':
     fargs = ["max"]

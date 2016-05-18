@@ -13,8 +13,7 @@
 # limitations under the License.
 
 import numpy as np
-from neon.backends.nervanagpu import NervanaGPU
-from neon.backends.nervanacpu import NervanaCPU
+import pytest
 
 
 def slicable(dim, pad=0):
@@ -22,9 +21,9 @@ def slicable(dim, pad=0):
     return (dim0, dim[-1])
 
 
-def test_pooling(device_id):
-    ng = NervanaGPU(stochastic_round=False, bench=True, device_id=device_id)
-    nc = NervanaCPU()
+@pytest.mark.hasgpu
+def test_pooling(backend_pair_bench):
+    ng, nc = backend_pair_bench
     layer_args = dict(dtype=np.float32, N=122, C=16, D=1, H=32, W=32, J=5)
     pool_test_args = dict(ones=0, cpu=1, ng=ng, nc=nc,
                           alpha=1.0,  # not supported in CPU

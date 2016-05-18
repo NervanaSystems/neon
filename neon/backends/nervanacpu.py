@@ -538,12 +538,17 @@ class NervanaCPU(Backend):
 
         logger.info("Initialized NervanaCPU")
 
-        self.hist_bins = hist_bins
-        self.hist_offset = hist_offset
-        self.hist_max = 4096
-        self.hist_buf = self.empty((self.hist_max, hist_bins), dtype=np.int32)
-        self.hist_idx = 0
-        self.hist_map = dict()
+        self.hist_bins, self.hist_offset = None, None
+        self.set_hist_buffers(hist_bins, hist_offset)
+
+    def set_hist_buffers(self, hist_bins, hist_offset):
+        if (hist_bins != self.hist_bins or hist_offset != self.hist_offset):
+            self.hist_bins = hist_bins
+            self.hist_offset = hist_offset
+            self.hist_max = 4096
+            self.hist_buf = self.empty((self.hist_max, hist_bins), dtype=np.int32)
+            self.hist_idx = 0
+            self.hist_map = dict()
 
     def gen_rng(self, seed=None):
         """

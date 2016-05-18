@@ -21,9 +21,9 @@ The Tensor types includes GPU and CPU Tensors
 
 import numpy as np
 import itertools as itt
-from neon.backends.nervanagpu import NervanaGPU
-from neon.backends.nervanacpu import NervanaCPU
-from neon.backends.tests.utils import tensors_allclose
+import pytest
+
+from utils import tensors_allclose
 
 
 def init_helper(lib, inA, inB, dtype):
@@ -55,24 +55,13 @@ def math_helper(lib, op, inA, inB, dtype):
     return C
 
 
-def compare_helper(op, inA, inB, dtype, device_id=0):
-    numpy_result = math_helper(np, op, inA, inB, dtype=np.float32)
+def compare_helper(op, inA, inB, ng, nc, dtype):
+    numpy_result = math_helper(np, op, inA, inB, dtype=np.float32).astype(dtype)
 
-    if np.dtype(dtype).kind == 'i' or np.dtype(dtype).kind == 'u':
-        numpy_result = np.around(numpy_result)
-        numpy_result = numpy_result.clip(
-            np.iinfo(dtype).min, np.iinfo(dtype).max)
-    numpy_result = numpy_result.astype(dtype)
+    nervanaGPU_result = math_helper(ng, op, inA, inB, dtype=dtype).get()
+    np.allclose(numpy_result, nervanaGPU_result, rtol=0, atol=1e-5)
 
-    if dtype in (np.float32, np.float16):
-        gpu = NervanaGPU(default_dtype=dtype, device_id=device_id)
-        nervanaGPU_result = math_helper(gpu, op, inA, inB, dtype=dtype)
-        nervanaGPU_result = nervanaGPU_result.get()
-        np.allclose(numpy_result, nervanaGPU_result, rtol=0, atol=1e-5)
-
-    cpu = NervanaCPU(default_dtype=dtype)
-    nervanaCPU_result = math_helper(cpu, op, inA, inB, dtype=dtype)
-    nervanaCPU_result = nervanaCPU_result.get()
+    nervanaCPU_result = math_helper(nc, op, inA, inB, dtype=dtype).get()
     np.allclose(numpy_result, nervanaCPU_result, rtol=0, atol=1e-5)
 
 
@@ -94,34 +83,36 @@ def pytest_generate_tests(metafunc):
             (1, 1023),
             (4, 3),
             ]
-    dtypes = [np.float32, np.float16]
 
     if 'fargs_tests' in metafunc.fixturenames:
-        fargs = itt.product(dims, dtypes)
+        fargs = itt.product(dims)
         metafunc.parametrize("fargs_tests", fargs)
 
 
-def test_math(fargs_tests, device_id):
-
-    dims, dtype = fargs_tests
+@pytest.mark.hasgpu
+def test_math(fargs_tests, backend_pair_dtype):
+    dims = fargs_tests[0]
+    ng, nc = backend_pair_dtype
+    dtype = ng.default_dtype
 
     randA = rand_unif(dtype, dims)
     randB = rand_unif(dtype, dims)
 
-    compare_helper('+', randA, randB, dtype, device_id=device_id)
-    compare_helper('-', randA, randB, dtype, device_id=device_id)
-    compare_helper('*', randA, randB, dtype, device_id=device_id)
-    compare_helper('>', randA, randB, dtype, device_id=device_id)
-    compare_helper('>=', randA, randB, dtype, device_id=device_id)
-    compare_helper('<', randA, randB, dtype, device_id=device_id)
-    compare_helper('<=', randA, randB, dtype, device_id=device_id)
+    compare_helper('+', randA, randB, ng, nc, dtype)
+    compare_helper('-', randA, randB, ng, nc, dtype)
+    compare_helper('*', randA, randB, ng, nc, dtype)
+    compare_helper('>', randA, randB, ng, nc, dtype)
+    compare_helper('>=', randA, randB, ng, nc, dtype)
+    compare_helper('<', randA, randB, ng, nc, dtype)
+    compare_helper('<=', randA, randB, ng, nc, dtype)
 
 
-def test_slicing(fargs_tests, device_id):
-    dims, dtype = fargs_tests
+@pytest.mark.hasgpu
+def test_slicing(fargs_tests, backend_pair_dtype):
+    dims = fargs_tests[0]
 
-    gpu = NervanaGPU(default_dtype=dtype, device_id=device_id)
-    cpu = NervanaCPU(default_dtype=dtype)
+    gpu, cpu = backend_pair_dtype
+    dtype = gpu.default_dtype
 
     array_np = np.random.uniform(-1, 1, dims).astype(dtype)
     array_ng = gpu.array(array_np, dtype=dtype)
@@ -140,5 +131,3 @@ def test_slicing(fargs_tests, device_id):
     array_nc[0] = 0
 
     assert tensors_allclose(array_ng, array_nc, rtol=0, atol=1e-3)
-
-    del(gpu)

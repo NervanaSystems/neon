@@ -37,8 +37,8 @@ from neon import NervanaObject
 from neon.initializers.initializer import Constant, Gaussian
 from neon.layers import GRU
 from neon.transforms import Logistic, Tanh
-from tests.gru_ref import GRU as RefGRU
-from tests.utils import allclose_with_out
+from gru_ref import GRU as RefGRU
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):

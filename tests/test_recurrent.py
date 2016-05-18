@@ -37,8 +37,8 @@ from neon import NervanaObject
 from neon.initializers.initializer import Constant, Gaussian
 from neon.layers import Recurrent
 from neon.transforms import Tanh
-from tests.recurrent_ref import Recurrent as RefRecurrent
-from tests.utils import allclose_with_out
+from recurrent_ref import Recurrent as RefRecurrent
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):
