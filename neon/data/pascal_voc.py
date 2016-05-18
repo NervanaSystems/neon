@@ -614,6 +614,7 @@ class PASCALVOCTrain(PASCALVOC):
 
         for i in xrange(self.num_images):
             roi_gt_ss[i] = {}
+            roi_gt_ss[i]['num_gt'] = self.roi_gt[i]['gt_bb'].shape[0]
             roi_gt_ss[i]['bb'] = np.vstack((self.roi_gt[i]['gt_bb'],
                                             self.roi_ss[i]['ss_bb']))
             roi_gt_ss[i]['gt_classes'] = np.vstack((self.roi_gt[i]['gt_classes'],
