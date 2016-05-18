@@ -105,13 +105,13 @@ def pytest_generate_tests(metafunc):
 
     D_H_W = [
         (3, 7, 58),
-        (3, 13, 68),
+        (3, 1, 68),
     ]
 
     T_R_S = [
         (3, 3, 3),
         (1, 3, 3),
-        (1, 1, 5),
+        (1, 1, 11),
     ]
 
     pad_d_h_w = [
@@ -165,6 +165,9 @@ def test_conv_layer(fargs_tests, backend_pair):
     dimI = conv_ng.dimI
     dimF = conv_ng.dimF
     dimO = conv_ng.dimO
+
+    if any(np.array(dimO) <= 0):
+        return
 
     # cpu input arrays
     cpuI = np.random.uniform(-0.8, 0.8, slicable(dimI, 1)).astype(np.float32)
@@ -238,16 +241,6 @@ def test_conv_layer(fargs_tests, backend_pair):
 
         assert ncRatio < 1e-5
         assert ngRatio < 1e-5
+
         assert allclose_with_out(ncA.get(), cpuA, rtol=0, atol=1e-4)
         assert allclose_with_out(ngA.get(), cpuA, rtol=0, atol=1e-3)
-
-
-if __name__ == '__main__':
-
-    fargs = [(32, 1, 1280),     # N, C, K
-             (1, 13, 657),      # D, H, W
-             (1, 1, 11),        # T, R, S
-             (0, 0, 5),         # pad: (0, 0, 5)
-             (1, 1, 2)]         # str: (1, 1, 2)
-
-    test_conv_layer(fargs)
