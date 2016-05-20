@@ -147,12 +147,16 @@ protected:
             dataBuf += _datumLen;
 
             // Handle the targets.
-            int targetLen = 0;
-            char* target = _inputBuf->second->getItem(i, targetLen);
-            memcpy(targetBuf, target, targetLen);
-            if (_targetLen > targetLen) {
+            int len = 0;
+            char* target = _inputBuf->second->getItem(i, len);
+            if (len > _targetLen) {
+                // TODO: avoid truncating.
+                len = _targetLen;
+            }
+            memcpy(targetBuf, target, len);
+            if (_targetLen > len) {
                 // Pad the rest of the buffer with zeros.
-                memset(targetBuf + targetLen, 0, _targetLen - targetLen);
+                memset(targetBuf + len, 0, _targetLen - len);
             }
             targetBuf += _targetLen;
         }
@@ -310,7 +314,8 @@ public:
            int targetConversion, int subsetPercent,
            MediaParams* mediaParams,
            DeviceParams* deviceParams,
-           MediaParams* ingestParams)
+           MediaParams* ingestParams,
+           char* alphabet)
     : _first(true),
       _batchSize(batchSize),
       _datumSize(datumSize), _datumTypeSize(datumTypeSize),
@@ -323,7 +328,8 @@ public:
                                     shuffle, reshuffle,
                                     startFileIdx, subsetPercent,
                                     mediaParams, ingestParams,
-                                    targetTypeSize, targetConversion);
+                                    targetTypeSize, targetConversion,
+                                    alphabet);
     }
 
     virtual ~Loader() {

@@ -75,7 +75,7 @@ public:
                   const char* indexFile, const char* archivePrefix,
                   bool shuffle,
                   MediaParams* params, MediaParams* ingestParams,
-                  int targetTypeSize, int targetConversion)
+                  int targetTypeSize, int targetConversion, char* alphabet)
     : _batchSize(batchSize),
       _repoDir(repoDir), _archiveDir(archiveDir),
       _indexFile(indexFile),
@@ -85,7 +85,8 @@ public:
         _media = Media::create(params, ingestParams, 0);
         _writeThread = new WriteThread(this);
         _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle,
-                                 targetTypeSize, targetConversion);
+                                 targetTypeSize, targetConversion,
+                                 alphabet);
         if (Reader::exists(_archiveDir) == true) {
             return;
         }
@@ -193,7 +194,8 @@ public:
                   MediaParams* params,
                   MediaParams* ingestParams,
                   int targetTypeSize,
-                  int targetConversion)
+                  int targetConversion,
+                  char* alphabet)
     : Reader(batchSize, repoDir, indexFile, shuffle, reshuffle, subsetPercent),
       _archiveDir(archiveDir), _indexFile(indexFile),
       _archivePrefix(archivePrefix),
@@ -206,7 +208,7 @@ public:
             _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT,
                     repoDir, archiveDir, indexFile, archivePrefix,
                     shuffle, params, ingestParams,
-                    targetTypeSize, targetConversion);
+                    targetTypeSize, targetConversion, alphabet);
         }
         _itemCount = *itemCount;
         assert(_itemCount != 0);

@@ -40,7 +40,8 @@ using std::map;
 
 enum ConversionType {
     NO_CONVERSION = 0,
-    ASCII_TO_BINARY = 1
+    ASCII_TO_BINARY = 1,
+    CHAR_TO_INDEX = 2,
 };
 
 class IndexElement {
@@ -55,7 +56,8 @@ public:
 
 class Index {
 public:
-    Index() {}
+    Index() : _maxTargetSize(0) {
+    }
 
     virtual ~Index() {
         for (auto elem : _elements) {
@@ -76,6 +78,9 @@ public:
         // For now, restrict to a single target.
         assert(elem->_targets.size() == 1);
         _elements.push_back(elem);
+        if (elem->_targets[0].size() > _maxTargetSize) {
+            _maxTargetSize = elem->_targets[0].size();
+        }
     }
 
     IndexElement* operator[] (int idx) {
@@ -93,6 +98,7 @@ public:
 
 public:
     vector<IndexElement*>       _elements;
+    uint                        _maxTargetSize;
 };
 
 class Reader {
@@ -138,13 +144,23 @@ class FileReader : public Reader {
 public:
     FileReader(int* itemCount, int batchSize,
                const char* repoDir, const char* indexFile,
-               bool shuffle, int targetTypeSize, int targetConversion)
+               bool shuffle, int targetTypeSize, int targetConversion,
+               char* alphabet)
     : Reader(batchSize, repoDir, indexFile, shuffle, false, 100), _itemIdx(0),
       _targetTypeSize(targetTypeSize), _targetConversion(targetConversion) {
         static_assert(sizeof(int) == 4, "int is not 4 bytes");
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
+        if (alphabet == 0) {
+            _alphabet = "_'ABCDEFGHIJKLMNOPQRSTUVWXYZ $";
+        } else {
+            _alphabet = alphabet;
+        }
+        memset(_charMap, 0, sizeof(_charMap));
+        if (targetConversion == CHAR_TO_INDEX) {
+            createCharMap();
+        }
     }
 
     int read(BufferPair& buffers) {
@@ -184,25 +200,40 @@ public:
         _ifs.read(*dataBuf, size);
         _ifs.close();
         *dataLen = size;
+
         // Read the targets.
-        if (_targetConversion == NO_CONVERSION) {
+        switch(_targetConversion) {
+        case NO_CONVERSION:
             *targetLen = elem->_targets[0].size();
-            if (*targetBufLen < *targetLen) {
-                resize(targetBuf, targetBufLen, *targetLen);
-            }
-            memcpy(*targetBuf, elem->_targets[0].c_str(), *targetLen);
-        } else if (_targetConversion == ASCII_TO_BINARY) {
+            break;
+        case ASCII_TO_BINARY:
             // For now, assume that binary targets are 4 bytes long.
             assert(_targetTypeSize == 4);
-            if (*targetBufLen < _targetTypeSize) {
-                resize(targetBuf, targetBufLen, _targetTypeSize);
-            }
-            int label = std::atoi(elem->_targets[0].c_str());
-            memcpy(*targetBuf, &label, sizeof(int));
             *targetLen = _targetTypeSize;
-        } else {
-            throw std::runtime_error("Unknown conversion specified for target\n");
+            break;
+        case CHAR_TO_INDEX:
+            *targetLen = _index._maxTargetSize;
+            break;
+        default:
+            throw std::runtime_error("Unknown conversion specified for target");
         }
+
+        if (*targetBufLen < *targetLen) {
+            resize(targetBuf, targetBufLen, *targetLen);
+        }
+
+        switch(_targetConversion) {
+        case NO_CONVERSION:
+            memcpy(*targetBuf, elem->_targets[0].c_str(), *targetLen);
+            break;
+        case ASCII_TO_BINARY:
+            asciiToBinary(elem, *targetBuf);
+            break;
+        case CHAR_TO_INDEX:
+            charToIndex(elem, *targetBuf);
+            break;
+        }
+
         return 0;
     }
 
@@ -216,6 +247,30 @@ public:
     }
 
 private:
+    void asciiToBinary(IndexElement* elem, char* targetBuf) {
+        int label = std::atoi(elem->_targets[0].c_str());
+        memcpy(targetBuf, &label, sizeof(int));
+    }
+
+    void charToIndex(IndexElement* elem, char* targetBuf) {
+        string& target = elem->_targets[0];
+        for (uint i = 0; i < target.size(); i++) {
+            uchar elem = target[i];
+            targetBuf[i] = _charMap[elem];
+        }
+        char* padding = targetBuf + target.size();
+        int paddingLen = _index._maxTargetSize - target.size();
+        // TODO: allow padding with values other than 1.
+        memset(padding, 1, paddingLen);
+    }
+
+    void createCharMap() {
+        for (uint i = 0; i < _alphabet.size(); i++) {
+            uchar elem = _alphabet[i];
+            _charMap[elem] = i + 1;
+        }
+    }
+
     void resize(char** buf, int* len, int newLen) {
         delete[] *buf;
         *buf = new char[newLen];
@@ -247,7 +302,7 @@ private:
 
         _itemCount = _index.size();
         if (_itemCount == 0) {
-            throw std::runtime_error("Could not load index\n");
+            throw std::runtime_error("Could not load index");
         }
     }
 
@@ -257,4 +312,7 @@ private:
     ifstream                    _ifs;
     int                         _targetTypeSize;
     int                         _targetConversion;
+    string                      _alphabet;
+    static constexpr int        _charMapSize = 256;
+    int                         _charMap[_charMapSize];
 };

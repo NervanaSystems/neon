@@ -42,7 +42,8 @@ class DataLoader(NervanaDataIterator):
     """
 
     _converters_ = {'no_conversion': 0,
-                    'ascii_to_binary': 1}
+                    'ascii_to_binary': 1,
+                    'char_to_index': 2}
 
     def __init__(self, set_name, repo_dir,
                  media_params, target_size,
@@ -51,7 +52,8 @@ class DataLoader(NervanaDataIterator):
                  shuffle=False, reshuffle=False,
                  datum_dtype=np.uint8, target_dtype=np.int32,
                  onehot=True, nclasses=None, subset_percent=100,
-                 ingest_params=None):
+                 ingest_params=None,
+                 alphabet=None):
         if onehot is True and nclasses is None:
             raise ValueError('nclasses must be specified for one-hot labels')
         if target_conversion not in self._converters_:
@@ -89,6 +91,10 @@ class DataLoader(NervanaDataIterator):
         self.nclasses = nclasses
         self.subset_percent = int(subset_percent)
         self.ingest_params = ingest_params
+        if alphabet is None:
+            self.alphabet = None
+        else:
+            self.alphabet = ct.c_char_p(alphabet)
         self.load_library()
         self.alloc()
         self.start()
@@ -117,6 +123,7 @@ class DataLoader(NervanaDataIterator):
 
         self.data = alloc_bufs(self.datum_size, self.datum_dtype)
         self.targets = alloc_bufs(self.target_size, self.target_dtype)
+        self.media_params.alloc(self)
         self.device_params = DeviceParams(self.be.device_type,
                                           self.be.device_id,
                                           cast_bufs(self.data),
@@ -164,7 +171,8 @@ class DataLoader(NervanaDataIterator):
             self.subset_percent,
             ct.POINTER(MediaParams)(self.media_params),
             ct.POINTER(DeviceParams)(self.device_params),
-            ingest_params)
+            ingest_params,
+            self.alphabet)
         self.ndata = self.item_count.value
         if self.loader is None:
             raise RuntimeError('Failed to start data loader.')
@@ -195,7 +203,6 @@ class DataLoader(NervanaDataIterator):
             # Convert data to the required precision.
             self.backend_data[:] = self.data[self.buffer_id]
             data = self.backend_data
-        self.media_params.process(data)
 
         if self.onehot:
             # Convert labels to one-hot encoding.
@@ -206,7 +213,7 @@ class DataLoader(NervanaDataIterator):
             targets = self.targets[self.buffer_id]
 
         self.buffer_id = 1 if self.buffer_id == 0 else 0
-        return data, targets
+        return self.media_params.process(self, data, targets)
 
     def __iter__(self):
         for start in range(self.start_idx, self.ndata, self.bsz):

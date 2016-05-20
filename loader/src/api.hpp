@@ -26,7 +26,8 @@ extern void* start(int* itemCount, int batchSize,
                    int subsetPercent,
                    MediaParams* mediaParams,
                    DeviceParams* deviceParams,
-                   MediaParams* ingestParams) {
+                   MediaParams* ingestParams,
+                   char* alphabet) {
     static_assert(sizeof(int) == 4, "int is not 4 bytes");
     try {
         Loader* loader = new Loader(itemCount, batchSize,
@@ -38,7 +39,8 @@ extern void* start(int* itemCount, int batchSize,
                                     targetSize, targetTypeSize,
                                     targetConversion,
                                     subsetPercent,
-                                    mediaParams, deviceParams, ingestParams);
+                                    mediaParams, deviceParams, ingestParams,
+                                    alphabet);
         int result = loader->start();
         if (result != 0) {
             printf("Could not start data loader. Error %d", result);

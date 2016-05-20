@@ -42,8 +42,11 @@ class MediaParams(ct.Structure):
     def datum_size(self):
         return np.prod(self.get_shape())
 
-    def process(self, data):
+    def alloc(self, loader):
         pass
+
+    def process(self, loader, data, targets):
+        return data, targets
 
 
 class ImageParams(MediaParams):
@@ -90,7 +93,7 @@ class ImageParams(MediaParams):
     def get_shape(self):
         return (self.channel_count, self.height, self.width)
 
-    def process(self, data):
+    def process(self, loader, data, targets):
         if self.subtract_mean is False:
             return
         if self.channel_count == 3:
@@ -100,6 +103,7 @@ class ImageParams(MediaParams):
             data_view[2] -= self.red_mean
         else:
             data[:] = data - self.gray_mean
+        return data, targets
 
 
 class ImageIngestParams(MediaParams):
@@ -154,6 +158,7 @@ class AudioParams(MediaParams):
                 # Randomly stretch/shrink the X dimension by this percent
                 ('randomize_time_scale_by', ct.c_float),
                 ('add_noise', ct.c_bool),
+                ('ctc_cost', ct.c_bool),
                 # The rest are automatically computed
                 ('window_size', ct.c_int),
                 ('overlap', ct.c_int),
@@ -169,6 +174,7 @@ class AudioParams(MediaParams):
                   'freq_scale_factor': 1.0,
                   'randomize_time_scale_by': 0.0,
                   'add_noise': False,
+                  'ctc_cost': False,
                   'window_size': -1,
                   'overlap': -1,
                   'stride': -1,
@@ -225,3 +231,13 @@ class AudioParams(MediaParams):
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)
+
+    def alloc(self, loader):
+        if self.ctc_cost is True:
+            self.target_sizes = loader.be.iobuf(dim0=1, dtype=np.int32)
+            self.target_sizes[:] = loader.target_size
+
+    def process(self, loader, data, targets):
+        if self.ctc_cost is True:
+            return data, (targets, self.target_sizes, None)
+        return data, targets

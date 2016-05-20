@@ -57,6 +57,7 @@ public:
     float                       _freqScaleFactor;
     float                       _randomizeTimeScaleBy;
     bool                        _addNoise;
+    bool                        _ctcCost;
     int                         _windowSize;
     int                         _overlap;
     int                         _stride;
