@@ -36,7 +36,6 @@ from neon.backends.kernels.cuda import pooling, roipooling
 from neon.util.persist import get_cache_dir
 from scikits.cuda import cublas
 
-
 _none_slice = slice(None, None, None)
 
 logger = logging.getLogger(__name__)
@@ -787,6 +786,11 @@ class NervanaGPU(Backend):
             self.hist_max = 4*4096
             self.hist_base = drv.mem_alloc(self.hist_bins * self.hist_max * 4)
             drv.memset_d32(self.hist_base, 0, self.hist_bins * self.hist_max)
+
+    def scratch_buffer_reset(self):
+        self.scratch_size = 0
+        self.scratch_offset = 0
+        _reset_scratch_data()
 
     def scratch_buffer_init(self):
         self.scratch_offset = 0
@@ -1753,8 +1757,7 @@ class NervanaGPU(Backend):
                    D=1, H=1, W=1,
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
-                   str_d=1, str_h=1, str_w=1,
-                   relu=False, bsum=False):
+                   str_d=1, str_h=1, str_w=1):
         """
         Create a new ConvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -1775,42 +1778,121 @@ class NervanaGPU(Backend):
         strides: factor to step the filters by in a given direction
 
         dtype: need to know dtype to setup proper kernels and params.
-
-        relu: apply a relu to the output for fprop or bprop
-
-        bsum: calculate the sum along the batchnorm axis for fprop or bprop
-              outputs an fp32 tensor of size Kx1
         """
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
-                         pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                         relu, bsum)
+                         pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-    def fprop_conv(self, layer, I, F, O, alpha=1.0, beta=0.0, bsum=None, repeat=1):
+    def fprop_conv(self, layer, I, F, O,
+        X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+        relu=False, brelu=False, slope=0.0, repeat=1):
+        """
+        fprop_conv:
+
+        Required Arguments:
+            layer: ConvLayer object created with conv_layer()
+            I: input tensor  (actiavtions)
+            F: filter tensor (weights)
+            O: output tensor (actiavtions)
+
+        Compounding Options:
+            X: tensor to use in bprop_relu or beta
+                can be same as O for beta accumulate (this is default when None)
+                should be same shape as O
+            bias: (K,1) tensor to use for adding bias to output
+                O += bias
+            bsum: (K,1) tensor to accumulate batch sum over (used in batchnorm or bprop_bias)
+                bsum = sum(O.reshape(K,-1), axis=1)
+                the sum operation is fully deterministic
+            alpha, beta:
+                O = alpha*O + beta*X
+                O = alpha*O + beta*O   (if X==O)
+            relu: boolean flag to apply:
+                O = max(O, 0) + slope*min(O, 0)
+                can be combined with bias (where bias is added first)
+            brelu: bprop_relu boolean flag to apply:
+                O *= (X > 0) + slope*(X < 0)
+                can be combined with bsum tensor to output bprop_bias
+
+        repeat: used in benchmarking
+        """
         assert layer.sizeI == I.size
         assert layer.sizeF == F.size
         assert layer.sizeO == O.size
 
-        layer.fprop_kernels.bind_params(I, F, O, alpha, beta, bsum)
+        layer.fprop_kernels.bind_params(I, F, O, X, bias, bsum, alpha, beta, relu, brelu, slope)
 
         return self._execute_conv("fprop", layer, layer.fprop_kernels, repeat)
 
-    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, beta=0.0, bsum=None, repeat=1):
+    def bprop_conv(self, layer, F, E, grad_I,
+        X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+        relu=False, brelu=False, slope=0.0, repeat=1):
+        """
+        bprop_conv:
+
+        Required Arguments:
+            layer: ConvLayer object created with conv_layer()
+            E: error tensor (output gradient from previous layer)
+            F: filter tensor (weights)
+            grad_I: output tensor (gradient with respect to inputs)
+
+        Compounding Options:
+            X: tensor to use in bprop_relu or beta
+                can be same as grad_I for beta accumulate (this is default when None)
+                should be same shape as grad_I
+            bias: (C,1) tensor to use for adding bias to output
+                grad_I += bias
+            bsum: (C,1) tensor to accumulate batch sum over (used in batchnorm or bprop_bias)
+                bsum = sum(grad_I.reshape(C,-1), axis=1)
+                the sum operation is fully deterministic
+                if combined with brelu then brelu is applied first
+            alpha, beta:
+                grad_I = alpha*grad_I + beta*X
+                grad_I = alpha*grad_I + beta*grad_I   (if X==grad_I)
+            relu: boolean flag to apply:
+                grad_I = max(grad_I, 0) + slope*min(grad_I, 0)
+                can be combined with bias (where bias is added first)
+            brelu: bprop_relu boolean flag to apply:
+                grad_I *= (X > 0) + slope*(X < 0)
+                can be combined with bsum tensor to output bprop_bias
+
+        repeat: used in benchmarking
+        """
         assert layer.sizeF == F.size
         assert layer.sizeO == E.size
         assert layer.sizeI == grad_I.size
 
-        layer.bprop_kernels.bind_params(E, F, grad_I, alpha, beta, bsum)
+        layer.bprop_kernels.bind_params(E, F, grad_I, X, bias, bsum, alpha, beta, relu, brelu, slope)
 
         return self._execute_conv("bprop", layer, layer.bprop_kernels, repeat)
 
-    def update_conv(self, layer, I, E, grad_F, alpha=1.0, repeat=1):
+    def update_conv(self, layer, I, E, grad_F, alpha=1.0, beta=0.0, repeat=1):
+        """
+        update_conv:
+
+        Required Inputs:
+            layer: ConvLayer object created with conv_layer()
+            I: input tensor (actiavtions)
+            E: error tensor (output gradient from previous layer)
+            grad_F: output tensor (gradient with respect to weights)
+
+        Compounding Options:
+        alpha, beta:
+            O = alpha*O + beta*O
+
+        repeat: used in benchmarking
+        """
         assert layer.sizeI == I.size
         assert layer.sizeO == E.size
         assert layer.sizeF == grad_F.size
 
-        layer.updat_kernels.bind_params(I, E, grad_F, alpha)
-
-        return self._execute_conv("updat", layer, layer.updat_kernels, repeat)
+        if layer.NCK[0] < 4 and layer.TRS == (1, 1, 1):
+            Ir = I.reshape((layer.NCK[1], -1))
+            Er = E.reshape((layer.NCK[2], -1))
+            Gr = grad_F.reshape((layer.NCK[1], -1))
+            return self.compound_dot(A=Ir, B=Er.T, C=Gr, alpha=alpha, beta=beta, repeat=repeat)
+        else:
+            layer.updat_kernels.bind_params(I, E, grad_F, alpha, beta)
+            return self._execute_conv("updat", layer, layer.updat_kernels, repeat)
 
     def _execute_conv(self, op, layer, kernels, repeat):
         # Warmup
@@ -1822,11 +1904,6 @@ class NervanaGPU(Backend):
             start.record(stream=self.stream)
 
         kernels.execute(repeat)
-
-#        TODO not sure if this part is needed for cuda kernels?
-#        if convert_type:
-#            _fp_convert(C_gpudata, convert_type, C, reduce_shape,
-#                        self.compute_capability)
 
         if self.bench or repeat > 1:
             end.record(stream=self.stream)
@@ -1844,8 +1921,7 @@ class NervanaGPU(Backend):
                      P, Q,
                      R=1, S=1,
                      pad_d=0, pad_h=0, pad_w=0,
-                     str_d=1, str_h=1, str_w=1,
-                     relu=False, bsum=False):
+                     str_d=1, str_h=1, str_w=1):
         """
         Create a new DeconvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -1869,16 +1945,9 @@ class NervanaGPU(Backend):
         strides: factor to step the filters by in a given direction
 
         dtype: need to know dtype to setup proper kernels and params.
-
-        relu: apply a relu to the output for fprop or bprop
-
-        bsum: calculate the sum along the batchnorm axis for fprop or bprop
-              outputs an fp32 tensor of size Kx1
-
         """
         return DeconvLayer(self, dtype, N, C, K, P, Q, R, S,
-                           pad_d, pad_h, pad_w, str_d, str_h, str_w,
-                           relu, bsum)
+                           pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
     def lrn_layer(self, dtype, N, C, D=1, H=1, W=1, J=1):
         """
@@ -2504,6 +2573,12 @@ def _contiguous_strides(shape):
 @context_dependent_memoize
 def _get_scratch_data(scratch_size):
     return drv.mem_alloc(scratch_size)
+
+def _reset_scratch_data():
+    try:
+        delattr(_get_scratch_data.__wrapped__, '_pycuda_ctx_dep_memoize_dic')
+    except AttributeError:
+        pass
 
 
 @context_dependent_memoize

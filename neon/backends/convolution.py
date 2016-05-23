@@ -32,12 +32,24 @@ if sys.version_info >= (3, 0):
 
 
 class KernelGroup(object):
-    def __init__(self, lib, dtype):
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w, bprop=False):
 
-        self.lib = lib
-        self.dtype = dtype
-        self.dtype_str = dtype.str[1:]
-        self.vec_size = 4 if dtype.itemsize == 4 else 8
+        self.params = (N, C, K, D, H, W, T, R, S, M, P, Q,
+                       pad_d, pad_h, pad_w, str_d, str_h, str_w)
+
+        self.bprop       = bprop
+        self.lib         = lib
+        self.dtype       = dtype
+        self.dtype_str   = dtype.str[1:]
+        self.vec_size    = 4 if dtype.itemsize == 4 else 8
+        self.kernel_name = None
+        self.kernel_opts = tuple()
 
         if dtype.type is np.float16:
             self.clss = "hconv"
@@ -50,26 +62,52 @@ class KernelGroup(object):
         else:
             raise TypeError("dtype not supported.")
 
-    def __str__(self):
-        raise TypeError("please implement __str__ to describe kernel params for logging.")
-
     def bind_params(self, *args):
         raise TypeError("bind_params not implemented.")
 
     def execute(self, repeat=1, unbind=True):
         raise TypeError("execute not implemented.")
 
-    def init_bsum(self, bsum, flags):
-        flags |= self.flags
-        if bsum:
-            bsum_gpudata = bsum.gpudata
-            self.bsum_zero = [bsum_gpudata, 0, bsum.size, self.lib.stream]
-            flags |= 4
+    def xprop_params(self, O, X, bias, bsum, beta, relu, brelu, slope):
+
+        bsum_data = self.bsum.bind_params(bsum)
+        x_data    = O.gpudata if X is None else X.gpudata
+
+        # TODO: expose more compound operations
+        self.kernel_options = self.kernel_opts
+        if bias is not None:
+            self.kernel_options += ("bias",)
+            bsum_data = bias.gpudata
+            assert bsum is None, "Cannot combine bias and bsum"
+        if relu or brelu:
+            if relu:
+                self.kernel_options += ("prelu",)  if slope else ("relu",)
+            else:
+                self.kernel_options += ("bprelu",) if slope else ("brelu",)
+                assert bias is None, "Cannot combine bias and brelu"
+                assert X is not None, "X param required for bprop_relu"
+        elif beta:
+            self.kernel_options += ("beta",)
+            assert bias is None, "Cannot combine bias and beta"
+        if bsum is not None:
+            self.kernel_options += ("bsum",)
+
+        return (bsum_data, x_data)
+
+    def __str__(self):
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        kernel_name = self.kernel_name
+        for opt in self.kernel_opts:
+            if type(opt) is not tuple:
+                kernel_name += "_" + opt
+        if self.bprop:
+            return "%s NCK:(%3d,%3d,%3d) DHW:(%3d,%3d,%3d) TRS:(%2d,%2d,%2d) str:(%d,%d,%d)" % (
+                kernel_name, N, K, C, M, P, Q, T, R, S, str_d, str_h, str_w)
         else:
-            bsum_gpudata = 0
-            self.bsum_zero = 0
-            flags &= ~4
-        return bsum_gpudata, flags
+            return "%s NCK:(%3d,%3d,%3d) DHW:(%3d,%3d,%3d) TRS:(%2d,%2d,%2d) str:(%d,%d,%d)" % (
+                kernel_name, N, C, K, D, H, W, T, R, S, str_d, str_h, str_w)
+
 
 class FpropCuda(KernelGroup):
 
@@ -79,10 +117,14 @@ class FpropCuda(KernelGroup):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 bsum):
+                 str_d, str_h, str_w):
 
-        super(FpropCuda, self).__init__(lib, dtype)
+        super(FpropCuda, self).__init__(lib, dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                                        pad_d, pad_h, pad_w, str_d, str_h, str_w)
+
+        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
+        self.get_kernel = _get_conv_kernel
+        self.kernel_name = "FpropCuda"
 
         assert N % 32 == 0, "N dim must be multiple of 32"
         assert K % self.vec_size == 0, "K dim must be multiple of %d" % self.vec_size
@@ -95,9 +137,8 @@ class FpropCuda(KernelGroup):
         KRST = K * RST
         PQ = P * Q
         PQN = PQ * N
-        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
-        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
-                                       bsum=bsum, operation="fprop")
+        self.RS = R*S
+
         grid = (PQ * (-(-N // 32)), (-(-K // 32)), 1)
         block = (8, 8, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -106,34 +147,32 @@ class FpropCuda(KernelGroup):
                                        PQ, 0, 0,
                                        magic_PQ, magic_Q, magic_S])
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
-
         self.shared = RST * 4 * 2
-        self.flags = (bsum and 4)
 
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
+        self.output_trans = CompoundOps(lib, dtype, K, PQN)
+        lib.set_scratch_size(self.output_trans.size)
 
-        assert I.dtype == F.dtype == O.dtype
+    def bind_params(self, I, F, O,
+        X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+        relu=False, brelu=False, slope=0.0):
 
-        bsum_gpudata, flags = self.init_bsum(bsum, flags)
+        assert I.dtype == F.dtype == O.dtype == self.dtype
 
-        self.launch_args[2:9] = (self.lib.stream, alpha, beta,
-                                 I.gpudata, F.gpudata, O.gpudata, bsum_gpudata)
+        self.lib.scratch_buffer_init()
+        output_data = self.output_trans.bind_params(O, X, bias, bsum, alpha, beta or slope, relu, brelu)
+        self.launch_args[2:9] = (self.lib.stream, 1.0, 0.0, I.gpudata, F.gpudata, output_data, 0)
 
     def execute(self, repeat=1, unbind=True):
 
+        kernel = self.get_kernel(self.dtype_str, self.RS, False, "fprop")
+
         for r in range(repeat):
-
-            if self.bsum_zero:
-                drv.memset_d32_async(*self.bsum_zero)
-
-            self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
+            kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
+            self.output_trans.execute()
 
         if unbind:
-            self.bsum_zero = None
+            self.output_trans.unbind()
             self.launch_args[2:9] = (None,) * 7
-
-    def __str__(self):
-        return "FpropCuda"
 
 
 class BpropCuda(KernelGroup):
@@ -144,10 +183,15 @@ class BpropCuda(KernelGroup):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 bsum):
+                 str_d, str_h, str_w):
 
-        super(BpropCuda, self).__init__(lib, dtype)
+        super(BpropCuda, self).__init__(lib, dtype,
+            N, C, K, D, H, W, T, R, S, M, P, Q,
+            pad_d, pad_h, pad_w, str_d, str_h, str_w, bprop=True)
+
+        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
+        self.get_kernel = _get_conv_kernel
+        self.kernel_name = "BpropCuda"
 
         assert N % 32 == 0, "N dim must be multiple of 32"
 
@@ -161,11 +205,8 @@ class BpropCuda(KernelGroup):
         CRST = C * RST
         PQ = P * Q
         PQN = PQ * N
+        self.RS = R*S
 
-        self.bsum = bsum
-        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
-        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
-                                       bsum=bsum, operation="bprop")
         grid = (HW * (-(-N // 32)), -(-C // 32), 1)
         block = (8, 8, 1)
         static_kernel_args = _flatten([K, M, P, Q, N, T, R, S, C, D, H, W,
@@ -174,47 +215,36 @@ class BpropCuda(KernelGroup):
                                        HW, 0, 0,
                                        magic_HW, magic_W, magic_S])
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
-
         self.shared = R*S*T * 4 * 2
-        self.flags = (bsum and 4)
 
         self.filter_trans = FilterDimShuffle(lib, dtype, C, T, R, S, K)
+        self.output_trans = CompoundOps(lib, dtype, C, HWN)
+        lib.set_scratch_size(self.filter_trans.size, self.output_trans.size)
 
-        lib.set_scratch_size(self.filter_trans.size)
+    def bind_params(self, I, F, O,
+        X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+        relu=False, brelu=False, slope=0.0):
 
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
-
-        assert I.dtype == F.dtype == O.dtype
-        if self.bsum:
-            assert bsum is not None, "must use initialized bsum config"
+        assert I.dtype == F.dtype == O.dtype == self.dtype
 
         self.lib.scratch_buffer_init()
-
         filter_data = self.filter_trans.bind_params(F)
-
-        bsum_gpudata, flags = self.init_bsum(bsum, flags)
-
-        self.launch_args[2:9] = (self.lib.stream, alpha, beta,
-                                 I.gpudata, filter_data, O.gpudata, bsum_gpudata)
+        output_data = self.output_trans.bind_params(O, X, bias, bsum, alpha, beta or slope, relu, brelu)
+        self.launch_args[2:9] = (self.lib.stream, 1.0, 0.0, I.gpudata, filter_data, output_data, 0)
 
     def execute(self, repeat=1, unbind=True):
 
+        kernel = self.get_kernel(self.dtype_str, self.RS, False, "bprop")
+
         for r in range(repeat):
-
-            if self.bsum_zero:
-                drv.memset_d32_async(*self.bsum_zero)
-
             self.filter_trans.execute()
-
-            self.kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
+            kernel.prepared_async_call(*self.launch_args, shared_size=self.shared)
+            self.output_trans.execute()
 
         if unbind:
-            self.bsum_zero = None
+            self.output_trans.unbind()
             self.filter_trans.unbind()
             self.launch_args[2:9] = (None,) * 7
-
-    def __str__(self):
-        return "BpropCuda"
 
 
 class UpdateCuda(KernelGroup):
@@ -227,7 +257,13 @@ class UpdateCuda(KernelGroup):
                  pad_d, pad_h, pad_w,
                  str_d, str_h, str_w):
 
-        super(UpdateCuda, self).__init__(lib, dtype)
+        super(UpdateCuda, self).__init__(lib, dtype,
+            N, C, K, D, H, W, T, R, S, M, P, Q,
+            pad_d, pad_h, pad_w, str_d, str_h, str_w)
+
+        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
+        self.get_kernel = _get_conv_kernel
+        self.kernel_name = "UpdateCuda"
 
         assert N % 32 == 0, "N dim must be multiple of 32"
 
@@ -239,6 +275,7 @@ class UpdateCuda(KernelGroup):
         PQ = P * Q
         PQN = PQ * N
         magic_S = _magic32(R*S+32, S)
+        self.RS = R*S
 
         if lib.deterministic:
             grid_P = 1
@@ -253,9 +290,6 @@ class UpdateCuda(KernelGroup):
         magic_PQ = _magic64(pq_blocks)
         magic_Q = _magic64(grid_Q)
 
-        from neon.backends.kernels.cuda.convolution import _get_conv_kernel
-        self.kernel = _get_conv_kernel(dtype=self.dtype.str[1:], filter_size=R*S,
-                                       bsum=False, operation="update")
         grid = (pq_blocks * (-(-K // 32)), (-(-(C*RS) // 32)), 1)
         block = (8, 32, 1)
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
@@ -266,57 +300,22 @@ class UpdateCuda(KernelGroup):
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
 
         self.output_trans = UpdateConvReduce(lib, 1, CRSTK)
-
         lib.set_scratch_size(self.output_trans.size)
 
-    def update_grid(self, kernel_name, base_blocks, P, Q, SM_count):
-
-        threads = kernel_specs.kernels[kernel_name]["threads"]
-        occupancy = kernel_specs.kernels[kernel_name]["occupancy"]
-
-        # warps per scheduler for one block
-        occ_per_block = threads / (32.0 * 4.0 * SM_count)
-
-        grid = []
-        for p in range(1, P+1):
-            for q in range(1, Q+1):
-
-                occup = p*q*base_blocks * occ_per_block
-                groups = occup / occupancy
-                slots = ceil(groups)
-
-                # This is a heuristic that keeps the balance of work accross the SMs
-                # while also maximizing the work that each block does
-                heuristic = min(abs(x - slots) for x in range(4, 8)) + (slots - groups) / 100.0
-
-                grid.append((p, q, heuristic))
-
-        grid.sort(key=lambda x: x[-1])
-
-        return (grid[0][0], grid[0][1], threads)
-
-    def bind_params(self, I, E, O, alpha, beta=0):
-
-        assert I.dtype == E.dtype
+    def bind_params(self, I, E, O, alpha=1.0, beta=0.0, no_op=False):
+        assert I.dtype == E.dtype == O.dtype == self.dtype
 
         self.lib.scratch_buffer_init()
-
-        output_data = self.output_trans.bind_params(O, beta)
-
-        self.zero_args = [output_data, 0, O.size, self.lib.stream]
-
-        bsum_gpudata = 0
-        self.launch_args[2:9] = (self.lib.stream, alpha, 0.0,
-                                 I.gpudata, E.gpudata, output_data, bsum_gpudata)
+        output_data = self.output_trans.bind_params(O, alpha, beta, no_op)
+        self.zero_args = (output_data, 0, O.size, self.lib.stream)
+        self.launch_args[2:9] = (self.lib.stream, 1.0, 0.0, I.gpudata, E.gpudata, output_data, 0)
 
     def execute(self, repeat=1, unbind=True):
+        kernel = self.get_kernel(self.dtype_str, self.RS, False, "update")
 
         for r in range(repeat):
-
             drv.memset_d32_async(*self.zero_args)
-
-            self.kernel.prepared_async_call(*self.launch_args)
-
+            kernel.prepared_async_call(*self.launch_args)
             self.output_trans.execute()
 
         if unbind:
@@ -324,27 +323,22 @@ class UpdateCuda(KernelGroup):
             self.zero_args = None
             self.launch_args[2:9] = (None,) * 7
 
-    def __str__(self):
-        return "UpdateCuda"
 
 class XpropDirect(KernelGroup):
 
     def __init__(self, op, lib, dtype,
                  N, C, K, D, H, W, T, R, S, M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 relu):
+                 str_d, str_h, str_w, bprop=False):
 
-        super(XpropDirect, self).__init__(lib, dtype)
-
-        self.params = (N, C, K, D, H, W, T, R, S, M, P, Q,
-                       pad_d, pad_h, pad_w, str_d, str_h, str_w)
+        super(XpropDirect, self).__init__(lib, dtype,
+            N, C, K, D, H, W, T, R, S, M, P, Q,
+            pad_d, pad_h, pad_w, str_d, str_h, str_w, bprop)
 
         if N % 64 == 0 and K % self.vec_size == 0:
             self.init_largeN(op)
         else:
             self.init_smallN(op)
-        self.relu = relu
         lib.set_scratch_size(self.filter_trans.size, self.bsum.size)
 
     def init_largeN(self, op):
@@ -365,7 +359,6 @@ class XpropDirect(KernelGroup):
 
         kname   = "%s_direct_%s_%dx%d" % (self.clss, op, blockK, blockN)
         threads = kernel_specs.kernels[kname]["threads"]
-        warps   = threads // 32
 
         gridK = _ceil_div(K, blockK)
         gridN = _ceil_div(N, blockN)
@@ -384,23 +377,26 @@ class XpropDirect(KernelGroup):
         magic_RS  = _magic32(TRS + 32, RS)
         magic_S   = _magic32(RS  + 32,  S)
 
-        gridMPQ = M*P*Q
-        grid    = (gridMPQ*k, gridK//k, gridN)
+        bsum_warps = blockN // 64
+        gridNw     = gridN * bsum_warps
+        gridQNw    = Q * gridNw
+        gridPQNw   = P * gridQNw
+        gridMPQNw  = M * gridPQNw
+        gridMPQ    = M * P * Q
+        grid       = (gridMPQ*k, gridK//k, gridN)
 
         self.kernel_opts = tuple()
         self.kernel_name = kname
         self.kernel_args = [grid, (threads,1,1), None, None, None, None, None, None, None, None, None]
         self.kernel_args.extend(_flatten([
-
             N, K, D, H, W, W*N, H*W*N, D*H*W*N,
             C, TRSK, TRS, RS, T, R, S, magic_RS, magic_S,
             pad_d, pad_h, pad_w, str_d, str_h, str_w,
             P2, Q, PQk, Qk, k, magic_PQk, magic_Qk, magic_k,
-            Q*N, P*Q*N, M*P*Q*N,
-            gridN*warps, Q*gridN*warps, P*Q*gridN*warps, gridMPQ*gridN*warps ]))
+            Q*N, P*Q*N, M*P*Q*N, gridNw, gridQNw, gridPQNw, gridMPQNw ]))
 
         self.shared = TRS * 4 * 2
-        self.bsum   = BatchNormSum(self.lib, K, gridMPQ*gridN*warps)
+        self.bsum   = BatchNormSum(self.lib, K, gridMPQNw)
 
     def init_smallN(self, op):
 
@@ -491,33 +487,24 @@ class XpropDirect(KernelGroup):
         else:
             self.shared = T*R*S * 4 * (32 >> shiftN)
 
-    def bind_params(self, I, F, O, alpha, beta, bsum, no_op=0):
+    def bind_params(self, I, F, O,
+        X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+        relu=False, brelu=False, slope=0.0, no_op=0):
 
-        assert I.dtype == O.dtype
+        assert I.dtype == O.dtype == self.dtype
 
         self.lib.scratch_buffer_init()
-
         filter_data = self.filter_trans.bind_params(F)
-        bsum_data   = self.bsum.bind_params(bsum)
+        bsum_data, x_data = self.xprop_params(O, X, bias, bsum, beta, relu, brelu, slope)
 
-        # TODO: expose more compound operations
-        self.kernel_options = self.kernel_opts
-        if bsum:
-            self.kernel_options += ("bsum",)
-        if beta:
-            self.kernel_options += ("beta",)
-        if self.relu:
-            self.kernel_options += ("relu",)
-
-        self.kernel_args[2:11] = (self.lib.stream, bsum_data, O.gpudata,
-                                  O.gpudata, I.gpudata, filter_data, alpha, beta, no_op)
+        self.kernel_args[2:11] = (self.lib.stream, bsum_data, x_data,
+                                  O.gpudata, I.gpudata, filter_data, alpha, beta or slope, no_op)
 
     def execute(self, repeat=1, unbind=True):
 
         kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_options)
 
         for r in range(repeat):
-
             self.filter_trans.execute()
             kernel.prepared_async_call(*self.kernel_args, shared_size=self.shared)
             self.bsum.execute()
@@ -527,12 +514,6 @@ class XpropDirect(KernelGroup):
             self.bsum.unbind()
             self.kernel_args[2:11] = (None,) * 9
 
-    def __str__(self):
-        (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
-        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d) RS:(%d,%d) str:(%d,%d)" % (
-            self.kernel_name, N, C, K, H, W, R, S, str_h, str_w)
-
 class FpropDirect(XpropDirect):
 
     def __init__(self, lib, dtype,
@@ -541,8 +522,7 @@ class FpropDirect(XpropDirect):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 relu, bsum):
+                 str_d, str_h, str_w):
 
         # The filters may still be in fp32 so we potentially need to dynamically quantize
         if dtype.itemsize != 4:
@@ -553,7 +533,7 @@ class FpropDirect(XpropDirect):
 
         super(FpropDirect, self).__init__("fprop", lib, dtype,
             N, C, K, D, H, W, T, R, S, M, P, Q,
-            pad_d, pad_h, pad_w, str_d, str_h, str_w, relu)
+            pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
 class BpropDirect(XpropDirect):
 
@@ -563,8 +543,7 @@ class BpropDirect(XpropDirect):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w,
-                 relu, bsum):
+                 str_d, str_h, str_w):
 
         self.filter_trans = FilterDimShuffle(lib, dtype, C, T, R, S, K)
 
@@ -576,7 +555,7 @@ class BpropDirect(XpropDirect):
         # Swap C<=>K and DHW<=>MPQ
         super(BpropDirect, self).__init__("bprop", lib, dtype,
             N, K, C, M, P, Q, T, R, S, D, H, W,
-            pad_d, pad_h, pad_w, str_d, str_h, str_w, relu)
+            pad_d, pad_h, pad_w, str_d, str_h, str_w, bprop=True)
 
         self.kernel_args.extend(_flatten([
             _magic32(D + T, str_d),
@@ -596,7 +575,9 @@ class UpdateDirect(KernelGroup):
 
         assert N % 4 == 0, "N dim must be multiple of 4"
 
-        super(UpdateDirect, self).__init__(lib, dtype)
+        super(UpdateDirect, self).__init__(lib, dtype,
+            N, C, K, D, H, W, T, R, S, M, P, Q,
+            pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
         SMs = _get_sm_count()
 
@@ -605,18 +586,15 @@ class UpdateDirect(KernelGroup):
             N, C, K, D, H, W, T, R, S, M, P, Q ))
 
         self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
-
-        self.params = (N, C, K, D, H, W, T, R, S, M, P, Q,
-                       pad_d, pad_h, pad_w, str_d, str_h, str_w)
-        self.init(self.params)
+        self.init()
 
         lib.set_scratch_size(self.output_trans.size)
 
         # allow for .5 seconds worth of warmup when autotuning
         # assume 5 Tflops on 24 SMs
-        self.warmup = min(max(int(2e12 / (M*P*Q*K*N*C*T*R*S*2.0) * (SMs / 24.0)), 1), 1000)
+        self.warmup = min(max(int(2e12 / (M*P*Q*K*N*C*T*R*S*2.0) * (SMs / 24.0)), 1), 5000)
 
-    def init(self, params, autotune=False):
+    def init(self, autotune=False):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
          pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
@@ -715,7 +693,7 @@ class UpdateDirect(KernelGroup):
 
         self.kernel_opts = tuple(options)
         self.kernel_name = "%s_direct_updat_64x32" % self.clss
-        self.kernel_args = [grid, (128,1,1), None, None, None, None, None]
+        self.kernel_args = [grid, (128,1,1), None, None, None, None, 1.0]
         self.kernel_args.extend(_flatten([
             C, D, H, W, N, K, M, P, Q,
             str_d, str_h, str_w, pad_d, pad_h, pad_w,
@@ -736,8 +714,8 @@ class UpdateDirect(KernelGroup):
         if not self.lib.warmup:
             self.lib.warmup = True
             # warmup  with a conservative set of params
-            self.init(self.params, autotune=(min(self.GP,192), 1))
-            self.bind_params(I, E, O, 1.0)
+            self.init(autotune=(min(self.GP,192), 1))
+            self.bind_params(I, E, O, no_op=True)
             self.execute(repeat=self.warmup, unbind=False)
 
         # we want at least this many blocks
@@ -779,8 +757,8 @@ class UpdateDirect(KernelGroup):
 
                             settings = (strideP, strideQ)
                             #print settings
-                            self.init(self.params, autotune=settings)
-                            self.bind_params(I, E, O, 1.0)
+                            self.init(autotune=settings)
+                            self.bind_params(I, E, O, no_op=True)
                             start.record(stream=self.lib.stream)
                             self.execute(repeat=2, unbind=False)
                             stop.record(stream=self.lib.stream)
@@ -803,11 +781,11 @@ class UpdateDirect(KernelGroup):
         autotune_db[self.autotune_key] = settings
         autotune_db.close()
 
-        self.init(self.params, autotune=settings)
+        self.init(autotune=settings)
 
-    def bind_params(self, I, E, O, alpha, beta=0):
+    def bind_params(self, I, E, O, alpha=1.0, beta=0.0, no_op=False):
 
-        assert I.dtype == E.dtype
+        assert I.dtype == E.dtype == self.dtype
 
         if not self.initialized:
             self.initialized = True
@@ -815,38 +793,28 @@ class UpdateDirect(KernelGroup):
 
         self.lib.scratch_buffer_init()
 
-        output_data = self.output_trans.bind_params(O, beta)
+        output_data = self.output_trans.bind_params(O, alpha, beta, no_op)
 
         if self.zero:
             self.zero_args = ( output_data, 0, O.size, self.lib.stream )
 
-        self.kernel_args[2:7] = (self.lib.stream, output_data, I.gpudata, E.gpudata, alpha)
+        self.kernel_args[2:6] = (self.lib.stream, output_data, I.gpudata, E.gpudata)
 
     def execute(self, repeat=1, unbind=True):
 
         kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_opts)
 
         for r in range(repeat):
-
             if self.zero:
                 drv.memset_d32_async(*self.zero_args)
 
             kernel.prepared_async_call(*self.kernel_args)
-
             self.output_trans.execute()
 
         if unbind:
             self.output_trans.unbind()
             self.zero_args = None
-            self.kernel_args[2:7] = (None,) * 5
-
-    def __str__(self):
-        (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
-        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d) RS:(%d,%d) str:(%d,%d)" % (
-            self.kernel_name, N, C, K, H, W, R, S, str_h, str_w)
-
-
+            self.kernel_args[2:6] = (None,) * 4
 
 
 # Magic numbers and shift amounts for integer division
@@ -935,15 +903,18 @@ class UpdateConvReduce(object):
         self.mpq   = gridMPQ > 1
         self.lib   = lib
         self.size  = PQCRSTK * 4
-        self.args  = [(blocks, 1, 1), (32, 1, 1), None, None, None, 0, CTRSK, PQCRSTK]
+        self.args  = [(blocks, 1, 1), (32, 1, 1), None, None, None, 1, 0, CTRSK, PQCRSTK]
 
-    def bind_params(self, U, beta):
-        if self.mpq or beta or U.dtype.type != np.float32:
+    def bind_params(self, U, alpha, beta, no_op):
+        if self.mpq or alpha != 1.0 or beta != 0.0 or U.dtype.type != np.float32:
             update_data    = self.lib.scratch_buffer_offset(self.size)
-            self.args[2:6] = (self.lib.stream, U.gpudata, update_data, beta)
+            output_data    = update_data if no_op else U.gpudata
+            self.args[2:7] = (self.lib.stream, output_data, update_data, alpha, beta)
             self.kernel    = _get_update_conv_reduce_kernel(U.dtype.str[1:], beta != 0)
             return update_data
         self.kernel = None
+        if no_op:
+            return self.lib.scratch_buffer_offset(self.size)
         return U.gpudata
 
     def execute(self):
@@ -961,7 +932,7 @@ def _get_update_conv_reduce_kernel(dtype, beta):
     kernel_code = r"""
 %(common)s
 
-__global__ void update_conv_reduce(%(type)s* Out, const float* In, float beta, int CRSTK, int PQCRSTK)
+__global__ void update_conv_reduce(%(type)s* Out, const float* In, float alpha, float beta, int CRSTK, int PQCRSTK)
 {
     int offset = blockIdx.x * 32 + threadIdx.x;
 
@@ -997,15 +968,15 @@ __global__ void update_conv_reduce(%(type)s* Out, const float* In, float beta, i
         "cvt_out" : _ew_types[dtype]["cvt_out"],
     }
     if beta:
-        output = "%(cvt_out)s(sum + %(cvt_in)s(Out[offset]) * beta)"
+        output = "%(cvt_out)s(sum * alpha + %(cvt_in)s(Out[offset]) * beta)"
     else:
-        output = "%(cvt_out)s(sum)"
+        output = "%(cvt_out)s(sum * alpha)"
     template_vals["output"] = output % template_vals
 
     code   = kernel_code % template_vals
     module = SourceModule(code)
     kernel = module.get_function("update_conv_reduce")
-    kernel.prepare("PPfII")
+    kernel.prepare("PPffII")
     return kernel
 
 # fast axis=1 reduction kernel used for deterministic compounded batch norm mean
@@ -1014,12 +985,14 @@ class BatchNormSum(object):
         self.lib   = lib
         self.size  = K * gridMPQN * 4
         self.args  = [(K, 1, 1), (256, 1, 1), None, None, None, gridMPQN]
+        #self.shape = (K, gridMPQN)
 
     def bind_params(self, bsum):
-        if bsum:
-            bsum_data    = self.lib.scratch_buffer_offset(self.size)
+        if bsum is not None:
+            bsum_data      = self.lib.scratch_buffer_offset(self.size)
             self.args[2:5] = (self.lib.stream, bsum.gpudata, bsum_data)
             self.kernel    = _get_batchnorm_sum_kernel()
+            #drv.memset_d32_async( bsum_data, 0, self.size//4, None )
             return bsum_data
         self.kernel = None
         return 0
@@ -1027,6 +1000,9 @@ class BatchNormSum(object):
     def execute(self):
         if self.kernel:
             self.kernel.prepared_async_call(*self.args)
+            #self.ary = np.empty(self.shape, np.float32)
+            #drv.memcpy_dtoh_async(self.ary, self.args[4], None)
+            #np.savetxt("out.txt", ary, fmt='%10.5f')
 
     def unbind(self):
         self.kernel    = None
@@ -1038,17 +1014,17 @@ def _get_batchnorm_sum_kernel():
     kernel_code = r"""
 #define THREADS 256
 
-__global__ void batchnorm_sum(float* Out, const float* In, int n)
+__global__ void batchnorm_sum(float* Out, const float* In, int N)
 {
     const int tid  = threadIdx.x;
     const int bid  = blockIdx.x;
 
     __shared__ float sPartials[THREADS];
 
-    In += bid*n + tid;
+    In += bid*N + tid;
 
     float sum = 0.0f;
-    for (int i = tid; i < n; i += THREADS)
+    for (int i = tid; i < N; i += THREADS)
     {
         sum += *In;
         In  += THREADS;
@@ -1081,6 +1057,162 @@ __global__ void batchnorm_sum(float* Out, const float* In, int n)
     kernel.prepare("PPI")
     return kernel
 
+
+# for kernels that can't compound these ops internally, use an external kernel
+class CompoundOps(object):
+    def __init__(self, lib, dtype, K, N):
+        for threads in (1024,512,256,128):
+            if N >= threads*8:
+                break
+        self.threads = threads
+        self.dtype   = dtype.str[1:]
+        self.lib     = lib
+        self.size    = K * N * dtype.itemsize
+        self.args    = [(K, 1, 1), (threads, 1, 1), None, None, None, None, None, None, 1.0, 0.0, N]
+
+    def bind_params(self, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0, relu=False, brelu=False):
+        if bsum is not None or bias is not None or relu or brelu or beta != 0.0 or alpha != 1.0:
+            # beta is reused as slope param in prelu / bprop_prelu
+            do_beta    = (beta != 0.0 or alpha != 1.0) and not relu and not brelu
+            bias_data  = 0 if bias is None else bias.gpudata
+            bsum_data  = 0 if bsum is None else bsum.gpudata
+            x_data     = O.gpudata    if X is None else X.gpudata
+            if bias is not None or relu or brelu or beta != 0.0 or alpha != 1.0:
+                input_data = self.lib.scratch_buffer_offset(self.size)
+            else:
+                input_data = O.gpudata
+
+            self.args[2:10] = (self.lib.stream, O.gpudata, bsum_data, bias_data, input_data, x_data, alpha, beta)
+            self.kernel    = _get_compound_ops_kernel(self.dtype, self.threads,
+                bias is not None, bsum is not None, do_beta, relu, brelu)
+            return input_data
+        self.kernel = None
+        return O.gpudata
+
+    def execute(self):
+        if self.kernel:
+            self.kernel.prepared_async_call(*self.args)
+
+    def unbind(self):
+        self.kernel    = None
+        self.args[2:8] = (None,) * 6
+
+@context_dependent_memoize
+def _get_compound_ops_kernel(dtype, threads, bias, bsum, beta, relu, brelu):
+
+    kernel_name = "compound"
+    if bias:  kernel_name += "_bias"
+    if relu:  kernel_name += "_relu"
+    if beta:  kernel_name += "_beta"
+    if brelu: kernel_name += "_brelu"
+    if bsum:  kernel_name += "_bsum"
+
+    kernel_code = r"""
+%(common)s
+
+#define THREADS %(threads)s
+
+__global__ void %(name)s(
+    %(type)s* Out,
+    float*    Bsum,
+    const  float* __restrict__ Bias,
+    const %(type)s* __restrict__ In,
+    const %(type)s* __restrict__ X,
+    float alpha, float beta, int N)
+{
+    const int tid  = threadIdx.x;
+    const int bid  = blockIdx.x;
+
+    In += bid*N + tid;
+    %(inits)s
+
+    for (int i = tid; i < N; i += THREADS)
+    {
+        float data = %(cvt_in)s(*In); In += THREADS;
+        %(loads)s
+
+        %(ops)s
+    }
+    %(bsum)s
+}
+"""
+    common  = _common_round["nearest"].get(dtype, "")
+    if dtype == "f2":
+        common += _common_fp16_to_fp32
+
+    vals = {
+        "name"    : kernel_name,
+        "threads" : threads,
+        "common"  : common,
+        "type"    : _ew_types[dtype]["type"],
+        "cvt_in"  : _ew_types[dtype]["cvt"],
+        "cvt_out" : _ew_types[dtype]["cvt_out"],
+        "bsum"    : "",
+    }
+    inits = []
+    if beta or brelu:
+        inits.append("X += bid*N + tid;")
+    if bias:
+        inits.append("Bias += bid;")
+    if bias or relu or beta or brelu:
+        inits.append("Out += bid*N + tid;")
+    if bsum:
+        inits.append("float sum = 0.0f;")
+    vals["inits"] = "\n    ".join(inits)
+
+    loads = []
+    if beta or brelu:
+        loads.append("float x = %(cvt_in)s(*X);  X += THREADS;" % vals)
+    if bias:
+        loads.append("float bias = *Bias;")
+    vals["loads"] = "\n        ".join(loads)
+
+    ops = []
+    if bias:
+        ops.append("data += bias;")
+    if relu:
+        ops.append("data = max(data, 0.0f) + min(data, 0.0f) * beta;")
+    if beta:
+        ops.append("data = data * alpha + x * beta;")
+    if brelu:
+        ops.append("data *= (x > 0.0f) + (x < 0.0f) * beta;")
+    if bsum:
+        ops.append("sum += data;")
+    if bias or relu or beta or brelu:
+        ops.append("*Out = %(cvt_out)s(data); Out += THREADS;" % vals)
+    vals["ops"] = "\n        ".join(ops)
+
+    if bsum:
+        vals["bsum"] = r"""
+    __shared__ float sPartials[THREADS];
+
+    sPartials[tid] = sum;
+    __syncthreads();
+
+    #pragma unroll
+    for (int a = THREADS >> 1; a > 32; a >>= 1)
+    {
+        if ( tid < a )
+            sPartials[tid] += sPartials[tid + a];
+        __syncthreads();
+    }
+    if ( tid < 32 )
+    {
+        sum = sPartials[tid] + sPartials[tid + 32];
+
+        #pragma unroll
+        for (int i = 16; i > 0; i >>= 1)
+            sum += __shfl_xor(sum, i);
+
+        if ( tid == 0 )
+            Bsum[bid] = sum;
+    }
+"""
+    code   = kernel_code % vals
+    module = SourceModule(code)
+    kernel = module.get_function(kernel_name)
+    kernel.prepare("PPPPPffI")
+    return kernel
 
 # Convert scratch to output tensor or from input tensor to scratch
 class ConvertDataType(object):

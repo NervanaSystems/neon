@@ -85,7 +85,7 @@
     92-99   : out<0-7>
    100-101  : Out<0-1>
    102-103  : Sum<0-1>
-   104-122  ~ writeCs, readCs, alpha, k, n, sum<0-3>, offset, out_offset, bsum_offset, tidOX, tidOY, tidOX2, tidOX63
+   104-122  ~ writeCs, readCs, alpha, k, n, sum<0-3>, offset, out_offset, bsum_offset, tidOX, tidOY, tidOX2, preds, one
 
 </REGISTER_MAPPING>
 
@@ -254,7 +254,7 @@ LOOP:
 --:-:-:-:1      SHL tidOY, tidOY, 2;
 01:-:-:-:1      ISCADD k, idx_K, tidOY, 7;
 
-[+ output_setup(63, 3) +]
+[+ output_setup(63, 1, 6) +]
 
 </SCHEDULE_BLOCK>
 

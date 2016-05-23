@@ -357,8 +357,7 @@ class ConvLayer(Layer):
                  D=1, H=1, W=1,
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1,
-                 relu=False, bsum=False):
+                 str_d=1, str_h=1, str_w=1):
 
         super(ConvLayer, self).__init__(lib, dtype, N, np.float32)
 
@@ -378,8 +377,6 @@ class ConvLayer(Layer):
         self.MPQ = (M, P, Q)
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
-        self.relu = relu
-        self.bsum = bsum
 
         self.all_params = (N, C, K, D, H, W, T, R, S, pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
@@ -400,6 +397,9 @@ class ConvLayer(Layer):
         # flop count for benchmarking
         self.flops = P*Q*M*K*N*C*R*S*T * 2.0
 
+        args = (lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
+                pad_d, pad_h, pad_w, str_d, str_h, str_w)
+
         #lib.enable_winograd = 0
 
         ####### Cuda C ###########
@@ -409,16 +409,10 @@ class ConvLayer(Layer):
             if T > 1 or D > 1:
                 raise ValueError("3D Convolution not supported by CUDA C kernels.")
 
-            if relu:
-                raise ValueError("Compound relu not supported by CUDA C kernels.")
-
-            self.fprop_kernels = convolution.FpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                                                       pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
             # TODO small C bprop?
-            self.bprop_kernels = convolution.BpropCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                                                       pad_d, pad_h, pad_w, str_d, str_h, str_w, bsum=bsum)
-            self.updat_kernels = convolution.UpdateCuda(lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                                                        pad_d, pad_h, pad_w, str_d, str_h, str_w)
+            self.fprop_kernels = convolution.FpropCuda(*args)
+            self.bprop_kernels = convolution.BpropCuda(*args)
+            self.updat_kernels = convolution.UpdateCuda(*args)
 
         ####### Winograd ###########
         elif lib.enable_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
@@ -433,49 +427,31 @@ class ConvLayer(Layer):
                 winograd = 2
 
             if C < 8:
-                self.fprop_kernels = convolution.FpropDirect(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
+                self.fprop_kernels = convolution.FpropDirect(*args)
             elif winograd == 4:
-                self.fprop_kernels = FpropWinograd_4x4_3x3(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+                self.fprop_kernels = FpropWinograd_4x4_3x3(*args)
             else:
-                self.fprop_kernels = FpropWinograd_2x2_3x3(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+                self.fprop_kernels = FpropWinograd_2x2_3x3(*args)
 
             if winograd == 4:
-                self.bprop_kernels = BpropWinograd_4x4_3x3(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+                self.bprop_kernels = BpropWinograd_4x4_3x3(*args)
             else:
-                self.bprop_kernels = BpropWinograd_2x2_3x3(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+                self.bprop_kernels = BpropWinograd_2x2_3x3(*args)
 
             if N >=4 and (C < 8 or H*W > 112*112):
-                self.updat_kernels = convolution.UpdateDirect(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
+                self.updat_kernels = convolution.UpdateDirect(*args)
             elif winograd == 4:
-                self.updat_kernels = UpdateWinograd_3x3_4x4(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
+                self.updat_kernels = UpdateWinograd_3x3_4x4(*args)
             else:
-                self.updat_kernels = UpdateWinograd_3x3_2x2(
-                    lib, self.dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
+                self.updat_kernels = UpdateWinograd_3x3_2x2(*args)
 
         ####### Direct ###########
         else:
 
-            self.fprop_kernels = convolution.FpropDirect(
-                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                 pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
-
-            self.bprop_kernels = convolution.BpropDirect(
-                lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                 pad_d, pad_h, pad_w, str_d, str_h, str_w, relu, bsum)
-
+            self.fprop_kernels = convolution.FpropDirect(*args)
+            self.bprop_kernels = convolution.BpropDirect(*args)
             if N >= 4:
-                self.updat_kernels = convolution.UpdateDirect(
-                    lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                     pad_d, pad_h, pad_w, str_d, str_h, str_w)
+                self.updat_kernels = convolution.UpdateDirect(*args)
 
         #logger.debug("%s: %s, %s, %s", str(self), str(self.fprop_kernels), str(self.bprop_kernels), str(self.updat_kernels))
 
@@ -561,8 +537,7 @@ class DeconvLayer(ConvLayer):
                  P, Q,
                  R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1,
-                 relu=False, bsum=False):
+                 str_d=1, str_h=1, str_w=1):
 
         # Set T and D to be consts.
         D = T = 1
@@ -577,8 +552,7 @@ class DeconvLayer(ConvLayer):
             D, H, W,
             T, R, S,
             pad_d, pad_h, pad_w,
-            str_d, str_h, str_w,
-            relu, bsum)
+            str_d, str_h, str_w)
 
         self.nOut = reduce(mul, self.DHW, 1) * C
         self.H = H

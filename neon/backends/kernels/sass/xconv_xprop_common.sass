@@ -498,18 +498,17 @@ EOF
 
     sub output_setup
     {
-        my ($tidOX, $warp_shift) = @_;
+        my ($tidOX, $warp_shift, $bsum_shift) = @_;
         my $out;
 
         $out .= qq{
-02:-:-:-:1      SHR.U32   bsum_offset, tid, 5;
+02:-:-:-:1      SHR.U32   bsum_offset, tidOX, $bsum_shift;
 04:-:-:-:1      ISCADD    bsum_offset, idx_N, bsum_offset,   $warp_shift;
 01:-:-:-:1      XMAD      bsum_offset, idx_Q, param_gridN,   bsum_offset;
 --:-:-:-:1      XMAD.LO2C bsum_offset, idx_P, param_gridQN,  bsum_offset;
 --:-:-:-:1      XMAD.LO2C bsum_offset, idx_M, param_gridPQN, bsum_offset;
 
---:-:-:-:1      LOP.AND tidOX63, tidOX, $tidOX;
---:-:-:-:1      ISETP.EQ.AND P5, PT, tidOX63, RZ, PT;
+--:-:-:-:1      LOP.AND.Z P5, RZ, tidOX, $tidOX;
         } if $bsum;
 
         $out .= qq{
@@ -519,6 +518,7 @@ EOF
 --:-:-:-:1      XMAD.LO2C out_offset, m, param_PQN,  out_offset;
 
 --:-:-:-:1      MOV alpha, param_alpha;
+--:-:-:-:1      MOV32I one, 1.0;
 
 --:-:-:-:1      ISETP.EQ.AND P2, PT, RZ, param_flags, PT; // no output
 --:-:-:-:1      ISETP.LT.AND P0, PT, n, param_N, P2;
@@ -535,7 +535,9 @@ EOF
 
     sub output
     {
-        my $out = "--:-:-:-:5      BAR.SYNC 0;\n\n";
+        my $out = q{
+--:-:-:-:5      BAR.SYNC 0;
+        };
 
         foreach my $y (0..7)
         {
@@ -585,8 +587,8 @@ STORE_O:
 --:-:-:-:1      LEA      Sum0.CC, k, param_Sum[0],     2;
 --:-:-:-:1      LEA.HI.X Sum1,    k, param_Sum[1], RZ, 2;
 
---:-:6:-:1  @P2 LDG.E.CI b00, [Sum];
---:-:-:-:1 @!P2 MOV b00, RZ;
+--:-:6:-:1  @P2 LDG.E.CI b0, [Sum];
+--:-:-:-:1 @!P2 MOV b0, RZ;
         } if $bias;
 
         $out .= q{
@@ -701,7 +703,7 @@ STORE_O:
 --:-:-:-:1 @!P1 MOV out5, RZ;
 --:-:-:-:1 @!P2 MOV out6, RZ;
 --:-:-:-:1 @!P3 MOV out7, RZ;
---:-:-:-:1      R2P PR, preds, 0x0f;
+--:-:-:-:5      R2P PR, preds, 0x0f;
         } if $brelu;
 
         $out .= q{

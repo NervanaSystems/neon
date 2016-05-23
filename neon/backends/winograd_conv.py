@@ -38,10 +38,11 @@ class XpropWinograd_2x2_3x3(KernelGroup):
     def __init__(self, op, lib, dtype,
                  N, C, K,
                  H, W, P, Q,
-                 pad_h, pad_w,
-                 relu, bsum):
+                 pad_h, pad_w, filter_extern=None, bprop=False):
 
-        super(XpropWinograd_2x2_3x3, self).__init__(lib, dtype)
+        super(XpropWinograd_2x2_3x3, self).__init__(lib, dtype,
+             N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
+             0, pad_h, pad_w, 1,1,1, bprop)
 
         SMs = _get_sm_count()
 
@@ -53,15 +54,19 @@ class XpropWinograd_2x2_3x3(KernelGroup):
         # assume 10 Tflops on 24 SMs
         self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
 
-        self.params = (N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
-        self.init(self.params)
+        if filter_extern is None:
+            self.init()
+        else:
+            # allow manual override for unit testing
+            self.initialized = True
+            self.init(autotune=1, filter_extern=filter_extern)
 
         lib.set_scratch_size(self.filter_trans.size, self.bsum.size)
 
-    def init(self, params, autotune=0, filter_extern=0):
+    def init(self, autotune=0, filter_extern=0):
 
-        R, S = 3,3
-        N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum = self.params
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
         itemsize = self.dtype.itemsize
 
         if not autotune:
@@ -77,7 +82,7 @@ class XpropWinograd_2x2_3x3(KernelGroup):
             autotune_db.close()
             #print filter_extern, self.autotune_key
 
-        filter_extern = True
+        # filter_extern = True
         self.filter_extern = filter_extern
 
         if N == 1:
@@ -138,7 +143,6 @@ class XpropWinograd_2x2_3x3(KernelGroup):
             superP, superQ, superN, shiftP, shiftQ, shiftN ]))
 
         self.bsum = BatchNormSum(self.lib, K, gridPQ*gridN)
-        self.relu = relu
 
     def autotune(self, I, F, O):
 
@@ -147,15 +151,15 @@ class XpropWinograd_2x2_3x3(KernelGroup):
         # Only need to do warmup once
         if not self.lib.warmup:
             self.lib.warmup = True
-            self.init(self.params, autotune=1, filter_extern=1)
-            self.bind_params(I, F, O, alpha=1.0, beta=0.0, bsum=None, no_op=1)
+            self.init(autotune=1, filter_extern=1)
+            self.bind_params(I, F, O, no_op=1)
             self.execute(repeat=self.warmup, unbind=False)
 
         results = []
         for external in (0,1):
 
-            self.init(self.params, autotune=1, filter_extern=external)
-            self.bind_params(I, F, O, alpha=1.0, beta=0.0, bsum=None, no_op=1)
+            self.init(autotune=1, filter_extern=external)
+            self.bind_params(I, F, O, no_op=1)
             start.record(stream=self.lib.stream)
             self.execute(repeat=self.warmup, unbind=False)
             stop.record(stream=self.lib.stream)
@@ -174,33 +178,25 @@ class XpropWinograd_2x2_3x3(KernelGroup):
         autotune_db[self.autotune_key] = external
         autotune_db.close()
 
-        self.init(self.params, autotune=0, filter_extern=external)
+        self.init(autotune=0, filter_extern=external)
 
-    def bind_params(self, I, F, O, alpha, beta, bsum, no_op=0):
+    def bind_params(self, I, F, O,
+        X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+        relu=False, brelu=False, slope=0.0, no_op=0):
 
-        assert I.dtype == O.dtype
+        assert I.dtype == O.dtype == self.dtype
 
         if not self.initialized:
             self.initialized = True
             self.autotune(I, F, O)
 
         self.lib.scratch_buffer_init()
-
         filter_data = self.filter_trans.bind_params(F)
-        bsum_data   = self.bsum.bind_params(bsum)
+        bsum_data, x_data = self.xprop_params(O, X, bias, bsum, beta, relu, brelu, slope)
 
-        # TODO: expose more compound operations
-        self.kernel_options = self.kernel_opts
-        if bsum:
-            self.kernel_options += ("bsum",)
-        if beta:
-            self.kernel_options += ("beta",)
-        if self.relu:
-            self.kernel_options += ("relu",)
-
-        self.kernel_args[2:11] = (self.lib.stream, bsum_data, O.gpudata,
+        self.kernel_args[2:11] = (self.lib.stream, bsum_data, x_data,
                                   O.gpudata, I.gpudata, filter_data,
-                                  alpha, beta, no_op)
+                                  alpha, beta or slope, no_op)
 
     def execute(self, repeat=1, unbind=True):
 
@@ -219,15 +215,21 @@ class XpropWinograd_2x2_3x3(KernelGroup):
 
 class FpropWinograd_2x2_3x3(XpropWinograd_2x2_3x3):
 
-    def __init__(self, lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum):
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w, filter_extern=None):
 
         super(FpropWinograd_2x2_3x3, self).__init__("fprop", lib, dtype,
-            N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+            N, C, K, H, W, P, Q, pad_h, pad_w, filter_extern)
 
 
-    def init(self, params, autotune=0, filter_extern=0):
+    def init(self, autotune=0, filter_extern=0):
 
-        super(FpropWinograd_2x2_3x3, self).init(params, autotune, filter_extern)
+        super(FpropWinograd_2x2_3x3, self).init(autotune, filter_extern)
 
         if self.filter_extern:
             C, K  = self.params[1:3]
@@ -235,20 +237,24 @@ class FpropWinograd_2x2_3x3(XpropWinograd_2x2_3x3):
         else:
             self.filter_trans = NoopTransform()
 
-    def __str__(self):
-        return "FpropWinograd " + self.kernel_name
 
 class BpropWinograd_2x2_3x3(XpropWinograd_2x2_3x3):
 
-    def __init__(self, lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum):
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w, filter_extern=None):
 
         # Swap C<=>K and HW<=>PQ, invert padding
         super(BpropWinograd_2x2_3x3, self).__init__("bprop", lib, dtype,
-            N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, relu, bsum)
+            N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, filter_extern, bprop=True)
 
-    def init(self, params, autotune=0, filter_extern=0):
+    def init(self, autotune=0, filter_extern=0):
 
-        super(BpropWinograd_2x2_3x3, self).init(params, autotune, filter_extern)
+        super(BpropWinograd_2x2_3x3, self).init(autotune, filter_extern)
 
         K, C  = self.params[1:3]
 
@@ -258,9 +264,6 @@ class BpropWinograd_2x2_3x3(XpropWinograd_2x2_3x3):
         else:
             # plain dim shuffle CRSK => KRSC
             self.filter_trans = FilterDimShuffle(self.lib, self.dtype, C, 1, 3, 3, K)
-
-    def __str__(self):
-        return "BpropWinograd " + self.kernel_name
 
 class UpdateWinograd_3x3_2x2(KernelGroup):
 
@@ -277,21 +280,27 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
             4 : (   0,    0, 0x000, 0x000, 0x205), # 1x1 nnccccc
     }
 
-    def __init__(self, lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w):
+    def __init__(self, lib, dtype,
+                 N, C, K,
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w):
 
         # Support N = 1,2 and multiples of 4 for now
         assert N in (1,2) or N % 4 == 0
 
-        super(UpdateWinograd_3x3_2x2, self).__init__(lib, dtype)
+        super(UpdateWinograd_3x3_2x2, self).__init__(lib, dtype,
+             N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
+             0, pad_h, pad_w, 1,1,1)
 
         SMs = _get_sm_count()
 
         self.autotune_key = [str(x) for x in ("update_3x3_2x2",
            SMs, 0, dtype.itemsize, N, C, K, H, W, P, Q)]
         self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
-
-        self.params = (N, C, K, H, W, P, Q, pad_h, pad_w)
-        self.init(self.params)
+        self.init()
 
         lib.set_scratch_size(self.image_trans.size, self.output_trans.size)
 
@@ -299,10 +308,11 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         # assume 10 Tflops on 24 SMs
         self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
 
-    def init(self, params, autotune=False):
+    def init(self, autotune=False):
 
-        N, C, K, H, W, P, Q, pad_h, pad_w = self.params
-        R, S    = 3, 3
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+
         loopN   = 4 if N >= 4 else N
         blkN    = 4 if N >= 3 else N
         superI  = UpdateWinograd_3x3_2x2.external_superblock.get(blkN) # I = image
@@ -395,7 +405,7 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
 
         self.kernel_opts = tuple(options)
         self.kernel_name = "%s_winograd_3x3_2x2_32x32" % self.clss
-        self.kernel_args = [ (gridPQKC,1,1), (256,1,1), None, None, None, None, None ]
+        self.kernel_args = [ (gridPQKC,1,1), (256,1,1), None, None, None, None, 1.0 ]
         self.kernel_args.extend(_flatten([
             H, W, P, Q, C, K, N, pad_h, pad_w,
             GY, GX, GYS, GXS, superI, superE, loopXI, loopXE, loopN, strideY, strideX,
@@ -414,8 +424,8 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         if not self.lib.warmup:
             self.lib.warmup = True
             # warmup  with a conservative set of params
-            self.init(self.params, autotune=(self.GYS, 1, 1))
-            self.bind_params(I, E, O, 1.0)
+            self.init(autotune=(self.GYS, 1, 1))
+            self.bind_params(I, E, O, no_op=True)
             self.execute(repeat=self.warmup, unbind=False)
 
         # we want at least this many blocks
@@ -459,8 +469,8 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
                             settings = (strideY, strideX, external)
                             #print settings
 
-                            self.init(self.params, autotune=settings)
-                            self.bind_params(I, E, O, 1.0)
+                            self.init(autotune=settings)
+                            self.bind_params(I, E, O, no_op=True)
                             start.record(stream=self.lib.stream)
                             self.execute(repeat=2, unbind=False)
                             stop.record(stream=self.lib.stream)
@@ -493,12 +503,12 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
 
         autotune_db.close()
 
-        self.init(self.params, autotune=settings)
+        self.init(autotune=settings)
 
 
-    def bind_params(self, I, E, O, alpha, beta=0):
+    def bind_params(self, I, E, O, alpha=1.0, beta=0.0, no_op=False):
 
-        assert I.dtype == E.dtype
+        assert I.dtype == E.dtype == self.dtype
 
         if not self.initialized:
             self.initialized = True
@@ -507,12 +517,12 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         self.lib.scratch_buffer_init()
 
         image_data  = self.image_trans.bind_params(I)
-        output_data = self.output_trans.bind_params(O, beta)
+        output_data = self.output_trans.bind_params(O, alpha, beta, no_op)
 
         if self.zero:
             self.zero_args = ( output_data, 0, O.size, self.lib.stream )
 
-        self.kernel_args[2:7] = (self.lib.stream, output_data, image_data, E.gpudata, alpha)
+        self.kernel_args[2:6] = (self.lib.stream, output_data, image_data, E.gpudata)
 
     def execute(self, repeat=1, unbind=True):
 
@@ -531,11 +541,7 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
             self.image_trans.unbind()
             self.output_trans.unbind()
             self.zero_args = None
-            self.kernel_args[2:7] = (None,) * 5
-
-    def __str__(self):
-        N, C, K, H, W, P, Q, pad_h, pad_w = self.params
-        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d)" % (self.kernel_name, N, C, K, H, W)
+            self.kernel_args[2:6] = (None,) * 4
 
 
 class XpropWinograd_4x4_3x3(KernelGroup):
@@ -543,10 +549,11 @@ class XpropWinograd_4x4_3x3(KernelGroup):
     def __init__(self, op, lib, dtype,
                  N, C, K,
                  H, W, P, Q,
-                 pad_h, pad_w,
-                 relu, bsum):
+                 pad_h, pad_w, external=None, bprop=False):
 
-        super(XpropWinograd_4x4_3x3, self).__init__(lib, dtype)
+        super(XpropWinograd_4x4_3x3, self).__init__(lib, dtype,
+             N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
+             0, pad_h, pad_w, 1,1,1, bprop)
 
         SMs = _get_sm_count()
 
@@ -558,15 +565,19 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         # assume 10 Tflops on 24 SMs
         self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
 
-        self.params = (N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
-        self.init(self.params)
+        if external is None:
+            self.init()
+        else:
+            # allow override for unit testing
+            self.initialized = True
+            self.init(autotune=1, external=external)
 
         lib.set_scratch_size(self.image_size, self.filter_trans.size, self.bsum.size)
 
-    def init(self, params, autotune=0, external=1):
+    def init(self, autotune=0, external=1):
 
-        R, S = 3,3
-        N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum = self.params
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
 
         if not autotune:
             autotune_db = shelve.open(self.autotune_db_file)
@@ -580,7 +591,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
 
             autotune_db.close()
 
-        # external = False
+        # external = True
         self.external = external
 
         if N == 1:
@@ -664,9 +675,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
                 GN, GXS*GN, GYS*GXS*GN ]))
 
         self.kernel_opts = tuple(options)
-
         self.bsum = BatchNormSum(self.lib, K, GYS*GXS*GN)
-        self.relu = relu
 
     def autotune(self, I, F, O):
 
@@ -675,15 +684,15 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         # Only need to do warmup once
         if not self.lib.warmup:
             self.lib.warmup = True
-            self.init(self.params, autotune=1, external=1)
-            self.bind_params(I, F, O, alpha=1.0, beta=0.0, bsum=None, flags=1)
+            self.init(autotune=1, external=1)
+            self.bind_params(I, F, O, no_op=1)
             self.execute(repeat=self.warmup, unbind=False)
 
         results = []
         for external in (0,1):
 
-            self.init(self.params, autotune=1, external=external)
-            self.bind_params(I, F, O, alpha=1.0, beta=0.0, bsum=None, flags=1)
+            self.init(autotune=1, external=external)
+            self.bind_params(I, F, O, no_op=1)
             start.record(stream=self.lib.stream)
             self.execute(repeat=self.warmup, unbind=False)
             stop.record(stream=self.lib.stream)
@@ -702,11 +711,13 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         autotune_db[self.autotune_key] = external
         autotune_db.close()
 
-        self.init(self.params, autotune=0, external=external)
+        self.init(autotune=0, external=external)
 
-    def bind_params(self, I, F, O, alpha, beta, bsum, flags=0):
+    def bind_params(self, I, F, O,
+        X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+        relu=False, brelu=False, slope=0.0, no_op=0):
 
-        assert I.dtype == O.dtype
+        assert I.dtype == O.dtype == self.dtype
 
         if not self.initialized:
             self.initialized = True
@@ -721,19 +732,10 @@ class XpropWinograd_4x4_3x3(KernelGroup):
             image_data = I.gpudata
 
         filter_data = self.filter_trans.bind_params(F)
-        bsum_data   = self.bsum.bind_params(bsum)
+        bsum_data, x_data = self.xprop_params(O, X, bias, bsum, beta, relu, brelu, slope)
 
-        # TODO: expose more compound operations
-        self.kernel_options = self.kernel_opts
-        if bsum:
-            self.kernel_options += ("bsum",)
-        if beta:
-            self.kernel_options += ("beta",)
-        if self.relu:
-            self.kernel_options += ("relu",)
-
-        self.kernel_args[2:11] = (self.lib.stream, bsum_data, O.gpudata, O.gpudata,
-                                  image_data, filter_data, alpha, beta, flags)
+        self.kernel_args[2:11] = (self.lib.stream, bsum_data, x_data, O.gpudata,
+                                  image_data, filter_data, alpha, beta or slope, no_op)
 
     def execute(self, repeat=1, unbind=True):
 
@@ -760,16 +762,18 @@ class FpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
 
     def __init__(self, lib, dtype,
                  N, C, K,
-                 H, W, P, Q,
-                 pad_h, pad_w,
-                 relu, bsum):
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w, external=None):
 
         super(FpropWinograd_4x4_3x3, self).__init__(
-                 "fprop", lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w, relu, bsum)
+                 "fprop", lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w, external)
 
-    def init(self, params, autotune=0, external=1):
+    def init(self, autotune=0, external=1):
 
-        super(FpropWinograd_4x4_3x3, self).init(params, autotune, external)
+        super(FpropWinograd_4x4_3x3, self).init(autotune, external)
 
         C, K = self.params[1:3]
 
@@ -780,23 +784,22 @@ class FpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
         else:
             self.filter_trans = NoopTransform()
 
-    def __str__(self):
-        return "FpropWinograd " + self.kernel_name
-
 class BpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
 
     def __init__(self, lib, dtype,
                  N, C, K,
-                 H, W, P, Q,
-                 pad_h, pad_w,
-                 relu, bsum):
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w, external=None):
 
         super(BpropWinograd_4x4_3x3, self).__init__(
-                 "bprop", lib, dtype, N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, relu, bsum)
+                 "bprop", lib, dtype, N, K, C, P, Q, H, W, 2-pad_h, 2-pad_w, external, bprop=True)
 
-    def init(self, params, autotune=0, external=1):
+    def init(self, autotune=0, external=1):
 
-        super(BpropWinograd_4x4_3x3, self).init(params, autotune, external)
+        super(BpropWinograd_4x4_3x3, self).init(autotune, external)
 
         K, C = self.params[1:3]
 
@@ -807,26 +810,26 @@ class BpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
             # plain dim shuffle CRSK => KRSC
             self.filter_trans = FilterDimShuffle(self.lib, self.dtype, C, 1, 3, 3, K)
 
-    def __str__(self):
-        return "BpropWinograd " + self.kernel_name
-
 class UpdateWinograd_3x3_4x4(KernelGroup):
 
     def __init__(self, lib, dtype,
                  N, C, K,
-                 H, W, P, Q,
-                 pad_h, pad_w):
+                 D, H, W,
+                 T, R, S,
+                 M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w):
 
-        super(UpdateWinograd_3x3_4x4, self).__init__(lib, dtype)
+        super(UpdateWinograd_3x3_4x4, self).__init__(lib, dtype,
+             N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
+             0, pad_h, pad_w, 1,1,1)
 
         SMs = _get_sm_count()
 
         self.autotune_key = [str(x) for x in ("update_3x3_4x4",
            SMs, 0, dtype.itemsize, N, C, K, H, W, P, Q)]
         self.autotune_db_file = os.path.join(lib.cache_dir, "autotune.db")
-
-        self.params = (N, C, K, H, W, P, Q, pad_h, pad_w)
-        self.init(self.params)
+        self.init()
 
         lib.set_scratch_size(self.image_size, self.delta_size, self.output_trans.size)
 
@@ -834,11 +837,11 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         # assume 10 Tflops on 24 SMs
         self.warmup = min(max(int(5e12 / (P*Q*K*N*C*9*2.0) * (SMs / 24.0)), 1), 1000)
 
-    def init(self, params, autotune=False):
+    def init(self, autotune=False):
 
-        N, C, K, H, W, P, Q, pad_h, pad_w = self.params
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
         itemsize = self.dtype.itemsize
-        R, S = 3, 3
 
         if N == 1:
             shlN = 0
@@ -956,7 +959,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         self.kernel_name = "%s_winograd_3x3_4x4_32x32" % self.clss
         self.kernel_args = [
             (strideYXN*Gk*Gc, GC, GK), (640, 1, 1), None,
-            None, None, None, None]
+            None, None, None, 1.0]
 
         self.kernel_args.extend( _flatten([
             K, C, Gk, Gc, kc, magic_kc, magic_c, YXN2, strideYXN, magic_sYXN,
@@ -972,8 +975,8 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         if not self.lib.warmup:
             self.lib.warmup = True
             # warmup  with a conservative set of params
-            self.init(self.params, autotune=self.maxYXN2)
-            self.bind_params(I, E, O, 1.0)
+            self.init(autotune=self.maxYXN2)
+            self.bind_params(I, E, O, no_op=True)
             self.execute(repeat=self.warmup, unbind=False)
 
         start, stop = self.lib.get_events()
@@ -1000,8 +1003,8 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
                 # this time looking only at settings that didn't pass.
                 if small_set or (threshold and filters) or (not threshold and not filters):
 
-                    self.init(self.params, autotune=strideYXN)
-                    self.bind_params(I, E, O, 1.0)
+                    self.init(autotune=strideYXN)
+                    self.bind_params(I, E, O, no_op=True)
                     start.record(stream=self.lib.stream)
                     self.execute(repeat=2, unbind=False)
                     stop.record(stream=self.lib.stream)
@@ -1036,11 +1039,11 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
 
         autotune_db.close()
 
-        self.init(self.params, autotune=strideYXN)
+        self.init(autotune=strideYXN)
 
-    def bind_params(self, I, E, O, alpha, beta=0):
+    def bind_params(self, I, E, O, alpha=1.0, beta=0.0, no_op=False):
 
-        assert I.dtype == E.dtype
+        assert I.dtype == E.dtype == self.dtype
 
         if not self.initialized:
             self.initialized = True
@@ -1050,7 +1053,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
 
         image_data  = self.lib.scratch_buffer_offset(self.image_size)
         delta_data  = self.lib.scratch_buffer_offset(self.delta_size)
-        output_data = self.output_trans.bind_params(O, beta)
+        output_data = self.output_trans.bind_params(O, alpha, beta, no_op)
 
         self.image_args[2:5] = (self.lib.stream, image_data, I.gpudata)
         self.delta_args[2:5] = (self.lib.stream, delta_data, E.gpudata)
@@ -1058,7 +1061,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         if self.zero:
             self.zero_args = [output_data, 0, O.size, self.lib.stream]
 
-        self.kernel_args[2:7] = (self.lib.stream, output_data, image_data, delta_data, alpha)
+        self.kernel_args[2:6] = (self.lib.stream, output_data, image_data, delta_data)
 
     def execute(self, repeat=1, unbind=True):
 
@@ -1079,13 +1082,9 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         if unbind:
             self.output_trans.unbind()
             self.zero_args = None
-            self.kernel_args[2:7] = (None,) * 5
+            self.kernel_args[2:6] = (None,) * 4
             self.image_args[2:5]  = (None,) * 3
             self.delta_args[2:5]  = (None,) * 3
-
-    def __str__(self):
-        N, C, K, H, W, P, Q, pad_h, pad_w = self.params
-        return "%s NCK:(%3d,%3d,%3d) HW:(%3d,%3d)" % (self.kernel_name, N, C, K, H, W)
 
 
 class UpdateImage_3x3_2x2(object):

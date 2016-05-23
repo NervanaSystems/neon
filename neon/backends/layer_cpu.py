@@ -17,6 +17,7 @@ CPU backend layers
 """
 import math
 from operator import mul
+import numpy as np
 
 
 def ceil_div(x, y):
@@ -53,8 +54,7 @@ class ConvLayer(object):
                  D=1, H=1, W=1,
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1,
-                 bsum=False):
+                 str_d=1, str_h=1, str_w=1):
 
         # Compute the output spatial dimensions
         M = lib.output_dim(D, T, pad_d, str_d)
@@ -72,11 +72,11 @@ class ConvLayer(object):
         self.MPQ = (M, P, Q)
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
-        self.bsum = bsum
 
         self.dimI = (C, D, H, W, N)
         self.dimF = (C, T, R, S, K)
         self.dimO = (K, M, P, Q, N)
+        self.dimS = (K, 1)
         self.dimI2 = (C * D * H * W, N)
         self.dimF2 = (C * T * R * S, K)
         self.dimO2 = (K * M * P * Q, N)
@@ -85,12 +85,20 @@ class ConvLayer(object):
         self.sizeO = reduce(mul, self.dimO, 1)
         self.nOut = reduce(mul, self.MPQ, 1) * K
 
-        self.mSlice = [self.fprop_slice(m, T, D, pad_d, str_d) for m in range(M)]
-        self.pSlice = [self.fprop_slice(p, R, H, pad_h, str_h) for p in range(P)]
-        self.qSlice = [self.fprop_slice(q, S, W, pad_w, str_w) for q in range(Q)]
-        self.dSlice = [self.bprop_slice(d, T, M, pad_d, str_d) for d in range(D)]
-        self.hSlice = [self.bprop_slice(h, R, P, pad_h, str_h) for h in range(H)]
-        self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w) for w in range(W)]
+        if all(x == 1 for x in self.TRS) and \
+           all(p == 0 for p in self.padding) and \
+           all(s == 1 for s in self.strides):
+
+            self.dot = True
+        else:
+            self.dot = False
+
+            self.mSlice = [self.fprop_slice(m, T, D, pad_d, str_d) for m in range(M)]
+            self.pSlice = [self.fprop_slice(p, R, H, pad_h, str_h) for p in range(P)]
+            self.qSlice = [self.fprop_slice(q, S, W, pad_w, str_w) for q in range(Q)]
+            self.dSlice = [self.bprop_slice(d, T, M, pad_d, str_d) for d in range(D)]
+            self.hSlice = [self.bprop_slice(h, R, P, pad_h, str_h) for h in range(H)]
+            self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w) for w in range(W)]
 
     def fprop_slice(self, q, S, X, padding, strides):
         firstF = 0
@@ -108,16 +116,144 @@ class ConvLayer(object):
 
     def bprop_slice(self, x, S, Q, padding, strides):
         qs = x - (S - padding - 1)
-        sliceF = []
-        sliceO = []
-        for s in range(S):
+        firstF = None
+        for s in range(S): #TODO remove loop logic here.
             q = qs + s
             if q % strides == 0:
                 q //= strides
                 if q >= 0 and q < Q:
-                    sliceF.append(S - s - 1)
-                    sliceO.append(q)
-        return sliceF, sliceO
+                    if firstF is None:
+                        firstF = s
+                        firstE = q
+                    lastF = s
+                    lastE = q
+        if firstF is None:
+            return (slice(0,0,1), slice(0,0,1), 0)
+        return (slice(firstF,lastF+1,strides), slice(firstE,lastE+1,1), 0)
+
+    def compound_ops(self, O, X, bias, bsum, relu, brelu, slope):
+        if bias is not None:
+            O[:] = (O.reshape((O.shape[0], -1)) + bias).reshape(O.shape)
+        if relu or brelu:
+            if relu:
+                if slope:
+                    O[:] = np.maximum(O, 0.0) + slope * np.minimum(O, 0.0)
+                else:
+                    O[:] = np.maximum(O, 0.0)
+            else:
+                if slope:
+                    O[:] = O * ((X > 0.0) + slope * (X < 0.0))
+                else:
+                    O[:] = O * (X > 0.0)
+        if bsum is not None:
+            bsum[:] = np.sum(O.reshape((O.shape[0], -1)), axis=1, keepdims=True)
+
+    def xprop_conv(self, I, F, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+                   relu=False, brelu=False, slope=0.0, backward=False):
+
+        if X is None:
+            X = O
+
+        if backward:
+            I = I._tensor.reshape(self.dimO)
+            O = O._tensor.reshape(self.dimI)
+            X = X._tensor.reshape(self.dimI)
+        else:
+            I = I._tensor.reshape(self.dimI)
+            O = O._tensor.reshape(self.dimO)
+            X = X._tensor.reshape(self.dimO)
+        F = F._tensor.reshape(self.dimF)
+        if bias is not None:
+            bias = bias._tensor.reshape((O.shape[0], 1))
+        if bsum is not None:
+            bsum = bsum._tensor.reshape((O.shape[0], 1))
+
+        # 1x1 conv can be cast as a simple dot operation
+        if self.dot:
+            C = F.shape[0]
+            K = F.shape[-1]
+            if backward:
+                # CxHWN = CxK . KxHWN
+                F = F.reshape((C,  K))
+                I = I.reshape((K, -1))
+            else:
+                # KxHWN = CxK.T . CxHWN
+                F = F.reshape((C,  K)).T
+                I = I.reshape((C, -1))
+
+            if beta:
+                O[:] = alpha * np.dot(F, I).reshape(O.shape) + beta * X
+            else:
+                O[:] = np.dot(F, I).reshape(O.shape)
+                self.compound_ops(O, X, bias, bsum, relu, brelu, slope)
+            return
+
+        if backward:
+            # C <=> K and mirror T,R,S  (0,1,2,3,4) => (4,1,2,3,0)
+            F = np.transpose(F[:,::-1,::-1,::-1,:], (4,1,2,3,0)).copy()
+            mSlice, pSlice, qSlice = self.dSlice, self.hSlice, self.wSlice
+        else:
+            mSlice, pSlice, qSlice = self.mSlice, self.pSlice, self.qSlice
+
+        K, M, P, Q, N = O.shape
+
+        for m in range(M):
+            sliceT, sliceD, _ = mSlice[m]
+            for p in range(P):
+                sliceR, sliceH, _ = pSlice[p]
+                for q in range(Q):
+                    sliceS, sliceW, _ = qSlice[q]
+
+                    slicedF = F[:,sliceT,sliceR,sliceS,:].reshape((-1, K))
+                    slicedI = I[:,sliceD,sliceH,sliceW,:].reshape((-1, N))
+
+                    if beta:
+                        O[:,m,p,q,:] = alpha * np.dot( slicedF.T,  slicedI ) + beta * X[:,m,p,q,:]
+                    else:
+                        O[:,m,p,q,:] = np.dot( slicedF.T,  slicedI )
+
+        if not beta:
+            self.compound_ops(O, X, bias, bsum, relu, brelu, slope)
+
+    def update_conv(self, I, E, U, alpha=1.0, beta=0.0):
+
+        C = self.C
+        K, M, P, Q, N = self.dimO
+
+        I = I._tensor.reshape(self.dimI)
+        E = E._tensor.reshape(self.dimO)
+        U = U._tensor.reshape(self.dimF)
+
+        # 1x1 conv can be cast as a simple dot operation
+        if self.dot:
+            # CxK = CxHWN . KxHWN.T
+            I = I.reshape((C, -1))
+            E = E.reshape((K, -1)).T
+            if beta:
+                U[:] = alpha * np.dot(I, E).reshape(U.shape) + beta * U
+            else:
+                U[:] = alpha * np.dot(I, E).reshape(U.shape)
+            return
+
+        if beta:
+            U *= beta
+        else:
+            U.fill(0.0)
+
+        for m in range(M):
+            sliceT, sliceD, tlen = self.mSlice[m]
+            for p in range(P):
+                sliceR, sliceH, rlen = self.pSlice[p]
+                for q in range(Q):
+                    sliceS, sliceW, slen = self.qSlice[q]
+
+                    slicedI = I[:, sliceD, sliceH, sliceW, :].reshape((-1, N))
+                    slicedE = E[:, m, p, q, :]
+                    update  = np.dot(slicedI, slicedE.T).reshape((C, tlen, rlen, slen, K))
+                    if alpha == 1.0:
+                        U[:, sliceT, sliceR, sliceS, :] += update
+                    else:
+                        U[:, sliceT, sliceR, sliceS, :] += alpha * update
 
 
 class DeconvLayer(ConvLayer):

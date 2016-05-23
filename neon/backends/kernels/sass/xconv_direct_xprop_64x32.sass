@@ -150,7 +150,7 @@
 
       64-83 ~ tidY, m, p, q, negOne, trs, lutStore2, lut_size, warp_count, warp_inc, neg_RS, neg_S, dep_thd_mask, qs, pr, mt, neg_str_w, neg_str_h, neg_str_d
 
-     84-131 ~ idx_MPQnk, idx_PQnk, idx_Qnk, idx_nk, idx_n, idx_k, magic_PQnk, magic_Qnk, neg_PQnk, neg_Qnk, neg_nk, neg_k, div1, div2, div3, idx_P2, idx_Q2, super_m, super_p, super_q, super_n, tid1, tid2, tid3, tid7, tid8, tid31, tid32, tidX, k<0|1|2|3>, sb, warp_mask, mask_shr, shiftSB, maskSB, q<1|2|3>
+     84-131 ~ idx_MPQnk, idx_PQnk, idx_Qnk, idx_nk, idx_n, idx_k, magic_PQnk, magic_Qnk, neg_PQnk, neg_Qnk, neg_nk, neg_k, div1, div2, div3, idx_P2, idx_Q2, super_m, super_p, super_q, super_n, tid1, tid2, tid3, tid7, tid8, tid31, tid32, readIs2, tidX, k<0|1|2|3>, sb, warp_mask, mask_shr, shiftSB, maskSB, q<1|2|3>
 
      84-131 ~ rs, t, r, s, z, y, x, x<1|2|3>, z_prime, y_prime, x_prime, x_prime<1|2|3>, z_mod, y_mod, x_mod, x_mod<1|2|3>, lutStore, ballot, warp_slices, dep_thd_bits, dep_thd_cnt, tidY1
 
@@ -289,32 +289,31 @@
 --:-:-:-:1      ISCADD writeIs, tidY, tidX, 5;
 --:-:-:-:1      ISCADD writeIs, writeIs, 4x<szShareF>, 2;
 
-// readFs  = (((tid >> 1) & 7) << 4
---:-:-:-:1      BFE.U32 readFs, tid,    0x301; // 3 bits at position 1
---:-:-:-:1      SHL     readFs, readFs, 4;
 
-// readIs = (((tid & 16) >> 2) | (tid & 1)) << 4
+// readIs  = (((tid >> 1) & 3) << 4
+--:-:-:-:1      BFE.U32 readIs, tid, 0x201; // 2 bits at position 1
+
+// readFs = (((tid & 24) >> 2) | (tid & 1)) << 4
 --:-:-:-:1      LOP.AND tid1,   tid,    1;
---:-:-:-:1      LOP.AND readIs, tid,   16;
---:-:-:-:1      SHR.U32 readIs, readIs, 3;
---:-:-:-:1      LOP.OR  readIs, readIs, tid1;
---:-:-:-:1      SHL     readIs, readIs, 4;
+--:-:-:-:1      LOP.AND readFs, tid,   24;
+--:-:-:-:1      SHR.U32 readFs, readFs, 2;
+--:-:-:-:1      LOP.OR  readFs, readFs, tid1;
 
 // Each tile has 32 threads so this is an index into the 4 tiles (at bit position 5)
 // tid32 = tid & -32
 --:-:-:-:1      LOP.AND tid32, tid, -32;
 
-// Write out the 4 groups of 64 rows 32 at a time
-// Also shift over bottom 16 rows by 16 to avoid some bank conflicts
-// Then offset each warp by 32*warpid
-// writeOs = (readFs + tid32*4) * 32 + readIs + (tid & 8) * 2 * 4 + tid32*4 + tid2*4
---:-:-:-:1      LOP.AND tid8, tid, 8;
---:-:-:-:1      BFE.U32 tid2, tid, 0x201;
---:-:-:-:1      ISCADD writeOs, tid32,   readFs, 2;
---:-:-:-:1      ISCADD writeOs, writeOs, readIs, 5;
---:-:-:-:1      ISCADD writeOs, tid8,   writeOs, 3;
---:-:-:-:1      ISCADD writeOs, tid32,  writeOs, 2;
---:-:-:-:1      ISCADD writeOs, tid2,   writeOs, 2;
+// readIs2 = readIs + (tid32 >> 2) + (readFs << 2)
+--:-:-:-:1      SHR.U32 readIs2, tid32, 2;
+--:-:-:-:1      IADD    readIs2, readIs2, readIs;
+--:-:-:-:1      ISCADD  readIs2, readFs, readIs2, 2;
+
+--:-:-:-:1      SHL readFs,  readFs,  4;
+--:-:-:-:1      SHL readIs,  readIs,  4;
+--:-:-:-:1      SHL readIs2, readIs2, 4;
+
+// writeFs = readFs*32*4 + readIs2
+--:-:-:-:1      ISCADD writeOs, readFs, readIs2, 7;
 
 // Each block of 32 threads works on 8 lines,
 // readFs += tid32/4 * 64 * 4
@@ -2006,8 +2005,9 @@ LOOP:
 --:-:-:-:1      LOP.AND tid_31, tid, 31;
 --:-:-:-:1      SHR.U32 tid_32, tid, 5;
 
-// readOs = tid*4
---:-:-:-:1      SHL readOs, tid, 2;
+// readFs = (tid_32 << 7 + tid_31) << 2
+--:-:-:-:1      ISCADD readOs, tid_32, tid_31, 7;
+--:-:-:-:1      SHL    readOs, readOs, 2;
 
 --:-:-:-:1      ISETP.EQ.AND P6, PT, tid_31, RZ, PT;
 
@@ -2106,44 +2106,19 @@ LOOP:
 --:-:-:-:1      FMUL shuffle_x5y3, cx5y3, alpha;
 --:-:-:-:1      FMUL shuffle_x6y3, cx6y3, alpha;
 --:-:-:-:1      FMUL shuffle_x7y3, cx7y3, alpha;
-
---:-:-:-:1      STS [writeOs+4x<0*32 + 00>], shuffle_x0y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 01>], shuffle_x1y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 02>], shuffle_x2y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 03>], shuffle_x3y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 16>], shuffle_x4y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 17>], shuffle_x5y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 18>], shuffle_x6y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 19>], shuffle_x7y0;
---:-:-:-:1      STS [writeOs+4x<1*32 + 00>], shuffle_x0y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 01>], shuffle_x1y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 02>], shuffle_x2y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 03>], shuffle_x3y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 16>], shuffle_x4y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 17>], shuffle_x5y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 18>], shuffle_x6y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 19>], shuffle_x7y1;
---:-:-:-:1      STS [writeOs+4x<2*32 + 00>], shuffle_x0y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 01>], shuffle_x1y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 02>], shuffle_x2y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 03>], shuffle_x3y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 16>], shuffle_x4y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 17>], shuffle_x5y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 18>], shuffle_x6y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 19>], shuffle_x7y2;
---:-:-:-:1      STS [writeOs+4x<3*32 + 00>], shuffle_x0y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 01>], shuffle_x1y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 02>], shuffle_x2y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 03>], shuffle_x3y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 16>], shuffle_x4y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 17>], shuffle_x5y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 18>], shuffle_x6y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 19>], shuffle_x7y3;
+--:-:-:-:1      STS.128 [writeOs+4x<0*128 + 00>], shuffle_x0y0;
+--:-:-:-:1      STS.128 [writeOs+4x<0*128 + 16>], shuffle_x4y0;
+--:-:-:-:1      STS.128 [writeOs+4x<1*128 + 00>], shuffle_x0y1;
+--:-:-:-:1      STS.128 [writeOs+4x<1*128 + 16>], shuffle_x4y1;
+--:-:-:-:1      STS.128 [writeOs+4x<2*128 + 00>], shuffle_x0y2;
+--:-:-:-:1      STS.128 [writeOs+4x<2*128 + 16>], shuffle_x4y2;
+--:-:-:-:1      STS.128 [writeOs+4x<3*128 + 00>], shuffle_x0y3;
+--:-:-:-:1      STS.128 [writeOs+4x<3*128 + 16>], shuffle_x4y3;
 </SCHEDULE_BLOCK>
 --:-:-:-:5      BAR.SYNC 0;
 
 --:-:-:-:5      CAL STORE_O;
---:-:-:-:0      IADD readOs, readOs, 4x<16*32 + 16>;
+--:-:-:-:0      IADD readOs, readOs, 4x<16*128 + 4*16>;
 --:-:-:-:5      CAL STORE_O;
 
 --:-:-:-:1      FMUL shuffle_x0y4, cx0y4, alpha;
@@ -2180,45 +2155,20 @@ LOOP:
 --:-:-:-:1      FMUL shuffle_x5y7, cx5y7, alpha;
 --:-:-:-:1      FMUL shuffle_x6y7, cx6y7, alpha;
 --:-:-:-:1      FMUL shuffle_x7y7, cx7y7, alpha;
-
---:-:-:-:1      STS [writeOs+4x<0*32 + 00>], shuffle_x0y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 01>], shuffle_x1y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 02>], shuffle_x2y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 03>], shuffle_x3y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 16>], shuffle_x4y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 17>], shuffle_x5y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 18>], shuffle_x6y0;
---:-:-:-:1      STS [writeOs+4x<0*32 + 19>], shuffle_x7y0;
---:-:-:-:1      STS [writeOs+4x<1*32 + 00>], shuffle_x0y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 01>], shuffle_x1y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 02>], shuffle_x2y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 03>], shuffle_x3y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 16>], shuffle_x4y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 17>], shuffle_x5y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 18>], shuffle_x6y1;
---:-:-:-:1      STS [writeOs+4x<1*32 + 19>], shuffle_x7y1;
---:-:-:-:1      STS [writeOs+4x<2*32 + 00>], shuffle_x0y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 01>], shuffle_x1y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 02>], shuffle_x2y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 03>], shuffle_x3y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 16>], shuffle_x4y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 17>], shuffle_x5y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 18>], shuffle_x6y2;
---:-:-:-:1      STS [writeOs+4x<2*32 + 19>], shuffle_x7y2;
---:-:-:-:1      STS [writeOs+4x<3*32 + 00>], shuffle_x0y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 01>], shuffle_x1y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 02>], shuffle_x2y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 03>], shuffle_x3y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 16>], shuffle_x4y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 17>], shuffle_x5y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 18>], shuffle_x6y3;
---:-:-:-:1      STS [writeOs+4x<3*32 + 19>], shuffle_x7y3;
+--:-:-:-:1      STS.128 [writeOs+4x<0*128 + 00>], shuffle_x0y4;
+--:-:-:-:1      STS.128 [writeOs+4x<0*128 + 16>], shuffle_x4y4;
+--:-:-:-:1      STS.128 [writeOs+4x<1*128 + 00>], shuffle_x0y5;
+--:-:-:-:1      STS.128 [writeOs+4x<1*128 + 16>], shuffle_x4y5;
+--:-:-:-:1      STS.128 [writeOs+4x<2*128 + 00>], shuffle_x0y6;
+--:-:-:-:1      STS.128 [writeOs+4x<2*128 + 16>], shuffle_x4y6;
+--:-:-:-:1      STS.128 [writeOs+4x<3*128 + 00>], shuffle_x0y7;
+--:-:-:-:1      STS.128 [writeOs+4x<3*128 + 16>], shuffle_x4y7;
 </SCHEDULE_BLOCK>
 --:-:-:-:5      BAR.SYNC 0;
 
---:-:-:-:0      IADD readOs, readOs, -4x<16*32 + 16>;
+--:-:-:-:0      IADD readOs, readOs, -4x<16*128 + 4*16>;
 --:-:-:-:5      CAL STORE_O;
---:-:-:-:0      IADD readOs, readOs,  4x<16*32 + 16>;
+--:-:-:-:0      IADD readOs, readOs,  4x<16*128 + 4*16>;
 --:-:-:-:5      CAL STORE_O;
 
 --:-:-:-:5      EXIT;
@@ -2279,22 +2229,22 @@ STORE_O:
 </SCHEDULE_BLOCK>
     } : '';
 +]
---:-:-:-:1      LDS o00_0, [readOs + 4x<( 0 + 0*32 + 0)*32 + 0>];
---:-:-:-:1      LDS o00_1, [readOs + 4x<( 0 + 1*32 + 1)*32 + 0>];
---:-:-:-:1      LDS o00_2, [readOs + 4x<( 0 + 2*32 + 2)*32 + 0>];
---:-:1:Y:1      LDS o00_3, [readOs + 4x<( 0 + 3*32 + 3)*32 + 0>];
---:-:-:-:1      LDS o04_0, [readOs + 4x<( 4 + 0*32 + 0)*32 + 1>];
---:-:-:-:1      LDS o04_1, [readOs + 4x<( 4 + 1*32 + 1)*32 + 1>];
---:-:-:-:1      LDS o04_2, [readOs + 4x<( 4 + 2*32 + 2)*32 + 1>];
---:-:2:Y:1      LDS o04_3, [readOs + 4x<( 4 + 3*32 + 3)*32 + 1>];
---:-:-:-:1      LDS o08_0, [readOs + 4x<( 8 + 0*32 + 0)*32 + 2>];
---:-:-:-:1      LDS o08_1, [readOs + 4x<( 8 + 1*32 + 1)*32 + 2>];
---:-:-:-:1      LDS o08_2, [readOs + 4x<( 8 + 2*32 + 2)*32 + 2>];
---:-:3:Y:1      LDS o08_3, [readOs + 4x<( 8 + 3*32 + 3)*32 + 2>];
---:-:-:-:1      LDS o12_0, [readOs + 4x<(12 + 0*32 + 0)*32 + 3>];
---:-:-:-:1      LDS o12_1, [readOs + 4x<(12 + 1*32 + 1)*32 + 3>];
---:-:-:-:1      LDS o12_2, [readOs + 4x<(12 + 2*32 + 2)*32 + 3>];
---:-:4:Y:1      LDS o12_3, [readOs + 4x<(12 + 3*32 + 3)*32 + 3>];
+--:-:-:-:1      LDS o00_0, [readOs + 4x< 0*128 + 0*32 + 0*16>];
+--:-:-:-:1      LDS o00_1, [readOs + 4x< 0*128 + 1*32 + 0*16>];
+--:-:-:-:1      LDS o00_2, [readOs + 4x< 0*128 + 2*32 + 0*16>];
+--:-:1:Y:1      LDS o00_3, [readOs + 4x< 0*128 + 3*32 + 0*16>];
+--:-:-:-:1      LDS o04_0, [readOs + 4x< 4*128 + 0*32 + 1*16>];
+--:-:-:-:1      LDS o04_1, [readOs + 4x< 4*128 + 1*32 + 1*16>];
+--:-:-:-:1      LDS o04_2, [readOs + 4x< 4*128 + 2*32 + 1*16>];
+--:-:2:Y:1      LDS o04_3, [readOs + 4x< 4*128 + 3*32 + 1*16>];
+--:-:-:-:1      LDS o08_0, [readOs + 4x< 8*128 + 0*32 + 2*16>];
+--:-:-:-:1      LDS o08_1, [readOs + 4x< 8*128 + 1*32 + 2*16>];
+--:-:-:-:1      LDS o08_2, [readOs + 4x< 8*128 + 2*32 + 2*16>];
+--:-:3:Y:1      LDS o08_3, [readOs + 4x< 8*128 + 3*32 + 2*16>];
+--:-:-:-:1      LDS o12_0, [readOs + 4x<12*128 + 0*32 + 3*16>];
+--:-:-:-:1      LDS o12_1, [readOs + 4x<12*128 + 1*32 + 3*16>];
+--:-:-:-:1      LDS o12_2, [readOs + 4x<12*128 + 2*32 + 3*16>];
+--:-:4:Y:1      LDS o12_3, [readOs + 4x<12*128 + 3*32 + 3*16>];
 
 <SCHEDULE_BLOCK>
 01:-:-:-:1      FADD o00_0, o00_0, o00_1;
@@ -2377,6 +2327,8 @@ STORE_O:
 --:-:-:-:1  @P1 MOV out04, RZ;
 --:-:-:-:1  @P2 MOV out08, RZ;
 --:-:-:-:1  @P3 MOV out12, RZ;
+--:-:-:Y:d      R2P PR, preds, 0x0f;
+
     } : '';
 +]
 [+
@@ -2407,7 +2359,7 @@ STORE_O:
 --:-:-:-:1      FMUL out00, out00, b00;
 --:-:-:-:1      FMUL out04, out04, b04;
 --:-:-:-:1      FMUL out08, out08, b08;
---:-:-:-:1      FMUL out12, out12, b12;
+--:-:-:-:2      FMUL out12, out12, b12;
     } : '';
 +]
 [+

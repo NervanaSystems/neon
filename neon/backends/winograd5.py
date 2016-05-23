@@ -190,16 +190,6 @@ def trans_I_2x2_5x5(Iw, I, minimal=False, trans=False):
     else:
         Iw[:] = np.dot( np.dot(I_2x2_5x5[trans[0]], I), I_2x2_5x5[trans[1]].T )
 
-# f64_81   =  64.0/81.0
-# f128_243 = 128.0/243.0
-# f32_243  =  32.0/243.0
-# f32_81   =  32.0/81.0
-# f16_81   =  16.0/81.0
-# f8_27    =   8.0/27.0
-# f2_9     =   2.0/9.0
-# f4_9     =   4.0/9.0
-# f1_6     =   1.0/6.0
-# f2_3     =   2.0/3.0
 
 def trans_F_2x2_5x5(Fw, F, minimal=False, trans=False):
     if minimal:

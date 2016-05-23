@@ -131,7 +131,7 @@ sub output_op   { return $determ ? 'STG.E.CG' : 'RED.E.ADD.F32.FTZ.RN'; }
      96-119 : I0<0-3>, I1<0-3>, I2<0-3>, I3<0-3>, E0<0-3>, E1<0-3>
     120-131 : track0I<0-1>,  track1I<0-1>, track2I<0-1>,  track3I<0-1>, track0E<0-1>, track1E<0-1>
 
-     64-131 ~ tid, idx_MPQkc, idx_PQkc, idx_Qkc, idx_kc, idx_k, idx_c, magic_PQkc, magic_Qkc, neg_PQkc, neg_Qkc, neg_kc, neg_c, div1, div2, div3, tidX, tidX4, tidY, tid1, tid8, tid32, neg_TRS, neg_RS, neg_S, super_m, m, mt, k, k16, ctrs<0-3>, trs<0-3>, rs<0-3>, c<0-3>, t<0-3>, z<0-3>
+     64-131 ~ tid, idx_MPQkc, idx_PQkc, idx_Qkc, idx_kc, idx_k, idx_c, magic_PQkc, magic_Qkc, neg_PQkc, neg_Qkc, neg_kc, neg_c, div1, div2, div3, tidX, tidX4, tidY, tid1, readEs2, tid32, tid32_2, neg_TRS, neg_RS, neg_S, super_m, m, mt, k, k16, ctrs<0-3>, trs<0-3>, rs<0-3>, c<0-3>, t<0-3>, z<0-3>
 
       80-81 : super_p, super_q
       80-81 : pr, qs
@@ -227,30 +227,30 @@ sub output_op   { return $determ ? 'STG.E.CG' : 'RED.E.ADD.F32.FTZ.RN'; }
 --:-:-:-:1      IADD   writeEs, writeEs, tidY;
 --:-:-:-:1      ISCADD writeEs, writeEs, 4x<szShareI>, 2;
 
-// readIs  = (((tid >> 1) & 7) << 4
---:-:-:-:1      BFE.U32 readIs, tid,    0x301; // 3 bits at position 1
---:-:-:-:1      SHL     readIs, readIs, 4;
+// readEs  = (((tid >> 1) & 3) << 4
+--:-:-:-:1      BFE.U32 readEs, tid, 0x201; // 2 bits at position 1
 
-// readEs = (((tid & 16) >> 2) | (tid & 1)) << 4
+// readIs = (((tid & 24) >> 2) | (tid & 1)) << 4
 --:-:-:-:1      LOP.AND tid1,   tid,    1;
---:-:-:-:1      LOP.AND readEs, tid,   16;
---:-:-:-:1      SHR.U32 readEs, readEs, 3;
---:-:-:-:1      LOP.OR  readEs, readEs, tid1;
---:-:-:-:1      SHL     readEs, readEs, 4;
+--:-:-:-:1      LOP.AND readIs, tid,   24;
+--:-:-:-:1      SHR.U32 readIs, readIs, 2;
+--:-:-:-:1      LOP.OR  readIs, readIs, tid1;
 
 // Each tile has 32 threads so this is an index into the 4 tiles (at bit position 5)
 // tid32 = tid & -32
 --:-:-:-:1      LOP.AND tid32, tid, -32;
 
-// Write out the 4 groups of 64 rows 32 at a time
-// Also shift over bottom 16 rows by 16 to avoid some bank conflicts
-// Then offset each warp by 32*warpid
-// writeFs = (readIs + tid32*4) * 32 + readEs + (tid & 8) * 2 * 4 + tid32*4
---:-:-:-:1      LOP.AND tid8, tid, 8;
---:-:-:-:1      ISCADD writeFs, tid32,   readIs, 2;
---:-:-:-:1      ISCADD writeFs, writeFs, readEs, 5;
---:-:-:-:1      ISCADD writeFs, tid8,   writeFs, 3;
---:-:-:-:1      ISCADD writeFs, tid32,  writeFs, 2;
+// readEs2 = readEs + (tid32 >> 2) + (readIs << 2)
+--:-:-:-:1      SHR.U32 tid32_2, tid32, 2;
+--:-:-:-:1      IADD    readEs2, tid32_2, readEs;
+--:-:-:-:1      ISCADD  readEs2, readIs, readEs2, 2;
+
+--:-:-:-:1      SHL readIs,  readIs,  4;
+--:-:-:-:1      SHL readEs,  readEs,  4;
+--:-:-:-:1      SHL readEs2, readEs2, 4;
+
+// writeFs = readIs*32*4 + readEs2
+--:-:-:-:1      ISCADD writeFs, readIs, readEs2, 7;
 
 // Each block of 32 threads works on 8 lines,
 // Also shift over each 8 lines by 8 (cumulative)
@@ -851,13 +851,12 @@ FINISH_LOOP:
 
 --:-:1:-:2      S2R Tid, SR_TID.X;
 <SCHEDULE_BLOCK>
---:-:-:-:1      MOV alpha, param_alpha;
-
-// readFs = tid*4
---:-:-:-:1      SHL readFs, Tid, 2;
-
---:-:-:-:1      LOP.AND tid_31, Tid, 31;
 01:-:-:-:1      SHR.U32 tid_32, Tid, 5;
+--:-:-:-:1      LOP.AND tid_31, Tid, 31;
+
+// readFs = (tid_32 << 7 + tid_31) << 2
+--:-:-:-:1      ISCADD readFs, tid_32, tid_31, 7;
+--:-:-:-:1      SHL    readFs, readFs, 2;
 
 // kk = idx_K*32 + tid31;
 --:-:-:-:1      ISCADD kk, idx_K, tid_31, 5;
@@ -874,6 +873,8 @@ FINISH_LOOP:
 --:-:-:-:1      MOV K, param_K;
 --:-:-:-:1      SHL K1,  K, 2;
 --:-:-:-:1      SHL K16, K, 6;
+
+--:-:-:-:1      MOV alpha, param_alpha;
 
 // trackF += crst*K + k;
 --:-:-:-:1      XMAD.LO2 tf, crst00, K, kk;
@@ -903,92 +904,94 @@ FINISH_LOOP:
 --:-:-:-:1      FMUL shuffle_x4y0, cx4y0, alpha;
 --:-:-:-:1      FMUL shuffle_x5y0, cx5y0, alpha;
 --:-:-:-:1      FMUL shuffle_x6y0, cx6y0, alpha;
---:-:-:-:0      FMUL shuffle_x7y0, cx7y0, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<0*32 + 00>], shuffle_x0y0;
+--:-:-:-:1      FMUL shuffle_x7y0, cx7y0, alpha;
 --:-:-:-:1      FMUL shuffle_x0y1, cx0y1, alpha;
 --:-:-:-:1      FMUL shuffle_x1y1, cx1y1, alpha;
 --:-:-:-:1      FMUL shuffle_x2y1, cx2y1, alpha;
---:-:-:-:0      FMUL shuffle_x3y1, cx3y1, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<0*32 + 16>], shuffle_x4y0;
+--:-:-:-:1      FMUL shuffle_x3y1, cx3y1, alpha;
 --:-:-:-:1      FMUL shuffle_x4y1, cx4y1, alpha;
 --:-:-:-:1      FMUL shuffle_x5y1, cx5y1, alpha;
 --:-:-:-:1      FMUL shuffle_x6y1, cx6y1, alpha;
---:-:-:-:0      FMUL shuffle_x7y1, cx7y1, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<1*32 + 00>], shuffle_x0y1;
+--:-:-:-:1      FMUL shuffle_x7y1, cx7y1, alpha;
 --:-:-:-:1      FMUL shuffle_x0y2, cx0y2, alpha;
 --:-:-:-:1      FMUL shuffle_x1y2, cx1y2, alpha;
 --:-:-:-:1      FMUL shuffle_x2y2, cx2y2, alpha;
---:-:-:-:0      FMUL shuffle_x3y2, cx3y2, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<1*32 + 16>], shuffle_x4y1;
+--:-:-:-:1      FMUL shuffle_x3y2, cx3y2, alpha;
 --:-:-:-:1      FMUL shuffle_x4y2, cx4y2, alpha;
 --:-:-:-:1      FMUL shuffle_x5y2, cx5y2, alpha;
 --:-:-:-:1      FMUL shuffle_x6y2, cx6y2, alpha;
---:-:-:-:0      FMUL shuffle_x7y2, cx7y2, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<2*32 + 00>], shuffle_x0y2;
+--:-:-:-:1      FMUL shuffle_x7y2, cx7y2, alpha;
 --:-:-:-:1      FMUL shuffle_x0y3, cx0y3, alpha;
 --:-:-:-:1      FMUL shuffle_x1y3, cx1y3, alpha;
 --:-:-:-:1      FMUL shuffle_x2y3, cx2y3, alpha;
---:-:-:-:0      FMUL shuffle_x3y3, cx3y3, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<2*32 + 16>], shuffle_x4y2;
+--:-:-:-:1      FMUL shuffle_x3y3, cx3y3, alpha;
 --:-:-:-:1      FMUL shuffle_x4y3, cx4y3, alpha;
 --:-:-:-:1      FMUL shuffle_x5y3, cx5y3, alpha;
 --:-:-:-:1      FMUL shuffle_x6y3, cx6y3, alpha;
---:-:-:-:0      FMUL shuffle_x7y3, cx7y3, alpha;
---:-:-:-:4      STS.128 [writeFs+4x<3*32 + 00>], shuffle_x0y3;
---:-:-:-:1      STS.128 [writeFs+4x<3*32 + 16>], shuffle_x4y3;
+--:-:-:-:1      FMUL shuffle_x7y3, cx7y3, alpha;
+--:-:-:-:1      STS.128 [writeFs+4x<0*128 + 00>], shuffle_x0y0;
+--:-:-:-:1      STS.128 [writeFs+4x<0*128 + 16>], shuffle_x4y0;
+--:-:-:-:1      STS.128 [writeFs+4x<1*128 + 00>], shuffle_x0y1;
+--:-:-:-:1      STS.128 [writeFs+4x<1*128 + 16>], shuffle_x4y1;
+--:-:-:-:1      STS.128 [writeFs+4x<2*128 + 00>], shuffle_x0y2;
+--:-:-:-:1      STS.128 [writeFs+4x<2*128 + 16>], shuffle_x4y2;
+--:-:-:-:1      STS.128 [writeFs+4x<3*128 + 00>], shuffle_x0y3;
+--:-:-:-:1      STS.128 [writeFs+4x<3*128 + 16>], shuffle_x4y3;
 </SCHEDULE_BLOCK>
 --:-:-:-:5      BAR.SYNC 0;
 
 --:-:-:-:5      CAL STORE_F;
---:-:-:-:0      IADD readFs, readFs, 4x<16*32 + 16>;
+--:-:-:-:0      IADD readFs, readFs, 4x<16*128 + 4*16>;
 --:-:-:-:5      CAL STORE_F;
 
 --:-:-:-:1      FMUL shuffle_x0y4, cx0y4, alpha;
 --:-:-:-:1      FMUL shuffle_x1y4, cx1y4, alpha;
 --:-:-:-:1      FMUL shuffle_x2y4, cx2y4, alpha;
---:-:-:-:1      FMUL shuffle_x3y4, cx3y4, alpha;
+--:-:-:-:0      FMUL shuffle_x3y4, cx3y4, alpha;
+--:-:-:-:5      BAR.SYNC 0;
+<SCHEDULE_BLOCK>
 --:-:-:-:1      FMUL shuffle_x4y4, cx4y4, alpha;
 --:-:-:-:1      FMUL shuffle_x5y4, cx5y4, alpha;
---:-:-:-:0      FMUL shuffle_x6y4, cx6y4, alpha;
---:-:-:-:5      BAR.SYNC 0;
---:-:-:-:0      FMUL shuffle_x7y4, cx7y4, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<0*32 + 00>], shuffle_x0y4;
+--:-:-:-:1      FMUL shuffle_x6y4, cx6y4, alpha;
+--:-:-:-:1      FMUL shuffle_x7y4, cx7y4, alpha;
 --:-:-:-:1      FMUL shuffle_x0y5, cx0y5, alpha;
 --:-:-:-:1      FMUL shuffle_x1y5, cx1y5, alpha;
 --:-:-:-:1      FMUL shuffle_x2y5, cx2y5, alpha;
---:-:-:-:0      FMUL shuffle_x3y5, cx3y5, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<0*32 + 16>], shuffle_x4y4;
+--:-:-:-:1      FMUL shuffle_x3y5, cx3y5, alpha;
 --:-:-:-:1      FMUL shuffle_x4y5, cx4y5, alpha;
 --:-:-:-:1      FMUL shuffle_x5y5, cx5y5, alpha;
 --:-:-:-:1      FMUL shuffle_x6y5, cx6y5, alpha;
---:-:-:-:0      FMUL shuffle_x7y5, cx7y5, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<1*32 + 00>], shuffle_x0y5;
+--:-:-:-:1      FMUL shuffle_x7y5, cx7y5, alpha;
 --:-:-:-:1      FMUL shuffle_x0y6, cx0y6, alpha;
 --:-:-:-:1      FMUL shuffle_x1y6, cx1y6, alpha;
 --:-:-:-:1      FMUL shuffle_x2y6, cx2y6, alpha;
---:-:-:-:0      FMUL shuffle_x3y6, cx3y6, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<1*32 + 16>], shuffle_x4y5;
+--:-:-:-:1      FMUL shuffle_x3y6, cx3y6, alpha;
 --:-:-:-:1      FMUL shuffle_x4y6, cx4y6, alpha;
 --:-:-:-:1      FMUL shuffle_x5y6, cx5y6, alpha;
 --:-:-:-:1      FMUL shuffle_x6y6, cx6y6, alpha;
---:-:-:-:0      FMUL shuffle_x7y6, cx7y6, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<2*32 + 00>], shuffle_x0y6;
+--:-:-:-:1      FMUL shuffle_x7y6, cx7y6, alpha;
 --:-:-:-:1      FMUL shuffle_x0y7, cx0y7, alpha;
 --:-:-:-:1      FMUL shuffle_x1y7, cx1y7, alpha;
 --:-:-:-:1      FMUL shuffle_x2y7, cx2y7, alpha;
---:-:-:-:0      FMUL shuffle_x3y7, cx3y7, alpha;
---:-:-:-:1      STS.128 [writeFs+4x<2*32 + 16>], shuffle_x4y6;
+--:-:-:-:1      FMUL shuffle_x3y7, cx3y7, alpha;
 --:-:-:-:1      FMUL shuffle_x4y7, cx4y7, alpha;
 --:-:-:-:1      FMUL shuffle_x5y7, cx5y7, alpha;
 --:-:-:-:1      FMUL shuffle_x6y7, cx6y7, alpha;
---:-:-:-:0      FMUL shuffle_x7y7, cx7y7, alpha;
---:-:-:-:4      STS.128 [writeFs+4x<3*32 + 00>], shuffle_x0y7;
---:-:-:-:1      STS.128 [writeFs+4x<3*32 + 16>], shuffle_x4y7;
+--:-:-:-:1      FMUL shuffle_x7y7, cx7y7, alpha;
+--:-:-:-:1      STS.128 [writeFs+4x<0*128 + 00>], shuffle_x0y4;
+--:-:-:-:1      STS.128 [writeFs+4x<0*128 + 16>], shuffle_x4y4;
+--:-:-:-:1      STS.128 [writeFs+4x<1*128 + 00>], shuffle_x0y5;
+--:-:-:-:1      STS.128 [writeFs+4x<1*128 + 16>], shuffle_x4y5;
+--:-:-:-:1      STS.128 [writeFs+4x<2*128 + 00>], shuffle_x0y6;
+--:-:-:-:1      STS.128 [writeFs+4x<2*128 + 16>], shuffle_x4y6;
+--:-:-:-:1      STS.128 [writeFs+4x<3*128 + 00>], shuffle_x0y7;
+--:-:-:-:1      STS.128 [writeFs+4x<3*128 + 16>], shuffle_x4y7;
+</SCHEDULE_BLOCK>
 --:-:-:-:5      BAR.SYNC 0;
 
---:-:-:-:0      IADD readFs, readFs, -4x<16*32 + 16>;
+--:-:-:-:0      IADD readFs, readFs, -4x<16*128 + 4*16>;
 --:-:-:-:5      CAL STORE_F;
---:-:-:-:0      IADD readFs, readFs,  4x<16*32 + 16>;
+--:-:-:-:0      IADD readFs, readFs,  4x<16*128 + 4*16>;
 --:-:-:-:5      CAL STORE_F;
 
 --:-:-:-:5      EXIT;
@@ -1005,22 +1008,22 @@ STORE_F:
 --:-:-:-:1      ISETP.LT.AND P3, PT, crst12, param_CTRS, P4; // crst12 < CRST && k < K
 --:-:-:-:1      IADD crst12, crst12, 1;
 <ORDERED>
---:-:-:-:1      LDS f00_0, [readFs + 4x<( 0 + 0*32 + 0)*32>];
---:-:-:-:1      LDS f00_1, [readFs + 4x<( 0 + 1*32 + 1)*32>];
---:-:-:-:1      LDS f00_2, [readFs + 4x<( 0 + 2*32 + 2)*32>];
---:-:1:-:1      LDS f00_3, [readFs + 4x<( 0 + 3*32 + 3)*32>];
---:-:-:-:1      LDS f04_0, [readFs + 4x<( 4 + 0*32 + 0)*32>];
---:-:-:-:1      LDS f04_1, [readFs + 4x<( 4 + 1*32 + 1)*32>];
---:-:-:-:1      LDS f04_2, [readFs + 4x<( 4 + 2*32 + 2)*32>];
---:-:2:-:1      LDS f04_3, [readFs + 4x<( 4 + 3*32 + 3)*32>];
---:-:-:-:1      LDS f08_0, [readFs + 4x<( 8 + 0*32 + 0)*32>];
---:-:-:-:1      LDS f08_1, [readFs + 4x<( 8 + 1*32 + 1)*32>];
---:-:-:-:1      LDS f08_2, [readFs + 4x<( 8 + 2*32 + 2)*32>];
---:-:3:-:1      LDS f08_3, [readFs + 4x<( 8 + 3*32 + 3)*32>];
---:-:-:-:1      LDS f12_0, [readFs + 4x<(12 + 0*32 + 0)*32>];
---:-:-:-:1      LDS f12_1, [readFs + 4x<(12 + 1*32 + 1)*32>];
---:-:-:-:1      LDS f12_2, [readFs + 4x<(12 + 2*32 + 2)*32>];
---:-:4:-:1      LDS f12_3, [readFs + 4x<(12 + 3*32 + 3)*32>];
+--:-:-:-:1      LDS f00_0, [readFs + 4x< 0*128 + 0*32 + 0*16>];
+--:-:-:-:1      LDS f00_1, [readFs + 4x< 0*128 + 1*32 + 0*16>];
+--:-:-:-:1      LDS f00_2, [readFs + 4x< 0*128 + 2*32 + 0*16>];
+--:-:1:Y:1      LDS f00_3, [readFs + 4x< 0*128 + 3*32 + 0*16>];
+--:-:-:-:1      LDS f04_0, [readFs + 4x< 4*128 + 0*32 + 1*16>];
+--:-:-:-:1      LDS f04_1, [readFs + 4x< 4*128 + 1*32 + 1*16>];
+--:-:-:-:1      LDS f04_2, [readFs + 4x< 4*128 + 2*32 + 1*16>];
+--:-:2:Y:1      LDS f04_3, [readFs + 4x< 4*128 + 3*32 + 1*16>];
+--:-:-:-:1      LDS f08_0, [readFs + 4x< 8*128 + 0*32 + 2*16>];
+--:-:-:-:1      LDS f08_1, [readFs + 4x< 8*128 + 1*32 + 2*16>];
+--:-:-:-:1      LDS f08_2, [readFs + 4x< 8*128 + 2*32 + 2*16>];
+--:-:3:Y:1      LDS f08_3, [readFs + 4x< 8*128 + 3*32 + 2*16>];
+--:-:-:-:1      LDS f12_0, [readFs + 4x<12*128 + 0*32 + 3*16>];
+--:-:-:-:1      LDS f12_1, [readFs + 4x<12*128 + 1*32 + 3*16>];
+--:-:-:-:1      LDS f12_2, [readFs + 4x<12*128 + 2*32 + 3*16>];
+--:-:4:Y:1      LDS f12_3, [readFs + 4x<12*128 + 3*32 + 3*16>];
 </ORDERED>
 </SCHEDULE_BLOCK>
 

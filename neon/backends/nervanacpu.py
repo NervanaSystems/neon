@@ -982,8 +982,7 @@ class NervanaCPU(Backend):
                    D=1, H=1, W=1,
                    T=1, R=1, S=1,
                    pad_d=0, pad_h=0, pad_w=0,
-                   str_d=1, str_h=1, str_w=1,
-                   bsum=False):
+                   str_d=1, str_h=1, str_w=1):
         """
         Create a new ConvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -1012,7 +1011,10 @@ class NervanaCPU(Backend):
         return ConvLayer(self, dtype, N, C, K, D, H, W, T, R, S,
                          pad_d, pad_h, pad_w, str_d, str_h, str_w)
 
-    def fprop_conv(self, layer, I, F, O, alpha=1.0, relu=False, bsum=None, beta=0.0):
+    def fprop_conv(self, layer, I, F, O,
+                   X=None, bias=None, bsum=None,
+                   alpha=1.0, beta=0.0,
+                   relu=False, brelu=False, slope=0.0):
         """
         Forward propagate the inputs of a convolutional network layer to
         produce output.
@@ -1022,46 +1024,32 @@ class NervanaCPU(Backend):
             I (CPUTensor): inputs
             F (CPUTensor): the weights (filters)
             O (CPUTensor): outputs
-            alpha (float): linear scaling
-            relu (bool): apply ReLu or not before output
-                            (currently not implemented)
-            beta (float): accumulation value into O
+
+        Compounding Options:
+            X: tensor to use in bprop_relu or beta
+                can be same as O for beta accumulate (this is default when None)
+                should be same shape as O
+            bias: (K,1) tensor to use for adding bias to output
+                O += bias
+            bsum: (K,1) tensor to accumulate batch sum over (used in batchnorm or bprop_bias)
+                bsum = sum(O.reshape(K,-1), axis=1)
+                the sum operation is fully deterministic
+            alpha, beta:
+                O = alpha*O + beta*X
+                O = alpha*O + beta*O   (if X==O)
+            relu, slope: boolean flag to apply:
+                O = max(O, 0) + beta*min(O, 0)
+                can be combined with bias (where bias is added first)
+            brelu, slope: boolean flag to apply:
+                O *= (X > 0) + beta*(X < 0)
+                can be combined with bsum tensor to output bprop_bias
         """
-        assert layer.sizeI == I.size
-        assert layer.sizeF == F.size
-        assert layer.sizeO == O.size
+        layer.xprop_conv(I, F, O, X, bias, bsum, alpha, beta, relu, brelu, slope)
 
-        M, P, Q = layer.MPQ
-        C, D, H, W, N = layer.dimI
-        C, T, R, S, K = layer.dimF
-        K, M, P, Q, N = layer.dimO
-
-        pad_d, pad_h, pad_w = layer.padding
-        str_d, str_h, str_w = layer.strides
-
-        array_I = I._tensor.reshape(layer.dimI)
-        array_F = F._tensor.reshape(layer.dimF)
-        array_O = O._tensor.reshape(layer.dimO)
-
-        for m in range(M):
-            sliceT, sliceD, _ = layer.mSlice[m]
-
-            for p in range(P):
-                sliceR, sliceH, _ = layer.pSlice[p]
-
-                for q in range(Q):
-                    sliceS, sliceW, _ = layer.qSlice[q]
-
-                    slicedF = array_F[:, sliceT, sliceR, sliceS, :].reshape((-1, K))
-                    slicedI = array_I[:, sliceD, sliceH, sliceW, :].reshape((-1, N))
-
-                    array_O[:, m, p, q, :] = beta * array_O[:, m, p, q, :] + alpha * \
-                        np.dot(slicedF.T,  slicedI)
-
-        if bsum is not None:
-            bsum[:] = array_O.sum((1, 2, 3, 4))
-
-    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, relu=False, bsum=None, beta=0.0):
+    def bprop_conv(self, layer, F, E, grad_I,
+                   X=None, bias=None, bsum=None,
+                   alpha=1.0, beta=0.0,
+                   relu=False, brelu=False, slope=0.0):
         """
         Backward propagate the error through a convolutional network layer.
 
@@ -1070,62 +1058,29 @@ class NervanaCPU(Backend):
             F (CPUTensor): the weights (filters)
             E (CPUTensor): errors
             grad_I (CPUTensor): gradient to inputs (output delta)
-            alpha (float): linear scaling
-            beta (float): accumulation value into grad_I
-            relu (bool): apply ReLu or not before output
-                            (currently not implemented)
+
+        Compounding Options:
+            X: tensor to use in bprop_relu or beta
+                can be same as grad_I for beta accumulate (this is default when None)
+                should be same shape as grad_I
+            bias: (K,1) tensor to use for adding bias to output
+                grad_I += bias
+            bsum: (K,1) tensor to accumulate batch sum over (used in batchnorm or bprop_bias)
+                bsum = sum(grad_I.reshape(K,-1), axis=1)
+                the sum operation is fully deterministic
+            alpha, beta:
+                grad_I = alpha*grad_I + beta*X
+                grad_I = alpha*grad_I + beta*grad_I   (if X==grad_I)
+            relu, slope: boolean flag to apply:
+                grad_I = max(grad_I, 0) + slope*min(grad_I, 0)
+                can be combined with bias (where bias is added first)
+            brelu, slope: boolean flag to apply:
+                grad_I *= (X > 0) + slope*(X < 0)
+                can be combined with bsum tensor to output bprop_bias
         """
-        assert layer.sizeF == F.size
-        assert layer.sizeO == E.size
-        assert layer.sizeI == grad_I.size
+        layer.xprop_conv(E, F, grad_I, X, bias, bsum, alpha, beta, relu, brelu, slope, backward=True)
 
-        M, P, Q = layer.MPQ
-        C, D, H, W, N = layer.dimI
-        C, T, R, S, K = layer.dimF
-        K, M, P, Q, N = layer.dimO
-
-        pad_d, pad_h, pad_w = layer.padding
-        str_d, str_h, str_w = layer.strides
-
-        array_F = F._tensor.reshape(layer.dimF)
-        array_E = E._tensor.reshape(layer.dimO)
-        array_grad_I = grad_I._tensor.reshape(layer.dimI)
-
-        array_F = np.transpose(array_F, (4, 1, 2, 3, 0)).copy()
-
-        for d in range(D):
-            sliceT, sliceM = layer.dSlice[d]
-
-            for h in range(H):
-                sliceR, sliceP = layer.hSlice[h]
-
-                for w in range(W):
-                    sliceS, sliceQ = layer.wSlice[w]
-
-                    sliceTRS = np.array([
-                        t * R * S + r * S + s
-                        for t in sliceT
-                        for r in sliceR
-                        for s in sliceS], dtype=np.intp)
-
-                    sliceMPQ = np.array([
-                        m * P * Q + p * Q + q
-                        for m in sliceM
-                        for p in sliceP
-                        for q in sliceQ], dtype=np.intp)
-
-                    slicedF = array_F.reshape(
-                        (K, -1, C))[:, sliceTRS, :].reshape((-1, C))
-                    slicedE = array_E.reshape(
-                        (K, -1, N))[:, sliceMPQ, :].reshape((-1, N))
-
-                    array_grad_I[:, d, h, w, :] = beta * array_grad_I[:, d, h, w, :] + alpha * \
-                        np.dot(slicedF.T, slicedE)
-        # If this is the forward pass for deconv, compute bsum here
-        if bsum is not None:
-            bsum[:] = self.sum(grad_I.reshape(C, -1), 1)
-
-    def update_conv(self, layer, I, E, U, alpha=1.0):
+    def update_conv(self, layer, I, E, U, alpha=1.0, beta=0.0):
         """
         Compute the updated gradient for a convolutional network layer.
 
@@ -1135,44 +1090,20 @@ class NervanaCPU(Backend):
             E (CPUTensor): the errors
             U (CPUTensor): the updates
             alpha (float): linear scaling
+            beta  (float): scaled accumulation
         """
         assert layer.sizeI == I.size
         assert layer.sizeO == E.size
         assert layer.sizeF == U.size
 
-        C, D, H, W, N = layer.dimI
-        C, T, R, S, K = layer.dimF
-        K, M, P, Q, N = layer.dimO
-
-        pad_d, pad_h, pad_w = layer.padding
-        str_d, str_h, str_w = layer.strides
-
-        array_I = I._tensor.reshape(layer.dimI)
-        array_E = E._tensor.reshape(layer.dimO)
-        array_U = U._tensor.reshape(layer.dimF)
-        array_U.fill(0.)
-
-        for m in range(M):
-            sliceT, sliceD, tlen = layer.mSlice[m]
-
-            for p in range(P):
-                sliceR, sliceH, rlen = layer.pSlice[p]
-
-                for q in range(Q):
-                    sliceS, sliceW, slen = layer.qSlice[q]
-
-                    slicedI = array_I[:, sliceD, sliceH, sliceW, :].reshape((-1, N))
-                    slicedE = array_E[:, m, p, q, :]
-                    array_U[:, sliceT, sliceR, sliceS, :] += alpha * np.dot(
-                        slicedI, slicedE.T).reshape((C, tlen, rlen, slen, K))
+        layer.update_conv(I, E, U, alpha, beta)
 
     def deconv_layer(self, dtype,
                      N, C, K,
                      P, Q,
                      R=1, S=1,
                      pad_d=0, pad_h=0, pad_w=0,
-                     str_d=1, str_h=1, str_w=1,
-                     bsum=False):
+                     str_d=1, str_h=1, str_w=1):
         """
         Create a new PoolLayer parameter object.
         This then is passed as an argument to all pooling kernels.

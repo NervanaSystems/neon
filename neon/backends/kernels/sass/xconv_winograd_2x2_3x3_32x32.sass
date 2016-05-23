@@ -102,20 +102,16 @@ our $convert_out = $type eq 'h' ? 'F2F.F16.F32' : '';
     120-121 : track<0-1>
     122-127 ~ writeS, readFs, readIs, C, preds, idx_nkpq
 
-      80-95 ~ p, q, n, tid32, q2, p2, to, superP, superQ, superN
+      80-95 ~ p, q, n, tid32, tid64, tid_16, tid_1, q2, p2, to, superP, superQ, superN
       96-99 : Out<0-1>, Sum<0-1>
-    100-121 ~ alpha, one, writeCs, readCs, k, PQN8, tid_31, out_offset, bsum_offset
+    100-121 ~ alpha, one, writeCs, readCs, k, PQN15, tid_31, out_offset, bsum_offset
 
-      64-95 : shuffle_x<0-7>y0, shuffle_x<0-7>y1, shuffle_x<0-7>y2, shuffle_x<0-7>y3
-      64-95 : shuffle_x<0-7>y4, shuffle_x<0-7>y5, shuffle_x<0-7>y6, shuffle_x<0-7>y7
+      64-79 : shuffle_x<0-7>y0, shuffle_x<0-7>y1
 
       64-79 : m0<0-3>, m1<0-3>, m2<0-3>, m3<0-3>
       80-95 : t0<0-1>, t1<0-1>, t2<0-1>, t3<0-1>
 
-
-       0-31 ~ b<00|01|10|11>, x<00|01|10|11>, sum<0|1>, s0<0-1>, s1<0-1>
-
-
+    3,2,11,10,19,18,27,26,1,0,9,8,17,16,25,24 ~ b<00|01|10|11>, x<00|01|10|11>, sum<0|1>, s0<0-1>, s1<0-1>
 
         // Image registers (registers assigned to avoid bank conflicts)
          96 = i00
@@ -942,22 +938,33 @@ END_LOOP:
 --:-:-:-:1      MOV alpha, param_alpha;
 --:-:-:-:1      MOV32I one, 1.0;
 
-// Strip double buffering offsets, and the batch dimension on readFs (tid16<<4)
-// This gives us the shared memory write mapping for the thread's registers:
-// writeCs = readFs * 512 + readIs;
---:-:-:-:1      LOP.AND  tid16, tid,   -16;
---:-:-:-:1      SHR.U32  tid16, tid16,  1;
---:-:-:-:1      ISCADD   tid16, tid16, 4x<512*4*3>, 4;
---:-:-:-:1      LOP.AND readIs, readIs, ~4x<512*4*2>;
---:-:-:-:1      LOP.AND readFs, readFs, ~tid16;
---:-:-:-:1      ISCADD  writeCs, readFs, readIs, 9;
+// readFs = ((tid &  8) >> 2) | (tid & 1)
+--:-:-:-:1      LOP.AND  tid_1,  tid,    1;
+--:-:-:-:1      LOP.AND  readFs, tid,    8;
+--:-:-:-:1      SHR.U32  readFs, readFs, 2;
+--:-:-:-:1      LOP.OR   readFs, readFs,  tid_1;
+//--:-:-:-:1      SHL      readFs, readFs, 3;
 
-// readCs = tid//32 * 512 + tid & 31
+// readIs = ((tid & -16) >> 1) | ((tid >> 1) & 3) | (readFs << 2)
+--:-:-:-:1      LOP.AND  tid_16, tid,   -16;
+--:-:-:-:1      SHR.U32  tid_16, tid_16, 1;
+--:-:-:-:1      BFE.U32  readIs, tid,    0x201; // 2 bits at position 1
+--:-:-:-:1      LOP.OR   readIs, readIs, tid_16;
+--:-:-:-:1      ISCADD   readIs, readFs, readIs, 2;
+--:-:-:-:1      SHL      readIs, readIs, 4;
+
+// writeCs = readFs * 512 + readIs;
+--:-:-:-:1      ISCADD  writeCs, readFs, readIs, 12;
+
+// readCs = tid32 * 512 + tid_31 + tid_64 * 16
 --:-:-:-:1      SHR.U32 tid32, tid,  5;
+--:-:-:-:1      SHR.U32 tid64, tid,  6;
 --:-:-:-:1      ISCADD  readCs, tid32, tid_31, 9;
+--:-:-:-:1      ISCADD  readCs, tid64, readCs, 4;
 --:-:-:-:1      SHL     readCs, readCs, 2;
 
-// k = Idx_K*32 + tid//32
+// k = idx_K*32 + tid32<<1
+--:-:-:-:1      SHL tid32, tid32, 1;
 --:-:-:-:1      ISCADD  k, idx_K, tid32, 5;
 
 // Out00 = k*PQN + p*QN + q*N + n
@@ -969,8 +976,9 @@ END_LOOP:
 --:-:-:-:1      XMAD.LO2C out_offset, k, param_PQN, out_offset;
 
 
---:-:-:-:1      MOV PQN8, param_PQN;
---:-:-:-:1      SHL PQN8, PQN8, 3;
+--:-:-:-:1      MOV  PQN15, param_PQN;
+--:-:-:-:1      SHL  PQN15, PQN15, 4;
+--:-:-:-:1      IADD PQN15, PQN15, -param_PQN;
 
 --:-:-:-:1      IADD q2, q, 1;
 --:-:-:-:1      IADD p2, p, 1;
@@ -990,8 +998,9 @@ END_LOOP:
 --:-:-:-:1      P2R preds, PR, RZ, 0x0f;
 
 --:-:-:-:1      ISETP.EQ.AND P6, PT, tid_31, RZ, PT; // tid31 == 0
-
 </SCHEDULE_BLOCK>
+
+<SCHEDULE_BLOCK>
 --:-:-:-:1      FMUL shuffle_x0y0, cx0y0, alpha;
 --:-:-:-:1      FMUL shuffle_x1y0, cx1y0, alpha;
 --:-:-:-:1      FMUL shuffle_x2y0, cx2y0, alpha;
@@ -999,94 +1008,104 @@ END_LOOP:
 --:-:-:-:1      FMUL shuffle_x4y0, cx4y0, alpha;
 --:-:-:-:1      FMUL shuffle_x5y0, cx5y0, alpha;
 --:-:-:-:1      FMUL shuffle_x6y0, cx6y0, alpha;
---:-:-:-:0      FMUL shuffle_x7y0, cx7y0, alpha;
+--:-:-:-:1      FMUL shuffle_x7y0, cx7y0, alpha;
+--:-:-:-:1      FMUL shuffle_x0y1, cx0y2, alpha;
+--:-:-:-:1      FMUL shuffle_x1y1, cx1y2, alpha;
+--:-:-:-:1      FMUL shuffle_x2y1, cx2y2, alpha;
+--:-:-:-:1      FMUL shuffle_x3y1, cx3y2, alpha;
+--:-:-:-:1      FMUL shuffle_x4y1, cx4y2, alpha;
+--:-:-:-:1      FMUL shuffle_x5y1, cx5y2, alpha;
+--:-:-:-:1      FMUL shuffle_x6y1, cx6y2, alpha;
+--:-:-:-:1      FMUL shuffle_x7y1, cx7y2, alpha;
+
 --:-:-:-:1      STS.128 [writeCs+4x<0*512 + 00>], shuffle_x0y0;
---:-:-:-:1      FMUL shuffle_x0y1, cx0y1, alpha;
---:-:-:-:1      FMUL shuffle_x1y1, cx1y1, alpha;
---:-:-:-:1      FMUL shuffle_x2y1, cx2y1, alpha;
---:-:-:-:0      FMUL shuffle_x3y1, cx3y1, alpha;
 --:-:-:-:1      STS.128 [writeCs+4x<0*512 + 16>], shuffle_x4y0;
---:-:-:-:1      FMUL shuffle_x4y1, cx4y1, alpha;
---:-:-:-:1      FMUL shuffle_x5y1, cx5y1, alpha;
---:-:-:-:1      FMUL shuffle_x6y1, cx6y1, alpha;
---:-:-:-:0      FMUL shuffle_x7y1, cx7y1, alpha;
 --:-:-:-:1      STS.128 [writeCs+4x<1*512 + 00>], shuffle_x0y1;
---:-:-:-:1      FMUL shuffle_x0y2, cx0y2, alpha;
---:-:-:-:1      FMUL shuffle_x1y2, cx1y2, alpha;
---:-:-:-:1      FMUL shuffle_x2y2, cx2y2, alpha;
---:-:-:-:0      FMUL shuffle_x3y2, cx3y2, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<1*512 + 16>], shuffle_x4y1;
---:-:-:-:1      FMUL shuffle_x4y2, cx4y2, alpha;
---:-:-:-:1      FMUL shuffle_x5y2, cx5y2, alpha;
---:-:-:-:1      FMUL shuffle_x6y2, cx6y2, alpha;
---:-:-:-:0      FMUL shuffle_x7y2, cx7y2, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<2*512 + 00>], shuffle_x0y2;
---:-:-:-:1      FMUL shuffle_x0y3, cx0y3, alpha;
---:-:-:-:1      FMUL shuffle_x1y3, cx1y3, alpha;
---:-:-:-:1      FMUL shuffle_x2y3, cx2y3, alpha;
---:-:-:-:0      FMUL shuffle_x3y3, cx3y3, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<2*512 + 16>], shuffle_x4y2;
---:-:-:-:1      FMUL shuffle_x4y3, cx4y3, alpha;
---:-:-:-:1      FMUL shuffle_x5y3, cx5y3, alpha;
---:-:-:-:1      FMUL shuffle_x6y3, cx6y3, alpha;
---:-:-:-:0      FMUL shuffle_x7y3, cx7y3, alpha;
---:-:-:-:4      STS.128 [writeCs+4x<3*512 + 00>], shuffle_x0y3;
---:-:-:-:1      STS.128 [writeCs+4x<3*512 + 16>], shuffle_x4y3;
-
+--:-:-:-:d      STS.128 [writeCs+4x<1*512 + 16>], shuffle_x4y1;
+</SCHEDULE_BLOCK>
 --:-:-:-:5      BAR.SYNC 0;
 
 --:-:-:-:5      CAL OUTPUT_TRANSFORM;
-
---:-:-:-:0      LOP.XOR readCs, readCs, 4x<8*512>;
---:-:-:-:5      CAL OUTPUT_TRANSFORM;
-
---:-:-:-:1      FMUL shuffle_x0y4, cx0y4, alpha;
---:-:-:-:1      FMUL shuffle_x1y4, cx1y4, alpha;
---:-:-:-:1      FMUL shuffle_x2y4, cx2y4, alpha;
---:-:-:-:1      FMUL shuffle_x3y4, cx3y4, alpha;
---:-:-:-:1      FMUL shuffle_x4y4, cx4y4, alpha;
---:-:-:-:1      FMUL shuffle_x5y4, cx5y4, alpha;
---:-:-:-:0      FMUL shuffle_x6y4, cx6y4, alpha;
---:-:-:-:5      BAR.SYNC 0;
---:-:-:-:0      FMUL shuffle_x7y4, cx7y4, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<0*512 + 00>], shuffle_x0y4;
---:-:-:-:1      FMUL shuffle_x0y5, cx0y5, alpha;
---:-:-:-:1      FMUL shuffle_x1y5, cx1y5, alpha;
---:-:-:-:1      FMUL shuffle_x2y5, cx2y5, alpha;
---:-:-:-:0      FMUL shuffle_x3y5, cx3y5, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<0*512 + 16>], shuffle_x4y4;
---:-:-:-:1      FMUL shuffle_x4y5, cx4y5, alpha;
---:-:-:-:1      FMUL shuffle_x5y5, cx5y5, alpha;
---:-:-:-:1      FMUL shuffle_x6y5, cx6y5, alpha;
---:-:-:-:0      FMUL shuffle_x7y5, cx7y5, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<1*512 + 00>], shuffle_x0y5;
---:-:-:-:1      FMUL shuffle_x0y6, cx0y6, alpha;
---:-:-:-:1      FMUL shuffle_x1y6, cx1y6, alpha;
---:-:-:-:1      FMUL shuffle_x2y6, cx2y6, alpha;
---:-:-:-:0      FMUL shuffle_x3y6, cx3y6, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<1*512 + 16>], shuffle_x4y5;
---:-:-:-:1      FMUL shuffle_x4y6, cx4y6, alpha;
---:-:-:-:1      FMUL shuffle_x5y6, cx5y6, alpha;
---:-:-:-:1      FMUL shuffle_x6y6, cx6y6, alpha;
---:-:-:-:0      FMUL shuffle_x7y6, cx7y6, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<2*512 + 00>], shuffle_x0y6;
---:-:-:-:1      FMUL shuffle_x0y7, cx0y7, alpha;
---:-:-:-:1      FMUL shuffle_x1y7, cx1y7, alpha;
---:-:-:-:1      FMUL shuffle_x2y7, cx2y7, alpha;
---:-:-:-:0      FMUL shuffle_x3y7, cx3y7, alpha;
---:-:-:-:1      STS.128 [writeCs+4x<2*512 + 16>], shuffle_x4y6;
---:-:-:-:1      FMUL shuffle_x4y7, cx4y7, alpha;
---:-:-:-:1      FMUL shuffle_x5y7, cx5y7, alpha;
---:-:-:-:1      FMUL shuffle_x6y7, cx6y7, alpha;
---:-:-:-:0      FMUL shuffle_x7y7, cx7y7, alpha;
---:-:-:-:4      STS.128 [writeCs+4x<3*512 + 00>], shuffle_x0y7;
---:-:-:-:1      STS.128 [writeCs+4x<3*512 + 16>], shuffle_x4y7;
+--:-:-:-:1      IADD k, k, 1;
+--:-:-:-:0      IADD out_offset, out_offset, param_PQN;
 --:-:-:-:5      BAR.SYNC 0;
 
---:-:-:-:0      LOP.XOR readCs, readCs, 4x<8*512>;
---:-:-:-:5      CAL OUTPUT_TRANSFORM;
+--:-:-:-:1      FMUL shuffle_x0y0, cx0y1, alpha;
+--:-:-:-:1      FMUL shuffle_x1y0, cx1y1, alpha;
+--:-:-:-:1      FMUL shuffle_x2y0, cx2y1, alpha;
+--:-:-:-:1      FMUL shuffle_x3y0, cx3y1, alpha;
+--:-:-:-:1      FMUL shuffle_x4y0, cx4y1, alpha;
+--:-:-:-:1      FMUL shuffle_x5y0, cx5y1, alpha;
+--:-:-:-:1      FMUL shuffle_x6y0, cx6y1, alpha;
+--:-:-:-:0      FMUL shuffle_x7y0, cx7y1, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*512 + 00>], shuffle_x0y0;
+--:-:-:-:1      FMUL shuffle_x0y1, cx0y3, alpha;
+--:-:-:-:1      FMUL shuffle_x1y1, cx1y3, alpha;
+--:-:-:-:1      FMUL shuffle_x2y1, cx2y3, alpha;
+--:-:-:-:0      FMUL shuffle_x3y1, cx3y3, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*512 + 16>], shuffle_x4y0;
+--:-:-:-:1      FMUL shuffle_x4y1, cx4y3, alpha;
+--:-:-:-:1      FMUL shuffle_x5y1, cx5y3, alpha;
+--:-:-:-:1      FMUL shuffle_x6y1, cx6y3, alpha;
+--:-:-:-:0      FMUL shuffle_x7y1, cx7y3, alpha;
+--:-:-:-:4      STS.128 [writeCs+4x<1*512 + 00>], shuffle_x0y1;
+--:-:-:-:d      STS.128 [writeCs+4x<1*512 + 16>], shuffle_x4y1;
+--:-:-:-:5      BAR.SYNC 0;
 
---:-:-:-:0      LOP.XOR readCs, readCs, 4x<8*512>;
+--:-:-:-:5      CAL OUTPUT_TRANSFORM;
+--:-:-:-:1      IADD k, k, 15;
+--:-:-:-:0      IADD out_offset, out_offset, PQN15;
+--:-:-:-:5      BAR.SYNC 0;
+
+--:-:-:-:1      FMUL shuffle_x0y0, cx0y4, alpha;
+--:-:-:-:1      FMUL shuffle_x1y0, cx1y4, alpha;
+--:-:-:-:1      FMUL shuffle_x2y0, cx2y4, alpha;
+--:-:-:-:1      FMUL shuffle_x3y0, cx3y4, alpha;
+--:-:-:-:1      FMUL shuffle_x4y0, cx4y4, alpha;
+--:-:-:-:1      FMUL shuffle_x5y0, cx5y4, alpha;
+--:-:-:-:1      FMUL shuffle_x6y0, cx6y4, alpha;
+--:-:-:-:0      FMUL shuffle_x7y0, cx7y4, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*512 + 00>], shuffle_x0y0;
+--:-:-:-:1      FMUL shuffle_x0y1, cx0y6, alpha;
+--:-:-:-:1      FMUL shuffle_x1y1, cx1y6, alpha;
+--:-:-:-:1      FMUL shuffle_x2y1, cx2y6, alpha;
+--:-:-:-:0      FMUL shuffle_x3y1, cx3y6, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*512 + 16>], shuffle_x4y0;
+--:-:-:-:1      FMUL shuffle_x4y1, cx4y6, alpha;
+--:-:-:-:1      FMUL shuffle_x5y1, cx5y6, alpha;
+--:-:-:-:1      FMUL shuffle_x6y1, cx6y6, alpha;
+--:-:-:-:0      FMUL shuffle_x7y1, cx7y6, alpha;
+--:-:-:-:4      STS.128 [writeCs+4x<1*512 + 00>], shuffle_x0y1;
+--:-:-:-:d      STS.128 [writeCs+4x<1*512 + 16>], shuffle_x4y1;
+--:-:-:-:5      BAR.SYNC 0;
+
+--:-:-:-:5      CAL OUTPUT_TRANSFORM;
+--:-:-:-:1      IADD k, k, 1;
+--:-:-:-:0      IADD out_offset, out_offset, param_PQN;
+--:-:-:-:5      BAR.SYNC 0;
+
+--:-:-:-:1      FMUL shuffle_x0y0, cx0y5, alpha;
+--:-:-:-:1      FMUL shuffle_x1y0, cx1y5, alpha;
+--:-:-:-:1      FMUL shuffle_x2y0, cx2y5, alpha;
+--:-:-:-:1      FMUL shuffle_x3y0, cx3y5, alpha;
+--:-:-:-:1      FMUL shuffle_x4y0, cx4y5, alpha;
+--:-:-:-:1      FMUL shuffle_x5y0, cx5y5, alpha;
+--:-:-:-:1      FMUL shuffle_x6y0, cx6y5, alpha;
+--:-:-:-:0      FMUL shuffle_x7y0, cx7y5, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*512 + 00>], shuffle_x0y0;
+--:-:-:-:1      FMUL shuffle_x0y1, cx0y7, alpha;
+--:-:-:-:1      FMUL shuffle_x1y1, cx1y7, alpha;
+--:-:-:-:1      FMUL shuffle_x2y1, cx2y7, alpha;
+--:-:-:-:0      FMUL shuffle_x3y1, cx3y7, alpha;
+--:-:-:-:1      STS.128 [writeCs+4x<0*512 + 16>], shuffle_x4y0;
+--:-:-:-:1      FMUL shuffle_x4y1, cx4y7, alpha;
+--:-:-:-:1      FMUL shuffle_x5y1, cx5y7, alpha;
+--:-:-:-:1      FMUL shuffle_x6y1, cx6y7, alpha;
+--:-:-:-:0      FMUL shuffle_x7y1, cx7y7, alpha;
+--:-:-:-:4      STS.128 [writeCs+4x<1*512 + 00>], shuffle_x0y1;
+--:-:-:-:d      STS.128 [writeCs+4x<1*512 + 16>], shuffle_x4y1;
+--:-:-:-:5      BAR.SYNC 0;
+
 --:-:-:-:5      CAL OUTPUT_TRANSFORM;
 
 --:-:-:-:5      EXIT;
@@ -1095,7 +1114,7 @@ OUTPUT_TRANSFORM:
 
 
 <SCHEDULE_BLOCK>
-01:-:-:-:1      ISETP.LT.AND P4, PT, k, 1x<$K>, PT; // k < K
+11:-:-:-:1      ISETP.LT.AND P4, PT, k, 1x<$K>, PT; // k < K
 --:-:-:-:1  @P4 R2P PR, preds, 0x0f;
 --:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
 [+
@@ -1245,16 +1264,16 @@ OUTPUT_TRANSFORM:
 [+
     our $brelu; return $brelu ? q{
 //delta *= x > 0
-11:-:-:-:1      FSETP.LT.AND P0, PT, b00, RZ, PT;
-02:-:-:-:1      FSETP.LT.AND P1, PT, b01, RZ, PT;
-24:-:-:-:1      FSETP.LT.AND P2, PT, b10, RZ, PT;
-08:-:-:-:1      FSETP.LT.AND P3, PT, b11, RZ, PT;
---:-:-:-:1  @P0 MOV s00, RZ;
---:-:-:-:1  @P1 MOV s01, RZ;
---:-:-:-:1  @P2 MOV s10, RZ;
---:-:-:-:1  @P3 MOV s11, RZ;
+11:-:-:-:1      FSETP.GT.AND P0, PT, b00, RZ, PT;
+02:-:-:-:1      FSETP.GT.AND P1, PT, b01, RZ, PT;
+24:-:-:-:1      FSETP.GT.AND P2, PT, b10, RZ, PT;
+08:-:-:-:1      FSETP.GT.AND P3, PT, b11, RZ, PT;
+--:-:-:-:1 @!P0 MOV s00, RZ;
+--:-:-:-:1 @!P1 MOV s01, RZ;
+--:-:-:-:1 @!P2 MOV s10, RZ;
+--:-:-:-:1 @!P3 MOV s11, RZ;
 --:-:-:-:1  @P4 R2P PR, preds, 0x0f;
---:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
+--:-:-:-:5 @!P4 R2P PR, RZ, 0x0f;
     } : '';
 +]
 [+
@@ -1269,13 +1288,15 @@ OUTPUT_TRANSFORM:
 --:-:-:-:1      SEL x10, one, RZ, P2;
 --:-:-:-:1      SEL x11, one, RZ, P3;
 --:-:-:-:1      FSETP.LT.AND P0, PT, b00, RZ, PT;
---:-:-:-:1      FSETP.LT.AND P1, PT, b04, RZ, PT;
---:-:-:-:1      FSETP.LT.AND P2, PT, b08, RZ, PT;
---:-:-:-:1      FSETP.LT.AND P3, PT, b12, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P1, PT, b01, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P2, PT, b10, RZ, PT;
+--:-:-:-:1      FSETP.LT.AND P3, PT, b11, RZ, PT;
 --:-:-:-:1      SEL b00, one, RZ, P0;
 --:-:-:-:1      SEL b01, one, RZ, P1;
 --:-:-:-:1      SEL b10, one, RZ, P2;
 --:-:-:-:1      SEL b11, one, RZ, P3;
+--:-:-:-:1  @P4 R2P PR, preds, 0x0f;
+--:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
 --:-:-:-:1      FFMA b00, b00, param_beta, x00;
 --:-:-:-:1      FFMA b01, b01, param_beta, x01;
 --:-:-:-:1      FFMA b10, b10, param_beta, x10;
@@ -1284,8 +1305,6 @@ OUTPUT_TRANSFORM:
 --:-:-:-:1      FMUL s01, s01, b01;
 --:-:-:-:1      FMUL s10, s10, b10;
 --:-:-:-:1      FMUL s11, s11, b11;
---:-:-:-:1  @P4 R2P PR, preds, 0x0f;
---:-:-:-:1 @!P4 R2P PR, RZ, 0x0f;
     } : '';
 +]
 [+
@@ -1302,10 +1321,10 @@ OUTPUT_TRANSFORM:
 [+
     our $convert_out;
     return $convert_out ? qq{
---:-:1:-:1  \@P0 $convert_out s00, s00;
---:-:2:-:1  \@P1 $convert_out s01, s01;
---:-:3:-:1  \@P2 $convert_out s10, s10;
---:-:4:-:1  \@P3 $convert_out s11, s11;
+--:-:1:-:1      $convert_out s00, s00;
+--:-:2:-:1      $convert_out s01, s01;
+--:-:3:-:1      $convert_out s10, s10;
+--:-:4:-:1      $convert_out s11, s11;
     } : '';
 +]
 
@@ -1313,7 +1332,6 @@ OUTPUT_TRANSFORM:
 <SCHEDULE_BLOCK>
 --:-:-:-:1      LEA      Out0.CC, out_offset, param_O[0],     [+ dshift() +];
 --:-:-:-:1      LEA.HI.X Out1,    out_offset, param_O[1], RZ, [+ dshift() +];
---:-:-:-:1      IADD out_offset, out_offset, PQN8;
 
 // k < K && R2P && output
 01:-:-:-:1  @P0 STG.E.CG.[+ dtype() +] [Out + [+ dsize() +]x<0*$Q*$N + 0*$N>], s00;
@@ -1326,7 +1344,7 @@ OUTPUT_TRANSFORM:
     our $bsum;
     return $bsum ? q{
 <SCHEDULE_BLOCK>
-20:-:-:-:1      XMAD.LO2C b00, k, param_gridPQN, bsum_offset;
+--:-:-:-:1      XMAD.LO2C b00, k, param_gridPQN, bsum_offset;
 
 --:-:-:-:1      LEA      Sum0.CC, b00, param_S[0],     2;
 --:-:-:-:1      LEA.HI.X Sum1,    b00, param_S[1], RZ, 2;
@@ -1344,12 +1362,10 @@ OUTPUT_TRANSFORM:
 --:-:5:-:2      SHFL.BFLY PT, sum1, sum0, 16, 0x1f;
 10:-:-:-:2      FADD sum0, sum1, sum0;
 
---:6:-:-:1  @P5 STG.E.CG [Sum], sum0;
+--:5:-:-:1  @P5 STG.E.CG [Sum], sum0;
 </SCHEDULE_BLOCK>
     } : '';
 +]
-
---:-:-:-:0      IADD k, k, 8;
 
 --:-:-:-:5      RET;
 
