@@ -42,6 +42,7 @@ enum ConversionType {
     NO_CONVERSION = 0,
     ASCII_TO_BINARY = 1,
     CHAR_TO_INDEX = 2,
+    READ_CONTENTS = 3,
 };
 
 class IndexElement {
@@ -178,30 +179,13 @@ public:
         }
         IndexElement* elem = _index[_itemIdx++];
         // Read the data.
-        string path;
-        if (elem->_fileName[0] == '/') {
-            path = elem->_fileName;
-        } else {
-            path = _repoDir + '/' + elem->_fileName;
-        }
-        struct stat stats;
-        int result = stat(path.c_str(), &stats);
-        if (result == -1) {
-            stringstream ss;
-            ss << "Could not find " << path;
-            throw std::runtime_error(ss.str());
-        }
-        off_t size = stats.st_size;
-        if (*dataBufLen < size) {
-            // Allocate a bit more than what we need right now.
-            resize(dataBuf, dataBufLen, size + size / 8);
-        }
-        _ifs.open(path, ios::binary);
-        _ifs.read(*dataBuf, size);
-        _ifs.close();
-        *dataLen = size;
-
+        readFile(elem->_fileName, dataBuf, dataBufLen, dataLen);
         // Read the targets.
+        if (_targetConversion == READ_CONTENTS) {
+            readFile(elem->_targets[0], targetBuf, targetBufLen, targetLen);
+            return 0;
+        }
+
         switch(_targetConversion) {
         case NO_CONVERSION:
             *targetLen = elem->_targets[0].size();
@@ -247,6 +231,31 @@ public:
     }
 
 private:
+    void readFile(string& fileName, char**buf, int* bufLen, int* dataLen) {
+        string path;
+        if (fileName[0] == '/') {
+            path = fileName;
+        } else {
+            path = _repoDir + '/' + fileName;
+        }
+        struct stat stats;
+        int result = stat(path.c_str(), &stats);
+        if (result == -1) {
+            stringstream ss;
+            ss << "Could not find " << path;
+            throw std::runtime_error(ss.str());
+        }
+        off_t size = stats.st_size;
+        if (*bufLen < size) {
+            // Allocate a bit more than what we need right now.
+            resize(buf, bufLen, size + size / 8);
+        }
+        _ifs.open(path, ios::binary);
+        _ifs.read(*buf, size);
+        _ifs.close();
+        *dataLen = size;
+    }
+
     void asciiToBinary(IndexElement* elem, char* targetBuf) {
         int label = std::atoi(elem->_targets[0].c_str());
         memcpy(targetBuf, &label, sizeof(int));

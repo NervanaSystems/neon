@@ -66,7 +66,8 @@ class ImageParams(MediaParams):
                 ('blue_mean', ct.c_int),
                 ('green_mean', ct.c_int),
                 ('red_mean', ct.c_int),
-                ('gray_mean', ct.c_int)]
+                ('gray_mean', ct.c_int),
+                ('color_noise_std', ct.c_float)]
     _defaults_ = {'center': True,
                   'flip': False,
                   'scale_min': 0,
@@ -80,7 +81,8 @@ class ImageParams(MediaParams):
                   'blue_mean': 127,
                   'green_mean': 119,
                   'red_mean': 104,
-                  'gray_mean': 127}
+                  'gray_mean': 127,
+                  'color_noise_std': 0}
 
     def __init__(self, **kwargs):
         for key in kwargs:
@@ -89,6 +91,7 @@ class ImageParams(MediaParams):
         for key, value in self._defaults_.items():
             setattr(self, key, value)
         super(ImageParams, self).__init__(mtype=MediaType.image, **kwargs)
+        self.color_noise_std = (self.contrast_max - 100) / 400.
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)

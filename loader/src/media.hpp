@@ -74,6 +74,12 @@ public:
 public:
     virtual void transform(char* item, int itemSize, char* buf, int bufSize) = 0;
     virtual void ingest(char** dataBuf, int* dataBufLen, int* dataLen) = 0;
+    virtual void transform(char* encDatum, int encDatumLen,
+                           char* encTarget, int encTargetLen,
+                           char* datumBuf, int datumLen,
+                           char* targetBuf, int targetLen) {
+        throw std::logic_error("Not implemented");
+    }
 
     static Media* create(MediaParams* params, MediaParams* ingestParams, int id);
 };

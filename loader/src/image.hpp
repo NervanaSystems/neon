@@ -257,6 +257,19 @@ public:
         transformDecodedImage(decodedImage, buf, bufSize);
     }
 
+    void transform(char* encDatum, int encDatumLen,
+                   char* encTarget, int encTargetLen,
+                   char* datumBuf, int datumLen,
+                   char* targetBuf, int targetLen) {
+        Mat decodedDatum;
+        decode(encDatum, encDatumLen, &decodedDatum);
+        createRandomAugParams(decodedDatum.size());
+        transformDecodedImage(decodedDatum, datumBuf, datumLen);
+        Mat decodedTarget;
+        decode(encTarget, encTargetLen, &decodedTarget);
+        transformDecodedImage(decodedTarget, targetBuf, targetLen);
+    }
+
     void dump_agp() {
         int x = _augParams.cropBox.x;
         int y = _augParams.cropBox.y;
@@ -463,10 +476,15 @@ private:
     void split(Mat& img, char* buf, int bufSize) {
         Size2i size = img.size();
         if (img.channels() * img.total() > (uint) bufSize) {
-            throw std::runtime_error("Decode failed - buffer too small");
+            stringstream ss;
+            ss << "Decode failed - buffer too small for image: " <<
+                    bufSize <<  " < " << img.channels() * img.total();
+            throw std::runtime_error(ss.str());
         }
         if (img.channels() == 1) {
-            memcpy(buf, img.data, img.total());
+            Mat gray(size, CV_8U, buf);
+            img.copyTo(gray);
+            return;
             return;
         }
 

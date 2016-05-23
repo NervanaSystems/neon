@@ -43,7 +43,8 @@ class DataLoader(NervanaDataIterator):
 
     _converters_ = {'no_conversion': 0,
                     'ascii_to_binary': 1,
-                    'char_to_index': 2}
+                    'char_to_index': 2,
+                    'read_contents': 3}
 
     def __init__(self, set_name, repo_dir,
                  media_params, target_size,

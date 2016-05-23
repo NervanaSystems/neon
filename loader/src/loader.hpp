@@ -32,6 +32,7 @@ public:
     DecodeThreadPool(int count, int batchSize,
                      int datumSize, int datumTypeSize,
                      int targetSize, int targetTypeSize,
+                     int targetConversion,
                      BufferPool& in, BufferPool& out,
                      Device* device,
                      MediaParams* mediaParams)
@@ -42,6 +43,7 @@ public:
       _bufferIndex(0), _batchSize(batchSize),
       _datumSize(datumSize), _datumTypeSize(datumTypeSize),
       _targetSize(targetSize), _targetTypeSize(targetTypeSize),
+      _targetConversion(targetConversion),
       _datumLen(datumSize * datumTypeSize),
       _targetLen(targetSize * targetTypeSize),
       _device(device) {
@@ -115,6 +117,32 @@ protected:
         _stopped[id] = true;
     }
 
+    void transform(int id, char* encDatum, int encDatumLen,
+                   char* encTarget, int encTargetLen,
+                   char* datumBuf, char* targetBuf) {
+        // Handle the data.
+        _media[id]->transform(encDatum, encDatumLen, datumBuf, _datumLen);
+
+        // Handle the targets.
+        if (encTargetLen > _targetLen) {
+            // TODO: avoid truncating.
+            encTargetLen = _targetLen;
+        }
+        memcpy(targetBuf, encTarget, encTargetLen);
+        if (_targetLen > encTargetLen) {
+            // Pad the rest of the buffer with zeros.
+            memset(targetBuf + encTargetLen, 0, _targetLen - encTargetLen);
+        }
+    }
+
+    void transform(int id, char* encDatum, int encDatumLen,
+                   char* encTarget, int encTargetLen,
+                   char* datumBuf, char* targetBuf, bool) {
+        // Transform input data and targets together.
+        _media[id]->transform(encDatum, encDatumLen, encTarget, encTargetLen,
+                              datumBuf, _datumLen, targetBuf, _targetLen);
+    }
+
     virtual void work(int id) {
         // Thread function.
         {
@@ -134,30 +162,22 @@ protected:
         // No locking required because threads
         // write into non-overlapping regions.
         BufferPair& outBuf = _out.getForWrite();
-        char* dataBuf = outBuf.first->_data + _dataOffsets[id];
+        char* datumBuf = outBuf.first->_data + _dataOffsets[id];
         char* targetBuf = outBuf.second->_data + _targetOffsets[id];
         for (int i = start; i < end; i++) {
-            // Handle the data.
-            int itemSize = 0;
-            char* item = _inputBuf->first->getItem(i, itemSize);
-            if (item == 0) {
-                return;
+            int encDatumLen = 0;
+            char* encDatum = _inputBuf->first->getItem(i, encDatumLen);
+            assert(encDatum != 0);
+            int encTargetLen = 0;
+            char* encTarget = _inputBuf->second->getItem(i, encTargetLen);
+            if (_targetConversion == READ_CONTENTS) {
+                transform(id, encDatum, encDatumLen, encTarget, encTargetLen,
+                          datumBuf, targetBuf, true);
+            } else {
+                transform(id, encDatum, encDatumLen, encTarget, encTargetLen,
+                          datumBuf, targetBuf);
             }
-            _media[id]->transform(item, itemSize, dataBuf, _datumLen);
-            dataBuf += _datumLen;
-
-            // Handle the targets.
-            int len = 0;
-            char* target = _inputBuf->second->getItem(i, len);
-            if (len > _targetLen) {
-                // TODO: avoid truncating.
-                len = _targetLen;
-            }
-            memcpy(targetBuf, target, len);
-            if (_targetLen > len) {
-                // Pad the rest of the buffer with zeros.
-                memset(targetBuf + len, 0, _targetLen - len);
-            }
+            datumBuf += _datumLen;
             targetBuf += _targetLen;
         }
 
@@ -259,6 +279,7 @@ private:
     int                         _datumTypeSize;
     int                         _targetSize;
     int                         _targetTypeSize;
+    int                         _targetConversion;
     // Datum length in bytes.
     int                         _datumLen;
     // Target length in bytes.
@@ -320,6 +341,7 @@ public:
       _batchSize(batchSize),
       _datumSize(datumSize), _datumTypeSize(datumTypeSize),
       _targetSize(targetSize), _targetTypeSize(targetTypeSize),
+      _targetConversion(targetConversion),
       _readBufs(0), _decodeBufs(0), _readThread(0), _decodeThreads(0),
       _device(0), _reader(0), _mediaParams(mediaParams) {
         _device = Device::create(deviceParams);
@@ -358,7 +380,7 @@ public:
             threadCount = std::min(threadCount, _batchSize);
             _decodeThreads = new DecodeThreadPool(threadCount, _batchSize,
                     _datumSize, _datumTypeSize,
-                    _targetSize, _targetTypeSize,
+                    _targetSize, _targetTypeSize, _targetConversion,
                     *_readBufs, *_decodeBufs, _device, _mediaParams);
         } catch(std::bad_alloc&) {
             return -1;
@@ -456,6 +478,7 @@ private:
     int                         _datumTypeSize;
     int                         _targetSize;
     int                         _targetTypeSize;
+    int                         _targetConversion;
     BufferPool*                 _readBufs;
     BufferPool*                 _decodeBufs;
     ReadThread*                 _readThread;
