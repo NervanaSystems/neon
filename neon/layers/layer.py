@@ -706,16 +706,15 @@ class Convolution(ParameterLayer):
                  name=None, parallelism="Data"):
         super(Convolution, self).__init__(init, name, parallelism)
         self.nglayer = None
-        bsum = bsum and not self.be.deterministic
+        self.bsum = bsum
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                            'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
-                           'T': 1, 'D': 1, 'bsum': bsum}  # 3D paramaters
+                           'T': 1, 'D': 1}  # 3D paramaters
 
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
         self.strides = strides
         self.padding = padding
-        self.bsum = bsum
 
         if isinstance(fshape, tuple) or isinstance(fshape, list):
             fkeys = ('R', 'S', 'K') if len(fshape) == 3 else ('T', 'R', 'S', 'K')
@@ -767,7 +766,7 @@ class Convolution(ParameterLayer):
             self.out_shape = (K, P, Q) if M == 1 else (K, M, P, Q)
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
-        if self.convparams['bsum']:
+        if self.bsum:
             self.batch_sum_shape = (self.nglayer.K, 1)
         return self
 
@@ -833,16 +832,14 @@ class Deconvolution(ParameterLayer):
                  name=None):
         super(Deconvolution, self).__init__(init, name)
         self.nglayer = None
-        bsum = bsum and not self.be.deterministic
+        self.bsum = bsum
         self.deconvparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
-                             'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
-                             'bsum': bsum}
+                             'pad_h': 0, 'pad_w': 0, 'pad_d': 0}
 
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
         self.strides = strides
         self.padding = padding
-        self.bsum = bsum
 
         if isinstance(fshape, tuple):
             # fshape[2] should now map to C (nifm)
@@ -884,7 +881,7 @@ class Deconvolution(ParameterLayer):
             self.out_shape = (self.nglayer.C, self.nglayer.H, self.nglayer.W)
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
-        if self.deconvparams['bsum']:
+        if self.bsum:
             self.batch_sum_shape = (self.nglayer.C, 1)
         return self
 

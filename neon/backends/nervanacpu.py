@@ -1078,7 +1078,8 @@ class NervanaCPU(Backend):
                 grad_I *= (X > 0) + slope*(X < 0)
                 can be combined with bsum tensor to output bprop_bias
         """
-        layer.xprop_conv(E, F, grad_I, X, bias, bsum, alpha, beta, relu, brelu, slope, backward=True)
+        layer.xprop_conv(E, F, grad_I, X, bias, bsum, alpha, beta, relu, brelu, slope,
+                         backward=True)
 
     def update_conv(self, layer, I, E, U, alpha=1.0, beta=0.0):
         """

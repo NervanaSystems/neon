@@ -173,11 +173,13 @@ def backend_tests(request):
     # backend or use the NervanaObject.be global
     return be
 
+
 def get_backend_pair(device_id, dtype=np.float32, bench=False):
     from neon.backends.nervanagpu import NervanaGPU
     ng = NervanaGPU(default_dtype=dtype, bench=bench, device_id=device_id)
     nc = NervanaCPU(default_dtype=dtype)
     return (ng, nc)
+
 
 @pytest.fixture(scope='module')
 def backend_pair(request):
