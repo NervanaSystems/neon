@@ -75,7 +75,7 @@ if args.callback_args['serialize'] is None:
     args.callback_args['serialize'] = min(args.epochs, 10)
 
 # hyperparameters
-args.batch_size = 3
+args.batch_size = 4
 
 num_epochs = args.epochs
 n_mb = None
