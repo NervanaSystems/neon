@@ -21,7 +21,7 @@ import xml.dom.minidom as minidom
 import tarfile
 from PIL import Image
 import abc
-from generate_anchors import generate_anchors
+from generate_anchors import generate_all_anchors
 
 from neon.data.datasets import Dataset
 from neon.util.persist import save_obj, load_obj
@@ -198,6 +198,8 @@ class ObjectLocalization(Dataset):
         self.dev_X_img_chw = self.dev_X_img.reshape(
             3, self.MAX_SIZE, self.MAX_SIZE, self.be.bsz)
 
+        self.shape = self.image_shape
+
         # For training, the RPN needs:
         # 1. bounding box target coordinates
         # 2. bounding box target masks (keep positive anchors only)
@@ -212,7 +214,26 @@ class ObjectLocalization(Dataset):
 
         self.dev_y_labels_mask = self.be.zeros((2 * self._total_anchors, 1), dtype=np.int32)
 
-        self.shape = self.image_shape
+        # For training, Fast-RCNN needs:
+        # 1. class labels
+        # 2. bbox targets
+        # The above are computed during fprop by the ProposalLayer,
+        # so here we create the buffers to pass that to layer.
+        self.dev_y_frcn_labels = self.be.zeros(
+            (self.num_classes, self.rois_per_batch), dtype=np.int32)
+        self.dev_y_frcn_bbtargets = self.be.zeros(
+            (self.num_classes * 4, self.rois_per_batch))
+        self.dev_y_frcn_bbmask = self.be.zeros(
+            (self.num_classes * 4, self.rois_per_batch))
+
+        # we also create some global buffers needed by the ProposalLayer
+        # 1. image_shape
+        # 2. gt_boxes
+        # 3. number of gtboxes
+        self.im_shape = self.be.zeros((2, 1))
+        self.gt_boxes = self.be.zeros((64, 4))
+        self.num_gt_boxes = self.be.zeros((1, 1))
+        self.im_scale = self.be.zeros((1, 1))
 
     @abc.abstractmethod
     def load_data(self):
@@ -228,6 +249,17 @@ class ObjectLocalization(Dataset):
         """
         pass
 
+    def get_global_buffers(self):
+
+        global_buffers = dict()
+        global_buffers['target_buffers'] = (self.dev_y_frcn_labels,
+                                            (self.dev_y_frcn_bbtargets, self.dev_y_frcn_bbmask))
+        global_buffers['img_info'] = (self.im_shape, self.im_scale)
+        global_buffers['gt_boxes'] = (self.gt_boxes, self.num_gt_boxes)
+        global_buffers['conv_config'] = (self._conv_size, self.SCALE)
+
+        return global_buffers
+
     def add_anchors(self, roi_db):
         # adds a database of anchors
 
@@ -239,30 +271,8 @@ class ObjectLocalization(Dataset):
         # 1.
         # generate list of K anchor boxes, where K = # ratios * # scales
         # anchor boxes are coded as [xmin, ymin, xmax, ymax]
-        # params = np.array([[s, r] for r in self.RATIOS for s in self.SCALES])
-        self._anchors = generate_anchors(scales=np.array((8, 16, 32)))
-        self._num_anchors = self._anchors.shape[0]
-
-        # generate shifts to apply to anchors
-        # note: 1/self.SCALE is the feature stride
-        shift_x = np.arange(0, self._conv_size) * 1 / self.SCALE
-        shift_y = np.arange(0, self._conv_size) * 1 / self.SCALE
-        shift_x, shift_y = np.meshgrid(shift_x, shift_y)
-        shifts = np.vstack((shift_x.ravel(), shift_y.ravel(),
-                            shift_x.ravel(), shift_y.ravel())).transpose()
-
-        # add K anchors (1, K, 4) to A shifts (A, 1, 4) to get
-        # shift anchors (A, K, 4), then reshape to (A*K, 4) shifted anchors
-        K = self._num_anchors
-        A = shifts.shape[0]
-        all_anchors = (self._anchors.reshape((1, K, 4)).transpose((1, 0, 2)) +
-                       shifts.reshape((1, A, 4)))
-
-        all_anchors = all_anchors.reshape((A * K, 4))
-        total_anchors = int(A * K)
-        # all_anchors is in (CHW) format, matching the CHWN output of the conv layer.
-
-        print 'total_anchors', total_anchors
+        all_anchors = generate_all_anchors(self._conv_size, self.SCALE)
+        # all_anchors are in (CHW) order, matching the CHWN output of the conv layer.
 
         # 2.
         # Iterate through each image, and build list of positive/negative anchors
@@ -316,7 +326,7 @@ class ObjectLocalization(Dataset):
             # store results in database
             db['labels'] = labels
             db['bbox_targets'] = bbox_targets
-            db['total_anchors'] = total_anchors
+            db['total_anchors'] = self._total_anchors
             db['idx_inside'] = idx_inside
 
         return roi_db
@@ -484,6 +494,13 @@ class ObjectLocalization(Dataset):
                 im = Image.open(db['img_path'])  # This is RGB order
 
                 im_scale, im_shape = self.calculate_scale_shape(im.size)
+
+                # store im_shape in buffer for ProposalLayer
+                self.im_shape.set(im_shape)
+                self.im_scale.set(np.array(im_scale))
+                num_gt_boxes = np.array(db['gt_bb'].shape[0])
+                self.num_gt_boxes.set(num_gt_boxes)
+                self.gt_boxes[:num_gt_boxes, :] = db['gt_bb'] * im_scale
 
                 im = im.resize(im_shape, Image.LINEAR)
 

@@ -13,7 +13,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from neon.transforms.activation import (Identity, Explin, Rectlin, Rectlinclip,
-                                        Sign, Softmax, Tanh, Logistic, Normalizer)
+                                        Sign, Softmax, Tanh, Logistic, Normalizer,
+                                        PixelwiseSoftmax)
 from neon.transforms.cost import (CrossEntropyBinary, CrossEntropyMulti,
                                   SumSquared, MeanSquared, LogLoss,
                                   Misclassification, TopKMisclassification,

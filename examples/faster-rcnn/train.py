@@ -13,51 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""
-Trains a Fast-RCNN model on PASCAL VOC dataset.
-This Fast-RCNN is based on VGG16 that was pre-trained using ImageI1K.
-
-By default, the script will download the pre-trained VGG16 from neon model zoo
-and seed the convolution and pooling layers. And Fast R-CNN starts training from
-that. If the script is given --model_file, it will continue training the
-Fast R-CNN from the given model file.
-
-Reference:
-    "Fast R-CNN"
-    http://arxiv.org/pdf/1504.08083v2.pdf
-    https://github.com/rbgirshick/fast-rcnn
-
-Usage:
-    python examples/fast-rcnn/train.py -e 20 --save_path frcn_vgg.pkl
-
-Notes:
-
-    1. For VGG16 based Fast R-CNN model, we can support training/testing with small
-    batch size such as, 2 or 3 images per batch. The model training will converge
-    around 20 epochs. With 3 images per batch, and 64 ROIs per image, the training
-    consumes about 11G memory.
-
-    2. The original caffe model goes through 40000 iteration (mb) of training, with
-    2 images per minibatch.
-
-    3. The dataset will cache the preprocessed file and re-use that if the same
-    configuration of the dataset is used again. The cached file by default is in
-    ~/nervana/data/VOCDevkit/VOC<year>/train_< >.pkl or
-    ~/nervana/data/VOCDevkit/VOC<year>/inference_< >.pkl
-
-"""
-
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.callbacks.callbacks import Callbacks, TrainMulticostCallback
 from neon.util.persist import save_obj
 from objectlocalization import PASCAL
-from util import load_vgg_weights, add_vgg_layers
 from neon.initializers import Gaussian, Constant, Xavier, GlorotUniform
-from neon.transforms import Rectlin, Softmax, Identity, Logistic, CrossEntropyMulti, SmoothL1Loss, PixelwiseSoftmax
-from neon.layers import Conv, Pooling, Affine, BranchNode, Tree, Multicost, GeneralizedCostMask
+from neon.transforms import Rectlin, Identity, Softmax, CrossEntropyMulti, SmoothL1Loss, PixelwiseSoftmax
+from neon.layers import Conv, Pooling, Affine, BranchNode, Tree, Multicost, GeneralizedCost, GeneralizedCostMask, Dropout
 from neon.models import Model
+from roi_pooling import RoiPooling
+from proposal_layer import ProposalLayer
+import util
 import os
 # main script
 
@@ -65,15 +33,6 @@ import os
 parser = NeonArgparser(__doc__)
 parser.add_argument('--lr_scale', help='learning rate scale', default=16.0)
 args = parser.parse_args(gen_be=False)
-
-if args.save_path is None:
-    args.save_path = 'frcn_vgg.pkl'
-
-if args.callback_args['save_path'] is None:
-    args.callback_args['save_path'] = args.save_path
-
-if args.callback_args['serialize'] is None:
-    args.callback_args['serialize'] = min(args.epochs, 10)
 
 if args.data_dir is None:
     args.data_dir = '/usr/local/data/'
@@ -86,7 +45,7 @@ n_mb = None
 img_per_batch = args.batch_size
 rois_per_img = 256
 frcn_fine_tune = False
-learning_rate_scale = 1.0/float(args.lr_scale)
+learning_rate_scale = 1.0 / float(args.lr_scale)
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
@@ -96,34 +55,63 @@ train_set = PASCAL('trainval', '2007', path=args.data_dir, n_mb=n_mb,
                    img_per_batch=img_per_batch, rois_per_img=rois_per_img,
                    add_flipped=True, shuffle=True, rebuild_cache=False)
 
-# test_set = PASCAL('test', '2007', path=args.data_dir, n_mb=n_mb,
-#                    img_per_batch=img_per_batch, rois_per_img=rois_per_img)
-# setup model
-# add VGG layers
-conv_layers = add_vgg_layers()
+# Faster-RCNN contains three models: VGG, the Region Proposal Network (RPN),
+# and the Classification Network (ROI-pooling + Fully Connected layers), organized
+# as a tree. Tree has 4 branches:
+#
+# VGG -> b1 -> Conv (3x3) -> b2 -> Conv (1x1) -> CrossEntropyMulti (objectness label)
+#                            b2 -> Conv (1x1) -> SmoothL1Loss (bounding box targets)
+#        b1 -> PropLayer -> ROI -> Affine -> Affine -> b3 -> Affine -> CrossEntropyMulti (category)
+#                                                      b3 -> Affine -> SmoothL1Loss (bounding box)
+#
 
-b1 = BranchNode(name="rpn_branch")
+# define the branch points
+b1 = BranchNode(name="conv_branch")
+b2 = BranchNode(name="rpn_branch")
+b3 = BranchNode(name="roi_branch")
 
-# add 3x3 Conv, and the first branch for the bbox objectness
-conv_layers += [
-     Conv((3, 3, 512), init=Gaussian(scale=0.01), bias=Constant(0), activation=Rectlin(),
-          padding=1, strides=1),
-     b1,
-     Conv((1, 1, 18), init=Gaussian(scale=0.01), bias=Constant(0), activation=PixelwiseSoftmax(c=2),
-          padding=0, strides=1)
-]
+# define VGG
+VGG = util.add_vgg_layers()
 
-# add second branch for the bbox_regression
-bbox_regression = [b1, Conv((1, 1, 36), init=Gaussian(scale=0.01), bias=Constant(0),
-                   activation=Identity(), padding=0, strides=1)]
+# define RPN
+rpn_init = dict(init=Gaussian(scale=0.01), bias=Constant(0))
+# these references are passed to the ProposalLayer.
+RPN_3x3 = Conv((3, 3, 512), activation=Rectlin(), padding=1, strides=1, **rpn_init)
+RPN_1x1_obj = Conv((1, 1, 18), activation=PixelwiseSoftmax(c=2), padding=0, strides=1, **rpn_init)
+RPN_1x1_bbox = Conv((1, 1, 36), activation=Identity(), padding=0, strides=1, **rpn_init)
 
-model = Model(layers=Tree([conv_layers, bbox_regression]))
+# define ROI classification network
+ROI = [ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox], train_set.get_global_buffers()),
+       RoiPooling(HW=(8, 8)),
+       Affine(nout=4096, init=Gaussian(scale=0.005),
+              bias=Constant(.1), activation=Rectlin()),
+       Dropout(keep=0.5),
+       Affine(nout=4096, init=Gaussian(scale=0.005),
+              bias=Constant(.1), activation=Rectlin()),
+       Dropout(keep=0.5)]
 
+ROI_category = Affine(nout=21, init=Gaussian(scale=0.01), bias=Constant(0), activation=Softmax())
+ROI_bbox = Affine(nout=84, init=Gaussian(scale=0.001), bias=Constant(0), activation=Identity())
 
-# set up cost for the objectness and regression branchs, respectively
-weights = 1.0/(256)
+# build the model
+# the four branches of the tree mirror the branches listed above
+model = Model(layers=Tree([VGG + [b1, RPN_3x3, b2, RPN_1x1_obj],
+                           [b2, RPN_1x1_bbox],
+                           [b1] + ROI + [ROI_category],
+                           #[b3, ROI_bbox],
+                           ]))
+
+# test fprop only
+bob = model.get_outputs(train_set)
+
+# set up cost different branches, respectively
+weights = 1.0 / (256)
 cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti(), weights=weights),
-                        GeneralizedCostMask(costfunc=SmoothL1Loss(sigma=3.0), weights=weights)])
+                        GeneralizedCostMask(costfunc=SmoothL1Loss(sigma=3.0), weights=weights),
+                        GeneralizedCost(costfunc=CrossEntropyMulti()),
+                        GeneralizedCostMask(costfunc=SmoothL1Loss())
+                        ])
+
 
 # setup optimizer
 # schedule = Schedule(step_config=[6], change=[0.1])
@@ -131,16 +119,14 @@ opt_w = GradientDescentMomentum(0.001 * learning_rate_scale, 0.9, wdecay=0.0005)
 opt_b = GradientDescentMomentum(0.002 * learning_rate_scale, 0.9, wdecay=0.0005)
 optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b})
 
-
 # if training a new model, seed the image model conv layers with pre-trained weights
 # otherwise, just load the model file
 if args.model_file is None:
-    load_vgg_weights(model, "~/private-neon/examples/vgg_weights_neon.prm")
+    util.load_vgg_weights(model, "~/private-neon/examples/vgg_weights_neon.prm")
 
 callbacks = Callbacks(model, eval_set=train_set, **args.callback_args)
 callbacks.add_callback(TrainMulticostCallback())
-#
-# outputs = model.get_outputs(train_set)
+
 
 model.fit(train_set, optimizer=optimizer,
           num_epochs=num_epochs, cost=cost, callbacks=callbacks)
