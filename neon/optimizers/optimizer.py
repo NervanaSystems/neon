@@ -16,12 +16,23 @@ from __future__ import division
 from builtins import range
 from neon import NervanaObject
 from neon.util.persist import load_class
+import logging
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 def get_param_list(layer_list):
     '''
-    returns a flattened list of params
+    Returns a flattened list of parameters. Each element in the list
+    is a tuple ``((W, dW), states)`` for the parameters ``W``, parameter updates ``dW``,
+    and the current set of ``states``.
+
+    Args:
+        layer_list (list): List of layers
+
+    Returns:
+        param_list (list): List of parameters.
     '''
     plist = []
     for l in layer_list:
@@ -33,8 +44,14 @@ def get_param_list(layer_list):
 class Optimizer(NervanaObject):
 
     '''
-    Optimizers will take a param, update, and state and
-    will be responsible for keeping track of a schedule.
+    The optimizer class handles the gradient update stage of training a neural network.
+    Given the current parameters :math:`w`, update parameters
+    :math:`\Delta w`, and current state :math:`s`, the optimizer specifies an
+    algorithm for performing the update.
+
+    This base class contains to helper functions for scaling the gradients.
+    specifices the abstract method optimize, which subclasses should implement. The optimize
+    method is called at every minibatch to update the layer parameters.
     '''
     def __init__(self, name=None):
         super(Optimizer, self).__init__(name=name)
@@ -49,16 +66,33 @@ class Optimizer(NervanaObject):
         return cls(**pdict)
 
     def optimize(self, layer_list, epoch):
+        """
+        Update the parameters for a provided list of layers.
+
+        Args:
+            layer_list (list): List of layers to optimize
+            epoch (integer): Epoch count of training
+        """
         raise NotImplementedError()
 
     def clip_gradient_norm(self, param_list, clip_norm):
         """
-        Scale the magnitude of the network's gradients
+        Returns a scaling factor to apply to the gradients.
+
+        The scaling factor is computed such that the root mean squared
+        average of the scaled gradients across all layers will be less than
+        or equal to the provided clip_norm value. This factor is always <1, so
+        never scales up the gradients.
 
         Arguments:
-            param_list (list): a list of layer parameters
-            clip_norm (float, optional): Value to scale gradients'
-                                         magnitude by.
+            param_list (list): List of layer parameters
+            clip_norm (float, optional): target norm for the gradients. If not provided
+                                         the returned scale_factor will equal 1.
+
+        Returns:
+            scale_factor (float): computed scale factor such that the RMS
+                                  average of the gradients across all layers
+                                  will be <= clip_norm.
         """
         scale_factor = 1
         if clip_norm:
@@ -69,15 +103,20 @@ class Optimizer(NervanaObject):
             scale_factor = clip_norm / max(float(grad_norm.get()), float(clip_norm))
         return scale_factor
 
-    def clip_gradient_value(self, grad, clip_value):
+    def clip_gradient_value(self, grad, clip_value=None):
         """
-        Element-wise clip a list of gradients.
+        Element-wise clip a list of gradients to between -``clip_value`` and ``clip_value``.
 
         Arguments:
-            grad (list): a list of gradients of a single layer
+            grad (list): List of gradients for a single layer
             gradient_clip_value (float, optional): Value to element-wise clip
                                                    gradients.
                                                    Defaults to None.
+
+        Returns:
+            grad (list): List of gradients, but clipped to between -clip_value
+                         and +clip_value
+
         """
         if clip_value:
             return self.be.clip(grad, -abs(clip_value), abs(clip_value))
@@ -87,26 +126,60 @@ class Optimizer(NervanaObject):
 
 class Schedule(NervanaObject):
     """
-    Learning rate schedule for constant or step learning rates.
+    Learning rate schedule.
 
-    By default implements a constant learning rate.
+    By default implements a constant learning rate:
+
+    .. code-block:: python
+        # Constant learning rate of 0.01 across training epochs
+        optimizer = GradientDescentMomentum(0.01, 0.9, schedule = Schedule())
+
+    Otherwise, the schedule multiplies the learning rate by change at every element in
+    ``step_config``.
+    For example,
+
+    .. code-block:: python
+        schedule = Schedule(step_config=[2, 6], change=0.5)
+        optimizer = GradientDescentMomentum(1.0, 0.9, schedule = Schedule())
+
+    will yield a learning rate schedule of:
+
+    .. csv-table::
+        :header: "Epoch", "LR"
+        :widths: 20, 10
+
+        0, 1.0
+        1, 1.0
+        2, 0.5
+        3, 0.5
+        4, 0.5
+        5, 0.5
+        6, 0.25
+        7, 0.25
+        8, 0.25
+        9, 0.25
     """
+
     def __init__(self, step_config=None, change=1.):
         """
         Arguments:
-            step_config (int or list, optional): Configure the epoch step rate (int)
-                or step times (list of epoch indices). Defaults to None (constant).
-
-            change (float or list, optional): In step mode, learning rate is
-                multiplied by ``change ** steps``, where ``steps`` is the number of
-                steps in the step schedule that have passed. If ``change`` is a list,
-                ``step_config`` must also be a list. Then at ``step[i]``, the
-                learning rate is set to ``change[i]``.
+            step_config (list, optional): Configure the step times (list of epoch indices).
+                                          Defaults to None (constant).
+            change (int, optional): The learning rate is
+                                    multiplied by ``change ** steps``, where ``steps`` is the
+                                    number of steps in the step schedule that have passed.
         """
 
         if isinstance(step_config, list) and isinstance(change, list):
             assert len(step_config) == len(change), "change and step_config must have the same" \
                 "length after step_config is deduplicated to do epoch-level LR assignment."
+
+            logger.warn("This functionality will be removed from Schedule in the future. "
+                        "Please use the StepSchedule class instead.")
+
+        if isinstance(step_config, int):
+            logger.warn("This functionality will be removed from Schedule in the future. "
+                        "Please use the PowerSchedule class instead.")
 
         self.step_config = step_config
         self.change = change
@@ -114,13 +187,17 @@ class Schedule(NervanaObject):
 
     def get_learning_rate(self, learning_rate, epoch):
         """
-        Get the current learning rate given the epoch and initial rate
+        Returns the current learning rate given the epoch and initial learning rate.
 
         Arguments:
-            learning_rate (float): the initial learning rate
-            epoch (int): the current epoch, used to calculate the new effective learning rate.
+            learning_rate (float): Initial learning rate
+            epoch (int): Current epoch, used to calculate the adjusted learning rate
+
+        Returns:
+            (float): The adjusted learning rate
         """
 
+        # will be moved to StepSchedule in the future
         if isinstance(self.step_config, list) and isinstance(self.change, list):
             if epoch in self.step_config:
                 # steps will store the current lr
@@ -130,8 +207,9 @@ class Schedule(NervanaObject):
             else:
                 return self.steps
 
+        # will be moved to PowerSchedule in the future
         elif isinstance(self.step_config, int):
-            self.steps = np.floor((epoch + 1) / self.step_config)
+            self.steps = np.floor(epoch / self.step_config)
 
         elif isinstance(self.step_config, list):
             self.steps = np.sum(epoch >= np.array(self.step_config))
@@ -139,17 +217,140 @@ class Schedule(NervanaObject):
         return float(learning_rate * self.change ** self.steps)
 
 
+class StepSchedule(Schedule):
+    """
+    Steps the learning rate over training time.
+
+    To set a step schedule, pass as arguments ``step_config`` and ``change``. The schedule
+    will set the learning rate at ``step[i]`` to ``change[i]``. For example, the call:
+
+    .. code-block:: python
+        schedule = Schedule(step_config=[2, 6], change=[0.6, 0.4])
+
+    will set the learning rate to 0.6 at step 2, and to 0.4 at step 6.
+    """
+    def __init__(self, step_config, change):
+        """
+        Arguments:
+            step_config (list): Configure the step times (list of epoch indices)
+            change (list): List of learning rates. Must be same length as step_config
+        """
+
+        assert isinstance(step_config, list) and isinstance(change, list), \
+            "The arguments change and step_config must be lists."
+
+        assert len(step_config) == len(change), \
+            "The arguments change and step_config must have the same length."
+
+        self.step_config = step_config
+        self.change = change
+        self.steps = 0
+
+    def get_learning_rate(self, learning_rate, epoch):
+        """
+        Returns the current learning rate given the epoch and initial learning rate.
+
+        Arguments:
+            learning_rate (float): Initial learning rate
+            epoch (int): Current epoch, used to calculate the adjusted learning rate
+
+        Returns:
+            (float): The adjusted learning rate
+        """
+        if epoch in self.step_config:
+            # steps will store the current lr
+            self.steps = self.change[self.step_config.index(epoch)]
+        if self.steps == 0:
+            return learning_rate
+        else:
+            return self.steps
+
+
+class PowerSchedule(Schedule):
+    """
+    Multiplies the learning rate by a factor at regular epoch intervals.
+
+    This schedule will multiply the learning rate by
+    the factor ``change`` every ``step_config`` epochs. For example,
+
+    .. code-block:: python
+        schedule = Schedule(step_config=2, change=0.5)
+        optimizer = GradientDescentMomentum(0.1, 0.9, schedule=schedule)
+
+    will yield a learning rate schedule of:
+
+    .. csv-table::
+    :header: "Epoch", "LR"
+    :widths: 20, 10
+
+    0, 0.1
+    1, 0.1
+    2, 0.05
+    3, 0.05
+    4, 0.025
+    5, 0.025
+    6, 0.0125
+    7, 0.0125
+    """
+    def __init__(self, step_config, change):
+        """
+        Arguments:
+            step_config (int): Learning rate update interval (in epochs)
+            change (int): Update factor
+        """
+        assert isinstance(step_config, int), \
+            "The argument step_config must be an integer."
+
+        assert not isinstance(change, list), \
+            "The argument change must be a float or integer."
+
+        self.step_config = step_config
+        self.change = change
+        self.steps = 0
+
+    def get_learning_rate(self, learning_rate, epoch):
+        """
+        Returns the current learning rate given the epoch and initial learning rate.
+
+        Arguments:
+            learning_rate (float): Initial learning rate
+            epoch (int): Current epoch, used to calculate the adjusted learning rate.
+
+        Returns:
+            (float): The adjusted learning rate.
+        """
+        self.steps = np.floor(epoch / self.step_config)
+
+        return float(learning_rate * self.change ** self.steps)
+
+
 class ExpSchedule(Schedule):
     """
-    Exponential learning rate schedule.
+    Exponential learning rate schedule. This schedule implements
 
-    Arguments:
-        decay (float): how much exponential decay to apply to the learning rate
+    .. math::
+        \alpha(t) = \frac{\alpha_\circ}{1 + \beta t}
+
+    where :math:`\beta` is the decay rate, and :math:`\alpha_\circ` is the initial learning rate.
     """
     def __init__(self, decay):
+        """
+        Arguments:
+            decay (float): Decay rate.
+        """
         self.decay = decay
 
     def get_learning_rate(self, learning_rate, epoch):
+        """
+        Returns the current learning rate given the epoch and initial learning rate.
+
+        Arguments:
+            learning_rate (float): Initial learning rate
+            epoch (int): Current epoch, used to calculate the adjusted learning rate.
+
+        Returns:
+            (float): The adjusted learning rate.
+        """
         return float(learning_rate / (1. + self.decay * epoch))
 
 
@@ -157,16 +358,35 @@ class PolySchedule(Schedule):
     """
     Polynomial learning rate schedule.
 
-    Arguments:
-        total_epochs (int): total number of epochs over which to calculate interpolated decay
-        power (float): total decay parameter
+    This schedule takes as input the total number of epochs :math:`T` and a power :math:`\beta`,
+    and produces the learning schedule:
+
+    .. math::
+        \alpha(t) = \alpha_\circ \times\left(1-\frac{t}{T}\right)^\beta
+
+    where :math:`\alpha_\circ` is the initial learning rate.
     """
 
     def __init__(self, total_epochs, power):
+        """
+        Arguments:
+            total_epochs (int): Total number of epochs over which to calculate interpolated decay
+            power (float): Total decay parameter
+        """
         self.total_epochs = np.float32(total_epochs)
         self.power = power
 
     def get_learning_rate(self, learning_rate, epoch):
+        """
+        Returns the current learning rate given the epoch and initial learning rate.
+
+        Arguments:
+            learning_rate (float): Initial learning rate
+            epoch (int): Current epoch, used to calculate the adjusted learning rate.
+
+        Returns:
+            (float): The adjusted learning rate.
+        """
         return float(learning_rate * (1. - epoch // self.total_epochs) ** self.power)
 
 
@@ -174,6 +394,32 @@ class GradientDescentMomentum(Optimizer):
 
     """
     Stochastic gradient descent with momentum.
+
+    Given the parameters :math:`\theta`, the learning rate :math:`\alpha`,
+    and the gradients :math:`\nabla J(\theta; x)`
+    computed on the minibatch data :math:`x`, SGD updates the parameters via
+
+    .. math::
+        \theta' = \theta - \alpha\nabla J(\theta; x)
+
+    Here we implement SGD with momentum. Momentum tracks the history of
+    gradient updates to help the system move faster through saddle points.
+    Given the additional parameters: momentum :math:`\gamma`, weight decay :math:`\lambda`,
+    and current velocity :math:`v`, we use the following update equations
+
+    .. math::
+        v' &= \gamma v - \alpha(\nabla J(\theta; x) + \lambda\theta) \\
+        \theta' &= \theta + v'
+
+    Example usage:
+
+    .. code-block:: python
+
+        from neon.optimizers import GradientDescentMomentum
+
+        # use SGD with learning rate 0.01 and momentum 0.9, while
+        # clipping the gradient magnitude to between -5 and 5.
+        opt = GradientDescentMomentum(0.01, 0.9, gradient_clip_value = 5)
     """
 
     def __init__(self, learning_rate, momentum_coef, stochastic_round=False,
@@ -181,8 +427,8 @@ class GradientDescentMomentum(Optimizer):
                  name=None, schedule=Schedule()):
         """
         Arguments:
-            learning_rate (float): the multiplicative coefficient of updates
-            momentum_coef (float): the coefficient of momentum
+            learning_rate (float): Multiplicative coefficient of updates
+            momentum_coef (float): Coefficient of momentum
             stochastic_round (bool, optional): Set this to True for stochastic
                                                rounding.  If False (default)
                                                rounding will be to nearest.  If
@@ -191,8 +437,7 @@ class GradientDescentMomentum(Optimizer):
                                                this only affects the GPU
                                                backend.
             wdecay (float, optional): Amount of weight decay.  Defaults to 0
-            gradient_clip_norm (float, optional): Value to scale gradients'
-                                                  magnitude by.
+            gradient_clip_norm (float, optional): Target gradient norm.
                                                   Defaults to None.
             gradient_clip_value (float, optional): Value to element-wise clip
                                                    gradients.
@@ -200,7 +445,7 @@ class GradientDescentMomentum(Optimizer):
             name (str, optional): the optimizer's layer's pretty-print name.
                                   Defaults to "gdm".
             schedule (neon.optimizers.optimizer.Schedule, optional): Learning
-                rate schedule.  Defaults to a constant learning rate.
+                        rate schedule.  Defaults to a constant learning rate.
         """
         super(GradientDescentMomentum, self).__init__(name=name)
         self.learning_rate, self.momentum_coef = (learning_rate, momentum_coef)
@@ -243,6 +488,19 @@ class RMSProp(Optimizer):
 
     """
     Root Mean Square propagation.
+
+    Root Mean Square (RMS) propagation protects against vanishing and
+    exploding gradients. In RMSprop, the gradient is divided by a running
+    average of recent gradients. Given the parameters :math:`\theta`, gradient :math:`\nabla J`,
+    we keep a running average :math:`\mu` of the last :math:`1/\lambda` gradients squared.
+    The update equations are then given by
+
+    .. math::
+
+        \mu' &= \lambda\mu + (1-\lambda)(\nabla J)^2 \\
+        \theta' &= \theta - \frac{\alpha}{\sqrt{\mu + \epsilon} + \epsilon}\nabla J
+
+    where we use :math:`\epsilon` as a (small) smoothing factor to prevent from dividing by zero.
     """
 
     def __init__(self, stochastic_round=False, decay_rate=0.95, learning_rate=2e-3, epsilon=1e-6,
@@ -257,8 +515,7 @@ class RMSProp(Optimizer):
             decay_rate (float): decay rate of states
             learning_rate (float): the multiplication coefficent of updates
             epsilon (float): smoothing epsilon to avoid divide by zeros
-            gradient_clip_norm (float, optional): Value to scale gradients'
-                                                  magnitude by.
+            gradient_clip_norm (float, optional): Target gradient norm.
                                                   Defaults to None.
             gradient_clip_value (float, optional): Value to element-wise clip
                                                    gradients.
@@ -313,7 +570,32 @@ class RMSProp(Optimizer):
 class Adagrad(Optimizer):
 
     """
-     AdaGrad learning rule updates.  See Duchi2011 for instance
+    Adagrad optimization algorithm.
+
+    Adagrad is an algorithm that adapts the learning rate individually for each parameter
+    by dividing by the :math:`L_2`-norm of all previous gradients. Given the parameters
+    :math:`\theta`, gradient :math:`\nabla J`, accumulating norm :math:`G`, and smoothing
+    factor :math:`\epsilon`, we use the update equations:
+
+    .. math::
+
+        G' &= G + (\nabla J)^2 \\
+        \theta' &= \theta - \frac{\alpha}{\sqrt{G' + \epsilon}} \nabla J
+
+    where the smoothing factor :math:`epsilon` prevents from dividing by zero.
+    By adjusting the learning rate individually for each parameter, Adagrad adapts
+    to the geometry of the error surface. Differently scaled weights have appropriately scaled
+    update steps.
+
+    Example usage:
+
+    .. code-block:: python
+
+        from neon.optimizers import Adagrad
+
+        # use Adagrad with a learning rate of 0.01
+        optimizer = Adagrad(learning_rate=0.01, epsilon=1e-6)
+
     """
 
     def __init__(self, stochastic_round=False, learning_rate=0.01, epsilon=1e-6,
@@ -326,8 +608,7 @@ class Adagrad(Optimizer):
                                      Only affects the gpu backend.
             learning_rate (float): the multiplication coefficent of updates
             epsilon (float): smoothing epsilon to avoid divide by zeros
-            gradient_clip_norm (float, optional): Value to scale gradients'
-                                                  magnitude by.
+            gradient_clip_norm (float, optional): Target gradient norm.
                                                   Defaults to None.
             gradient_clip_value (float, optional): Value to element-wise clip
                                                    gradients.
@@ -374,8 +655,32 @@ class Adagrad(Optimizer):
 class Adadelta(Optimizer):
 
     """
-    Adadelta based learning rule updates.
-    See Zeiler2012 for instance.
+    Adadelta optimization algorithm.
+
+    Similar to RMSprop, Adadelta tracks the running average of the
+    gradients, :math:`\mu_J`, over a window size :math:`1/\lambda`, where
+    :math:`\lambda` is the parameter ``decay``. Adadelta also tracks an average of the
+    recent update steps, which we denote as :math:`\mu_\theta`, and sets the learning rate
+    as the ratio of the two averages:
+
+    .. math::
+        \mu_J' &= \lambda\mu_J + (1-\lambda) (\nabla J)^2 \\
+        \Delta \theta &= \sqrt{\frac{\mu_\theta + \epsilon}{\mu_J' + \epsilon}} \nabla J \\
+        \mu_\theta &= \lambda \mu_\theta + (1-\rho) (\Delta \theta)^2 \\
+        \theta &= \theta - \Delta \theta
+
+    Note that the learning rate is a ratio of the average updates from the
+    previous step, :math:`\mu_\theta`, divided by the average gradients including the current step,
+    :math:`\mu'_J`.
+
+    Example usage:
+
+    .. code-block:: python
+
+        from neon.optimizers import Adadelta
+
+        # use Adagrad with a learning rate of 0.01
+        optimizer = Adadelta(decay=0.95, epsilon=1e-6)
     """
 
     def __init__(self, stochastic_round=False, decay=0.95, epsilon=1e-6, name=None):
@@ -425,7 +730,37 @@ class Adadelta(Optimizer):
 class Adam(Optimizer):
 
     """
-    Adam based learning rule updates. http://arxiv.org/pdf/1412.6980v8.pdf
+    Adam optimizer.
+
+    The Adam optimizer combines features from RMSprop and Adagrad. We
+    accumulate both the first and second moments of the gradient with decay
+    rates :math:`\beta_1` and :math:`\beta_2` corresponding to window sizes of
+    :math:`1/\beta_1` and :math:`1/\beta_2`, respectively.
+
+    .. math::
+        m' &= \beta_1 m + (1-\beta_1) \nabla J \\
+        v' &= \beta_2 v + (1-\beta_2) (\nabla J)^2
+
+    We update the parameters by the ratio of the two moments:
+
+    .. math::
+        \theta = \theta - \alpha \frac{\hat{m}'}{\sqrt{\hat{v}'}+\epsilon}
+
+    where we compute the bias-corrected moments :math:`\hat{m}'` and :math:`\hat{v}'` via
+
+    .. math::
+        \hat{m}' &= m'/(1-\beta_1^t) \\
+        \hat{v}' &= v'/(1-\beta_1^t)
+
+    Example usage:
+
+    .. code-block:: python
+
+        from neon.optimizers import Adam
+
+        # use Adam
+        optimizer = Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.999)
+
     """
 
     def __init__(self, stochastic_round=False, learning_rate=0.001, beta_1=0.9, beta_2=0.999,
@@ -480,6 +815,61 @@ class MultiOptimizer(Optimizer):
 
     """
     A wrapper class for using multiple Optimizers within the same model.
+
+    To assign different optimizers to different layers we first define
+    the different optimizers:
+
+    .. code-block:: python
+
+        from neon.optimizers import GradientDescentMomentum, RMSprop
+
+        optimizer_A = GradientDescentMomentum(learning_rate=0.01, momentum_coef=0.9)
+        optimizer_B = GradientDescentMomentum(learning_rate=0.05, momentum_coef=0.9)
+        optimizer_C = RMSprop(learning_rate=2e-3, decay_rate=0.95)
+
+    Then, we instantiate this class and pass a
+    dictionary mapping layers to optimizers. The keys can either be:
+    ``default``, a layer class name (e.g. ``Bias``), or the Layer's name
+    attribute. The latter takes precedence for finer layer-to-layer control.
+
+    For example, if we have the following layers,
+
+    .. code-block:: python
+
+        layers = []
+        layers.append(Linear(nout = 100, init=Gaussian(), name="layer_one"))
+        layers.append(Linear(nout = 50, init=Gaussian(), name="layer_two"))
+        layers.append(Affine(nout = 5, init=Gaussian(), activation=Softmax()))
+
+    we can define multiple optimizers with
+
+    .. code-block:: python
+
+        from neon.optimizers import MultiOptimizer
+
+        # dictionary of mappings
+        mapping = {'default': optimizer_A, # default optimizer
+                   'Linear': optimizer_B, # all layers from the Linear class
+                   'layer_two': optimizer_C} # this overrides the previous entry
+
+        # use multiple optimizers
+        opt = MultiOptimizer(mapping)
+
+    After definition, we have the following mapping
+
+    +----------------------+----------------------------+
+    | Layer                | Optimizer                  |
+    +======================+============================+
+    | ``layer_one``        | ``optimizer_B``            |
+    +----------------------+----------------------------+
+    | ``layer_two``        | ``optimizer_C``            |
+    +----------------------+----------------------------+
+    | ``Affine.Linear``    | ``optimizer_B``            |
+    +----------------------+----------------------------+
+    | ``Affine.Bias``      | ``optimizer_A``            |
+    +----------------------+----------------------------+
+    | ``Affine.Softmax``   | ``None (no parameters)``   |
+    +----------------------+----------------------------+
     """
 
     def __init__(self, optimizer_mapping, name=None):
@@ -487,13 +877,9 @@ class MultiOptimizer(Optimizer):
 
         Args:
             optimizer_mapping (dict): dictionary specifying the mapping of layers to optimizers.
-                Key: Layer class name or Layer `name` attribute. The latter takes
-                precedence over the former for finer layer-to-layer control.
-                Don't name your layers ``'default'``. Value: the optimizer object to use for those
-                layers. For instance, ``{'default': optimizer1, 'Bias': optimizer2,
-                'special_bias': optimizer3}`` will use ``optimizer3`` for the layer named
-                ``special_bias``, ``optimizer2`` for all other Bias layers, and ``optimizer1``
-                for all other layers.
+                Key: ``'default'``, layer class name or layer `name` attribute.
+                Don't name your layers ``'default'``. Value: the optimizer object to
+                use for those layers.
         """
         super(MultiOptimizer, self).__init__(name=name)
         self.optimizer_mapping = optimizer_mapping
@@ -522,7 +908,7 @@ class MultiOptimizer(Optimizer):
             desc['config']['optimizer_mapping'][key] = opt_desc
         return desc
 
-    def map_optimizers(self, layer_list):
+    def _map_optimizers(self, layer_list):
         """
         maps the optimizers to their corresponding layers
         """
@@ -544,7 +930,7 @@ class MultiOptimizer(Optimizer):
                 map_list[opt].append(layer)
         return map_list
 
-    def reset_mapping(self, new_mapping):
+    def _reset_mapping(self, new_mapping):
         """
         Pass this optimizer a new mapping, and on subsequent optimize call, the
         mapping will be refreshed (since map_list will be recreated)
@@ -564,7 +950,7 @@ class MultiOptimizer(Optimizer):
         """
 
         if self.map_list is None:
-            self.map_list = self.map_optimizers(layer_list)
+            self.map_list = self._map_optimizers(layer_list)
 
         for opt in self.map_list:
             opt.optimize(self.map_list[opt], epoch)

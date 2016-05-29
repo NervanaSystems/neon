@@ -171,7 +171,7 @@ def test_multi_optimizer(backend_default):
                           'LSTM': opt_rms_1,
                           'GRU': opt_rms_1})
 
-    map_list = opt.map_optimizers(layer_list)
+    map_list = opt._map_optimizers(layer_list)
     assert map_list[opt_adam][0].__class__.__name__ == 'Convolution'
     assert map_list[opt_ada][0].__class__.__name__ == 'Bias'
     assert map_list[opt_rms][0].__class__.__name__ == 'Linear'
