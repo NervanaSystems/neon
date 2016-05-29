@@ -54,6 +54,9 @@ class Optimizer(NervanaObject):
     method is called at every minibatch to update the layer parameters.
     '''
     def __init__(self, name=None):
+        """
+        Class constructor.
+        """
         super(Optimizer, self).__init__(name=name)
 
     @classmethod
@@ -86,13 +89,11 @@ class Optimizer(NervanaObject):
 
         Arguments:
             param_list (list): List of layer parameters
-            clip_norm (float, optional): target norm for the gradients. If not provided
+            clip_norm (float, optional): Target norm for the gradients. If not provided
                                          the returned scale_factor will equal 1.
 
         Returns:
-            scale_factor (float): computed scale factor such that the RMS
-                                  average of the gradients across all layers
-                                  will be <= clip_norm.
+            scale_factor (float): Computed scale factor.
         """
         scale_factor = 1
         if clip_norm:
@@ -105,7 +106,7 @@ class Optimizer(NervanaObject):
 
     def clip_gradient_value(self, grad, clip_value=None):
         """
-        Element-wise clip a list of gradients to between -``clip_value`` and ``clip_value``.
+        Element-wise clip a list of gradients to between ``-clip_value`` and ``+clip_value``.
 
         Arguments:
             grad (list): List of gradients for a single layer
@@ -114,8 +115,7 @@ class Optimizer(NervanaObject):
                                                    Defaults to None.
 
         Returns:
-            grad (list): List of gradients, but clipped to between -clip_value
-                         and +clip_value
+            grad (list): List of clipped gradients.
 
         """
         if clip_value:
@@ -131,6 +131,7 @@ class Schedule(NervanaObject):
     By default implements a constant learning rate:
 
     .. code-block:: python
+
         # Constant learning rate of 0.01 across training epochs
         optimizer = GradientDescentMomentum(0.01, 0.9, schedule = Schedule())
 
@@ -139,6 +140,7 @@ class Schedule(NervanaObject):
     For example,
 
     .. code-block:: python
+
         schedule = Schedule(step_config=[2, 6], change=0.5)
         optimizer = GradientDescentMomentum(1.0, 0.9, schedule = Schedule())
 
@@ -162,6 +164,8 @@ class Schedule(NervanaObject):
 
     def __init__(self, step_config=None, change=1.):
         """
+        Class constructor.
+
         Arguments:
             step_config (list, optional): Configure the step times (list of epoch indices).
                                           Defaults to None (constant).
@@ -225,12 +229,15 @@ class StepSchedule(Schedule):
     will set the learning rate at ``step[i]`` to ``change[i]``. For example, the call:
 
     .. code-block:: python
+
         schedule = Schedule(step_config=[2, 6], change=[0.6, 0.4])
 
     will set the learning rate to 0.6 at step 2, and to 0.4 at step 6.
     """
     def __init__(self, step_config, change):
         """
+        Class constructor.
+
         Arguments:
             step_config (list): Configure the step times (list of epoch indices)
             change (list): List of learning rates. Must be same length as step_config
@@ -274,26 +281,29 @@ class PowerSchedule(Schedule):
     the factor ``change`` every ``step_config`` epochs. For example,
 
     .. code-block:: python
+
         schedule = Schedule(step_config=2, change=0.5)
         optimizer = GradientDescentMomentum(0.1, 0.9, schedule=schedule)
 
     will yield a learning rate schedule of:
 
     .. csv-table::
-    :header: "Epoch", "LR"
-    :widths: 20, 10
+        :header: "Epoch", "LR"
+        :widths: 20, 10
 
-    0, 0.1
-    1, 0.1
-    2, 0.05
-    3, 0.05
-    4, 0.025
-    5, 0.025
-    6, 0.0125
-    7, 0.0125
+        0, 0.1
+        1, 0.1
+        2, 0.05
+        3, 0.05
+        4, 0.025
+        5, 0.025
+        6, 0.0125
+        7, 0.0125
     """
     def __init__(self, step_config, change):
         """
+        Class constructor.
+
         Arguments:
             step_config (int): Learning rate update interval (in epochs)
             change (int): Update factor
@@ -329,12 +339,15 @@ class ExpSchedule(Schedule):
     Exponential learning rate schedule. This schedule implements
 
     .. math::
-        \alpha(t) = \frac{\alpha_\circ}{1 + \beta t}
+        \\alpha(t) = \\frac{\\alpha_\\circ}{1 + \\beta t}
 
-    where :math:`\beta` is the decay rate, and :math:`\alpha_\circ` is the initial learning rate.
+    where :math:`\\beta` is the decay rate, and :math:`\\alpha_\\circ` is the
+    initial learning rate.
     """
     def __init__(self, decay):
         """
+        Class constructor.
+
         Arguments:
             decay (float): Decay rate.
         """
@@ -358,17 +371,19 @@ class PolySchedule(Schedule):
     """
     Polynomial learning rate schedule.
 
-    This schedule takes as input the total number of epochs :math:`T` and a power :math:`\beta`,
+    This schedule takes as input the total number of epochs :math:`T` and a power :math:`\\beta`,
     and produces the learning schedule:
 
     .. math::
-        \alpha(t) = \alpha_\circ \times\left(1-\frac{t}{T}\right)^\beta
+        \\alpha(t) = \\alpha_\\circ \\times\\left(1-\\frac{t}{T}\\right)^\\beta
 
-    where :math:`\alpha_\circ` is the initial learning rate.
+    where :math:`\\alpha_\\circ` is the initial learning rate.
     """
 
     def __init__(self, total_epochs, power):
         """
+        Class constructor.
+
         Arguments:
             total_epochs (int): Total number of epochs over which to calculate interpolated decay
             power (float): Total decay parameter
@@ -395,12 +410,12 @@ class GradientDescentMomentum(Optimizer):
     """
     Stochastic gradient descent with momentum.
 
-    Given the parameters :math:`\theta`, the learning rate :math:`\alpha`,
-    and the gradients :math:`\nabla J(\theta; x)`
+    Given the parameters :math:`\\theta`, the learning rate :math:`\\alpha`,
+    and the gradients :math:`\\nabla J(\\theta; x)`
     computed on the minibatch data :math:`x`, SGD updates the parameters via
 
     .. math::
-        \theta' = \theta - \alpha\nabla J(\theta; x)
+        \\theta' = \\theta - \\alpha\\nabla J(\\theta; x)
 
     Here we implement SGD with momentum. Momentum tracks the history of
     gradient updates to help the system move faster through saddle points.
@@ -408,8 +423,8 @@ class GradientDescentMomentum(Optimizer):
     and current velocity :math:`v`, we use the following update equations
 
     .. math::
-        v' &= \gamma v - \alpha(\nabla J(\theta; x) + \lambda\theta) \\
-        \theta' &= \theta + v'
+        v' = \\gamma v - \\alpha(\\nabla J(\\theta; x) + \\lambda\\theta)
+        theta' = \\theta + v'
 
     Example usage:
 
@@ -426,6 +441,8 @@ class GradientDescentMomentum(Optimizer):
                  wdecay=0.0, gradient_clip_norm=None, gradient_clip_value=None,
                  name=None, schedule=Schedule()):
         """
+        Class constructor.
+
         Arguments:
             learning_rate (float): Multiplicative coefficient of updates
             momentum_coef (float): Coefficient of momentum
@@ -491,22 +508,27 @@ class RMSProp(Optimizer):
 
     Root Mean Square (RMS) propagation protects against vanishing and
     exploding gradients. In RMSprop, the gradient is divided by a running
-    average of recent gradients. Given the parameters :math:`\theta`, gradient :math:`\nabla J`,
-    we keep a running average :math:`\mu` of the last :math:`1/\lambda` gradients squared.
+    average of recent gradients. Given the parameters :math:`\\theta`, gradient :math:`\\nabla J`,
+    we keep a running average :math:`\\mu` of the last :math:`1/\\lambda` gradients squared.
     The update equations are then given by
 
     .. math::
 
-        \mu' &= \lambda\mu + (1-\lambda)(\nabla J)^2 \\
-        \theta' &= \theta - \frac{\alpha}{\sqrt{\mu + \epsilon} + \epsilon}\nabla J
+        \\mu' &= \\lambda\\mu + (1-\\lambda)(\\nabla J)^2
 
-    where we use :math:`\epsilon` as a (small) smoothing factor to prevent from dividing by zero.
+    .. math::
+
+        \\theta' &= \\theta - \\frac{\\alpha}{\\sqrt{\\mu + \\epsilon} + \\epsilon}\\nabla J
+
+    where we use :math:`\\epsilon` as a (small) smoothing factor to prevent from dividing by zero.
     """
 
     def __init__(self, stochastic_round=False, decay_rate=0.95, learning_rate=2e-3, epsilon=1e-6,
                  gradient_clip_norm=None, gradient_clip_value=None, name=None,
                  schedule=Schedule()):
         """
+        Class constructor.
+
         Arguments:
             stochastic_round (bool): Set this to True for stochastic rounding.
                                      If False rounding will be to nearest.
@@ -574,15 +596,18 @@ class Adagrad(Optimizer):
 
     Adagrad is an algorithm that adapts the learning rate individually for each parameter
     by dividing by the :math:`L_2`-norm of all previous gradients. Given the parameters
-    :math:`\theta`, gradient :math:`\nabla J`, accumulating norm :math:`G`, and smoothing
-    factor :math:`\epsilon`, we use the update equations:
+    :math:`\\theta`, gradient :math:`\\nabla J`, accumulating norm :math:`G`, and smoothing
+    factor :math:`\\epsilon`, we use the update equations:
 
     .. math::
 
-        G' &= G + (\nabla J)^2 \\
-        \theta' &= \theta - \frac{\alpha}{\sqrt{G' + \epsilon}} \nabla J
+        G' = G + (\\nabla J)^2
 
-    where the smoothing factor :math:`epsilon` prevents from dividing by zero.
+    .. math::
+
+        \\theta' = \\theta - \\frac{\\alpha}{\sqrt{G' + \\epsilon}} \\nabla J
+
+    where the smoothing factor :math:`\\epsilon` prevents from dividing by zero.
     By adjusting the learning rate individually for each parameter, Adagrad adapts
     to the geometry of the error surface. Differently scaled weights have appropriately scaled
     update steps.
@@ -601,6 +626,8 @@ class Adagrad(Optimizer):
     def __init__(self, stochastic_round=False, learning_rate=0.01, epsilon=1e-6,
                  gradient_clip_norm=None, gradient_clip_value=None, name=None):
         """
+        Class constructor.
+
         Arguments:
             stochastic_round (bool): Set this to True for stochastic rounding.
                                      If False rounding will be to nearest.
@@ -658,33 +685,45 @@ class Adadelta(Optimizer):
     Adadelta optimization algorithm.
 
     Similar to RMSprop, Adadelta tracks the running average of the
-    gradients, :math:`\mu_J`, over a window size :math:`1/\lambda`, where
-    :math:`\lambda` is the parameter ``decay``. Adadelta also tracks an average of the
-    recent update steps, which we denote as :math:`\mu_\theta`, and sets the learning rate
+    gradients, :math:`\\mu_J`, over a window size :math:`1/\\lambda`, where
+    :math:`\\lambda` is the parameter ``decay``. Adadelta also tracks an average of the
+    recent update steps, which we denote as :math:`\\mu_\\theta`, and sets the learning rate
     as the ratio of the two averages:
 
     .. math::
-        \mu_J' &= \lambda\mu_J + (1-\lambda) (\nabla J)^2 \\
-        \Delta \theta &= \sqrt{\frac{\mu_\theta + \epsilon}{\mu_J' + \epsilon}} \nabla J \\
-        \mu_\theta &= \lambda \mu_\theta + (1-\rho) (\Delta \theta)^2 \\
-        \theta &= \theta - \Delta \theta
+
+        \\mu_J' &= \\lambda\\mu_J + (1-\\lambda) (\\nabla J)^2
+
+    .. math::
+
+        \\Delta \\theta &= \\sqrt{\\frac{\\mu_\\theta + \\epsilon}{\\mu_J' + \\epsilon}} \\nabla J
+
+    .. math::
+
+        \\mu_\\theta &= \\lambda \\mu_\\theta + (1-\\rho) (\\Delta \\theta)^2
+
+    .. math::
+
+        \\theta &= \\theta - \\Delta \\theta
 
     Note that the learning rate is a ratio of the average updates from the
-    previous step, :math:`\mu_\theta`, divided by the average gradients including the current step,
-    :math:`\mu'_J`.
+    previous step, :math:`\\mu_\\theta`, divided by the average gradients including the current
+    step, :math:`\\mu'_J`.
 
     Example usage:
 
     .. code-block:: python
 
         from neon.optimizers import Adadelta
-
         # use Adagrad with a learning rate of 0.01
         optimizer = Adadelta(decay=0.95, epsilon=1e-6)
+
     """
 
     def __init__(self, stochastic_round=False, decay=0.95, epsilon=1e-6, name=None):
         """
+        Class constructor.
+
         Args:
             stochastic_round (bool): Set this to True for stochastic rounding.
                                      If False rounding will be to nearest.
@@ -734,23 +773,27 @@ class Adam(Optimizer):
 
     The Adam optimizer combines features from RMSprop and Adagrad. We
     accumulate both the first and second moments of the gradient with decay
-    rates :math:`\beta_1` and :math:`\beta_2` corresponding to window sizes of
-    :math:`1/\beta_1` and :math:`1/\beta_2`, respectively.
+    rates :math:`\\beta_1` and :math:`\\beta_2` corresponding to window sizes of
+    :math:`1/\\beta_1` and :math:`1/\\beta_2`, respectively.
 
     .. math::
-        m' &= \beta_1 m + (1-\beta_1) \nabla J \\
-        v' &= \beta_2 v + (1-\beta_2) (\nabla J)^2
+        m' &= \\beta_1 m + (1-\\beta_1) \\nabla J
+
+    .. math::
+        v' &= \\beta_2 v + (1-\\beta_2) (\\nabla J)^2
 
     We update the parameters by the ratio of the two moments:
 
     .. math::
-        \theta = \theta - \alpha \frac{\hat{m}'}{\sqrt{\hat{v}'}+\epsilon}
+        \\theta = \\theta - \\alpha \\frac{\\hat{m}'}{\\sqrt{\\hat{v}'}+\\epsilon}
 
-    where we compute the bias-corrected moments :math:`\hat{m}'` and :math:`\hat{v}'` via
+    where we compute the bias-corrected moments :math:`\\hat{m}'` and :math:`\\hat{v}'` via
 
     .. math::
-        \hat{m}' &= m'/(1-\beta_1^t) \\
-        \hat{v}' &= v'/(1-\beta_1^t)
+        \\hat{m}' &= m'/(1-\\beta_1^t)
+
+    .. math::
+        \\hat{v}' &= v'/(1-\\beta_1^t)
 
     Example usage:
 
@@ -766,6 +809,8 @@ class Adam(Optimizer):
     def __init__(self, stochastic_round=False, learning_rate=0.001, beta_1=0.9, beta_2=0.999,
                  epsilon=1e-8, name="adam"):
         """
+        Class constructor.
+
         Args:
             stochastic_round (bool): Set this to True for stochastic rounding.
                                      If False rounding will be to nearest.
@@ -874,6 +919,7 @@ class MultiOptimizer(Optimizer):
 
     def __init__(self, optimizer_mapping, name=None):
         """
+        Class constructor.
 
         Args:
             optimizer_mapping (dict): dictionary specifying the mapping of layers to optimizers.

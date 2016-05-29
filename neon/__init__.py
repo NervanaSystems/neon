@@ -44,6 +44,7 @@ logging.Logger.display = display
 logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
+
 def get_args(func):
     """
     returns a dictionary of arg_name:default_values for the input function
@@ -63,17 +64,19 @@ class NervanaObject(object):
     """
     Base (global) object available to all other classes.
 
-    Args:
-        name (str, optional)
-
     Attributes:
-        be (Backend): Hardware backend being used.  See `backends` dir
-        name (str, optional): The name assigned to a given instance.
+        be (Backend): Hardware backend being used.
     """
     be = None
     __counter = 0
 
     def __init__(self, name=None):
+        """
+        Class constructor.
+
+        Args:
+            name (str, optional): Name to assign instance of this class.
+        """
         if name is None:
             name = '{}_{}'.format(self.classnm, self.__counter)
         self.name = name
@@ -90,18 +93,28 @@ class NervanaObject(object):
     @property
     def classnm(self):
         """
-        Convenience method for getting the class name
+        Returns the class name.
         """
         return self.__class__.__name__
 
     @property
     def modulenm(self):
         """
-        Convenience method for getting the full module path
+        Returns the full module path.
         """
         return self.__class__.__module__ + '.' + self.__class__.__name__
 
     def get_description(self, skip=[], **kwargs):
+        """
+        Returns a ``dict`` that contains all necessary information needed
+        to serialize this object.
+
+        Arguments:
+            skip (list): Objects to omit from the dictionary.
+
+        Returns:
+            (dict): Dictionary format for object information.
+        """
         if type(skip) is not list:
             skip = list(skip)
         else:

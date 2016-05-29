@@ -18,14 +18,21 @@ from neon import NervanaObject
 class Transform(NervanaObject):
 
     """
-    Base class for activation or cost functions and their derivatives.
+    Base class for activation or cost functions and their derivatives. Child classes
+    can either implement the below ``__call__`` and ``bprop`` methods, or alternatively
+    define ``self.func`` and ``self.funcgrad``. The latter is typically used for code
+    compactness when the operations can be fit into a lambda function.
     """
     def __init__(self, name=None):
+        """
+        Class constructor.
+        """
         super(Transform, self).__init__(name)
 
     def __call__(self, x):
         """
         Compute f(x)
+
         Args:
             x (Tensor or OpTree): input
 
@@ -36,7 +43,8 @@ class Transform(NervanaObject):
 
     def bprop(self, x):
         """
-        Compute f'(x), i.e. the derivative of f(x)
+        Returns the derivative of f(x).
+
         Args:
             x (Tensor or OpTree): input
 

@@ -21,7 +21,11 @@ import numpy as np
 class Cost(NervanaObject):
 
     """
-    Base class for the cost functions.
+    Base class for cost functions that are used during training.
+
+    Child classes can either implement the below `__call__` and `bprop` methods, or alternatively
+    define `self.func` and self.funcgrad`. The latter is typically used for code
+    compactness when the operations can be fit into a lambda function.
     """
 
     def __call__(self, y, t):
@@ -51,55 +55,31 @@ class Cost(NervanaObject):
         return self.funcgrad(y, t)
 
 
-class Metric(Cost):
-
-    """
-    Base class for Metric.
-
-    Meant for non-smooth costs that we just want to check on validation.
-    """
-
-    def __call__(self, y, t):
-        """
-        To implement in derived classes
-
-        Args:
-            y (Tensor or OpTree): Output of previous layer or model
-            t (Tensor or OpTree): True targets corresponding to y
-
-        Returns:
-            float: Returns the metric
-        """
-        raise NotImplementedError()
-
-    def bprop(self, y, t):
-        """
-        Not relevant for Metric
-        """
-        pass
-
-
 class CrossEntropyBinary(Cost):
 
     """
-    Applies the binary cross entropy function.
+    Binary cross-entropy cost.
+
+    The binary cross-entropy cost is used when the labels have two classes: 0 and 1.
+    The cost is computed as :math:`C = \sum -t\log(y)-(1-t)\log(1-y)`, where :math:`t` is
+    the target label and :math:`y` is the network output.
 
     Note:
-        bprop assumes that shortcut is used to calculate derivative
+    The backpropagation assumes that this cost is coupled with an output layer
+    that uses the Softmax() activation function. This allows for a shortcut in
+    the deriviate that saves computation.
     """
 
     def __init__(self, scale=1):
         """
-        Initialize the binary cross entropy function
-
         Args:
-            scale (float): amount by which to scale the backpropagated error
+            scale (float, optional): Amount by which to scale the backpropagated error (default: 1)
         """
         self.scale = scale
 
     def __call__(self, y, t):
         """
-        Applies the binary cross entropy cost function
+        Returns the binary cross entropy cost.
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model
@@ -115,7 +95,7 @@ class CrossEntropyBinary(Cost):
 
     def bprop(self, y, t):
         """
-        Computes the shortcut derivative of the binary cross entropy cost function
+        Returns the derivative of the binary cross entropy cost.
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model
@@ -131,19 +111,27 @@ class CrossEntropyBinary(Cost):
 class CrossEntropyMulti(Cost):
 
     """
-    Applies the multiclass cross entropy function.
+    Multi-class cross-entropy cost.
+
+    The multi-class cross-entropy cost is used when the labels have multiple classes.
+    The cost is computed as :math:`C = \sum -t*\log(y)`, where :math:`t` is
+    the target label and :math:`y` is the network output.
+
+    The target labels :math:`t` are expected to be in an one-hot encoding. By default,
+    the natural logarithm is used, but a cost that returns bits instead (e.g. log base 2)
+    can also be specified with the ``usebits`` argument.
 
     Note:
-        bprop assumes that shortcut is used to calculate derivative
+        The back-propogation assumes that this cost is coupled with an output layer
+        that uses the Softmax() activation function. This allows for a shortcut in
+        the deriviate that saves computation.
     """
 
     def __init__(self, scale=1, usebits=False):
         """
-        Initialize the multiclass cross entropy function
-
         Args:
-            scale (float): amount by which to scale the backpropagated error
-            usebits (boolean): whether to display costs in bits or nats (default)
+            scale (float, optional): scale factor for the backpropagated error (default: 1)
+            usebits (boolean, optional): Display costs in bits (default: False)
         """
         super(CrossEntropyMulti, self).__init__()
         self.usebits = usebits
@@ -152,7 +140,7 @@ class CrossEntropyMulti(Cost):
 
     def __call__(self, y, t):
         """
-        Applies the multiclass cross entropy cost function
+        Returns the multiclass cross entropy cost
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model
@@ -166,8 +154,7 @@ class CrossEntropyMulti(Cost):
 
     def bprop(self, y, t):
         """
-        Computes the shortcut derivative of the multiclass cross entropy cost
-        function
+        Returns the derivative of the multiclass cross entropy cost.
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model
@@ -183,12 +170,14 @@ class CrossEntropyMulti(Cost):
 class SumSquared(Cost):
 
     """
-    Applies the squared error cost function.
+    Total Squared Error cost function. Computes :math:`\sum_i (y_i-t_i)^2`.
+
+
     """
 
     def __init__(self):
         """
-        Initialize the squared error cost functions
+        Define the cost function and its gradient as lambda functions.
         """
         self.func = lambda y, t: self.be.sum(self.be.square(y - t), axis=0) / 2.
         self.funcgrad = lambda y, t: (y - t)
@@ -197,12 +186,12 @@ class SumSquared(Cost):
 class MeanSquared(Cost):
 
     """
-    Applies the mean squared error cost function.
+    Average Squared Error cost function. Computes :math:`\\frac{1}{N}\\sum_i (y_i-t_i)^2`.
     """
 
     def __init__(self):
         """
-        Initialize the mean squared error cost function
+        Define the cost function and its gradient as lambda functions.
         """
         self.func = lambda y, t: self.be.mean(self.be.square(y - t), axis=0) / 2.
         self.funcgrad = lambda y, t: (y - t) / y.shape[0]
@@ -211,31 +200,65 @@ class MeanSquared(Cost):
 class SmoothL1Loss(Cost):
 
     """
-    A smooth L1 loss cost function from Fast-RCNN
-    http://arxiv.org/pdf/1504.08083v2.pdf
-    L1 loss is less sensitive to the outlier than L2 loss used in RCNN.
+    Smooth L1 cost function.
+
+    The L1 loss is less sensitive to outliers than the L2 loss since.
+    See `Girshick 2015 <http://arxiv.org/pdf/1504.08083v2.pdf>`__. This
+    cost is used for training object localization models such as Fast-RCNN.
     """
 
     def smoothL1(self, x):
+        """
+        Returns the Smooth-L1 cost
+        """
         return (0.5 * self.be.square(x) * (self.be.absolute(x) < 1) +
                 (self.be.absolute(x) - 0.5) * (self.be.absolute(x) >= 1))
 
     def smoothL1grad(self, x):
+        """
+        Returns the gradient of the Smooth-L1 cost.
+        """
         return (x * (self.be.absolute(x) < 1) + self.be.sgn(x) *
                 (self.be.absolute(x) >= 1))
 
     def __init__(self):
         """
-        Initialize the smooth L1 loss cost function
+        Define the cost function and its gradient as lambda functions.
         """
         self.func = lambda y, t: self.be.sum(self.smoothL1(y - t), axis=0)
         self.funcgrad = lambda y, t: self.smoothL1grad(y - t)
 
 
+class Metric(Cost):
+
+    """
+    Base class for Metrics. Metrics are quantities not used during training
+    for the back-propogration but are useful to compute and display to check
+    on progress.
+
+    For example, when training on image classification network,
+    we may want to use the Cross-entropy cost to train the weights, but display
+    the misclassification rate metric.
+    """
+
+    def __call__(self, y, t):
+        """
+        Args:
+            y (Tensor or OpTree): Output of previous layer or model
+            t (Tensor or OpTree): True targets corresponding to y
+
+        Returns:
+            float: Returns the metric
+        """
+        raise NotImplementedError()
+
+
 class LogLoss(Metric):
 
     """
-    Compute logloss.
+    LogLoss metric.
+
+    Computes :math:`\\log\\left(\\sum y*t\\right)`.
     """
 
     def __init__(self):
@@ -260,10 +283,17 @@ class LogLoss(Metric):
 class TopKMisclassification(Metric):
 
     """
-    Compute logloss, top1, and topk misclassification error metric.
+    Multiple misclassification metrics.
+
+    Computes the LogLoss metric, the Top-1 Misclassification rate, and the Top-K
+    misclassification rate.
     """
 
     def __init__(self, k):
+        """
+        Arguments:
+            k (integer): Number of guesses to allow.
+        """
         self.correctProbs = self.be.iobuf(1)
         self.top1 = self.be.iobuf(1)
         self.topk = self.be.iobuf(1)
@@ -273,15 +303,16 @@ class TopKMisclassification(Metric):
 
     def __call__(self, y, t, calcrange=slice(0, None)):
         """
-        Compute the misclassification error metric
+        Returns a numpy array of metrics for: LogLoss, Top-1, and Top-K.
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model
             t (Tensor or OpTree): True targets corresponding to y
+            calcrange (slice, optional): Slice of data used for the metric (default: all)
 
         Returns:
-            numpy ary : Returns the metrics in numpy array,
-                        [LogLoss, Top 1 misclass, Top k misclass]
+            numpy array : Returns the metrics in a numpy array:
+                          [LogLoss, Top 1 misclass, Top k misclass]
         """
         be = self.be
         self.correctProbs[:] = be.sum(y * t, axis=0)
@@ -298,10 +329,13 @@ class TopKMisclassification(Metric):
 class Misclassification(Metric):
 
     """
-    Compute the misclassification error metric.
+    Misclassification error metric.
     """
 
     def __init__(self):
+        """
+        Initialize the metric.
+        """
         self.preds = self.be.iobuf(1, persist_values=False)
         self.hyps = self.be.iobuf(1, persist_values=False)
         self.outputs = self.preds  # Contains per record metric
@@ -309,7 +343,7 @@ class Misclassification(Metric):
 
     def __call__(self, y, t, calcrange=slice(0, None)):
         """
-        Compute the misclassification error metric
+        Returns the misclassification error metric
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model
@@ -329,7 +363,8 @@ class Misclassification(Metric):
 class Accuracy(Metric):
 
     """
-    Compute the accuracy metric.
+    Accuracy metric (correct rate).
+
     """
 
     def __init__(self):
@@ -340,7 +375,7 @@ class Accuracy(Metric):
 
     def __call__(self, y, t, calcrange=slice(0, None)):
         """
-        Compute the accuracy metric
+        Returns the accuracy.
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model
@@ -359,17 +394,20 @@ class Accuracy(Metric):
 
 class PrecisionRecall(Metric):
     """
-    Compute precision and recall metrics.
+    Precision and Recall metrics.
 
-    Arguments:
-        num_classes (int): Number of different output classes.
-        binarize (bool, optional): If True will attempt to convert the model
-                                   outputs to a one-hot encoding (in place).
-                                   Defaults to False.
-        epsilon (float, optional): Smoothing to apply to avoid divsion by zero.
-                                   Defaults to 1e-6.
+    Typically used in a conjunction with a multi-classification model.
     """
     def __init__(self, num_classes, binarize=False, epsilon=1e-6):
+        """
+        Arguments:
+            num_classes (int): Number of different output classes.
+            binarize (bool, optional): If True will attempt to convert the model
+                                       outputs to a one-hot encoding (in place).
+                                       Defaults to False.
+            epsilon (float, optional): Smoothing to apply to avoid division by zero.
+                                       Defaults to 1e-6.
+        """
         self.outputs = self.be.empty((num_classes, 2))
         self.token_stats = self.be.empty((num_classes, 3))
         self.metric_names = ['Precision', 'Recall']
@@ -381,7 +419,7 @@ class PrecisionRecall(Metric):
 
     def __call__(self, y, t):
         """
-        Compute the precision and recall of a multi-class classification model
+        Returns a numpy array with the precision and recall metrics.
 
         Args:
             y (Tensor or OpTree): Output of previous layer or model (we assume
@@ -391,7 +429,7 @@ class PrecisionRecall(Metric):
                                   already binarized)
 
         Returns:
-            ndarray: Returns the class averaged precision (item 0) and recall (item
+            ndarray: The class averaged precision (item 0) and recall (item
                      1) values.  Per-class statistics remain in self.outputs.
         """
         if self.bin_buf is not None:
@@ -418,7 +456,7 @@ class PrecisionRecall(Metric):
 class ObjectDetection(Metric):
 
     """
-    Compute the object detection metric includes object label accuracy, and
+    The object detection metric includes object label accuracy, and
     bounding box regression.
     """
 
@@ -428,12 +466,15 @@ class ObjectDetection(Metric):
         self.bbox_ind = 1
 
     def smoothL1(self, x):
+        """
+        Returns the Smooth L1 cost.
+        """
         return (0.5 * self.be.square(x) * (self.be.absolute(x) < 1) +
                 (self.be.absolute(x) - 0.5) * (self.be.absolute(x) >= 1))
 
     def __call__(self, y, t, calcrange=slice(0, None)):
         """
-        Compute the object detection metric
+        Returns a numpy array with the accuracy and the Smooth-L1 metrics.
 
         Args:
             y (Tensor or OpTree): Output of a model like Fast-RCNN model with 2 elements:
@@ -449,7 +490,7 @@ class ObjectDetection(Metric):
                                                     (# classes * 4, # bacthsize for ROIs)
 
         Returns:
-            numpy ary : Returns the metrics in numpy array. Metric has 2 elements
+            numpy ary : Returns the metrics in numpy array [Label Accuracy, Bounding Box Smooth-L1]
         """
 
         self.detectionMetric = self.be.empty((1, t[self.bbox_ind][0].shape[1]))

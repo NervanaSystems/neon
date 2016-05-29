@@ -333,6 +333,8 @@ by providing a schedule.
   :nosignatures:
 
   neon.optimizers.optimizer.Schedule
+  neon.optimizers.optimizer.StepSchedule
+  neon.optimizers.optimizer.PowerSchedule
   neon.optimizers.optimizer.ExpSchedule
   neon.optimizers.optimizer.PolySchedule
 
