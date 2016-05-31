@@ -485,7 +485,6 @@ private:
             Mat gray(size, CV_8U, buf);
             img.copyTo(gray);
             return;
-            return;
         }
 
         // Split into separate channels

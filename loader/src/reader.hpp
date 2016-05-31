@@ -269,14 +269,14 @@ private:
         }
         char* padding = targetBuf + target.size();
         int paddingLen = _index._maxTargetSize - target.size();
-        // TODO: allow padding with values other than 1.
-        memset(padding, 1, paddingLen);
+        // The last character in the alphabet is assumed to represent non-data.
+        memset(padding, _alphabet.size() - 1, paddingLen);
     }
 
     void createCharMap() {
         for (uint i = 0; i < _alphabet.size(); i++) {
             uchar elem = _alphabet[i];
-            _charMap[elem] = i + 1;
+            _charMap[elem] = i;
         }
     }
 

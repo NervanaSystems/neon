@@ -91,6 +91,9 @@ class ImageParams(MediaParams):
         for key, value in self._defaults_.items():
             setattr(self, key, value)
         super(ImageParams, self).__init__(mtype=MediaType.image, **kwargs)
+        for key in ['color_noise_std']:
+            if getattr(self, key) != self._defaults_[key]:
+                raise ValueError('Argument %s must not be specified' % key)
         self.color_noise_std = (self.contrast_max - 100) / 400.
 
     def get_shape(self):
@@ -239,8 +242,12 @@ class AudioParams(MediaParams):
         if self.ctc_cost is True:
             self.target_sizes = loader.be.iobuf(dim0=1, dtype=np.int32)
             self.target_sizes[:] = loader.target_size
+            shape = loader.targets[0].shape[::-1]
+            self.targets = loader.be.empty(shape, dtype=loader.target_dtype)
 
     def process(self, loader, data, targets):
         if self.ctc_cost is True:
-            return data, (targets, self.target_sizes, None)
+            loader.be.copy_transpose(targets, self.targets)
+            return data, (self.targets.reshape((np.prod(targets.shape), 1)),
+                          self.target_sizes, None)
         return data, targets

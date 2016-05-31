@@ -50,11 +50,9 @@ public:
 
         _maxSignalSize = params->_clipDuration * params->_samplingFreq / 1000;
         _buf = new char[4 *  _maxSignalSize];
-        _image = new Mat(_timeSteps, _numFreqs, CV_8UC1);
         if (params->_windowType != 0) {
             _window = new Mat(1, _windowSize, CV_32FC1);
             createWindow(params->_windowType);
-            hann(_windowSize - 1);
         }
         assert(params->_randomizeTimeScaleBy >= 0);
         assert(params->_randomizeTimeScaleBy < 100);
@@ -65,7 +63,6 @@ public:
 
     virtual ~Specgram() {
         delete _window;
-        delete _image;
         delete[] _buf;
     }
 
@@ -90,17 +87,19 @@ public:
 
         cv::split(compx, planes);
         cv::magnitude(planes[0], planes[1], planes[0]);
-        Mat mag = planes[0];
-
-        cv::normalize(mag, (*_image)(Range(0, rows), Range::all()), 0, 255,
-                      CV_MINMAX, CV_8UC1);
-        // Pad the rest with zeros.
-        (*_image)(Range(rows, _image->rows), Range::all()) = cv::Scalar::all(0);
+        Mat mag;
 
         // Rotate by 90 degrees.
+        cv::transpose(planes[0], mag);
+        cv::flip(mag, mag, 0);
+
+        cv::normalize(mag, mag, 0, 255, CV_MINMAX, CV_8UC1);
         Mat result(_numFreqs, _timeSteps, CV_8UC1, buf);
-        cv::transpose(*_image, result);
-        cv::flip(result, result, 0);
+        mag.copyTo(result(Range::all(), Range(0, mag.cols)));
+
+        // Pad the rest with zeros.
+        result(Range::all(), Range(mag.cols, result.cols)) = cv::Scalar::all(0);
+
         randomize(result);
     }
 
