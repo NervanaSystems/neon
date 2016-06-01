@@ -17,7 +17,8 @@
 Floating point elementwise operations on GPU.
 """
 from __future__ import division
-from builtins import range, str
+from builtins import range
+from future.utils import native_str
 import os.path
 import re
 import traceback as tb
@@ -114,13 +115,13 @@ def _print_tree(node, level=0):
     """
 
     if type(node) is list:
-        neon_logger.display(("    " * level) + ", ".join(str(s) for s in node[0:3]))
+        neon_logger.display(("    " * level) + ", ".join(native_str(s) for s in node[0:3]))
         if len(node) > 3:
             _print_tree(node[3], level + 1)
         if len(node) > 4:
             _print_tree(node[4], level + 1)
     else:
-        neon_logger.display(("    " * level) + str(node))
+        neon_logger.display(("    " * level) + native_str(node))
 
 
 def _post_order(node, stack=None):
@@ -498,7 +499,7 @@ def _get_compound_kernel(type_args, compute_capability):
                         hot_axis = arg[2]
                         test_val = "i" if hot_axis else "bid"
 
-                        ew_in = _ew_strings[arg_type + str(hot_axis)]
+                        ew_in = _ew_strings[arg_type + native_str(hot_axis)]
                         loads = "loads%d" % stage
                         template_vals["inits"].append(
                             ew_in["inits"].format(arg_id))
@@ -1060,7 +1061,7 @@ def _get_kernel_name():
             if name:
                 names.append(name)
 
-        names.append(str(caller[1]))
+        names.append(native_str(caller[1]))
 
     return names
 

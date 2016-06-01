@@ -14,6 +14,7 @@
 # ----------------------------------------------------------------------------
 from __future__ import division
 from builtins import map, range, str, zip
+from future.utils import native
 from collections import deque
 import h5py
 import inspect
@@ -154,7 +155,7 @@ class Callbacks(NervanaObject):
         """
         Load callbacks.
         """
-        if type(cdict) is str:
+        if type(native(cdict)) is str:
             cdict = load_obj(cdict)
         callbacks = cls(model, output_file=cdict['output_file'])
         callbacks.epoch_marker = cdict['epoch_marker']

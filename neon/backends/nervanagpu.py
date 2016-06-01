@@ -134,7 +134,7 @@ class GPUTensor(Tensor):
         if gpudata is None:
             # print "allocate!"
             if size:
-                # (drv.mem_get_info())
+                # print drv.mem_get_info()
                 self.gpudata = allocator(self.nbytes)
             else:
                 self.gpudata = None
