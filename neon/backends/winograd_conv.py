@@ -29,7 +29,7 @@ from neon.backends.util.source_module import SourceModule
 import os.path
 import shelve
 from .convolution import (
-    KernelGroup, NoopTransform, UpdateConvReduce, BatchNormSum, ConvertDataType, FilterDimShuffle,
+    KernelGroup, NoopTransform, CompoundOps, UpdateConvReduce, BatchNormSum, ConvertDataType, FilterDimShuffle,
     _get_sm_count, _ceil_div, _magic64, _div64, _magic32, _flatten, _closest_divisor)
 
 
@@ -1094,6 +1094,154 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
             self.kernel_args[2:6] = (None,) * 4
             self.image_args[2:5]  = (None,) * 3
             self.delta_args[2:5]  = (None,) * 3
+
+
+class XpropWinograd_2x2_5x5(KernelGroup):
+
+    def __init__(self, op, lib, dtype,
+                 N, C, K,
+                 H, W, P, Q,
+                 pad_h, pad_w, bprop=False):
+
+        super(XpropWinograd_2x2_5x5, self).__init__(lib, dtype,
+             N, C, K, 1, H, W, 1, 5, 5, 1, P, Q,
+             0, pad_h, pad_w, 1,1,1, bprop)
+
+        self.init()
+        lib.set_scratch_size(self.filter_trans.size, self.output_trans.size)
+
+    def init(self):
+
+        (N, C, K, D, H, W, T, R, S, M, P, Q,
+        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+
+        if N == 1:
+            shlN = 0
+        elif N < 32:
+            shlN = len(bin(N-1))-2
+        else:
+            shlN = 5
+
+        itemsize = self.dtype.itemsize
+
+        if itemsize == 4:
+            # TODO: explore more superblock shapes here.
+            shlY, shlX, supY, supX, supN, SupY, SupX, SupN = {
+                0 : (3, 4, 0x203, 0x300, 0x00, 0x203, 0x300, 0x00), # 4x8  yyxxx
+                1 : (3, 3, 0x203, 0x201, 0x01, 0x203, 0x201, 0x01), # 4x4  yyxxn
+                2 : (2, 3, 0x104, 0x202, 0x03, 0x104, 0x202, 0x03), # 2x4  yxxnn
+                3 : (2, 2, 0x104, 0x103, 0x07, 0x104, 0x103, 0x07), # 2x2  yxnnn
+                4 : (1, 2, 0x000, 0x104, 0x0f, 0x000, 0x104, 0x0f), # 1x2  xnnnn
+                5 : (1, 1, 0x000, 0x000, 0x1f, 0x000, 0x000, 0x1f), # 1x1  nnnnn
+            }.get(shlN)
+        else:
+            shlY, shlX, supY, supX, supN, SupY, SupX, SupN = {
+                0 : (3, 4, 0x203, 0x300, 0x00, 0x202, 0x200, 0x0), # 4x8  yyxx(x)
+                1 : (3, 3, 0x203, 0x201, 0x01, 0x202, 0x200, 0x0), # 4x4  yyxx(n)
+                2 : (2, 3, 0x104, 0x202, 0x03, 0x103, 0x201, 0x1), # 2x4  yxxn(n)
+                3 : (2, 2, 0x104, 0x103, 0x07, 0x103, 0x102, 0x3), # 2x2  yxnn(n)
+                4 : (1, 2, 0x000, 0x104, 0x0f, 0x000, 0x103, 0x7), # 1x2  xnnn(n)
+                5 : (1, 1, 0x000, 0x000, 0x1f, 0x000, 0x000, 0xf), # 1x1  nnnn(n)
+            }.get(shlN)
+
+        GYS  = _ceil_div(H, 1 << shlY)
+        GXS  = _ceil_div(W, 1 << shlX)
+        GN   = _ceil_div(N, 1 << shlN)
+        GK   = _ceil_div(K, 32)
+        GYS2 = max(GYS // 2, 1)
+        GXS2 = GXS  * 2
+        k    = _closest_divisor(GK, 2)
+
+        Xk       = GXS2*k
+        magic_Xk = _magic64(Xk)
+        magic_k  = _magic32(Xk, k)
+
+        options = list()
+        options.append(("W", W))
+        options.append(("Q", Q))
+        options.append(("N", N))
+
+        self.kernel_args = [
+            (GYS*GXS*k, GK//k, GN), (640, 1, 1), None, None, None, None, None, None ]
+
+        self.kernel_name = "%s_winograd_2x2_5x5_32x32" % self.clss
+        self.kernel_opts = tuple(options)
+        self.zero_args   = None
+        self.kernel_args.extend( _flatten([
+            C, K, N, H, W, H*W*N, W*N, GYS2, GXS,
+            Xk, k, magic_Xk, magic_k,
+            P, Q, Q*N, P*Q*N, P*Q*N*itemsize, P*Q*N*15*itemsize,
+            shlY, shlX, shlN, supY, supX, supN, SupY, SupX, SupN,
+            pad_w, pad_h, H*W*N*2*itemsize, C*1152 ]))
+
+        self.output_trans = CompoundOps(self.lib, self.dtype, K, P*Q*N)
+
+    def bind_params(self, I, F, O,
+        X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
+        relu=False, brelu=False, slope=0.0, no_op=0):
+
+        assert I.dtype == O.dtype == self.dtype
+
+        self.lib.scratch_buffer_init()
+
+        filter_data = self.filter_trans.bind_params(F)
+
+        if beta == 1.0 and X is None:
+            # Atomic add result on top of existing tensor
+            self.zero_args = None
+            self.kernel_args[2:8] = (self.lib.stream, O.gpudata, I.gpudata, filter_data, alpha, no_op)
+            self.output_trans.kernel = None
+        else:
+            output_data = self.output_trans.bind_params(O, X, bias, bsum, alpha, beta or slope, relu, brelu)
+            self.zero_args = (output_data, 0, O.nbytes, self.lib.stream)
+            self.kernel_args[2:8] = (self.lib.stream, output_data, I.gpudata, filter_data, 1.0, no_op)
+
+    def execute(self, repeat=1, unbind=True):
+
+        kernel = kernel_specs.get_kernel(self.kernel_name, self.kernel_opts)
+
+        for r in range(repeat):
+            if self.zero_args is not None:
+                drv.memset_d8_async(*self.zero_args)
+
+            self.filter_trans.execute()
+            kernel.prepared_async_call(*self.kernel_args)
+            self.output_trans.execute()
+
+        if unbind:
+            self.filter_trans.unbind()
+            self.output_trans.unbind()
+            self.kernel_args[2:8] = (None,) * 6
+
+class FpropWinograd_2x2_5x5(XpropWinograd_2x2_5x5):
+
+    def __init__(self, lib, dtype,
+                 N, C, K, D, H, W,
+                 T, R, S, M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w):
+        super(FpropWinograd_2x2_5x5, self).__init__(
+                 "fprop", lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
+
+    def init(self):
+        super(FpropWinograd_2x2_5x5, self).init()
+        C, K = self.params[1:3]
+        self.filter_trans = FpropFilter_2x2_5x5(self.lib, self.dtype, C, K)
+
+class BpropWinograd_2x2_5x5(XpropWinograd_2x2_5x5):
+
+    def __init__(self, lib, dtype,
+                 N, C, K, D, H, W,
+                 T, R, S, M, P, Q,
+                 pad_d, pad_h, pad_w,
+                 str_d, str_h, str_w):
+        super(BpropWinograd_2x2_5x5, self).__init__(
+                 "bprop", lib, dtype, N, K, C, P, Q, H, W, 4-pad_h, 4-pad_w, bprop=True)
+
+    def init(self):
+        super(BpropWinograd_2x2_5x5, self).init()
+        K, C = self.params[1:3]
+        self.filter_trans = BpropFilter_2x2_5x5(self.lib, self.dtype, C, K)
 
 
 class UpdateImage_3x3_2x2(object):

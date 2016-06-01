@@ -921,7 +921,7 @@ class UpdateConvReduce(object):
         return U.gpudata
 
     def execute(self):
-        if self.kernel:
+        if self.kernel is not None:
             self.kernel.prepared_async_call(*self.args)
 
     def unbind(self):
@@ -1001,7 +1001,7 @@ class BatchNormSum(object):
         return 0
 
     def execute(self):
-        if self.kernel:
+        if self.kernel is not None:
             self.kernel.prepared_async_call(*self.args)
             #self.ary = np.empty(self.shape, np.float32)
             #drv.memcpy_dtoh_async(self.ary, self.args[4], None)
@@ -1093,7 +1093,7 @@ class CompoundOps(object):
         return O.gpudata
 
     def execute(self):
-        if self.kernel:
+        if self.kernel is not None:
             self.kernel.prepared_async_call(*self.args)
 
     def unbind(self):
@@ -1248,7 +1248,7 @@ class ConvertDataType(object):
         return A.gpudata
 
     def execute(self):
-        if self.kernel:
+        if self.kernel is not None:
             self.kernel.prepared_async_call(*self.args)
 
     def unbind(self):

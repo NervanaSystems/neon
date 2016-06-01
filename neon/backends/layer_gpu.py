@@ -419,7 +419,7 @@ class ConvLayer(Layer):
         ####### Winograd ###########
         elif lib.enable_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
             from .winograd_conv import (FpropWinograd_2x2_3x3, BpropWinograd_2x2_3x3, UpdateWinograd_3x3_2x2,
-                                       FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
+                                        FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
 
             # Temp for now till we can autotune
             # 2 is safer for fp16 without batchnorm
@@ -446,6 +446,16 @@ class ConvLayer(Layer):
                 self.updat_kernels = UpdateWinograd_3x3_4x4(*args)
             else:
                 self.updat_kernels = UpdateWinograd_3x3_2x2(*args)
+
+        elif lib.enable_winograd and not lib.deterministic and N > 1 and \
+             R == 5 and S == 5 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
+
+            from .winograd_conv import (FpropWinograd_2x2_5x5, BpropWinograd_2x2_5x5)
+
+            self.fprop_kernels = FpropWinograd_2x2_5x5(*args)
+            self.bprop_kernels = BpropWinograd_2x2_5x5(*args)
+            if N >= 4:
+                self.updat_kernels = convolution.UpdateDirect(*args)
 
         ####### Direct ###########
         else:

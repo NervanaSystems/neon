@@ -26,10 +26,11 @@ from neon.backends.convolution import (_ceil_div,
 
 from neon.backends.winograd_conv import (
     FpropWinograd_2x2_3x3, BpropWinograd_2x2_3x3, UpdateWinograd_3x3_2x2,
-    FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
+    FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4,
+    FpropWinograd_2x2_5x5, BpropWinograd_2x2_5x5)
 
-fprop_kernels  = (FpropCuda,  FpropDirect,  FpropWinograd_2x2_3x3,  FpropWinograd_4x4_3x3)
-bprop_kernels  = (BpropCuda,  BpropDirect,  BpropWinograd_2x2_3x3,  BpropWinograd_4x4_3x3)
+fprop_kernels  = (FpropCuda,  FpropDirect,  FpropWinograd_2x2_3x3,  FpropWinograd_4x4_3x3, FpropWinograd_2x2_5x5)
+bprop_kernels  = (BpropCuda,  BpropDirect,  BpropWinograd_2x2_3x3,  BpropWinograd_4x4_3x3, BpropWinograd_2x2_5x5)
 update_kernels = (UpdateCuda, UpdateDirect, UpdateWinograd_3x3_2x2, UpdateWinograd_3x3_4x4)
 
 ng = NervanaGPU()
@@ -156,6 +157,16 @@ configs = [
     (FpropWinograd_4x4_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,) ),
     (BpropWinograd_4x4_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,) ),
     (UpdateWinograd_3x3_4x4,  1,  63,  63, True,  False, None,  (conv_3x3,) ),
+
+    (FpropWinograd_2x2_5x5,  32,  32,  32, False, True,  None,  (conv_5x5,) ),
+    (BpropWinograd_2x2_5x5,  32,  32,  32, False, True,  None,  (conv_5x5,) ),
+
+    (FpropWinograd_2x2_5x5,  32,  64, 192, False, False, None,  (conv_5x5,) ),
+    (BpropWinograd_2x2_5x5,  32,  64, 192, False, False, None,  (conv_5x5,) ),
+    (FpropWinograd_2x2_5x5,  16,  64, 192, False, False, None,  (conv_5x5,) ),
+    (FpropWinograd_2x2_5x5,   8,  64, 192, False, False, None,  (conv_5x5,) ),
+    (FpropWinograd_2x2_5x5,   4,  64, 192, False, False, None,  (conv_5x5,) ),
+    (FpropWinograd_2x2_5x5,   2,  64, 192, False, False, None,  (conv_5x5,) ),
 ]
 
 fprop_opts = [
