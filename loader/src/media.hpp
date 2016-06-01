@@ -167,3 +167,22 @@ private:
     int                         _dataSize;
     int                         _sampleSize;
 };
+
+class Metadata {
+public:
+    Metadata() : _size(0) {
+    }
+
+    void setDatumLen(int index, int len) {
+        _datumLens[index] = len;
+    }
+
+    void setTargetLen(int index, int len) {
+        _targetLens[index] = len;
+    }
+
+public:
+    int                         _size;
+    int*                        _datumLens;
+    int*                        _targetLens;
+};

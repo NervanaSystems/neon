@@ -276,14 +276,19 @@ public:
         }
     }
 
-    void readItem(BufferPair& buffers) {
+    void readItem(BufferTuple& buffers) {
         uint datumSize;
         uint targetSize;
         _recordHeader.read(_ifs, &datumSize);
-        buffers.first->read(_ifs, datumSize);
+
+        CharBuffer* data;
+        CharBuffer* targets;
+        tie(data, targets) = buffers;
+        data->read(_ifs, datumSize);
+
         _ifs.readPadding(datumSize);
         _recordHeader.read(_ifs, &targetSize);
-        buffers.second->read(_ifs, targetSize);
+        targets->read(_ifs, targetSize);
         _ifs.readPadding(targetSize);
     }
 

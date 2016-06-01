@@ -35,21 +35,24 @@ int single(Loader* loader, int epochCount, int minibatchCount,
     memset(dataBuf, 0, datumSize);
     CharBuffer dataBuffer(0);
     CharBuffer targetBuffer(0);
-    BufferPair bufPair = make_pair(&dataBuffer, &targetBuffer);
+    BufferTuple bufTuple = make_tuple(&dataBuffer, &targetBuffer);
     for (int epoch = 0; epoch < epochCount; epoch++) {
         reader->reset();
+        CharBuffer* first = get<0>(bufTuple);
+        CharBuffer* second = get<1>(bufTuple);;
+
         for (int i = 0; i < minibatchCount; i++) {
-            bufPair.first->reset();
-            bufPair.second->reset();
-            reader->read(bufPair);
+            first->reset();
+            second->reset();
+            reader->read(bufTuple);
             for (int j = 0; j < batchSize; j++) {
                 int itemSize = 0;
-                char* item = bufPair.first->getItem(j, itemSize);
+                char* item = first->getItem(j, itemSize);
                 assert(item != 0);
                 media->transform(item, itemSize, dataBuf, datumSize);
                 sm += sum(dataBuf, datumSize);
                 int targetChunkSize = 0;
-                char* targets = bufPair.second->getItem(j, targetChunkSize);
+                char* targets = second->getItem(j, targetChunkSize);
                 sm += sum(targets, targetSize);
             }
         }
@@ -65,27 +68,25 @@ int multi(Loader* loader, int epochCount, int minibatchCount,
     int result = loader->start();
     assert(result == 0);
     unsigned int sm = 0;
-    int dataSize = batchSize * datumSize;
-    int targetsSize = batchSize * targetSize;
-    char* data = new char[dataSize];
-    char* targets = new char[targetsSize];
-    memset(data, 0, dataSize);
-    memset(targets, 0, targetsSize);
+    int dataBufSize = batchSize * datumSize;
+    int targetsBufSize = batchSize * targetSize;
+    CharBuffer data(dataBufSize);
+    CharBuffer targets(targetsBufSize);
+    data.init();
+    targets.init();
     Device* device = loader->getDevice();
     for (int epoch = 0; epoch < epochCount; epoch++) {
         loader->reset();
         for (int i = 0; i < minibatchCount; i++) {
             loader->next();
             int bufIdx = i % 2;
-            device->copyDataBack(bufIdx, data, dataSize);
-            device->copyLabelsBack(bufIdx, targets, targetsSize);
-            sm += sum(data, dataSize);
-            sm += sum(targets, targetsSize);
+            device->copyDataBack(bufIdx, &data);
+            device->copyLabelsBack(bufIdx, &targets);
+            sm += sum(data._data, dataBufSize);
+            sm += sum(targets._data, targetsBufSize);
         }
     }
     loader->stop();
-    delete[] data;
-    delete[] targets;
     return sm;
 }
 
@@ -119,7 +120,7 @@ int test(char* repoDir, char* indexFile,
                   indexFile, "archive-",
                   false, false, 0, datumSize, datumTypeSize,
                   targetSize, targetTypeSize, targetConversion, 100,
-                  &mediaParams, &deviceParams, &ingestParams);
+                  &mediaParams, &deviceParams, &ingestParams, 0);
     unsigned int singleSum = single(&loader, epochCount,
                                     minibatchCount, batchSize,
                                     datumLen, targetLen,

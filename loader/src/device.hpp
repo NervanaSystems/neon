@@ -48,10 +48,10 @@ public:
     Device(int type) : _type(type) {}
     virtual ~Device() {};
     virtual int init() = 0;
-    virtual int copyData(int idx, char* data, int size) = 0;
-    virtual int copyLabels(int idx, char* data, int size) = 0;
-    virtual int copyDataBack(int idx, char* data, int size) = 0;
-    virtual int copyLabelsBack(int idx, char* data, int size) = 0;
+    virtual int copyData(int idx, CharBuffer* buf) = 0;
+    virtual int copyLabels(int idx, CharBuffer* buf) = 0;
+    virtual int copyDataBack(int idx, CharBuffer* buf) = 0;
+    virtual int copyLabelsBack(int idx, CharBuffer* buf) = 0;
 
     static Device* create(DeviceParams* params);
 
@@ -121,20 +121,20 @@ public:
         return 0;
     }
 
-    int copyData(int idx, char* data, int size) {
-        return copy(_data[idx], data, size);
+    int copyData(int idx, CharBuffer* buf) {
+        return copy(_data[idx], buf->_data, buf->_size);
     }
 
-    int copyLabels(int idx, char* targets, int size) {
-        return copy(_targets[idx], targets, size);
+    int copyLabels(int idx, CharBuffer* buf) {
+        return copy(_targets[idx], buf->_data, buf->_size);
     }
 
-    int copyDataBack(int idx, char* data, int size) {
-        return copyBack(data, _data[idx], size);
+    int copyDataBack(int idx, CharBuffer* buf) {
+        return copyBack(buf->_data, _data[idx], buf->_size);
     }
 
-    int copyLabelsBack(int idx, char* targets, int size) {
-        return copyBack(targets, _targets[idx], size);
+    int copyLabelsBack(int idx, CharBuffer* buf) {
+        return copyBack(buf->_data, _targets[idx], buf->_size);
     }
 
 private:
@@ -196,23 +196,23 @@ public:
         return 0;
     }
 
-    int copyData(int idx, char* data, int size) {
-        memcpy(_data[idx], data, size);
+    int copyData(int idx, CharBuffer* buf) {
+        memcpy(_data[idx], buf->_data, buf->_size);
         return 0;
     }
 
-    int copyLabels(int idx, char* targets, int size) {
-        memcpy(_targets[idx], targets, size);
+    int copyLabels(int idx, CharBuffer* buf) {
+        memcpy(_targets[idx], buf->_data, buf->_size);
         return 0;
     }
 
-    int copyDataBack(int idx, char* data, int size) {
-        memcpy(data, _data[idx], size);
+    int copyDataBack(int idx, CharBuffer* buf) {
+        memcpy(buf->_data, _data[idx], buf->_size);
         return 0;
     }
 
-    int copyLabelsBack(int idx, char* targets, int size) {
-        memcpy(targets, _targets[idx], size);
+    int copyLabelsBack(int idx, CharBuffer* buf) {
+        memcpy(buf->_data, _targets[idx], buf->_size);
         return 0;
     }
 

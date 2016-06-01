@@ -113,7 +113,7 @@ public:
     }
 
     virtual ~Reader() {};
-    virtual int read(BufferPair& buffers) = 0;
+    virtual int read(BufferTuple& buffers) = 0;
     virtual int reset() = 0;
 
     virtual int totalDataSize() {
@@ -164,7 +164,7 @@ public:
         }
     }
 
-    int read(BufferPair& buffers) {
+    int read(BufferTuple& buffers) {
         // Deprecated
         assert(0);
         return 0;

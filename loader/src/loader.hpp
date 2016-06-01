@@ -27,6 +27,8 @@
 #include "matrix.hpp"
 #include "device.hpp"
 
+using std::tie;
+
 class DecodeThreadPool : public ThreadPool {
 public:
     DecodeThreadPool(int count, int batchSize,
@@ -161,15 +163,19 @@ protected:
         int end = _endInds[id];
         // No locking required because threads
         // write into non-overlapping regions.
-        BufferPair& outBuf = _out.getForWrite();
-        char* datumBuf = outBuf.first->_data + _dataOffsets[id];
-        char* targetBuf = outBuf.second->_data + _targetOffsets[id];
+        BufferTuple& dst = _out.getForWrite();
+        char* datumBuf = get<0>(dst)->_data + _dataOffsets[id];
+        char* targetBuf = get<1>(dst)->_data + _targetOffsets[id];
+        CharBuffer* srcData;
+        CharBuffer* srcTargets;
+        tie(srcData, srcTargets) = *_inputBuf;
+
         for (int i = start; i < end; i++) {
             int encDatumLen = 0;
-            char* encDatum = _inputBuf->first->getItem(i, encDatumLen);
+            char* encDatum = srcData->getItem(i, encDatumLen);
             assert(encDatum != 0);
             int encTargetLen = 0;
-            char* encTarget = _inputBuf->second->getItem(i, encTargetLen);
+            char* encTarget = srcTargets->getItem(i, encTargetLen);
             if (_targetConversion == READ_CONTENTS) {
                 transform(id, encDatum, encDatumLen, encTarget, encTargetLen,
                           datumBuf, targetBuf, true);
@@ -211,16 +217,14 @@ protected:
                 _endSignaled = 0;
             }
             // At this point, we have decoded data for the whole minibatch.
-            BufferPair& outBuf = _out.getForWrite();
-            Matrix::transpose(outBuf.first->_data, _batchSize,
-                              _datumSize, _datumTypeSize);
-            Matrix::transpose(outBuf.second->_data, _batchSize,
-                              _targetSize, _targetTypeSize);
+            CharBuffer* data;
+            CharBuffer* targets;
+            tie(data, targets) = _out.getForWrite();
+            Matrix::transpose(data, _batchSize, _datumSize, _datumTypeSize);
+            Matrix::transpose(targets, _batchSize, _targetSize, _targetTypeSize);
             // Copy to device.
-            _device->copyData(_bufferIndex, outBuf.first->_data,
-                              outBuf.first->_size);
-            _device->copyLabels(_bufferIndex, outBuf.second->_data,
-                                outBuf.second->_size);
+            _device->copyData(_bufferIndex, data);
+            _device->copyLabels(_bufferIndex, targets);
             _bufferIndex = (_bufferIndex == 0) ? 1 : 0;
             _out.advanceWritePos();
         }
@@ -268,7 +272,7 @@ private:
     thread*                     _manager;
     bool                        _stopManager;
     bool                        _managerStopped;
-    BufferPair*                 _inputBuf;
+    BufferTuple*                _inputBuf;
     int                         _bufferIndex;
     int                         _batchSize;
     vector<int>                 _startInds;
@@ -307,7 +311,7 @@ protected:
             while (_out.full() == true) {
                 _out.waitForNonFull(lock);
             }
-            BufferPair& bufPair = _out.getForWrite();
+            BufferTuple& bufPair = _out.getForWrite();
             int result = _reader->read(bufPair);
             if (result == -1) {
                 _done = true;
@@ -427,9 +431,10 @@ public:
             while (_decodeBufs->empty()) {
                 _decodeBufs->waitForNonEmpty(lock);
             }
-            Buffer<char>* data = _decodeBufs->getForRead().first;
+            Buffer<char>* data;
+            Buffer<char>* targets;
+            tie(data, targets) = _decodeBufs->getForRead();
             memcpy(dataBuf->_data, data->_data, dataBuf->_size);
-            Buffer<char>* targets = _decodeBufs->getForRead().second;
             memcpy(targetsBuf->_data, targets->_data, targetsBuf->_size);
             _decodeBufs->advanceReadPos();
         }

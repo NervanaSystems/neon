@@ -22,7 +22,7 @@ using cv::Mat;
                                   "pre-requisites and re-run the installer."
 class Matrix {
 public:
-    static void transpose(char* data, int height, int width, int elemLen) {
+    static void transpose(CharBuffer* data, int height, int width, int elemLen) {
 #if HAS_IMGLIB
         int elemType;
         if (elemLen == 1) {
@@ -32,8 +32,8 @@ public:
         } else {
             throw std::runtime_error("Unsupported type in transpose\n");
         }
-        Mat input = Mat(height, width, elemType, data).clone();
-        Mat output = Mat(width, height, elemType, data);
+        Mat input = Mat(height, width, elemType, data->_data).clone();
+        Mat output = Mat(width, height, elemType, data->_data);
         cv::transpose(input, output);
 #else
 #warning ("OpenCV support not built-in. Certain features will not work.")

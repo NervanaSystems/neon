@@ -27,7 +27,10 @@
 
 typedef uint8_t uchar;
 using std::vector;
-using std::pair;
+using std::tuple;
+using std::get;
+using std::make_tuple;
+using std::tie;
 using std::make_pair;
 using std::mutex;
 using std::unique_lock;
@@ -50,6 +53,11 @@ public:
         if (_alloc == true) {
             dealloc(_data);
         }
+    }
+
+    void init() {
+        int len = _size * sizeof(T);
+        memset((char*)_data, 0, len);
     }
 
     void reset() {
@@ -189,7 +197,7 @@ protected:
 };
 
 typedef Buffer<char>                                    CharBuffer;
-typedef pair<CharBuffer*, CharBuffer*>                  BufferPair;
+typedef tuple<CharBuffer*, CharBuffer*>                 BufferTuple;
 
 class BufferPool {
 public:
@@ -198,24 +206,25 @@ public:
         for (int i = 0; i < count; i++) {
             CharBuffer* dataBuffer = new CharBuffer(dataSize, pinned);
             CharBuffer* targetBuffer = new CharBuffer(targetSize, pinned);
-            _bufs.push_back(make_pair(dataBuffer, targetBuffer));
+            _bufs.push_back(make_tuple(dataBuffer, targetBuffer));
         }
     }
 
     virtual ~BufferPool() {
-        for (auto buf : _bufs) {
-            delete buf.first;
-            delete buf.second;
+        for (auto tup : _bufs) {
+            delete get<0>(tup);
+            delete get<1>(tup);
         }
     }
 
-    BufferPair& getForWrite() {
-        _bufs[_writePos].first->reset();
-        _bufs[_writePos].second->reset();
-        return _bufs[_writePos];
+    BufferTuple& getForWrite() {
+        BufferTuple& result = _bufs[_writePos];;
+        std::get<0>(result)->reset();
+        std::get<1>(result)->reset();
+        return result;
     }
 
-    BufferPair& getForRead() {
+    BufferTuple& getForRead() {
         return _bufs[_readPos];
     }
 
@@ -269,7 +278,7 @@ protected:
 protected:
     int                         _count;
     int                         _used;
-    vector<BufferPair>          _bufs;
+    vector<BufferTuple>         _bufs;
     int                         _readPos;
     int                         _writePos;
     mutex                       _mutex;

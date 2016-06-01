@@ -66,7 +66,7 @@ public:
         delete[] _buf;
     }
 
-    void generate(RawMedia* raw, char* buf, int bufSize) {
+    int generate(RawMedia* raw, char* buf, int bufSize) {
         // TODO: get rid of this assumption
         assert(raw->sampleSize() == 2);
         assert(_timeSteps * _numFreqs == bufSize);
@@ -101,6 +101,8 @@ public:
         result(Range::all(), Range(mag.cols, result.cols)) = cv::Scalar::all(0);
 
         randomize(result);
+        // Return the number of valid columns.
+        return mag.cols;
     }
 
 private:

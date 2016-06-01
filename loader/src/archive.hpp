@@ -41,6 +41,7 @@ using std::ios;
 using std::stringstream;
 using std::vector;
 using std::map;
+using std::tuple;
 
 #define ARCHIVE_ITEM_COUNT  4096
 
@@ -220,7 +221,7 @@ public:
         close();
     }
 
-    int read(BufferPair& buffers) {
+    int read(BufferTuple& buffers) {
         int offset = 0;
         while (offset < _batchSize) {
             int count = _batchSize - offset;
@@ -300,7 +301,7 @@ private:
         return count;
     }
 
-    int read(BufferPair& buffers, int count) {
+    int read(BufferTuple& buffers, int count) {
         if (_itemsLeft == 0) {
             next();
         }
@@ -337,20 +338,20 @@ private:
         return 0;
     }
 
-    int readShuffle(BufferPair& buffers, int count) {
+    int readShuffle(BufferTuple& buffers, int count) {
         while ((int) _shuffleQueue.size() < count) {
             replenishQueue(count);
         }
         for (int i=0; i<count; ++i) {
             auto ee = std::move(_shuffleQueue.at(0));
-            buffers.first->read(&(*ee.first)[0], ee.first->size());
-            buffers.second->read(&(*ee.second)[0], ee.second->size());
+            get<0>(buffers)->read(&(*ee.first)[0], ee.first->size());
+            get<1>(buffers)->read(&(*ee.second)[0], ee.second->size());
             _shuffleQueue.pop_front();
         }
         return count;
     }
 
-    void readExact(BufferPair& buffers, int count) {
+    void readExact(BufferTuple& buffers, int count) {
         assert(count <= _itemsLeft);
         for (int i = 0; i < count; ++i) {
             _batchFile.readItem(buffers);
