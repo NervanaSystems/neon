@@ -32,6 +32,7 @@
 using std::string;
 using std::stringstream;
 using std::unique_ptr;
+using std::ignore;
 
 typedef std::vector<string> LineList;
 typedef std::vector<char> ByteVect;
@@ -283,7 +284,7 @@ public:
 
         CharBuffer* data;
         CharBuffer* targets;
-        tie(data, targets) = buffers;
+        tie(data, targets, ignore) = buffers;
         data->read(_ifs, datumSize);
 
         _ifs.readPadding(datumSize);

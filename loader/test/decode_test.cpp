@@ -45,7 +45,7 @@ int main (int argc, char **argv) {
     std::cout << "label index: " << label_idx << std::endl;
 
     for (int i = 0; i < num_decode; i++) {
-        decoder.transform(&data[0], data.size(), &outbuf[i * num_pixels], num_pixels);
+        decoder.transform(&data[0], data.size(), &outbuf[i * num_pixels], num_pixels, 0);
     }
 
     std::ofstream file (argv[2], std::ofstream::out | std::ofstream::binary);

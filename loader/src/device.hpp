@@ -30,17 +30,19 @@ public:
 
 class CpuParams : public DeviceParams {
 public:
-    CpuParams(int type, int id, char* data[2], char* targets[2])
+    CpuParams(int type, int id, char* data[2], char* targets[2], int* meta[2])
     : DeviceParams(type, id) {
         for (int i = 0; i < 2; i++) {
             _data[i] = data[i];
             _targets[i] = targets[i];
+            _meta[i] = meta[i];
         }
     }
 
 public:
     char*                       _data[2];
     char*                       _targets[2];
+    int*                        _meta[2];
 };
 
 class Device {
@@ -48,10 +50,11 @@ public:
     Device(int type) : _type(type) {}
     virtual ~Device() {};
     virtual int init() = 0;
-    virtual int copyData(int idx, CharBuffer* buf) = 0;
-    virtual int copyLabels(int idx, CharBuffer* buf) = 0;
-    virtual int copyDataBack(int idx, CharBuffer* buf) = 0;
-    virtual int copyLabelsBack(int idx, CharBuffer* buf) = 0;
+    virtual void copyData(int idx, CharBuffer* buf) = 0;
+    virtual void copyLabels(int idx, CharBuffer* buf) = 0;
+    virtual void copyMeta(int idx, IntBuffer* buf) = 0;
+    virtual void copyDataBack(int idx, CharBuffer* buf) = 0;
+    virtual void copyLabelsBack(int idx, CharBuffer* buf) = 0;
 
     static Device* create(DeviceParams* params);
 
@@ -81,16 +84,18 @@ class GpuParams : public DeviceParams {
 public:
     CUdeviceptr                 _data[2];
     CUdeviceptr                 _targets[2];
+    CUdeviceptr                 _meta[2];
 };
 
 class Gpu : public Device {
 public:
-    Gpu(int id, int dataSize, int targetSize)
+    Gpu(int id, int dataSize, int targetSize, int metaSize)
     : Device(GPU), _alloc(true), _id(id) {
         init();
         for (int i = 0; i < 2; i++) {
             checkDriverErrors(cuMemAlloc(&_data[i], dataSize));
             checkDriverErrors(cuMemAlloc(&_targets[i], targetSize));
+            checkDriverErrors(cuMemAlloc(&_meta[i], metaSize * sizeof(int)));
         }
     }
 
@@ -99,6 +104,7 @@ public:
         for (int i = 0; i < 2; i++) {
             _data[i] = params->_data[i];
             _targets[i] = params->_targets[i];
+            _meta[i] = params->_meta[i];
         }
     }
 
@@ -107,58 +113,54 @@ public:
             for (int i = 0; i < 2; i++) {
                 cuMemFree(_data[i]);
                 cuMemFree(_targets[i]);
+                cuMemFree(_meta[i]);
             }
         }
     }
 
     int init() {
-        try {
-            checkCudaErrors(cudaSetDevice(_id));
-            checkCudaErrors(cudaFree(0));
-        } catch(...) {
-            return -1;
-        }
+        checkCudaErrors(cudaSetDevice(_id));
+        checkCudaErrors(cudaFree(0));
         return 0;
     }
 
-    int copyData(int idx, CharBuffer* buf) {
-        return copy(_data[idx], buf->_data, buf->_size);
+    void copyData(int idx, CharBuffer* buf) {
+        copy(_data[idx], buf);
     }
 
-    int copyLabels(int idx, CharBuffer* buf) {
-        return copy(_targets[idx], buf->_data, buf->_size);
+    void copyLabels(int idx, CharBuffer* buf) {
+        copy(_targets[idx], buf);
     }
 
-    int copyDataBack(int idx, CharBuffer* buf) {
-        return copyBack(buf->_data, _data[idx], buf->_size);
+    void copyMeta(int idx, IntBuffer* buf) {
+        copy(_meta[idx], buf);
     }
 
-    int copyLabelsBack(int idx, CharBuffer* buf) {
-        return copyBack(buf->_data, _targets[idx], buf->_size);
+    void copyDataBack(int idx, CharBuffer* buf) {
+        copyBack(buf, _data[idx]);
+    }
+
+    void copyLabelsBack(int idx, CharBuffer* buf) {
+        copyBack(buf, _targets[idx]);
     }
 
 private:
-    int copy(CUdeviceptr dst, char* src, int size) {
-        try {
-            checkDriverErrors(cuMemcpyHtoD(dst, src, size));
-        } catch(...) {
-            return -1;
-        }
-        return 0;
+    void copy(CUdeviceptr dst, CharBuffer* src) {
+        checkDriverErrors(cuMemcpyHtoD(dst, src->_data, src->_totalLen));
     }
 
-    int copyBack(char* dst, CUdeviceptr src, int size) {
-        try {
-            checkDriverErrors(cuMemcpyDtoH(dst, src, size));
-        } catch(...) {
-            return -1;
-        }
-        return 0;
+    void copy(CUdeviceptr dst, IntBuffer* src) {
+        checkDriverErrors(cuMemcpyHtoD(dst, (char*) src->_data, src->_totalLen));
+    }
+
+    void copyBack(CharBuffer* dst, CUdeviceptr src) {
+        checkDriverErrors(cuMemcpyDtoH(dst->_data, src, dst->_totalLen));
     }
 
 private:
     CUdeviceptr                 _data[2];
     CUdeviceptr                 _targets[2];
+    CUdeviceptr                 _meta[2];
     bool                        _alloc;
     int                         _id;
 };
@@ -166,12 +168,13 @@ private:
 
 class Cpu : public Device {
 public:
-    Cpu(int id, int dataSize, int targetSize)
+    Cpu(int id, int dataSize, int targetSize, int metaSize)
     : Device(CPU), _alloc(true) {
         init();
         for (int i = 0; i < 2; i++) {
             _data[i] = new char[dataSize];
             _targets[i] = new char[targetSize];
+            _meta[i] = new int[metaSize];
         }
     }
 
@@ -180,6 +183,7 @@ public:
         for (int i = 0; i < 2; i++) {
             _data[i] = params->_data[i];
             _targets[i] = params->_targets[i];
+            _meta[i] = params->_meta[i];
         }
     }
 
@@ -188,6 +192,7 @@ public:
             for (int i = 0; i < 2; i++) {
                 delete[] _data[i];
                 delete[] _targets[i];
+                delete[] _meta[i];
             }
         }
     }
@@ -196,29 +201,32 @@ public:
         return 0;
     }
 
-    int copyData(int idx, CharBuffer* buf) {
-        memcpy(_data[idx], buf->_data, buf->_size);
-        return 0;
+    void copyData(int idx, CharBuffer* buf) {
+        memcpy(_data[idx], buf->_data, buf->_totalLen);
     }
 
-    int copyLabels(int idx, CharBuffer* buf) {
-        memcpy(_targets[idx], buf->_data, buf->_size);
-        return 0;
+    void copyLabels(int idx, CharBuffer* buf) {
+        memcpy(_targets[idx], buf->_data, buf->_totalLen);
     }
 
-    int copyDataBack(int idx, CharBuffer* buf) {
-        memcpy(buf->_data, _data[idx], buf->_size);
-        return 0;
+    void copyMeta(int idx, IntBuffer* buf) {
+        if (_meta[idx] != 0) {
+            memcpy(_meta[idx], buf->_data, buf->_totalLen);
+        }
     }
 
-    int copyLabelsBack(int idx, CharBuffer* buf) {
-        memcpy(buf->_data, _targets[idx], buf->_size);
-        return 0;
+    void copyDataBack(int idx, CharBuffer* buf) {
+        memcpy(buf->_data, _data[idx], buf->_totalLen);
+    }
+
+    void copyLabelsBack(int idx, CharBuffer* buf) {
+        memcpy(buf->_data, _targets[idx], buf->_totalLen);
     }
 
 private:
     char*                       _data[2];
     char*                       _targets[2];
+    int*                        _meta[2];
     bool                        _alloc;
 };
 

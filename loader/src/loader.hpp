@@ -28,6 +28,7 @@
 #include "device.hpp"
 
 using std::tie;
+using std::ignore;
 
 class DecodeThreadPool : public ThreadPool {
 public:
@@ -59,6 +60,7 @@ public:
             _endInds.push_back(0);
             _dataOffsets.push_back(0);
             _targetOffsets.push_back(0);
+            _metaOffsets.push_back(0);
         }
     }
 
@@ -112,6 +114,7 @@ protected:
         _endInds[id] = _startInds[id] + itemCount;
         _dataOffsets[id] = _startInds[id] * _datumLen;
         _targetOffsets[id] = _startInds[id] * _targetLen;
+        _metaOffsets[id] = _startInds[id];
         while (_done == false) {
             work(id);
         }
@@ -121,9 +124,9 @@ protected:
 
     void transform(int id, char* encDatum, int encDatumLen,
                    char* encTarget, int encTargetLen,
-                   char* datumBuf, char* targetBuf) {
+                   char* datumBuf, char* targetBuf, int* meta) {
         // Handle the data.
-        _media[id]->transform(encDatum, encDatumLen, datumBuf, _datumLen);
+        _media[id]->transform(encDatum, encDatumLen, datumBuf, _datumLen, meta);
 
         // Handle the targets.
         if (encTargetLen > _targetLen) {
@@ -166,9 +169,10 @@ protected:
         BufferTuple& dst = _out.getForWrite();
         char* datumBuf = get<0>(dst)->_data + _dataOffsets[id];
         char* targetBuf = get<1>(dst)->_data + _targetOffsets[id];
+        int* metaBuf = get<2>(dst)->_data + _metaOffsets[id];
         CharBuffer* srcData;
         CharBuffer* srcTargets;
-        tie(srcData, srcTargets) = *_inputBuf;
+        tie(srcData, srcTargets, ignore) = *_inputBuf;
 
         for (int i = start; i < end; i++) {
             int encDatumLen = 0;
@@ -181,10 +185,11 @@ protected:
                           datumBuf, targetBuf, true);
             } else {
                 transform(id, encDatum, encDatumLen, encTarget, encTargetLen,
-                          datumBuf, targetBuf);
+                          datumBuf, targetBuf, metaBuf);
             }
             datumBuf += _datumLen;
             targetBuf += _targetLen;
+            metaBuf += 1;
         }
 
         {
@@ -219,12 +224,14 @@ protected:
             // At this point, we have decoded data for the whole minibatch.
             CharBuffer* data;
             CharBuffer* targets;
-            tie(data, targets) = _out.getForWrite();
+            IntBuffer* meta;
+            tie(data, targets, meta) = _out.getForWrite();
             Matrix::transpose(data, _batchSize, _datumSize, _datumTypeSize);
             Matrix::transpose(targets, _batchSize, _targetSize, _targetTypeSize);
             // Copy to device.
             _device->copyData(_bufferIndex, data);
             _device->copyLabels(_bufferIndex, targets);
+            _device->copyMeta(_bufferIndex, meta);
             _bufferIndex = (_bufferIndex == 0) ? 1 : 0;
             _out.advanceWritePos();
         }
@@ -279,6 +286,7 @@ private:
     vector<int>                 _endInds;
     vector<int>                 _dataOffsets;
     vector<int>                 _targetOffsets;
+    vector<int>                 _metaOffsets;
     int                         _datumSize;
     int                         _datumTypeSize;
     int                         _targetSize;
@@ -311,8 +319,8 @@ protected:
             while (_out.full() == true) {
                 _out.waitForNonFull(lock);
             }
-            BufferTuple& bufPair = _out.getForWrite();
-            int result = _reader->read(bufPair);
+            BufferTuple& bufs = _out.getForWrite();
+            int result = _reader->read(bufs);
             if (result == -1) {
                 _done = true;
                 throw std::runtime_error("Could not read data\n");
@@ -374,10 +382,10 @@ public:
             int targetLen = _batchSize * _targetSize * _targetTypeSize;
             // Start the read buffers off with a reasonable size. They will
             // get resized as needed.
-            _readBufs = new BufferPool(dataLen / 8, targetLen);
+            _readBufs = new BufferPool(dataLen / 8, targetLen, _batchSize);
             _readThread = new ReadThread(*_readBufs, _reader);
             bool pinned = (_device->_type != CPU);
-            _decodeBufs = new BufferPool(dataLen, targetLen, pinned);
+            _decodeBufs = new BufferPool(dataLen, targetLen, _batchSize, pinned);
             int numCores = thread::hardware_concurrency();
             int itemsPerThread = (_batchSize - 1) /  numCores + 1;
             int threadCount =  (_batchSize - 1) / itemsPerThread + 1;
@@ -433,7 +441,7 @@ public:
             }
             Buffer<char>* data;
             Buffer<char>* targets;
-            tie(data, targets) = _decodeBufs->getForRead();
+            tie(data, targets, ignore) = _decodeBufs->getForRead();
             memcpy(dataBuf->_data, data->_data, dataBuf->_size);
             memcpy(targetsBuf->_data, targets->_data, targetsBuf->_size);
             _decodeBufs->advanceReadPos();

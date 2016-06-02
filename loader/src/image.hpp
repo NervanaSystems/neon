@@ -250,7 +250,7 @@ public:
         _numPixels = _innerSize.area();
     }
 
-    void transform(char* item, int itemSize, char* buf, int bufSize) {
+    void transform(char* item, int itemSize, char* buf, int bufSize, int* meta) {
         Mat decodedImage;
         decode(item, itemSize, &decodedImage);
         createRandomAugParams(decodedImage.size());

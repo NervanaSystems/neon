@@ -45,7 +45,7 @@ class MediaParams(ct.Structure):
     def alloc(self, loader):
         pass
 
-    def process(self, loader, data, targets):
+    def process(self, loader, data, targets, meta):
         return data, targets
 
 
@@ -99,7 +99,7 @@ class ImageParams(MediaParams):
     def get_shape(self):
         return (self.channel_count, self.height, self.width)
 
-    def process(self, loader, data, targets):
+    def process(self, loader, data, targets, meta):
         if self.subtract_mean is False:
             return
         if self.channel_count == 3:
@@ -245,9 +245,9 @@ class AudioParams(MediaParams):
             shape = loader.targets[0].shape[::-1]
             self.targets = loader.be.empty(shape, dtype=loader.target_dtype)
 
-    def process(self, loader, data, targets):
+    def process(self, loader, data, targets, meta):
         if self.ctc_cost is True:
             loader.be.copy_transpose(targets, self.targets)
             return data, (self.targets.reshape((np.prod(targets.shape), 1)),
-                          self.target_sizes, None)
+                          self.target_sizes, meta)
         return data, targets

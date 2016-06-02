@@ -32,7 +32,8 @@ class DeviceParams(ct.Structure):
     _fields_ = [('type', ct.c_int),
                 ('id', ct.c_int),
                 ('data', BufferPair),
-                ('targets', BufferPair)]
+                ('targets', BufferPair),
+                ('meta', BufferPair)]
 
 
 class DataLoader(NervanaDataIterator):
@@ -124,11 +125,13 @@ class DataLoader(NervanaDataIterator):
 
         self.data = alloc_bufs(self.datum_size, self.datum_dtype)
         self.targets = alloc_bufs(self.target_size, self.target_dtype)
+        self.meta = alloc_bufs(1, np.int32)
         self.media_params.alloc(self)
         self.device_params = DeviceParams(self.be.device_type,
                                           self.be.device_id,
                                           cast_bufs(self.data),
-                                          cast_bufs(self.targets))
+                                          cast_bufs(self.targets),
+                                          cast_bufs(self.meta))
         if self.onehot:
             self.onehot_labels = self.be.iobuf(self.nclasses,
                                                dtype=self.be.default_dtype)
@@ -213,8 +216,9 @@ class DataLoader(NervanaDataIterator):
         else:
             targets = self.targets[self.buffer_id]
 
+        meta = self.meta[self.buffer_id]
         self.buffer_id = 1 if self.buffer_id == 0 else 0
-        return self.media_params.process(self, data, targets)
+        return self.media_params.process(self, data, targets, meta)
 
     def __iter__(self):
         for start in range(self.start_idx, self.ndata, self.bsz):

@@ -72,7 +72,7 @@ public:
     }
 
 public:
-    void transform(char* item, int itemSize, char* buf, int bufSize) {
+    void transform(char* item, int itemSize, char* buf, int bufSize, int* meta) {
         AVFormatContext* formatCtx = avformat_alloc_context();
         uchar* itemCopy = (unsigned char *) malloc(itemSize);
         memcpy(itemCopy, item, itemSize);

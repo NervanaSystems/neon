@@ -72,7 +72,7 @@ public:
     }
 
 public:
-    virtual void transform(char* item, int itemSize, char* buf, int bufSize) = 0;
+    virtual void transform(char* item, int itemSize, char* buf, int bufSize, int* meta) = 0;
     virtual void ingest(char** dataBuf, int* dataBufLen, int* dataLen) = 0;
     virtual void transform(char* encDatum, int encDatumLen,
                            char* encTarget, int encTargetLen,
@@ -166,23 +166,4 @@ private:
     int                         _bufSize;
     int                         _dataSize;
     int                         _sampleSize;
-};
-
-class Metadata {
-public:
-    Metadata() : _size(0) {
-    }
-
-    void setDatumLen(int index, int len) {
-        _datumLens[index] = len;
-    }
-
-    void setTargetLen(int index, int len) {
-        _targetLens[index] = len;
-    }
-
-public:
-    int                         _size;
-    int*                        _datumLens;
-    int*                        _targetLens;
 };

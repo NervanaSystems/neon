@@ -34,9 +34,12 @@ public:
     }
 
 public:
-    void transform(char* item, int itemSize, char* buf, int bufSize) {
+    void transform(char* item, int itemSize, char* buf, int bufSize, int* meta) {
         RawMedia* raw = _codec->decode(item, itemSize);
-        _specgram->generate(raw, buf, bufSize);
+        int len = _specgram->generate(raw, buf, bufSize);
+        if (meta != 0) {
+            *meta = len;
+        }
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {

@@ -35,7 +35,7 @@ int single(Loader* loader, int epochCount, int minibatchCount,
     memset(dataBuf, 0, datumSize);
     CharBuffer dataBuffer(0);
     CharBuffer targetBuffer(0);
-    BufferTuple bufTuple = make_tuple(&dataBuffer, &targetBuffer);
+    BufferTuple bufTuple = make_tuple(&dataBuffer, &targetBuffer, (IntBuffer*)0);
     for (int epoch = 0; epoch < epochCount; epoch++) {
         reader->reset();
         CharBuffer* first = get<0>(bufTuple);
@@ -49,7 +49,7 @@ int single(Loader* loader, int epochCount, int minibatchCount,
                 int itemSize = 0;
                 char* item = first->getItem(j, itemSize);
                 assert(item != 0);
-                media->transform(item, itemSize, dataBuf, datumSize);
+                media->transform(item, itemSize, dataBuf, datumSize, 0);
                 sm += sum(dataBuf, datumSize);
                 int targetChunkSize = 0;
                 char* targets = second->getItem(j, targetChunkSize);
@@ -107,14 +107,16 @@ int test(char* repoDir, char* indexFile,
                             0, 0, 0, false, 0, 0, 0, 0);
     char* dataBuffer[2];
     char* targetBuffer[2];
+    int* meta[2];
     for (int i = 0; i < 2; i++) {
         dataBuffer[i] = new char[batchSize * datumLen];
         targetBuffer[i] = new char[batchSize * targetLen];
+        meta[i] = 0;
     }
 
     string archiveDir(repoDir);
     archiveDir += "-ingested";
-    CpuParams deviceParams(0, 0, dataBuffer, targetBuffer);
+    CpuParams deviceParams(0, 0, dataBuffer, targetBuffer, meta);
     ImageIngestParams ingestParams(false, true, 0, 0);
     Loader loader(&itemCount, batchSize, repoDir, archiveDir.c_str(),
                   indexFile, "archive-",

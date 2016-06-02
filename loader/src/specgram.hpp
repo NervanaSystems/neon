@@ -101,8 +101,8 @@ public:
         result(Range::all(), Range(mag.cols, result.cols)) = cv::Scalar::all(0);
 
         randomize(result);
-        // Return the number of valid columns.
-        return mag.cols;
+        // Return the percentage of valid columns.
+        return mag.cols * 100 / result.cols;
     }
 
 private:
