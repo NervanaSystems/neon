@@ -54,9 +54,11 @@ conv_11x11s4 = ( 1, 224, 224,  1,11,11,  0,2,2, 1,4,4)
 conv_1x1x1   = ( 7,   7,   7,  1, 1, 1,  0,0,0, 1,1,1)
 conv_3x3x3   = ( 7,   7,   7,  3, 3, 3,  1,1,1, 1,1,1)
 conv_3x3x3s2 = ( 7,   7,   7,  3, 3, 3,  1,1,1, 2,2,2)
+conv_3x3L    = ( 1, 200, 200,  1, 3, 3,  0,1,1, 1,1,1)
+
 
 # configs = [
-#     (FpropDirect,            32,  32,  64, True,  False, None,  (conv_1x1,) ),
+#     (BpropDirect,            32, 64, 32, True,  True,  None,  (conv_3x3L,) ),
 # ]
 
 configs = [
@@ -64,16 +66,16 @@ configs = [
     (FpropCuda,              32,  32,  32, True,  True,  None,  (conv_3x3,) ),
     (BpropCuda,              32,  32,  32, True,  True,  None,  (conv_3x3,) ),
     (UpdateCuda,             32,  32,  32, True,  True,  None,  (conv_3x3,) ),
-    (FpropCuda,              32,  32,  32, True,  False, None,  (conv_3x3s2, conv_1x3, conv_3x1, conv_5x5) ), # conv_1x1 broken
-    (BpropCuda,              32,  32,  32, True,  False, None,  (conv_3x3s2, conv_1x3, conv_3x1, conv_5x5) ), # conv_1x1 broken
-    (UpdateCuda,             32,  32,  32, True,  False, None,  (conv_3x3s2, conv_1x3, conv_3x1, conv_5x5) ), # conv_1x1 broken
+    (FpropCuda,              32,  32,  32, True,  False, None,  (conv_1x1, conv_3x3s2, conv_1x3, conv_3x1, conv_5x5) ),
+    (BpropCuda,              32,  32,  32, True,  False, None,  (conv_1x1, conv_3x3s2, conv_1x3, conv_3x1, conv_5x5) ),
+    (UpdateCuda,             32,  32,  32, True,  False, None,  (conv_1x1, conv_3x3s2, conv_1x3, conv_3x1, conv_5x5) ),
     (FpropCuda,              32,   3,  64, True,  False, None,  (conv_11x11s4,) ),
-    #(UpdateCuda,             32,   3,  64, True,  False, None,  (conv_11x11s4,) ), #broken
+    (UpdateCuda,             32,   3,  32, True,  False, None,  (conv_11x11s4,) ), #broken: K=64
 
-    (FpropDirect,            32,  32,  64, True,  True,  None,  (conv_3x3,) ),
-    (BpropDirect,            32,  64,  32, True,  True,  None,  (conv_3x3,) ),
-    (UpdateDirect,           32,  32,  32, True,  True,  None,  (conv_3x3,) ),
-    (UpdateDirect,           32,  32,  32, False, True,  None,  (conv_3x3,) ),
+    (FpropDirect,            32,  32,  64, True,  True,  None,  (conv_3x3,conv_3x3L) ),
+    (BpropDirect,            32,  64,  32, True,  True,  None,  (conv_3x3,conv_3x3L) ),
+    (UpdateDirect,           32,  32,  32, True,  True,  None,  (conv_3x3,conv_3x3L) ),
+    (UpdateDirect,           32,  32,  32, False, True,  None,  (conv_3x3,conv_3x3L) ),
 
     (FpropDirect,            32,  32,  64, True,  False, None,  (conv_1x1, conv_3x3s2, conv_1x3, conv_3x1, conv_5x5, conv_3x3x3, conv_1x1x1, conv_3x3x3s2) ),
     (BpropDirect,            32,  64,  32, True,  False, None,  (conv_1x1, conv_3x3s2, conv_1x3, conv_3x1, conv_5x5, conv_3x3x3, conv_1x1x1, conv_3x3x3s2) ),
@@ -83,8 +85,8 @@ configs = [
     (UpdateDirect,           32,   3,  32, True,  False, None,  (conv_11x11s4,) ),
 
     (FpropDirect,            32,  64, 128, True,  True,  None,  (conv_3x3,) ),
-    (FpropDirect,            32,  32,  63, True,  True,  None,  (conv_3x3,) ),
-    (FpropDirect,            32,  32,   1, True,  True,  None,  (conv_3x3,) ),
+    (FpropDirect,            32,  32,  63, True,  True,  None,  (conv_3x3,conv_3x3L) ),
+    (FpropDirect,            32,  32,   1, True,  True,  None,  (conv_3x3,conv_3x3L) ),
 
     (FpropDirect,            16,  32,  64, True,  False, None,  (conv_3x3,) ),
     (FpropDirect,             8,  32,  64, True,  False, None,  (conv_3x3,) ),
@@ -131,16 +133,16 @@ configs = [
     (FpropDirect,           128,  33, 248, True,  True,  None,  (conv_3x3s2,) ),
 
     # Kernel                  N,   C,   K  Determ Cmpnd  Xtern, conv
-    (FpropWinograd_2x2_3x3,  32,  32,  32, True,  True,  False, (conv_3x3,) ),
+    (FpropWinograd_2x2_3x3,  32,  32,  32, True,  True,  False, (conv_3x3,conv_3x3L) ),
     (FpropWinograd_2x2_3x3,  32,  32,  32, True,  True,  True,  (conv_3x3,) ),
-    (BpropWinograd_2x2_3x3,  32,  32,  32, True,  True,  False, (conv_3x3,) ),
+    (BpropWinograd_2x2_3x3,  32,  32,  32, True,  True,  False, (conv_3x3,conv_3x3L) ),
     (BpropWinograd_2x2_3x3,  32,  32,  32, True,  True,  True,  (conv_3x3,) ),
     (UpdateWinograd_3x3_2x2, 32,  32,  32, True,  True,  None,  (conv_3x3,) ),
     (UpdateWinograd_3x3_2x2, 32,  32,  32, False, True,  None,  (conv_3x3,) ),
     (FpropWinograd_4x4_3x3,  32,  32,  32, True,  True,  False, (conv_3x3,) ),
-    (FpropWinograd_4x4_3x3,  32,  32,  32, True,  True,  True,  (conv_3x3,) ),
+    (FpropWinograd_4x4_3x3,  32,  32,  32, True,  True,  True,  (conv_3x3,conv_3x3L) ),
     (BpropWinograd_4x4_3x3,  32,  32,  32, True,  True,  False, (conv_3x3,) ),
-    (BpropWinograd_4x4_3x3,  32,  32,  32, True,  True,  True,  (conv_3x3,) ),
+    (BpropWinograd_4x4_3x3,  32,  32,  32, True,  True,  True,  (conv_3x3,conv_3x3L) ),
     (UpdateWinograd_3x3_4x4, 32,  32,  32, True,  True,  None,  (conv_3x3,) ),
     (UpdateWinograd_3x3_4x4, 32,  32,  32, False, True,  None,  (conv_3x3,) ),
 
@@ -151,11 +153,11 @@ configs = [
     (BpropWinograd_4x4_3x3,  32,  32,  32, True,  False, True,  (conv_3x3p0,conv_3x3p2) ),
     (UpdateWinograd_3x3_4x4, 32,  32,  32, True,  False, None,  (conv_3x3p0,conv_3x3p2) ),
 
-    (FpropWinograd_2x2_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,) ),
-    (BpropWinograd_2x2_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,) ),
+    (FpropWinograd_2x2_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,conv_3x3L) ),
+    (BpropWinograd_2x2_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,conv_3x3L) ),
     (UpdateWinograd_3x3_2x2,  1,  63,  63, True,  False, None,  (conv_3x3,) ),
-    (FpropWinograd_4x4_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,) ),
-    (BpropWinograd_4x4_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,) ),
+    (FpropWinograd_4x4_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,conv_3x3L) ),
+    (BpropWinograd_4x4_3x3,   1,  63,  63, True,  False, True,  (conv_3x3,conv_3x3L) ),
     (UpdateWinograd_3x3_4x4,  1,  63,  63, True,  False, None,  (conv_3x3,) ),
 
     (FpropWinograd_2x2_5x5,  32,  32,  32, False, True,  None,  (conv_5x5,) ),
@@ -312,9 +314,9 @@ for config in configs:
                 difA = cpuA - devA
 
                 if out:
-                    np.savetxt("out.txt",  difA.reshape((-1,dimO[-1])), fmt='%5.1f')
-                    np.savetxt("outC.txt", cpuA.reshape((-1,dimO[-1])), fmt='%5.1f')
-                    np.savetxt("outD.txt", devA.reshape((-1,dimO[-1])), fmt='%5.1f')
+                    np.savetxt("out.txt",  difA.reshape((-1,dimO[-1])), fmt='%6.3f')
+                    np.savetxt("outC.txt", cpuA.reshape((-1,dimO[-1])), fmt='%6.3f')
+                    np.savetxt("outD.txt", devA.reshape((-1,dimO[-1])), fmt='%6.3f')
 
                 maxval = abs(cpuA).max()
                 maxdif = abs(difA).max()

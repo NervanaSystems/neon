@@ -2319,14 +2319,14 @@ STORE_O:
     our $brelu; return $brelu ? q{
 //delta *= x > 0
 --:-:-:-:1      P2R preds, PR, RZ, 0x0f;
-11:-:-:-:1      FSETP.LT.AND P0, PT, b00, RZ, PT;
-02:-:-:-:1      FSETP.LT.AND P1, PT, b04, RZ, PT;
-24:-:-:-:1      FSETP.LT.AND P2, PT, b08, RZ, PT;
-08:-:-:-:1      FSETP.LT.AND P3, PT, b12, RZ, PT;
---:-:-:-:1  @P0 MOV out00, RZ;
---:-:-:-:1  @P1 MOV out04, RZ;
---:-:-:-:1  @P2 MOV out08, RZ;
---:-:-:-:1  @P3 MOV out12, RZ;
+11:-:-:-:1      FSETP.GT.AND P0, PT, b00, RZ, PT;
+02:-:-:-:1      FSETP.GT.AND P1, PT, b04, RZ, PT;
+24:-:-:-:1      FSETP.GT.AND P2, PT, b08, RZ, PT;
+08:-:-:-:1      FSETP.GT.AND P3, PT, b12, RZ, PT;
+--:-:-:-:1 @!P0 MOV out00, RZ;
+--:-:-:-:1 @!P1 MOV out04, RZ;
+--:-:-:-:1 @!P2 MOV out08, RZ;
+--:-:-:-:1 @!P3 MOV out12, RZ;
 --:-:-:Y:d      R2P PR, preds, 0x0f;
 
     } : '';
@@ -2364,7 +2364,7 @@ STORE_O:
 +]
 [+
     our $bsum; return $bsum ? q{
---:-:-:-:1      SEL sum00, out00, RZ, P0;
+20:-:-:-:1      SEL sum00, out00, RZ, P0;
 --:-:-:-:1      SEL sum04, out04, RZ, P1;
 --:-:-:-:1      SEL sum08, out08, RZ, P2;
 --:-:-:-:1      SEL sum12, out12, RZ, P3;
@@ -2399,7 +2399,7 @@ STORE_O:
 [+
     our $bsum; return $bsum ? q{
 <SCHEDULE_BLOCK>
-20:-:-:-:1      XMAD.LO2C bsum00, k00, param_gridMPQN, bsum_offset;
+--:-:-:-:1      XMAD.LO2C bsum00, k00, param_gridMPQN, bsum_offset;
 --:-:-:-:1      XMAD.LO2C bsum04, k04, param_gridMPQN, bsum_offset;
 --:-:-:-:1      XMAD.LO2C bsum08, k08, param_gridMPQN, bsum_offset;
 --:-:-:-:1      XMAD.LO2C bsum12, k12, param_gridMPQN, bsum_offset;
