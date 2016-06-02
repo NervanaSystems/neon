@@ -19,7 +19,29 @@ import abc
 from future.utils import with_metaclass
 
 
-class AbstractBackend(with_metaclass(abc.ABCMeta, object)):
+class Backend_ABC_Meta(abc.ABCMeta):
+    """
+    metaclass for the backend objects
+    takes care of registering all the backend subclasses
+    """
+    def __init__(self, name, bases, dict_):
+        if not hasattr(self, 'backends'):
+            self.backends = {}
+        else:
+            name = getattr(self, 'backend_name', name)
+            if name not in ['Backend']:
+                self.backends[name] = self
+        super(Backend_ABC_Meta, self).__init__(name, bases, dict_)
+
+
+class AbstractBackend(with_metaclass(Backend_ABC_Meta, object)):
+    def __del__(self):
+        self.cleanup_backend()
+
+    @abc.abstractmethod
+    def cleanup_backend(self):
+        """Release any resources that have been acquired by this backend."""
+        raise NotImplementedError()
 
     @abc.abstractmethod
     def gen_rng(self, seed=None):

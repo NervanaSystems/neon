@@ -455,6 +455,22 @@ class Backend(AbstractBackend):
                                        usage and slow down.  Only relevant for GPU
                                        backends.
     """
+    @staticmethod
+    def backend_choices():
+        """Return the list of available backends."""
+        names = Backend.backends.keys()
+        names.sort()
+        return names
+
+    @staticmethod
+    def allocate_backend(name, **kargs):
+        """Allocate a named backend."""
+        try:
+            return Backend.backends[name](**kargs)
+        except KeyError:
+            names = ', '.join(["'%s'" % (_,) for _ in Backend.backend_choices()])
+            raise ValueError("backend must be one of (%s)" % (names,))
+
     def __init__(self, rng_seed=None, default_dtype=np.float32,
                  compat_mode=None, deterministic=None):
         # dtype
@@ -480,6 +496,10 @@ class Backend(AbstractBackend):
             logger.warning('deterministic arg is deprecated in favor of specifying random seed')
 
         self.deterministic = self.rng_seed is not None
+
+    def cleanup_backend(self):
+        """Release any resources that have been acquired by this backend."""
+        pass
 
     def output_dim(self, X, S, padding, strides, pooling=False):
         """

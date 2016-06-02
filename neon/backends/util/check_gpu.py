@@ -66,6 +66,13 @@ def get_compute_capability(device_id=None, verbose=False):
     return max(full_version)
 
 
+def ensure_gpu_capability(device_id):
+    gpuflag = (get_compute_capability(device_id) >= 3.0)
+    if gpuflag is False:
+        raise RuntimeError("Device " + str(device_id) + " does not have CUDA compute " +
+                           "capability 3.0 or greater")
+
+
 def get_device_count(verbose=False):
     """
     Query device count through PyCuda.

@@ -692,7 +692,7 @@ class NervanaGPU(Backend):
 
         TODO: define other keyword parameters!
         """
-
+    backend_name = 'gpu'
     # size of the RNG pool on device
     # currently this is hard wired
     _RNG_POOL_SIZE = (3 * 2048 * 32, 1)
@@ -707,7 +707,13 @@ class NervanaGPU(Backend):
                  hist_bins=64,
                  hist_offset=-48,
                  compat_mode=None,
-                 enable_winograd=True):
+                 enable_winograd=True,
+                 # Ignored
+                 num_devices=None
+                 ):
+        from neon.backends.util import check_gpu
+        check_gpu.ensure_gpu_capability(device_id)
+
         if default_dtype not in [np.float16, np.float32]:
             raise ValueError('Default data type for nervanagpu '
                              'backend must be float16 or 32')
@@ -801,6 +807,11 @@ class NervanaGPU(Backend):
 
     def scratch_buffer_init(self):
         self.scratch_offset = 0
+
+    def cleanup_backend(self):
+        super(NervanaGPU, self).cleanup_backend()
+        self.ctx.pop()
+        self.ctx.detach()
 
     def scratch_buffer(self, size):
 

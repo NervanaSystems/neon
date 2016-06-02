@@ -508,13 +508,20 @@ class NervanaCPU(Backend):
     See also:
         :class:`CPUTensor`
     """
+    backend_name = 'cpu'
 
     def __init__(self,
                  rng_seed=None,
                  default_dtype=np.float32,
                  hist_bins=64,
                  hist_offset=-48,
-                 compat_mode=None):
+                 compat_mode=None,
+                 # Ignored
+                 num_devices=None,
+                 stochastic_round=None,
+                 device_id=None,
+                 deterministic=None
+                 ):
 
         if default_dtype not in [np.float16, np.float32, np.float64]:
             logger.error('Default data type for nervanagpu '

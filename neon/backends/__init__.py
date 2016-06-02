@@ -26,6 +26,16 @@ from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
 from neon.backends.util.check_gpu import get_device_count
 
+# These are imported to register the backends with the factory
+import neon.backends.nervanacpu
+import neon.backends.nervanagpu
+
+try:
+    # Register if it exists
+    import mgpu.nervanamgpu
+except ImportError:
+    pass
+
 
 def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
@@ -83,45 +93,15 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
                       'specifying random seed')
        deterministic = None
 
-    if backend == 'cpu' or backend is None:
-        from neon.backends.nervanacpu import NervanaCPU
-        be = NervanaCPU(rng_seed=rng_seed, default_dtype=datatype, compat_mode=compat_mode)
-    elif backend == 'gpu' or backend == 'mgpu':
-        gpuflag = False
-        # check nvcc
-        from neon.backends.util import check_gpu
-        gpuflag = (check_gpu.get_compute_capability(device_id) >= 3.0)
-        if gpuflag is False:
-            raise RuntimeError("Device {} does not have CUDA"
-                               " compute capability 3.0 or greater".format(device_id))
-        if backend == 'gpu':
-            from neon.backends.nervanagpu import NervanaGPU
-            # init gpu
-            be = NervanaGPU(rng_seed=rng_seed, default_dtype=datatype,
-                            stochastic_round=stochastic_round,
-                            device_id=device_id,
-                            compat_mode=compat_mode,
-                            deterministic=deterministic)
-        else:
-            try:
-                from mgpu.nervanamgpu import NervanaMGPU
-                # init multiple GPU
-                be = NervanaMGPU(rng_seed=rng_seed,
-                                 default_dtype=datatype,
-                                 stochastic_round=stochastic_round,
-                                 num_devices=max_devices,
-                                 compat_mode=compat_mode,
-                                 deterministic=deterministic)
-            except ImportError:
-                logger.error("Multi-GPU support is a premium feature "
-                             "available exclusively through the Nervana cloud."
-                             " Please contact info@nervanasys.com for details.")
-                raise
-    elif backend == 'argon':
-        from argon.neon_backend.ar_backend import ArBackend
-        be = ArBackend(rng_seed=rng_seed, default_dtype=datatype)
-    else:
-        raise ValueError("backend must be one of ('cpu', 'gpu', 'mgpu')")
+    from neon.backends.backend import Backend
+    be = Backend.allocate_backend(backend,
+                                    rng_seed=rng_seed,
+                                    default_dtype=datatype,
+                                    stochastic_round=stochastic_round,
+                                    device_id=device_id,
+                                    num_devices=max_devices,
+                                    compat_mode=compat_mode,
+                                    deterministic=deterministic)
 
     logger.info("Backend: {}, RNG seed: {}".format(backend, rng_seed))
 
@@ -133,20 +113,5 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
 def cleanup_backend():
     if NervanaObject.be is None:
         return;
-    be = NervanaObject.be
-    if type(be).__name__ in ['NervanaGPU', 'NervanaMGPU']:
-        from neon.backends.nervanagpu import NervanaGPU
-        try:
-            if type(be) is NervanaGPU:
-                be.ctx.pop()
-                be.ctx.detach()
-            else:
-                from mgpu.nervanamgpu import NervanaMGPU
-                assert type(be) is NervanaMGPU
-                for ctx in be.ctxs:
-                    ctx.pop()
-                    ctx.detach()
-        except:
-            pass
-    del(be)
+    NervanaObject.be.cleanup_backend()
     NervanaObject.be = None

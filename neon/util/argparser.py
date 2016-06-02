@@ -30,6 +30,7 @@ import inspect
 
 from neon import __version__ as neon_version
 from neon.backends import gen_backend
+from neon.backends.backend import Backend
 from neon.backends.util.check_gpu import get_compute_capability, get_device_count
 from neon.callbacks.callbacks import Callbacks
 
@@ -135,10 +136,9 @@ class NeonArgparser(configargparse.ArgumentParser):
                             help='number of checkpoint files to retain')
 
         be_grp = self.add_argument_group('backend')
-        be_grp.add_argument('-b', '--backend', choices=['cpu', 'gpu', 'mgpu', 'argon'],
-                            default=self.defaults.get('backend',
-                                                      'gpu' if get_compute_capability() >= 3.0
-                                                      else 'cpu'),
+        be_grp.add_argument('-b', '--backend', choices=Backend.backend_choices(),
+                            default='gpu' if get_compute_capability() >= 3.0
+                                    else 'cpu',
                             help='backend type. Multi-GPU support is a premium '
                                  'feature available exclusively through the '
                                  'Nervana cloud. Please contact '
