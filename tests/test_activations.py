@@ -18,6 +18,7 @@ from math import tanh as true_tanh
 import numpy as np
 from neon import NervanaObject
 from neon.transforms import Identity, Rectlin, Softmax, Tanh, Logistic
+from utils import allclose_with_out
 
 
 def compare_tensors(func, inputs, outputs, deriv=False, tol=0.):
@@ -144,6 +145,33 @@ def test_softmax_derivative(backend_default):
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     outputs = np.ones((1, 1))  # shortcut only
     compare_tensors(Softmax(), inputs, outputs, deriv=True)
+
+
+def test_softmax_big_inputs(backend_default):
+    np.random.seed(1)
+
+    be = backend_default
+    assert be.bsz >= 128, 'This tests needs large batch size'
+
+    act = Softmax()
+    Nout = 1000  # 1000 input and output units to softmax
+
+    # random inputs
+    x_ = np.random.random((Nout, be.bsz))
+
+    x = be.iobuf(Nout)
+    # init input to softmax
+    x[:] = x_
+
+    # numpy softmax
+    mx = np.max(x_, axis=0)
+    ex = np.exp(x_ - mx)
+    y_ = ex/np.sum(ex, axis=0)
+
+    # in-place softmax on device
+    x[:] = act(x)
+
+    assert allclose_with_out(y_, x.get(), atol=0.0, rtol=1.0e-5)
 
 
 """Tanh
