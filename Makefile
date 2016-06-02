@@ -19,9 +19,8 @@
 .SUFFIXES:
 
 # Choose default Python version; overrideable with "make python2" or "make python3".
-PYTHON_VERSION := $(shell python --version 2>&1  | cut -c8)
-VIRTUALENV_DIR := .venv
-ACTIVATE := $(VIRTUALENV_DIR)/bin/activate
+PY := $(shell python --version 2>&1  | cut -c8)
+VIRTUALENV_DIR_BASE := .venv
 
 # get release version info
 RELEASE := $(strip $(shell grep '^VERSION *=' setup.py | cut -f 2 -d '=' \
@@ -75,30 +74,42 @@ DOC_PUB_RELEASE_PATH := $(DOC_PUB_PATH)/$(RELEASE)
 # neon compiled objects
 DATA_LOADER := loader
 
-ifeq ($(PYTHON_VERSION), 2)
+ifeq ($(PY), 2)
 	VIRTUALENV_EXE := virtualenv -p python2.7
 	PYLINT3K_ARGS := --disable=no-absolute-import
+	VIRTUALENV_DIR = $(VIRTUALENV_DIR_BASE)$(PY)
+	ACTIVATE = $(VIRTUALENV_DIR)/bin/activate
 else
 	VIRTUALENV_EXE := python3 -m venv
 	PYLINT3K_ARGS :=
+	VIRTUALENV_DIR = $(VIRTUALENV_DIR_BASE)$(PY)
+	ACTIVATE = $(VIRTUALENV_DIR)/bin/activate
 endif
 
-.PHONY: python2 python3 default env sysinstall sysinstall_nodeps neon_install \
+.PHONY: default all env sysinstall sysinstall_nodeps neon_install python2 python3 \
 	    sysdeps sysuninstall clean_py clean_so \
 	    clean test coverage style lint lint3k check doc html release examples \
 	    serialize_check $(DATA_LOADER)
 
-python2: VIRTUALENV_EXE := virtualenv -p python2.7
-python2: PYLINT3K_ARGS := --disable=no-absolute-import
-python2: default
-
-python3: VIRTUALENV_EXE := python3 -m venv
-python3: PYLINT3K_ARGS :=
-python3: default
-
 default: env
 
+all:
+	$(MAKE) PY=3 TEST_OPTS=$(TEST_OPTS) test
+	$(MAKE) PY=2 TEST_OPTS=$(TEST_OPTS) test
+
 env: $(ACTIVATE) $(DATA_LOADER)
+
+python2: VIRTUALENV_EXE := virtualenv -p python2.7
+python2: VIRTUALENV_DIR := $(VIRTUALENV_DIR_BASE)2
+python2: ACTIVATE := $(VIRTUALENV_DIR)/bin/activate
+python2: PYLINT3K_ARGS := --disable=no-absolute-import
+python2: env
+
+python3: VIRTUALENV_EXE := python3 -m venv
+python3: VIRTUALENV_DIR := $(VIRTUALENV_DIR_BASE)3
+python3: ACTIVATE := $(VIRTUALENV_DIR)/bin/activate
+python3: PYLINT3K_ARGS :=
+python3: env
 
 $(ACTIVATE): requirements.txt gpu_requirements.txt vis_requirements.txt
 	@echo "Updating virtualenv dependencies in: $(VIRTUALENV_DIR)..."
@@ -120,11 +131,12 @@ ifeq ($(HAS_GPU), true)
 endif
 	@echo "Installing neon in development mode..."
 	@. $(ACTIVATE); python setup.py develop
-	@echo "######################"
+	@rm -f $(VIRTUALENV_DIR_BASE); ln -s $(VIRTUALENV_DIR) $(VIRTUALENV_DIR_BASE)
+	@echo "###########################################################"
 	@echo "Setup complete.  Type:"
 	@echo "    . '$(ACTIVATE)'"
-	@echo "to work interactively"
-	@echo "######################"
+	@echo "to work interactively ($(VIRTUALENV_DIR) also symlinked to $(VIRTUALENV_DIR_BASE))"
+	@echo "###########################################################"
 	@touch $(ACTIVATE)
 	@echo
 
@@ -169,7 +181,7 @@ clean_so:
 
 clean: clean_py clean_so
 	@echo "Removing virtual environment files..."
-	@rm -rf $(VIRTUALENV_DIR)
+	@rm -rf $(VIRTUALENV_DIR_BASE) $(VIRTUALENV_DIR_BASE)2 $(VIRTUALENV_DIR_BASE)3
 	@echo
 
 test: env
