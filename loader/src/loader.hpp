@@ -138,6 +138,9 @@ protected:
             // Pad the rest of the buffer with zeros.
             memset(targetBuf + encTargetLen, 0, _targetLen - encTargetLen);
         }
+
+        // Store target length inside metadata.
+        *(meta + _batchSize) = encTargetLen;
     }
 
     void transform(int id, char* encDatum, int encDatumLen,
@@ -380,12 +383,13 @@ public:
         try {
             int dataLen = _batchSize * _datumSize * _datumTypeSize;
             int targetLen = _batchSize * _targetSize * _targetTypeSize;
+            int metaLen = 2 * _batchSize;
             // Start the read buffers off with a reasonable size. They will
             // get resized as needed.
-            _readBufs = new BufferPool(dataLen / 8, targetLen, _batchSize);
+            _readBufs = new BufferPool(dataLen / 8, targetLen, metaLen);
             _readThread = new ReadThread(*_readBufs, _reader);
             bool pinned = (_device->_type != CPU);
-            _decodeBufs = new BufferPool(dataLen, targetLen, _batchSize, pinned);
+            _decodeBufs = new BufferPool(dataLen, targetLen, metaLen, pinned);
             int numCores = thread::hardware_concurrency();
             int itemsPerThread = (_batchSize - 1) /  numCores + 1;
             int threadCount =  (_batchSize - 1) / itemsPerThread + 1;

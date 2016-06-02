@@ -150,6 +150,10 @@ public:
     : Reader(batchSize, repoDir, indexFile, shuffle, false, 100), _itemIdx(0),
       _targetTypeSize(targetTypeSize), _targetConversion(targetConversion) {
         static_assert(sizeof(int) == 4, "int is not 4 bytes");
+        if (_targetConversion == ASCII_TO_BINARY) {
+            // For now, assume that binary targets are 4 bytes long.
+            assert(_targetTypeSize == 4);
+        }
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
@@ -188,15 +192,11 @@ public:
 
         switch(_targetConversion) {
         case NO_CONVERSION:
+        case CHAR_TO_INDEX:
             *targetLen = elem->_targets[0].size();
             break;
         case ASCII_TO_BINARY:
-            // For now, assume that binary targets are 4 bytes long.
-            assert(_targetTypeSize == 4);
             *targetLen = _targetTypeSize;
-            break;
-        case CHAR_TO_INDEX:
-            *targetLen = _index._maxTargetSize;
             break;
         default:
             throw std::runtime_error("Unknown conversion specified for target");
@@ -267,13 +267,10 @@ private:
             uchar elem = target[i];
             targetBuf[i] = _charMap[elem];
         }
-        char* padding = targetBuf + target.size();
-        int paddingLen = _index._maxTargetSize - target.size();
-        // The last character in the alphabet is assumed to represent non-data.
-        memset(padding, _alphabet.size() - 1, paddingLen);
     }
 
     void createCharMap() {
+        assert(_alphabet.size() <= 256);
         for (uint i = 0; i < _alphabet.size(); i++) {
             uchar elem = _alphabet[i];
             _charMap[elem] = i;
@@ -323,5 +320,5 @@ private:
     int                         _targetConversion;
     string                      _alphabet;
     static constexpr int        _charMapSize = 256;
-    int                         _charMap[_charMapSize];
+    uchar                       _charMap[_charMapSize];
 };

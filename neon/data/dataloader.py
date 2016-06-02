@@ -125,7 +125,7 @@ class DataLoader(NervanaDataIterator):
 
         self.data = alloc_bufs(self.datum_size, self.datum_dtype)
         self.targets = alloc_bufs(self.target_size, self.target_dtype)
-        self.meta = alloc_bufs(1, np.int32)
+        self.meta = alloc_bufs(2, np.int32)
         self.media_params.alloc(self)
         self.device_params = DeviceParams(self.be.device_type,
                                           self.be.device_id,

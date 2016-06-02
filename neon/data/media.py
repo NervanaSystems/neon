@@ -240,14 +240,18 @@ class AudioParams(MediaParams):
 
     def alloc(self, loader):
         if self.ctc_cost is True:
-            self.target_sizes = loader.be.iobuf(dim0=1, dtype=np.int32)
-            self.target_sizes[:] = loader.target_size
-            shape = loader.targets[0].shape[::-1]
-            self.targets = loader.be.empty(shape, dtype=loader.target_dtype)
+            shape = (np.prod(loader.targets[0].shape), 1)
+            self.packed_targets = loader.be.empty(shape, dtype=loader.target_dtype)
 
     def process(self, loader, data, targets, meta):
         if self.ctc_cost is True:
-            loader.be.copy_transpose(targets, self.targets)
-            return data, (self.targets.reshape((np.prod(targets.shape), 1)),
-                          self.target_sizes, meta)
+            # FIXME: Do the packing of targets within the context of a
+            # background thread inside the loader library.
+            start = 0
+            target_lens = meta.get()[1]
+            for i in range(loader.bsz):
+                end = start + target_lens[i]
+                self.packed_targets[start:end, 0] = targets[:target_lens[i], i]
+                start = end
+            return data, (self.packed_targets, meta[1], meta[0])
         return data, targets
