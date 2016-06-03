@@ -72,7 +72,7 @@ def conv_params(fsize, nfm, strides=1, relu=True, batch_norm=True):
     return dict(fshape=(fsize, fsize, nfm),
                 strides=strides,
                 activation=(Rectlin() if relu else None),
-                padding=(fsize/2),
+                padding=(fsize // 2),
                 batch_norm=batch_norm,
                 init=Kaiming(local=True))
 

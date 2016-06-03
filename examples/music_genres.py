@@ -41,7 +41,7 @@ def create_index_files(source_path, train_percent=80, pattern='*'):
     if os.path.exists(train_idx) and os.path.exists(val_idx):
         return train_idx, val_idx
     subdirs = glob.iglob(os.path.join(source_path, '*'))
-    subdirs = filter(lambda x: os.path.isdir(x), subdirs)
+    subdirs = list(filter(lambda x: os.path.isdir(x), subdirs))
     classes = sorted(map(lambda x: os.path.basename(x), subdirs))
     class_map = {key: val for key, val in zip(classes, range(len(classes)))}
 
@@ -54,7 +54,7 @@ def create_index_files(source_path, train_percent=80, pattern='*'):
             label = class_map[os.path.basename(subdir)]
             files = glob.glob(os.path.join(subdir, pattern))
             np.random.shuffle(files)
-            train_count = len(files) * train_percent / 100
+            train_count = (len(files) * train_percent) // 100
             for idx, filename in enumerate(files):
                 fd = train_fd if idx < train_count else val_fd
                 rel_path = os.path.join(os.path.basename(subdir),

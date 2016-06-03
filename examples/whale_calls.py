@@ -59,7 +59,7 @@ def create_index_files(data_dir, train_percent=80):
     # Split into training and validation subsets
     np.random.seed(0)
     np.random.shuffle(train)
-    train_count = train.shape[0] * train_percent / 100
+    train_count = (train.shape[0] * train_percent) // 100
     to_csv(all_idx, train)
     to_csv(train_idx, train[:train_count])
     to_csv(val_idx, train[train_count:])

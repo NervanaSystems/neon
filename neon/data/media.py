@@ -17,6 +17,8 @@
 This must be kept in sync with loader/media.hpp.
 """
 
+from __future__ import division
+from future.utils import iteritems
 import math
 import logging
 import numpy as np
@@ -258,7 +260,7 @@ class AudioParams(MediaParams):
                 ('window_type', ct.c_int)]
     _defaults_ = {'frame_duration': 10,
                   'overlap_percent': 30,
-                  'window_func': 'hann',
+                  'window_func': b'hann',
                   'random_scale_percent': 0.0,
                   'add_noise': False,
                   'ctc_cost': False,
@@ -268,17 +270,17 @@ class AudioParams(MediaParams):
                   'width': -1,
                   'height': -1,
                   'window_type': -1}
-    _windows_ = {'none': 0,
-                 'hann': 1,
-                 'blackman': 2,
-                 'hamming': 3,
-                 'bartlett': 4}
+    _windows_ = {b'none': 0,
+                 b'hann': 1,
+                 b'blackman': 2,
+                 b'hamming': 3,
+                 b'bartlett': 4}
 
     def __init__(self, **kwargs):
         for key in kwargs:
             if not hasattr(self, (key)):
                 raise ValueError('Unknown argument %s' % key)
-        for key, value in self._defaults_.iteritems():
+        for key, value in iteritems(self._defaults_):
             setattr(self, key, value)
         super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
         for key in ['window_size', 'overlap', 'stride', 'width',

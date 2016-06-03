@@ -68,7 +68,7 @@ def extract_images(out_dir, padded_size):
     from PIL import Image
     dataset = dict()
     dataset['train'], dataset['val'], _ = load_cifar10(out_dir, normalize=False)
-    pad_size = (padded_size - 32) / 2 if padded_size > 32 else 0
+    pad_size = (padded_size - 32) // 2 if padded_size > 32 else 0
     pad_width = ((0, 0), (pad_size, pad_size), (pad_size, pad_size))
 
     for setn in ('train', 'val'):
