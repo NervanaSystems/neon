@@ -84,13 +84,15 @@ def test_batched_dot(backend_pair_bench):
 
     cpuI, cpuE, cpuW = setup_test_data(X, N, C, K, dtype)
 
-    ngO, ngB, ngU = run_batched_dot(ng, cpuI, cpuE, cpuW, X, dtype)
     ncO, ncB, ncU = run_batched_dot(nc, cpuI, cpuE, cpuW, X, dtype)
     npO, npB, npU = run_batched_dot(np, cpuI, cpuE, cpuW, X, dtype)
 
-    assert tensors_allclose(npO, ngO, rtol=0, atol=1e-3)
-    assert tensors_allclose(npB, ngB, rtol=0, atol=1e-3)
-    assert tensors_allclose(npU, ngU, rtol=0, atol=1e-3)
+    if ng.compute_capability > (5, 0):
+        ngO, ngB, ngU = run_batched_dot(ng, cpuI, cpuE, cpuW, X, dtype)
+
+        assert tensors_allclose(npO, ngO, rtol=0, atol=1e-3)
+        assert tensors_allclose(npB, ngB, rtol=0, atol=1e-3)
+        assert tensors_allclose(npU, ngU, rtol=0, atol=1e-3)
 
     assert tensors_allclose(npO, ncO, rtol=0, atol=1e-3)
     assert tensors_allclose(npB, ncB, rtol=0, atol=1e-3)

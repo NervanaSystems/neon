@@ -17,6 +17,7 @@ Convolution layer tests
 """
 from builtins import zip
 import numpy as np
+import pytest
 from neon import NervanaObject, logger as neon_logger
 from neon.layers import Sequential, Conv, Pooling, MergeBroadcast, Affine
 from neon.initializers.initializer import Gaussian, Constant
@@ -186,6 +187,9 @@ def test_branch_model_fork(backend_gpu):
     from neon.layers import BranchNode, Tree
     np.random.seed(0)
     be = NervanaObject.be
+    if be.compute_capability < (5, 0):
+        # TODO switch to pytest.skip() once verified to be expected failure
+        pytest.xfail(reason='Test requires Maxwell or higher')
     be.bsz = 64
     bnode = BranchNode()
     i1 = inception([(32,), (32, 32), ('max', 16)])

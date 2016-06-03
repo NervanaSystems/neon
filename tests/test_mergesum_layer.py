@@ -17,6 +17,7 @@ Convolution layer tests
 """
 from builtins import zip
 import numpy as np
+import pytest
 from neon import NervanaObject
 from neon.layers import Sequential, Conv, MergeSum, SkipNode, Activation
 from neon.initializers.initializer import Gaussian, IdentityInit
@@ -70,6 +71,8 @@ def module_factory_copy(ref_module, modfunc, nfm, stride=1, name="i"):
 
 def test_skip_noupsample(backend_gpu):
     be = NervanaObject.be
+    if be.compute_capability < (5, 0):
+        pytest.xfail(reason="Test requires Maxwell or higher")
     be.bsz = 64
     mergesum_test_config(be, modfunc=identity_skip, use_stride=1)
 

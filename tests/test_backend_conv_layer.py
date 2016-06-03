@@ -136,6 +136,9 @@ def test_conv_layer(fargs_tests, backend_pair):
     dtype = np.float32
     ng, nc = backend_pair
 
+    if ng.compute_capability < (5, 0):
+        pytest.skip(msg="Test requires Maxwell or higher")
+
     N, C, K = fargs_tests[0]
     D, H, W = fargs_tests[1]
     T, R, S = fargs_tests[2]

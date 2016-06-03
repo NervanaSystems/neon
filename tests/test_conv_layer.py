@@ -18,7 +18,9 @@ Convolution layer tests
 from builtins import range
 import itertools as itt
 import numpy as np
+import pytest
 from neon import NervanaObject
+from neon.backends.nervanagpu import NervanaGPU
 from neon.layers.layer import Convolution
 from neon.initializers.initializer import Uniform
 from utils import allclose_with_out
@@ -134,6 +136,11 @@ def test_conv_zeros(backend_default, zeros_convargs):
 
 
 def test_conv_ones(backend_default, ones_convargs):
+    if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
+        if ones_convargs[3] > 32:
+            # TODO switch to pytest.skip() if verified to be expected failure
+            pytest.xfail(reason="Test requires Maxwell or higher")
+
     dtypeu = np.float32
     indim, nifm, fshape, nofm, batch_size, stride, pad = ones_convargs
     NervanaObject.be.bsz = batch_size
@@ -199,6 +206,10 @@ def test_conv_ones(backend_default, ones_convargs):
 
 
 def test_conv_rand(backend_default, rand_convargs):
+
+    if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
+        # TODO switch to pytest.skip() if verified to be expected failure
+        pytest.xfail(reason='Test requires Maxwell or higher')
     indim, nifm, fshape, nofm, batch_size, stride, rng_max, w_rng, pad = rand_convargs
     NervanaObject.be.bsz = batch_size
     inp_rng = [0.0, rng_max]
