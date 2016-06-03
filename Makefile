@@ -94,8 +94,8 @@ endif
 default: env
 
 all:
-	$(MAKE) PY=3 TEST_OPTS=$(TEST_OPTS) test
-	$(MAKE) PY=2 TEST_OPTS=$(TEST_OPTS) test
+	$(MAKE) PY=3 TEST_OPTS='$(TEST_OPTS)' test
+	$(MAKE) PY=2 TEST_OPTS='$(TEST_OPTS)' test
 
 env: $(ACTIVATE) $(DATA_LOADER)
 
