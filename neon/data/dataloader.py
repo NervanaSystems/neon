@@ -39,7 +39,67 @@ class DeviceParams(ct.Structure):
 class DataLoader(NervanaDataIterator):
     """
     Encapsulates the data loader library and exposes an API to iterate over
-    minibatches of generic data.
+    generic data (images, video or audio given in compressed form). An index
+    file that maps the data examples to their targets is expected to be provided
+    in CSV format.
+
+    Arguments:
+        set_name (str):
+            Name of this dataset partition.  This is used as prefix for
+            directories and index files that may be created while ingesting.
+        repo_dir (str):
+            Directory to find the data.  This may also be used as the output
+            directory to store ingested data.
+        media_params (MediaParams):
+            Parameters specific to the media type of the input data.
+        target_size (int):
+            The size of the targets.  For example: if the target is a class
+            label, set this parameter to 1, indicating a single integer.  If
+            the target is a mask image, the number of pixels in that image
+            should be specified.
+        target_conversion (str, optional):
+            Specifies the method to be used for converting the targets that are
+            provided in the index file.  The options are "no_conversion",
+            "ascii_to_binary", "char_to_index" and "read_contents".  If this
+            parameter is set to "read_contents", the targets given in the index
+            file are treated as pathnames and their contents read in.  Defaults
+            to "ascii_to_binary".
+        index_file (str, optional):
+            CSV formatted index file that defines the mapping between each
+            example and its target.  The first line in the index file is
+            assumed to be a header and is ignored.  Two columns are expected in
+            the index.  The first column should be the file system path to
+            individual data examples.  The second column may contain the actual
+            label or the pathname of a file that contains the labels (e.g. a
+            mask image).  If this parameter is not specified, creation of an
+            index file is attempted.  Automaitic index generation can only be
+            performed if the dataset is organized into subdirectories, which
+            also represent labels.
+        shuffle (boolean, optional):
+            Whether to shuffle the order of data examples as the data is
+            ingested.
+        reshuffle (boolean, optional):
+            Whether to reshuffle the order of data examples as they are loaded.
+            If this is set to True, the order is reshuffled for each epoch.
+            Useful for batch normalization.  Defaults to False.
+        datum_type (data-type, optional):
+            Data type of input data.  Defaults to np.uint8.
+        target_type (data-type, optional):
+            Data type of targets.  Defaults to np.int32.
+        onehot (boolean, optional):
+            If the targets are categorical and have to be converted to a one-hot
+            representation.
+        nclasses (int, optional):
+            Number of classes, if this dataset is intended for a classification
+            problem.
+        subset_percent (int, optional):
+            Value between 0 and 100 indicating what percentage of the dataset
+            partition to use.  Defaults to 100.
+        ingest_params (IngestParams):
+            Parameters to specify special handling for ingesting data.
+        alphabet (str, optional):
+            Alphabet to use for converting string labels.  This is only
+            applicable if target_conversion is set to "char_to_index".
     """
 
     _converters_ = {'no_conversion': 0,

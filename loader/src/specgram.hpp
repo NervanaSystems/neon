@@ -31,21 +31,13 @@ class Specgram {
 public:
     Specgram(SignalParams* params, int id)
     : _clipDuration(params->_clipDuration), _windowSize(params->_windowSize),
-      _stride(params->_stride), _timeSteps(params->_timeSteps),
-      _numFreqs(params->_numFreqs), _addNoise(params->_addNoise),
+      _stride(params->_stride), _timeSteps(params->_width),
+      _numFreqs(params->_height), _addNoise(params->_addNoise),
       _window(0), _rng(id) {
         static_assert(sizeof(short) == 2, "short is not 2 bytes");
         assert(_stride != 0);
         if (powerOfTwo(_windowSize) == false) {
             throw std::runtime_error("Window size must be a power of 2");
-        }
-
-        if (params->_resample == true) {
-            throw std::runtime_error("Resampling not implemented yet");
-        }
-
-        if ((params->_timeScaleFactor != 1.0) || (params->_freqScaleFactor != 1.0)) {
-            throw std::runtime_error("Scaling not implemented yet");
         }
 
         _maxSignalSize = params->_clipDuration * params->_samplingFreq / 1000;
@@ -54,9 +46,9 @@ public:
             _window = new Mat(1, _windowSize, CV_32FC1);
             createWindow(params->_windowType);
         }
-        assert(params->_randomizeTimeScaleBy >= 0);
-        assert(params->_randomizeTimeScaleBy < 100);
-        _scaleBy = params->_randomizeTimeScaleBy / 100.0;
+        assert(params->_randomScalePercent >= 0);
+        assert(params->_randomScalePercent < 100);
+        _scaleBy = params->_randomScalePercent / 100.0;
         _scaleMin = 1.0 - _scaleBy;
         _scaleMax = 1.0 + _scaleBy;
     }

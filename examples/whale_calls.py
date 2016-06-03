@@ -98,7 +98,7 @@ args = parser.parse_args()
 train_idx, val_idx, all_idx, test_idx = create_index_files(args.data_dir)
 
 common_params = dict(sampling_freq=2000, clip_duration=2000, frame_duration=80, overlap_percent=50)
-train_params = AudioParams(add_noise=True, randomize_time_scale_by=5, **common_params)
+train_params = AudioParams(add_noise=True, random_scale_percent=5, **common_params)
 test_params = AudioParams(**common_params)
 common = dict(target_size=1, nclasses=2)
 

@@ -50,6 +50,68 @@ class MediaParams(ct.Structure):
 
 
 class ImageParams(MediaParams):
+    """
+    Used to provide image specific parameters while loading data.
+
+    Arguments:
+        channel_count (int):
+            The number of channels in the image.
+        height (int):
+            The height to crop the image to in pixels.
+        width (int):
+            The width to crop the iamge to  in pixels.
+        center (boolean):
+            Whether to center the crop.  If this is set to False, random
+            cropping is performed.
+        flip (boolean):
+            Whether to flip the image randomly.
+        scale_min (int):
+            This and the scale_max parameter specify the range to scale
+            the short side of a given input image.
+            If an image is 100 x 200, for example, scale_min and scale_max are
+            (256, 256) and height and width are given as 224, then the image
+            will be first scaled to 256 x 512, and then a random crop of size
+            224 x 224 will be taken from the result.  (If center is True, the
+            center crop will be taken).  If scale_min and scale_max are
+            (256, 300) then the resize dimension will be randomly selected
+            between 256 and 300 (unless center is True, in which case the
+            lower value, 256, will always be used).  If scale_min and scale_max
+            are (0, 0), then the entire image will be used, without regard to
+            aspect ratio.  For the 100 x 200 image, the entire image will be
+            used and rescaled into a height x width output.
+        scale_max (int):
+            See scale_min.
+        contrast_min (int):
+            This and the contrast_max parameter are percentage values
+            indicating the range over which to randomly vary the contrast of
+            the image.  No contrast variation is applied if
+            contrast_min == contrast_max.  Defaults to (100, 100).
+        contrast_max (int):
+            See contrast_min.
+        rotate_min (int):
+            This and the rotate_max parameter specify the minimum and maximum
+            angle (in degrees) to randomly rotate the input image.
+        rotate_max (int):
+            See rotate_max.
+        aspect_ratio (int):
+            If non-zero, then this will be interpreted as the percentage to
+            randomly stretch the image in either horizontal or vertical
+            direction by some amount between 100 and aspect_ratio.  For example,
+            aspect_ratio = 133 implies that the square crop will be stretched in
+            the horizontal or vertical direction (randomly determined) by some
+            range between 1.0 and 1.33 (4/3).  If set to <= 100, no random
+            stretching will occur.
+        subtract_mean (boolean):
+            Whether to subtract mean values from pixel values.
+        blue_mean (int):
+            The mean of blue pixel values.
+        green_mean (int):
+            The mean of green pixel values.
+        red_mean (int):
+            The mean of red pixel values.
+        gray_mean (int):
+            The mean of gray pixel values.
+"""
     _fields_ = [('channel_count', ct.c_int),
                 ('height', ct.c_int),
                 ('width', ct.c_int),
@@ -132,6 +194,15 @@ class ImageIngestParams(MediaParams):
 
 
 class VideoParams(MediaParams):
+    """
+    Used to provide video specific parameters while loading data.
+
+    Arguments:
+        frame_prams (ImageParams):
+            Properties of video frames.
+        frames_per_clip (int):
+            The number of frames within each input video clip.
+    """
     _fields_ = [('frame_params', ImageParams),
                 ('frames_per_clip', ct.c_int)]
 
@@ -147,45 +218,55 @@ class VideoParams(MediaParams):
 
 
 class AudioParams(MediaParams):
+    """
+    Used to provide audio specific parameters while loading data.
+
+    Arguments:
+        sampling_freq (int):
+            The sampling frequency (in Hz) of input audio.
+        clip_duration (int):
+            Maximum duration of audio clips in milliseconds.
+        frame_duration (int):
+            Frame duration in milliseconds.  This defines the window over which
+            FFT is computed.
+        overlap_percent (int):
+            Overlap percent to be used for FFT windows.
+        window_func (str):
+            Type of windowing.  The options are "none", "hann", "blackman",
+            "hamming" and "bartlett".  Defaults to "hann".
+        random_scale_percent (float):
+            Randomly stretch/shrink the time dimension by this percent.
+        add_noise (boolean):
+            Superimpose gaussian noise.
+        ctc_cost (boolean):
+            Whether the CTC cost function is used.
+    """
+
     _fields_ = [('sampling_freq', ct.c_int),
-                # Whether input must be resampled
-                ('resample', ct.c_bool),
-                # Maximum duration in milliseconds
                 ('clip_duration', ct.c_int),
-                # Frame duration in milliseconds
                 ('frame_duration', ct.c_int),
                 ('overlap_percent', ct.c_int),
-                # Type of windowing
                 ('window_func', ct.c_char * 16),
-                # Used to scale the X dimension of the spectrogram
-                ('time_scale_factor', ct.c_float),
-                # Used to scale the Y dimension of the spectrogram
-                ('freq_scale_factor', ct.c_float),
-                # Randomly stretch/shrink the X dimension by this percent
-                ('randomize_time_scale_by', ct.c_float),
+                ('random_scale_percent', ct.c_float),
                 ('add_noise', ct.c_bool),
                 ('ctc_cost', ct.c_bool),
-                # The rest are automatically computed
                 ('window_size', ct.c_int),
                 ('overlap', ct.c_int),
                 ('stride', ct.c_int),
-                ('time_steps', ct.c_int),
-                ('num_freqs', ct.c_int),
+                ('width', ct.c_int),
+                ('height', ct.c_int),
                 ('window_type', ct.c_int)]
-    _defaults_ = {'resample': False,
-                  'frame_duration': 10,
+    _defaults_ = {'frame_duration': 10,
                   'overlap_percent': 30,
                   'window_func': 'hann',
-                  'time_scale_factor': 1.0,
-                  'freq_scale_factor': 1.0,
-                  'randomize_time_scale_by': 0.0,
+                  'random_scale_percent': 0.0,
                   'add_noise': False,
                   'ctc_cost': False,
                   'window_size': -1,
                   'overlap': -1,
                   'stride': -1,
-                  'time_steps': -1,
-                  'num_freqs': -1,
+                  'width': -1,
+                  'height': -1,
                   'window_type': -1}
     _windows_ = {'none': 0,
                  'hann': 1,
@@ -200,8 +281,8 @@ class AudioParams(MediaParams):
         for key, value in self._defaults_.iteritems():
             setattr(self, key, value)
         super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
-        for key in ['window_size', 'overlap', 'stride', 'time_steps',
-                    'num_freqs', 'window_type']:
+        for key in ['window_size', 'overlap', 'stride', 'width',
+                    'height', 'window_type']:
             if getattr(self, key) != self._defaults_[key]:
                 raise ValueError('Argument %s must not be specified' % key)
         if getattr(self, 'window_func') not in self._windows_:
@@ -227,12 +308,10 @@ class AudioParams(MediaParams):
         assert self.overlap_percent < 100
         self.overlap = self.window_size * self.overlap_percent // 100
         self.stride = self.window_size - self.overlap
-        self.time_steps = (
+        self.width = (
             (self.clip_duration * self.sampling_freq // 1000 -
              self.window_size) // self.stride) + 1
-        self.num_freqs = (self.window_size // 2) + 1
-        self.width = int(self.time_steps * self.time_scale_factor)
-        self.height = int(self.num_freqs * self.freq_scale_factor)
+        self.height = (self.window_size // 2) + 1
         self.window_type = self._windows_[self.window_func]
 
     def get_shape(self):
