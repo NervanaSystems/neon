@@ -89,9 +89,7 @@ class CrossEntropyBinary(Cost):
             OpTree: Returns the binary cross entropy cost
         """
         assert y.shape == t.shape, "CrossEntropy requires network output shape to match targets"
-        a = - self.be.safelog(y) * t
-        b = - self.be.safelog(1 - y) * (1 - t)
-        return self.be.sum(a + b, axis=0)
+        return self.be.sum(self.be.safelog(1 - y) * (t - 1) - self.be.safelog(y) * t, axis=0)
 
     def bprop(self, y, t):
         """
