@@ -958,8 +958,8 @@ class RoiPooling(Sequential):
                                      self.rois_per_batch, self.fm_channel, self.fm_height,
                                      self.fm_width, self.roi_H, self.roi_W, self.spatial_scale)
 
-        # bprop back through the imagenet layer container
-        self.deltas = super(RoiPooling, self).bprop(self.error, alpha, beta)
+            # bprop back through the imagenet layer container
+            self.deltas = super(RoiPooling, self).bprop(self.error, alpha, beta)
 
     def get_terminal(self):
         """

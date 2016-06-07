@@ -202,7 +202,7 @@ class SmoothL1Loss(Cost):
     """
     Smooth L1 cost function.
 
-    The L1 loss is less sensitive to outliers than the L2 loss since.
+    The L1 loss is less sensitive to outliers than the L2 loss.
     See `Girshick 2015 <http://arxiv.org/pdf/1504.08083v2.pdf>`__. This
     cost is used for training object localization models such as Fast-RCNN.
     """
@@ -482,6 +482,10 @@ class ObjectDetection(Metric):
                                     2. object bounding box (# classes * 4, # bacthsize for ROIs)
             t (Tensor or OpTree): True targets corresponding to y, with 2 elements:
                                     1. class labels: (# classes, # batchsize for ROIs)
+                                        1.1 class labels
+                                                    (# classes, # batchsize for ROIs)
+                                        1.2 class labels mask
+                                                    (# classes, # batchsize for ROIs)
                                     2. object bounding box and mask, where mask will indicate the
                                         real object to detect other than the background objects
                                         2.1 object bounding box
@@ -492,18 +496,26 @@ class ObjectDetection(Metric):
         Returns:
             numpy ary : Returns the metrics in numpy array [Label Accuracy, Bounding Box Smooth-L1]
         """
+        t_bb = t[self.bbox_ind][0]
+        t_bb_mask = t[self.bbox_ind][1]
+        y_bb = y[self.bbox_ind]
 
-        self.detectionMetric = self.be.empty((1, t[self.bbox_ind][0].shape[1]))
-        self.detectionMetric[:] = self.be.sum(self.smoothL1(y[self.bbox_ind] -
-                                                            t[self.bbox_ind][0] *
-                                                            t[self.bbox_ind][1]), axis=0)
+        self.detectionMetric = self.be.empty((1, t_bb.shape[1]))
+        self.detectionMetric[:] = self.be.sum(self.smoothL1(y_bb * t_bb_mask - t_bb), axis=0)
 
-        self.preds = self.be.empty((1, y[self.label_ind].shape[1]))
-        self.hyps = self.be.empty((1, t[self.label_ind].shape[1]))
-        self.labelMetric = self.be.empty((1, y[self.label_ind].shape[1]))
+        if isinstance(t[self.label_ind], tuple):
+            t_lbl = t[self.label_ind][0] * t[self.label_ind][1]
+            y_lbl = y[self.label_ind] * t[self.label_ind][1]
+        else:
+            t_lbl = t[self.label_ind]
+            y_lbl = y[self.label_ind]
 
-        self.preds[:] = self.be.argmax(y[self.label_ind], axis=0)
-        self.hyps[:] = self.be.argmax(t[self.label_ind], axis=0)
+        self.preds = self.be.empty((1, y_lbl.shape[1]))
+        self.hyps = self.be.empty((1, t_lbl.shape[1]))
+        self.labelMetric = self.be.empty((1, y_lbl.shape[1]))
+
+        self.preds[:] = self.be.argmax(y_lbl, axis=0)
+        self.hyps[:] = self.be.argmax(t_lbl, axis=0)
         self.labelMetric[:] = self.be.equal(self.preds, self.hyps)
 
         return np.array((self.labelMetric.get()[:, calcrange].mean(),

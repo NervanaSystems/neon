@@ -349,6 +349,8 @@ class PASCALVOCTrain(PASCALVOC):
             (1, self.rois_per_batch), dtype=np.int32)
         self.dev_y_labels = self.be.zeros(
             (self.num_classes, self.rois_per_batch), dtype=np.int32)
+        self.dev_y_labels_mask = self.be.zeros_like(self.dev_y_labels)
+
         self.dev_y_bbtargets = self.be.zeros(
             (self.num_classes * 4, self.rois_per_batch))
         self.dev_y_bbmask = self.be.zeros(
@@ -442,6 +444,7 @@ class PASCALVOCTrain(PASCALVOC):
 
             rois_mb = np.zeros((self.rois_per_batch, 5), dtype=np.float32)
             labels_blob = np.zeros((self.rois_per_batch), dtype=np.int32)
+            labels_mask_blob = np.zeros((self.num_classes, self.rois_per_batch), dtype=np.float32)
             bbox_targets_blob = np.zeros((self.rois_per_batch, 4 * self.num_classes),
                                          dtype=np.float32)
             bbox_loss_blob = np.zeros(
@@ -476,6 +479,7 @@ class PASCALVOCTrain(PASCALVOC):
                 # Add to RoIs blob
                 rois = im_rois * im_scale
                 num_rois_this_image = rois.shape[0]
+
                 slice_i = slice(im_i * self.rois_per_img,
                                 im_i * self.rois_per_img + num_rois_this_image)
                 batch_ind = im_i * np.ones((num_rois_this_image, 1))
@@ -487,6 +491,7 @@ class PASCALVOCTrain(PASCALVOC):
 
                 # Add to labels, bbox targets, and bbox loss blobs
                 labels_blob[slice_i] = labels.ravel()
+                labels_mask_blob[:, slice_i] = 1
                 bbox_targets_blob[slice_i] = bbox_targets
                 bbox_loss_blob[slice_i] = bbox_loss
 
@@ -497,15 +502,17 @@ class PASCALVOCTrain(PASCALVOC):
             self.dev_X_img_chw.set(self.img_np)
             self.dev_X_rois[:] = rois_mb
             self.dev_y_labels_flat[:] = labels_blob.reshape(1, -1)
-            self.dev_y_labels[:] = self.be.onehot(
-                self.dev_y_labels_flat, axis=0)
+            self.dev_y_labels[:] = self.be.onehot(self.dev_y_labels_flat, axis=0)
+            self.dev_y_labels_mask[:] = labels_mask_blob
+
             self.dev_y_bbtargets[:] = bbox_targets_blob.T.astype(
                 np.float, order='C')
             self.dev_y_bbmask[:] = bbox_loss_blob.T.astype(np.int32, order='C')
 
             if self.output_type == 0:
                 X = (self.dev_X_img, self.dev_X_rois)
-                Y = (self.dev_y_labels, (self.dev_y_bbtargets, self.dev_y_bbmask))
+                Y = ((self.dev_y_labels, self.dev_y_labels_mask),
+                     (self.dev_y_bbtargets, self.dev_y_bbmask))
             elif self.output_type == 1:
                 X = (self.dev_X_img, self.dev_X_rois)
                 Y = self.dev_y_labels

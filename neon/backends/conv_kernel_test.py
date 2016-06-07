@@ -33,7 +33,7 @@ fprop_kernels  = (FpropCuda,  FpropDirect,  FpropWinograd_2x2_3x3,  FpropWinogra
 bprop_kernels  = (BpropCuda,  BpropDirect,  BpropWinograd_2x2_3x3,  BpropWinograd_4x4_3x3, BpropWinograd_2x2_5x5)
 update_kernels = (UpdateCuda, UpdateDirect, UpdateWinograd_3x3_2x2, UpdateWinograd_3x3_4x4)
 
-ng = NervanaGPU()
+ng = NervanaGPU(0)
 nc = NervanaCPU()
 
 neon_logger.display(drv.Context.get_current().get_device().name())
@@ -55,7 +55,6 @@ conv_1x1x1   = ( 7,   7,   7,  1, 1, 1,  0,0,0, 1,1,1)
 conv_3x3x3   = ( 7,   7,   7,  3, 3, 3,  1,1,1, 1,1,1)
 conv_3x3x3s2 = ( 7,   7,   7,  3, 3, 3,  1,1,1, 2,2,2)
 conv_3x3L    = ( 1, 200, 200,  1, 3, 3,  0,1,1, 1,1,1)
-
 
 # configs = [
 #     (BpropDirect,            32, 64, 32, True,  True,  None,  (conv_3x3L,) ),

@@ -57,7 +57,7 @@ from neon.transforms import CrossEntropyMulti, SmoothL1Loss, ObjectDetection
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer
 from neon.callbacks.callbacks import Callbacks
-from neon.layers import Multicost, GeneralizedCost, GeneralizedCostMask
+from neon.layers import Multicost, GeneralizedCostMask
 from neon.util.persist import save_obj
 from util import load_vgg_weights, create_frcn_model, scale_bbreg_weights
 
@@ -80,6 +80,8 @@ if args.callback_args['serialize'] is None:
     args.callback_args['serialize'] = min(args.epochs, 10)
 
 # hyperparameters
+args.batch_size = 4
+
 num_epochs = args.epochs
 n_mb = None
 img_per_batch = args.batch_size
@@ -99,9 +101,11 @@ if be.gpu_memory_size < 11 * 1024 * 1024 * 1024:
 # setup training dataset
 train_set = PASCALVOCTrain('trainval', '2007', path=args.data_dir, n_mb=n_mb,
                            img_per_batch=img_per_batch, rois_per_img=rois_per_img,
+                           rois_random_sample=True,
                            add_flipped=False, subset_pct=args.subset_pct)
 test_set = PASCALVOCTrain('test', '2007', path=args.data_dir, n_mb=n_mb,
                           img_per_batch=img_per_batch, rois_per_img=rois_per_img,
+                          rois_random_sample=True,
                           add_flipped=False)
 
 # setup model
@@ -119,7 +123,7 @@ optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b})
 if args.model_file is None:
     load_vgg_weights(model, args.data_dir)
 
-cost = Multicost(costs=[GeneralizedCost(costfunc=CrossEntropyMulti()),
+cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti()),
                         GeneralizedCostMask(costfunc=SmoothL1Loss())],
                  weights=[1, 1])
 
@@ -136,6 +140,7 @@ model = scale_bbreg_weights(
 save_obj(model.serialize(keep_states=True), args.save_path)
 
 neon_logger.display('running eval...')
+
 metric_train = model.eval(train_set, metric=ObjectDetection())
 neon_logger.display(
     'Train: label accuracy - {}%, object detection logloss - {}'.format(metric_train[0] * 100,
