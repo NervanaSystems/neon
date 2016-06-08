@@ -17,8 +17,9 @@ Convolution layer tests
 """
 from builtins import zip
 import numpy as np
+import pytest
+
 from neon import NervanaObject
-from neon.backends import gen_backend
 from neon.layers import Sequential, Conv, Pooling, BranchNode, Affine, Tree
 from neon.initializers.initializer import Gaussian, Constant
 from neon.transforms import Rectlin
@@ -28,10 +29,7 @@ init1 = Gaussian(scale=0.01)
 relu = Rectlin()
 bias = Constant(0)
 common = dict(activation=relu, init=init1, bias=bias)
-commonp1 = dict(activation=relu, init=init1, bias=bias, padding=1)
-commonp3s2 = dict(activation=relu, init=init1, bias=bias, padding=3, strides=2)
 pool2s1p1 = dict(fshape=2, padding=1, strides=1)
-batch_size = 64
 
 
 def make_tree(trunk, branch1, branch2, alphas):
@@ -50,8 +48,8 @@ def make_tree(trunk, branch1, branch2, alphas):
     return (v1, _trunkb, _branch1b, _branch2b)
 
 
-def test_branch_model():
-    NervanaObject.be = gen_backend("gpu", batch_size=64)
+@pytest.mark.hasgpu
+def test_branch_model(backend_gpu):
     be = NervanaObject.be
     trunk = [{'layer': Conv, 'config': dict(fshape=(5, 5, 16), **common)},
              {'layer': Pooling, 'config': dict(op='max', **pool2s1p1)}]
@@ -71,7 +69,7 @@ def test_branch_model():
     insize = np.prod(inshape)
 
     # Let's force bprop deltas computation for
-    inpa = np.random.random((insize, batch_size))
+    inpa = np.random.random((insize, be.bsz))
     inp = be.array(inpa)
 
     neon_layer.configure(inshape)
