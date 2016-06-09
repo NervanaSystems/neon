@@ -27,7 +27,7 @@ from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary, Misclassification
 from neon.util.argparser import NeonArgparser
 from neon import logger as neon_logger
-
+import h5py
 import numpy as np
 
 # parse the command line arguments
@@ -40,9 +40,9 @@ args = parser.parse_args()
 (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
 
 # generate the HDF5 file
-import h5py
-datsets = {'train':  (X_train, y_train),
+datsets = {'train': (X_train, y_train),
            'test': (X_test, y_test)}
+
 for ky in ['train', 'test']:
     df = h5py.File('mnist_%s.h5' % ky, 'w')
 
@@ -55,7 +55,7 @@ for ky in ['train', 'test']:
     # for mean subtraction during data iteration
     # e.g.
     if ky == 'train':
-       mean_image = np.mean(X_train, axis=0)
+        mean_image = np.mean(X_train, axis=0)
     # use training set mean for both train and val data sets
     df.create_dataset('mean', data=mean_image)
 
@@ -64,8 +64,9 @@ for ky in ['train', 'test']:
     df['output'].attrs['nclass'] = 10
     df.close()
 
-# setup a training set iterator  use the iterator that generates 1-hot output
-# other JDF5Iterator (sub) classes are available for different data layouts
+# setup a training set iterator
+# use the iterator that generates 1-hot output. other HDF5Iterator (sub) classes are
+# available for different data layouts
 train_set = HDF5IteratorOneHot('mnist_train.h5')
 valid_set = HDF5IteratorOneHot('mnist_test.h5')
 

@@ -26,39 +26,46 @@ logger = logging.getLogger(__name__)
 
 class HDF5Iterator(ArrayIterator):
     """
-    Data iterator which uses an HDF5 file as the source of the data.
-    For data sets that can fit into device memory it is better to use
-    the ArrayIterator.
+    Data iterator which uses an HDF5 file as the source of the data, useful when
+    the entire HDF5 dataset cannot fit into memory (for smaller datasets, use the ArrayIterator).
 
-    The HDF5 file format is:
+    To initialize the HDF5Iterator, simply call::
 
-        'input' dataset: this is the input data, 2-D array, can be uint8 to
-                         save memory.  The array should have the size (N, C*H*W)
-                         where N is the number of inputs, C is the number of
-                         channels, and H and W are the height and width of the
-                         image, respectively.
+        train_set = HDF5Iterator('your_data_path.h5')
 
-            This dataset must have the following attributes:
+    The HDF5 file format must contain the following datasets:
 
-                'lshape' : a tuple of int indicating the shape of each
-                           input (for examples, image data may have
-                           an lshape of [C, H, W])
+    - `input` (ndarray):
+                        Input data, which is a 2-D array (float or uint8) that
+                        has size `(N, F)`, where `N` is the number of examples,
+                        and `F` is the number of features. For images, `F = C*H*W` where
+                        `C` is the number of channels and `H` and `W` are the height
+                        and width of the image, respectively. This data must also
+                        have the following attributes:
+        - `lshape` (tuple):
+                    Tuple of ints indicating the shape of each
+                    input (for examples, image data may have
+                    an lshape of `[C, H, W]`)
+        - `mean` (ndarray):
+                    The mean to subtract, either formatted as (F, 1) or
+                    a mean for each channel with dimensions (C, 1)
+    - `output` (ndarray):
+                        An optional dataset which, if supplied, will be
+                        used at the target/expected output of the network. the
+                        array should have the shape `(N, M)` where `N` is the number
+                        of items (must match the `N` dim of the input set)
+                        and `M` is the size of the output data which must match
+                        size of ouput from the output layer of the network.
 
-                'mean' : the mean to subtract, this can be a full
-                         image mean of dimensions (C*H*W, 1) or
-                         a mean for each channel with dimensions (C, 1)
-
-        'output' dataset: An optional dataset which, if supplied, will be
-                          used at the target/expected output of the network. the
-                          array should have the shape (N, M) where N is the number
-                          of items (must match the N dim of the input set)
-                          and M is the size of the output data which must match
-                          size of ouput from the output layer of the network.
-
-    Args:
-        hdf_filename (string): name of the hdf file
+    For cases where the output should be converted to a one-hot encoding (see Loading Data),
+    use the `HDF5IteratorOneHot`. Or for autoencoder problems, use `HDFIteratorAutoencoder`.
     """
     def __init__(self, hdf_filename, name=None):
+        """
+        Args:
+            hdf_filename (string): Path to the HDF5 datafile.
+            name (string, optional): Name to assign this iterator. Defaults to None.
+        """
         super(ArrayIterator, self).__init__(name=name)
 
         self.hdf_filename = hdf_filename
@@ -88,11 +95,12 @@ class HDF5Iterator(ArrayIterator):
 
     def allocate(self):
         """
-        After the input and output (self.inp and self.out) have been
-        set this function will allocate the on host and on device buffers
+        After the input and output (`self.inp` and `self.out)` have been
+        set this function will allocate the host and device buffers
         for the mini-batches.
-        (On host is self.mini_batch_in and self.mini_batch_out, on
-        device is self.inbuf and self.outbuf)
+
+        The host buffer is referenced as `self.mini_batch_in` and `self.mini_batch_out`, and
+        stored on device as `self.inbuf` and `self.outbuf`.
         """
         if not self.allocated:
             self.allocate_inputs()
@@ -101,12 +109,12 @@ class HDF5Iterator(ArrayIterator):
 
     def allocate_inputs(self):
         """
-        Allocate the host and device input data buffers
+        Allocates the host and device input data buffers
         and any other associated storage.
 
-        self.inpbuf is the on-device buffer for the input minibatch
-        self.mini_batch_in is the on-host buffer for the input minibatch
-        self.mean is the on-device buffer of the mean array
+        `self.inpbuf` is the on-device buffer for the input minibatch
+        `self.mini_batch_in` is the on-host buffer for the input minibatch
+        `self.mean` is the on-device buffer of the mean array
         """
         # on device minibatch_buffer (input)
         self.inpbuf = self.be.iobuf(self.inp.shape[1])
@@ -133,11 +141,11 @@ class HDF5Iterator(ArrayIterator):
 
     def allocate_outputs(self):
         """
-        Allocate the host and device output data buffers
+        Allocates the host and device output data buffers
         and any other associated storage.
 
-        self.outbuf is the on-device buffer for the output minibatch
-        self.mini_batch_out is the on-host buffer for the output minibatch
+        `self.outbuf` is the on-device buffer for the output minibatch
+        `self.mini_batch_out` is the on-host buffer for the output minibatch
         """
         self.outbuf = None
         if 'output' in self.hdf_file:
@@ -173,9 +181,15 @@ class HDF5Iterator(ArrayIterator):
         self.cleanup()
 
     def cleanup(self):
+        """
+        Closes the HDF file.
+        """
         self.hdf_file.close()
 
     def reset(self):
+        """
+        Resets the index to zero.
+        """
         self.start = 0
 
     def __iter__(self):
@@ -223,14 +237,39 @@ class HDF5Iterator(ArrayIterator):
 
 class HDF5IteratorOneHot(HDF5Iterator):
     """
-    Extended the base HDF5Iterator class to add one hot conversion of the
-    target output data
+    Extends the HDF5Iterator class to add one hot conversion of the
+    target data. For example::
+
+        train_set = HDF5IteratorOneHot('your_data_path.h5')
+
+    The HDF5 file format must contain the following datasets:
+    - `input` dataset: Input data, which is a 2-D array (float or uint8) that
+                        has size `(N, C*H*W)`, where `N` is the number of examples,
+                        `C` is the number of channels, and `H` and `W` are the height
+                        and width of the image, respectively. This dataset must also
+                        have the following attributes:
+        - `lshape`: a tuple of int indicating the shape of each
+                    input (for examples, image data may have
+                    an lshape of `[C, H, W]`)
+        - `mean`: the mean to subtract, either formatted as (C*H*W, 1) or
+                  a mean for each channel with dimensions (C, 1)
+    - `output` dataset: An optional dataset which, if supplied, will be
+                        used at the target/expected output of the network. the
+                        array should have the shape `(N, M)` where `N` is the number
+                        of items (must match the `N` dim of the input set)
+                        and `M` is the size of the output data which must match
+                        size of ouput from the output layer of the network.
 
     The "output" dataset in the HDF5 (if present) must have the 'nclass'
     attribute specifying the number of total output classes which is needed
     for generating the one-hot encoding.
     """
     def __init__(self, hdf_filename, name=None):
+        """
+        Args:
+            hdf_filename (string): Path to the HDF5 datafile.
+            name (string, optional): Name to assign this iterator. Defaults to None.
+        """
         super(HDF5IteratorOneHot, self).__init__(hdf_filename, name=name)
         if 'output' in self.hdf_file:
             assert 'nclass' in self.hdf_file['output'].attrs, 'Missing nclass attribute'
@@ -251,9 +290,15 @@ class HDF5IteratorOneHot(HDF5Iterator):
 
 class HDF5IteratorAutoencoder(HDF5Iterator):
     """
-    Extended the base HDF5Iterator class for an Autoencoder network.
-    Will return the input data item as the target output as well.
+    Extends the base HDF5Iterator class for an autoencoder model.
+    Returns the input data as the target.
     """
     def __iter__(self):
+        """
+        Defines a generator that can be used to iterate over this dataset.
+
+        Yields:
+            tuple: The next minibatch containing the inputs and the targets (here target=inputs)
+        """
         for x, t in super(HDF5IteratorAutoencoder, self).__iter__():
             yield (x, x)

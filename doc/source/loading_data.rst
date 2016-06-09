@@ -17,7 +17,10 @@ call.
     * For image data or other data in the form of numpy arrays, use |ArrayIterator|.
     * For specific modalities, neon includes specialized iterators (Text, Image Captioning, Q&A)
 
-* If your data is too large, use macrobatching, a specialized loader that loads macrobatches of data into memory, and then splits the macrobatches into minibatches to feed the model.
+* If your data is too large:
+    * For data in the HDF5 format, use the |HDF5Iterator| to load chunks of data to send to the model. This approach is flexible for
+      any type of data. 
+    * For other types of data, use the macrobatching DataLoader, a specialized loader that loads macrobatches of data into memory, and then splits the macrobatches into minibatches to feed the model. This can be used for images, audio, video datasets and is recommended for large datasets or high-performance applications.
 
 ArrayIterator
 -------------
@@ -185,19 +188,18 @@ HDF5Iterator
 For datasets that are too large to fit in memory the |HDF5Iterator| class can be used.  This uses
 an HDF5 formatted data file to store the input and target data arrays so the data size is not limited
 by on-host and/or on-device memory capacity.  To use the |HDF5Iterator|, the data arrays need to be
-stored in an HDF5 file; the input data placed in an HDF5 dataset named `input` and the target output,
-if necessary, in a dataset named `output`.  The data arrays are of the same format as the arrays
-used to initialize the |ArrayIterator| class.  The `input` data class also requires an attribute
-named `lshape` which specified the shape of the flattened input data array.  For mean subtraction,
-an additional dataset named `mean` can be included in the HDF5 file which includes either a channel-wise
-mean vector or a complete mean image to subtract from the input data.
+stored in an HDF5 file with the following format:
 
-For different output formatting, like converting the output to a one-hot vector, or for autoencoder
-data formatting the |HDF5IteratorOneHot| and |HDF5IteratorAutoencoder| subclasses are included.
-These subclasses can be used as a model for how to use this class to generate HDF5 file data
-iterators with differnt input and output data formats or transformations.
+* The input data is in an HDF5 dataset named `input` and the target output, if needed, in a dataset named `output`. The data arrays are of the same format as the arrays used to initialize the |ArrayIterator| class. 
 
-See the example, `examples/mnist_hdf5.py`, for an example of how to format the HDF5 data file
+* The `input` data class also requires an attribute named `lshape` which specifies the shape of the flattened input data array. For mean subtraction, an additional dataset named `mean` can be included in the HDF5 file which includes either a channel-wise mean vector or a complete mean image to subtract from the input data.
+
+For alternate target label formats, such as converting the targets to a one-hot vector, or for autoencoder
+data, the |HDF5IteratorOneHot| and |HDF5IteratorAutoencoder| subclasses are included.
+These subclasses demonstrate how to extend the HDF5Iterator to handle different input and target data formats
+or transformations.
+
+See the example, `examples/mnist_hdf5.py`, for how to format the HDF5 data file
 for use with the |HDF5Iterator| class.
 
 Macrobatching
@@ -566,6 +568,9 @@ performed.
 
 
 
-
-
 .. |ArrayIterator| replace:: :py:class:`.ArrayIterator`
+.. |DataLoader| replace:: :py:class:`.DataLoader`
+.. |HDF5Iterator| replace:: :py:class:`.HDF5Iterator`
+.. |HDF5IteratorOneHot| replace:: :py:class:`.HDF5IteratorOneHot`
+.. |HDF5IteratorAutoencoder| replace:: :py:class:`.HDF5IteratorAutoencoder`
+
