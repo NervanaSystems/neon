@@ -602,7 +602,7 @@ _share_template = r"""
 """
 
 _kernel_template = r"""
-.version 4.2
+.version {6}
 .target {0}
 .address_size 64
 
@@ -618,7 +618,7 @@ _kernel_template = r"""
 }}
 """
 
-def get_ptx_file(kernel_spec, kernel_name, arch):
+def get_ptx_file(kernel_spec, kernel_name, arch, ptx_ver):
 
     thread_spec = kernel_spec["threads"]
     args_spec   = str(kernel_spec.get("args",""))
@@ -644,7 +644,7 @@ def get_ptx_file(kernel_spec, kernel_name, arch):
     else:
         share = ""
 
-    kernel_text = _kernel_template.format(arch, kernel_name, kernel_params, thread_spec, share, args_spec)
+    kernel_text = _kernel_template.format(arch, kernel_name, kernel_params, thread_spec, share, args_spec, ptx_ver)
     kernel_ptx  = os.path.join(ptx_dir, kernel_name + ".ptx")
 
     current_text = ""
@@ -724,7 +724,8 @@ def get_kernel(base_name, options=None):
     sass_name  = kernel_spec["sass"] + ".sass"
     cubin_name = kernel_name + ".cubin"
 
-    ptx_file   = get_ptx_file(kernel_spec, kernel_name, arch)
+    ptx_version = "4.2" if major < 6 else "5.0"
+    ptx_file   = get_ptx_file(kernel_spec, kernel_name, arch, ptx_version)
     sass_file  = os.path.join(sass_dir, sass_name)
     cubin_file = os.path.join(cubin_dir, cubin_name)
 
