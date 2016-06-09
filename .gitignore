@@ -12,6 +12,7 @@ neon/version.py
 .pkgs
 *.egg-info
 .venv
+.venv[23]
 .coverage
 build
 *.gz

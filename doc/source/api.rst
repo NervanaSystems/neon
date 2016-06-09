@@ -92,6 +92,9 @@ and iterating through minibatches of data during training.
 
   neon.data.dataiterator.NervanaDataIterator
   neon.data.dataiterator.ArrayIterator
+  neon.data.hdf5iterator.HDF5Iterator
+  neon.data.hdf5iterator.HDF5IteratorAutoencoder
+  neon.data.hdf5iterator.HDF5IteratorOneHot
   neon.data.imageloader.ImageLoader
   neon.data.batch_writer.BatchWriter
 

@@ -179,6 +179,26 @@ of the input data can depend on your usage.
 
 * Time series data should be formatted to have shape :math:`(F, T * N)`, where :math:`F` is the number of features. For an example, see `timeseries_lstm.py <https://github.com/NervanaSystems/neon/blob/master/examples/timeseries_lstm.py>`_.
 
+HDF5Iterator
+-------------
+
+For datasets that are too large to fit in memory the |HDF5Iterator| class can be used.  This uses
+an HDF5 formatted data file to store the input and target data arrays so the data size is not limited
+by on-host and/or on-device memory capacity.  To use the |HDF5Iterator|, the data arrays need to be
+stored in an HDF5 file; the input data placed in an HDF5 dataset named `input` and the target output,
+if necessary, in a dataset named `output`.  The data arrays are of the same format as the arrays
+used to initialize the |ArrayIterator| class.  The `input` data class also requires an attribute
+named `lshape` which specified the shape of the flattened input data array.  For mean subtraction,
+an additional dataset named `mean` can be included in the HDF5 file which includes either a channel-wise
+mean vector or a complete mean image to subtract from the input data.
+
+For different output formatting, like converting the output to a one-hot vector, or for autoencoder
+data formatting the |HDF5IteratorOneHot| and |HDF5IteratorAutoencoder| subclasses are included.
+These subclasses can be used as a model for how to use this class to generate HDF5 file data
+iterators with differnt input and output data formats or transformations.
+
+See the example, `examples/mnist_hdf5.py`, for an example of how to format the HDF5 data file
+for use with the |HDF5Iterator| class.
 
 Macrobatching
 -------------

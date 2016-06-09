@@ -33,19 +33,20 @@ class HDF5Iterator(ArrayIterator):
     The HDF5 file format is:
 
         'input' dataset: this is the input data, 2-D array, can be uint8 to
-                          save memory.  The array should have the size (N, C*H*W)
-                          where N is the number of inputs, C is the number of
-                          channels, and H and W are the height and width of the
-                          image, respectively.
+                         save memory.  The array should have the size (N, C*H*W)
+                         where N is the number of inputs, C is the number of
+                         channels, and H and W are the height and width of the
+                         image, respectively.
 
-                          This dataset must have the following attributes:
-                            'lshape' : a tuple of int indicating the shape of each
-                                       input (for examples, image data may have
-                                       an lshape of [C, H, W])
-                            'mean' : the mean to subtract, this can be a full
-                                     image mean of dimensions (C*H*W, 1) or
-                                     a mean for each channel with dimensions
-                                     (C, 1)
+            This dataset must have the following attributes:
+
+                'lshape' : a tuple of int indicating the shape of each
+                           input (for examples, image data may have
+                           an lshape of [C, H, W])
+
+                'mean' : the mean to subtract, this can be a full
+                         image mean of dimensions (C*H*W, 1) or
+                         a mean for each channel with dimensions (C, 1)
 
         'output' dataset: An optional dataset which, if supplied, will be
                           used at the target/expected output of the network. the
@@ -91,7 +92,7 @@ class HDF5Iterator(ArrayIterator):
         set this function will allocate the on host and on device buffers
         for the mini-batches.
         (On host is self.mini_batch_in and self.mini_batch_out, on
-         device is self.inbuf and self.outbuf)
+        device is self.inbuf and self.outbuf)
         """
         if not self.allocated:
             self.allocate_inputs()
