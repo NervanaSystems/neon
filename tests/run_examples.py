@@ -12,33 +12,32 @@ from timeit import default_timer as timer
 # Modify the following to suit your environment
 NUM_EPOCHS = 2
 BACKEND = "gpu"
-SUBSET_PCT = 5
+SUBSET_PCT = 1
+TINY_SUBSET_PCT = .1
 ADDITIONAL_ARGS = ""
 
 BASE_DATA_DIR = '~/nervana/data'
-I1K_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'I1K/macrobatches')
-CIFAR_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'CIFAR10/macrobatches')
 
-# skip; implement subset pct to fit
-FILES_TO_SKIP = ['examples/timeseries_lstm.py',
-                 'examples/vgg_bn.py',
-                 'examples/fast-rcnn/train.py']
-# skip; needs to download dataset
-FILES_TO_SKIP += ['examples/deep_dream.py',
-                  'examples/imdb/train.py',
-                  'examples/video-c3d/train.py']
+# skip - not a training example
+FILES_TO_SKIP = ['examples/deep_dream.py']
+# skip - need to download dataset
+FILES_TO_SKIP += ['examples/imdb/train.py']
 
-ADD_I1K_BATCH_DIR = ['alexnet.py', 'imagenet_allcnn.py', 'vgg_bn.py',
-                     'i1k_msra.py']
-ADD_CIFAR_BATCH_DIR = ['cifar10_msra.py']
-ADD_SUBSET_PCT = ADD_I1K_BATCH_DIR + ADD_CIFAR_BATCH_DIR + ['examples/fast-rcnn/train.py']
+ADD_I1K_BATCH_DIR = ['examples/alexnet.py', 'examples/imagenet_allcnn.py',
+                     'examples/vgg_bn.py', 'examples/i1k_msra.py']
+ADD_CIFAR_BATCH_DIR = ['examples/cifar10_msra.py']
+ADD_UCF101_BATCH_DIR = ['examples/video-c3d/train.py']
+ADD_SUBSET_PCT = ADD_I1K_BATCH_DIR + ADD_UCF101_BATCH_DIR
+ADD_TINY_SUBSET_PCT = ['examples/fast-rcnn/train.py', 'examples/vgg_bn.py']
 
 # Jenkins environment setup
 if os.getenv("EXECUTOR_NUMBER"):
     BASE_DATA_DIR = '/usr/local/data/jenkins'
-    I1K_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'I1K/macrobatches')
-    CIFAR_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'CIFAR10/macrobatches')
     ADDITIONAL_ARGS += "-i {}".format(os.getenv("EXECUTOR_NUMBER"))
+
+I1K_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'I1K/macrobatches')
+CIFAR_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'CIFAR10/macrobatches')
+UCF101_BATCH_DIR = os.path.join(BASE_DATA_DIR, 'UCF-101/ucf-preprocessed')
 
 if not os.path.isdir('examples'):
     raise IOError('Must run from root dir of none repo')
@@ -56,21 +55,25 @@ for ex in sorted(examples):
     if ex in FILES_TO_SKIP:
         skipped.append(ex)
         continue
-    cmdargs = "-e {} -b {} --serialize 1 --no_progress_bar -s {} {}".format(
+    cmdargs = "-e {} -b {} --serialize 1 -v --no_progress_bar -s {} {}".format(
         NUM_EPOCHS, BACKEND, os.path.splitext(ex)[0] + '.prm',
         ADDITIONAL_ARGS)
     cmd = "python {} ".format(ex) + cmdargs
 
-    ex_bn = os.path.basename(ex)
-    if ex_bn in ADD_I1K_BATCH_DIR:
+    if ex in ADD_I1K_BATCH_DIR:
         cmd += ' -w {}'.format(I1K_BATCH_DIR)
-    elif ex_bn in ADD_CIFAR_BATCH_DIR:
+    elif ex in ADD_CIFAR_BATCH_DIR:
         cmd += ' -w {}'.format(CIFAR_BATCH_DIR)
+    elif ex in ADD_UCF101_BATCH_DIR:
+        cmd += ' -w {} -z 16'.format(UCF101_BATCH_DIR)
     else:
         cmd += ' -w {}'.format(BASE_DATA_DIR)
 
-    if ex_bn in ADD_SUBSET_PCT:
+    if ex in ADD_TINY_SUBSET_PCT:
+        cmd += ' --subset_pct {}'.format(TINY_SUBSET_PCT)
+    elif ex in ADD_SUBSET_PCT:
         cmd += ' --subset_pct {}'.format(SUBSET_PCT)
+
     start = timer()
     rc = subp.call(cmd, shell=True)
     end = timer()

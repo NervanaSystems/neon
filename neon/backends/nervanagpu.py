@@ -504,7 +504,7 @@ class GPUTensor(Tensor):
             shape = shape + (1, )
 
         if -1 in shape:
-            missing_dim = -self.size // np.prod(shape)
+            missing_dim = -self.size // int(np.prod(shape))
             shape = tuple([missing_dim if x == -1 else x for x in shape])
 
         if shape == self.shape:

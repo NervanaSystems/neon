@@ -489,8 +489,8 @@ class Model(NervanaObject):
             dictionary with fprop, bprop run times
         """
         # initialize model
-        if inference is False and cost is not None and optimizer is not None:
-            raise RuntimeError("Need cost and optimizer to benchmark bprop and update")
+        if inference is False and (cost is None or optimizer is None):
+            raise RuntimeError("Need cost and optimizer to benchmark bprop")
         self.cost = cost
         self.initialize(dataset, cost)
         self.optimizer = optimizer
@@ -549,8 +549,9 @@ class Model(NervanaObject):
 
         head_str = fmt_titles.format(*header)
         sep = '-' * len(head_str)
-        head_str = sep + '\n' + head_str + '\n' + sep
+        neon_logger.display(sep)
         neon_logger.display(head_str)
+        neon_logger.display(sep)
         out_stats = {}
         for step in times:
             timesu = np.array(times[step][nskip:])  # in ms
