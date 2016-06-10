@@ -15,7 +15,6 @@
 """
 To test pool layer operations between NervanaGPU, NervanaCPU against numpy.
 """
-from builtins import range
 import itertools as itt
 import numpy as np
 import pytest

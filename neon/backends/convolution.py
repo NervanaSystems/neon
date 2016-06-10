@@ -15,7 +15,7 @@
 Python code to wrap convolution kernels
 """
 from __future__ import division
-from builtins import object, range
+from builtins import object
 from future.utils import native_str
 import numpy as np
 import pycuda.driver as drv

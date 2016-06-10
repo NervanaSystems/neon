@@ -26,6 +26,11 @@ import logging  # noqa
 logger = logging.getLogger(__name__)
 PY3 = (sys.version_info[0] >= 3)
 
+if PY3:
+    xrange = range
+else:
+    xrange = xrange  # pylint: disable=xrange-builtin
+
 if not PY3:
     import cPickle as the_pickle  # noqa
 else:

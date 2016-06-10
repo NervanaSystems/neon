@@ -24,7 +24,7 @@ Then look at the PNG plots generated.
 
 """
 
-from builtins import object, range
+from builtins import object
 import numpy as np
 import math
 from neon.backends import gen_backend

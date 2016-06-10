@@ -18,7 +18,7 @@ Class definitions for image data sets.
 from __future__ import division
 from future import standard_library
 standard_library.install_aliases()  # triggers E402, hence noqa below
-from builtins import range, str  # noqa
+from builtins import str  # noqa
 
 import gzip  # noqa
 import logging  # noqa

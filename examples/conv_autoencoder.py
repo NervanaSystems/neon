@@ -18,7 +18,6 @@
 Convolutional autoencoder example network for MNIST data set
 """
 
-from builtins import range
 import numpy as np
 from neon import logger as neon_logger
 from neon.data import ArrayIterator, load_mnist

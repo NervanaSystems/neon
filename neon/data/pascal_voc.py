@@ -16,7 +16,7 @@
 Defines PASCAL_VOC datatset handling.
 """
 from __future__ import division
-from builtins import range, str, zip
+from builtins import str, zip
 import numpy as np
 import os
 import xml.dom.minidom as minidom
@@ -24,6 +24,7 @@ import tarfile
 from PIL import Image
 from neon import logger as neon_logger
 from neon.data.datasets import Dataset
+from neon.util.compat import xrange
 from neon.util.persist import save_obj, load_obj
 
 # background class is always indexed at 0
@@ -110,7 +111,7 @@ class PASCALVOC(Dataset):
         # PASCAL class to index
         self.num_classes = PASCAL_VOC_NUM_CLASSES
         self._class_to_index = dict(
-            list(zip(PASCAL_VOC_CLASSES, range(self.num_classes))))
+            list(zip(PASCAL_VOC_CLASSES, xrange(self.num_classes))))
 
         # load the voc dataset
         self.voc_root = self.load_voc(image_set, year, path)
@@ -431,7 +432,7 @@ class PASCALVOCTrain(PASCALVOC):
             shuf_idx = self.be.rng.permutation(self.num_image_entries)
             self.image_index = [self.image_index[i] for i in shuf_idx]
 
-        for self.batch_index in range(self.nbatches):
+        for self.batch_index in xrange(self.nbatches):
             start = self.batch_index * self.img_per_batch
             end = (self.batch_index + 1) * self.img_per_batch
 
@@ -560,7 +561,7 @@ class PASCALVOCTrain(PASCALVOC):
         roi_ss = []
 
         # load the bb from SS and compare with gt
-        for i in range(ss_num_img):
+        for i in xrange(ss_num_img):
             # make sure the image index match
             assert self.image_index[i] == ss_img_idx[i][0]
             bb = (ss_bb[i][:, (1, 0, 3, 2)] - 1)
@@ -617,7 +618,7 @@ class PASCALVOCTrain(PASCALVOC):
 
         roi_gt_ss = [None] * self.num_image_entries
 
-        for i in range(self.num_images):
+        for i in xrange(self.num_images):
             roi_gt_ss[i] = {}
             roi_gt_ss[i]['num_gt'] = self.roi_gt[i]['gt_bb'].shape[0]
             roi_gt_ss[i]['bb'] = np.vstack((self.roi_gt[i]['gt_bb'],
@@ -644,7 +645,7 @@ class PASCALVOCTrain(PASCALVOC):
 
             roi_gt_ss[i]['bb_targets'] = bb_targets
 
-            for cls in range(1, self.num_classes):
+            for cls in xrange(1, self.num_classes):
                 cls_inds = np.where(bb_targets[:, 0] == cls)[0]
                 if cls_inds.size > 0:
                     class_counts[cls] += cls_inds.size
@@ -673,7 +674,7 @@ class PASCALVOCTrain(PASCALVOC):
                     'img_file': image_file,
                     'bb_targets': bb_targets_flipped
                 }
-                for cls in range(1, self.num_classes):
+                for cls in xrange(1, self.num_classes):
                     cls_inds = np.where(bb_targets[:, 0] == cls)[0]
                     if cls_inds.size > 0:
                         class_counts[cls] += cls_inds.size
@@ -689,9 +690,9 @@ class PASCALVOCTrain(PASCALVOC):
         bbtarget_stds = stds.ravel()
 
         # Normalize targets
-        for i in range(self.num_images):
+        for i in xrange(self.num_images):
             targets = roi_gt_ss[i]['bb_targets']
-            for cls in range(1, self.num_classes):
+            for cls in xrange(1, self.num_classes):
                 cls_inds = np.where(targets[:, 0] == cls)[0]
                 roi_gt_ss[i]['bb_targets'][cls_inds, 1:] -= means[cls, :]
                 roi_gt_ss[i]['bb_targets'][cls_inds, 1:] /= stds[cls, :]
@@ -846,7 +847,7 @@ class PASCALVOCInference(PASCALVOC):
             shuf_idx = self.be.rng.permutation(self.num_images)
             self.image_index = [self.image_index[i] for i in shuf_idx]
 
-        for self.batch_index in range(self.nbatches):
+        for self.batch_index in xrange(self.nbatches):
             start = self.batch_index * self.img_per_batch
             end = (self.batch_index + 1) * self.img_per_batch
 
@@ -939,7 +940,7 @@ class PASCALVOCInference(PASCALVOC):
 
         roi_ss = []
         # load the bb from SS and remove duplicate
-        for i in range(ss_num_img):
+        for i in xrange(ss_num_img):
             # make sure the image index match
             assert self.image_index[i] == ss_img_idx[i][0]
             bb = (ss_bb[i][:, (1, 0, 3, 2)] - 1)
@@ -983,7 +984,7 @@ class PASCALVOCInference(PASCALVOC):
 
         roi_gt_ss = [None] * self.num_image_entries
 
-        for i in range(self.num_images):
+        for i in xrange(self.num_images):
             roi_gt_ss[i] = {}
 
             roi_gt_ss[i]['bb'] = np.vstack((self.roi_gt[i]['gt_bb'],
@@ -1125,10 +1126,10 @@ class PASCALVOCInference(PASCALVOC):
         """
         num_classes = len(all_boxes)
         num_images = len(all_boxes[0])
-        nms_boxes = [[[] for _ in range(num_images)]
-                     for _ in range(num_classes)]
-        for cls_ind in range(num_classes):
-            for im_ind in range(num_images):
+        nms_boxes = [[[] for _ in xrange(num_images)]
+                     for _ in xrange(num_classes)]
+        for cls_ind in xrange(num_classes):
+            for im_ind in xrange(num_images):
                 dets = all_boxes[cls_ind][im_ind]
                 if dets == []:
                     continue
@@ -1214,7 +1215,7 @@ class PASCALVOCInference(PASCALVOC):
                     if dets == []:
                         continue
                     # the VOCdevkit expects 1-based indices
-                    for k in range(dets.shape[0]):
+                    for k in xrange(dets.shape[0]):
                         f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
                                 format(index, dets[k, -1],
                                        dets[k, 0] + 1, dets[k, 1] + 1,

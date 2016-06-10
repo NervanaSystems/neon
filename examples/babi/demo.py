@@ -25,7 +25,7 @@ Usage:
     python examples/babi/demo.py -t 1 --rlayer_type gru --model_weights babi.p
 """
 
-from builtins import input, range
+from builtins import input
 import numpy as np
 from util import create_model, babi_handler
 from neon import logger as neon_logger

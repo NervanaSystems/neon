@@ -22,7 +22,6 @@ Reference:
 .. _[Karpathy]: http://github.com/karpathy/char-rnn
 """
 
-from builtins import range
 from neon import logger as neon_logger
 from neon.backends import gen_backend
 from neon.data.text import Text

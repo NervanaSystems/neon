@@ -18,7 +18,6 @@ Defines text datatset preprocessing routines
 from future import standard_library
 standard_library.install_aliases()  # triggers E402, hence noqa below
 from builtins import map  # noqa
-from builtins import range  # noqa
 import numpy as np  # noqa
 import re  # noqa
 from neon.util.compat import pickle  # noqa

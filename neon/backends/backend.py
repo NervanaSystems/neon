@@ -16,7 +16,7 @@
 Defines Tensor and Backend class.
 """
 from __future__ import division
-from builtins import hex, map, object, range, str
+from builtins import hex, map, object, str
 import logging
 from math import ceil
 import numpy as np

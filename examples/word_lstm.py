@@ -28,7 +28,6 @@ Usage:
 
 """
 
-from builtins import range
 from neon.backends import gen_backend
 from neon.data.text import Text
 from neon.data.dataloaders import load_ptb_train, load_ptb_test

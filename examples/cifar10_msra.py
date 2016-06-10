@@ -45,7 +45,7 @@
 # to be local to your machine (to avoid accessing the macrobatches over network if,
 # for example, your data_dir is in an NFS mounted location)
 
-from builtins import range, zip
+from builtins import zip
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Kaiming
 from neon.layers import Conv, Pooling, GeneralizedCost, Activation, Affine

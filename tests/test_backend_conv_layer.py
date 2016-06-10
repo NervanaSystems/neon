@@ -20,7 +20,6 @@ The numpy implementation is different from what is done underneath NervanaCPU to
 be a valid checking. It requires externally pad the input, while NervanaCPU does
 not require so
 """
-from builtins import range
 import itertools as itt
 import numpy as np
 import pytest

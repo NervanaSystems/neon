@@ -43,7 +43,6 @@ The mAP evaluation script is adapted from:
 https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc351be7f145499f
 """
 
-from builtins import range
 import sys
 import os
 import numpy as np
@@ -51,6 +50,7 @@ import heapq
 from neon import logger as neon_logger
 from neon.data.pascal_voc import PASCAL_VOC_CLASSES, PASCALVOCInference
 from neon.util.argparser import NeonArgparser
+from neon.util.compat import xrange
 from util import create_frcn_model, run_voc_eval
 
 # parse the command line arguments
@@ -89,12 +89,12 @@ max_per_image = 100
 thresh = -np.inf * np.ones(num_classes)
 # top_scores will hold one minheap of scores per class (used to enforce
 # the max_per_set constraint)
-top_scores = [[] for _ in range(num_classes)]
+top_scores = [[] for _ in xrange(num_classes)]
 # all detections are collected into:
 #    all_boxes[cls][image] = N x 5 array of detections in
 #    (x1, y1, x2, y2, score)
-all_boxes = [[[] for _ in range(num_images)]
-             for _ in range(num_classes)]
+all_boxes = [[[] for _ in xrange(num_images)]
+             for _ in xrange(num_classes)]
 
 NMS_THRESH = 0.3
 
@@ -151,8 +151,8 @@ for mb_idx, (x, db) in enumerate(valid_set):
         all_boxes[cls_ind][mb_idx] = np.hstack((cls_boxes, cls_scores[:, np.newaxis])).astype(
             np.float32, copy=False)
 
-for j in range(1, num_classes):
-    for i in range(num_images):
+for j in xrange(1, num_classes):
+    for i in xrange(num_images):
         if len(all_boxes[j][i]) > 0:
             inds = np.where(all_boxes[j][i][:, -1] > thresh[j])[0]
             all_boxes[j][i] = all_boxes[j][i][inds, :]

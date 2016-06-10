@@ -23,7 +23,6 @@ Reference:
 .. _[Graves2014]: http://arxiv.org/pdf/1308.0850.pdf
 """
 
-from builtins import range
 import numpy as np
 from neon import logger as neon_logger
 from neon.data import Text

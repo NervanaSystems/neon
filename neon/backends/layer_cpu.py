@@ -16,7 +16,7 @@
 CPU backend layers
 """
 from __future__ import division
-from builtins import object, range
+from builtins import object
 import math
 from operator import mul
 import numpy as np

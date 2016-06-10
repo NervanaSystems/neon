@@ -13,7 +13,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from builtins import zip
-from builtins import range
 import numpy as np
 import os
 from neon.backends import gen_backend

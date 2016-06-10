@@ -20,7 +20,6 @@ against numpy.
 In NervanaGPU, it supports both N as inside dimension or as outer dimension.
 In NervanaCPU, it only supports N as inside dimension, since this is what we use.
 """
-from builtins import range
 import numpy as np
 import pytest
 

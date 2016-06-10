@@ -16,7 +16,6 @@
 """
 Generalized gradient testing applied to different layers and activations
 """
-from builtins import range
 import numpy as np
 from neon import logger as neon_logger
 

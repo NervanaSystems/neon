@@ -14,7 +14,7 @@
 # ----------------------------------------------------------------------------
 # pylint: skip-file
 
-from builtins import range, zip
+from builtins import zip
 import itertools
 import numpy as np
 

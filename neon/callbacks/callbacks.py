@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from __future__ import division
-from builtins import map, range, str, zip
+from builtins import map, str, zip
 from future.utils import native
 from collections import deque
 import h5py

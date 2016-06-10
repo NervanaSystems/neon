@@ -48,7 +48,6 @@ Usage:
     python examples/babi/train.py -e 20 --rlayer_type gru --save_path babi_lstm.p -t 1
 """
 
-from builtins import range
 from util import create_model, babi_handler
 from neon import logger as neon_logger
 from neon.backends import gen_backend

@@ -14,7 +14,7 @@
 # ----------------------------------------------------------------------------
 from future import standard_library
 standard_library.install_aliases()  # triggers E402, hence noqa below
-from builtins import range, zip  # noqa
+from builtins import zip  # noqa
 
 from functools import partial  # noqa
 from glob import glob  # noqa

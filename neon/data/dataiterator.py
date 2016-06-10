@@ -15,7 +15,7 @@
 """
 Defines basic input datatset types.
 """
-from builtins import range, zip
+from builtins import zip
 import numpy as np
 
 from neon import NervanaObject, logger

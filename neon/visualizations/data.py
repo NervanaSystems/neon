@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from __future__ import division
-from builtins import range, str
+from builtins import str
 
 import h5py
 import numpy as np

@@ -16,7 +16,7 @@
 """
 Process macro batches of data in a pipelined fashion.
 """
-from builtins import range, str, zip
+from builtins import str, zip
 import logging
 from glob import glob
 import gzip

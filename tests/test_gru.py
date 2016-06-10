@@ -30,7 +30,6 @@ The following are made sure to be the same in both GRUs
     -   the data shape inside GRU (neon) is is batch_size, seq_len * batch_size
 
 """
-from builtins import range
 import itertools as itt
 import numpy as np
 

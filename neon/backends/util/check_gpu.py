@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 # pylint: skip-file
-from builtins import range, str
+from builtins import str
 from neon import logger as neon_logger
 
 

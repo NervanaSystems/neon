@@ -14,7 +14,6 @@
 # ----------------------------------------------------------------------------
 from future import standard_library
 standard_library.install_aliases()  # triggers E402, hence noqa below
-from builtins import range  # noqa
 import h5py  # noqa
 from collections import defaultdict  # noqa
 import numpy as np  # noqa

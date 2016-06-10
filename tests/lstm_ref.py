@@ -6,7 +6,7 @@ The adaptation includes
   - being able to read out intermediate values to compare with another LSTM
     implementation
 """
-from builtins import input, range
+from builtins import input
 import numpy as np
 from neon import logger as neon_logger
 

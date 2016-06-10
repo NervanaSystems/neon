@@ -17,7 +17,6 @@
 Floating point elementwise operations on GPU.
 """
 from __future__ import division
-from builtins import range
 from future.utils import native_str
 import os.path
 import re

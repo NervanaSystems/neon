@@ -30,7 +30,7 @@ TODO:
     - intrinsic key for caching
 """
 from __future__ import division
-from builtins import object, range, zip
+from builtins import object, zip
 from neon.backends.backend import OpTreeNode, Tensor
 import numpy as np
 from functools import wraps

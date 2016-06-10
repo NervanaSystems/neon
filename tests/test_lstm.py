@@ -30,7 +30,6 @@ The following are made sure to be the same in both LSTMs
     -   the data shape inside LSTM (neon) is input_size, seq_len * batch_size
 
 """
-from builtins import range
 import itertools as itt
 import numpy as np
 

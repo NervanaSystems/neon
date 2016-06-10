@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from __future__ import division
-from builtins import range, str, zip
+from builtins import str, zip
 import logging
 import numpy as np
 

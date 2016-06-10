@@ -19,7 +19,7 @@ TODO: clean up merge with CPU layers
 TODO: remove any non-param caching code, neon layers should replace benchmark code.
 """
 from __future__ import division
-from builtins import object, range, str
+from builtins import object, str
 import logging
 from math import ceil
 import numpy as np

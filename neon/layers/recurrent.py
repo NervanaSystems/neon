@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from builtins import range, zip
+from builtins import zip
 from neon.layers.layer import ParameterLayer, Layer
 from neon.util.persist import load_class
 

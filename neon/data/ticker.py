@@ -15,8 +15,6 @@
 """
 For machine generated datasets.
 """
-from builtins import range
-
 import numpy as np
 
 from neon import NervanaObject

@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 # pylint: skip-file
-from builtins import range, zip
+from builtins import zip
 import numpy as np
 import pprint
 import pytest

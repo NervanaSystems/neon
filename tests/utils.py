@@ -16,7 +16,7 @@
 """
 Utility functions for testing
 """
-from builtins import range, zip
+from builtins import zip
 import numpy as np
 import numpy.random as nprnd
 from neon import logger as neon_logger

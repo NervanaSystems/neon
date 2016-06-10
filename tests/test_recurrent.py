@@ -29,7 +29,6 @@ The following are made sure to be the same in both recurrent layers
     -   the data shape inside recurrent_ref is seq_len, input_size, 1
     -   the data shape inside recurrent (neon) is feature, seq_len * batch_size
 """
-from builtins import range
 
 import itertools as itt
 import numpy as np

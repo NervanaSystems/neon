@@ -10,7 +10,6 @@ The adaptation includes
   - being able to read out hashable values to compare with another GRU
     implementation
 """
-from builtins import range
 
 import numpy as np
 

@@ -24,7 +24,6 @@ https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc35
 
 from future import standard_library
 standard_library.install_aliases()  # triggers E402, hence noqa below
-from builtins import range  # noqa
 import xml.etree.ElementTree as ET  # noqa
 import os  # noqa
 import numpy as np  # noqa

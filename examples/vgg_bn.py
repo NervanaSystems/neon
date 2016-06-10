@@ -20,7 +20,6 @@ Simplified version of VGG model B, D, or E:
  - removes convolutional inference
 """
 
-from builtins import range
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.backends import gen_backend
 from neon.initializers import Constant, GlorotUniform

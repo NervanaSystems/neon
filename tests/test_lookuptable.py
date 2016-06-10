@@ -15,7 +15,7 @@
 '''
 Test of a LookupTable layer, which is often being used for word embedding
 '''
-from builtins import range, zip
+from builtins import zip
 import itertools as itt
 import numpy as np
 from neon.backends import gen_backend

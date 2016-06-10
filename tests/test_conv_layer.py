@@ -15,7 +15,6 @@
 """
 Convolution layer tests
 """
-from builtins import range
 import itertools as itt
 import numpy as np
 import pytest

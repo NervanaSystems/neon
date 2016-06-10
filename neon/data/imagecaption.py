@@ -12,7 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from builtins import range
 
 from collections import Counter
 import numpy as np
@@ -21,6 +20,7 @@ import os
 from neon import logger as neon_logger
 from neon.data.dataiterator import NervanaDataIterator
 from neon.data.datasets import Dataset
+from neon.util.compat import xrange
 
 
 class ImageCaption(NervanaDataIterator):
@@ -159,7 +159,7 @@ class ImageCaption(NervanaDataIterator):
         self.X, self.y, self.images = (self.X[shuf_idx], self.y[shuf_idx], self.images[shuf_idx])
         self.sent_length = self.sent_length[shuf_idx]
 
-        for batch_idx in range(self.nbatches):
+        for batch_idx in xrange(self.nbatches):
 
             start = batch_idx * self.be.bsz
             end = (batch_idx + 1) * self.be.bsz
@@ -204,9 +204,9 @@ class ImageCaption(NervanaDataIterator):
             prob = prob.get()
         words = [self.index_to_vocab[x] for x in np.argmax(prob, axis=0).tolist()]
 
-        for sent_index in range(self.be.bsz):
+        for sent_index in xrange(self.be.bsz):
             sent = []
-            for i in range(self.max_sentence_length):
+            for i in xrange(self.max_sentence_length):
                 word = words[self.be.bsz * i + sent_index]
                 sent.append(word)
                 if (i > 0 and word == self.end_token) or i >= 20:
@@ -359,7 +359,7 @@ class ImageCaptionTest(ImageCaption):
                           second tuple contains list of reference sentences and
                           placeholder for mask.
         """
-        for batch_idx in range(self.nbatches):
+        for batch_idx in xrange(self.nbatches):
 
             start = batch_idx * self.be.bsz
             end = (batch_idx + 1) * self.be.bsz

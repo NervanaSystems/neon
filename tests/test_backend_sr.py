@@ -1,4 +1,3 @@
-from builtins import range
 import numpy as np
 import pytest
 from neon import NervanaObject, logger

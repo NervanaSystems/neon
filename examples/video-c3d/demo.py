@@ -26,7 +26,7 @@ Usage:
                                       --model_weights <trained_pickle_file>
 """
 
-from builtins import map, range, zip
+from builtins import map, zip
 import cv2
 import numpy as np
 import os

@@ -32,7 +32,6 @@ Usage:
                                        --save_path UCF101-C3D.p
 """
 
-from builtins import range
 import os
 import numpy as np
 from neon import logger as neon_logger

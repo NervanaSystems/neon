@@ -15,7 +15,7 @@
 '''
 Test of the ROI pooling layer
 '''
-from builtins import range, round
+from builtins import round
 import itertools as itt
 import numpy as np
 from timeit import default_timer as timeit

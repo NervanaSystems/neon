@@ -13,7 +13,6 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from __future__ import division
-from builtins import range
 from neon import NervanaObject
 from neon.util.persist import load_class
 import logging

@@ -17,12 +17,13 @@ Our CPU based backend interface and tensor data structure. Our implementation
 wraps :mod:`numpy` ndarray and related operations
 """
 from __future__ import division
-from builtins import object, range, round, str, zip
+from builtins import object, round, str, zip
 import numpy as np
 import logging
 import time
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_cpu import ConvLayer, DeconvLayer, PoolLayer
+from neon.util.compat import xrange
 
 _none_slice = slice(None, None, None)
 
@@ -1447,7 +1448,7 @@ class NervanaCPU(Backend):
         array_argmax[:] = -1
 
         # combine the feature map with ROIs
-        for b_id in range(roi_count):
+        for b_id in xrange(roi_count):
             [idx, xmin, ymin, xmax, ymax] = array_rois[b_id]
             xmin = int(round(xmin * spatial_scale))
             xmax = int(round(xmax * spatial_scale))
@@ -1459,11 +1460,11 @@ class NervanaCPU(Backend):
             stride_h = float(roi_height) / float(pooled_height)
             stride_w = float(roi_width) / float(pooled_width)
 
-            for h_out in range(pooled_height):
+            for h_out in xrange(pooled_height):
                 sliceh, lenh = self._roipooling_slice(h_out, stride_h, H, ymin)
                 if sliceh.stop <= sliceh.start:
                     continue
-                for w_out in range(pooled_width):
+                for w_out in xrange(pooled_width):
                     slicew, lenw = self._roipooling_slice(w_out, stride_w, W, xmin)
                     if slicew.stop <= slicew.start:
                         continue
@@ -1503,7 +1504,7 @@ class NervanaCPU(Backend):
         array_argmax = argmax._tensor.reshape(C, pooled_height, pooled_width, roi_count)
         array_delta[:] = 0
 
-        for b_id in range(roi_count):
+        for b_id in xrange(roi_count):
             [idx, xmin, ymin, xmax, ymax] = array_rois[b_id]
             xmin = int(round(xmin * spatial_scale))
             xmax = int(round(xmax * spatial_scale))

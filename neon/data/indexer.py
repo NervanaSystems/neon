@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from builtins import range, str, zip
+from builtins import str, zip
 import os
 import glob
 import logging

@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from builtins import range, str, zip
+from builtins import str, zip
 import numpy as np
 import itertools as itt
 from operator import add

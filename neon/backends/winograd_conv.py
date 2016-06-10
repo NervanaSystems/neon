@@ -15,7 +15,6 @@
 Python code to wrap convolution kernels
 """
 from __future__ import division
-from builtins import range
 from future.utils import native_str
 
 import sys

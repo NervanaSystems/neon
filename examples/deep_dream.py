@@ -24,7 +24,7 @@ Usage:
 
 """
 
-from builtins import object, range, round, zip
+from builtins import object, round, zip
 import numpy as np
 import os.path as osp
 from PIL import Image

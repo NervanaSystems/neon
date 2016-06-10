@@ -16,7 +16,7 @@
 Our GPU based backend interface and tensor data structure.
 """
 from __future__ import division
-from builtins import range, round
+from builtins import round
 import os
 import sys
 import numpy as np

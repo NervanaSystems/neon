@@ -15,7 +15,6 @@
 '''
 Test of the recurrent outputs layers.
 '''
-from builtins import range
 import itertools as itt
 import numpy as np
 

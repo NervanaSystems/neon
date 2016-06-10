@@ -13,7 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 from __future__ import division
-from builtins import range
 import numpy           as np
 import pycuda.driver   as drv
 from neon import logger as neon_logger
