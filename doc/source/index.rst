@@ -38,6 +38,7 @@ New features in this release:
 
 * Python2/Python3 compatibility [#191]
 * Support for Pascal GPUs
+* Persistent RNN kernels [#262]
 * Dataloader enhancements (audio loader with examples)
 * HDF5 file data iterator
 * Convolution kernel improvements

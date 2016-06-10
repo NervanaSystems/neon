@@ -1,5 +1,21 @@
 # ChangeLog
 
+## v1.5.0 (2016-06-xx):
+
+### Modifications
+
+* Python2/Python3 compatibility [#191]
+* Support for Pascal GPUs
+* Persistent RNN kernels [#262]
+* Dataloader enhancements (audio loader with examples)
+* HDF5 file data iterator
+* Convolution kernel improvements
+* Winograd kernel for fprop/bprop and 5x5 stride 1 filters
+* API documentation improvements [#234, #244]
+* Cache directory cleanup
+* Reorganization of all unit tests
+* Check for compatible shapes before doing a memcpy [#182, #183]
+
 ## v1.4.0 (2016-04-29):
 
 ### Modifications
