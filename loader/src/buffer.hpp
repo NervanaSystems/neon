@@ -27,7 +27,10 @@
 
 typedef uint8_t uchar;
 using std::vector;
-using std::pair;
+using std::tuple;
+using std::get;
+using std::make_tuple;
+using std::tie;
 using std::make_pair;
 using std::mutex;
 using std::unique_lock;
@@ -37,19 +40,26 @@ template<typename T>
 class Buffer {
 public:
     explicit Buffer(int size, bool pinned = false)
-    : _size(size), _idx(0), _alloc(true), _pinned(pinned) {
+    : _size(size), _totalLen(size * sizeof(T)),
+      _idx(0), _alloc(true), _pinned(pinned) {
         _data = alloc();
         _cur = _data;
     }
 
     Buffer(T* data, int size)
-    : _data(data), _size(size), _cur(_data), _idx(0), _alloc(false) {
+    : _data(data), _size(size), _totalLen(size * sizeof(T)), _cur(_data),
+      _idx(0), _alloc(false) {
     }
 
     virtual ~Buffer() {
         if (_alloc == true) {
             dealloc(_data);
         }
+    }
+
+    void init() {
+        int len = _size * sizeof(T);
+        memset((char*)_data, 0, len);
     }
 
     void reset() {
@@ -137,7 +147,7 @@ private:
         assert(_alloc == true);
         _size = getLevel() + inc;
         // Allocate a bit more to minimize reallocations.
-        _size += _size / 10;
+        _size += _size / 8;
         T* data = alloc();
         memcpy(data, _data, getLevel() * sizeof(T));
         dealloc(_data);
@@ -160,6 +170,7 @@ private:
         } else {
             data = new T[_size];
         }
+        _totalLen = _size * sizeof(T);
         return data;
     }
 
@@ -178,6 +189,7 @@ private:
 public:
     T*                          _data;
     uint                        _size;
+    uint                        _totalLen;
 
 protected:
     T*                          _cur;
@@ -189,33 +201,38 @@ protected:
 };
 
 typedef Buffer<char>                                    CharBuffer;
-typedef pair<CharBuffer*, CharBuffer*>                  BufferPair;
+typedef Buffer<int>                                     IntBuffer;
+typedef tuple<CharBuffer*, CharBuffer*, IntBuffer*>     BufferTuple;
 
 class BufferPool {
 public:
-    BufferPool(int dataSize, int targetSize, bool pinned = false, int count = 2)
+    BufferPool(int dataSize, int targetSize, int metaSize, bool pinned = false, int count = 2)
     : _count(count), _used(0), _readPos(0), _writePos(0) {
         for (int i = 0; i < count; i++) {
             CharBuffer* dataBuffer = new CharBuffer(dataSize, pinned);
             CharBuffer* targetBuffer = new CharBuffer(targetSize, pinned);
-            _bufs.push_back(make_pair(dataBuffer, targetBuffer));
+            IntBuffer* metaBuffer = new IntBuffer(metaSize, pinned);
+            _bufs.push_back(make_tuple(dataBuffer, targetBuffer, metaBuffer));
         }
     }
 
     virtual ~BufferPool() {
-        for (auto buf : _bufs) {
-            delete buf.first;
-            delete buf.second;
+        for (auto tup : _bufs) {
+            delete get<0>(tup);
+            delete get<1>(tup);
+            delete get<2>(tup);
         }
     }
 
-    BufferPair& getForWrite() {
-        _bufs[_writePos].first->reset();
-        _bufs[_writePos].second->reset();
-        return _bufs[_writePos];
+    BufferTuple& getForWrite() {
+        BufferTuple& result = _bufs[_writePos];
+        std::get<0>(result)->reset();
+        std::get<1>(result)->reset();
+        std::get<2>(result)->reset();
+        return result;
     }
 
-    BufferPair& getForRead() {
+    BufferTuple& getForRead() {
         return _bufs[_readPos];
     }
 
@@ -269,7 +286,7 @@ protected:
 protected:
     int                         _count;
     int                         _used;
-    vector<BufferPair>          _bufs;
+    vector<BufferTuple>         _bufs;
     int                         _readPos;
     int                         _writePos;
     mutex                       _mutex;

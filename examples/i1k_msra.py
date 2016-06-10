@@ -29,7 +29,7 @@ from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
 from neon.data import ImageLoader
-from neon.callbacks.callbacks import Callbacks
+from neon.callbacks.callbacks import Callbacks, BatchNormTuneCallback
 import itertools as itt
 import sys
 
@@ -61,17 +61,18 @@ else:
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        subset_pct=args.subset_pct)
-train = ImageLoader(set_name='train', scale_range=(
-    256, 480), shuffle=True, **img_set_options)
-test = ImageLoader(set_name='validation', scale_range=0,
-                   do_transforms=False, **img_set_options)
+train = ImageLoader(set_name='train', scale_range={'min_area_pct': 8, 'max_area_pct': 100},
+                    aspect_ratio=133, contrast_range=(60, 140), shuffle=True, **img_set_options)
+test = ImageLoader(set_name='validation', scale_range=256, do_transforms=False, **img_set_options)
+tune = ImageLoader(set_name='train', scale_range=256, do_transforms=False, repo_dir=args.data_dir,
+                   inner_size=224, subset_pct=10)
 
 
 def conv_params(fsize, nfm, strides=1, relu=True, batch_norm=True):
     return dict(fshape=(fsize, fsize, nfm),
                 strides=strides,
                 activation=(Rectlin() if relu else None),
-                padding=(1 if fsize > 1 else 0),
+                padding=(fsize // 2),
                 batch_norm=batch_norm,
                 init=Kaiming(local=True))
 
@@ -84,8 +85,8 @@ def module_factory(nfm, stride=1):
         **conv_params(1, nfm_out, stride, False))]
 
     if args.bottleneck:
-        mainpath = [Conv(**conv_params(1, nfm)),
-                    Conv(**conv_params(3, nfm, stride)),
+        mainpath = [Conv(**conv_params(1, nfm, stride)),
+                    Conv(**conv_params(3, nfm)),
                     Conv(**conv_params(1, nfm_out, relu=False))]
     else:
         mainpath = [Conv(**conv_params(3, nfm, stride)),
@@ -110,8 +111,7 @@ for nfm, stride in zip(nfms, strides):
     layers.append(module_factory(nfm, stride))
 
 layers.append(Pooling('all', op='avg'))
-layers.append(
-    Conv(**conv_params(1, train.nclass, relu=False, batch_norm=False)))
+layers.append(Conv(**conv_params(1, train.nclass, relu=False)))
 layers.append(Activation(Softmax()))
 model = Model(layers=layers)
 
@@ -120,8 +120,9 @@ opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)
 
 # configure callbacks
 valmetric = TopKMisclassification(k=5)
-callbacks = Callbacks(model, eval_set=test,
-                      metric=valmetric, **args.callback_args)
+callbacks = Callbacks(model, eval_set=test, metric=valmetric, **args.callback_args)
+callbacks.add_callback(BatchNormTuneCallback(tune), insert_pos=0)
+
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 model.fit(train, optimizer=opt, num_epochs=args.epochs,
           cost=cost, callbacks=callbacks)

@@ -97,6 +97,10 @@ and iterating through minibatches of data during training.
   neon.data.hdf5iterator.HDF5IteratorOneHot
   neon.data.imageloader.ImageLoader
   neon.data.batch_writer.BatchWriter
+  neon.data.dataloader.DataLoader
+  neon.data.media.ImageParams
+  neon.data.media.VideoParams
+  neon.data.media.AudioParams
 
 Dataset objects for storing data from common modalities (e.g. Text), as well as specific stock datasets (e.g. MNIST, CIFAR-10, Penn Treebank) are included.
 
@@ -175,7 +179,6 @@ Common Layers
     neon.layers.layer.Pooling
     neon.layers.layer.LRN
     neon.layers.layer.DataTransform
-    neon.layers.layer.ColorNoise
     neon.layers.layer.BranchNode
     neon.layers.layer.SkipNode
 

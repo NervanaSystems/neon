@@ -41,6 +41,7 @@ using std::ios;
 using std::stringstream;
 using std::vector;
 using std::map;
+using std::tuple;
 
 #define ARCHIVE_ITEM_COUNT  4096
 
@@ -72,18 +73,21 @@ private:
 class ArchiveWriter : public Writer {
 public:
     ArchiveWriter(int batchSize, const char* repoDir, const char* archiveDir,
-                  const char* indexFile, const char* metaFile,
-                  const char* archivePrefix,
-                  bool shuffle, Media* media)
+                  const char* indexFile, const char* archivePrefix,
+                  bool shuffle,
+                  MediaParams* params, MediaParams* ingestParams,
+                  int targetTypeSize, int targetConversion, char* alphabet)
     : _batchSize(batchSize),
       _repoDir(repoDir), _archiveDir(archiveDir),
-      _indexFile(indexFile), _metaFile(metaFile),
+      _indexFile(indexFile),
       _archivePrefix(archivePrefix),
       _fileIdx(0), _itemCount(0), _started(false),
-      _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0),
-      _media(media) {
+      _dataBuf(0), _targetBuf(0), _dataBufLen(0), _targetBufLen(0) {
+        _media = Media::create(params, ingestParams, 0);
         _writeThread = new WriteThread(this);
-        _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle);
+        _reader = new FileReader(&_itemCount, 1, repoDir, indexFile, shuffle,
+                                 targetTypeSize, targetConversion,
+                                 alphabet);
         if (Reader::exists(_archiveDir) == true) {
             return;
         }
@@ -100,8 +104,9 @@ public:
         _writeThread->stop();
         delete _writeThread;
         delete _reader;
-        delete _targetBuf;
-        delete _dataBuf;
+        delete[] _targetBuf;
+        delete[] _dataBuf;
+        delete _media;
     }
 
     void waitFor(string& name) {
@@ -156,34 +161,16 @@ private:
         _started = true;
     }
 
-    void writeMetadata() {
-        // Deprecated
-        assert(0);
-        ofstream ofs(_metaFile);
-        if (!ofs) {
-            stringstream ss;
-            ss << "Could not create " <<  _metaFile;
-            throw std::ios_base::failure(ss.str());
-        }
-
-        stringstream ss;
-        ss << "nrec," << _itemCount << "\n";
-        string line = ss.str();
-        ofs.write(line.c_str(), line.length());
-    }
-
 private:
     int                         _batchSize;
     string                      _repoDir;
     string                      _archiveDir;
     string                      _indexFile;
-    string                      _metaFile;
     string                      _archivePrefix;
     // Index of current archive file.
     int                         _fileIdx;
     // Total number of items in this dataset.
     int                         _itemCount;
-    Metadata                    _metadata;
     bool                        _started;
     mutex                       _mutex;
     condition_variable          _write;
@@ -200,13 +187,18 @@ class ArchiveReader : public Reader {
 public:
     ArchiveReader(int* itemCount, int batchSize,
                   const char* repoDir, const char* archiveDir,
-                  const char* indexFile, const char* metaFile,
+                  const char* indexFile,
                   const char* archivePrefix,
                   bool shuffle, bool reshuffle,
                   int startFileIdx,
-                  int subsetPercent, Media* media)
+                  int subsetPercent,
+                  MediaParams* params,
+                  MediaParams* ingestParams,
+                  int targetTypeSize,
+                  int targetConversion,
+                  char* alphabet)
     : Reader(batchSize, repoDir, indexFile, shuffle, reshuffle, subsetPercent),
-      _archiveDir(archiveDir), _indexFile(indexFile), _metaFile(metaFile),
+      _archiveDir(archiveDir), _indexFile(indexFile),
       _archivePrefix(archivePrefix),
       _startFileIdx(startFileIdx),
       _fileIdx(startFileIdx), _itemIdx(0), _itemsLeft(0), _archiveWriter(0) {
@@ -215,10 +207,9 @@ public:
             // Create a writer just in case. It will only be used if archive
             // files are missing or damaged.
             _archiveWriter = new ArchiveWriter(ARCHIVE_ITEM_COUNT,
-                                               repoDir, archiveDir,
-                                               indexFile, metaFile,
-                                               archivePrefix,
-                                               shuffle, media);
+                    repoDir, archiveDir, indexFile, archivePrefix,
+                    shuffle, params, ingestParams,
+                    targetTypeSize, targetConversion, alphabet);
         }
         _itemCount = *itemCount;
         assert(_itemCount != 0);
@@ -230,7 +221,7 @@ public:
         close();
     }
 
-    int read(BufferPair& buffers) {
+    int read(BufferTuple& buffers) {
         int offset = 0;
         while (offset < _batchSize) {
             int count = _batchSize - offset;
@@ -310,34 +301,7 @@ private:
         return count;
     }
 
-    void loadMetadata() {
-        // Deprecated
-        assert(0);
-        if (Reader::exists(_metaFile) == false) {
-            _archiveWriter->waitFor(_metaFile);
-        }
-        ifstream ifs(_metaFile);
-        if (!ifs) {
-            stringstream ss;
-            ss << "Could not open " << _metaFile;
-            throw std::runtime_error(ss.str());
-        }
-
-        string line;
-        while (std::getline(ifs, line)) {
-            _metadata.addElement(line);
-        }
-
-        _itemCount = _metadata.getItemCount();
-        _itemCount = (_itemCount * _subsetPercent) / 100;
-        if (_itemCount <= 0) {
-            stringstream ss;
-            ss << "Number of data points is " <<  _itemCount;
-            throw std::runtime_error(ss.str());
-        }
-    }
-
-    int read(BufferPair& buffers, int count) {
+    int read(BufferTuple& buffers, int count) {
         if (_itemsLeft == 0) {
             next();
         }
@@ -374,20 +338,20 @@ private:
         return 0;
     }
 
-    int readShuffle(BufferPair& buffers, int count) {
+    int readShuffle(BufferTuple& buffers, int count) {
         while ((int) _shuffleQueue.size() < count) {
             replenishQueue(count);
         }
         for (int i=0; i<count; ++i) {
             auto ee = std::move(_shuffleQueue.at(0));
-            buffers.first->read(&(*ee.first)[0], ee.first->size());
-            buffers.second->read(&(*ee.second)[0], ee.second->size());
+            get<0>(buffers)->read(&(*ee.first)[0], ee.first->size());
+            get<1>(buffers)->read(&(*ee.second)[0], ee.second->size());
             _shuffleQueue.pop_front();
         }
         return count;
     }
 
-    void readExact(BufferPair& buffers, int count) {
+    void readExact(BufferTuple& buffers, int count) {
         assert(count <= _itemsLeft);
         for (int i = 0; i < count; ++i) {
             _batchFile.readItem(buffers);
@@ -420,7 +384,6 @@ private:
 private:
     string                      _archiveDir;
     string                      _indexFile;
-    string                      _metaFile;
     string                      _archivePrefix;
     int                         _startFileIdx;
     // Index of current archive file.
@@ -430,7 +393,6 @@ private:
     // Number of items left in the current archive.
     int                         _itemsLeft;
     BatchFile                   _batchFile;
-    Metadata                    _metadata;
     std::deque<DataPair>        _shuffleQueue;
     ArchiveWriter*              _archiveWriter;
 };

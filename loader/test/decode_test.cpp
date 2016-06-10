@@ -13,11 +13,11 @@
 #include "image.hpp"
 
 int main (int argc, char **argv) {
-    ImageParams *imgp = new ImageParams(3, 224, 224, true, true, // channels, h, w, augment, flip
-        256, 256,   // Scale Params
-        75, 125,    // Contrast params
-        0, 0,       // Rotation params
-        0,          // Aspect Ratio
+    ImageParams *imgp = new ImageParams(3, 224, 224, false, true, // channels, h, w, augment, flip
+        20, 100,   // Scale Params
+        60, 140,    // Contrast params
+        -10, 10,       // Rotation params
+        133,          // Aspect Ratio
         false, 0, 0, 0, 0);  // subtract mean, r, g, b, gray means
     ImageIngestParams *iip = new ImageIngestParams(true, true, 256, 256);
 
@@ -36,7 +36,7 @@ int main (int argc, char **argv) {
 
     int label_idx = *reinterpret_cast<int *>(&labels[0]);
     // We'll do 10 decodings of the same image;
-    Image decoder(imgp, iip);
+    Image decoder(imgp, iip, 0);
     int num_decode = 10;
     int num_pixels = imgp->getSize().area() * 3;
     ByteVect outbuf(num_pixels * num_decode);
@@ -45,7 +45,7 @@ int main (int argc, char **argv) {
     std::cout << "label index: " << label_idx << std::endl;
 
     for (int i = 0; i < num_decode; i++) {
-        decoder.transform(&data[0], data.size(), &outbuf[i * num_pixels], num_pixels);
+        decoder.transform(&data[0], data.size(), &outbuf[i * num_pixels], num_pixels, 0);
     }
 
     std::ofstream file (argv[2], std::ofstream::out | std::ofstream::binary);

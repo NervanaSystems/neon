@@ -14,30 +14,39 @@
 */
 
 #include "media.hpp"
+#include "codec.hpp"
+#include "specgram.hpp"
 
-class AudioParams : public MediaParams {
-public:
-    int                         _dummy;
+class AudioParams : public SignalParams {
 };
 
 class Audio : public Media {
 public:
-    Audio(AudioParams *params)
+    Audio(AudioParams *params, int id)
     : _params(params) {
+        _codec = new Codec(params);
+        _specgram = new Specgram(params, id);
     }
 
     virtual ~Audio() {
+        delete _specgram;
+        delete _codec;
     }
 
 public:
-    void transform(char* item, int itemSize, char* buf, int bufSize) {
-        assert(_params != 0);
+    void transform(char* item, int itemSize, char* buf, int bufSize, int* meta) {
+        RawMedia* raw = _codec->decode(item, itemSize);
+        int len = _specgram->generate(raw, buf, bufSize);
+        if (meta != 0) {
+            *meta = len;
+        }
     }
 
     void ingest(char** dataBuf, int* dataBufLen, int* dataLen) {
-        assert(_params != 0);
     }
 
 private:
     AudioParams*                _params;
+    Codec*                      _codec;
+    Specgram*                   _specgram;
 };

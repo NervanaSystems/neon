@@ -21,7 +21,7 @@ BASE_DATA_DIR = '~/nervana/data'
 # skip - not a training example
 FILES_TO_SKIP = ['examples/deep_dream.py']
 # skip - need to download dataset
-FILES_TO_SKIP += ['examples/imdb/train.py']
+FILES_TO_SKIP += ['examples/imdb/train.py', 'examples/whale_calls.py', 'examples/music_genres.py']
 
 ADD_I1K_BATCH_DIR = ['examples/alexnet.py', 'examples/imagenet_allcnn.py',
                      'examples/vgg_bn.py', 'examples/i1k_msra.py']

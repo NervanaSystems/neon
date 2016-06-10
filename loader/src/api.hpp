@@ -17,26 +17,30 @@ extern "C" {
 
 extern void* start(int* itemCount, int batchSize,
                    const char* repoDir, const char* archiveDir,
-                   const char* indexFile, const char* metaFile,
-                   const char* archivePrefix,
+                   const char* indexFile, const char* archivePrefix,
                    bool shuffle, bool reshuffle,
                    int macroStart,
-                   int datumSize, int targetSize,
+                   int datumSize, int datumTypeSize,
+                   int targetSize, int targetTypeSize,
+                   int targetConversion,
                    int subsetPercent,
                    MediaParams* mediaParams,
                    DeviceParams* deviceParams,
-                   MediaParams* ingestParams) {
+                   MediaParams* ingestParams,
+                   char* alphabet) {
     static_assert(sizeof(int) == 4, "int is not 4 bytes");
     try {
         Loader* loader = new Loader(itemCount, batchSize,
                                     repoDir, archiveDir,
-                                    indexFile, metaFile,
-                                    archivePrefix,
+                                    indexFile, archivePrefix,
                                     shuffle, reshuffle,
                                     macroStart,
-                                    datumSize, targetSize,
+                                    datumSize, datumTypeSize,
+                                    targetSize, targetTypeSize,
+                                    targetConversion,
                                     subsetPercent,
-                                    mediaParams, deviceParams, ingestParams);
+                                    mediaParams, deviceParams, ingestParams,
+                                    alphabet);
         int result = loader->start();
         if (result != 0) {
             printf("Could not start data loader. Error %d", result);

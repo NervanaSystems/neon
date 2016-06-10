@@ -38,6 +38,13 @@ using std::stringstream;
 using std::vector;
 using std::map;
 
+enum ConversionType {
+    NO_CONVERSION = 0,
+    ASCII_TO_BINARY = 1,
+    CHAR_TO_INDEX = 2,
+    READ_CONTENTS = 3,
+};
+
 class IndexElement {
 public:
     IndexElement() {
@@ -50,7 +57,8 @@ public:
 
 class Index {
 public:
-    Index() {}
+    Index() : _maxTargetSize(0) {
+    }
 
     virtual ~Index() {
         for (auto elem : _elements) {
@@ -71,6 +79,9 @@ public:
         // For now, restrict to a single target.
         assert(elem->_targets.size() == 1);
         _elements.push_back(elem);
+        if (elem->_targets[0].size() > _maxTargetSize) {
+            _maxTargetSize = elem->_targets[0].size();
+        }
     }
 
     IndexElement* operator[] (int idx) {
@@ -88,27 +99,7 @@ public:
 
 public:
     vector<IndexElement*>       _elements;
-};
-
-class Metadata {
-public:
-    void addElement(string& line) {
-        std::istringstream ss(line);
-        string key, val;
-        std::getline(ss, key, ',');
-        std::getline(ss, val, ',');
-        _map[key] = val;
-    }
-
-    int getItemCount() {
-        if (_map.count("nrec") == 0) {
-            throw std::runtime_error("Error in metadata\n");
-        }
-        return atoi(_map["nrec"].c_str());
-    }
-
-private:
-    map<string, string>         _map;
+    uint                        _maxTargetSize;
 };
 
 class Reader {
@@ -122,7 +113,7 @@ public:
     }
 
     virtual ~Reader() {};
-    virtual int read(BufferPair& buffers) = 0;
+    virtual int read(BufferTuple& buffers) = 0;
     virtual int reset() = 0;
 
     virtual int totalDataSize() {
@@ -154,14 +145,30 @@ class FileReader : public Reader {
 public:
     FileReader(int* itemCount, int batchSize,
                const char* repoDir, const char* indexFile,
-               bool shuffle)
-    : Reader(batchSize, repoDir, indexFile, shuffle, false, 100), _itemIdx(0) {
+               bool shuffle, int targetTypeSize, int targetConversion,
+               char* alphabet)
+    : Reader(batchSize, repoDir, indexFile, shuffle, false, 100), _itemIdx(0),
+      _targetTypeSize(targetTypeSize), _targetConversion(targetConversion) {
+        static_assert(sizeof(int) == 4, "int is not 4 bytes");
+        if (_targetConversion == ASCII_TO_BINARY) {
+            // For now, assume that binary targets are 4 bytes long.
+            assert(_targetTypeSize == 4);
+        }
         _ifs.exceptions(_ifs.failbit);
         loadIndex();
         *itemCount = _itemCount;
+        if (alphabet == 0) {
+            _alphabet = "_'ABCDEFGHIJKLMNOPQRSTUVWXYZ $";
+        } else {
+            _alphabet = alphabet;
+        }
+        memset(_charMap, 0, sizeof(_charMap));
+        if (targetConversion == CHAR_TO_INDEX) {
+            createCharMap();
+        }
     }
 
-    int read(BufferPair& buffers) {
+    int read(BufferTuple& buffers) {
         // Deprecated
         assert(0);
         return 0;
@@ -176,36 +183,41 @@ public:
         }
         IndexElement* elem = _index[_itemIdx++];
         // Read the data.
-        string path;
-        if (elem->_fileName[0] == '/') {
-            path = elem->_fileName;
-        } else {
-            path = _repoDir + '/' + elem->_fileName;
-        }
-        struct stat stats;
-        int result = stat(path.c_str(), &stats);
-        if (result == -1) {
-            stringstream ss;
-            ss << "Could not find " << path;
-            throw std::runtime_error(ss.str());
-        }
-        off_t size = stats.st_size;
-        if (*dataBufLen < size) {
-            // Allocate a bit more than what we need right now.
-            resize(dataBuf, dataBufLen, size + size / 10);
-        }
-        _ifs.open(path, ios::binary);
-        _ifs.read(*dataBuf, size);
-        _ifs.close();
-        *dataLen = size;
+        readFile(elem->_fileName, dataBuf, dataBufLen, dataLen);
         // Read the targets.
-        // Limit to a single integer for now.
-        if (*targetBufLen < (int) sizeof(int)) {
-            resize(targetBuf, targetBufLen, sizeof(int));
+        if (_targetConversion == READ_CONTENTS) {
+            readFile(elem->_targets[0], targetBuf, targetBufLen, targetLen);
+            return 0;
         }
-        int label = atoi(elem->_targets[0].c_str());
-        memcpy(*targetBuf, &label, sizeof(int));
-        *targetLen = sizeof(int);
+
+        switch(_targetConversion) {
+        case NO_CONVERSION:
+        case CHAR_TO_INDEX:
+            *targetLen = elem->_targets[0].size();
+            break;
+        case ASCII_TO_BINARY:
+            *targetLen = _targetTypeSize;
+            break;
+        default:
+            throw std::runtime_error("Unknown conversion specified for target");
+        }
+
+        if (*targetBufLen < *targetLen) {
+            resize(targetBuf, targetBufLen, *targetLen);
+        }
+
+        switch(_targetConversion) {
+        case NO_CONVERSION:
+            memcpy(*targetBuf, elem->_targets[0].c_str(), *targetLen);
+            break;
+        case ASCII_TO_BINARY:
+            asciiToBinary(elem, *targetBuf);
+            break;
+        case CHAR_TO_INDEX:
+            charToIndex(elem, *targetBuf);
+            break;
+        }
+
         return 0;
     }
 
@@ -219,6 +231,52 @@ public:
     }
 
 private:
+    void readFile(string& fileName, char**buf, int* bufLen, int* dataLen) {
+        string path;
+        if (fileName[0] == '/') {
+            path = fileName;
+        } else {
+            path = _repoDir + '/' + fileName;
+        }
+        struct stat stats;
+        int result = stat(path.c_str(), &stats);
+        if (result == -1) {
+            stringstream ss;
+            ss << "Could not find " << path;
+            throw std::runtime_error(ss.str());
+        }
+        off_t size = stats.st_size;
+        if (*bufLen < size) {
+            // Allocate a bit more than what we need right now.
+            resize(buf, bufLen, size + size / 8);
+        }
+        _ifs.open(path, ios::binary);
+        _ifs.read(*buf, size);
+        _ifs.close();
+        *dataLen = size;
+    }
+
+    void asciiToBinary(IndexElement* elem, char* targetBuf) {
+        int label = std::atoi(elem->_targets[0].c_str());
+        memcpy(targetBuf, &label, sizeof(int));
+    }
+
+    void charToIndex(IndexElement* elem, char* targetBuf) {
+        string& target = elem->_targets[0];
+        for (uint i = 0; i < target.size(); i++) {
+            uchar elem = target[i];
+            targetBuf[i] = _charMap[elem];
+        }
+    }
+
+    void createCharMap() {
+        assert(_alphabet.size() <= 256);
+        for (uint i = 0; i < _alphabet.size(); i++) {
+            uchar elem = _alphabet[i];
+            _charMap[elem] = i;
+        }
+    }
+
     void resize(char** buf, int* len, int newLen) {
         delete[] *buf;
         *buf = new char[newLen];
@@ -250,7 +308,7 @@ private:
 
         _itemCount = _index.size();
         if (_itemCount == 0) {
-            throw std::runtime_error("Could not load index\n");
+            throw std::runtime_error("Could not load index");
         }
     }
 
@@ -258,4 +316,9 @@ private:
     Index                       _index;
     int                         _itemIdx;
     ifstream                    _ifs;
+    int                         _targetTypeSize;
+    int                         _targetConversion;
+    string                      _alphabet;
+    static constexpr int        _charMapSize = 256;
+    uchar                       _charMap[_charMapSize];
 };
