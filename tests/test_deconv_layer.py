@@ -14,8 +14,9 @@
 # ----------------------------------------------------------------------------
 import itertools as itt
 import numpy as np
-
+import pytest
 from neon import NervanaObject
+from neon.backends.nervanagpu import NervanaGPU
 from neon.layers import Deconvolution
 from neon.initializers import Uniform
 
@@ -110,6 +111,9 @@ def test_dconv_zeros(backend_default, zeros_convargs):
 
 def test_dconv_ones(backend_default, ones_convargs):
     indim, nifm, fshape, nofm, batch_size = ones_convargs
+    if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
+        if nofm % 4 != 0:
+            pytest.skip(msg="C dim must be a multiple of 4 for Kepler bprop kernel")
     NervanaObject.be.bsz = batch_size
     dtypeu = np.float32
 
@@ -163,6 +167,9 @@ def test_dconv_ones(backend_default, ones_convargs):
 
 def test_dconv_rand(backend_default, rand_convargs):
     indim, nifm, fshape, nofm, batch_size, rngmax, w_rng = rand_convargs
+    if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
+        if nofm % 4 != 0:
+            pytest.skip(msg="C dim must be a multiple of 4 for Kepler bprop kernel")
     NervanaObject.be.bsz = batch_size
     dtypeu = np.float32
     inp_rng = [0.0, rngmax]

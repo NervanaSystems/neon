@@ -14,27 +14,32 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains a small multi-layer perceptron with fully connected layers on MNIST.
+Train a small multi-layer perceptron with fully connected layers on MNIST data.
 
 This example has some command line arguments that enable different neon features.
 
 Examples:
 
-    python mnist_mlp.py -b gpu -e 10
-        Run the example for 10 epochs of mnist data using the nervana gpu backend
+    python examples/mnist_mlp.py -b gpu -e 10
 
-    python mnist_mlp.py --eval_freq 1
-        After each training epoch the validation/test data set will be processed through the model
-        and the cost will be displayed.
+        Run the example for 10 epochs using the NervanaGPU backend
 
-    python mnist_mlp.py --serialize 1 -s checkpoint.pkl
-        After every iteration of training the model will be dumped to a pickle file named
-        "checkpoint.pkl".  Changing the serialize parameter changes the frequency at which the
-        model is saved.
+    python examples/mnist_mlp.py --eval_freq 1
 
-    python mnist_mlp.py --model_file checkpoint.pkl
-        Before starting to train the model, the model state is set to the values stored in the
-        checkpoint file named checkpoint.pkl.
+        After each training epoch, process the validation/test data
+        set through the model and display the cost.
+
+    python examples/mnist_mlp.py --serialize 1 -s checkpoint.pkl
+
+        After every iteration of training, dump the model to a pickle
+        file named "checkpoint.pkl".  Changing the serialize parameter
+        changes the frequency at which the model is saved.
+
+    python examples/mnist_mlp.py --model_file checkpoint.pkl
+
+        Before starting to train the model, set the model state to
+        the values stored in the checkpoint file named checkpoint.pkl.
+
 """
 
 from neon.callbacks.callbacks import Callbacks

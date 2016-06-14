@@ -14,7 +14,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-MNIST example demonstrating the use of merge layers.
+Example demonstrating the use of merge layers training the MNIST data.
+
+Usage:
+
+    python examples/mnist_merge.py
+
 """
 
 from neon.data import ArrayIterator, load_mnist

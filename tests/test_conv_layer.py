@@ -48,7 +48,7 @@ def pytest_generate_tests(metafunc):
         if metafunc.config.option.all:
             bsz_rng = [64]
             indim_rng = [16, 32]
-            nifm_rng = [1, 2, 3]
+            nifm_rng = [3, 4, 32]
             fs_rng = [2, 3]
             stride_rng = [1, 2]
             nofm_rng = [16, 32, 64]
@@ -63,7 +63,7 @@ def pytest_generate_tests(metafunc):
         else:
             bsz_rng = [64]
             indim_rng = [32]
-            nifm_rng = [3]
+            nifm_rng = [4]
             fs_rng = [2, 5]
             nofm_rng = [16]
             stride_rng = [1, 2]
@@ -77,7 +77,7 @@ def pytest_generate_tests(metafunc):
         eps = np.finfo(np.float32).eps
         if metafunc.config.option.all:
             indim_rng = [16, 32]
-            nifm_rng = [1, 3]
+            nifm_rng = [3, 4]
             fs_rng = [2, 3]
             nofm_rng = [16]
             rng_max_rng = [eps, eps * 10, 1.0, 100]
@@ -93,7 +93,7 @@ def pytest_generate_tests(metafunc):
             fargs = itt.chain(fargs1, fargs2)
         else:
             indim_rng = [16]
-            nifm_rng = [1, 3]
+            nifm_rng = [3, 4]
             fs_rng = [2, 5]
             nofm_rng = [16]
             rng_max_rng = [2.0]
@@ -112,7 +112,7 @@ def test_conv_zeros(backend_default, zeros_convargs):
 
     # basic sanity check with 0 weights random inputs
     init_unif = Uniform(low=0.0, high=0.0)
-    inshape = (3, 32, 32)
+    inshape = (32, 32, 32)
     insize = np.prod(inshape)
     neon_layer = Convolution(fshape=(fshape, fshape, nofm),
                              strides=1, padding=0, init=init_unif)
@@ -135,13 +135,13 @@ def test_conv_zeros(backend_default, zeros_convargs):
 
 
 def test_conv_ones(backend_default, ones_convargs):
-    if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
-        if ones_convargs[3] > 32:
-            # TODO switch to pytest.skip() if verified to be expected failure
-            pytest.xfail(reason="Test requires Maxwell or higher")
 
     dtypeu = np.float32
     indim, nifm, fshape, nofm, batch_size, stride, pad = ones_convargs
+    if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
+        if nifm % 4 != 0:
+            pytest.skip(msg="C dim must be a multiple of 4 for Kepler bprop kernel")
+
     NervanaObject.be.bsz = batch_size
 
     # weights set to one
@@ -206,10 +206,10 @@ def test_conv_ones(backend_default, ones_convargs):
 
 def test_conv_rand(backend_default, rand_convargs):
 
-    if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
-        # TODO switch to pytest.skip() if verified to be expected failure
-        pytest.xfail(reason='Test requires Maxwell or higher')
     indim, nifm, fshape, nofm, batch_size, stride, rng_max, w_rng, pad = rand_convargs
+    if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
+        if nifm % 4 != 0:
+            pytest.skip(msg="C dim must be a multiple of 4 for Kepler bprop kernel")
     NervanaObject.be.bsz = batch_size
     inp_rng = [0.0, rng_max]
     dtypeu = np.float32

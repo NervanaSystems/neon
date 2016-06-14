@@ -14,11 +14,15 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Classify music clips according to genre
-Example dataset can be downloaded from http://marsyasweb.appspot.com/download/data_sets/
-After unpacking the dataset, point the script to the unpacked directory:
+Classify music clips according to genre.
 
-./music_genres.py -e8 -w /path/to/data -r0
+Download the example dataset from http://marsyasweb.appspot.com/download/data_sets/
+After unpacking the dataset, point the script to the unpacked directory.
+
+Usage:
+
+    python examples/music_genres.py -e 8 -w </path/to/dataset> -r 0
+
 """
 
 import os

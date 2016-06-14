@@ -15,6 +15,7 @@
 from builtins import zip
 import numpy as np
 import os
+
 from neon.backends import gen_backend
 from neon.data import ArrayIterator, load_mnist, Text
 from neon.data.dataloaders import load_ptb_test

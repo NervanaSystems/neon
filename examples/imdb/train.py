@@ -14,18 +14,19 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-  Example that trains LSTM network for sentiment analysis
-  $ python examples/imdb/train.py -e 2 -eval 1 -s imdb.pkl --vocab_file imdb.vocab
-    [--use_w2v]
+Train a LSTM network for sentiment analysis on IMDB review data.
 
-  Get the data from Kaggle:
+Get the data from Kaggle: https://www.kaggle.com/c/word2vec-nlp-tutorial/data
 
-  https://www.kaggle.com/c/word2vec-nlp-tutorial/data
+If choose to initialize the word embedding layer using Word2Vec, please make sure
+to get the data GoogleNews-vectors-negative300.bin from:
 
-  If choose to initialize the word embedding layer using Word2Vec, please make sure
-  to get the data GoogleNews-vectors-negative300.bin from:
+https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit?usp=sharing
 
-  https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM/edit?usp=sharing
+Usage:
+
+    python examples/imdb/train.py -f labeledTrainData.tsv -e 2 -eval 1 -s imdb.p \
+        --vocab_file imdb.vocab [--use_w2v]
 
 """
 
@@ -150,5 +151,5 @@ model.fit(train_set,
           callbacks=callbacks)
 
 # eval model
-neon_logger.display("\nTrain Accuracy -" + 100 * model.eval(train_set, metric=metric))
-neon_logger.display("Test Accuracy -" + 100 * model.eval(valid_set, metric=metric))
+neon_logger.display("Train Accuracy - {}".format(100 * model.eval(train_set, metric=metric)))
+neon_logger.display("Test Accuracy - {}".format(100 * model.eval(valid_set, metric=metric)))

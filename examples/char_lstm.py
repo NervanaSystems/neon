@@ -14,12 +14,18 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains an LSTM or GRU based recurrent networks.
-The dataset uses Penn Treebank dataset parsing on character-level.
+Train a LSTM or GRU based recurrent network on the Penn Treebank
+dataset parsing on character-level.
 
 Reference:
+
     Andrej Karpathy's char-rnn `[Karpathy]`_
 .. _[Karpathy]: http://github.com/karpathy/char-rnn
+
+Usage:
+
+    python examples/char_lstm.py
+
 """
 
 from neon import logger as neon_logger

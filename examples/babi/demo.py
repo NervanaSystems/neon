@@ -21,17 +21,19 @@ Reference:
     http://arxiv.org/abs/1502.05698
 
 Usage:
-    use -t to specify which bAbI task to run
     python examples/babi/demo.py -t 1 --rlayer_type gru --model_weights babi.p
+
+    use -t to specify which bAbI task to run (reference table in train.py)
+
 """
 
+from __future__ import print_function
 from builtins import input
 import numpy as np
 from util import create_model, babi_handler
-from neon import logger as neon_logger
 from neon.backends import gen_backend
 from neon.data import BABI, QA
-from neon.data.text import Text
+from neon.data.text_preprocessing import pad_sentences
 from neon.util.argparser import NeonArgparser, extract_valid_args
 
 # parse the command line arguments
@@ -61,25 +63,22 @@ ex_story, ex_question, ex_answer = babi.test_parsed[0]
 
 
 def stitch_sentence(words):
-    return " ".join(words).replace(" ?", "?").replace(" .", ".\n") \
-              .replace("\n ", "\n")
+    return " ".join(words).replace(" ?", "?").replace(" .", ".\n").replace("\n ", "\n")
 
 
 def vectorize(words, max_len):
-    return be.array(Text.pad_sentences([babi.words_to_vector(BABI.tokenize(words))],
-                                       max_len))
+    return be.array(pad_sentences([babi.words_to_vector(BABI.tokenize(words))], max_len))
 
 
-neon_logger.display(
-    "\nThe vocabulary set from this task has {} words:".format(babi.vocab_size))
-neon_logger.display(stitch_sentence(babi.vocab))
-neon_logger.display("\nExample from test set:")
-neon_logger.display("\nStory")
-neon_logger.display(stitch_sentence(ex_story))
-neon_logger.display("Question")
-neon_logger.display(stitch_sentence(ex_question))
-neon_logger.display("\nAnswer")
-neon_logger.display(ex_answer)
+print("\nThe vocabulary set from this task has {} words:".format(babi.vocab_size))
+print(stitch_sentence(babi.vocab))
+print("\nExample from test set:")
+print("\nStory")
+print(stitch_sentence(ex_story))
+print("Question")
+print(stitch_sentence(ex_question))
+print("\nAnswer")
+print(ex_answer)
 
 while True:
     # ask user for story and question
@@ -105,7 +104,7 @@ while True:
     max_probs = probs[max_indices]
     sorted_idx = max_indices[np.argsort(max_probs, axis=0)]
 
-    neon_logger.display("\nAnswer:")
+    print("\nAnswer:")
     for idx in reversed(sorted_idx):
         idx = int(idx)
-        neon_logger.display(babi.index_to_word[idx], float(probs[idx]))
+        print(babi.index_to_word[idx], float(probs[idx]))

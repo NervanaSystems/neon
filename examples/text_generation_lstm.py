@@ -14,13 +14,19 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains an LSTM based recurrent network and draws samples
-from the network. It is trained on the Shakespeare dataset using
-character-level parsing.
+Train a LSTM based recurrent network on the Shakespeare dataset and
+produce samples from the trained network.
+
 
 Reference:
+
     Generating sequences with recurrent neural networks `[Graves2014]`_
 .. _[Graves2014]: http://arxiv.org/pdf/1308.0850.pdf
+
+Usage:
+
+    python examples/text_generation_lstm.py
+
 """
 
 import numpy as np

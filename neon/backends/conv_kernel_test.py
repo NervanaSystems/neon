@@ -70,7 +70,7 @@ configs = [
     (BpropCuda,              32,  32,  32, True,  False, None,  (conv_1x1, conv_3x3s2, conv_1x3, conv_3x1, conv_5x5) ),
     (UpdateCuda,             32,  32,  32, True,  False, None,  (conv_1x1, conv_3x3s2, conv_1x3, conv_3x1, conv_5x5) ),
     (FpropCuda,              32,   3,  64, True,  False, None,  (conv_11x11s4,) ),
-    (UpdateCuda,             32,   3,  32, True,  False, None,  (conv_11x11s4,) ), #broken: K=64
+    (UpdateCuda,             32,   3,  64, True,  False, None,  (conv_11x11s4,) ),
 
     (FpropDirect,            32,  32,  64, True,  True,  None,  (conv_3x3,conv_3x3L) ),
     (BpropDirect,            32,  64,  32, True,  True,  None,  (conv_3x3,conv_3x3L) ),

@@ -14,9 +14,19 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Runs one epoch of Alexnet on imagenet data.
-For running complete alexnet
-alexnet.py -e 90 -eval 1 -s <save-path> -w <path-to-saved-batches>
+Deep Residual Network on ImageNet data.
+
+Reference:
+    Deep Residual Learning for Image Recognition `[He2015]`_
+..  _[He2015]: http://arxiv.org/abs/1512.03385
+
+Usage:
+
+    Before training, prepare ImageNet macrobatches as described at
+    http://neon.nervanasys.com/docs/latest/datasets.html#imagenet
+
+    python examples/i1k_msra.py -w </path/to/ImageNet/macrobatches>
+
 """
 
 from builtins import zip

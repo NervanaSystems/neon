@@ -13,13 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
 """
 AllCNN style convnet on CIFAR10 data.
 
 Reference:
+
     Striving for Simplicity: the All Convolutional Net `[Springenberg2015]`_
 ..  _[Springenberg2015]: http://arxiv.org/pdf/1412.6806.pdf
+
+Usage:
+
+    python examples/cifar10_allcnn.py
+
 """
 
 from neon import logger as neon_logger

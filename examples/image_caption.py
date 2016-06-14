@@ -14,15 +14,23 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains an image captioning model on precomputed image features from
-a CNN and reference sentences. Uses standard image captioning datasets
-[flickr8k, flickr30k, coco] from http://cs.stanford.edu/people/karpathy/deepimagesent/
-that have been stored in pkl format. The model then transforms the image features
-and sentences to the same hidden dimension size and prepends the image to be the
-first word of the sequence which is then fed to a LSTM.
+Train an image captioning model on precomputed image features from a
+CNN and reference sentences.
+
+Uses standard image captioning datasets [flickr8k, flickr30k, coco] from
+http://cs.stanford.edu/people/karpathy/deepimagesent/ that have been stored
+in pkl format. The model then transforms the image features and sentences
+to the same hidden dimension size and prepends the image to be the first
+word of the sequence which is then fed to a LSTM.
 
 Reference:
-https://github.com/karpathy/neuraltalk
+
+    NeuralTalk `[Karpathy2014]`_
+..  _[Karpathy2014]: https://github.com/karpathy/neuraltalk
+
+Usage:
+
+    python examples/image_caption.py
 
 """
 

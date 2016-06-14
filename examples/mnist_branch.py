@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains a small multi-layer perceptron with multiple branches
+Example that trains a small multi-layer perceptron with multiple branches on MNIST data.
 
 Branch nodes are used to indicate points at which different layer sequences diverge
 
@@ -37,6 +37,10 @@ The topology of the network is:
   |
   |
  data
+
+Usage:
+
+    python examples/mnist_branch.py
 
 """
 

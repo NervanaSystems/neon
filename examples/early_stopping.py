@@ -17,6 +17,11 @@
 Example that trains an MLP using early stopping.
 Training will stop when the stopping condition is satisfied
 or when num_epochs has been reached, whichever is first.
+
+Usage:
+
+    python examples/early_stopping.py
+
 """
 
 import os

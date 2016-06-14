@@ -409,7 +409,7 @@ class ConvLayer(Layer):
 
             #3D conv not supported yet
             if T > 1 or D > 1:
-                raise ValueError("3D Convolution not supported by CUDA C kernels.")
+                raise ValueError("3D Convolution not supported by CUDA C kernels and pre-Maxwell GPUs")
 
             # TODO small C bprop?
             self.fprop_kernels = convolution.FpropCuda(*args)
@@ -627,13 +627,15 @@ class PoolLayer(Layer):
         if str_w is None:
             str_w = S
 
-        if str_c < J or str_d < T or str_h < R or str_w < S:
-            self.overlap = (ceil(float(J) / str_c) *
-                            ceil(float(T) / str_d) *
-                            ceil(float(R) / str_h) *
-                            ceil(float(S) / str_w))
-        else:
-            self.overlap = 0.0
+#        if str_c < J or str_d < T or str_h < R or str_w < S:
+#            self.overlap = (ceil(float(J) / str_c) *
+#                            ceil(float(T) / str_d) *
+#                            ceil(float(R) / str_h) *
+#                            ceil(float(S) / str_w))
+#        else:
+#            self.overlap = 0.0
+
+        self.overlap = 1.0
 
         # TODO: detect other forms of gaps
         if str_c > J or str_d > T or str_h > R or str_w > S:

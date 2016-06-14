@@ -14,8 +14,13 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Small CIFAR10 based convolutional neural network. Showcases the use of cost
+Small convolutional neural network on CIFAR10 data. Showcases the use of cost
 scaling with the fp16 data format.
+
+Usage:
+
+    python examples/cifar10_conv.py
+
 """
 
 import numpy as np

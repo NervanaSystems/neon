@@ -16,6 +16,11 @@
 """
 Example highlighting the ability to mix different optimizers in different
 layers, or different components of the same layer.
+
+Usage:
+
+    python examples/multi_optimizer.py
+
 """
 
 from neon.data import ArrayIterator, load_mnist

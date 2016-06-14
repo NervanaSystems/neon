@@ -14,8 +14,17 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains a network with one GRU layer to
-perform the vector copy task from the NTM paper.
+Train a network with one GRU layer to perform the vector copy task.
+
+Reference:
+
+    Neural Turing Machines `[Graves2014]`_
+.. _[Graves2014]: https://arxiv.org/pdf/1410.5401.pdf
+
+Usage:
+
+    python examples/rnn_copy.py
+
 """
 
 from neon.initializers import Uniform

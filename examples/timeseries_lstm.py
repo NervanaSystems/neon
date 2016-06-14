@@ -14,10 +14,11 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that shows how to train on synthetic multi-dimensional time series
+Train on synthetic multi-dimensional time series data.
 After training, the network is able to generate the sequences
 
 Usage:
+
     python examples/timeseries_lstm.py -e 10 -eval 1
 
 Then look at the PNG plots generated.

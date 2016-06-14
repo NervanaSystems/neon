@@ -760,6 +760,9 @@ class NervanaGPU(Backend):
         self.hist_bins, self.hist_offset = None, None
         self.set_hist_buffers(hist_bins, hist_offset)
 
+        # store GPU memory size in bytes
+        self.gpu_memory_size = drv.mem_get_info()[1]
+
         # Fall back to CUDA C kernels on older (pre-Maxwell) GPU generations
         self.compute_capability = drv.Device(self.device_id).compute_capability()
         if self.compute_capability[0] < 5:
@@ -2268,8 +2271,8 @@ class NervanaGPU(Backend):
         """
         assert xsum.dtype.type is np.float32
 
-        K = x.shape[0]
-        N = x.shape[1]
+        K = int(x.shape[0])
+        N = int(x.shape[1])
 
         if threads is None:
             if N <= 8192:
@@ -2315,8 +2318,8 @@ class NervanaGPU(Backend):
         """
         assert xsum.dtype.type is np.float32, "xsum should be fp32"
 
-        K = x.shape[0]
-        N = x.shape[1]
+        K = int(x.shape[0])
+        N = int(x.shape[1])
 
         if threads is None:
             if N <= 8192:

@@ -14,7 +14,12 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Small CIFAR10 based MLP with fully connected layers.
+Small MLP with fully connected layers trained on CIFAR10 data.
+
+Usage:
+
+    python examples/cifar10.py
+
 """
 
 from neon import logger as neon_logger

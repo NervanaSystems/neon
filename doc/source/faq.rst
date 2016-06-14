@@ -21,7 +21,7 @@ How do I generate or change the backend configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 neon can use either the CPU or a supported GPU as the backend for training
-and running inference with models.  Currently GPUs with either Maxwell or
+and running inference with models.  Currently GPUs with Pascal, Maxwell or
 Kepler architecture are supported.  There is a utility function called
 :py:func:`neon.backends.gen_backend` which is used to configure the backend.
 

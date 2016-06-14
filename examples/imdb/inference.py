@@ -20,11 +20,11 @@ $ python examples/imdb/inference.py --model_weights imdb.p --vocab_file imdb.voc
 
 """
 
+from __future__ import print_function
 from future import standard_library
 standard_library.install_aliases()  # triggers E402, hence noqa below
 from builtins import input  # noqa
 import numpy as np  # noqa
-from neon import logger as neon_logger  # noqa
 from neon.backends import gen_backend  # noqa
 from neon.initializers import Uniform, GlorotUniform  # noqa
 from neon.layers import LSTM, Affine, Dropout, LookupTable, RecurrentSum  # noqa
@@ -76,9 +76,9 @@ layers = [
 
 
 # load the weights
-neon_logger.display("Initialized the models - ")
+print("Initialized the models - ")
 model_new = Model(layers=layers)
-neon_logger.display("Loading the weights from {0}".format(args.model_weights))
+print("Loading the weights from {0}".format(args.model_weights))
 
 model_new.load_params(args.model_weights)
 model_new.initialize(dataset=(sentence_length, batch_size))
@@ -111,6 +111,6 @@ while True:
     xdev[:] = xbuf.T.copy()
     y_pred = model_new.fprop(xdev, inference=True)  # inference flag dropout
 
-    neon_logger.display("Sent - {0}".format(xbuf))
-    neon_logger.display("Pred - {0} ".format(y_pred.get().T))
-    neon_logger.display('-' * 100)
+    print("Sent - {0}".format(xbuf))
+    print("Pred - {0} ".format(y_pred.get().T))
+    print('-' * 100)

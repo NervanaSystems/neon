@@ -101,7 +101,7 @@ def test_branch_model(backend_gpu):
     top = top_branch()
     neon_layer = Sequential(main1 + i1 + top)
 
-    inshape = (3, 224, 224)
+    inshape = (4, 224, 224)
     insize = np.prod(inshape)
     inpa = np.random.random((insize, batch_size))
     neon_layer.configure(inshape)
@@ -187,9 +187,8 @@ def test_branch_model_fork(backend_gpu):
     from neon.layers import BranchNode, Tree
     np.random.seed(0)
     be = NervanaObject.be
-    if be.compute_capability < (5, 0):
-        # TODO switch to pytest.skip() once verified to be expected failure
-        pytest.xfail(reason='Test requires Maxwell or higher')
+    if be.gpu_memory_size < 6.1 * 1024 * 1024 * 1024:
+        pytest.skip(msg='Test requires more than 6.1GB')
     be.bsz = 64
     bnode = BranchNode()
     i1 = inception([(32,), (32, 32), ('max', 16)])
@@ -201,7 +200,7 @@ def test_branch_model_fork(backend_gpu):
     alpha2 = 0.3
     neon_layer = Tree([p1, p2], alphas=[1.0, alpha2])
 
-    inshape = (3, 224, 224)
+    inshape = (4, 224, 224)
     insize = np.prod(inshape)
     inpa = np.random.random((insize, batch_size))
     neon_layer.configure(inshape)

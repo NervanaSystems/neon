@@ -14,16 +14,17 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains an LSTM or GRU based recurrent networks.
-The dataset uses Penn Treebank dataset parsing on word-level.
+Train a LSTM or GRU based recurrent network on Penn Treebank data.
 
-Reference:
+References:
+
     Recurrent Neural Network Regularization `[Zaremba2015]`_
     Generating sequences with recurrent neural networks `[Graves2014]`_
 .. _[Zaremba2015]: http://arxiv.org/pdf/1409.2329v5.pdf
 .. _[Graves2014]: http://arxiv.org/pdf/1308.0850.pdf
 
 Usage:
+
     python examples/word_lstm.py -e 13 -eval 1 --rlayer_type lstm
 
 """

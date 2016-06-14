@@ -14,13 +14,15 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Trains C3D on UCF-101 dataset.
+Train C3D on the UCF-101 dataset.
 
 Reference:
+
     "Learning Spatiotemporal Features with 3D Convolutional Networks"
     http://arxiv.org/pdf/1412.0767.pdf
 
 Usage:
+
     Run neon/examples/video-c3d/preprocess.py to preprocess videos into clips
     for training and test splits. Point the --data_dir arg to the directory
     containing the preprocessed train and test folders. Try a smaller batch

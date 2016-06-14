@@ -167,7 +167,7 @@ class Text(NervanaDataIterator):
         """
         Deprecated, use neon.data.text_preprocessing.pad_sentences.
         """
-        logger.error('pad_sentances in the Text class is deprecated.  This function'
+        logger.error('pad_sentences in the Text class is deprecated.  This function '
                      'is now in neon.data.text_preprocessing.')
         return pad_sentences(sentences,
                              sentence_length=sentence_length,

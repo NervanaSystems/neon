@@ -228,6 +228,7 @@ class BpropCuda(KernelGroup):
         relu=False, brelu=False, slope=0.0):
 
         assert I.dtype == F.dtype == O.dtype == self.dtype
+        assert self.params[1] % 4 == 0, "C dim must be a multiple of 4 for Kepler bprop kernel"
 
         self.lib.scratch_buffer_init()
         filter_data = self.filter_trans.bind_params(F)
@@ -297,7 +298,7 @@ class UpdateCuda(KernelGroup):
         static_kernel_args = _flatten([C, D, H, W, N, T, R, S, K, M, P, Q,
                                        str_w, str_h, pad_w, pad_h,
                                        HWN // 4, KRST // 4, PQN // 4,
-                                       PQ, grid_P, grid_Q,
+                                       pq_blocks, grid_P, grid_Q,
                                        magic_PQ, magic_Q, magic_S])
         self.launch_args = [grid, block] + [None] * 7 + static_kernel_args
 

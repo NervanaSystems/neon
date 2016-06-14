@@ -13,13 +13,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
 """
-AllCNN style convnet on imagenet data.
+AllCNN style convnet on ImageNet data.
 
 Reference:
     Striving for Simplicity: the All Convolutional Net `[Springenberg2014]`_
 ..  _[Springenberg2014]: http://arxiv.org/pdf/1412.6806.pdf
+
+Usage:
+
+    Before training, prepare ImageNet macrobatches as described at
+    http://neon.nervanasys.com/docs/latest/datasets.html#imagenet
+
+    python examples/imagenet_allcnn.py -w </path/to/ImageNet/macrobatches>
+
 """
 
 from neon.util.argparser import NeonArgparser

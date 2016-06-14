@@ -14,7 +14,8 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Trains a Fast-RCNN model on PASCAL VOC dataset.
+Train a Fast-RCNN model on the PASCAL VOC dataset.
+
 This Fast-RCNN is based on VGG16 that was pre-trained using ImageI1K.
 
 By default, the script will download the pre-trained VGG16 from neon model zoo
@@ -23,11 +24,13 @@ that. If the script is given --model_file, it will continue training the
 Fast R-CNN from the given model file.
 
 Reference:
+
     "Fast R-CNN"
     http://arxiv.org/pdf/1504.08083v2.pdf
     https://github.com/rbgirshick/fast-rcnn
 
 Usage:
+
     python examples/fast-rcnn/train.py -e 20 --save_path frcn_vgg.pkl
 
 Notes:
@@ -61,7 +64,7 @@ from util import load_vgg_weights, create_frcn_model, scale_bbreg_weights
 # main script
 
 # parse the command line arguments
-parser = NeonArgparser(__doc__)
+parser = NeonArgparser(__doc__, default_overrides=dict(batch_size=4))
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args(gen_be=False)
@@ -77,8 +80,6 @@ if args.callback_args['serialize'] is None:
     args.callback_args['serialize'] = min(args.epochs, 10)
 
 # hyperparameters
-args.batch_size = 4
-
 num_epochs = args.epochs
 n_mb = None
 img_per_batch = args.batch_size
@@ -91,6 +92,9 @@ if frcn_fine_tune is True:
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
+
+if be.gpu_memory_size < 11 * 1024 * 1024 * 1024:
+    exit("ERROR: This model requires at least 11GB GPU memory to be run.")
 
 # setup training dataset
 train_set = PASCALVOCTrain('trainval', '2007', path=args.data_dir, n_mb=n_mb,

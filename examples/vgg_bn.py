@@ -14,10 +14,26 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Simplified version of VGG model B, D, or E:
+Simplified version of VGG model B, D, or E.
  - adds batch normalization
  - removes scale jittering
  - removes convolutional inference
+ - B (default) has 13 weight layers, D, 16 and E, 19.
+
+Reference:
+
+    Very Deep Convolutional Networks for Large-Scale Image Recognition `[Simonyan2014]`_
+..  _[Simonyan2014]: http://arxiv.org/abs/1409.1556
+
+Usage:
+
+    Before training, prepare ImageNet macrobatches as described at
+    http://neon.nervanasys.com/docs/latest/datasets.html#imagenet
+    If memory is limited, try a smaller batch size; a batch size of 64 will
+    require 11GB of GPU memory.
+
+    python examples/vgg_bn.py -w </path/to/ImageNet/macrobatches> -z 64 -e 10
+
 """
 
 from neon.util.argparser import NeonArgparser, extract_valid_args
@@ -31,13 +47,12 @@ from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks
 
 # parse the command line arguments
-parser = NeonArgparser(__doc__)
+parser = NeonArgparser(__doc__, default_overrides=dict(batch_size=32))
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args(gen_be=False)
 
 # hyperparameters
-args.batch_size = 64
 cost_scale = 1.
 VGG = 'B'
 use_batch_norm = True

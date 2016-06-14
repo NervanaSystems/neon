@@ -114,13 +114,14 @@ def build_data_train(path='.', filepath='labeledTrainData.tsv', vocab_file=None,
         reviews_text.attrs['nrows'] = nsamples
         reviews_text.attrs['nclass'] = nclass
         reviews_text.attrs['class_distribution'] = counts
-        neon_logger.display("vocabulary size - ", vocab_size)
-        neon_logger.display("# of samples - " + nsamples)
-        neon_logger.display("# of classes" + nclass)
-        neon_logger.display("class distribution - " + ratings + counts)
+        neon_logger.display("vocabulary size - {}".format(vocab_size))
+        neon_logger.display("# of samples - {}".format(nsamples))
+        neon_logger.display("# of classes {}".format(nclass))
+        neon_logger.display("class distribution - {} {}".format(ratings, counts))
         sen_counts = list(zip(sen_len, sen_len_counts))
         sen_counts = sorted(sen_counts, key=lambda kv: kv[1], reverse=True)
-        neon_logger.display("sentence length - " + len(sen_len) + sen_len + sen_len_counts)
+        neon_logger.display("sentence length - {} {} {}".format(len(sen_len),
+                                                                sen_len, sen_len_counts))
 
         # WARNING: assume vocab is of order ~4-5 million words.
         # sort the vocab , re-assign ids by its frequency. Useful for downstream tasks

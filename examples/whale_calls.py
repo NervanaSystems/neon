@@ -14,11 +14,15 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Detect presence of whale calls in sound clips
-Dataset can be downloaded from https://www.kaggle.com/c/whale-detection-challenge
-After unpacking the dataset, point the script to the unpacked directory:
+Detect presence of whale calls in sound clips.
 
-./whale_calls.py -e16 -w /path/to/data -r0
+Download the dataset from https://www.kaggle.com/c/whale-detection-challenge
+After unpacking the dataset, point the script to the unpacked directory.
+
+Usage:
+
+    python examples/whale_calls.py -e 16 -w </path/to/dataset> -r 0
+
 """
 
 import os

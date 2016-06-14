@@ -34,27 +34,23 @@ Features include:
 * Framework for visualization
 * Swappable hardware backends: write code once and deploy on CPUs, GPUs, or Nervana hardware
 
-New features in recent releases:
+New features in this release:
 
-* Winograd algorithm for faster convolutions (up to 2x)
-* Kepler GPU support
-* Greatly expanded `model zoo`_ now featuring deep residual nets for image
-  classification, fast-RCNN for object localization, C3D video action
-  recognition.
+* Python2/Python3 compatibility [#191]
+* Support for Pascal GPUs
+* Dataloader enhancements (audio loader with examples)
+* HDF5 file data iterator
+* Convolution kernel improvements
+* Winograd kernel for fprop/bprop and 5x5 stride 1 filters
+* API documentation improvements [#234, #244]
+* Cache directory cleanup
+* Reorganization of all unit tests
+* Check for compatible shapes before doing a memcpy [#182, #183]
 * and `many more`_.
 
 We use neon internally at Nervana to solve our `customers' problems`_
 in many domains. Consider joining us. We are hiring across several
 roles. Apply here_!
-
-.. note::
-
-    This release includes 3x3 convolution kernels based on the the Winograd minimal filtering algorithm for up to a 2x algorithmic performance gain.  Winograd is enabled by default, but can be controlled
-    with the backend setting ``enable_winograd``. When Winograd is enabled, the first time
-    users run a network on the GPU, an autotuning process will compute the fastest kernel parameters. The results are cached in ``~/nervana/cache`` folder for reuse.
-
-    The backend can also be configured to prefer 2x2 compared to 4x4 transform sizes through the
-    ``enable_winograd`` option (0 = disabled (direct convolution), 2 = prefer 2x2, 4 = prefer 4x4).
 
 
 .. |(TM)| unicode:: U+2122

@@ -14,13 +14,17 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Deep Dream
+Deep Dream.
 
 Reference:
-    http://googleresearch.blogspot.ch/2015/06/inceptionism-going-deeper-into-neural.html
+
+    Inceptionism: Going Deeper into Neural Networks `[Mordvintsev2015]`_
+..  _[Mordvintsev2015]: http://googleresearch.blogspot.ch/2015/06/\
+inceptionism-going-deeper-into-neural.html
 
 Usage:
-    python deep_dream.py <image> --output <output_location>
+
+    python examples/deep_dream.py <image> --output <output_location>
 
 """
 

@@ -35,7 +35,7 @@ ifdef HAS_GPU
 export CUDA_ROOT:=$(patsubst %/bin/nvcc,%, $(realpath $(shell which nvcc)))
 else
 # Try to find CUDA.  Kernels will still need nvcc in path
-export CUDA_ROOT:=$(firstword $(wildcard $(addprefix /usr/local/, cuda-7.5 cuda-7.0 cuda)))
+export CUDA_ROOT:=$(firstword $(wildcard $(addprefix /usr/local/, cuda-8.0 cuda-7.5 cuda-7.0 cuda)))
 
 ifdef CUDA_ROOT
 export PATH:=$(CUDA_ROOT)/bin:$(PATH)

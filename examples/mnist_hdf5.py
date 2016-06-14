@@ -14,8 +14,14 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example for using the HDF5 data iterator.  See mnist_mlp.py for more information
-on the model and data used in this example.
+Example for using the HDF5 data iterator on a MLP with the MNIST data.
+
+See mnist_mlp.py for more information on the model and data used in this example.
+
+Usage:
+
+    python examples/mnist_hdf5.py
+
 """
 
 from neon.callbacks.callbacks import Callbacks

@@ -13,31 +13,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+"""
+Deep Residual Network on CIFAR10 data.
 
-# This will allow you to run a deep residual network on cifar10 data as detailed in:
-# He et. al., "Deep Residual Learning for Image Recognition", http://arxiv.org/abs/1512.03385
-#
-# Edit:  This example has now been updated to use the "preactivation" structure described in:
-# He et. al., "Identity Mappings in Deep Residual Networks", http://arxiv.org/abs/1603.05027
-#
-# To run the example:
-#
-# cifar10_msra.py -r 0 -vv \
-#      --log <logfile> \
-#      --no_progress_bar \
-#      --epochs 165 \
-#      --depth 111 \
-#      --save_path <save-path> \
-#      --eval_freq 1 \
-#      --backend gpu \
-#      --batch_size 64 \
-#      --data_dir <path-to-saved-batches>
-#
-# This setting should get to ~4.84% top-1 error. (Could be as low as 4.7)
-#
-# NB:  It is good practice to set your data_dir where your batches are stored
-# to be local to your machine (to avoid accessing the macrobatches over network if,
-# for example, your data_dir is in an NFS mounted location)
+Reference:
+
+    Deep Residual Learning for Image Recognition `[He2015]`_
+..  _[He2015]: http://arxiv.org/abs/1512.03385
+
+This example has also been updated to use the "preactivation" structure
+described in: He et. al., "Identity Mappings in Deep Residual Networks",
+http://arxiv.org/abs/1603.05027
+
+Usage:
+
+    python examples/cifar10_msra.py -r 0 -vv \
+        --log <logfile> \
+        --no_progress_bar \
+        --epochs 165 \
+        --depth 111 \
+        --save_path <save-path> \
+        --eval_freq 1 \
+        --backend gpu \
+        --batch_size 64 \
+
+    This setting should get to ~4.84% top-1 error. (Could be as low as 4.7)
+
+    NB:  It is good practice to set your data_dir where your batches are stored
+    to be local to your machine (to avoid accessing the macrobatches over network if,
+    for example, your data_dir is in an NFS mounted location)
+
+"""
 
 import os
 from builtins import zip

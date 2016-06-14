@@ -13,9 +13,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-
 """
-Convolutional autoencoder example network for MNIST data set
+Convolutional autoencoder example network on MNIST data set.
+
+Usage:
+
+    python examples/conv_autoencoder.py
+
 """
 
 import numpy as np

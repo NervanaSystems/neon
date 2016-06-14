@@ -554,8 +554,7 @@ class Backend(object):
         else:
             out_tsr = self.empty(bufshape, dtype=dtype, name=name, persist_values=persist_values)
 
-        if persist_values and shared is None:
-            out_tsr[:] = 0
+        out_tsr[:] = 0
 
         return out_tsr
 

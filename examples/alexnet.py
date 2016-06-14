@@ -14,9 +14,23 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Runs one epoch of Alexnet on imagenet data.
-For running complete alexnet
-alexnet.py -e 90 -eval 1 -s <save-path> -w <path-to-saved-batches>
+Alexnet - An implementation of a deep convolutional neural network for
+classification of images from the ImageNet 2012 competition based on
+Krizhevsky, Sutskever and Hinton, 2012.
+
+Reference:
+
+    ImageNet Classification with Deep Convolutional Neural Networks `[Krizhevsky2015]`_
+..  _[Krizhevsky2015]: http://papers.nips.cc/paper/\
+4824-imagenet-classification-with-deep-convolutional-neural-networks
+
+Usage:
+
+    Before training, prepare ImageNet macrobatches as described at
+    http://neon.nervanasys.com/docs/latest/datasets.html#imagenet
+
+    python examples/alexnet.py --data_dir </path/to/ImageNet/macrobatches> --epochs 90
+
 """
 
 from neon.util.argparser import NeonArgparser

@@ -14,13 +14,16 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Example that trains an LSTM or GRU networks for sentiment analysis
+Train a LSTM or GRU network for sentiment analysis on IMDB review data.
 
 Reference:
-   See J.Li et al, EMNLP2015 - http://arxiv.org/pdf/1503.00185v5.pdf
 
-$ python examples/imdb_lstm.py -e 2 -eval 1 --rlayer_type lstm
+    When are Tree Structures Necessary for Deep Learning of Representations? `[Li2015]_
+..  _[Li2015]: http://arxiv.org/pdf/1503.00185v5.pdf
 
+Usage:
+
+    python examples/imdb_lstm.py -e 2 -eval 1 --rlayer_type lstm
 
 """
 
