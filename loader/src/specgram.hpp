@@ -22,17 +22,24 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
+#include <cmath>
+#include <vector>
+
 using cv::Mat;
 using cv::Range;
 using cv::Size;
 using std::stringstream;
+using std::vector;
 
 class Specgram {
 public:
     Specgram(SignalParams* params, int id)
     : _clipDuration(params->_clipDuration), _windowSize(params->_windowSize),
       _stride(params->_stride), _timeSteps(params->_width),
-      _numFreqs(params->_height), _addNoise(params->_addNoise),
+      _numFreqs(params->_height), _samplingFreq(params->_samplingFreq),
+      _ncepstra(params->_ncepstra),
+      _nfilts(params->_nfilts),
+      _addNoise(params->_addNoise),
       _window(0), _rng(id) {
         static_assert(sizeof(short) == 2, "short is not 2 bytes");
         assert(_stride != 0);
@@ -95,6 +102,49 @@ public:
         randomize(result);
         // Return the percentage of valid columns.
         return mag.cols * 100 / result.cols;
+    }
+
+    int generate_mfccs(RawMedia* raw, char* buf, int bufSize) {
+        // TODO: get rid of this assumption
+        assert(raw->sampleSize() == 2);
+        assert(_timeSteps * _numFreqs == bufSize);
+        addNoise(raw);
+        int rows = stridedSignal(raw);
+        assert(rows <= _timeSteps);
+        Mat signal(rows, _windowSize, CV_16SC1, (short*) _buf);
+        Mat input;
+        signal.convertTo(input, CV_32FC1);
+
+        applyWindow(input);
+        Mat planes[] = {input, Mat::zeros(input.size(), CV_32FC1)};
+        Mat compx;
+        cv::merge(planes, 2, compx);
+
+        cv::dft(compx, compx, cv::DFT_ROWS);
+
+
+        cv::split(compx, planes);
+        cv::magnitude(planes[0], planes[1], planes[0]);
+
+        Mat feats = extract_mfccs(planes[0], _ncepstra, _nfilts, _samplingFreq);
+
+        // From this point on, match what was done with spectrograms
+        // TODO: do away with matching spectrograms
+        Mat feats_tr;
+        // Rotate by 90 degrees to match what is done with spectrograms
+        cv::transpose(feats, feats_tr);
+        cv::flip(feats_tr, feats_tr, 0);
+
+        cv::normalize(feats_tr, feats_tr, 0, 255, CV_MINMAX, CV_8UC1);
+
+        Mat result(feats_tr.rows, _timeSteps, CV_8UC1, buf);
+        feats_tr.copyTo(result(Range::all(), Range(0, feats_tr.cols)));
+
+        // Pad the rest with zeros.
+        result(Range::all(), Range(feats_tr.cols, result.cols)) = cv::Scalar::all(0);
+
+        // Return the percentage of valid columns.
+        return feats_tr.cols * 100 / result.cols;
     }
 
 private:
@@ -210,6 +260,71 @@ private:
         return count;
     }
 
+    double hz_to_mel(double freq_in_hz) {
+        return 2595 * std::log10(1 + freq_in_hz/700.0);
+    }
+
+    double mel_to_hz(double freq_in_mels) {
+        return 700 * (std::pow(10, freq_in_mels/2595.0)-1);
+    }
+
+    vector<double> linspace(double a, double b, int n) {
+        vector<double> interval;
+        double delta = (b-a)/(n-1);
+        while (a <= b) {
+            interval.push_back(a);
+            a += delta;
+        }
+        return interval;
+    }
+
+    Mat get_filterbank(int filts, int ffts, double sampling_rate) {
+        double minfreq = 0.0;
+        double maxfreq = sampling_rate / 2.0;
+        double minmelfreq = hz_to_mel(minfreq);
+        double maxmelfreq = hz_to_mel(maxfreq);
+        vector<double> melinterval = linspace(minmelfreq, maxmelfreq, filts + 2);
+        vector<int> bins;
+        for (int k=0; k<filts+2; ++k) {
+            bins.push_back(std::floor((1+ffts)*mel_to_hz(melinterval[k])/sampling_rate));
+        }
+
+        Mat fbank = Mat::zeros(filts, 1 + ffts / 2, CV_32F);
+        for (int j=0; j<filts; ++j) {
+            for (int i=bins[j]; i<bins[j+1]; ++i) {
+                fbank.at<float>(j, i) = (i - bins[j]) / (1.0*(bins[j + 1] - bins[j]));
+            }
+            for (int i=bins[j+1]; i<bins[j+2]; ++i) {
+                fbank.at<float>(j, i) = (bins[j+1]-i) / (1.0*(bins[j + 2] - bins[j+1]));
+            }
+        }
+        return fbank;
+    }
+
+    Mat extract_mfccs(Mat& spectrogram, int cepstra, int filts, double sampling_rate) {
+        int ffts = spectrogram.cols;
+        Mat powspec = spectrogram.mul(spectrogram);
+        Mat fbank;
+        transpose(get_filterbank(filts, 2*(ffts-1), sampling_rate), fbank);
+        Mat feats = powspec*fbank;
+        log(feats, feats);
+        if (feats.rows %2 !=0) {
+            Mat pad_feats = Mat::zeros(1+feats.rows, feats.cols, CV_32FC1);
+            feats.copyTo(pad_feats(Range(0, feats.rows), Range::all()));
+            dct(pad_feats, pad_feats);
+            feats = pad_feats(Range(0, feats.rows), Range::all());
+        } else {
+            dct(feats, feats);
+        }
+        int ncepstra = cepstra;
+        if (filts < ncepstra) {
+            ncepstra = filts;
+            return feats;
+        }
+       Mat subfeats = feats(Range::all(), Range(0, ncepstra));
+       return subfeats;
+    }
+
 private:
     // Maximum duration in milliseconds.
     int                         _clipDuration;
@@ -218,7 +333,10 @@ private:
     int                         _stride;
     int                         _timeSteps;
     int                         _numFreqs;
+    int                         _samplingFreq;
     int                         _maxSignalSize;
+    int                         _ncepstra;
+    int                         _nfilts;
     float                       _scaleBy;
     float                       _scaleMin;
     float                       _scaleMax;

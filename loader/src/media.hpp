@@ -55,6 +55,8 @@ public:
     float                       _randomScalePercent;
     bool                        _addNoise;
     bool                        _ctcCost;
+    int                         _ncepstra;
+    int                         _nfilts;
     int                         _windowSize;
     int                         _overlap;
     int                         _stride;

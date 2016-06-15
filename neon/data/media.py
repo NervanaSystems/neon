@@ -242,6 +242,10 @@ class AudioParams(MediaParams):
             Superimpose gaussian noise.
         ctc_cost (boolean):
             Whether the CTC cost function is used.
+        ncepstra (int):
+            The no. of cepstral coefficients required.
+        nfilts (int):
+            The no. of filters used in the filterbank to generata MFCCs.
     """
 
     _fields_ = [('sampling_freq', ct.c_int),
@@ -252,6 +256,8 @@ class AudioParams(MediaParams):
                 ('random_scale_percent', ct.c_float),
                 ('add_noise', ct.c_bool),
                 ('ctc_cost', ct.c_bool),
+                ('ncepstra', ct.c_int),
+                ('nfilts', ct.c_int),
                 ('window_size', ct.c_int),
                 ('overlap', ct.c_int),
                 ('stride', ct.c_int),
@@ -264,6 +270,8 @@ class AudioParams(MediaParams):
                   'random_scale_percent': 0.0,
                   'add_noise': False,
                   'ctc_cost': False,
+                  'ncepstra': 40,
+                  'nfilts': 64,
                   'window_size': -1,
                   'overlap': -1,
                   'stride': -1,
