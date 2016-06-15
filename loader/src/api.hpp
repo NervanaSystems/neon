@@ -28,7 +28,6 @@ extern void* start(int* itemCount, int batchSize,
                    DeviceParams* deviceParams,
                    MediaParams* ingestParams,
                    char* alphabet) {
-    static_assert(sizeof(int) == 4, "int is not 4 bytes");
     try {
         Loader* loader = new Loader(itemCount, batchSize,
                                     repoDir, archiveDir,

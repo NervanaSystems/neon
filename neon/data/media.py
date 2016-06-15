@@ -233,56 +233,68 @@ class AudioParams(MediaParams):
             FFT is computed.
         overlap_percent (int):
             Overlap percent to be used for FFT windows.
-        window_func (str):
+        window_type (str):
             Type of windowing.  The options are "none", "hann", "blackman",
             "hamming" and "bartlett".  Defaults to "hann".
+        feature_type (str):
+            Type of features to use. The options are "specgram", "mfsc"
+            and "mfcc".  Defaults to "specgram".
         random_scale_percent (float):
             Randomly stretch/shrink the time dimension by this percent.
         add_noise (boolean):
             Superimpose gaussian noise.
         ctc_cost (boolean):
             Whether the CTC cost function is used.
-        ncepstra (int):
-            The no. of cepstral coefficients required.
-        nfilts (int):
-            The no. of filters used in the filterbank to generata MFCCs.
+        num_filts (int):
+            The no. of filters used in the filterbank to generate MFSC and
+            MFCC features.
+        num_cepstra (int):
+            The no. of cepstral coefficients required. This is only applicable
+            for MFCC.
     """
 
     _fields_ = [('sampling_freq', ct.c_int),
                 ('clip_duration', ct.c_int),
                 ('frame_duration', ct.c_int),
                 ('overlap_percent', ct.c_int),
-                ('window_func', ct.c_char * 16),
+                ('window_type', ct.c_char * 16),
+                ('feature_type', ct.c_char * 16),
                 ('random_scale_percent', ct.c_float),
                 ('add_noise', ct.c_bool),
                 ('ctc_cost', ct.c_bool),
-                ('ncepstra', ct.c_int),
-                ('nfilts', ct.c_int),
+                ('num_filts', ct.c_int),
+                ('num_cepstra', ct.c_int),
                 ('window_size', ct.c_int),
                 ('overlap', ct.c_int),
                 ('stride', ct.c_int),
                 ('width', ct.c_int),
                 ('height', ct.c_int),
-                ('window_type', ct.c_int)]
+                ('window', ct.c_int),
+                ('feature', ct.c_int)]
     _defaults_ = {'frame_duration': 10,
                   'overlap_percent': 30,
-                  'window_func': b'hann',
+                  'window_type': b'hann',
+                  'feature_type': b'specgram',
                   'random_scale_percent': 0.0,
                   'add_noise': False,
                   'ctc_cost': False,
-                  'ncepstra': 40,
-                  'nfilts': 64,
+                  'num_filts': 64,
+                  'num_cepstra': 40,
                   'window_size': -1,
                   'overlap': -1,
                   'stride': -1,
                   'width': -1,
                   'height': -1,
-                  'window_type': -1}
+                  'window': -1,
+                  'feature': -1}
     _windows_ = {b'none': 0,
                  b'hann': 1,
                  b'blackman': 2,
                  b'hamming': 3,
                  b'bartlett': 4}
+    _features_ = {b'specgram': 0,
+                  b'mfsc': 1,
+                  b'mfcc': 2}
 
     def __init__(self, **kwargs):
         for key in kwargs:
@@ -292,15 +304,20 @@ class AudioParams(MediaParams):
             setattr(self, key, value)
         super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
         for key in ['window_size', 'overlap', 'stride', 'width',
-                    'height', 'window_type']:
+                    'height', 'window', 'feature']:
             if getattr(self, key) != self._defaults_[key]:
                 raise ValueError('Argument %s must not be specified' % key)
-        if getattr(self, 'window_func') not in self._windows_:
+        if getattr(self, 'window_type') not in self._windows_:
             raise ValueError('Unknown window function: %s' %
-                             getattr(self, 'window_func'))
+                             getattr(self, 'window_type'))
+        if getattr(self, 'feature_type') not in self._features_:
+            raise ValueError('Unknown feature type: %s' %
+                             getattr(self, 'feature_type'))
         self.set_shape()
 
     def set_shape(self):
+        self.feature = self._features_[self.feature_type]
+        self.window = self._windows_[self.window_type]
         self.channel_count = 1
         samples_per_frame = self.sampling_freq * self.frame_duration // 1000
         # Get the closest power of 2.
@@ -321,8 +338,13 @@ class AudioParams(MediaParams):
         self.width = (
             (self.clip_duration * self.sampling_freq // 1000 -
              self.window_size) // self.stride) + 1
-        self.height = (self.window_size // 2) + 1
-        self.window_type = self._windows_[self.window_func]
+        if self.feature == 0:
+            self.height = (self.window_size // 2) + 1
+        elif self.feature == 1:
+            self.height = self.num_filts
+        else:
+            assert self.num_cepstra <= self.num_filts
+            self.height = self.num_cepstra
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)

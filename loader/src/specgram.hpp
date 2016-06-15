@@ -31,17 +31,26 @@ using cv::Size;
 using std::stringstream;
 using std::vector;
 
+enum FeatureType {
+    SPECGRAM    = 0,
+    MFSC        = 1,
+    MFCC        = 2,
+};
+
+static_assert(sizeof(short) == 2, "Unsupported platform");
+
 class Specgram {
 public:
     Specgram(SignalParams* params, int id)
-    : _clipDuration(params->_clipDuration), _windowSize(params->_windowSize),
+    : _feature(params->_feature),
+      _clipDuration(params->_clipDuration), _windowSize(params->_windowSize),
       _stride(params->_stride), _timeSteps(params->_width),
-      _numFreqs(params->_height), _samplingFreq(params->_samplingFreq),
-      _ncepstra(params->_ncepstra),
-      _nfilts(params->_nfilts),
+      _numFreqs(params->_windowSize / 2 + 1),
+      _height(params->_height), _samplingFreq(params->_samplingFreq),
+      _numFilts(params->_numFilts),
+      _numCepstra(params->_numCepstra),
       _addNoise(params->_addNoise),
       _window(0), _rng(id) {
-        static_assert(sizeof(short) == 2, "short is not 2 bytes");
         assert(_stride != 0);
         if (powerOfTwo(_windowSize) == false) {
             throw std::runtime_error("Window size must be a power of 2");
@@ -49,9 +58,9 @@ public:
 
         _maxSignalSize = params->_clipDuration * params->_samplingFreq / 1000;
         _buf = new char[4 *  _maxSignalSize];
-        if (params->_windowType != 0) {
+        if (params->_window != 0) {
             _window = new Mat(1, _windowSize, CV_32FC1);
-            createWindow(params->_windowType);
+            createWindow(params->_window);
         }
         assert(params->_randomScalePercent >= 0);
         assert(params->_randomScalePercent < 100);
@@ -68,7 +77,7 @@ public:
     int generate(RawMedia* raw, char* buf, int bufSize) {
         // TODO: get rid of this assumption
         assert(raw->sampleSize() == 2);
-        assert(_timeSteps * _numFreqs == bufSize);
+        assert(_timeSteps * _height == bufSize);
         addNoise(raw);
         int rows = stridedSignal(raw);
         assert(rows <= _timeSteps);
@@ -87,64 +96,27 @@ public:
         cv::split(compx, planes);
         cv::magnitude(planes[0], planes[1], planes[0]);
         Mat mag;
+        if (_feature == SPECGRAM) {
+            mag = planes[0];
+        } else {
+            mag = extractFeatures(planes[0]);
+        }
 
+        Mat feats;
         // Rotate by 90 degrees.
-        cv::transpose(planes[0], mag);
-        cv::flip(mag, mag, 0);
+        cv::transpose(mag, feats);
+        cv::flip(feats, feats, 0);
 
-        cv::normalize(mag, mag, 0, 255, CV_MINMAX, CV_8UC1);
-        Mat result(_numFreqs, _timeSteps, CV_8UC1, buf);
-        mag.copyTo(result(Range::all(), Range(0, mag.cols)));
+        cv::normalize(feats, feats, 0, 255, CV_MINMAX, CV_8UC1);
+        Mat result(feats.rows, _timeSteps, CV_8UC1, buf);
+        feats.copyTo(result(Range::all(), Range(0, feats.cols)));
 
         // Pad the rest with zeros.
-        result(Range::all(), Range(mag.cols, result.cols)) = cv::Scalar::all(0);
+        result(Range::all(), Range(feats.cols, result.cols)) = cv::Scalar::all(0);
 
         randomize(result);
         // Return the percentage of valid columns.
-        return mag.cols * 100 / result.cols;
-    }
-
-    int generate_mfccs(RawMedia* raw, char* buf, int bufSize) {
-        // TODO: get rid of this assumption
-        assert(raw->sampleSize() == 2);
-        assert(_timeSteps * _numFreqs == bufSize);
-        addNoise(raw);
-        int rows = stridedSignal(raw);
-        assert(rows <= _timeSteps);
-        Mat signal(rows, _windowSize, CV_16SC1, (short*) _buf);
-        Mat input;
-        signal.convertTo(input, CV_32FC1);
-
-        applyWindow(input);
-        Mat planes[] = {input, Mat::zeros(input.size(), CV_32FC1)};
-        Mat compx;
-        cv::merge(planes, 2, compx);
-
-        cv::dft(compx, compx, cv::DFT_ROWS);
-
-
-        cv::split(compx, planes);
-        cv::magnitude(planes[0], planes[1], planes[0]);
-
-        Mat feats = extract_mfccs(planes[0], _ncepstra, _nfilts, _samplingFreq);
-
-        // From this point on, match what was done with spectrograms
-        // TODO: do away with matching spectrograms
-        Mat feats_tr;
-        // Rotate by 90 degrees to match what is done with spectrograms
-        cv::transpose(feats, feats_tr);
-        cv::flip(feats_tr, feats_tr, 0);
-
-        cv::normalize(feats_tr, feats_tr, 0, 255, CV_MINMAX, CV_8UC1);
-
-        Mat result(feats_tr.rows, _timeSteps, CV_8UC1, buf);
-        feats_tr.copyTo(result(Range::all(), Range(0, feats_tr.cols)));
-
-        // Pad the rest with zeros.
-        result(Range::all(), Range(feats_tr.cols, result.cols)) = cv::Scalar::all(0);
-
-        // Return the percentage of valid columns.
-        return feats_tr.cols * 100 / result.cols;
+        return feats.cols * 100 / result.cols;
     }
 
 private:
@@ -163,7 +135,7 @@ private:
         int sampleCount = raw->dataSize() / raw->sampleSize();
         short* buf = (short*) raw->getBuf(0);
         for (int i = 0; i < sampleCount; i++) {
-           buf[i] += short(noiseAmp * (float) _rng.gaussian(1.0));
+            buf[i] += short(noiseAmp * (float) _rng.gaussian(1.0));
         }
     }
 
@@ -275,6 +247,7 @@ private:
             interval.push_back(a);
             a += delta;
         }
+        interval.push_back(a);
         return interval;
     }
 
@@ -295,37 +268,41 @@ private:
                 fbank.at<float>(j, i) = (i - bins[j]) / (1.0*(bins[j + 1] - bins[j]));
             }
             for (int i=bins[j+1]; i<bins[j+2]; ++i) {
-                fbank.at<float>(j, i) = (bins[j+1]-i) / (1.0*(bins[j + 2] - bins[j+1]));
+                fbank.at<float>(j, i) = (bins[j+2]-i) / (1.0*(bins[j + 2] - bins[j+1]));
             }
         }
         return fbank;
     }
 
-    Mat extract_mfccs(Mat& spectrogram, int cepstra, int filts, double sampling_rate) {
+    Mat extractFeatures(Mat& spectrogram) {
         int ffts = spectrogram.cols;
         Mat powspec = spectrogram.mul(spectrogram);
+        powspec *= 1.0 / _windowSize;
         Mat fbank;
-        transpose(get_filterbank(filts, 2*(ffts-1), sampling_rate), fbank);
-        Mat feats = powspec*fbank;
-        log(feats, feats);
-        if (feats.rows %2 !=0) {
-            Mat pad_feats = Mat::zeros(1+feats.rows, feats.cols, CV_32FC1);
-            feats.copyTo(pad_feats(Range(0, feats.rows), Range::all()));
-            dct(pad_feats, pad_feats);
-            feats = pad_feats(Range(0, feats.rows), Range::all());
-        } else {
-            dct(feats, feats);
+        transpose(get_filterbank(_numFilts, 2*(ffts-1), _samplingFreq), fbank);
+        Mat cepsgram = powspec*fbank;
+        log(cepsgram, cepsgram);
+        if (_feature == MFSC) {
+            return cepsgram;
         }
-        int ncepstra = cepstra;
-        if (filts < ncepstra) {
-            ncepstra = filts;
-            return feats;
+        int pad_cols = cepsgram.cols;
+        int pad_rows = cepsgram.rows;
+        if (cepsgram.cols % 2 != 0) {
+            pad_cols = 1 + cepsgram.cols;
         }
-       Mat subfeats = feats(Range::all(), Range(0, ncepstra));
-       return subfeats;
+        if (cepsgram.rows % 2 != 0) {
+            pad_rows = 1 + cepsgram.rows;
+        }
+        Mat padcepsgram = Mat::zeros(pad_rows, pad_cols, CV_32F);
+        cepsgram.copyTo(padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols)));
+        dct(padcepsgram, padcepsgram, cv::DFT_ROWS);
+        cepsgram = padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols));
+        Mat subcepsgram = cepsgram(Range::all(), Range(0, _numCepstra));
+        return subcepsgram;
     }
 
 private:
+    int                         _feature;
     // Maximum duration in milliseconds.
     int                         _clipDuration;
     // Window size and stride are in terms of samples.
@@ -333,10 +310,11 @@ private:
     int                         _stride;
     int                         _timeSteps;
     int                         _numFreqs;
+    int                         _height;
     int                         _samplingFreq;
     int                         _maxSignalSize;
-    int                         _ncepstra;
-    int                         _nfilts;
+    int                         _numFilts;
+    int                         _numCepstra;
     float                       _scaleBy;
     float                       _scaleMin;
     float                       _scaleMax;

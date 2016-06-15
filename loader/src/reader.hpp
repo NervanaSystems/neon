@@ -45,6 +45,8 @@ enum ConversionType {
     READ_CONTENTS = 3,
 };
 
+static_assert(sizeof(int) == 4, "Unsupported platform");
+
 class IndexElement {
 public:
     IndexElement() {
@@ -149,7 +151,6 @@ public:
                char* alphabet)
     : Reader(batchSize, repoDir, indexFile, shuffle, false, 100), _itemIdx(0),
       _targetTypeSize(targetTypeSize), _targetConversion(targetConversion) {
-        static_assert(sizeof(int) == 4, "int is not 4 bytes");
         if (_targetConversion == ASCII_TO_BINARY) {
             // For now, assume that binary targets are 4 bytes long.
             assert(_targetTypeSize == 4);

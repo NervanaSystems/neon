@@ -14,7 +14,7 @@
 */
 
 
-// This must be kept in sync with ../media.py.
+// This must be kept in sync with media.py.
 
 #pragma once
 
@@ -23,11 +23,11 @@
 using std::vector;
 
 enum MediaType {
-    UNKNOWN = -1,
-    IMAGE = 0,
-    VIDEO = 1,
-    AUDIO = 2,
-    TEXT = 3,
+    UNKNOWN     = -1,
+    IMAGE       =  0,
+    VIDEO       =  1,
+    AUDIO       =  2,
+    TEXT        =  3,
 };
 
 class MediaParams {
@@ -51,18 +51,20 @@ public:
     int                         _clipDuration;
     int                         _frameDuration;
     int                         _overlapPercent;
-    char                        _windowFunc[16];
+    char                        _windowType[16];
+    char                        _featureType[16];
     float                       _randomScalePercent;
     bool                        _addNoise;
     bool                        _ctcCost;
-    int                         _ncepstra;
-    int                         _nfilts;
+    int                         _numFilts;
+    int                         _numCepstra;
     int                         _windowSize;
     int                         _overlap;
     int                         _stride;
     int                         _width;
     int                         _height;
-    int                         _windowType;
+    int                         _window;
+    int                         _feature;
 };
 
 class Media {
