@@ -308,7 +308,7 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
 
 
 if __name__ == '__main__':
-
+    from neon.backends import gen_backend
     bsz = 1
     be = gen_backend(backend='gpu', batch_size=bsz)
 

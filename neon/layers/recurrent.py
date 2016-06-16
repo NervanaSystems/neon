@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from __future__ import division
 from builtins import range, zip
 import numpy as np
 from neon.layers.layer import ParameterLayer, Layer
@@ -27,14 +28,14 @@ def get_steps(x, shape):
     if x is None:
         return [None for step in range(steps)]
 
-    bsz = x.shape[1] // steps
-    return [x[:, (step*bsz):((step+1)*bsz)] for step in range(steps)]
+    xs = x.reshape(shape + (-1,))
+    return [xs[:, step, :] for step in range(steps)]
 
 
 def interpret_in_shape(xshape):
     """
-    Helper function to interpret the tensor layout of preceding layer to handle non-recurrent,
-    recurrent, and local layers
+    Helper function to interpret the tensor layout of preceding layer for input
+    to a recurrent layer. Handles non-recurrent, recurrent, and local layers
     """
     if isinstance(xshape, int):
         nin, nsteps = xshape, 1
@@ -1035,6 +1036,8 @@ class BiRNN(ParameterLayer):
         """
         assert self.owns_output
 
+        # Allocate a hidden state buffer with an extra time step of padding on either end
+        o_shape_pad = (self.o_shape[0], self.o_shape[1] + 2)
         self.h_buffer_all = self.be.iobuf(self.hidden_shape,
                                           shared=shared_outputs,
                                           parallelism=self.parallelism)
@@ -1049,17 +1052,26 @@ class BiRNN(ParameterLayer):
 
         # forward
         self.h_buffer_f = self.h_buffer[:nout]
-        self.h_f = get_steps(self.h_buffer_f, self.o_shape)
         self.h_prev_buffer = self.h_buffer_all[:nout, :-(2 * step_size)]
-        self.h_prev = get_steps(self.h_prev_buffer, self.o_shape)
         self.h_f_last = self.h_prev_buffer[:, :step_size]
+
+        # Slice padded buffer to a list of step tensors, remove padding steps
+        self.h_f = get_steps(self.h_buffer_all[:nout, :], o_shape_pad)[1:-1]
+
+        # Slice padded buffer to a list of step tensors, remove the last step and end padding
+        self.h_prev = get_steps(self.h_buffer_all[:nout, :], o_shape_pad)[:-2]
 
         # backward
         self.h_buffer_b = self.h_buffer[nout:]
-        self.h_b = get_steps(self.h_buffer_b, self.o_shape)
         self.h_next_buffer = self.h_buffer_all[nout:, (2 * step_size):]
-        self.h_next = get_steps(self.h_next_buffer, self.o_shape)
         self.h_b_last = self.h_next_buffer[:, -step_size:]
+
+        # Slice padded buffer to a list of step tensors, remove padding steps
+        self.h_b = get_steps(self.h_buffer_all[nout:, :], o_shape_pad)[1:-1]
+
+        # Slice padded buffer to a list of step tensors, remove the beginning padding and 1st step
+        self.h_next = get_steps(self.h_buffer_all[nout:, :], o_shape_pad)[2:]
+
         self.bufs_to_reset = [self.h_buffer]
 
         # Last time step for in deltas
@@ -1103,7 +1115,7 @@ class BiRNN(ParameterLayer):
                              (input_size, sequence_length * batch_size)
 
         """
-        if self.x is None or self.x is not inputs:
+        if self.x is None or self.x.base is not inputs:
             if self.x:
                 for buf in self.bufs_to_reset:
                     buf[:] = 0
@@ -1168,18 +1180,6 @@ class BiRNN(ParameterLayer):
 
         self.db_f = self.dW[-2:-1].reshape(self.b_f.shape)
         self.db_b = self.dW[-1:].reshape(self.b_b.shape)
-
-        # Force backend not to reduce update, since it can't infer how to reduce
-        if self.parallelism == "Data":
-            try:
-                self.db_f.auto_reduce = False
-                self.db_b.auto_reduce = False
-                self.dW_input_f.auto_reduce = False
-                self.dW_input_b.auto_reduce = False
-                self.dW_recur_f.auto_reduce = False
-                self.dW_recur_b.auto_reduce = False
-            except:
-                pass
 
         if doFill:
             gatelist = [g * nout for g in range(0, self.ngates + 1)]
@@ -1318,16 +1318,6 @@ class BiRNN(ParameterLayer):
                                  self.out_deltas_buffer_b.reshape((nin, -1)),
                                  alpha=alpha, beta=beta)
 
-        try:
-            self.be.reduce_replicas(self.dW_recur_f, True)
-            self.be.reduce_replicas(self.dW_input_f, True)
-            self.be.reduce_replicas(self.dW_recur_b, True)
-            self.be.reduce_replicas(self.dW_input_b, True)
-            self.be.reduce_replicas(self.db_f, True)
-            self.be.reduce_replicas(self.db_b, True)
-        except:
-            pass
-
         return self.out_deltas_buffer
 
 
@@ -1350,7 +1340,7 @@ class BiSum(Layer):
         super(BiSum, self).configure(in_obj)
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
         assert self.nin % 2 == 0, 'The input feature dimension must be mulitple of 2'
-        self.out_shape = (self.nin/2, self.nsteps)
+        self.out_shape = (self.nin // 2, self.nsteps)
         return self
 
     def init_buffers(self, inputs):
@@ -1369,12 +1359,12 @@ class BiSum(Layer):
 
     def fprop(self, inputs, inference=False):
         self.init_buffers(inputs)
-        self.outputs[:] = self.x[:self.nin/2] + self.x[self.nin/2:]
+        self.outputs[:] = self.x[:self.nin // 2] + self.x[self.nin // 2:]
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
-        self.deltas[:self.nin/2] = error
-        self.deltas[self.nin/2:] = error
+        self.deltas[:self.nin // 2] = error
+        self.deltas[self.nin // 2:] = error
         return self.deltas
 
 
@@ -1419,7 +1409,7 @@ class BiBNRNN(BiRNN):
     def __str__(self):
         if self.split_inputs:
             return "BiBNRNN Layer '%s': (%d inputs) * 2, (%d outputs) * 2, %d steps" % (
-                self.name, self.nin/2, self.nout, self.nsteps)
+                self.name, self.nin // 2, self.nout, self.nsteps)
         else:
             return "BiBNRNN Layer '%s': %d inputs, (%d outputs) * 2, %d steps" % (
                 self.name, self.nin, self.nout, self.nsteps)
@@ -1438,12 +1428,14 @@ class BiBNRNN(BiRNN):
     def init_params(self, shape):
         super(BiBNRNN, self).init_params(shape)
         nf = self.out_shape[0]
-        nout = self.output_size
-        self.xmean = self.be.zeros((nf, 1), dtype=self.stats_dtype)
-        self.xsum = self.be.zeros((nf, 1), dtype=self.stats_dtype)
-        self.xvar = self.be.zeros((nf, 1), dtype=self.stats_dtype)
-        self.beta = self.be.zeros((nf, 1), dtype=self.stats_dtype)
-        self.gamma = self.be.ones((nf, 1), dtype=self.stats_dtype)
+        self.xmean = self.be.empty((nf, 1), dtype=self.stats_dtype,
+                                   **self.get_param_attrs())
+        self.xvar = self.be.empty((nf, 1), dtype=self.stats_dtype,
+                                  **self.get_param_attrs())
+        self.beta = self.be.zeros((nf, 1), dtype=self.stats_dtype,
+                                  **self.get_param_attrs())
+        self.gamma = self.be.ones((nf, 1), dtype=self.stats_dtype,
+                                  **self.get_param_attrs())
         # self.gmean = self.be.zeros((nf, 1), dtype=self.stats_dtype)
         # self.gvar = self.be.zeros((nf, 1), dtype=self.stats_dtype)
 
@@ -1460,39 +1452,19 @@ class BiBNRNN(BiRNN):
                                                         self.states_bn)]
         self.plist = [((self.W, self.dW), self.states)] + self.plist_bn
 
-        # views for two directions
-        self.xmean_f = self.xmean[:nout]
-        self.xmean_b = self.xmean[nout:]
-        self.xvar_f = self.xvar[:nout]
-        self.xvar_b = self.xvar[nout:]
-        self.beta_f = self.beta[:nout]
-        self.beta_b = self.beta[nout:]
-        self.gamma_f = self.gamma[:nout]
-        self.gamma_b = self.gamma[nout:]
+        try:
+            self.xmean.auto_reduce = False
+            self.xvar.auto_reduce = False
+            self.beta.auto_reduce = False
+            self.gamma.auto_reduce = False
+        except:
+            pass
 
     def set_deltas(self, delta_buffers):
         super(BiBNRNN, self).set_deltas(delta_buffers)
 
-        nout = self.output_size
-
         self.grad_gamma = self.be.zeros_like(self.gamma)
         self.grad_beta = self.be.zeros_like(self.beta)
-
-        self.grad_gamma_f = self.grad_gamma[:nout]
-        self.grad_gamma_b = self.grad_gamma[nout:]
-        self.grad_beta_f = self.grad_beta[:nout]
-        self.grad_beta_b = self.grad_beta[nout:]
-
-        if self.parallelism == "Data":
-            try:
-                self.grad_gamma.auto_reduce = False
-                self.grad_beta.auto_reduce = False
-                self.grad_gamma_f.auto_reduce = False
-                self.grad_beta_f.auto_reduce = False
-                self.grad_gamma_b.auto_reduce = False
-                self.grad_beta_b.auto_reduce = False
-            except:
-                pass
 
     def get_params(self):
         return self.plist
@@ -1636,18 +1608,6 @@ class BiBNRNN(BiRNN):
             self.be.compound_dot(self.W_input_b.T, in_deltas_all_b,
                                  self.out_deltas_buffer_b.reshape((nin, -1)),
                                  alpha=alpha, beta=beta if self.split_inputs else 1.0)
-
-        try:
-            self.be.reduce_replicas(self.dW_recur_f, True)
-            self.be.reduce_replicas(self.dW_input_f, True)
-            self.be.reduce_replicas(self.dW_recur_b, True)
-            self.be.reduce_replicas(self.dW_input_b, True)
-            self.be.reduce_replicas(self.db_f, True)
-            self.be.reduce_replicas(self.db_b, True)
-            self.be.reduce_replicas(self.grad_gamma, True)
-            self.be.reduce_replicas(self.grad_beta, True)
-        except:
-            pass
 
         return self.out_deltas_buffer
 
@@ -1965,9 +1925,33 @@ class DeepBiRNN(list):
         if depth <= 0:
             raise ValueError("Depth is <= 0.")
 
-        self.append(BiRNN(nout, init, init_inner, activation, reset_cells, split_inputs=False))
-        for i in range(depth - 1):
-            self.append(BiRNN(nout, init, init_inner, activation, reset_cells, split_inputs=True))
+        if bi_sum is True:
+            split_inputs_first = False
+            split_inputs_second = False
+        else:
+            split_inputs_first = False
+            split_inputs_second = True
+
+        if batch_norm is False:
+            self.append(BiRNN(nout, init, init_inner, activation,
+                              reset_cells, split_inputs=split_inputs_first))
+            if bi_sum:
+                self.append(BiSum())
+            for i in range(depth-1):
+                self.append(BiRNN(nout, init, init_inner, activation,
+                            reset_cells, split_inputs=split_inputs_second))
+                if bi_sum:
+                    self.append(BiSum())
+        else:
+            self.append(BiBNRNN(nout, init, init_inner, activation,
+                                reset_cells, split_inputs=split_inputs_first))
+            if bi_sum:
+                self.append(BiSum())
+            for i in range(depth-1):
+                self.append(BiBNRNN(nout, init, init_inner, activation,
+                            reset_cells, split_inputs=split_inputs_second))
+                if bi_sum:
+                    self.append(BiSum())
 
 
 class DeepBiLSTM(list):

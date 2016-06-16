@@ -940,8 +940,8 @@ class Linear(ParameterLayer):
         name (str, optional): Layer name. Defaults to "LinearLayer"
     """
 
-    def __init__(self, nout, init, bsum=False, name=None):
-        super(Linear, self).__init__(init, name, "Disabled")
+    def __init__(self, nout, init, bsum=False, name=None, parallelism="Disabled"):
+        super(Linear, self).__init__(init, name, parallelism)
         self.nout = nout
         self.inputs = None
         self.bsum = bsum
@@ -983,7 +983,6 @@ class Linear(ParameterLayer):
         Returns:
             Tensor: output data
         """
-
         self.inputs = inputs
         if self.actual_bsz is None and self.actual_seq_len is None:
             self.be.compound_dot(A=self.W, B=self.inputs, C=self.outputs, beta=beta,
@@ -997,8 +996,6 @@ class Linear(ParameterLayer):
                                  C=self.outputs[:, :bsz * steps],
                                  beta=beta,
                                  bsum=self.batch_sum)
-        if revert:
-            inputs.swap_shadow()
 
         return self.outputs
 
@@ -1019,8 +1016,6 @@ class Linear(ParameterLayer):
         if self.deltas:
             self.be.compound_dot(A=self.W.T, B=error, C=self.deltas, alpha=alpha, beta=beta)
         self.be.compound_dot(A=error, B=self.inputs.T, C=self.dW)
-        if revert:
-            error.swap_shadow()
         return self.deltas
 
 
@@ -1318,10 +1313,12 @@ class Affine(CompoundLayer):
     """
 
     def __init__(self, nout, init, bias=None,
-                 batch_norm=False, activation=None, name=None):
+                 batch_norm=False, activation=None, name=None,
+                 parallelism="Disabled"):
         super(Affine, self).__init__(bias=bias, batch_norm=batch_norm,
                                      activation=activation, name=name)
-        self.append(Linear(nout, init, bsum=batch_norm, name=name))
+        self.append(Linear(nout, init, bsum=batch_norm, name=name,
+                           parallelism=parallelism))
         self.add_postfilter_layers()
 
 
@@ -1501,7 +1498,7 @@ class Dropout(Layer):
     """
 
     def __init__(self, keep=0.5, name=None):
-        super(Dropout, self).__init__(name, "Disabled")
+        super(Dropout, self).__init__(name)
         self.keep = keep
         self.keep_mask = None
         self.caffe_mode = self.be.check_caffe_compat()
@@ -1741,10 +1738,14 @@ class GeneralizedCost(NervanaObject):
 
         assert isinstance(in_obj, Layer)
         self.prev_layer = in_obj
+        self.parallelism = self.prev_layer.parallelism
+        self.costfunc.parallelism = self.parallelism
         (_, self.nstep) = interpret_in_shape(in_obj.out_shape)
-        self.outputs = self.be.iobuf((1, self.nstep), persist_values=False)
+        self.outputs = self.be.iobuf((1, self.nstep),
+                                     parallelism=self.parallelism,
+                                     persist_values=False)
         self.deltas = self.be.iobuf(in_obj.out_shape,
-                                    parallelism=self.prev_layer.parallelism,
+                                    parallelism=self.parallelism,
                                     persist_values=False)
         self.cost = np.empty([1, 1], dtype=np.float32)
 
@@ -1762,7 +1763,7 @@ class GeneralizedCost(NervanaObject):
 
         """
         self.outputs[:] = self.costfunc(inputs, targets)
-        self.cost_buffer[:] = self.be.mean(self.outputs, axis=1)
+        self.be.mean(self.outputs, axis=1, out=self.cost_buffer)
         self.cost = self.cost_buffer.get()
         return self.cost
 

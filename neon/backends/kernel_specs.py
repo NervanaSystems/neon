@@ -108,6 +108,15 @@ kernels = {
     "hgemm_nt_16x64": {"threads": 128, "sass": "hgemm_nt_16x64", "params": "gemm", "share": "(16*64 + 32)*2 + (64*64 + 32)*2 + 4" },
     "hgemm_nn_32x64": {"threads": 128, "sass": "hgemm_nn_32x64", "params": "gemm", "share": "32*33*2 + 64*32*2 + 2048" },  #artificially limit occpancy
     "hgemm_nn_16x64": {"threads": 128, "sass": "hgemm_nn_16x64", "params": "gemm", "share": "(16*64 + 32)*2 + 64*64*2 + 4" },
+
+    "sgemm_rnn_nn_128x32":    {"threads": 128, "sass": "sgemm_nn_rnn_128x32",       "params": "gemm_rnn",   "share": "(128*16 + 32)*2 + 32*16*2 + 4"},
+    "sgemm_rnn_nn_vec_128x32":    {"threads": 128, "sass": "sgemm_nn_rnn_128x32",       "params": "gemm_rnn",   "share": "(128*16 + 32)*2 + 32*16*2 + 4", "args": {"vec": "1"}},
+
+    "sgemm_rnn_bprop_tn_128x32":    {"threads": 128, "sass": "sgemm_tn_rnn_bprop_128x32",       "params": "gemm_rnn_bprop",   "share": "(128*16 + 32)*2 + 32*16*2 + 4"},
+    "sgemm_rnn_bprop_tn_vec_128x32":    {"threads": 128, "sass": "sgemm_tn_rnn_bprop_128x32",       "params": "gemm_rnn_bprop",   "share": "(128*16 + 32)*2 + 32*16*2 + 4", "args": {"vec": "1"}},
+
+    "persistent_rnn_fprop": {"threads": 256, "sass": "persistent_rnn_fprop", "params": "rnn_fprop", "share": "(64*48) + 4"},
+    "persistent_rnn_bprop": {"threads": 256, "sass": "persistent_rnn_bprop", "params": "rnn_bprop", "share": "(64*48) + 4"},
 }
 
 _params = {
@@ -323,6 +332,60 @@ _params = {
         "unsigned param_ldbz",
         "unsigned param_ldcz",
         "unsigned param_batch_loops",
+    ],
+    "gemm_rnn": [
+        "float* param_C",
+        "float* param_A",
+        "float* param_B",
+        "float* param_bias",
+        "float* param_lock",
+        "float param_alpha",
+        "float param_beta",
+        "float param_xcutoff",
+        "int   param_flags",
+        "int   param_lda",
+        "int   param_ldb",
+        "int   param_ldc",
+        "int   param_m",
+        "int   param_n",
+        "int   param_k",
+        "int   param_ldaz",
+        "int   param_ldbz",
+        "int   param_ldcz",
+        "int   param_batch_loops",
+        "int   param_dimB",
+        "int   param_dimC",
+        "int   param_unrolling",
+        "int   param_numBlks",
+        "int   param_numAblks"
+    ],
+    "gemm_rnn_bprop": [
+        "float* param_C",
+        "float* param_A",
+        "float* param_B",
+        "float* param_H",
+        "float* param_lock",
+        "float param_alpha",
+        "float param_beta",
+        "float param_xcutoff",
+        "int   param_flags",
+        "int   param_lda",
+        "int   param_ldb",
+        "int   param_ldc",
+        "int   param_ldh",
+        "int   param_m",
+        "int   param_n",
+        "int   param_k",
+        "int   param_ldaz",
+        "int   param_ldbz",
+        "int   param_ldcz",
+        "int   param_batch_loops",
+        "int   param_dimB",
+        "int   param_dimC",
+        "int   param_dimH",
+        "int   param_unrolling",
+        "int   param_numBlks",
+        "int   param_numAblks"
     ],
     "fpropw": [
         "float* param_S",
@@ -575,6 +638,38 @@ _params = {
         "unsigned param_SKp",
         "unsigned param_RSK15_SK2p",
     ],
+    "rnn_fprop": [
+        "float* param_h",
+        "float* param_hprev",
+        "float* param_bias",
+        "float* param_w",
+        "int* param_lockAddr",
+        "int param_ldh",
+        "int param_ldw",
+        "int param_bsz",
+        "int param_seqLength",
+        "int param_numBlks",
+        "int param_rowSize",
+        "int param_reverse",
+        "float param_reluclip"
+    ]
+    ,
+    "rnn_bprop": [
+        "float* param_d",
+        "float* param_dnext",
+        "float* param_h",
+        "float* param_w",
+        "int* param_lockAddr",
+        "int param_ldd",
+        "int param_ldh",
+        "int param_ldw",
+        "int param_bsz",
+        "int param_seqLength",
+        "int param_numBlks",
+        "int param_rowSize",
+        "int param_reverse",
+        "float param_reluclip"
+    ]
 }
 
 _params["bprop"] = _params["fprop"] + [
@@ -696,7 +791,7 @@ def get_kernel(base_name, options=None):
     arch = "sm_%d%d" % (major, minor)
 
     libprefix = "PERL5LIB=%s" % (maxas_dir)
-    maxas_i = [libprefix, os.path.join(maxas_dir, "maxas.pl") + " -i"]
+    maxas_i = [libprefix, os.path.join(maxas_dir, "maxas.pl") + " -i -w"]
     maxas_p = [libprefix, os.path.join(maxas_dir, "maxas.pl") + " -p"]
 
     kernel_spec = kernels[base_name]

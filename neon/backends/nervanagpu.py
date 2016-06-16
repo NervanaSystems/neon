@@ -515,8 +515,10 @@ class GPUTensor(Tensor):
         if size != self.size:
             raise ValueError("total size of new array must be unchanged")
 
-        if not self.is_contiguous:
+        if self.take_array:
             raise TypeError("reshaping of non-contiguous arrays is not yet supported")
+
+        new_strides = _reshape_strides(self.strides, self.shape, shape)
 
         return self.__class__(
             backend=self.backend,
@@ -525,7 +527,7 @@ class GPUTensor(Tensor):
             allocator=self.allocator,
             base=self,
             gpudata=self.gpudata,
-            strides=_contiguous_strides(shape),
+            strides=new_strides,
             name=self.name,
             rounding=self.rounding)
 
@@ -755,6 +757,7 @@ class NervanaGPU(Backend):
         self.buf = {}
         self.buf_active = {}
         self.warmup = False
+        self.sm_count = _get_sm_count()
 
         # store histograms for batched memcpy
         self.hist_bins, self.hist_offset = None, None
@@ -2457,18 +2460,29 @@ class NervanaGPU(Backend):
             reverse (boolean): When true, unrolling will iterate over time steps
                 in reverse (for BiRNN).
         """
-        from neon.transforms.activation import Rectlinclip
-        num_blocks = (h_s[0].shape[0] // 128) * (h_s[0].shape[1] // 32)
-        if isinstance(activation, Rectlinclip) and num_blocks < (4 * _get_sm_count()):
+        num_blocks = (-(-h_s[0].shape[0] // 128)) * (-(-h_s[0].shape[1] // 32))
+        if activation.classnm == 'Rectlinclip' and num_blocks < (4 * self.sm_count):
             if h_s[0].base is not h_ff_s[0].base:
-                h_s[0].base[:] = h_ff_s[0].base
+                if len(h_s[0].base.shape) == 3:
+                    assert ((h_ff_s[0].base.shape[1] + 2) == h_s[0].base.shape[1])
+                    h_buffer = h_s[0].base[:, 1:-1].reshape(nout, -1)
+                    h_ff_buffer = h_ff_s[0].base.reshape(nout, -1)
+                    h_buffer[:] = h_ff_buffer
+                else:
+                    h_s[0].base[:] = h_ff_s[0].base
 
             if num_used_steps is not None and num_used_steps < num_steps:
                 num_steps = num_used_steps
 
-            self.compound_unrolled_gemm(W_recur, h_prev_s[0].base, h_s[0].base,
-                                        bias, nout, nout, self.bsz, num_steps,
-                                        activation, reverse)
+            if nout <= 1152 and self.bsz == 4 and (nout % 48) == 0:
+                self._persistent_rnn_fprop(W_recur, h_prev_s[0],
+                                           h_s[0], bias, nout, nout,
+                                           self.bsz, num_steps, activation,
+                                           reverse)
+            else:
+                self._compound_unrolled_gemm(W_recur, h_prev_s[0], h_s[0],
+                                             bias, nout, nout, self.bsz, num_steps,
+                                             activation, reverse)
         else:
             if num_used_steps is not None and num_used_steps < num_steps:
                 h_s = h_s[:num_used_steps]
@@ -2476,9 +2490,9 @@ class NervanaGPU(Backend):
                 h_ff_s = h_ff_s[:num_used_steps]
 
             if reverse:
-                steps = reversed(zip(h_s, h_prev_s, h_ff_s))
+                steps = reversed(list(zip(h_s, h_prev_s, h_ff_s)))
             else:
-                steps = zip(h_s, h_prev_s, h_ff_s)
+                steps = list(zip(h_s, h_prev_s, h_ff_s))
 
             for (h, h_prev, h_ff) in steps:
                 if h_ff is h:
@@ -2513,9 +2527,8 @@ class NervanaGPU(Backend):
             reverse (boolean): When true, unrolling will iterate over time steps
                 in reverse (default case for RNN).
         """
-        from neon.transforms.activation import Rectlinclip
-        num_blocks = (delta_s[0].shape[0] // 128) * (delta_s[0].shape[1] // 32)
-        if isinstance(activation, Rectlinclip) and num_blocks < (4 * _get_sm_count()):
+        num_blocks = (-(-delta_s[0].shape[0] // 128)) * (-(-delta_s[0].shape[1] // 32))
+        if activation.classnm == 'Rectlinclip' and num_blocks < (4 * self.sm_count):
             # Compute activation bprop for first timestep since there is
             # no compounded GEMM
             if reverse:
@@ -2523,21 +2536,31 @@ class NervanaGPU(Backend):
             else:
                 delta_s[0][:] = activation.bprop(h_s[0]) * delta_s[0]
 
-            if reverse:
-                B = delta_s[0].base[:, self.bsz:]
-                C = delta_s[0].base[:, :-self.bsz]
-                H = h_s[0].base[:, :-self.bsz]
-            else:
-                B = delta_s[0].base[:, :-self.bsz]
-                C = delta_s[0].base[:, self.bsz:]
-                H = h_s[0].base[:, self.bsz:]
-
             if num_used_steps is not None and num_used_steps < num_steps:
                 num_steps = num_used_steps
 
-            self.compound_unrolled_gemm_bprop(W_recur, B, C, H, nout, nout,
-                                              self.bsz, num_steps - 1,
-                                              activation, reverse)
+            if reverse:
+                B = delta_s[1]
+                C = delta_s[0]
+                H = h_s[0]
+            else:
+                B = delta_s[0]
+                C = delta_s[1]
+                H = h_s[1]
+
+            if nout <= 1152 and self.bsz == 4 and (nout % 48) == 0:
+                self._persistent_rnn_bprop(W_recur, B, C, H, nout, nout,
+                                           self.bsz, num_steps - 1, activation,
+                                           reverse)
+            else:
+                self._compound_unrolled_gemm_bprop(W_recur, B, C, H, nout, nout,
+                                                   self.bsz, num_steps - 1,
+                                                   activation, reverse)
+
+            if reverse:
+                self.compound_dot(W_recur, delta_s[0], delta_s[-1], beta=1.0)
+            else:
+                self.compound_dot(W_recur, delta_s[-1], delta_s[0], beta=1.0)
         else:
             if num_used_steps is not None and num_used_steps < num_steps:
                 h_s = h_s[:num_used_steps]
@@ -2545,26 +2568,75 @@ class NervanaGPU(Backend):
                 h_ff_s = h_ff_s[:num_used_steps]
 
             if reverse:
-                steps = reversed(zip(h_s, delta_s, delta_prev_s))
+                steps = reversed(list(zip(h_s, delta_s, delta_prev_s)))
             else:
-                steps = zip(h_s, delta_s, delta_prev_s)
+                steps = list(zip(h_s, delta_s, delta_prev_s))
 
             for (hs, in_deltas, prev_in_deltas) in steps:
                 in_deltas[:] = activation.bprop(hs) * in_deltas
                 self.compound_dot(W_recur, in_deltas, prev_in_deltas, beta=1.0)
 
-    context_dependent_memoize
+    def _persistent_rnn_fprop(self, W, hprev, h, bias, nin, nout, unroll_stride,
+                             num_steps, activation, reverse=False):
+        assert W.dtype.type == h.dtype.type == bias.dtype.type
+        assert activation.classnm == 'Rectlinclip'
 
-    def compound_unrolled_gemm(self, A, B, C, bias, nin, nout, unroll_stride, num_steps, activation,
+        gpulock = _get_lock_data(4 * num_steps)
+        drv.memset_d32_async(gpulock, 0, num_steps, self.stream)
+
+        # one dimension must be contiguous
+        assert min(h.strides) == 1
+        assert min(hprev.strides) == 1
+        assert min(W.strides) == 1
+
+        reluclip = activation.xcut
+        param_reverse = 1 if reverse else 0
+        num_blocks = -(-nout // 48)
+
+        kernel = kernel_specs.get_kernel("persistent_rnn_fprop")
+        params = [
+            (num_blocks, 1, 1), (kernel.threads, 1, 1), self.stream,
+            h.gpudata, hprev.gpudata, bias.gpudata, W.gpudata, gpulock,
+            h.strides[0] // 4, W.strides[0], self.bsz, num_steps, num_blocks,
+            nout, param_reverse, reluclip]
+
+        kernel.prepared_async_call(*params)
+
+    def _persistent_rnn_bprop(self, W, dnext, d, h, nin, nout, unroll_stride,
+                             num_steps, activation, reverse=False):
+        assert W.dtype.type == h.dtype.type == d.dtype.type
+        assert activation.classnm == 'Rectlinclip'
+
+        gpulock = _get_lock_data(4 * num_steps)
+        drv.memset_d32_async(gpulock, 0, num_steps, self.stream)
+
+        # one dimension must be contiguous
+        assert min(h.strides) == 1
+        assert min(d.strides) == 1
+        assert min(W.strides) == 1
+
+        reluclip = activation.xcut
+        param_reverse = 1 if reverse else 0
+        num_blocks = -(-nout // 48)
+
+        kernel = kernel_specs.get_kernel("persistent_rnn_bprop")
+        params = [
+            (num_blocks, 1, 1), (kernel.threads, 1, 1), self.stream,
+            d.gpudata, dnext.gpudata, h.gpudata, W.gpudata, gpulock,
+            d.strides[0] // 4, h.strides[0] // 4, W.strides[1], self.bsz,
+            num_steps, num_blocks, nout, param_reverse, reluclip]
+
+        kernel.prepared_async_call(*params)
+
+    def _compound_unrolled_gemm(self, A, B, C, bias, nin, nout, unroll_stride, num_steps, activation,
                                reverse=False):
         assert A.dtype.type == B.dtype.type == C.dtype.type
-        from neon.transforms.activation import Rectlinclip
-        assert isinstance(activation, Rectlinclip)
+        assert activation.classnm == 'Rectlinclip'
 
         gpulock = _get_lock_data(4)
-        drv.memset_d32(gpulock, 0, 1)
+        drv.memset_d32_async(gpulock, 0, 1, self.stream)
 
-        # one dimention must be contiguous
+        # one dimension must be contiguous
         assert min(A.strides) == 1
         assert min(B.strides) == 1
         assert min(C.strides) == 1
@@ -2626,16 +2698,15 @@ class NervanaGPU(Backend):
 
         kernel.prepared_async_call(*params)
 
-    def compound_unrolled_gemm_bprop(self, A, B, C, H, nin, nout, unroll_stride, num_steps, activation,
+    def _compound_unrolled_gemm_bprop(self, A, B, C, H, nin, nout, unroll_stride, num_steps, activation,
                                reverse=False):
         assert A.dtype.type == B.dtype.type == C.dtype.type
-        from neon.transforms.activation import Rectlinclip
-        assert isinstance(activation, Rectlinclip)
+        assert activation.classnm == 'Rectlinclip'
 
         gpulock = _get_lock_data(4)
-        drv.memset_d32(gpulock, 0, 1)
+        drv.memset_d32_async(gpulock, 0, 1, self.stream)
 
-        # one dimention must be contiguous
+        # one dimension must be contiguous
         assert min(A.strides) == 1
         assert min(B.strides) == 1
         assert min(C.strides) == 1
@@ -2848,6 +2919,27 @@ def _contiguous_strides(shape):
     else:
         return ()
 
+def _reshape_strides(orig_strides, orig_shape, new_shape):
+    # Only contiguous dimensions can be reshaped
+    matched_dims = 0
+    for orig, new in zip(orig_shape, new_shape):
+        if orig != new:
+            break
+        else:
+            matched_dims = matched_dims + 1
+
+    # Extend original shape to length of new shape
+    orig_shape = tuple(list(orig_shape) + [1] * (len(new_shape) - len(orig_shape)))
+    orig_strides = tuple(list(orig_strides) + [1] * (len(new_shape) - len(orig_strides)))
+
+    reshape_size = np.prod(new_shape[matched_dims:])
+    orig_size = np.prod(orig_strides[matched_dims:]) * orig_shape[matched_dims]
+
+    if orig_size != reshape_size:
+        raise ValueError("Reshaping of non-contiguous dimensions unsupported.")
+
+    new_strides = orig_strides[:matched_dims] + _contiguous_strides(new_shape[matched_dims:])
+    return new_strides
 
 @context_dependent_memoize
 def _get_scratch_data(scratch_size):
@@ -2879,3 +2971,4 @@ def _get_events():
 #             break
 #         caller = (frame[0],frame[1])
 #     print caller
+

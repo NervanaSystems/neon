@@ -24,22 +24,22 @@ from numpy import concatenate as con
 from neon import NervanaObject
 from neon.initializers.initializer import GlorotUniform
 from neon.layers.recurrent import BiRNN, Recurrent, get_steps, BiSum, BiBNRNN
-from neon.transforms import Logistic
-from tests.utils import allclose_with_out
+from neon.transforms import Rectlinclip
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):
-    bsz_rng = [1]
+    bsz_rng = [1, 4]
     if 'fargs' in metafunc.fixturenames:
         fargs = []
         if metafunc.config.option.all:
             seq_rng = [2, 3, 4]
             inp_rng = [3, 5, 10]
-            out_rng = [3, 5, 10]
+            out_rng = [3, 5, 10, 1152]
         else:
             seq_rng = [3]
             inp_rng = [5]
-            out_rng = [10]
+            out_rng = [10, 1152]
         fargs = itt.product(seq_rng, inp_rng, out_rng, bsz_rng)
         metafunc.parametrize('fargs', fargs)
 
@@ -54,7 +54,7 @@ def test_biRNN_fprop_rnn(backend_default, fargs):
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
-    birnn = BiRNN(hidden_size, activation=Logistic(), init=init_glorot)
+    birnn = BiRNN(hidden_size, activation=Rectlinclip(slope=0), init=init_glorot)
     birnn.configure(in_shape)
     birnn.prev_layer = True
     birnn.allocate()
@@ -62,7 +62,7 @@ def test_biRNN_fprop_rnn(backend_default, fargs):
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
-    rnn = Recurrent(hidden_size, activation=Logistic(), init=init_glorot)
+    rnn = Recurrent(hidden_size, activation=Rectlinclip(slope=0), init=init_glorot)
     rnn.configure(in_shape)
     rnn.prev_layer = True
     rnn.allocate()
@@ -120,7 +120,7 @@ def test_biRNN_fprop(backend_default, fargs):
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
-    birnn = BiRNN(hidden_size, activation=Logistic(), init=init_glorot)
+    birnn = BiRNN(hidden_size, activation=Rectlinclip(slope=0), init=init_glorot)
     birnn.configure(in_shape)
     birnn.prev_layer = True
     birnn.allocate()
@@ -169,7 +169,7 @@ def test_biRNN_bprop(backend_default, fargs):
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
-    birnn = BiRNN(hidden_size, activation=Logistic(), init=init_glorot)
+    birnn = BiRNN(hidden_size, activation=Rectlinclip(slope=0), init=init_glorot)
     birnn.configure(in_shape)
     birnn.prev_layer = True
     birnn.allocate()
@@ -183,7 +183,7 @@ def test_biRNN_bprop(backend_default, fargs):
 
     # same weight for bi-directional rnn
     init_glorot = GlorotUniform()
-    rnn = Recurrent(hidden_size, activation=Logistic(), init=init_glorot)
+    rnn = Recurrent(hidden_size, activation=Rectlinclip(slope=0), init=init_glorot)
     rnn.configure(in_shape)
     rnn.prev_layer = True
     rnn.allocate()
@@ -235,12 +235,12 @@ def test_biSum(backend_default, fargs):
     del_be = bisum.bprop(out_be)
 
     out_ref = bisum.be.empty_like(out_be)
-    out_ref[:] = inp_be[:input_size / 2] + inp_be[input_size / 2:]
+    out_ref[:] = inp_be[:input_size // 2] + inp_be[input_size // 2:]
     assert out_be.shape[0] * 2 == inp_be.shape[0]
     assert allclose_with_out(out_be.get(), out_ref.get(), rtol=0.0, atol=1.0e-5)
 
-    assert allclose_with_out(del_be[:input_size / 2].get(), out_be.get(), rtol=0.0, atol=1.0e-5)
-    assert allclose_with_out(del_be[input_size / 2:].get(), out_be.get(), rtol=0.0, atol=1.0e-5)
+    assert allclose_with_out(del_be[:input_size // 2].get(), out_be.get(), rtol=0.0, atol=1.0e-5)
+    assert allclose_with_out(del_be[input_size // 2:].get(), out_be.get(), rtol=0.0, atol=1.0e-5)
 
 
 def test_bibn(backend_default, fargs):
@@ -249,9 +249,11 @@ def test_bibn(backend_default, fargs):
     in_shape = (input_size, seq_len)
     NervanaObject.be.bsz = batch_size
 
+    hidden_size = min(10, hidden_size)
+
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
-    birnn = BiBNRNN(hidden_size, activation=Logistic(), init=init_glorot)
+    birnn = BiBNRNN(hidden_size, activation=Rectlinclip(slope=0), init=init_glorot)
     birnn.configure(in_shape)
     birnn.prev_layer = True
     birnn.allocate()
@@ -298,4 +300,4 @@ def test_bibn(backend_default, fargs):
 
     err_out_bn = birnn._bprop_bn(err_be, out_bn)
 
-    assert allclose_with_out(err_out_bn.get(), err_out_ref.get(), rtol=0.0, atol=1.0e-5)
+    assert allclose_with_out(err_out_bn.get(), err_out_ref.get(), rtol=0.0, atol=2.0e-5)

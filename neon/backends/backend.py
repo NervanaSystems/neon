@@ -16,10 +16,12 @@
 Defines Tensor and Backend class.
 """
 from __future__ import division
-from builtins import hex, map, object, str
+from builtins import hex, map, object, range, str, zip
 import logging
 from math import ceil
 import numpy as np
+
+from neon.backends.abstract_backend import AbstractBackend
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +291,16 @@ class Tensor(object):
         """
         raise NotImplementedError()
 
+    def dimension_reorder(self, new_order):
+        """
+        Re-orders dimensions of a tensor without preserving data
+
+        Arguments:
+            new_order (list): new order of dimensions
+        """
+        shape = [self.shape[dim] for dim in new_order]
+        return self.reshape(shape)
+
     @property
     def T(self):
         """
@@ -422,7 +434,7 @@ class Tensor(object):
         return OpTreeNode.build("neg", self, None)
 
 
-class Backend(object):
+class Backend(AbstractBackend):
     """
     Backend interface used to manipulate Tensor data. This abstract base class
     defines what operations each concrete backend must support.
@@ -599,50 +611,6 @@ class Backend(object):
         """
         pass
 
-    def gen_rng(self, seed=None):
-        """
-        Setup the random number generator(s) and store the state
-        in self.init_rng_state.
-
-        Arguments:
-            seed (int or None): RNG seed, if the seed is None,
-                                then a seed will be randomly chosen
-
-        Returns:
-            np.random.RandomState: numpy RNG
-        """
-        raise NotImplementedError()
-
-    def rng_get_state(self, state):
-        """
-        Get the random number generator state to a specific state.
-
-        Returns a tuple since some backends have multiple RNG states
-        (e.g. on-host and on-device)
-
-        Returns:
-            tuple: array of numpy ndarray which defines the current
-                   state of the RNGs
-        """
-        raise NotImplementedError()
-
-    def rng_reset(self):
-        """
-        Reset the random state to the state where the Backend is first
-        initialized.
-        """
-        raise NotImplementedError()
-
-    def rng_set_state(self, state):
-        """
-        Set the random number generator state to a specific state.
-
-        Arguments:
-            state (np.array): array which is used to define the RNG
-                              state
-        """
-        raise NotImplementedError()
-
     def execute(self, node):
         """
         Execute the optree. There must be one and only one 'assign' op at the
@@ -693,237 +661,6 @@ class Backend(object):
         """
         pass
 
-    def empty(self, shape, dtype=None, name=None, persist_values=True,
-              parallel=False, distributed=False):
-        """
-        Instantiate a new instance of this backend's Tensor class, without
-        initializing element values.  This is slightly faster than
-        :py:func:`~neon.backends.Backend.array`,
-        :py:func:`~neon.backends.Backend.ones`,
-        :py:func:`~neon.backends.Backend.zeros`, but the values will be
-        random.
-
-        Arguments:
-            shape (int, list): length of each dimension of the Tensor.
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-            name (str, optional): name indentifying the tensor (used in printing).
-            persist_values (bool, optional): If set to True (the default), the
-                                             values assigned to this Tensor
-                                             will persist across multiple begin
-                                             and end calls.  Setting to False
-                                             may provide a performance increase
-                                             if values do not need to be
-                                             maintained across such calls
-            parallel (bool, optional): If True and using multi-GPU backend,
-                                       replicate copies of this tensor across
-                                       devices.  Defaults to False, and has no
-                                       effect on CPU, or (single) GPU backends.
-            distributed (bool, optional): If True and using multi-GPU backend,
-                                          this tensor is fragmented and
-                                          partitioned across devices.  Defaults
-                                          to False, and has no effect on CPU,
-                                          or (single) GPU backends.
-
-        Returns:
-            Tensor: array object
-
-        Raises:
-            NotImplementedError: Can't be instantiated directly.
-
-        See Also:
-            :py:func:`~neon.backends.backend.Backend.array`,
-            :py:func:`~neon.backends.backend.Backend.zeros`,
-            :py:func:`~neon.backends.backend.Backend.ones`
-        """
-        raise NotImplementedError()
-
-    def array(self, ary, dtype=None, name=None, persist_values=True,
-              parallel=False, distributed=False):
-        """
-        Instantiate a new instance of this backend's Tensor class, populating
-        elements based on ary values.
-
-        Arguments:
-            ary (array_like): input array object to construct from.  Can be
-                              built-in python scalar or list (of lists), or a
-                              numpy.ndarray
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-            name (str, optional): name indentifying the tensor (used in printing).
-            persist_values (bool, optional): If set to True (the default), the
-                                             values assigned to this Tensor
-                                             will persist across multiple begin
-                                             and end calls.  Setting to False
-                                             may provide a performance increase
-                                             if values do not need to be
-                                             maintained across such calls
-            parallel (bool, optional): If True and using multi-GPU backend,
-                                       replicate copies of this tensor across
-                                       devices.  Defaults to False, and has no
-                                       effect on CPU, or (single) GPU backends.
-            distributed (bool, optional): If True and using multi-GPU backend,
-                                          this tensor is fragmented and
-                                          partitioned across devices.  Defaults
-                                          to False, and has no effect on CPU,
-                                          or (single) GPU backends.
-
-        Returns:
-            Tensor: array object
-
-        Raises:
-            NotImplementedError: Can't be instantiated directly.
-
-        See Also:
-            :py:func:`~neon.backends.backend.Backend.empty`,
-            :py:func:`~neon.backends.backend.Backend.zeros`,
-            :py:func:`~neon.backends.backend.Backend.ones`
-        """
-        raise NotImplementedError()
-
-    def zeros(self, shape, dtype=None, name=None, persist_values=True,
-              parallel=False, distributed=False):
-        """
-        Instantiate a new instance of this backend's Tensor class, populating
-        each element with a value of 0.
-
-        Arguments:
-            shape (int, list): length of each dimension of the Tensor.
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-            name (str, optional): name indentifying the tensor (used in printing).
-            persist_values (bool, optional): If set to True (the default), the
-                                             values assigned to this Tensor
-                                             will persist across multiple begin
-                                             and end calls.  Setting to False
-                                             may provide a performance increase
-                                             if values do not need to be
-                                             maintained across such calls
-            parallel (bool, optional): If True and using multi-GPU backend,
-                                       replicate copies of this tensor across
-                                       devices.  Defaults to False, and has no
-                                       effect on CPU, or (single) GPU backends.
-            distributed (bool, optional): If True and using multi-GPU backend,
-                                          this tensor is fragmented and
-                                          partitioned across devices.  Defaults
-                                          to False, and has no effect on CPU,
-                                          or (single) GPU backends.
-
-        Returns:
-            Tensor: array object
-
-        Raises:
-            NotImplementedError: Can't be instantiated directly.
-
-        See Also:
-            :py:func:`~neon.backends.backend.Backend.empty`,
-            :py:func:`~neon.backends.backend.Backend.ones`,
-            :py:func:`~neon.backends.backend.Backend.array`
-        """
-        raise NotImplementedError()
-
-    def ones(self, shape, dtype=None, name=None, persist_values=True,
-             parallel=False, distributed=False):
-        """
-        Instantiate a new instance of this backend's Tensor class, populating
-        each element with a value of 1.
-
-        Arguments:
-            shape (int, list): length of each dimension of the Tensor.
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-            name (str, optional): name indentifying the tensor (used in printing).
-            persist_values (bool, optional): If set to True (the default), the
-                                             values assigned to this Tensor
-                                             will persist across multiple begin
-                                             and end calls.  Setting to False
-                                             may provide a performance increase
-                                             if values do not need to be
-                                             maintained across such calls
-            parallel (bool, optional): If True and using multi-GPU backend,
-                                       replicate copies of this tensor across
-                                       devices.  Defaults to False, and has no
-                                       effect on CPU, or (single) GPU backends.
-            distributed (bool, optional): If True and using multi-GPU backend,
-                                          this tensor is fragmented and
-                                          partitioned across devices.  Defaults
-                                          to False, and has no effect on CPU,
-                                          or (single) GPU backends.
-
-        Returns:
-            Tensor: array object
-
-        Raises:
-            NotImplementedError: Can't be instantiated directly.
-
-        See Also:
-            :py:func:`~neon.backends.backend.Backend.empty`,
-            :py:func:`~neon.backends.backend.Backend.zeros`,
-            :py:func:`~neon.backends.backend.Backend.array`
-        """
-        raise NotImplementedError()
-
-    def empty_like(self, other_ary, name=None, persist_values=True):
-        """
-        Instantiate a new instance of this backend's Tensor class, with the
-        shape taken from other_ary.
-
-        Arguments:
-            other_ary (tensor object): Tensor to inherit the dimensions of.
-            name (str, optional): name indentifying the tensor (used in printing).
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-            persist_values (bool, optional): If set to True (the default), the
-                                             values assigned to this Tensor
-                                             will persist across multiple begin
-                                             and end calls.  Setting to False
-                                             may provide a performance increase
-                                             if values do not need to be
-                                             maintained across such calls.
-
-        Returns:
-            Tensor: array object
-
-        Raises:
-            NotImplementedError: Can't be instantiated directly.
-
-        See Also:
-            :py:func:`~neon.backends.backend.Backend.empty`,
-            :py:func:`~neon.backends.backend.Backend.ones`,
-            :py:func:`~neon.backends.backend.Backend.array`
-        """
-        raise NotImplementedError()
-
-    def zeros_like(self, other_ary, name=None, persist_values=True):
-        """
-        Instantiate a new instance of this backend's Tensor class, with the
-        shape taken from other_ary and populating each element with a value of 0.
-
-        Arguments:
-            other_ary (tensor object): Tensor to inherit the dimensions of.
-            name (str, optional): name indentifying the tensor (used in printing).
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-            persist_values (bool, optional): If set to True (the default), the
-                                             values assigned to this Tensor
-                                             will persist across multiple begin
-                                             and end calls.  Setting to False
-                                             may provide a performance increase
-                                             if values do not need to be
-                                             maintained across such calls.
-        Returns:
-            Tensor: array object
-
-        Raises:
-            NotImplementedError: Can't be instantiated directly.
-
-        See Also:
-            :py:func:`~neon.backends.backend.Backend.empty`,
-            :py:func:`~neon.backends.backend.Backend.ones`,
-            :py:func:`~neon.backends.backend.Backend.array`
-        """
-        raise NotImplementedError()
-
     def dot(self, a, b, out=None):
         """
         Dot product of two Tensors.
@@ -940,57 +677,6 @@ class Backend(object):
             OpTreeNode: the resulting op-tree from this operation.
         """
         return OpTreeNode.build("dot", a, b, out=out)
-
-    def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False):
-        """
-        Perform one of the following operations (* is dot product)
-        C = alpha * A * B   + beta * C
-        C = alpha * A.T * B + beta * C
-        C = alpha * A * B.T + beta * C.
-
-        relu: if true, applied before output (and prior to beta addition)
-
-        The operation will be short-circuited to: out <- alpha * left * right
-        if beta has value 0 (the default).
-
-        Arguments:
-            A (Tensor): left-hand side operand.
-            B (Tensor): right-hand side operand.
-            C (Tensor): output operand
-            alpha (float. optional): scale A*B term
-            beta (float, optional): scale C term before sum
-            relu (bool, optional): If True apply ReLu non-linearity before
-                                   output.  Defaults to False.
-        """
-        raise NotImplementedError()
-
-    def batched_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False):
-        """
-        Perform one of the following operations:
-        1 For fprop: A(K, C), B(X,C,N), C(X,K,N) --> call batched_dot(A, B, C)
-        2 For bprop: A(K, C), B(X,K,N), C(X,C,N) --> call batched_dot(A.T, B, C)
-        3 For update: A(X,K,N), B(X,C,N), C(K,C) --> call batched_dot(A, B.T, C)
-
-        Arguments:
-            A (Tensor): left-hand input operand
-            B (Tensor): right-hand input operand
-            C (Tensor): output operand
-            alpha (float. optional): scale A*B term
-            beta (float, optional): scale C term before sum
-            relu (bool, optional): If True apply ReLu non-linearity before
-                                   output.  Defaults to False.
-        """
-        raise NotImplementedError()
-
-    def make_binary_mask(self, out, keepthresh=0.5):
-        """
-        Create a binary mask for dropout layers.
-
-        Arguments:
-            out (Tensor): Output tensor
-            keepthresh (float, optional): fraction of ones. Defaults to 0.5
-        """
-        raise NotImplementedError()
 
     def add(self, a, b, out=None):
         """
@@ -1753,234 +1439,6 @@ class Backend(object):
         """
         self.ng.add(inputs, bias, out=inputs)
 
-    def conv_layer(self, dtype,
-                   N, C, K,
-                   D=1, H=1, W=1,
-                   T=1, R=1, S=1,
-                   pad_d=0, pad_h=0, pad_w=0,
-                   str_d=1, str_h=1, str_w=1,
-                   relu=False, bsum=False):
-        """
-        Create a new ConvLayer parameter object.
-        This is then passed as an argument to all the convolution operations.
-
-        Arguments:
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-
-            N (int): Number of images in mini-batch
-            C (int): Number of input feature maps
-            K (int): Number of output feature maps
-
-            D (int, optional): Depth of input image.  Defaults to 1
-            H (int, optional): Height of input image.  Defaults to 1
-            W (int, optional): Width of input image.  Defaults to 1
-
-            T (int, optional): Depth of filter kernel.  Defaults to 1
-            R (int, optional): Height of filter kernel.  Defaults to 1
-            S (int, optional): Width of filter kernel.  Defaults to 1
-
-            pad_d (int, optional): amount of zero-padding around the depth edge
-                                   Defaults to 0.
-            pad_h (int, optional): amount of zero-padding around the height edge
-                                   Defaults to 0.
-            pad_w (int, optional): amount of zero-padding around the width edge
-                                   Defaults to 0.
-
-            str_d (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-            str_h (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-            str_w (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-
-            relu (bool, optional): apply a relu transform to the output for
-                                   fprop or bprop.  Defaults to False
-
-            bsum (bool, optional): calculate the sum along the batchnorm axis
-                                   for fprop or bprop.  Outputs an fp32 tensor
-                                   of size Kx1.  Defaults to False.
-        """
-        raise NotImplementedError()
-
-    def fprop_conv(self, layer, I, F, O, alpha=1.0, relu=False, repeat=1):
-        """
-        Forward propagate the inputs of a convolutional network layer to
-        produce output.
-
-        Arguments:
-            layer: the conv layer as a parameter object
-            I (Tensor): inputs
-            F (Tensor): the weights (filters)
-            O (Tensor): outputs
-            alpha (float, optional): linear scaling.  Defaults to 1.0
-            relu (bool, optional): apply ReLu before output.  Default not to.
-            repeat (int, optional): Repeat this operation the specified number
-                                    of times.  Defaults to 1.
-        """
-        raise NotImplementedError()
-
-    def bprop_conv(self, layer, F, E, grad_I, alpha=1.0, repeat=1):
-        """
-        Backward propagate the error through a convolutional network layer.
-
-        Arguments:
-            layer: the conv layer as a parameter object
-            F (Tensor): the weights (filters)
-            E (Tensor): errors
-            grad_I (Tensor): gradient to inputs (output delta)
-            alpha (float, optional): linear scaling.  Defaults to 1.0
-            repeat (int, optional): Repeat this operation the specified number
-                                    of times.  Defaults to 1.
-        """
-        raise NotImplementedError()
-
-    def update_conv(self, layer, I, E, grad_F, alpha=1.0, repeat=1):
-        """
-        Compute the updated gradient for a convolutional network layer.
-
-        Arguments:
-            layer: the conv layer as a parameter object
-            I (Tensor): the inputs
-            E (Tensor): the errors
-            grad_F (Tensor): filter gradients (weights) to update.
-            alpha (float, optional): linear scaling.  Defaults to 1.0
-            repeat (int, optional): Repeat this operation the specified number
-                                    of times.  Defaults to 1.
-        """
-        raise NotImplementedError()
-
-    def deconv_layer(self, dtype,
-                     N, C, K,
-                     P, Q,
-                     R=1, S=1,
-                     pad_d=0, pad_h=0, pad_w=0,
-                     str_d=1, str_h=1, str_w=1):
-        """
-        Create a new Deconvolution parameter object.
-        This then is passed as an argument to all deconvolution kernels.
-
-        Arguments:
-            dtype (data-type, optional): If present, specifies the underlying
-                                         type to employ for each element.
-
-            N (int): Number of images in mini-batch
-            C (int): Number of input feature maps
-            K (int): Number of output feature maps
-
-            P (int): Height of output
-            Q (int): Width of output
-
-            R (int, optional): Height of filter kernel.  Defaults to 1
-            S (int, optional): Width of filter kernel.  Defaults to 1
-
-            pad_d (int, optional): amount of zero-padding around the depth edge
-                                   Defaults to 0.
-            pad_h (int, optional): amount of zero-padding around the height edge
-                                   Defaults to 0.
-            pad_w (int, optional): amount of zero-padding around the width edge
-                                   Defaults to 0.
-
-            str_d (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-            str_h (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-            str_w (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-
-        Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
-        """
-        raise NotImplementedError()
-
-    def pool_layer(self, dtype,
-                   op, N, C,
-                   D=1, H=1, W=1,
-                   J=1, T=1, R=1, S=1,
-                   pad_j=0, pad_d=0, pad_h=0, pad_w=0,
-                   str_j=None, str_d=None, str_h=None, str_w=None):
-        """
-        Create a new PoolLayer parameter object.
-        This then is passed as an argument to all pooling kernels.
-
-        Arguments:
-            op (str): "max", "avg", "l2" pooling (currently bprop only supports
-                      max, but not avg and l2)
-            N (int): Number of images in mini-batch
-
-            C (int): Number of input feature maps
-            D (int, optional): Depth of input image.  Defaults to 1
-            H (int, optional): Height of input image.  Defaults to 1
-            W (int, optional): Width of input image.  Defaults to 1
-
-            J (int, optional): Size of feature map pooling window
-                               (maxout n_pieces).  Defaults to 1
-            T (int, optional): Depth of pooling window.  Defaults to 1
-            R (int, optional): Height of pooling window.  Defaults to 1
-            S (int, optional): Width of pooling window.  Defaults to 1
-
-            pad_j (int, optional): amount of zero-padding around the fm pooling
-                                   window edge.  Defaults to 0.
-            pad_d (int, optional): amount of zero-padding around the depth edge
-                                   Defaults to 0.
-            pad_h (int, optional): amount of zero-padding around the height edge
-                                   Defaults to 0.
-            pad_w (int, optional): amount of zero-padding around the width edge
-                                   Defaults to 0.
-
-            str_j (int, optional): factor to step the filters by in the fm
-                                   pooling window direction.  Defaults to 1
-            str_d (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-            str_h (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-            str_w (int, optional): factor to step the filters by in the depth
-                                   direction.  Defaults to 1
-
-        Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
-        """
-        raise NotImplementedError()
-
-    def fprop_pool(self, layer, I, O):
-        """
-        Forward propagate pooling layer.
-
-        Arguments:
-            layer (PoolLayer): The pool layer object, different backends have
-                               different pool layers.
-            I (Tensor): Input tensor.
-            O (Tensor): output tensor.
-        """
-        raise NotImplementedError()
-
-    def bprop_pool(self, layer, I, E, grad_I):
-        """
-        Backward propagate pooling layer.
-
-        Arguments:
-            layer (PoolLayer): The pool layer object. Different backends have
-                               different pool layers.
-            I (Tensor): Input tensor.
-            E (Tensor): Error tensor.
-            grad_I (Tensor): Gradient tensor (delta)
-        """
-        raise NotImplementedError()
-
-    def compound_bprop_lut(self, nin, inputs, error, error_t, dW, pad_idx, alpha=1.0, beta=0):
-        """
-        Backward propagate lookup table layer.
-
-        Arguments:
-            nin (int): Number of input word_ids.
-            inputs (Tensor): Input tensor.
-            error (Tensor): Error tensor.
-            error_t (Tensor): Transposed error tensor.
-            dW (Tensor): Gradient tensor (delta).
-            pad_idx (int):
-            alpha (float):
-            beta (float):
-        """
-        raise NotImplementedError()
-
     def compound_rnn_unroll_fprop(self, W_recur, h_prev_s, h_ff_s, h_s, bias,
                                   nout, num_steps, num_used_steps, activation,
                                   reverse=False):
@@ -2007,7 +1465,23 @@ class Backend(object):
             reverse (boolean): When true, unrolling will iterate over time steps
                 in reverse (for BiRNN).
         """
-        raise NotImplementedError()
+        if num_used_steps is not None and num_used_steps < num_steps:
+            h_s = h_s[:num_used_steps]
+            h_prev_s = h_prev_s[:num_used_steps]
+            h_ff_s = h_ff_s[:num_used_steps]
+
+        if reverse:
+            steps = reversed(list(zip(h_s, h_prev_s, h_ff_s)))
+        else:
+            steps = zip(h_s, h_prev_s, h_ff_s)
+
+        for (h, h_prev, h_ff) in steps:
+            if h_ff is h:
+                self.compound_dot(W_recur, h_prev, h, beta=1.0)
+                h[:] = activation(h + bias)
+            else:
+                self.compound_dot(W_recur, h_prev, h)
+                h[:] = activation(h + h_ff + bias)
 
     def compound_rnn_unroll_bprop(self, W_recur, delta_prev_s, delta_s, h_s,
                                   nout, num_steps, num_used_steps, activation,
@@ -2034,7 +1508,17 @@ class Backend(object):
             reverse (boolean): When true, unrolling will iterate over time steps
                 in reverse (default case for RNN).
         """
-        raise NotImplementedError()
+        if num_used_steps is not None and num_used_steps < num_steps:
+            h_s = h_s[:num_used_steps]
+
+        if reverse:
+            steps = reversed(list(zip(h_s, delta_s, delta_prev_s)))
+        else:
+            steps = zip(h_s, delta_s, delta_prev_s)
+
+        for (hs, in_deltas, prev_in_deltas) in steps:
+            in_deltas[:] = activation.bprop(hs) * in_deltas
+            self.compound_dot(W_recur, in_deltas, prev_in_deltas, beta=1.0)
 
 
 # For constructing an op tree used in lazy evaluation

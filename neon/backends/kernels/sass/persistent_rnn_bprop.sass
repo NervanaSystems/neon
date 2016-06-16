@@ -1,0 +1,638 @@
+# Kernel: presistent_birnn
+
+# Copyright 2016 Nervana Systems Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+<CONSTANT_MAPPING>
+    addr_zero : 4x<(64*48)>
+
+    gridDimA : c[0x0][0x14]
+    gridDimB : c[0x0][0x18]
+
+    param_d[0]        : c[0x0][0x140]
+    param_d[1]        : c[0x0][0x144]
+    param_dnext[0]    : c[0x0][0x148]
+    param_dnext[1]    : c[0x0][0x14c]
+    param_h[0]        : c[0x0][0x150]
+    param_h[1]        : c[0x0][0x154]
+    param_w[0]        : c[0x0][0x158]
+    param_w[1]        : c[0x0][0x15c]
+    param_lockAddr[0] : c[0x0][0x160]
+    param_lockAddr[1] : c[0x0][0x164]
+    param_ldd         : c[0x0][0x168]
+    param_ldh         : c[0x0][0x16c]
+    param_ldw         : c[0x0][0x170]
+    param_bsz         : c[0x0][0x174]
+    param_seqLength   : c[0x0][0x178]
+    param_numBlks     : c[0x0][0x17c]
+    param_rowSize     : c[0x0][0x180]
+    param_reverse     : c[0x0][0x184]
+    param_reluclip    : c[0x0][0x188]
+</CONSTANT_MAPPING>
+
+<REGISTER_MAPPING>
+
+      0-215 : weight<000-215>
+    216-227 : accum<00-11>
+    228-231 : timeStep, warpTid, rowOffset, tid
+
+    232-235 : wAddr<0-1>, biasAddr<0-1>
+    236-254 ~ bid, ldw, wRow, loadRow, tidLsbs, tidMsbs, warpIndex, storeWeights, loadWeights, outRow, rowSize
+
+    232-249 : loadBuffer<0-3>, delta0r<0-3>, delta1r<0-3>, delta2r<0-3>, dnextAddr<0-1>
+    250-254 ~ loadDeltas, storeDeltas, loadIndex, dOffset, ldd
+
+    236-247 : peerR0V<0-3>, peerR1V<0-3>, peerR2V<0-3>
+    244     : hOffset
+    248-253 : h<0-3>, hAddr<0-1>
+
+    232-241 : output<0-3>, dAddr<0-1>, lockAddr<0-1>, expectVal, setVal
+    241-245 ~ storeIndex, hRow, predSave, lockVal, reluclip
+
+</REGISTER_MAPPING>
+
+//Get tid/block id
+--:-:1:-:1      S2R tid, SR_TID.X;
+--:-:2:-:1      S2R bid, SR_CTAID.X;
+
+//Store zeros at addr_zero
+--:-:-:-:1      STS.128 [addr_zero], RZ;
+
+<SCHEDULE_BLOCK>
+--:-:-:-:1      MOV     ldw,       param_ldw;
+--:-:-:-:1      MOV     rowSize,   param_rowSize;
+
+//timeStep = (param_reverse == 0) ? 0 : param_seqLength
+--:-:-:-:1      ISETP.EQ.AND P2, PT, RZ, param_reverse, PT;
+--:-:-:-:1      SEL timeStep, RZ, param_seqLength, P2;
+--:-:-:-:1 @!P2 IADD timeStep, timeStep, -1;
+
+//warpIndex = threadIdx.x >> 5
+01:-:-:-:1      SHR.U32 warpIndex, tid, 5;
+
+//warpTid = threadIdx.x & 0x1f
+01:-:-:-:1      LOP.AND warpTid,   tid, 0x1f;
+
+//rowOffset = ((blockIdx.x << 3) + warp_index) * 6
+02:-:-:-:1      SHL     rowOffset, bid,       3;
+--:-:-:-:1      IADD    rowOffset, rowOffset, warpIndex;
+--:-:-:-:1      XMAD    rowOffset, rowOffset, 6, RZ;
+
+//if(warp_tid > 15) rowOffset += 3
+--:-:-:-:1      ISETP.GT.AND P1, PT, warpTid, 15, PT;
+--:-:-:-:1  @P1 IADD     rowOffset, rowOffset, 3;
+
+//warpTid = warpTid & 0x0f
+--:-:-:-:1      LOP.AND  warpTid, warpTid, 0x0f;
+--:-:-:-:1      ISETP.LT.AND P0, PT, warpTid, 3, PT;
+--:-:-:-:1      IADD     outRow, rowOffset, warpTid;
+--:-:-:-:1      ISETP.LT.AND P0, PT, outRow, param_rowSize, P0;
+
+//storeWeights = (((tid >> 2) * 48) + ((tid & 3) << 2)) << 2
+//wRow = ((tid >> 2) * ldw) + ((tid & 3) << 2) + (bid * 48)
+--:-:-:-:1      LOP.AND tidLsbs, warpTid, 0x03;
+--:-:-:-:1      SHR     tidMsbs, tid, 2;
+--:-:-:-:1      SHL     tidLsbs, tidLsbs, 2;
+
+--:-:-:-:1      XMAD    loadRow, bid, 48, tidLsbs;
+--:-:-:-:1      XMAD    wRow, tidMsbs, ldw, loadRow;
+
+--:-:-:-:1      XMAD    storeWeights, tidMsbs, 48, tidLsbs;
+--:-:-:-:1      SHL     storeWeights, storeWeights, 2;
+
+//loadWeights = (((warpTid * 8) + warpIndex) * 6) + (P1 ? 3 : 0)) << 2
+--:-:-:-:1      XMAD    loadWeights, warpTid, 8, warpIndex;
+--:-:-:-:1      XMAD    loadWeights, loadWeights, 6, RZ;
+--:-:-:-:1  @P1 IADD    loadWeights, loadWeights, 3;
+--:-:-:-:1      SHL     loadWeights, loadWeights, 2;
+
+//wAddr = &w[wRow]
+--:-:-:-:1      LEA      wAddr0.CC, wRow, param_w[0],     2;
+--:-:-:-:1      LEA.HI.X wAddr1,    wRow, param_w[1], RZ, 2;
+
+//ldw = ldw << 6
+--:-:-:-:1      SHL      ldw,  ldw,       8;
+
+//Compute row loading predicates
+--:-:-:-:1      ISETP.LT.AND P1, PT, tidMsbs, rowSize, PT;
+--:-:-:-:1      ISETP.LT.AND P3, PT, loadRow, rowSize, P1;
+--:-:-:-:1      IADD     rowSize, rowSize, -16;
+--:-:-:-:1      ISETP.LT.AND P4, PT, loadRow, rowSize, P1;
+--:-:-:-:1      IADD     rowSize, rowSize, -16;
+--:-:-:-:1      ISETP.LT.AND P5, PT, loadRow, rowSize, P1;
+</SCHEDULE_BLOCK>
+
+--:-:-:Y:c NOP;
+
+//Load weights to registers
+<CODE>
+    my $out;
+    my $regId = 0;
+    my $rowsize = 1152;
+
+    for (my $col=0; $col < $rowsize; $col += 64)
+    {
+        $out .= "--:-:-:-:1      IADD tidMsbs, tidMsbs, 64;\n";
+
+        #Use vector loads from weight matrix
+        $regId = $col / 16;
+        $out .= sprintf "--:-:1:-:1  \@P3 LDG.E.128 weight%03d, [wAddr];\n", $regId;
+        $out .= sprintf "--:-:1:-:1 \@!P3 LDS.U.128 weight%03d, [addr_zero];\n", $regId;
+        $regId = $col / 16 + 72;
+        $out .= sprintf "--:-:2:-:1  \@P4 LDG.E.128 weight%03d, [wAddr + 4x<16>];\n", $regId;
+        $out .= sprintf "--:-:2:-:1 \@!P4 LDS.U.128 weight%03d, [addr_zero];\n", $regId;
+        $regId = $col / 16 + 144;
+        $out .= sprintf "--:-:3:-:1  \@P5 LDG.E.128 weight%03d, [wAddr + 4x<32>];\n", $regId;
+        $out .= sprintf "--:-:3:-:1 \@!P5 LDS.U.128 weight%03d, [addr_zero];\n", $regId;
+
+        $out .= "--:-:-:-:1      ISETP.LT.AND P3, PT, tidMsbs, param_rowSize, P3;\n";
+        $out .= "--:-:-:-:1      ISETP.LT.AND P4, PT, tidMsbs, param_rowSize, P4;\n";
+        $out .= "--:-:-:-:1      ISETP.LT.AND P5, PT, tidMsbs, param_rowSize, P5;\n";
+
+        #Store weights into shared memory
+        if ($col > 0)
+        {
+            $out .= "--:-:-:-:5      BAR.SYNC 0;\n\n";
+        }
+
+        $regId = $col / 16;
+        $out .= sprintf "01:-:-:-:1      STS.U.128 [storeWeights], weight%03d;\n", $regId;
+        $regId = $col / 16 + 72;
+        $out .= sprintf "02:-:-:-:1      STS.U.128 [storeWeights + 4x<16>], weight%03d;\n", $regId;
+        $regId = $col / 16 + 144;
+        $out .= sprintf "04:-:-:-:1      STS.U.128 [storeWeights + 4x<32>], weight%03d;\n", $regId;
+
+        $out .= "--:-:-:-:6      IADD   wAddr0.CC, wAddr0, ldw;\n";
+        $out .= "--:-:-:-:1      IADD.X wAddr1,    wAddr1, RZ;\n\n";
+
+        #Load each weight from shared mem
+        $out .= "--:-:-:-:5      BAR.SYNC 0;\n\n";
+
+        foreach my $row (0 .. 2)
+        {
+            foreach my $shared_col (0 .. 3)
+            {
+                my $control;
+
+                if (($col + 64) >= $rowsize && $row == 2 && $shared_col == 3)
+                {
+                    $control = "--:1:6:-:2";
+                }
+                else
+                {
+                    $control = "--:-:-:-:1";
+                }
+
+                $regId = ($row * 72) + ($col / 16) + $shared_col;
+                my $shared_offset = $row + ($shared_col * 16 * 48);
+                $out .= sprintf "%s      LDS.U weight%03d, [loadWeights + 4x<%d>];\n", $control, $regId, $shared_offset;
+            }
+        }
+    }
+
+    $out .= "--:-:-:-:5      BAR.SYNC 0;\n\n";
+
+    return $out;
+
+</CODE>
+
+//Predicates for store code
+--:-:-:-:1      ISETP.EQ.AND P2, PT, warpTid, 0, PT;
+--:-:-:-:1      ISETP.EQ.AND P3, PT, warpTid, 1, PT;
+--:-:-:-:1      ISETP.EQ.AND P4, PT, warpTid, 2, PT;
+
+UNROLLING_LOOP:
+<SCHEDULE_BLOCK>
+//Prime inner product loop by loading first rows of dnext
+--:-:-:-:1      MOV loadIndex,    tid;
+
+//storeDeltas = tid << 4
+--:-:-:-:1      SHL storeDeltas, tid, 4;
+--:-:-:-:1      SHL loadDeltas, warpTid, 4;
+
+//dnextAddr = &d_next[timeStep * ldd + loadIndex]
+--:-:-:-:1      XMAD     dOffset,        loadIndex, param_ldd,      timeStep;
+--:-:-:-:1      LEA      dnextAddr0.CC,  dOffset,   param_dnext[0],     4;
+01:-:-:-:2      LEA.HI.X dnextAddr1,     dOffset,   param_dnext[1], RZ, 4;
+
+//loadBuffer = *dnextAddr
+--:-:-:-:1      ISETP.LT.AND P1, PT, loadIndex, param_rowSize, PT;
+--:5:1:-:2  @P1 LDG.E.CI.128 loadBuffer, [dnextAddr];
+--:5:1:-:2 @!P1 LDS.U.CI.128 loadBuffer, [addr_zero];
+
+//ldd = param_ldd << 12
+--:-:-:-:1      MOV ldd, param_ldd;
+--:-:-:-:1      SHL ldd, ldd, 12;
+</SCHEDULE_BLOCK>
+
+//Initialize all accumulation registers to 0
+<CODE>
+    return join '', map sprintf("--:-:-:-:1      LDS.U.128 accum%02d, [addr_zero];\n", $_ * 4), 0..2;
+</CODE>
+
+//Update load index and load address
+--:-:-:-:6      IADD loadIndex, loadIndex, 256;
+--:-:-:-:1      ISETP.LT.AND P1, PT, loadIndex, param_rowSize, PT;
+10:-:-:-:6      IADD   dnextAddr0.CC, dnextAddr0, ldd;
+--:-:-:-:6      IADD.X dnextAddr1,    dnextAddr1, RZ;
+
+01:-:-:-:1      STS.U.128 [storeDeltas], loadBuffer;
+
+//Unrolled GEMM loop
+<CODE>
+    our @top;
+
+    my $out = join '', @top;
+
+    my $rowsize = 1152;
+    my $weight_index = 0;
+
+    my $wait_flag = 2;
+    my $set_flag = 4;
+    my $read_buffer = 0;
+    my $write_buffer = 2;
+
+    for (my $k=0; $k < $rowsize; $k+=256)
+    {
+        if ($k == 0)
+        {
+            $out .= "--:6:1:-:1  \@P1 LDG.E.CI.128 loadBuffer, [dnextAddr];\n";
+            $out .= "--:-:1:-:1 \@!P1 LDS.U.128    loadBuffer, [addr_zero];\n\n";
+            $out .= "--:-:-:-:5      BAR.SYNC 0;\n\n";
+            $out .= "--:-:2:-:1      LDS.U.128 delta0r, [loadDeltas];\n";
+            $out .= "--:-:3:-:1      LDS.U.128 delta1r, [loadDeltas + 4x<4*16>];\n\n";
+        }
+        $out .= "--:-:-:-:1      LOP.XOR storeDeltas, storeDeltas, 4096;\n";
+
+        foreach my $shared_row (0 .. 15)
+        {
+            if($weight_index < 72)
+            {
+                if ($shared_row < 14 && ($k + (16 * ($shared_row + 2))) < $rowsize)
+                {
+                    my $read_bar = "-";
+                    if ($shared_row == 13 && ($k + 256) < $rowsize)
+                    {
+                        $read_bar = "5";
+                    }
+                    $out .= sprintf "--:%s:%d:-:1      LDS.U.128 delta%dr, [loadDeltas + 4x<4*%d>];\n", $read_bar, $set_flag, $write_buffer, (16 * ($shared_row + 2));
+                }
+
+                if ($shared_row == 11 && ($k + 512) < $rowsize)
+                {
+                    $out .= "--:-:-:-:1      IADD loadIndex, loadIndex, 256;\n";
+                    $out .= "20:-:-:-:1      IADD dnextAddr0.CC, dnextAddr0, ldd;\n";
+                }
+
+                if ($shared_row == 12 && ($k + 512) < $rowsize)
+                {
+                    $out .= "--:-:-:-:1      ISETP.LT.AND P1, PT, loadIndex, param_rowSize, PT;\n";
+                    $out .= "--:-:-:-:1      IADD.X dnextAddr1,    dnextAddr1, RZ;\n";
+                }
+
+                if ($shared_row == 13)
+                {
+                    $out .= "01:-:-:-:1      STS.U.128 [storeDeltas], loadBuffer;\n";
+
+                    if(($k + 512) < $rowsize)
+                    {
+                        $out .= "--:6:1:-:1  \@P1 LDG.E.CI.128 loadBuffer, [dnextAddr];\n";
+                        $out .= "--:-:1:-:1 \@!P1 LDS.U.128    loadBuffer, [addr_zero];\n\n";
+                    }
+                    else
+                    {
+                        $out .= "--:-:-:-:6      IADD     dOffset,        rowOffset, warpTid;\n";
+                        $out .= "--:-:-:-:6      XMAD     dOffset,        dOffset,   param_ldd,  timeStep;\n";
+                        $out .= "--:-:-:-:6      LEA      dnextAddr0.CC,  dOffset,   param_d[0],      4;\n";
+                        $out .= "--:-:-:-:2      LEA.HI.X dnextAddr1,     dOffset,   param_d[1], RZ, 4;\n";
+                        $out .= "--:-:6:-:1 \@P0 LDG.E.CI.128 loadBuffer, [dnextAddr];\n\n";
+                    }
+                }
+
+                if ($shared_row == 14 && ($k + 256) < $rowsize)
+                {
+                    $out .= "10:-:-:-:1      LOP.XOR loadDeltas, loadDeltas, 4096;\n";
+                    $out .= "--:-:-:-:5      BAR.SYNC 0;\n\n";
+                    $out .= sprintf "--:-:%d:-:1      LDS.U.128 delta%dr, [loadDeltas];\n", $set_flag, $write_buffer;
+                }
+
+                if ($shared_row == 15 && ($k + 256) < $rowsize)
+                {
+                    $out .= sprintf "--:-:%d:-:1      LDS.U.128 delta%dr, [loadDeltas + 4x<4*16>];\n\n", $set_flag, $write_buffer;
+                }
+
+                foreach my $row (0 .. 2)
+                {
+                    my $weight = ($row * 72) + $weight_index;
+
+                    foreach my $col (0 .. 3)
+                    {
+                        my $accum = ($row * 4) + $col;
+                        my $wait = "--";
+                        my $stall = 1;
+                        if ($accum == 0)
+                        {
+                            if ($weight_index == 0)
+                            {
+                                $wait = sprintf "%02x", (0x20 | (1 << ($wait_flag - 1)));
+                            }
+                            else
+                            {
+                                $wait = sprintf "%02x", (1 << ($wait_flag - 1));
+                            }
+                        }
+
+                        if ($row == 2 && $col == 3)
+                        {
+                            if ($shared_row < 13 && ($k + (16 * ($shared_row + 3))) < $rowsize)
+                            {
+                                $stall = 0;
+                            }
+                            elsif ($shared_row == 14 && ($k + 256) < $rowsize)
+                            {
+                                $stall = 0;
+                            }
+                        }
+
+                        $out .= sprintf "%s:-:-:-:%d      FFMA accum%02d, weight%03d, delta%dr%d, accum%02d;\n", $wait, $stall, $accum, $weight, $read_buffer, $col, $accum;
+                    }
+                }
+
+                $weight_index++;
+            }
+
+            $wait_flag += 1;
+            $set_flag += 1;
+            $read_buffer += 1;
+            $write_buffer += 1;
+            if($wait_flag == 5)
+            {
+                $wait_flag = 2;
+            }
+            if($set_flag == 5)
+            {
+                $set_flag = 2;
+            }
+            if($read_buffer == 3)
+            {
+                $read_buffer = 0;
+            }
+            if($write_buffer == 3)
+            {
+                $write_buffer = 0;
+            }
+        }
+    }
+
+    return $out;
+</CODE>
+
+//Load hidden states
+--:-:-:-:6      IADD     hOffset,    rowOffset, warpTid;
+--:-:-:-:6      XMAD     hOffset,    hOffset,   param_ldh,  timeStep;
+--:-:-:-:6      LEA      hAddr0.CC,  hOffset,   param_h[0],      4;
+--:-:-:-:2      LEA.HI.X hAddr1,     hOffset,   param_h[1], RZ, 4;
+--:-:5:-:1 @P0  LDG.E.CI.128 h, [hAddr];
+
+//Reduction between threads
+--:-:-:-:1      SHFL.BFLY PT, peerR0V0, accum00, 1, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V0, accum04, 1, 0x1f;
+--:-:1:-:1      SHFL.BFLY PT, peerR2V0, accum08, 1, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V1, accum01, 1, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V1, accum05, 1, 0x1f;
+--:-:2:-:1      SHFL.BFLY PT, peerR2V1, accum09, 1, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V2, accum02, 1, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V2, accum06, 1, 0x1f;
+--:-:3:-:1      SHFL.BFLY PT, peerR2V2, accum10, 1, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V3, accum03, 1, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V3, accum07, 1, 0x1f;
+--:-:4:-:1      SHFL.BFLY PT, peerR2V3, accum11, 1, 0x1f;
+
+01:-:-:-:1      FADD accum00, accum00, peerR0V0;
+--:-:-:-:1      FADD accum04, accum04, peerR1V0;
+--:-:-:-:1      FADD accum08, accum08, peerR2V0;
+
+02:-:-:-:1      FADD accum01, accum01, peerR0V1;
+--:-:-:-:1      FADD accum05, accum05, peerR1V1;
+--:-:-:-:1      FADD accum09, accum09, peerR2V1;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V0, accum00, 2, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V0, accum04, 2, 0x1f;
+--:-:1:-:1      SHFL.BFLY PT, peerR2V0, accum08, 2, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V1, accum01, 2, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V1, accum05, 2, 0x1f;
+--:-:2:-:1      SHFL.BFLY PT, peerR2V1, accum09, 2, 0x1f;
+
+04:-:-:-:1      FADD accum02, accum02, peerR0V2;
+--:-:-:-:1      FADD accum06, accum06, peerR1V2;
+--:-:-:-:1      FADD accum10, accum10, peerR2V2;
+
+08:-:-:-:1      FADD accum03, accum03, peerR0V3;
+--:-:-:-:1      FADD accum07, accum07, peerR1V3;
+--:-:-:-:1      FADD accum11, accum11, peerR2V3;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V2, accum02, 2, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V2, accum06, 2, 0x1f;
+--:-:3:-:1      SHFL.BFLY PT, peerR2V2, accum10, 2, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V3, accum03, 2, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V3, accum07, 2, 0x1f;
+--:-:4:-:1      SHFL.BFLY PT, peerR2V3, accum11, 2, 0x1f;
+
+01:-:-:-:1      FADD accum00, accum00, peerR0V0;
+--:-:-:-:1      FADD accum04, accum04, peerR1V0;
+--:-:-:-:1      FADD accum08, accum08, peerR2V0;
+
+02:-:-:-:1      FADD accum01, accum01, peerR0V1;
+--:-:-:-:1      FADD accum05, accum05, peerR1V1;
+--:-:-:-:1      FADD accum09, accum09, peerR2V1;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V0, accum00, 4, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V0, accum04, 4, 0x1f;
+--:-:1:-:1      SHFL.BFLY PT, peerR2V0, accum08, 4, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V1, accum01, 4, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V1, accum05, 4, 0x1f;
+--:-:2:-:1      SHFL.BFLY PT, peerR2V1, accum09, 4, 0x1f;
+
+04:-:-:-:1      FADD accum02, accum02, peerR0V2;
+--:-:-:-:1      FADD accum06, accum06, peerR1V2;
+--:-:-:-:1      FADD accum10, accum10, peerR2V2;
+
+08:-:-:-:1      FADD accum03, accum03, peerR0V3;
+--:-:-:-:1      FADD accum07, accum07, peerR1V3;
+--:-:-:-:1      FADD accum11, accum11, peerR2V3;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V2, accum02, 4, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V2, accum06, 4, 0x1f;
+--:-:3:-:1      SHFL.BFLY PT, peerR2V2, accum10, 4, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V3, accum03, 4, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V3, accum07, 4, 0x1f;
+--:-:4:-:1      SHFL.BFLY PT, peerR2V3, accum11, 4, 0x1f;
+
+01:-:-:-:1      FADD accum00, accum00, peerR0V0;
+--:-:-:-:1      FADD accum04, accum04, peerR1V0;
+--:-:-:-:1      FADD accum08, accum08, peerR2V0;
+
+02:-:-:-:1      FADD accum01, accum01, peerR0V1;
+--:-:-:-:1      FADD accum05, accum05, peerR1V1;
+--:-:-:-:1      FADD accum09, accum09, peerR2V1;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V0, accum00, 8, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V0, accum04, 8, 0x1f;
+--:-:1:-:1      SHFL.BFLY PT, peerR2V0, accum08, 8, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V1, accum01, 8, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V1, accum05, 8, 0x1f;
+--:-:2:-:1      SHFL.BFLY PT, peerR2V1, accum09, 8, 0x1f;
+
+04:-:-:-:1      FADD accum02, accum02, peerR0V2;
+--:-:-:-:1      FADD accum06, accum06, peerR1V2;
+--:-:-:-:1      FADD accum10, accum10, peerR2V2;
+
+08:-:-:-:1      FADD accum03, accum03, peerR0V3;
+--:-:-:-:1      FADD accum07, accum07, peerR1V3;
+--:-:-:-:1      FADD accum11, accum11, peerR2V3;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V2, accum02, 8, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V2, accum06, 8, 0x1f;
+--:-:3:-:1      SHFL.BFLY PT, peerR2V2, accum10, 8, 0x1f;
+
+--:-:-:-:1      SHFL.BFLY PT, peerR0V3, accum03, 8, 0x1f;
+--:-:-:-:1      SHFL.BFLY PT, peerR1V3, accum07, 8, 0x1f;
+--:-:4:-:1      SHFL.BFLY PT, peerR2V3, accum11, 8, 0x1f;
+
+01:-:-:-:1      FADD accum00, accum00, peerR0V0;
+--:-:-:-:1      FADD accum04, accum04, peerR1V0;
+--:-:-:-:1      FADD accum08, accum08, peerR2V0;
+
+02:-:-:-:1      FADD accum01, accum01, peerR0V1;
+--:-:-:-:1      FADD accum05, accum05, peerR1V1;
+--:-:-:-:1      FADD accum09, accum09, peerR2V1;
+
+04:-:-:-:1      FADD accum02, accum02, peerR0V2;
+--:-:-:-:1      FADD accum06, accum06, peerR1V2;
+--:-:-:-:1      FADD accum10, accum10, peerR2V2;
+
+08:-:-:-:1      FADD accum03, accum03, peerR0V3;
+--:-:-:-:1      FADD accum07, accum07, peerR1V3;
+--:-:-:-:1      FADD accum11, accum11, peerR2V3;
+
+--:-:-:-:5      MOV reluclip, param_reluclip;
+
+//Compute store pointer
+<SCHEDULE_BLOCK>
+--:-:-:-:1      IADD     hRow,       rowOffset,  warpTid;
+--:-:-:-:1      XMAD     storeIndex, hRow,       param_ldd,  timeStep;
+--:-:-:-:1      LEA      dAddr0.CC,  storeIndex, param_d[0],      4;
+--:-:-:-:1      LEA.HI.X dAddr1,     storeIndex, param_d[1], RZ, 4;
+--:-:-:-:1      LEA      lockAddr0,  timeStep,   param_lockAddr[0], 2;
+--:-:-:-:1      LEA.HI.X lockAddr1,  timeStep,   param_lockAddr[1], RZ, 2;
+
+//Conditional select for output
+//TODO: make sure scheduler orders these such that first one waits on barrier
+20:-:-:-:1  @P2 FADD output0, output0, accum00;
+20:-:-:-:1  @P3 FADD output0, output0, accum04;
+20:-:-:-:1  @P4 FADD output0, output0, accum08;
+
+20:-:-:-:1  @P2 FADD output1, output1, accum01;
+20:-:-:-:1  @P3 FADD output1, output1, accum05;
+20:-:-:-:1  @P4 FADD output1, output1, accum09;
+
+20:-:-:-:1  @P2 FADD output2, output2, accum02;
+20:-:-:-:1  @P3 FADD output2, output2, accum06;
+20:-:-:-:1  @P4 FADD output2, output2, accum10;
+
+20:-:-:-:1  @P2 FADD output3, output3, accum03;
+20:-:-:-:1  @P3 FADD output3, output3, accum07;
+20:-:-:-:3  @P4 FADD output3, output3, accum11;
+</SCHEDULE_BLOCK>
+
+//Save select predicates
+//TODO: how many stall cycles needed here?
+--:-:-:-:6      P2R predSave, PR, RZ, 0x1e;
+
+//Multiply by bprop for reclinclip activation function
+//TODO: others
+<SCHEDULE_BLOCK>
+10:-:-:-:1      FSETP.LT.AND P2, PT, RZ, h0, PT;
+10:-:-:-:1      FSETP.LT.AND P3, PT, RZ, h1, PT;
+10:-:-:-:1      FSETP.LT.AND P4, PT, RZ, h2, PT;
+10:-:-:-:1      FSETP.LT.AND P5, PT, RZ, h3, PT;
+--:-:-:-:1      FSETP.LT.AND P2, PT, h0, reluclip, P2;
+--:-:-:-:1      FSETP.LT.AND P3, PT, h1, reluclip, P3;
+--:-:-:-:1      FSETP.LT.AND P4, PT, h2, reluclip, P4;
+--:-:-:-:1      FSETP.LT.AND P5, PT, h3, reluclip, P5;
+--:-:-:-:1 @!P2 FMUL output0, output0, RZ;
+--:-:-:-:1 @!P3 FMUL output1, output1, RZ;
+--:-:-:-:1 @!P4 FMUL output2, output2, RZ;
+--:-:-:-:1 @!P5 FMUL output3, output3, RZ;
+
+//Update timestep
+--:-:-:-:1      ISETP.EQ.AND P1, PT, RZ, param_reverse, PT;
+--:-:-:-:1  @P1 MOV setVal, 1;
+--:-:-:-:1 @!P1 MOV setVal, -1;
+--:-:-:-:1  @P1 MOV expectVal, param_seqLength;
+--:-:-:-:1 @!P1 MOV expectVal, -1;
+--:-:-:-:1      IADD timeStep, timeStep, setVal;
+</SCHEDULE_BLOCK>
+
+//Conditional store
+--:-:-:-:5  @P0 STG.E.CI.128 [dAddr], output;
+
+//Compute predicate for time unrolling loop
+--:-:-:Y:d      ISETP.NE.AND P5, PT, timeStep, expectVal, PT;
+
+//P2 = (tid != 0)
+//setVal = 1
+--:-:-:-:1      ISETP.NE.AND P2, PT, tid, RZ, PT;
+--:-:-:-:1      MOV expectVal, param_numBlks;
+--:-:-:Y:b      MOV setVal, 1;
+
+//Barrier for all blocks
+--:-:-:-:f      MEMBAR.GL;
+--:-:-:-:5      BAR.SYNC 0;
+
+--:-:-:-:2      SSY SSY_TARGET1;
+--:-:-:-:d  @P2 SYNC;
+
+--:-:-:Y:2      ATOM.E.ADD RZ, [lockAddr], setVal;
+--:-:-:-:d      SYNC;
+
+SSY_TARGET1:
+--:-:-:-:1      SSY SSY_TARGET2;
+--:-:-:-:d  @P2 SYNC;
+
+SPINLOCK:
+--:-:1:Y:2      LDG.E lockVal, [lockAddr];
+01:-:-:Y:d      ISETP.NE.AND P2, PT, lockVal, expectVal, PT;
+--:-:-:-:5  @P2 BRA.U SPINLOCK;
+--:-:-:-:d      SYNC;
+
+SSY_TARGET2:
+--:-:-:-:5      BAR.SYNC 0;
+
+//Restore select predicates
+--:-:-:-:1      R2P PR, predSave, 0x1e;
+
+//Conditional branch back to beginning of loop
+--:-:-:Y:5  @P5 BRA.U UNROLLING_LOOP;
+
+--:-:-:-:5      EXIT;
