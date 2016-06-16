@@ -75,7 +75,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('rand_convargs', fargs)
 
 
-def test_dconv_zeros(backend_default, zeros_convargs):
+def test_dconv_zeros(backend_default, zeros_convargs, deltas_buffer):
     fshape, nofm, batch_size = zeros_convargs
     NervanaObject.be.bsz = batch_size
 
@@ -94,7 +94,10 @@ def test_dconv_zeros(backend_default, zeros_convargs):
     neon_layer.configure(inshape)
     neon_layer.prev_layer = True
     neon_layer.allocate()
-    neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
+
+    neon_layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    neon_layer.set_deltas(deltas_buffer)
 
     outa = neon_layer.fprop(inp)
     out = outa.get()
@@ -109,7 +112,7 @@ def test_dconv_zeros(backend_default, zeros_convargs):
     return
 
 
-def test_dconv_ones(backend_default, ones_convargs):
+def test_dconv_ones(backend_default, ones_convargs, deltas_buffer):
     indim, nifm, fshape, nofm, batch_size = ones_convargs
     if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
         if nofm % 4 != 0:
@@ -131,7 +134,11 @@ def test_dconv_ones(backend_default, ones_convargs):
     neon_layer.configure(inshape)
     neon_layer.prev_layer = True
     neon_layer.allocate()
-    neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
+
+    neon_layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    neon_layer.set_deltas(deltas_buffer)
+
     out = neon_layer.fprop(inp).get()
     out_exp_min = nifm
     out_exp_max = fshape * fshape * nifm
@@ -165,7 +172,7 @@ def test_dconv_ones(backend_default, ones_convargs):
     return
 
 
-def test_dconv_rand(backend_default, rand_convargs):
+def test_dconv_rand(backend_default, rand_convargs, deltas_buffer):
     indim, nifm, fshape, nofm, batch_size, rngmax, w_rng = rand_convargs
     if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
         if nofm % 4 != 0:
@@ -200,8 +207,12 @@ def test_dconv_rand(backend_default, rand_convargs):
     neon_layer.configure(inshape)
     neon_layer.prev_layer = True
     neon_layer.allocate()
-    neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
     neon_out = neon_layer.fprop(inp).get()
+
+    neon_layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    neon_layer.set_deltas(deltas_buffer)
+
     # pull neon weights into ref layer weights
     ref_layer.weights = neon_layer.W.get().T
     ref_out = np.copy(ref_layer.berror)

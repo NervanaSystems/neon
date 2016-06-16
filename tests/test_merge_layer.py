@@ -34,7 +34,7 @@ def pytest_generate_tests(metafunc):
     metafunc.parametrize('allrand_args', fargs)
 
 
-def test_concat_l1_l1(backend_default, allrand_args):
+def test_concat_l1_l1(backend_default, allrand_args, deltas_buffer):
     # test two linear layers that are merged with concat
     dtypeu = np.float32
     w_rng, rngmax = allrand_args
@@ -52,7 +52,11 @@ def test_concat_l1_l1(backend_default, allrand_args):
     assert(len(inputs) == len(layers))
     merge.configure(inputs)
     merge.allocate()
-    merge.set_deltas(None)
+
+    merge.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    merge.set_deltas(deltas_buffer)
+
     out = merge.fprop(inputs).get()
 
     sublayers = [s.layers[0] for s in layers]
@@ -71,7 +75,7 @@ def test_concat_l1_l1(backend_default, allrand_args):
     return
 
 
-def test_concat_sequence_l1_l1(backend_default, allrand_args):
+def test_concat_sequence_l1_l1(backend_default, allrand_args, deltas_buffer):
     # test two linear layers that are merged with concat
     dtypeu = np.float32
     w_rng, rngmax = allrand_args
@@ -91,7 +95,11 @@ def test_concat_sequence_l1_l1(backend_default, allrand_args):
     assert(len(inputs) == len(layers))
     merge.configure(inputs)
     merge.allocate()
-    merge.set_deltas(None)
+
+    merge.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    merge.set_deltas(deltas_buffer)
+
     out = merge.fprop(inputs).get()
 
     sublayers = [s.layers[0] for s in layers]

@@ -37,6 +37,8 @@ from neon import NervanaObject, logger as neon_logger
 from neon.initializers.initializer import Constant, Gaussian
 from neon.layers import GRU
 from neon.transforms import Logistic, Tanh
+from neon.layers.container import DeltasTree
+
 from gru_ref import GRU as RefGRU
 from utils import allclose_with_out
 
@@ -116,7 +118,12 @@ def check_gru(seq_len, input_size, hidden_size,
     gru.configure((input_size, seq_len))
     gru.prev_layer = True
     gru.allocate()
-    gru.set_deltas([gru.be.iobuf(gru.in_shape)])
+
+    test_buffer = DeltasTree()
+    gru.allocate_deltas(test_buffer)
+    test_buffer.allocate_buffers()
+    gru.set_deltas(test_buffer)
+
     gru.fprop(inpa)
 
     # reference numpy GRU
@@ -351,7 +358,12 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
     gru.configure((input_size, seq_len))
     gru.prev_layer = True
     gru.allocate()
-    gru.set_deltas([gru.be.iobuf(gru.in_shape)])
+
+    test_buffer = DeltasTree()
+    gru.allocate_deltas(test_buffer)
+    test_buffer.allocate_buffers()
+    gru.set_deltas(test_buffer)
+
     out_bl = gru.fprop(inpa).get()
 
     # random scaling/hash to generate fake loss

@@ -129,6 +129,9 @@ class Layer(NervanaObject):
             self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs,
                                          parallelism=self.parallelism)
 
+    def allocate_deltas(self, global_deltas):
+        global_deltas.proc_layer(self)
+
     def set_deltas(self, delta_buffers):
         """
         Use pre-allocated (by layer containers) list of buffers for backpropagated error.
@@ -137,7 +140,7 @@ class Layer(NervanaObject):
         so do not own their deltas).
 
         Arguments:
-            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+            delta_buffers (DeltasTree): list of pre-allocated tensors (provided by layer container)
         """
         if self.next_layer is not None and self.next_layer.parallelism != self.parallelism:
             self.owns_delta = True
@@ -146,9 +149,9 @@ class Layer(NervanaObject):
             if type(self.prev_layer) in (BranchNode,):
                 self.deltas = self.prev_layer.deltas
             else:
-                self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0],
+                self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers.buffers[0],
                                             parallelism=self.parallelism)
-                delta_buffers.reverse()
+                delta_buffers.buffers.reverse()
         else:
             self.deltas = None
 
@@ -330,11 +333,11 @@ class BranchNode(Layer):
         so do not own their deltas).
 
         Arguments:
-            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+            delta_buffers (DeltasTree): list of pre-allocated tensors (provided by layer container)
         """
         if self.deltas is None:
-            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0])
-            delta_buffers.reverse()
+            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers.buffers[0])
+            delta_buffers.buffers.reverse()
 
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
@@ -542,6 +545,7 @@ class Pooling(Layer):
         Returns:
             Tensor: deltas to propagate to the adjacent lower layer
         """
+
         self.be.bprop_pool(self.nglayer, error, self.deltas, self.argmax, alpha, beta)
         return self.deltas
 

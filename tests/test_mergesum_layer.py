@@ -99,7 +99,9 @@ def mergesum_test_config(be, modfunc, use_stride=1):
 
     neon_seq.allocate()
     # neon_layer.layers[0].prev_layer = True
+
     neon_seq.allocate_deltas()
+
     neon_out = neon_seq.fprop(inp).get()
 
     # Now make the reference pathways:

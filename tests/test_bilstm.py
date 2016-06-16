@@ -58,7 +58,6 @@ def test_biLSTM_fprop_rnn(backend_default, fargs):
     bilstm.configure(in_shape)
     bilstm.prev_layer = True
     bilstm.allocate()
-    bilstm.set_deltas([bilstm.be.iobuf(bilstm.in_shape)])
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
@@ -67,7 +66,6 @@ def test_biLSTM_fprop_rnn(backend_default, fargs):
     rnn.configure(in_shape)
     rnn.prev_layer = True
     rnn.allocate()
-    rnn.set_deltas([rnn.be.iobuf(rnn.in_shape)])
 
     # same weight for bi-rnn backward and rnn weights
     nout = hidden_size
@@ -126,7 +124,6 @@ def test_biLSTM_fprop(backend_default, fargs):
     bilstm.configure(in_shape)
     bilstm.prev_layer = True
     bilstm.allocate()
-    bilstm.set_deltas([bilstm.be.iobuf(bilstm.in_shape)])
 
     # same weight
     nout = hidden_size
@@ -162,7 +159,7 @@ def test_biLSTM_fprop(backend_default, fargs):
         assert np.allclose(x_b, y_f, rtol=0.0, atol=1.0e-5)
 
 
-def test_biLSTM_bprop(backend_default, fargs):
+def test_biLSTM_bprop(backend_default, fargs, deltas_buffer):
 
     # basic sanity check with 0 weights random inputs
     seq_len, input_size, hidden_size, batch_size = fargs
@@ -177,7 +174,10 @@ def test_biLSTM_bprop(backend_default, fargs):
     bilstm.configure(in_shape)
     bilstm.prev_layer = True
     bilstm.allocate()
-    bilstm.set_deltas([bilstm.be.iobuf(bilstm.in_shape)])
+
+    bilstm.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    bilstm.set_deltas(deltas_buffer)
 
     # same weight for bi-rnn backward and rnn weights
     nout = hidden_size

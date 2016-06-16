@@ -85,5 +85,6 @@ def test_pooling(backend_cpu64, poolargs):
                                                inp,
                                                epsilon=epsilon,
                                                lshape=lshape,
-                                               pert_inds=pert_inds)
+                                               pert_inds=pert_inds,
+                                               pooling=True)
     assert max_abs < 1.0e-7

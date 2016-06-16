@@ -44,7 +44,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('fargs', fargs)
 
 
-def test_biRNN_fprop_rnn(backend_default, fargs):
+def test_biRNN_fprop_rnn(backend_default, fargs, deltas_buffer):
 
     # basic sanity check with 0 weights random inputs
     seq_len, input_size, hidden_size, batch_size = fargs
@@ -58,7 +58,6 @@ def test_biRNN_fprop_rnn(backend_default, fargs):
     birnn.configure(in_shape)
     birnn.prev_layer = True
     birnn.allocate()
-    birnn.set_deltas([birnn.be.iobuf(birnn.in_shape)])
 
     # setup the bi-directional rnn
     init_glorot = GlorotUniform()
@@ -66,7 +65,6 @@ def test_biRNN_fprop_rnn(backend_default, fargs):
     rnn.configure(in_shape)
     rnn.prev_layer = True
     rnn.allocate()
-    rnn.set_deltas([rnn.be.iobuf(rnn.in_shape)])
 
     # same weight for bi-rnn backward and rnn weights
     nout = hidden_size
@@ -124,7 +122,6 @@ def test_biRNN_fprop(backend_default, fargs):
     birnn.configure(in_shape)
     birnn.prev_layer = True
     birnn.allocate()
-    birnn.set_deltas([birnn.be.iobuf(birnn.in_shape)])
 
     # same weight
     nout = hidden_size
@@ -160,7 +157,7 @@ def test_biRNN_fprop(backend_default, fargs):
         assert np.allclose(x_b, y_f, rtol=0.0, atol=1.0e-5)
 
 
-def test_biRNN_bprop(backend_default, fargs):
+def test_biRNN_bprop(backend_default, fargs, deltas_buffer):
 
     # basic sanity check with 0 weights random inputs
     seq_len, input_size, hidden_size, batch_size = fargs
@@ -173,7 +170,10 @@ def test_biRNN_bprop(backend_default, fargs):
     birnn.configure(in_shape)
     birnn.prev_layer = True
     birnn.allocate()
-    birnn.set_deltas([birnn.be.iobuf(birnn.in_shape)])
+
+    birnn.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    birnn.set_deltas(deltas_buffer)
 
     # same weight for bi-rnn backward and rnn weights
     birnn.W_input_b[:] = birnn.W_input_f
@@ -187,7 +187,10 @@ def test_biRNN_bprop(backend_default, fargs):
     rnn.configure(in_shape)
     rnn.prev_layer = True
     rnn.allocate()
-    rnn.set_deltas([rnn.be.iobuf(rnn.in_shape)])
+
+    rnn.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    rnn.set_deltas(deltas_buffer)
 
     # inputs and views
     lr = np.random.random((input_size, seq_len * batch_size))
@@ -211,7 +214,7 @@ def test_biRNN_bprop(backend_default, fargs):
         assert np.allclose(x, y, rtol=0.0, atol=1.0e-5)
 
 
-def test_biSum(backend_default, fargs):
+def test_biSum(backend_default, fargs, deltas_buffer):
 
     seq_len, input_size, hidden_size, batch_size = fargs
     input_size *= 2
@@ -224,7 +227,9 @@ def test_biSum(backend_default, fargs):
     bisum.prev_layer = True
 
     bisum.allocate()
-    bisum.set_deltas([bisum.be.iobuf(bisum.in_shape)])
+    bisum.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    bisum.set_deltas(deltas_buffer)
 
     # inputs
     inp_np = np.random.random((input_size, seq_len * batch_size))
@@ -243,7 +248,7 @@ def test_biSum(backend_default, fargs):
     assert allclose_with_out(del_be[input_size // 2:].get(), out_be.get(), rtol=0.0, atol=1.0e-5)
 
 
-def test_bibn(backend_default, fargs):
+def test_bibn(backend_default, fargs, deltas_buffer):
 
     seq_len, input_size, hidden_size, batch_size = fargs
     in_shape = (input_size, seq_len)
@@ -256,8 +261,11 @@ def test_bibn(backend_default, fargs):
     birnn = BiBNRNN(hidden_size, activation=Rectlinclip(slope=0), init=init_glorot)
     birnn.configure(in_shape)
     birnn.prev_layer = True
+
     birnn.allocate()
-    birnn.set_deltas([birnn.be.iobuf(birnn.in_shape)])
+    birnn.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    birnn.set_deltas(deltas_buffer)
 
     # test fprop
 

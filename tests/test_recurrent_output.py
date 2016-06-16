@@ -38,7 +38,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('refgruargs', fargs)
 
 
-def test_recurrent_sum(backend_default, refgruargs):
+def test_recurrent_sum(backend_default, refgruargs, deltas_buffer):
     seq_len, nin, batch_size = refgruargs
     NervanaObject.be.bsz = batch_size
 
@@ -47,7 +47,10 @@ def test_recurrent_sum(backend_default, refgruargs):
     layer.configure(in_shape)
     layer.prev_layer = True
     layer.allocate()
-    layer.set_deltas([layer.be.iobuf(in_shape)])
+
+    layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    layer.set_deltas(deltas_buffer)
 
     # zeros
     inp = layer.be.zeros((nin, seq_len * batch_size))
@@ -86,7 +89,7 @@ def test_recurrent_sum(backend_default, refgruargs):
     assert np.allclose(err_comp, err.get())
 
 
-def test_recurrent_mean(backend_default, refgruargs):
+def test_recurrent_mean(backend_default, refgruargs, deltas_buffer):
     seq_len, nin, batch_size = refgruargs
     NervanaObject.be.bsz = batch_size
 
@@ -95,7 +98,10 @@ def test_recurrent_mean(backend_default, refgruargs):
     layer.configure(in_shape)
     layer.prev_layer = True
     layer.allocate()
-    layer.set_deltas([layer.be.iobuf(in_shape)])
+
+    layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    layer.set_deltas(deltas_buffer)
 
     # zeros
     inp = layer.be.zeros((nin, seq_len * batch_size))
@@ -136,7 +142,7 @@ def test_recurrent_mean(backend_default, refgruargs):
     assert np.allclose(err_comp, err.get())
 
 
-def test_recurrent_last(backend_default, refgruargs):
+def test_recurrent_last(backend_default, refgruargs, deltas_buffer):
     seq_len, nin, batch_size = refgruargs
     NervanaObject.be.bsz = batch_size
 
@@ -145,7 +151,10 @@ def test_recurrent_last(backend_default, refgruargs):
     layer.configure(in_shape)
     layer.prev_layer = True
     layer.allocate()
-    layer.set_deltas([layer.be.iobuf(in_shape)])
+
+    layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    layer.set_deltas(deltas_buffer)
 
     # zeros
     inp = layer.be.zeros((nin, seq_len * batch_size))

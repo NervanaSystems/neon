@@ -33,6 +33,45 @@ def flatten(item):
         yield item
 
 
+class DeltasTree(NervanaObject):
+    """
+    Data structure for maintaining nested global delta buffers
+    """
+    def __init__(self, parent=None):
+        self.parent = None
+        self.child = None
+        self.buffers = [None]*2
+        self.max_shape = 0
+        if parent:
+            assert type(parent) is DeltasTree
+            self.parent = parent
+
+    def decend(self):
+        if self.child is None:
+            self.child = DeltasTree()
+        return self.child
+
+    def ascend(self):
+        return self.parent
+
+    def proc_layer(self, layer):
+        in_size = layer.be.shared_iobuf_size(layer.in_shape,
+                                             layer.parallelism)
+        if in_size > self.max_shape:
+            self.max_shape = in_size
+
+    def allocate_buffers(self):
+        if self.child:
+            self.child.allocate_buffers()
+
+        for ind in range(len(self.buffers)):
+            if self.buffers[ind] is None:
+                if self.max_shape > 0:
+                    self.buffers[ind] = self.be.iobuf(self.max_shape,
+                                                      persist_values=False,
+                                                      parallelism="Data")
+
+
 class LayerContainer(Layer):
     """
     Layer containers are a generic class that are used to encapsulate groups of layers and
@@ -49,6 +88,10 @@ class LayerContainer(Layer):
                     continue
                 lto.append(l)
         return lto
+
+    @property
+    def nest_deltas(self):
+        return False
 
     def nested_str(self, level=0):
         """
@@ -150,6 +193,36 @@ class LayerContainer(Layer):
         for l in self.layers:
             l.set_seq_len(S)
 
+    def set_deltas(self, global_deltas):
+        """
+        Set the layer deltas from the shared
+        global deltas pool
+        """
+        for l in self.layers:
+            l.set_deltas(global_deltas)
+
+    def layers_fprop(self):
+        """
+        Generator to iterator over the layers in the same
+        order as fprop
+        """
+        for layer in self.layers:
+            yield layer
+            if hasattr(layer, 'layers_fprop'):
+                for layer2 in layer.layers_fprop():
+                    yield layer2
+
+    def layers_bprop(self):
+        """
+        Generator to iterator over the layers in the same
+        order as bprop
+        """
+        for layer in reversed(self.layers):
+            if hasattr(layer, 'layers_bprop'):
+                for layer2 in layer.layers_bprop():
+                    yield layer2
+            yield layer
+
 
 class Sequential(LayerContainer):
     """
@@ -204,27 +277,16 @@ class Sequential(LayerContainer):
             l.allocate()
 
     def allocate_deltas(self, global_deltas=None):
-        def needs_extra_delta(ll):
-            return True if issubclass(ll.__class__, Broadcast) else False
+        if global_deltas is None:
+            self.global_deltas = DeltasTree()
 
-        self.global_deltas = global_deltas
+            st_ind = 0 if getattr(self.layers[0], 'nest_deltas', False) else 1
+            for layer in self.layers[st_ind:]:
+                layer.allocate_deltas(self.global_deltas)
 
-        if self.global_deltas is None:
-            # See if we have any inception-ish layers:
-            max_in_size = 0
-            for l in self.layers[1:]:
-                in_size = self.be.shared_iobuf_size(l.in_shape, l.parallelism)
-                if in_size > max_in_size:
-                    max_in_size = in_size
+            self.global_deltas.allocate_buffers()
 
-            ndelta_bufs = 4 if any([needs_extra_delta(l) for l in self.layers]) else 2
-            if max_in_size != 0:
-                self.global_deltas = [self.be.iobuf(
-                    max_in_size, persist_values=False,
-                    parallelism="Data") for _ in range(ndelta_bufs)]
-
-        for l in self.layers:
-            l.set_deltas(self.global_deltas)
+        self.set_deltas(self.global_deltas)
 
     def fprop(self, inputs, inference=False, beta=0.0):
         """
@@ -379,7 +441,7 @@ class Tree(LayerContainer):
 
     def allocate_deltas(self, global_deltas=None):
         for l in reversed(self.layers):
-            l.allocate_deltas()
+            l.allocate_deltas(global_deltas)
 
     def fprop(self, inputs, inference=False):
         """
@@ -462,6 +524,10 @@ class Broadcast(LayerContainer):
         self.owns_output = True
         self.outputs = None
 
+    @property
+    def nest_deltas(self):
+        return True
+
     def __str__(self):
         ss = '\n\t'.join([str(l) for l in self.layers])
         ss = '\t' + self.classnm + '\n\t' + ss
@@ -487,6 +553,13 @@ class Broadcast(LayerContainer):
         self._configure_merge()
         return self
 
+    def allocate_deltas(self, global_deltas):
+        nested_deltas = global_deltas.decend()
+        for layer in self.layers:
+            layer.layers[0].allocate_deltas(global_deltas)
+            for sublayer in layer.layers[1:]:
+                sublayer.allocate_deltas(nested_deltas)
+
     def set_deltas(self, delta_buffers):
         """
         Use pre-allocated (by layer containers) list of buffers for backpropagated error.
@@ -495,21 +568,26 @@ class Broadcast(LayerContainer):
         so do not own their deltas).
 
         Arguments:
-            delta_buffers (list): list of pre-allocated tensors (provided by layer container)
+            delta_buffers (DeltasTree): list of pre-allocated tensors (provided by layer container)
         """
-        assert len(delta_buffers) == 4, "Need extra delta buffer pool for broadcast layers"
+        bottom_buffer = delta_buffers.buffers[0]
+
+        nested_deltas = delta_buffers.decend()
+        assert nested_deltas is not None
         for l in self.layers:
-            l.allocate_deltas(delta_buffers[1:3])
-            l.layers[0].set_deltas(delta_buffers[0:1])
+            l.layers[0].set_deltas(delta_buffers)
+            delta_buffers.buffers.reverse()  # undo that last reverse
+            for sublayer in l.layers[1:]:
+                sublayer.set_deltas(nested_deltas)
 
         # Special case if originating from a branch node
         if type(self.prev_layer) is BranchNode:
             self.deltas = self.be.iobuf(self.in_shape, shared=self.prev_layer.deltas,
                                         parallelism=self.parallelism)
         else:
-            self.deltas = self.be.iobuf(self.in_shape, shared=delta_buffers[0],
+            self.deltas = self.be.iobuf(self.in_shape, shared=bottom_buffer,
                                         parallelism=self.parallelism)
-            delta_buffers.reverse()
+            delta_buffers.buffers.reverse()
 
     def get_terminal(self):
         """
@@ -721,6 +799,10 @@ class MergeMultistream(MergeBroadcast):
     def __init__(self, layers, merge, name=None):
         super(MergeMultistream, self).__init__(layers, merge=merge, name=name)
 
+    @property
+    def nest_deltas(self):
+        return False
+
     def configure(self, in_obj):
         """
         Must receive a list of shapes for configuration (one for each pathway)
@@ -749,6 +831,8 @@ class MergeMultistream(MergeBroadcast):
         Arguments:
             delta_buffers (list): list of pre-allocated tensors (provided by layer container)
         """
+        # delta_buffers ignored here, will generate
+        # new delta buffers for each sequential container
         for l in self.layers:
             l.allocate_deltas()
 
@@ -899,6 +983,17 @@ class RoiPooling(Sequential):
         self.error = self.be.iobuf(self.in_shape)
         self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
         self.max_idx = self.be.iobuf(self.out_shape, dtype=np.int32)
+
+    def allocate_deltas(self, global_deltas=None):
+        if global_deltas is None:
+            self.global_deltas = DeltasTree()
+
+            st_ind = 0 if getattr(self.layers[0], 'nest_deltas', False) else 1
+            for layer in self.layers[st_ind:]:
+                layer.allocate_deltas(self.global_deltas)
+
+            self.global_deltas.allocate_buffers()
+        super(RoiPooling, self).set_deltas(self.global_deltas)
 
     def set_deltas(self, delta_buffers):
         """

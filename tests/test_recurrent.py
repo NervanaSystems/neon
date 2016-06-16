@@ -36,6 +36,7 @@ import numpy as np
 from neon import NervanaObject, logger as neon_logger
 from neon.initializers.initializer import Constant, Gaussian
 from neon.layers import Recurrent
+from neon.layers.container import DeltasTree
 from neon.transforms import Tanh
 from recurrent_ref import Recurrent as RefRecurrent
 from utils import allclose_with_out
@@ -130,7 +131,12 @@ def check_rnn(seq_len, input_size, hidden_size,
     rnn.configure((input_size, seq_len))
     rnn.prev_layer = True
     rnn.allocate()
-    rnn.set_deltas([rnn.be.iobuf(rnn.in_shape)])
+
+    dtree = DeltasTree()
+    rnn.allocate_deltas(dtree)
+    dtree.allocate_buffers()
+    rnn.set_deltas(dtree)
+
     rnn.fprop(inpa)
 
     # weights are only initialized after doing fprop, so now
@@ -264,7 +270,12 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
     rnn.configure((input_size, seq_len))
     rnn.prev_layer = True
     rnn.allocate()
-    rnn.set_deltas([rnn.be.iobuf(rnn.in_shape)])
+
+    dtree = DeltasTree()
+    rnn.allocate_deltas(dtree)
+    dtree.allocate_buffers()
+    rnn.set_deltas(dtree)
+
     out_bl = rnn.fprop(inpa).get()
 
     # random scaling/hash to generate fake loss

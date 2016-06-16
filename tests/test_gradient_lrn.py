@@ -60,7 +60,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("lrnargs", fargs)
 
 
-def lrnorm(backend_cpu64, lrnargs):
+def test_lrnorm(backend_cpu64, lrnargs):
     nin, nifm, fshape, batch_size = lrnargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     sz = nin * nin * nifm * batch_size
@@ -87,7 +87,7 @@ def lrnorm(backend_cpu64, lrnargs):
     assert max_abs < 1.0e-6
 
 
-def test_lrn_large_inp(backend_cpu64):
+def test_lrn_large_inp(backend_cpu64, deltas_buffer):
     # adding an extra test with a large inp at 1 location=
     # LRN is not very sensitive to small inputs
     nin = 2
@@ -120,7 +120,10 @@ def test_lrn_large_inp(backend_cpu64):
     if layer.owns_delta:
         layer.prev_layer = True
     layer.allocate()
-    layer.set_deltas([layer.be.iobuf(shape[0])])
+
+    layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    layer.set_deltas(deltas_buffer)
 
     loss_scale = np.ones(inpa.shape)
     layer.fprop(inpa).get()

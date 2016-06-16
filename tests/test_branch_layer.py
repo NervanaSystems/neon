@@ -25,6 +25,7 @@ from neon.initializers.initializer import Gaussian, Constant
 from neon.transforms import Rectlin
 from neon import logger as neon_logger
 
+
 init1 = Gaussian(scale=0.01)
 relu = Rectlin()
 bias = Constant(0)
@@ -74,7 +75,9 @@ def test_branch_model(backend_gpu):
 
     neon_layer.configure(inshape)
     neon_layer.allocate()
+
     neon_layer.allocate_deltas()
+
     neon_out = [i.get() for i in neon_layer.fprop(inp)]
 
     ref_layers = [Sequential(t), Sequential(b1), Sequential(b2)]
@@ -82,6 +85,7 @@ def test_branch_model(backend_gpu):
     ref_layers[1].configure(ref_layers[0].out_shape)
     ref_layers[2].configure(ref_layers[0].out_shape)
     [r.allocate() for r in ref_layers]
+
     [r.allocate_deltas() for r in ref_layers]
 
     # Now copy the weights
@@ -105,7 +109,7 @@ def test_branch_model(backend_gpu):
 
     input_layer = neon_layer.layers[0].layers[0]  # reference the trunk, then the root
     input_layer.prev_layer = True
-    input_layer.set_deltas([be.iobuf(inshape)])
+    input_layer.deltas = be.iobuf(inshape)
 
     neon_layer.bprop(err)
     errp = input_layer.deltas.get()
@@ -113,7 +117,7 @@ def test_branch_model(backend_gpu):
     for i, r in enumerate(ref_layers):
         r.layers[0].prev_layer = True
         _inshape = inshape if i == 0 else ref_layers[0].out_shape
-        r.layers[0].set_deltas([be.iobuf(_inshape)])
+        r.layers[0].deltas = be.iobuf(_inshape)
 
     joined_err = be.iobuf(ref_layers[0].out_shape)
     branch_errs = [r.bprop(e, a) for r, e, a in reversed(list(zip(ref_layers[1:], err, alphas)))]

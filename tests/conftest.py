@@ -22,6 +22,7 @@ import re
 
 from neon.backends import gen_backend
 from neon.backends.nervanacpu import NervanaCPU
+from neon.layers.container import DeltasTree
 
 
 def pytest_addoption(parser):
@@ -218,3 +219,19 @@ def backend_pair_dtype(request):
     request.addfinalizer(cleanup)
 
     return (ng, nc)
+
+
+@pytest.fixture
+def deltas_buffer():
+    # empty DeltasTree object for tests that need
+    # to allocate shared deltas buffers
+    return DeltasTree()
+
+
+@pytest.fixture
+def deltas_buffer_wref():
+    # returns 2 empty DeltasTree object for
+    # tests that need to allocate shared
+    # deltas buffers for 2 models
+    # (one test, one reference)
+    return (DeltasTree(), DeltasTree())

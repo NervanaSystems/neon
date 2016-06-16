@@ -22,6 +22,8 @@ from neon import NervanaObject, logger as neon_logger
 from neon.layers import Sequential, Conv, Pooling, MergeBroadcast, Affine
 from neon.initializers.initializer import Gaussian, Constant
 from neon.transforms import Rectlin, Softmax
+from neon.layers.container import DeltasTree
+
 from utils import allclose_with_out
 
 init1 = Gaussian(scale=0.01)
@@ -106,12 +108,12 @@ def test_branch_model(backend_gpu):
     inpa = np.random.random((insize, batch_size))
     neon_layer.configure(inshape)
     inp = neon_layer.be.array(inpa)
-
     neon_layer.allocate()
     neon_logger.display(neon_layer.nested_str())
     neon_layer.layers[0].prev_layer = True
+
     neon_layer.allocate_deltas()
-    neon_layer.layers[0].set_deltas([be.iobuf(inshape)])
+
     neon_out = neon_layer.fprop(inp).get()
 
     # Now make the reference pathways:
@@ -119,7 +121,7 @@ def test_branch_model(backend_gpu):
     main_trunk2.configure(inshape)
     main2 = main_trunk2.layers
     main2[0].prev_layer = True
-    main2[0].set_deltas([be.iobuf(inshape)])
+    main2[0].deltas = be.iobuf(inshape)
     (b1, b2, b3) = inception_bare(i1, [(32,), (32, 32), ('max', 16)])
 
     for bb in (b1, b2, b3):
@@ -132,11 +134,19 @@ def test_branch_model(backend_gpu):
         if ll.has_params:
             ll.set_params({'params': {'W': lo.W.get()}})
         ll.allocate()
-        ll.set_deltas([be.iobuf(ll.in_shape)])
+
+        temp_buff = DeltasTree()
+        ll.allocate_deltas(temp_buff)
+        temp_buff.allocate_buffers()
+        ll.set_deltas(temp_buff)
+
     for bb in (b1, b2, b3):
         for ll in bb:
             ll.allocate()
-            ll.set_deltas([be.iobuf(ll.in_shape)])
+            temp_buff = DeltasTree()
+            ll.allocate_deltas(temp_buff)
+            temp_buff.allocate_buffers()
+            ll.set_deltas(temp_buff)
 
     # Create the combined output buffer
     merge_output = be.empty_like(neon_layer.layers[8].outputs)
@@ -207,10 +217,10 @@ def test_branch_model_fork(backend_gpu):
     inp = neon_layer.be.array(inpa)
 
     neon_layer.allocate()
-    neon_logger.display(neon_layer.nested_str())
+
     neon_layer.layers[0].layers[0].prev_layer = True
     neon_layer.allocate_deltas()
-    neon_layer.layers[0].layers[0].set_deltas([be.iobuf(inshape)])
+
     neon_out_dev = neon_layer.fprop(inp)
     neon_out = [d.get() for d in neon_out_dev]
 
@@ -219,7 +229,7 @@ def test_branch_model_fork(backend_gpu):
     main_trunk2.configure(inshape)
     main2 = main_trunk2.layers
     main2[0].prev_layer = True
-    main2[0].set_deltas([be.iobuf(inshape)])
+    main2[0].deltas = be.iobuf(inshape)
 
     branch2 = Sequential(top_branch())
     lbranch2 = branch2.layers
@@ -235,7 +245,10 @@ def test_branch_model_fork(backend_gpu):
         if ll.has_params:
             ll.set_params({'params': {'W': lo.W.get()}})
         ll.allocate()
-        ll.set_deltas([be.iobuf(ll.in_shape)])
+        temp_deltas = DeltasTree()
+        temp_deltas.proc_layer(ll)
+        temp_deltas.allocate_buffers()
+        ll.set_deltas(temp_deltas)
 
     for ll, lo in zip(lbranch2, neon_layer.layers[1].layers[1:]):
         if ll.has_params:
@@ -244,7 +257,10 @@ def test_branch_model_fork(backend_gpu):
     for bb in (b1, b2, b3, lbranch2):
         for ll in bb:
             ll.allocate()
-            ll.set_deltas([be.iobuf(ll.in_shape)])
+            temp_deltas = DeltasTree()
+            temp_deltas.proc_layer(ll)
+            temp_deltas.allocate_buffers()
+            ll.set_deltas(temp_deltas)
 
     # Create the combined output buffer
     merge_output = be.empty_like(neon_layer.layers[0].layers[9].outputs)

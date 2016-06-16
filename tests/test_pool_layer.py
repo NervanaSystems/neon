@@ -93,7 +93,7 @@ def ref_pooling(inp, inp_shape, fshape, padding, strides, be, ncheck=None):
     return (out_exp, check_inds)
 
 
-def test_padding(backend_default, poolargs):
+def test_padding(backend_default, poolargs, deltas_buffer):
     fshape, nifm, padding, stride, in_sz, batch_size = poolargs
 
     NervanaObject.be.bsz = batch_size
@@ -108,7 +108,10 @@ def test_padding(backend_default, poolargs):
     neon_layer.configure(inshape)
     neon_layer.prev_layer = True
     neon_layer.allocate()
-    neon_layer.set_deltas([neon_layer.be.iobuf(inshape)])
+
+    neon_layer.allocate_deltas(deltas_buffer)
+    neon_layer.set_deltas(deltas_buffer)
+    neon_layer.argmax = neon_layer.be.iobuf(neon_layer.outputs.shape[0], dtype=np.uint8)
 
     out = neon_layer.fprop(inp).get()
 

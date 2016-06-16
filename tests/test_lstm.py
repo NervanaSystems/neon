@@ -36,6 +36,7 @@ import numpy as np
 from neon import NervanaObject, logger as neon_logger
 from neon.initializers.initializer import Constant, Gaussian
 from neon.layers.recurrent import LSTM
+from neon.layers.container import DeltasTree
 from neon.transforms import Logistic, Tanh
 from lstm_ref import LSTM as RefLSTM
 from utils import sparse_rand, allclose_with_out
@@ -116,7 +117,12 @@ def check_lstm(seq_len, input_size, hidden_size,
     lstm.configure((input_size, seq_len))
     lstm.prev_layer = True  # Hack to force allocating a delta buffer
     lstm.allocate()
-    lstm.set_deltas([lstm.be.iobuf(lstm.in_shape)])
+
+    dtree = DeltasTree()
+    lstm.allocate_deltas(dtree)
+    dtree.allocate_buffers()
+    lstm.set_deltas(dtree)
+
     lstm.fprop(inpa)
 
     # reference numpy LSTM
@@ -360,8 +366,14 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
     # run fprop on the baseline input
     lstm.configure((input_size, seq_len))
     lstm.prev_layer = True  # Hack to force allocating a delta buffer
+
     lstm.allocate()
-    lstm.set_deltas([lstm.be.iobuf(lstm.in_shape)])
+
+    dtree = DeltasTree()
+    lstm.allocate_deltas(dtree)
+    dtree.allocate_buffers()
+    lstm.set_deltas(dtree)
+
     out_bl = lstm.fprop(inpa).get()
 
     # random scaling/hash to generate fake loss

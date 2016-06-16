@@ -24,6 +24,7 @@ from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.util.modeldesc import ModelDescription
 from neon.layers import Sequential, Activation, Tree, SingleOutputTree
+from neon.layers.container import DeltasTree
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,18 @@ class Model(NervanaObject):
         self.layers.allocate()
         self.layers.allocate_deltas()
         self.initialized = True
+
+    def allocate_deltas(self):
+        if getattr(self, 'global_deltas', None) is None:
+            self.global_deltas = DeltasTree()
+            self.layers.allocate_deltas(self.global_deltas)
+
+            # allocate the buffers now that all the
+            # nesting and max sizes have been determined
+            self.global_deltas.allocate_buffers(self.be)
+
+        # set the deltas
+        self.layers.set_deltas(self.global_deltas)
 
     def __str__(self):
         """

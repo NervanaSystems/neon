@@ -18,6 +18,7 @@ Generalized gradient testing applied to different layers and activations
 """
 import numpy as np
 from neon import logger as neon_logger
+from neon.layers.container import DeltasTree
 
 
 def sweep_epsilon(layer, inp, pert_rng, out_shape=None, lshape=None,
@@ -71,7 +72,8 @@ def general_gradient_comp(layer,
                           epsilon=1.0e-5,
                           loss_scale=None,
                           lshape=None,
-                          pert_inds=None):
+                          pert_inds=None,
+                          pooling=False):
     # given a layer, test the bprop
     # using finite differences
 
@@ -83,7 +85,12 @@ def general_gradient_comp(layer,
     if layer.owns_delta:
         layer.prev_layer = True
     layer.allocate()
-    layer.set_deltas([layer.be.iobuf(in_shape)])
+
+    dtree = DeltasTree()
+    layer.allocate_deltas(dtree)
+    dtree.allocate_buffers()
+    layer.set_deltas(dtree)
+
     out = layer.fprop(inpa).get()
 
     out_shape = out.shape

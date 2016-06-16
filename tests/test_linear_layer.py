@@ -53,7 +53,7 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('allrand_args', fargs)
 
 
-def test_linear_zeros(backend_default, basic_linargs):
+def test_linear_zeros(backend_default, basic_linargs, deltas_buffer):
     # basic sanity check with 0 weights random inputs
     nin, nout, batch_size = basic_linargs
     NervanaObject.be.bsz = batch_size
@@ -66,7 +66,11 @@ def test_linear_zeros(backend_default, basic_linargs):
     layer.configure(nin)
     layer.prev_layer = True  # Hack to force delta buffer allocation
     layer.allocate()
-    layer.set_deltas([layer.be.iobuf(nin)])
+
+    layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    layer.set_deltas(deltas_buffer)
+
     out = layer.fprop(inp).get()
 
     assert np.min(out) == 0.0 and np.max(out) == 0.0
@@ -81,7 +85,7 @@ def test_linear_zeros(backend_default, basic_linargs):
     return
 
 
-def test_linear_ones(backend_default, basic_linargs):
+def test_linear_ones(backend_default, basic_linargs, deltas_buffer):
     # basic sanity check with all ones on the inputs
     # and weights, check that each row in output
     # is the sum of the weights for that output
@@ -98,7 +102,11 @@ def test_linear_ones(backend_default, basic_linargs):
     layer.configure(nin)
     layer.prev_layer = True  # Hack to force delta buffer allocation
     layer.allocate()
-    layer.set_deltas([layer.be.iobuf(nin)])
+
+    layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    layer.set_deltas(deltas_buffer)
+
     out = layer.fprop(inp).get()
     w = layer.W.get()
     sums = np.sum(w, 1).reshape((nout, 1)) * np.ones((1, batch_size))
@@ -110,7 +118,7 @@ def test_linear_ones(backend_default, basic_linargs):
     return
 
 
-def test_all_rand(backend_default, allrand_args):
+def test_all_rand(backend_default, allrand_args, deltas_buffer):
     # test with random weights and random inputs
     dtypeu = np.float32
     w_rng, rngmax = allrand_args
@@ -129,7 +137,11 @@ def test_all_rand(backend_default, allrand_args):
     layer.configure(nin)
     layer.prev_layer = True  # Hack to force delta buffer allocation
     layer.allocate()
-    layer.set_deltas([layer.be.iobuf(nin)])
+
+    layer.allocate_deltas(deltas_buffer)
+    deltas_buffer.allocate_buffers()
+    layer.set_deltas(deltas_buffer)
+
     out = layer.fprop(layer.be.array(inp)).get()
     w = layer.W.get()
 
