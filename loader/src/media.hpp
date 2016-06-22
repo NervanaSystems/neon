@@ -58,6 +58,8 @@ public:
     bool                        _ctcCost;
     int                         _numFilts;
     int                         _numCepstra;
+    char*                       _noiseIndexFile;
+    char*                       _noiseDir;
     int                         _windowSize;
     int                         _overlap;
     int                         _stride;
@@ -65,6 +67,7 @@ public:
     int                         _height;
     int                         _window;
     int                         _feature;
+    void*                       _noiseClips;
 };
 
 class Media {
@@ -88,6 +91,16 @@ public:
 class RawMedia {
 public:
     RawMedia() : _bufSize(0), _dataSize(0), _sampleSize(0) {
+    }
+
+    RawMedia(const RawMedia& media)
+    : _bufSize(media._bufSize),
+      _dataSize(media._dataSize),
+      _sampleSize(media._sampleSize) {
+        for (uint i = 0; i < media._bufs.size(); i++) {
+            _bufs.push_back(new char[_bufSize]);
+            memcpy(_bufs[i], media._bufs[i], _bufSize);
+        }
     }
 
     virtual ~RawMedia() {
@@ -146,6 +159,10 @@ public:
 
     int sampleSize() {
         return _sampleSize;
+    }
+
+    int numSamples() {
+        return dataSize() / sampleSize();
     }
 
     void copyData(char* buf, int bufSize) {

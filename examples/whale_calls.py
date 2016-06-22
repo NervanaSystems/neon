@@ -42,8 +42,8 @@ def from_csv(filename):
     return np.genfromtxt(filename, delimiter=',', skip_header=1, dtype=str)
 
 
-def to_csv(filename, index):
-    np.savetxt(filename, index, fmt='%s', delimiter=',', header='filename,label1')
+def to_csv(filename, index, header='filename,label1'):
+    np.savetxt(filename, index, fmt='%s', delimiter=',', header=header)
 
 
 def create_index_files(data_dir, train_percent=80):
@@ -55,8 +55,9 @@ def create_index_files(data_dir, train_percent=80):
     val_idx = get_path('val-index.csv')
     all_idx = get_path('all-index.csv')
     test_idx = get_path('test-index.csv')
+    noise_idx = get_path('noise-index.csv')
     if os.path.exists(test_idx):
-        return train_idx, val_idx, all_idx, test_idx
+        return train_idx, val_idx, all_idx, test_idx, noise_idx
 
     train = from_csv(os.path.join(data_dir, 'train.csv'))
 
@@ -67,12 +68,15 @@ def create_index_files(data_dir, train_percent=80):
     to_csv(all_idx, train)
     to_csv(train_idx, train[:train_count])
     to_csv(val_idx, train[train_count:])
+    noise = train[:train_count]
+    noise = noise[noise[:, 1] == '0']
+    to_csv(noise_idx, noise[:, 0], 'filename')
     # Test set
     test_files = glob.glob(os.path.join(data_dir, 'test', '*.aiff'))
     test = np.zeros((len(test_files), 2), dtype=object)
     test[:, 0] = map(os.path.basename, test_files)
     to_csv(test_idx, test)
-    return train_idx, val_idx, all_idx, test_idx
+    return train_idx, val_idx, all_idx, test_idx, noise_idx
 
 
 def run(train, test):
@@ -99,15 +103,16 @@ def run(train, test):
 
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
-train_idx, val_idx, all_idx, test_idx = create_index_files(args.data_dir)
+train_idx, val_idx, all_idx, test_idx, noise_idx = create_index_files(args.data_dir)
 
+train_dir = os.path.join(args.data_dir, 'train')
 common_params = dict(sampling_freq=2000, clip_duration=2000, frame_duration=80, overlap_percent=50)
-train_params = AudioParams(add_noise=True, random_scale_percent=5, **common_params)
+train_params = AudioParams(add_noise=True, noise_index_file=noise_idx, noise_dir=train_dir,
+                           random_scale_percent=5, **common_params)
 test_params = AudioParams(**common_params)
 common = dict(target_size=1, nclasses=2)
 
 # Validate...
-train_dir = os.path.join(args.data_dir, 'train')
 train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
                    index_file=train_idx, **common)
 test = DataLoader(set_name='val', repo_dir=train_dir, media_params=test_params,

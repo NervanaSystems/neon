@@ -13,29 +13,194 @@
  limitations under the License.
 */
 
+#include <sys/stat.h>
+#include <libgen.h>
+
+#include <vector>
+#include <string>
+#include <sstream>
+#include <fstream>
+
+#include <opencv2/core/core.hpp>
+
 #include "media.hpp"
 #include "codec.hpp"
 #include "specgram.hpp"
 
+using std::vector;
+using std::ifstream;
+using cv::Mat;
+
+
 class AudioParams : public SignalParams {
+};
+
+class NoiseClips {
+public:
+    NoiseClips(AudioParams* params, Codec* codec)
+    : _indexFile(params->_noiseIndexFile), _indexDir(params->_noiseDir),
+      _buf(0), _bufLen(0),
+      _clipIndex(0), _clipOffset(0), _rng(0ULL) {
+        loadIndex(_indexFile);
+        loadData(codec);
+    }
+
+    virtual ~NoiseClips() {
+        delete[] _buf;
+        for (auto elem : _data) {
+            delete elem;
+        }
+    }
+
+    void addNoise(RawMedia* media) {
+        if (_rng(2) == 0) {
+            // Augment half of the data examples.
+            return;
+        }
+        // Assume a single channel with 16 bit samples for now.
+        assert(media->size() == 1);
+        assert(media->sampleSize() == 2);
+        int sampleSize = media->sampleSize();
+        int numSamples = media->numSamples();
+        Mat data(1, numSamples, CV_16S, media->getBuf(0));
+        Mat noise(1, numSamples, CV_16S);
+        int left = numSamples;
+        int offset = 0;
+        while (left > 0) {
+            RawMedia* clipData = _data[_clipIndex];
+            assert(clipData->sampleSize() == sampleSize);
+            int clipSize = clipData->numSamples() - _clipOffset;
+            Mat clip(1, clipSize , CV_16S,
+                     clipData->getBuf(0) + sampleSize * _clipOffset);
+            if (clipSize > left) {
+                const Mat& src = clip(Range::all(), Range(0, left));
+                const Mat& dst = noise(Range::all(), Range(offset, offset + left));
+                src.copyTo(dst);
+                left = 0;
+                _clipOffset += left;
+            } else {
+                const Mat& dst = noise(Range::all(),
+                                       Range(offset, offset + clipSize));
+                clip.copyTo(dst);
+                left -= clipSize;
+                offset += clipSize;
+                next();
+            }
+        }
+
+        Mat convData;
+        data.convertTo(convData, CV_32F);
+        Mat convNoise;
+        noise.convertTo(convNoise, CV_32F);
+        float noiseLevel = _rng.uniform(0.f, 0.5f);
+        convNoise *= noiseLevel;
+        convData *= (1.f - noiseLevel);
+        convData += convNoise;
+        convData.convertTo(data, CV_16S);
+    }
+
+private:
+    void next() {
+        _clipIndex += 1;
+        if (_clipIndex != _data.size()) {
+            _clipOffset = 0;
+        } else {
+            // Wrap around.
+            _clipIndex = 0;
+            // Start at a random offset.
+            _clipOffset = _rng(_data[0]->numSamples());
+        }
+    }
+
+    void loadIndex(string& indexFile) {
+        _index.load(indexFile, true);
+    }
+
+    void loadData(Codec* codec) {
+        for (uint i = 0; i < _index.size(); i++) {
+            string& fileName = _index[i]->_fileName;
+            int len = 0;
+            readFile(fileName, &len);
+            if (len == 0) {
+                stringstream ss;
+                ss << "Could not read " << fileName;
+                throw std::runtime_error(ss.str());
+            }
+            RawMedia* raw = codec->decode(_buf, len);
+            _data.push_back(new RawMedia(*raw));
+        }
+    }
+
+    void readFile(string& fileName, int* dataLen) {
+        string path;
+        if (fileName[0] == '/') {
+            path = fileName;
+        } else {
+            path = _indexDir + '/' + fileName;
+        }
+        struct stat stats;
+        int result = stat(path.c_str(), &stats);
+        if (result == -1) {
+            stringstream ss;
+            ss << "Could not find " << path;
+            throw std::runtime_error(ss.str());
+        }
+        off_t size = stats.st_size;
+        if (_bufLen < size) {
+            resize(size + size / 8);
+        }
+        ifstream ifs(path, ios::binary);
+        ifs.read(_buf, size);
+        *dataLen = size;
+    }
+
+    void resize(int newLen) {
+        delete[] _buf;
+        _buf = new char[newLen];
+        _bufLen = newLen;
+    }
+
+private:
+    string                      _indexFile;
+    string                      _indexDir;
+    vector<RawMedia*>           _data;
+    Index                       _index;
+    char*                       _buf;
+    int                         _bufLen;
+    uint                        _clipIndex;
+    int                         _clipOffset;
+    cv::RNG                     _rng;
 };
 
 class Audio : public Media {
 public:
     Audio(AudioParams *params, int id)
-    : _params(params) {
+    : _params(params), _noiseClips(0), _loadedNoise(false) {
         _codec = new Codec(params);
         _specgram = new Specgram(params, id);
+        if (params->_noiseIndexFile != 0) {
+            if ((id == 0) && (params->_noiseClips == 0)) {
+                params->_noiseClips = new NoiseClips(params, _codec);
+                _loadedNoise = true;
+            }
+            _noiseClips = reinterpret_cast<NoiseClips*>(params->_noiseClips);
+            assert(_noiseClips != 0);
+        }
     }
 
     virtual ~Audio() {
+        if (_loadedNoise == true) {
+            delete _noiseClips;
+        }
         delete _specgram;
         delete _codec;
     }
 
-public:
     void transform(char* item, int itemSize, char* buf, int bufSize, int* meta) {
         RawMedia* raw = _codec->decode(item, itemSize);
+        if (_noiseClips != 0) {
+            addNoise(raw);
+        }
         int len = _specgram->generate(raw, buf, bufSize);
         if (meta != 0) {
             *meta = len;
@@ -46,7 +211,14 @@ public:
     }
 
 private:
+    void addNoise(RawMedia* raw) {
+        _noiseClips->addNoise(raw);
+    }
+
+private:
     AudioParams*                _params;
     Codec*                      _codec;
     Specgram*                   _specgram;
+    NoiseClips*                 _noiseClips;
+    bool                        _loadedNoise;
 };

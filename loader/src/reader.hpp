@@ -39,10 +39,10 @@ using std::vector;
 using std::map;
 
 enum ConversionType {
-    NO_CONVERSION = 0,
+    NO_CONVERSION   = 0,
     ASCII_TO_BINARY = 1,
-    CHAR_TO_INDEX = 2,
-    READ_CONTENTS = 3,
+    CHAR_TO_INDEX   = 2,
+    READ_CONTENTS   = 3,
 };
 
 static_assert(sizeof(int) == 4, "Unsupported platform");
@@ -68,6 +68,45 @@ public:
         }
     }
 
+    void load(string& fileName, bool shuf = false) {
+        ifstream ifs(fileName);
+        if (!ifs) {
+            stringstream ss;
+            ss << "Could not open " << fileName;
+            throw std::ios_base::failure(ss.str());
+        }
+
+        string line;
+        // Ignore the header line.
+        std::getline(ifs, line);
+        while (std::getline(ifs, line)) {
+            if (line[0] == '#') {
+                // Ignore comments.
+                continue;
+            }
+            addElement(line);
+        }
+
+        if (shuf == true) {
+            shuffle();
+        }
+
+        if (_elements.size() == 0) {
+            stringstream ss;
+            ss << "Could not load index from " << fileName;
+            throw std::runtime_error(ss.str());
+        }
+    }
+
+    IndexElement* operator[] (int idx) {
+        return _elements[idx];
+    }
+
+    uint size() {
+        return _elements.size();
+    }
+
+private:
     void addElement(string& line) {
         IndexElement* elem = new IndexElement();
         std::istringstream ss(line);
@@ -79,19 +118,14 @@ public:
         }
 
         // For now, restrict to a single target.
-        assert(elem->_targets.size() == 1);
+        assert(elem->_targets.size() <= 1);
         _elements.push_back(elem);
+        if (elem->_targets.size() == 0) {
+            return;
+        }
         if (elem->_targets[0].size() > _maxTargetSize) {
             _maxTargetSize = elem->_targets[0].size();
         }
-    }
-
-    IndexElement* operator[] (int idx) {
-        return _elements[idx];
-    }
-
-    uint size() {
-        return _elements.size();
     }
 
     void shuffle() {
@@ -285,32 +319,8 @@ private:
     }
 
     void loadIndex() {
-        ifstream ifs(_indexFile);
-        if (!ifs) {
-            stringstream ss;
-            ss << "Could not open " << _indexFile;
-            throw std::ios_base::failure(ss.str());
-        }
-
-        string line;
-        // Ignore the header line.
-        std::getline(ifs, line);
-        while (std::getline(ifs, line)) {
-            if (line[0] == '#') {
-                // Ignore comments.
-                continue;
-            }
-            _index.addElement(line);
-        }
-
-        if (_shuffle == true) {
-            _index.shuffle();
-        }
-
+        _index.load(_indexFile, _shuffle);
         _itemCount = _index.size();
-        if (_itemCount == 0) {
-            throw std::runtime_error("Could not load index");
-        }
     }
 
 private:

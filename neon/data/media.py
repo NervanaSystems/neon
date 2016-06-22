@@ -251,6 +251,12 @@ class AudioParams(MediaParams):
         num_cepstra (int):
             The no. of cepstral coefficients required. This is only applicable
             for MFCC.
+        noise_index_file (str):
+            Pathname of index file containing a list of files with noise
+            content. If this is not None, the data is augmented with the given
+            noise.
+        noise_dir (str):
+            Pathname of directory containing noise clips.
     """
 
     _fields_ = [('sampling_freq', ct.c_int),
@@ -264,13 +270,16 @@ class AudioParams(MediaParams):
                 ('ctc_cost', ct.c_bool),
                 ('num_filts', ct.c_int),
                 ('num_cepstra', ct.c_int),
+                ('noise_index_file', ct.c_char_p),
+                ('noise_dir', ct.c_char_p),
                 ('window_size', ct.c_int),
                 ('overlap', ct.c_int),
                 ('stride', ct.c_int),
                 ('width', ct.c_int),
                 ('height', ct.c_int),
                 ('window', ct.c_int),
-                ('feature', ct.c_int)]
+                ('feature', ct.c_int),
+                ('noise_clips', ct.c_void_p)]
     _defaults_ = {'frame_duration': 10,
                   'overlap_percent': 30,
                   'window_type': b'hann',
@@ -280,13 +289,16 @@ class AudioParams(MediaParams):
                   'ctc_cost': False,
                   'num_filts': 64,
                   'num_cepstra': 40,
+                  'noise_index_file': None,
+                  'noise_dir': None,
                   'window_size': -1,
                   'overlap': -1,
                   'stride': -1,
                   'width': -1,
                   'height': -1,
                   'window': -1,
-                  'feature': -1}
+                  'feature': -1,
+                  'noise_clips': None}
     _windows_ = {b'none': 0,
                  b'hann': 1,
                  b'blackman': 2,
@@ -304,7 +316,7 @@ class AudioParams(MediaParams):
             setattr(self, key, value)
         super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
         for key in ['window_size', 'overlap', 'stride', 'width',
-                    'height', 'window', 'feature']:
+                    'height', 'window', 'feature', 'noise_clips']:
             if getattr(self, key) != self._defaults_[key]:
                 raise ValueError('Argument %s must not be specified' % key)
         if getattr(self, 'window_type') not in self._windows_:
@@ -313,6 +325,9 @@ class AudioParams(MediaParams):
         if getattr(self, 'feature_type') not in self._features_:
             raise ValueError('Unknown feature type: %s' %
                              getattr(self, 'feature_type'))
+        if (self.noise_index_file is None) != (self.noise_dir is None):
+            raise ValueError('noise_index_file must accompany noise_dir')
+
         self.set_shape()
 
     def set_shape(self):
