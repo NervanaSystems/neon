@@ -48,7 +48,7 @@ relu: &relu_act
 
 layers:
 -
-    type: Conv # Convolution + Bias + BN + Activation
+    type: Conv # Convolution + Bias + Activation
     config:
         name: conv1
         fshape: [11, 11, 64]
