@@ -32,7 +32,7 @@ HAS_GPU := $(shell nvcc --version > /dev/null 2>&1 && echo true)
 
 ifdef HAS_GPU
 # Get CUDA_ROOT for LD_RUN_PATH
-export CUDA_ROOT:=$(patsubst %/bin/nvcc,%, $(realpath $(shell which nvcc)))
+export CUDA_ROOT:=$(patsubst %/bin/nvcc,%, $(shell which nvcc))
 else
 # Try to find CUDA.  Kernels will still need nvcc in path
 export CUDA_ROOT:=$(firstword $(wildcard $(addprefix /usr/local/, cuda-8.0 cuda-7.5 cuda-7.0 cuda)))
