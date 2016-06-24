@@ -28,6 +28,7 @@ extern "C" {
     #include <libavformat/avformat.h>
     #include <libavutil/imgutils.h>
     #include <libswscale/swscale.h>
+    #include <libavutil/log.h>
 }
 
 #if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(55, 28, 1)
@@ -65,6 +66,7 @@ public:
         _imgSize = params->_frameParams.getSize().area();
         _decodedSize = _imgSize * params->_frameParams._channelCount ;
         av_register_all();
+        av_log_set_level(AV_LOG_FATAL);
     }
 
     virtual ~Video() {
