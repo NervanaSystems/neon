@@ -1371,7 +1371,8 @@ class BiSum(Layer):
 class BiBNRNN(BiRNN):
 
     """
-    Basic Bi Directional Recurrent layer with sequence-wise batch norm
+    Basic Bi Directional Recurrent layer with sequence-wise batch norm, based on:
+    http://arxiv.org/abs/1510.01378
 
     Arguments:
         output_size (int): Number of hidden/output units
