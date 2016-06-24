@@ -52,6 +52,13 @@ For GPU users, remember to add the CUDA path. For example, on Ubuntu:
     export PATH="/usr/local/cuda/bin:"$PATH
     export LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/local/cuda/lib:/usr/local/lib:"$LD_LIBRARY_PATH
 
+Or on Mac OS X:
+
+.. code-block:: bash
+
+    export PATH="/usr/local/cuda/bin:"$PATH
+    export DYLD_LIBRARY_PATH="/usr/local/cuda/lib:"$DYLD_LIBRARY_PATH
+
 Installation
 ~~~~~~~~~~~~
 

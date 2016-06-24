@@ -447,15 +447,15 @@ class ConvLayer(Layer):
             else:
                 self.updat_kernels = UpdateWinograd_3x3_2x2(*args)
 
-        elif lib.enable_winograd and not lib.deterministic and N > 1 and \
-             R == 5 and S == 5 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
-
-            from .winograd_conv import (FpropWinograd_2x2_5x5, BpropWinograd_2x2_5x5)
-
-            self.fprop_kernels = FpropWinograd_2x2_5x5(*args)
-            self.bprop_kernels = BpropWinograd_2x2_5x5(*args)
-            if N >= 4:
-                self.updat_kernels = convolution.UpdateDirect(*args)
+#        elif lib.enable_winograd and not lib.deterministic and N > 1 and \
+#            R == 5 and S == 5 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
+#
+#            from .winograd_conv import (FpropWinograd_2x2_5x5, BpropWinograd_2x2_5x5)
+#
+#            self.fprop_kernels = FpropWinograd_2x2_5x5(*args)
+#            self.bprop_kernels = BpropWinograd_2x2_5x5(*args)
+#            if N >= 4:
+#                self.updat_kernels = convolution.UpdateDirect(*args)
 
         ####### Direct ###########
         else:
