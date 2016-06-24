@@ -165,7 +165,7 @@ class ImageParams(MediaParams):
 
     def process(self, loader, data, targets, meta):
         if self.subtract_mean is False:
-            return
+            return data, targets
         if self.channel_count == 3:
             data_view = data.reshape((3, -1))
             data_view[0] -= self.blue_mean
