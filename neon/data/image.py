@@ -199,7 +199,7 @@ class CIFAR10(Dataset):
         meanX = np.mean(imgs, 0)
 
         covX = np.cov(imgs.T)
-        D, E = np.linalg.eigh(covX)
+        D, E = np.linalg.eigh(covX + filter_bias * np.eye(covX.shape[0], covX.shape[1]))
 
         assert not np.isnan(D).any()
         assert not np.isnan(E).any()
