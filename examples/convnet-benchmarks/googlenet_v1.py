@@ -41,7 +41,7 @@ NervanaObject.be.enable_winograd = 4
 
 # setup data provider
 X_train = np.random.uniform(-1, 1, (128, 3 * 224 * 224))
-y_train = np.random.uniform(-1, 1, (128, 1000))
+y_train = np.random.randint(0, 999, (128, 1000))
 train = ArrayIterator(X_train, y_train, nclass=1000, lshape=(3, 224, 224))
 
 init1 = Xavier(local=False)
