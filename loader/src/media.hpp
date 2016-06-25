@@ -54,7 +54,6 @@ public:
     char                        _windowType[16];
     char                        _featureType[16];
     float                       _randomScalePercent;
-    bool                        _addNoise;
     bool                        _ctcCost;
     int                         _numFilts;
     int                         _numCepstra;

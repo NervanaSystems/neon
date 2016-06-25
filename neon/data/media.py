@@ -241,8 +241,6 @@ class AudioParams(MediaParams):
             and "mfcc".  Defaults to "specgram".
         random_scale_percent (float):
             Randomly stretch/shrink the time dimension by this percent.
-        add_noise (boolean):
-            Superimpose gaussian noise.
         ctc_cost (boolean):
             Whether the CTC cost function is used.
         num_filts (int):
@@ -266,7 +264,6 @@ class AudioParams(MediaParams):
                 ('window_type', ct.c_char * 16),
                 ('feature_type', ct.c_char * 16),
                 ('random_scale_percent', ct.c_float),
-                ('add_noise', ct.c_bool),
                 ('ctc_cost', ct.c_bool),
                 ('num_filts', ct.c_int),
                 ('num_cepstra', ct.c_int),
@@ -285,7 +282,6 @@ class AudioParams(MediaParams):
                   'window_type': b'hann',
                   'feature_type': b'specgram',
                   'random_scale_percent': 0.0,
-                  'add_noise': False,
                   'ctc_cost': False,
                   'num_filts': 64,
                   'num_cepstra': 40,

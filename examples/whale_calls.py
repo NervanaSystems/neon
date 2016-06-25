@@ -107,8 +107,7 @@ train_idx, val_idx, all_idx, test_idx, noise_idx = create_index_files(args.data_
 
 train_dir = os.path.join(args.data_dir, 'train')
 common_params = dict(sampling_freq=2000, clip_duration=2000, frame_duration=80, overlap_percent=50)
-train_params = AudioParams(add_noise=True, noise_index_file=noise_idx, noise_dir=train_dir,
-                           random_scale_percent=5, **common_params)
+train_params = AudioParams(noise_index_file=noise_idx, noise_dir=train_dir, **common_params)
 test_params = AudioParams(**common_params)
 common = dict(target_size=1, nclasses=2)
 

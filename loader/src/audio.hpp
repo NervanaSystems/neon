@@ -66,6 +66,7 @@ public:
         Mat noise(1, numSamples, CV_16S);
         int left = numSamples;
         int offset = 0;
+        // Collect enough noise data to cover the entire input clip.
         while (left > 0) {
             RawMedia* clipData = _data[_clipIndex];
             assert(clipData->sampleSize() == sampleSize);
@@ -87,15 +88,23 @@ public:
                 next();
             }
         }
-
+        // Superimpose noise without overflowing.
         Mat convData;
         data.convertTo(convData, CV_32F);
         Mat convNoise;
         noise.convertTo(convNoise, CV_32F);
-        float noiseLevel = _rng.uniform(0.f, 0.5f);
+        float noiseLevel = _rng.uniform(0.f, 1.0f);
         convNoise *= noiseLevel;
-        convData *= (1.f - noiseLevel);
         convData += convNoise;
+        double min, max;
+        cv::minMaxLoc(convData, &min, &max);
+        if (-min > 0x8000) {
+            convData *= 0x8000 / -min;
+            cv::minMaxLoc(convData, &min, &max);
+        }
+        if (max > 0x7FFF) {
+            convData *= 0x7FFF / max;
+        }
         convData.convertTo(data, CV_16S);
     }
 

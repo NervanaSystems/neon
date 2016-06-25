@@ -71,7 +71,7 @@ args = parser.parse_args()
 train_idx, val_idx = create_index_files(args.data_dir)
 
 common_params = dict(sampling_freq=22050, clip_duration=31000, frame_duration=20)
-train_params = AudioParams(add_noise=True, random_scale_percent=5, **common_params)
+train_params = AudioParams(random_scale_percent=5, **common_params)
 val_params = AudioParams(**common_params)
 common = dict(target_size=1, nclasses=10, repo_dir=args.data_dir)
 train = DataLoader(set_name='genres-train', media_params=train_params,

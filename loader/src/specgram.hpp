@@ -49,7 +49,6 @@ public:
       _height(params->_height), _samplingFreq(params->_samplingFreq),
       _numFilts(params->_numFilts),
       _numCepstra(params->_numCepstra),
-      _addNoise(params->_addNoise),
       _window(0), _rng(id) {
         assert(_stride != 0);
         if (powerOfTwo(_windowSize) == false) {
@@ -78,7 +77,6 @@ public:
         // TODO: get rid of this assumption
         assert(raw->sampleSize() == 2);
         assert(_timeSteps * _height == bufSize);
-        addNoise(raw);
         int rows = stridedSignal(raw);
         assert(rows <= _timeSteps);
         Mat signal(rows, _windowSize, CV_16SC1, (short*) _buf);
@@ -124,18 +122,6 @@ private:
         if (_scaleBy > 0) {
             float fx = _rng.uniform(_scaleMin, _scaleMax);
             resize(img, fx);
-        }
-    }
-
-    void addNoise(RawMedia* raw) {
-        if (_addNoise == false) {
-            return;
-        }
-        const float noiseAmp = 100;
-        int sampleCount = raw->dataSize() / raw->sampleSize();
-        short* buf = (short*) raw->getBuf(0);
-        for (int i = 0; i < sampleCount; i++) {
-            buf[i] += short(noiseAmp * (float) _rng.gaussian(1.0));
         }
     }
 
@@ -318,7 +304,6 @@ private:
     float                       _scaleBy;
     float                       _scaleMin;
     float                       _scaleMax;
-    bool                        _addNoise;
     char*                       _buf;
     Mat*                        _image;
     Mat*                        _window;
