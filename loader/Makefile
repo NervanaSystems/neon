@@ -45,7 +45,7 @@ LIBS            := $(IMGLIBS) $(VIDLIBS)
 
 ifeq ($(HAS_GPU), true)
 ifeq ($(CUDA_ROOT),)
-	CUDA_ROOT   := $(patsubst %/bin/nvcc,%, $(shell which nvcc))
+	CUDA_ROOT   := $(abspath $(shell which nvcc)/../..)
 endif
 
 	GPUFLAG     := -DHAS_GPU
