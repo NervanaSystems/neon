@@ -254,7 +254,9 @@ class AudioParams(MediaParams):
             content. If this is not None, the data is augmented with the given
             noise.
         noise_dir (str):
-            Pathname of directory containing noise clips.
+            Pathname of directory containing noise clips.  This pathname is
+            prepended to any filenames in noise_index_file which do not start
+            with /
     """
 
     _fields_ = [('sampling_freq', ct.c_int),

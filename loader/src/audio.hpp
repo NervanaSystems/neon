@@ -205,6 +205,16 @@ public:
         delete _codec;
     }
 
+    void dumpToBin(char* filename, RawMedia* audio, int idx) {
+        // dump audio file in `audio` at buffer index `idx` into bin
+        // file at `filename`.  Assumes buffer is already scaled to
+        // int16.  A simple python script can convert this file into
+        // a wav file: ~/loader/raw_to_wav.py
+        FILE *file = fopen(filename, "wb");
+        fwrite(audio->getBuf(idx), audio->numSamples(), 2, file);
+        fclose(file);
+    }
+
     void transform(char* item, int itemSize, char* buf, int bufSize, int* meta) {
         RawMedia* raw = _codec->decode(item, itemSize);
         if (_noiseClips != 0) {
