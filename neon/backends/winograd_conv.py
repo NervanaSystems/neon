@@ -597,7 +597,9 @@ class XpropWinograd_4x4_3x3(KernelGroup):
 
             autotune_db.close()
 
-        # external = True
+        # Disable due to non-determinism observed in VGG
+        external = True
+        self.initialized = True
         self.external = external
 
         if N == 1:

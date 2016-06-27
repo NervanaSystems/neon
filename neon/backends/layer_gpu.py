@@ -430,12 +430,12 @@ class ConvLayer(Layer):
 
             if C < 8:
                 self.fprop_kernels = convolution.FpropDirect(*args)
-            elif winograd == 4:
+            elif winograd == 4 and H * W < 112 * 112:
                 self.fprop_kernels = FpropWinograd_4x4_3x3(*args)
             else:
                 self.fprop_kernels = FpropWinograd_2x2_3x3(*args)
 
-            if winograd == 4:
+            if winograd == 4 and H * W < 112 * 112:
                 self.bprop_kernels = BpropWinograd_4x4_3x3(*args)
             else:
                 self.bprop_kernels = BpropWinograd_2x2_3x3(*args)
