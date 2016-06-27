@@ -2460,8 +2460,16 @@ class NervanaGPU(Backend):
             reverse (boolean): When true, unrolling will iterate over time steps
                 in reverse (for BiRNN).
         """
-        num_blocks = (-(-h_s[0].shape[0] // 128)) * (-(-h_s[0].shape[1] // 32))
-        if activation.classnm == 'Rectlinclip' and num_blocks < (4 * self.sm_count):
+        if nout <= 1152 and self.bsz == 4 and (nout % 48) == 0:
+            persistent_kernel = True
+            num_blocks = nout // 48
+        else:
+            persistent_kernel = False
+            num_blocks = (-(-h_s[0].shape[0] // 128)) * (-(-h_s[0].shape[1] // 32))
+            num_blocks = (-(-num_blocks // 4))
+
+        if (activation.classnm == 'Rectlinclip' and num_blocks < self.sm_count and
+                not self.use_cudac_kernels):
             if h_s[0].base is not h_ff_s[0].base:
                 if len(h_s[0].base.shape) == 3:
                     assert ((h_ff_s[0].base.shape[1] + 2) == h_s[0].base.shape[1])
@@ -2474,7 +2482,7 @@ class NervanaGPU(Backend):
             if num_used_steps is not None and num_used_steps < num_steps:
                 num_steps = num_used_steps
 
-            if nout <= 1152 and self.bsz == 4 and (nout % 48) == 0:
+            if persistent_kernel:
                 self._persistent_rnn_fprop(W_recur, h_prev_s[0],
                                            h_s[0], bias, nout, nout,
                                            self.bsz, num_steps, activation,
@@ -2527,8 +2535,16 @@ class NervanaGPU(Backend):
             reverse (boolean): When true, unrolling will iterate over time steps
                 in reverse (default case for RNN).
         """
-        num_blocks = (-(-delta_s[0].shape[0] // 128)) * (-(-delta_s[0].shape[1] // 32))
-        if activation.classnm == 'Rectlinclip' and num_blocks < (4 * self.sm_count):
+        if nout <= 1152 and self.bsz == 4 and (nout % 48) == 0:
+            persistent_kernel = True
+            num_blocks = nout // 48
+        else:
+            persistent_kernel = False
+            num_blocks = (-(-delta_s[0].shape[0] // 128)) * (-(-delta_s[0].shape[1] // 32))
+            num_blocks = (-(-num_blocks // 4))
+
+        if (activation.classnm == 'Rectlinclip' and num_blocks < self.sm_count and
+                not self.use_cudac_kernels):
             # Compute activation bprop for first timestep since there is
             # no compounded GEMM
             if reverse:
@@ -2548,7 +2564,7 @@ class NervanaGPU(Backend):
                 C = delta_s[1]
                 H = h_s[1]
 
-            if nout <= 1152 and self.bsz == 4 and (nout % 48) == 0:
+            if persistent_kernel:
                 self._persistent_rnn_bprop(W_recur, B, C, H, nout, nout,
                                            self.bsz, num_steps - 1, activation,
                                            reverse)

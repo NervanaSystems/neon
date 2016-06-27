@@ -300,4 +300,4 @@ def test_bibn(backend_default, fargs):
 
     err_out_bn = birnn._bprop_bn(err_be, out_bn)
 
-    assert allclose_with_out(err_out_bn.get(), err_out_ref.get(), rtol=0.0, atol=2.0e-5)
+    assert allclose_with_out(err_out_bn.get(), err_out_ref.get(), rtol=0.0, atol=2.5e-5)
