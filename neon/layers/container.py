@@ -582,13 +582,31 @@ class MergeSum(Broadcast):
 class MergeBroadcast(Broadcast):
     """
     Branches a single incoming layer or object (broadcast) into multiple output paths that are
-    then combined again (merged).
+    then combined again (merged). This container supports several options for concatenating the
+    paths ("recurrent", "depth", and "stack").
+
+    "recurrent" is used when merging two recurrent output streams.
+
+    "depth" concatenates activations that have a notion of spatial dimension. Multiple
+    activations can be concatenated along the feature map dimension, but the feature map
+    shapes have to be the same.
+
+    "stack" ignores the feature map shape and simply stacks the non-batch dimensions
+    atop each other. Used to concatenate the output of fully connected layers with each
+    other, and fully connected layers with convolutional layers.
+
+    For example, suppose we are merging a conv layer with output shape (10, 5, 5)
+    and a fully connected layer with 100 output nodes. Using 'depth' is not allowable.
+    By using 'stack', the (10, 5, 5) output of the conv layer would just be interpreted as
+    250 output nodes that are stacked on top of the 100 nodes from the fully connected
+    layer to get a total merged output of 350 nodes.
 
     Arguments:
         layers (list(list(Layer), LayerContainer): list of either layer lists,
                                                    or layer containers.  Elements that are
                                                    lists will be wrapped in Sequential
                                                    containers
+        merge (string): the merging method. Must be 'recurrent', 'depth', or 'stack'
         alphas (list(float), optional):  list of alpha values by which to weight the
                                          backpropagated errors
         name (str): Container name.  Defaults to "MergeBroadcast"
