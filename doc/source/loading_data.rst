@@ -202,66 +202,108 @@ or transformations.
 See the example, `examples/mnist_hdf5.py`, for how to format the HDF5 data file
 for use with the |HDF5Iterator| class.
 
-Macrobatching
--------------
+DataLoader
+----------
 
 If your data is too large to load directly into memory, use a
 macrobatching approach. In macrobatching, the data is loaded in smaller
 batches, then split further into minibatches to feed the model.
-Currently, neon only supports macrobatching with image datasets using
-the :py:class:`.ImageLoader` class. However, future releases will
-include a generic data loader for macrobatching of all data types (text,
-video, images, etc.).
+neon supports macrobatching with image, audio, and video datasets using
+the :py:class:`.DataLoader` class. 
 
-:py:class:`.ImageLoader` was created to provide a way to feed images
+:py:class:`.DataLoader` was created to provide a way to feed images
 from disk to neon with minimal latency. The module takes advantage of
 the high compressibility of images to conserve disk space and disk to
-host memory IO. ImageLoader uses a multithreaded library to hide the
+host memory IO. DataLoader uses a multithreaded library to hide the
 latency of decoding images, applying augmentation and/or
 transformations, and transferring the resulting outputs to device memory
 (if necessary). The module also adds optional functionality for applying
-transformations (scale, flip, and rotation)
+transformations to images (scale, flip, and rotation).
 
-Writing macrobatches
-~~~~~~~~~~~~~~~~~~~~
 
-In order to use the :py:class:`.ImageLoader`, the images of the dataset
-must be packaged into flat binary files which we refer to as
-“macrobatches”. Macrobatches are simply archive files that package
-together many data files (jpegs) to take advantage of disk locality. The
-container for these macrobatches is designed to be compatible with the
-GNU tool ``cpio``.
+Data format
+~~~~~~~~~~~
 
-To generate macrobatches, use the ``neon.util.batch_writer.py`` script.
-Macrobatch datasets can be generated with this script from four types of
-raw image sources:
+The :py:class:`.DataLoader` supports several ways to organize the data:
 
-1. General directory structure
+1. CSV manifest files
+2. General directory structure
+3. Macrobatched data
 
-2. CSV Manifest file
 
-3. ImageNet 1K tar files
+CSV manifest files
+~~~~~~~~~~~~~~~~~~
 
-4. CIFAR-10 numpy arrays (pickled)
+The most common approach is to provide training and validation *.csv* files, each containing
+file path and label indexes (for classification). The manifest file should contain a header line
+(that is ignored). Subsequent lines will have one record per line, formatted as:
+
+.. code-block:: bash
+
+    filename, label
+    <path_to_image_1>,<label_1>
+    <path_to_image_2>,<label_2>
+    ...
+    <path_to_image_N>,<label_N>
+
+For example:
+
+.. code-block:: bash
+
+    filename, label
+    /image_dir/faces/naveen_rao.jpg, 0
+    /image_dir/faces/arjun_bansal.jpg, 0
+    /image_dir/faces/amir_khosrowshahi.jpg, 0
+    /image_dir/fruits/apple.jpg, 1
+    /image_dir/fruits/pear.jpg, 1
+    /image_dir/animals/lion.jpg, 2
+    /image_dir/animals/tiger.jpg, 2
+    ...
+    /image_dir/vehicles/toyota.jpg, 3
+
+The manifest file is shuffled if the ``shuffle`` parameter to the DataLoader constructor is set to ``True``
+
+If the specified paths are not absolute (i.e. starts with ‘/’), then the
+path will be assumed to be relative to the location of the csv file.
+
+For example, see the ``examples/whale_calls.py`` script.
+
 
 General Directory Structure
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 This option presumes that your data is provided as a directory of
-images, each with the same extension, ``<ext>``, that are organized in a
-hierarchy as follows:
+images, that are organized in a hierarchy as follows:
 
 .. figure:: assets/image_loader_data_structure_v2.jpg
 
 In this organization, there are :math:`K=4` categories, with each category containing a variable number of images.
-The ``batch_writer.py`` utility will partition the data into train and
-validation sets, and then write out CSV files mapping the file location
-to an integer corresponding to the category label index. Then, the files
-are copied into macrobatch files, with optional arguments for resizing
-the images.
+The :py:class:`.DataLoader` will write out CSV files mapping the file location
+to an integer corresponding to the category label index. Note that to generate training/validation splits, the user
+should provide separate directories for training and testing. Alternatively, use the generated manifest file and partition into separate manifest files.
 
-The following command illustrates how to invoke ``batch_writer.py`` in
-this scenario:
+
+Macrobatches
+~~~~~~~~~~~~
+
+Macrobatches are simply archive files that package
+together many data files (jpegs) to take advantage of disk locality. The
+container for these macrobatches is designed to be compatible with the
+GNU tool ``cpio``.
+
+
+During runtime, the :py:class:`.DataLoader` will generate macrobatches from the
+data, if they do not exist. These macrobatches can then be used as direct input
+on subsequent training runs.
+
+Alternatively, users can pre-generate macrobatches using the 
+``neon.util.batch_writer.py`` script. Macrobatch datasets can be generated with this script 
+from four types of raw image sources:
+
+1. General directory structure
+
+Assuming the same directory structure as mentioned above, the following command illustrates how to 
+invoke ``batch_writer.py`` in this scenario:
 
 .. code-block:: python
 
@@ -279,43 +321,10 @@ In this command, the images will be loaded from
 rescaled to 256x384, but a 128x128 will be untouched). Each macrobatch
 will have at most ``macro_size=5000`` images.
 
-CSV Manifest file
-^^^^^^^^^^^^^^^^^
+2. CSV Manifest file
 
-This user can provide training and validation *csv.gz* files, each
-containing files and label indexes. The two required files are
-*train_file.csv.gz* and *val_file.csv.gz*. They should each contain
-one record per line, and be formatted as:
-
-.. code-block:: bash
-
-    <path_to_image_1>.<ext>,<label_1>
-    <path_to_image_2>.<ext>,<label_2>
-    ...
-    <path_to_image_N>.<ext>,<label_N>
-
-For example, the above images could be provided as:
-
-.. code-block:: bash
-
-    /image_dir/faces/naveen_rao.jpg, 0
-    /image_dir/faces/arjun_bansal.jpg, 0
-    /image_dir/faces/amir_khosrowshahi.jpg, 0
-    /image_dir/fruits/apple.jpg, 1
-    /image_dir/fruits/pear.jpg, 1
-    /image_dir/animals/lion.jpg, 2
-    /image_dir/animals/tiger.jpg, 2
-    ...
-    /image_dir/vehicles/toyota.jpg, 3
-
-Note that the train file is not shuffled during batch creation, so the
-user should take care to shuffle the lines when creating
-*train_file.csv.gz*.
-
-If the specified paths are not absolute (i.e. starts with ‘/’), then the
-path will be assumed to be relative to the location of the csv file.
-
-The batch writer can then be invoked by calling:
+For data formatted as a CSV Manifest file (see above), the batch writer 
+can then be invoked by calling:
 
 .. code-block:: bash
 
@@ -323,8 +332,7 @@ The batch writer can then be invoked by calling:
                                       --image_dir /location/of/csv_files \
                                       --set_type csv
 
-ImageNet 1K tar files
-^^^^^^^^^^^^^^^^^^^^^
+3. ImageNet 1K tar files
 
 The ImageNet task is recognition task is described on the
 `ILSVRC <http://www.image-net.org/challenges/LSVRC/>`__ website. The
@@ -359,8 +367,7 @@ images (these can be deleted once the macrobatches have been written).
 Since the dataset is relatively large, an SSD can greatly speed up the
 batch writing process.
 
-CIFAR-10 pickled numpy arrays
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+4. CIFAR-10 numpy arrays (pickled)
 
 The CIFAR10 dataset is provided as a pickled set of numpy arrays
 containing the uncompressed pixel buffers of each image. This dataset is
@@ -389,184 +396,50 @@ the images can negatively impact the accuracy of classification
 algorithms, so in this case we use lossless PNG encoding as the format
 to dump into the macrobatches.
 
-Metafile
-~~~~~~~~
 
-A required metafile named ``macrobatch_meta`` is automatically generated
-by ``batch_writer.py``. This file instructs :py:class:`.ImageLoader`  on how many
-batches to consider. The metafile is a plain text file with a different
-attribute for each line. As an example, the metafile for the ImageNet
-dataset would look like this:
+Invoking the DataLoader
+~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: bash
-
-    train_start 0
-    train_nrec 1281167
-    val_start 257
-    val_nrec 50000
-    nclass 1000
-    item_max_size 1845130
-    label_size 4
-    R_mean 104.412277
-    G_mean 119.213318
-    B_mean 126.806091
-
-Each of these attributes is described below:
-
- * ``train_nrec`` and ``val_nrec`` are the number of records for the train and validation sets, respectively. ``train_start`` and ``val_start`` are the index of the macrobatch where each of those partitions start (e.g. ``macrobatch_0`` through ``macrobatch_256`` contain training images, while ``macrobatch_257`` onwards contain validation images)
- * ``nclass`` is the number of distinct categories
- * ``item_max_size`` is the size (in bytes) of the largest encoded jpeg file
- * ``label_size`` is the size (in bytes) of the label format (for an integer, 4 bytes)
- * ``R_mean``, ``G_mean``, ``B_mean`` are the pixel means for the red, green, and blue channels, respectively.
-
-Loading Images from macrobatches
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Once macrobatches have been created, the :py:class:`.ImageLoader` module, which
-is an iterable, can be instantiated to load images in a pipelined
-fashion while applying several types of image transformations or
-augmentations.
-
-See the documentation of arguments to the ImageLoader constructor for
-explanation of the possible configurations. Below are several example
-invocations.
-
-Examples
-^^^^^^^^
-
-In the below examples, each macrobatch of images can be any size and any
-aspect ratio. The ImageLoader takes care of rescaling the image and
-cropping a region of interest. In general, the ``do_transforms`` flag is
-used to switch on or off random transformations en masse, so even if
-arguments are provided that indicate some range over which random values
-should be picked, setting ``do_transforms`` to ``False`` will override
-those ranges.
-
-We will assume that the macrobatches are in the */usr/local/data/batches*
-directory for simplicity. Note that the default value of
-``do_transforms`` is ``True``, but we provide it explicitly in the
-examples for clarity.
-
-1. Scale the original image so that its short side is 256 pixels,
-   randomly perform a horizontal reflection, then crop a randomly
-   selected 100x100 region from the result.
-
-   .. code-block:: python
-
-       train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                           inner_size=100,
-                           scale_range=256,
-                           do_transforms=True)
-
-2. Scale the original image so that its short side is 256 pixels, do not
-   perform a horizontal reflection, then crop the center 100x100 region
-   from the result.
-
-   .. code-block:: python
-
-       train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                           inner_size=100,
-                           scale_range=256,
-                           do_transforms=False)  # Overrides flipping/random cropping
-
-3. Randomly scale the original image so that the short side is between
-   100 and 200 pixels, randomly perform a horizontal reflection, then
-   crop a randomly selected 80x80 region from the result.
-
-   .. code-block:: python
-
-       train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                           inner_size=80,
-                           scale_range=(100, 200),
-                           do_transforms=True)
-
-4. Same as 3, but also randomly adjust the contrast to between 75% and
-   125% of the original image.
-
-   .. code-block:: python
-
-       train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                           inner_size=80,
-                           scale_range=(100, 200),
-                           contrast_range=(75, 125),
-                           do_transforms=True)
-
-5. Same as 4, but also shuffle the order of images returned.
-
-   .. code-block:: python
-
-       train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                           inner_size=80,
-                           scale_range=(100, 200),
-                           contrast_range=(75, 125),
-                           shuffle=True,
-                           do_transforms=True)
-
-6. Same as 5, but also randomly stretch the image horizontally or
-   vertically (direction is also randomly determined) by a factor
-   between 1 and 1.25.
-
-   .. code-block:: python
-
-       train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                           inner_size=80,
-                           scale_range=(100, 200),
-                           contrast_range=(75, 125),
-                           aspect_ratio=125,
-                           shuffle=True,
-                           do_transforms=True)
-
-7. Scale the original image so that the short side is 100 pixels, do not
-   perform a horizontal reflection, do not adjust contrast, crop the
-   center 80x80 region from the resulting image, and do not shuffle the
-   order in which images are returned
-
-   .. code-block:: python
-
-       train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                           inner_size=80,
-                           scale_range=(100, 200),
-                           contrast_range=(75, 125),
-                           shuffle=True,
-                           do_transforms=False)  # Overrides all randomness
-
-8. Force the original image to be scaled so that the entire image fits
-   into a 100x100 region, regardless of aspect ratio distortion, and
-   perform random horizontal reflections.
-
-   .. code-block:: python
-
-       train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                           inner_size=100,
-                           scale_range=0,  # Force scaling to match inner_size
-                           do_transforms=True)
-
-Typical setup for ImageNet
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-Here is a typical setup for ImageNet training. Randomly select a 224x224
-crop of an image randomly scaled so that its shortest side is between
-256 and 480, randomly flipped, shuffled. For testing, scale to various
-scales and take the whole image so that convolutional inference can be
-performed.
+The :py:class:`.DataLoader` constructor takes several arguments (see the API), including a `media_params`, which
+specifies the type of media being loaded and provides additional parameters. For images, an example invocation is:
 
 .. code-block:: python
 
-    train_set = ImageLoader(repo_dir='/usr/local/data/batches', set_name='train',
-                            inner_size=224,
-                            scale_range=(256, 480),  # Force scaling to match inner_size
-                            shuffle=True,
-                            do_transforms=True)
-    test256 = ImageLoader(repo_dir='/usr/local/data/batches', set_name='validation',
-                          inner_size=256,
-                          scale_range=0,  # Force scaling to match inner_size
-                          do_transforms=False)
-    test384 = ImageLoader(repo_dir='/usr/local/data/batches', set_name='validation',
-                          inner_size=384,
-                          scale_range=0,  # Force scaling to match inner_size
-                          do_transforms=False)
+    shape = dict(channel_count=3, height=32, width=32)
+    train_params = ImageParams(center=False, aspect_ratio=110, **shape)
+    train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
+                       shuffle=True, target_size=1, nclasses=10)
+
+For images, transformations specified by :py:class:`.ImageParams` will be performed on-the-fly. For supported
+transformations, see the :py:class:`.ImageParams` documentation.
+
+For audio, use the :py:class:`.AudioParams` object to provide the needed parameters to the data loader:
+
+.. code-block:: python
+
+    common_params = dict(sampling_freq=2000, clip_duration=2000, frame_duration=80, overlap_percent=50)
+    train_params = AudioParams(random_scale_percent=5, **common_params)
+    train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
+                       index_file=train_idx, target_size=1, nclasses=2)
+
+Here, several important metadata are supplied, such as the sampling frequency and the maximum duration of audio clips, as well as FFT-related parameters for generating the spectrogram such as frame_duration and overlap_percent. For more information, see the :py:class:`.AudioParams` documentation and the ``whale_calls.py`` and ``music_genres.py`` scripts.
+
+For video, use the :py:class:`.VideoParams` class. We first define image parameters for the frames, and those parameters are then supplied to constructor the VideoParams object. For example:
+
+.. code-block:: python
+
+    shape = dict(channel_count=3, height=112, width=112, scale_min=128, scale_max=128)
+    frame_params = ImageParams(center=False, flip=True, **shape)
+    trainParams = VideoParams(frame_params=frame_params, frames_per_clip=16)
+    train = DataLoader(set_name='train', repo_dir=traindir, media_params=trainParams,
+                       shuffle=True, target_size=1, nclasses=101, datum_dtype=np.uint8)
 
 
+ImageLoader
+~~~~~~~~~~~
+
+neon maintains backwards compatibility with the old :py:class:`.ImageLoader` class. For more details
+on how to use the old system, see documentation for neon v1.4.0.
 
 .. |ArrayIterator| replace:: :py:class:`.ArrayIterator`
 .. |DataLoader| replace:: :py:class:`.DataLoader`
