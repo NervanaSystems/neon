@@ -37,23 +37,34 @@ args = parser.parse_args(gen_be=False)
 if args.data_dir is None:
     args.data_dir = '/usr/local/data/'
 
+# Override save path if None
+if args.save_path is None:
+    args.save_path = 'frcn_vgg.pkl'
+
+if args.callback_args['save_path'] is None:
+    args.callback_args['save_path'] = args.save_path
+
+if args.callback_args['serialize'] is None:
+    args.callback_args['serialize'] = min(args.epochs, 10)
+
 # hyperparameters
 args.batch_size = 1
 
 num_epochs = args.epochs
 n_mb = None
 img_per_batch = args.batch_size
-rois_per_img = 256
+rpn_rois_per_img = 256  # number of rois to sample to train rpn
+frcn_rois_per_img = 128 # number of rois to sample to train frcn
 frcn_fine_tune = False
 learning_rate_scale = 1.0 / float(args.lr_scale)
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
-
 train_set = PASCAL('trainval', '2007', path=args.data_dir, n_mb=n_mb,
-                   img_per_batch=img_per_batch, rois_per_img=rois_per_img,
-                   add_flipped=True, shuffle=True, rebuild_cache=False)
+                   img_per_batch=img_per_batch, rpn_rois_per_img=rpn_rois_per_img,
+                   frcn_rois_per_img=frcn_rois_per_img, add_flipped=True, shuffle=True,
+                   rebuild_cache=False)
 
 # Faster-RCNN contains three models: VGG, the Region Proposal Network (RPN),
 # and the Classification Network (ROI-pooling + Fully Connected layers), organized
@@ -81,8 +92,10 @@ RPN_1x1_obj = Conv((1, 1, 18), activation=PixelwiseSoftmax(c=2), padding=0, stri
 RPN_1x1_bbox = Conv((1, 1, 36), activation=Identity(), padding=0, strides=1, **rpn_init)
 
 # define ROI classification network
-ROI = [ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox], train_set.get_global_buffers()),
-       RoiPooling(HW=(8, 8)),
+ROI = [ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox], 
+                      train_set.get_global_buffers(),
+                      num_rois=frcn_rois_per_img),
+       RoiPooling(HW=(7, 7)),
        Affine(nout=4096, init=Gaussian(scale=0.005),
               bias=Constant(.1), activation=Rectlin()),
        Dropout(keep=0.5),
@@ -97,32 +110,34 @@ ROI_bbox = Affine(nout=84, init=Gaussian(scale=0.001), bias=Constant(0), activat
 # the four branches of the tree mirror the branches listed above
 model = Model(layers=Tree([VGG + [b1, RPN_3x3, b2, RPN_1x1_obj],
                            [b2, RPN_1x1_bbox],
-                           [b1] + ROI + [ROI_category],
-                           #[b3, ROI_bbox],
+                           [b1] + ROI + [b3, ROI_category],
+                           [b3, ROI_bbox],
                            ]))
 
 # test fprop only
-bob = model.get_outputs(train_set)
+# bob = model.get_outputs(train_set)
 
 # set up cost different branches, respectively
-weights = 1.0 / (256)
+weights = 1.0 / (rpn_rois_per_img)
 cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti(), weights=weights),
                         GeneralizedCostMask(costfunc=SmoothL1Loss(sigma=3.0), weights=weights),
-                        GeneralizedCost(costfunc=CrossEntropyMulti()),
+                        GeneralizedCostMask(costfunc=CrossEntropyMulti()),
                         GeneralizedCostMask(costfunc=SmoothL1Loss())
-                        ])
+                        ],
+                weights=[1, 1, 0, 0])
 
 
 # setup optimizer
-# schedule = Schedule(step_config=[6], change=[0.1])
-opt_w = GradientDescentMomentum(0.001 * learning_rate_scale, 0.9, wdecay=0.0005)
-opt_b = GradientDescentMomentum(0.002 * learning_rate_scale, 0.9, wdecay=0.0005)
+schedule_w = Schedule(step_config=[6], change=[0.0001])
+schedule_b = Schedule(step_config=[6], change=[0.0002])
+opt_w = GradientDescentMomentum(0.001 * learning_rate_scale, 0.9, wdecay=0.0005, schedule=schedule_w)
+opt_b = GradientDescentMomentum(0.002 * learning_rate_scale, 0.9, wdecay=0.0005, schedule=schedule_b)
 optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b})
 
 # if training a new model, seed the image model conv layers with pre-trained weights
 # otherwise, just load the model file
 if args.model_file is None:
-    util.load_vgg_weights(model, "~/private-neon/examples/vgg_weights_neon.prm")
+    util.load_vgg_weights(model, '~/private-neon/examples/faster-rcnn/')
 
 callbacks = Callbacks(model, eval_set=train_set, **args.callback_args)
 callbacks.add_callback(TrainMulticostCallback())
@@ -135,13 +150,13 @@ model.fit(train_set, optimizer=optimizer,
 # # before saving the model
 # model = scale_bbreg_weights(model, train_set.bbtarget_means, train_set.bbtarget_stds)
 #
-# save_obj(model.serialize(keep_states=True), args.save_path)
-#
-# print 'running eval...'
-# metric_train = model.eval(train_set, metric=ObjectDetection())
-# print 'Train: label accuracy - {}%, object deteciton logloss - {}'.format(metric_train[0]*100,
-#                                                                           metric_train[1])
-#
-# metric_test = model.eval(test_set, metric=ObjectDetection())
-# print 'Test: label accuracy - {}%, object deteciton logloss - {}'.format(metric_test[0]*100,
-#                                                                          metric_test[1])
+save_obj(model.serialize(keep_states=True), args.save_path)
+
+print 'running eval...'
+#metric_train = model.eval(train_set, metric=ObjectDetection())
+print 'Train: label accuracy - {}%, object deteciton logloss - {}'.format(metric_train[0]*100,
+                                                                          metric_train[1])
+
+#metric_test = model.eval(test_set, metric=ObjectDetection())
+print 'Test: label accuracy - {}%, object deteciton logloss - {}'.format(metric_test[0]*100,
+                                                                         metric_test[1])

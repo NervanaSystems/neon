@@ -20,7 +20,10 @@ from neon.initializers import Constant, Xavier
 from neon.transforms import Rectlin
 from neon.layers import Conv, Pooling
 from neon.util.persist import load_obj
-
+from neon.data.datasets import Dataset
+from voc_eval import voc_eval
+import os
+import cPickle
 
 def add_vgg_layers():
 
@@ -66,15 +69,43 @@ def add_vgg_layers():
     return vgg_layers
 
 
-def load_vgg_weights(model, weight_path):
-    pdict = load_obj(weight_path)
+def load_vgg_weights(model, path):
+    url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/'
+    filename = 'VGG_D_Conv.p'
+    size = 169645138
 
-    param_layers = [l for l in model.layers_to_optimize]
-    param_dict_list = pdict['layer_params_states']
-    i = 0
+    workdir, filepath = Dataset._valid_path_append(path, '', filename)
+    if not os.path.exists(filepath):
+        Dataset.fetch_dataset(url, filename, filepath, size)
+
+    print 'De-serializing the pre-trained VGG16 model...'
+    pdict = load_obj(filepath)
+
+    param_layers = [l for l in model.layers.layers[0].layers]
+    param_dict_list = pdict['model']['config']['layers']
+
     for layer, ps in zip(param_layers, param_dict_list):
-        i = i+1
-        print i, layer.name
-        layer.set_params(ps)
-        if i == 26:
-            break
+        layer.load_weights(ps, load_states=True)
+        print layer.name + " <-- " + ps['config']['name']
+
+
+def run_voc_eval(annopath, imagesetfile, year, image_set, classes, output_dir):
+    aps = []
+    # The PASCAL VOC metric changed in 2010
+    use_07_metric = True if int(year) < 2010 else False
+    print 'VOC07 metric? ' + ('Yes' if use_07_metric else 'No')
+    for i, cls in enumerate(classes):
+        if cls == '__background__':
+            continue
+        filename = 'voc_{}_{}_{}.txt'.format(
+            year, image_set, cls)
+        filepath = os.path.join(output_dir, filename)
+        rec, prec, ap = voc_eval(filepath, annopath, imagesetfile, cls,
+                                 output_dir, ovthresh=0.5, use_07_metric=use_07_metric)
+        aps += [ap]
+        print('AP for {} = {:.4f}'.format(cls, ap))
+        with open(os.path.join(output_dir, cls + '_pr.pkl'), 'w') as f:
+            cPickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
+    print('Mean AP = {:.4f}'.format(np.mean(aps)))
+
+

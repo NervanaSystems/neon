@@ -253,9 +253,20 @@ class Sequential(LayerContainer):
         Arguments:
             in_obj: any object that has an out_shape (Layer) or shape (Tensor, dataset)
         """
-        config_layers = self.layers if in_obj else self._layers
+       if in_obj:
+            config_layers = self.layers
+            in_obj = in_obj
+        else:
+            in_obj = self.layers[0]
 
-        in_obj = in_obj if in_obj else self.layers[0]
+            # Remove the initial branch nodes from the layers
+            for l_idx, l in enumerate(self.layers):
+                if type(l) in (BranchNode,):
+                    continue
+                else:
+                    config_layers = self.layers[l_idx:]
+                    break
+
         super(Sequential, self).configure(in_obj)
         prev_layer = None
         for l in config_layers:
@@ -339,7 +350,7 @@ class Sequential(LayerContainer):
             altered_tensor = l.be.distribute_data(error, l.parallelism)
             if altered_tensor:
                 l.revert_list.append(altered_tensor)
-
+            
             if type(l.prev_layer) is BranchNode or l is self._layers[0]:
                 error = l.bprop(error, alpha, beta)
             else:
@@ -426,7 +437,6 @@ class Tree(LayerContainer):
         """
         super(Tree, self).configure(in_obj)
         self.layers[0].configure(in_obj)
-
         for l in self.layers[1:]:
             l.configure(None)
         self.out_shape = [l.out_shape for l in self.layers]
@@ -459,7 +469,7 @@ class Tree(LayerContainer):
             Tensor: output data
         """
         x = self.layers[0].fprop(inputs, inference)
-        out = [x] + [l.fprop(None) for l in self.layers[1:]]
+        out = [x] + [l.fprop(None, inference=inference) for l in self.layers[1:]]
         return out
 
     def bprop(self, error):

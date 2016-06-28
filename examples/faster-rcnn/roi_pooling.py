@@ -39,6 +39,8 @@ class RoiPooling(Layer):
         self.fm_height = None
         self.fm_width = None
 
+        self.bprop_enabled = True
+
         # self.rois_per_batch = self.be.bsz * 64
 
     def configure(self, in_obj):
@@ -87,17 +89,6 @@ class RoiPooling(Layer):
         self.error = self.be.iobuf(self.in_shape)
         self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs)
         self.max_idx = self.be.iobuf(self.out_shape, dtype=np.int32)
-
-    # def set_deltas(self, delta_buffers):
-    #     """
-    #     Use pre-allocated (by layer containers) list of buffers for backpropagated error.
-    #     Only set deltas for layers that own their own deltas
-    #     Only allocate space if layer owns its own deltas
-
-    #     Arguments:
-    #         delta_buffers (list): list of pre-allocated tensors (provided by layer container)
-    #     """
-    #     self.allocate_deltas()
 
     def init_buffers(self, inputs):
         """
@@ -156,8 +147,8 @@ class RoiPooling(Layer):
         if self.bprop_enabled:
             # # bprop through the roipooling layer
             self.be.roipooling_bprop(error, self.rois, self.error, self.max_idx,
-                                     self.rois_per_batch, self.fm_channel, self.fm_height,
+                                     self.rois_per_img, self.fm_channel, self.fm_height,
                                      self.fm_width, self.roi_H, self.roi_W, self.spatial_scale)
 
-        # # bprop back through the imagenet layer container
-        # self.deltas = super(RoiPooling, self).bprop(self.error, alpha, beta)
+        # bprop back through the imagenet layer container
+        return self.error

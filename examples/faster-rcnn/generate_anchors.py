@@ -35,24 +35,24 @@ import numpy as np
 #       [-167., -343.,  184.,  360.]])
 
 
-def generate_all_anchors(conv_size, im_scale, scales=np.array((8, 16, 32))):
+def generate_all_anchors(conv_size_x, conv_size_y, im_scale, scales=np.array((8, 16, 32))):
     anchors = generate_anchors(scales=scales)
     num_anchors = anchors.shape[0]
 
     # generate shifts to apply to anchors
     # note: 1/self.SCALE is the feature stride
-    shift_x = np.arange(0, conv_size) * 1 / im_scale
-    shift_y = np.arange(0, conv_size) * 1 / im_scale
+    shift_x = np.arange(0, conv_size_x) * 1.0 / im_scale
+    shift_y = np.arange(0, conv_size_y) * 1.0 / im_scale
     shift_x, shift_y = np.meshgrid(shift_x, shift_y)
+    
     shifts = np.vstack((shift_x.ravel(), shift_y.ravel(),
                         shift_x.ravel(), shift_y.ravel())).transpose()
-
+    
     # add K anchors (1, K, 4) to A shifts (A, 1, 4) to get
     # shift anchors (A, K, 4), then reshape to (A*K, 4) shifted anchors
     K = num_anchors
     A = shifts.shape[0]
-    all_anchors = (anchors.reshape((1, K, 4)).transpose((1, 0, 2)) +
-                   shifts.reshape((1, A, 4)))
+    all_anchors = (anchors.reshape((1, K, 4)) + shifts.reshape((1,A,4)).transpose((1,0,2)))#.transpose((1, 0, 2)) + shifts.reshape((1, A, 4)))
 
     all_anchors = all_anchors.reshape((K * A, 4))
     # total_anchors = int(K * A)

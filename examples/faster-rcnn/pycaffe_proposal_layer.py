@@ -22,7 +22,6 @@ class PyCaffeProposalLayer():
     def setup(self, bottom, top):
         # parse the layer parameter string, which must be valid YAML
         # layer_params = yaml.load(self.param_str_)
-
         self._feat_stride = 16
         anchor_scales = (8, 16, 32)
         self._anchors = generate_anchors(scales=np.array(anchor_scales))
@@ -69,7 +68,7 @@ class PyCaffeProposalLayer():
         scores = bottom[0][:, self._num_anchors:, :, :]
         bbox_deltas = bottom[1]
         im_info = [float(x.get()) for x in bottom[2]]
-
+    
         if DEBUG:
             print 'im_size: ({}, {})'.format(im_info[0], im_info[1])
             print 'scale: {}'.format(im_info[2])
@@ -114,7 +113,7 @@ class PyCaffeProposalLayer():
         # transpose to (1, H, W, A)
         # reshape to (1 * H * W * A, 1) where rows are ordered by (h, w, a)
         scores = scores.transpose((0, 2, 3, 1)).reshape((-1, 1))
-
+            
         # Convert anchors into proposals via bbox transformations
         proposals = bbox_transform_inv(anchors, bbox_deltas)
 
@@ -124,8 +123,12 @@ class PyCaffeProposalLayer():
         # 3. remove predicted boxes with either height or width < threshold
         # (NOTE: convert min_size to input image scale stored in im_info[2])
         keep = _filter_boxes(proposals, min_size * im_info[2])
+
         proposals = proposals[keep, :]
         scores = scores[keep]
+    
+        if DEBUG:
+            print "(CAFFE) len(keep) before nms: {}".format(len(keep))
 
         # 4. sort all (proposal, score) pairs by score from highest to lowest
         # 5. take top pre_nms_topN (e.g. 6000)
@@ -134,15 +137,25 @@ class PyCaffeProposalLayer():
             order = order[:pre_nms_topN]
         proposals = proposals[order, :]
         scores = scores[order]
+       
+        if DEBUG: 
+            print "(CAFFE) len(proposals) after get_top_N: {}".format(len(proposals))
 
         # 6. apply nms (e.g. threshold = 0.7)
         # 7. take after_nms_topN (e.g. 300)
         # 8. return the top proposals (-> RoIs top)
         keep = nms(np.hstack((proposals, scores)), nms_thresh)
+        
+        if DEBUG:
+            print "(CAFFE) len(keep) before clipping: {}".format(len(keep))
+    
         if post_nms_topN > 0:
             keep = keep[:post_nms_topN]
         proposals = proposals[keep, :]
         scores = scores[keep]
+    
+        if DEBUG:
+            print "(CAFFE) len(keep) after nms: {}".format(len(keep))
 
         # Output rois blob
         # Our RPN implementation only supports a single input image, so all
