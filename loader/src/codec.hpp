@@ -15,8 +15,23 @@
 
 #include "media.hpp"
 
-#include <libavcodec/avcodec.h>
-#include <libavutil/common.h>
+#ifdef __cplusplus
+extern "C"
+{
+    #include <libavcodec/avcodec.h>
+    #include <libavutil/common.h>
+    #include <libavutil/error.h>
+}
+#endif
+
+void raise_averror(const char* prefix, int errnum) {
+    static char errbuf[512];
+    av_strerror(errnum, &errbuf[0], 512);
+
+    stringstream ss;
+    ss << prefix << ": " << errbuf;
+    throw std::runtime_error(ss.str());
+}
 
 #include <mutex>
 
@@ -61,6 +76,8 @@ public:
     }
 
     RawMedia* decode(char* item, int itemSize) {
+        int errnum;
+
         _format = avformat_alloc_context();
         if (_format == 0) {
             throw std::runtime_error("Could not get context for decoding");
@@ -73,12 +90,12 @@ public:
         memcpy(itemCopy, item, itemSize);
         _format->pb = avio_alloc_context(itemCopy, itemSize, 0, 0, 0, 0, 0);
 
-        if (avformat_open_input(&_format , "", 0, 0) < 0) {
-            throw std::runtime_error("Could not open input for decoding");
+        if ((errnum = avformat_open_input(&_format , "", 0, 0)) < 0) {
+            raise_averror("Could not open input for decoding", errnum);
         }
 
-        if (avformat_find_stream_info(_format, 0) < 0) {
-            throw std::runtime_error("Could not find media information");
+        if ((errnum = avformat_find_stream_info(_format, 0)) < 0) {
+            raise_averror("Could not find media information", errnum);
         }
 
         _codec = _format->streams[0]->codec;
@@ -87,10 +104,9 @@ public:
             throw std::runtime_error("Could not find media stream in input");
         }
 
-        int result =
-            avcodec_open2(_codec, avcodec_find_decoder(_codec->codec_id), 0);
-        if (result < 0) {
-            throw std::runtime_error("Could not open decoder");
+        errnum = avcodec_open2(_codec, avcodec_find_decoder(_codec->codec_id), 0);
+        if (errnum < 0) {
+            raise_averror("Could not open decoder", errnum);
         }
 
         if (_raw.size() == 0) {
