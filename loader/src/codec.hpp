@@ -18,6 +18,30 @@
 #include <libavcodec/avcodec.h>
 #include <libavutil/common.h>
 
+#include <mutex>
+
+using std::mutex;
+
+int lockmgr(void **p, enum AVLockOp op)
+{
+   mutex** mx = (mutex**) p;
+   switch (op) {
+   case AV_LOCK_CREATE:
+      *mx = new mutex;
+       break;
+   case AV_LOCK_OBTAIN:
+       (*mx)->lock();
+       break;
+   case AV_LOCK_RELEASE:
+       (*mx)->unlock();
+       break;
+   case AV_LOCK_DESTROY:
+       delete *mx;
+       break;
+   }
+   return 0;
+}
+
 class Codec {
 public:
     Codec(MediaParams* params) : _format(0), _codec(0) {
@@ -25,6 +49,14 @@ public:
             _mediaType = AVMEDIA_TYPE_VIDEO;
         } else if (params->_mtype == AUDIO) {
             _mediaType = AVMEDIA_TYPE_AUDIO;
+        }
+
+        lock_guard<mutex> lock(_mutex);
+        if (_init == 0) {
+            av_register_all();
+            av_lockmgr_register(lockmgr);
+            av_log_set_level(AV_LOG_FATAL);
+            _init = 1;
         }
     }
 
@@ -115,4 +147,6 @@ private:
     AVMediaType                 _mediaType;
     AVFormatContext*            _format;
     AVCodecContext*             _codec;
+    mutex                       _mutex;
+    static int                  _init;
 };

@@ -30,6 +30,10 @@
 #include "audio.hpp"
 #endif
 
+#if defined HAS_AUDLIB || defined HAS_VIDLIB
+int Codec::_init = 0;
+#endif
+
 #include "api.hpp"
 
 Media* Media::create(MediaParams* params, MediaParams* ingestParams, int id) {
