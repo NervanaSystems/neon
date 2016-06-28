@@ -66,7 +66,8 @@ public:
         _scaleBy = params->_randomScalePercent / 100.0;
         _scaleMin = 1.0 - _scaleBy;
         _scaleMax = 1.0 + _scaleBy;
-    }
+        transpose(getFilterbank(_numFilts, _windowSize, _samplingFreq), _fbank); 
+   }
 
     virtual ~Specgram() {
         delete _window;
@@ -93,11 +94,23 @@ public:
 
         cv::split(compx, planes);
         cv::magnitude(planes[0], planes[1], planes[0]);
-        Mat mag;
+        int nframes = planes[0].rows;
+        int nfeats;
+        if (_feature == SPECGRAM) {
+            nfeats = planes[0].cols; 
+        }
+        else if (_feature == MFSC){
+          nfeats = _numFilts;
+        }
+        else {
+            nfeats = _numCepstra;
+        }
+        Mat mag = Mat::zeros(nframes, nfeats, CV_32F);
         if (_feature == SPECGRAM) {
             mag = planes[0];
-        } else {
-            mag = extractFeatures(planes[0]);
+        } 
+        else {
+            extractFeatures(planes[0], mag);
         }
 
         Mat feats;
@@ -218,12 +231,12 @@ private:
         return count;
     }
 
-    double hz_to_mel(double freq_in_hz) {
-        return 2595 * std::log10(1 + freq_in_hz/700.0);
+    double hzToMel(double freqInHz) {
+        return 2595 * std::log10(1 + freqInHz/700.0);
     }
 
-    double mel_to_hz(double freq_in_mels) {
-        return 700 * (std::pow(10, freq_in_mels/2595.0)-1);
+    double melToHz(double freqInMels) {
+        return 700 * (std::pow(10, freqInMels/2595.0)-1);
     }
 
     vector<double> linspace(double a, double b, int n) {
@@ -237,15 +250,15 @@ private:
         return interval;
     }
 
-    Mat get_filterbank(int filts, int ffts, double sampling_rate) {
-        double minfreq = 0.0;
-        double maxfreq = sampling_rate / 2.0;
-        double minmelfreq = hz_to_mel(minfreq);
-        double maxmelfreq = hz_to_mel(maxfreq);
-        vector<double> melinterval = linspace(minmelfreq, maxmelfreq, filts + 2);
+    Mat getFilterbank(int filts, int ffts, double samplingRate) {
+        double minFreq = 0.0;
+        double maxFreq = samplingRate / 2.0;
+        double minMelFreq = hzToMel(minFreq);
+        double maxMelFreq = hzToMel(maxFreq);
+        vector<double> melInterval = linspace(minMelFreq, maxMelFreq, filts + 2);
         vector<int> bins;
         for (int k=0; k<filts+2; ++k) {
-            bins.push_back(std::floor((1+ffts)*mel_to_hz(melinterval[k])/sampling_rate));
+            bins.push_back(std::floor((1+ffts)*melToHz(melInterval[k])/samplingRate));
         }
 
         Mat fbank = Mat::zeros(filts, 1 + ffts / 2, CV_32F);
@@ -260,31 +273,29 @@ private:
         return fbank;
     }
 
-    Mat extractFeatures(Mat& spectrogram) {
-        int ffts = spectrogram.cols;
+  void extractFeatures(Mat& spectrogram, Mat& features) {
         Mat powspec = spectrogram.mul(spectrogram);
         powspec *= 1.0 / _windowSize;
-        Mat fbank;
-        transpose(get_filterbank(_numFilts, 2*(ffts-1), _samplingFreq), fbank);
-        Mat cepsgram = powspec*fbank;
+        Mat cepsgram = powspec*_fbank;
         log(cepsgram, cepsgram);
         if (_feature == MFSC) {
-            return cepsgram;
+            features = cepsgram;
         }
-        int pad_cols = cepsgram.cols;
-        int pad_rows = cepsgram.rows;
-        if (cepsgram.cols % 2 != 0) {
-            pad_cols = 1 + cepsgram.cols;
+        else {
+            int pad_cols = cepsgram.cols;
+            int pad_rows = cepsgram.rows;
+            if (cepsgram.cols % 2 != 0) {
+                pad_cols = 1 + cepsgram.cols;
+            }
+            if (cepsgram.rows % 2 != 0) {
+                pad_rows = 1 + cepsgram.rows;
+            } 
+            Mat padcepsgram = Mat::zeros(pad_rows, pad_cols, CV_32F);
+            cepsgram.copyTo(padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols)));
+            dct(padcepsgram, padcepsgram, cv::DFT_ROWS);
+            cepsgram = padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols));
+            features = cepsgram(Range::all(), Range(0, _numCepstra));
         }
-        if (cepsgram.rows % 2 != 0) {
-            pad_rows = 1 + cepsgram.rows;
-        }
-        Mat padcepsgram = Mat::zeros(pad_rows, pad_cols, CV_32F);
-        cepsgram.copyTo(padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols)));
-        dct(padcepsgram, padcepsgram, cv::DFT_ROWS);
-        cepsgram = padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols));
-        Mat subcepsgram = cepsgram(Range::all(), Range(0, _numCepstra));
-        return subcepsgram;
     }
 
 private:
@@ -307,6 +318,7 @@ private:
     char*                       _buf;
     Mat*                        _image;
     Mat*                        _window;
+    Mat                         _fbank;
     cv::RNG                     _rng;
     constexpr static double     PI = 3.14159265358979323846;
 };
