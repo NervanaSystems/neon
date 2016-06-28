@@ -1,6 +1,6 @@
 # ChangeLog
 
-## v1.5.0 (2016-06-24):
+## v1.5.0 (2016-06-27):
 
 ### Modifications
 
@@ -11,10 +11,11 @@
 * HDF5 file data iterator
 * Convolution kernel improvements
 * Winograd kernel for fprop/bprop and 5x5 stride 1 filters
-* API documentation improvements [#234, #244]
+* API documentation improvements [#234, #244, #263]
 * Cache directory cleanup
 * Reorganization of all unit tests
 * Check for compatible shapes before doing a memcpy [#182, #183]
+* Bug fixes [#231, #241, #253, #257, #259]
 
 ## v1.4.0 (2016-04-29):
 

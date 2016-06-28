@@ -43,10 +43,9 @@ New features in this release:
 * HDF5 file data iterator
 * Convolution kernel improvements
 * Winograd kernel for fprop/bprop and 5x5 stride 1 filters
-* API documentation improvements [#234, #244]
+* API documentation improvements [#234, #244, #263]
 * Cache directory cleanup
 * Reorganization of all unit tests
-* Check for compatible shapes before doing a memcpy [#182, #183]
 * and `many more`_.
 
 We use neon internally at Nervana to solve our `customers' problems`_
