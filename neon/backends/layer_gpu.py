@@ -424,7 +424,7 @@ class ConvLayer(Layer):
             # Temp for now till we can autotune
             # 2 is safer for fp16 without batchnorm
             if (dtype == np.float32 and lib.enable_winograd != 2) or lib.enable_winograd == 4:
-                winograd = 4
+                winograd = 2  # not using 4 as a default for now
             else:
                 winograd = 2
 
