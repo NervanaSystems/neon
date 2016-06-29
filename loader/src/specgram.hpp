@@ -66,7 +66,7 @@ public:
         _scaleBy = params->_randomScalePercent / 100.0;
         _scaleMin = 1.0 - _scaleBy;
         _scaleMax = 1.0 + _scaleBy;
-        transpose(getFilterbank(_numFilts, _windowSize, _samplingFreq), _fbank); 
+        transpose(getFilterbank(_numFilts, _windowSize, _samplingFreq), _fbank);
    }
 
     virtual ~Specgram() {
@@ -94,22 +94,10 @@ public:
 
         cv::split(compx, planes);
         cv::magnitude(planes[0], planes[1], planes[0]);
-        int nframes = planes[0].rows;
-        int nfeats;
-        if (_feature == SPECGRAM) {
-            nfeats = planes[0].cols; 
-        }
-        else if (_feature == MFSC){
-          nfeats = _numFilts;
-        }
-        else {
-            nfeats = _numCepstra;
-        }
-        Mat mag = Mat::zeros(nframes, nfeats, CV_32F);
+        Mat mag;
         if (_feature == SPECGRAM) {
             mag = planes[0];
-        } 
-        else {
+        } else {
             extractFeatures(planes[0], mag);
         }
 
@@ -280,22 +268,21 @@ private:
         log(cepsgram, cepsgram);
         if (_feature == MFSC) {
             features = cepsgram;
+            return;
         }
-        else {
-            int pad_cols = cepsgram.cols;
-            int pad_rows = cepsgram.rows;
-            if (cepsgram.cols % 2 != 0) {
-                pad_cols = 1 + cepsgram.cols;
-            }
-            if (cepsgram.rows % 2 != 0) {
-                pad_rows = 1 + cepsgram.rows;
-            } 
-            Mat padcepsgram = Mat::zeros(pad_rows, pad_cols, CV_32F);
-            cepsgram.copyTo(padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols)));
-            dct(padcepsgram, padcepsgram, cv::DFT_ROWS);
-            cepsgram = padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols));
-            features = cepsgram(Range::all(), Range(0, _numCepstra));
+        int pad_cols = cepsgram.cols;
+        int pad_rows = cepsgram.rows;
+        if (cepsgram.cols % 2 != 0) {
+            pad_cols = 1 + cepsgram.cols;
         }
+        if (cepsgram.rows % 2 != 0) {
+            pad_rows = 1 + cepsgram.rows;
+        }
+        Mat padcepsgram = Mat::zeros(pad_rows, pad_cols, CV_32F);
+        cepsgram.copyTo(padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols)));
+        dct(padcepsgram, padcepsgram, cv::DFT_ROWS);
+        cepsgram = padcepsgram(Range(0, cepsgram.rows), Range(0, cepsgram.cols));
+        features = cepsgram(Range::all(), Range(0, _numCepstra));
     }
 
 private:
