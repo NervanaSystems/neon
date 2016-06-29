@@ -209,7 +209,7 @@ public:
         // dump audio file in `audio` at buffer index `idx` into bin
         // file at `filename`.  Assumes buffer is already scaled to
         // int16.  A simple python script can convert this file into
-        // a wav file: ~/loader/raw_to_wav.py
+        // a wav file: loader/test/raw_to_wav.py
         FILE *file = fopen(filename, "wb");
         fwrite(audio->getBuf(idx), audio->numSamples(), 2, file);
         fclose(file);
