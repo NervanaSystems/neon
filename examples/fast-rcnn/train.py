@@ -94,9 +94,10 @@ if frcn_fine_tune is True:
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
-
-if be.gpu_memory_size < 11 * 1024 * 1024 * 1024:
-    exit("ERROR: This model requires at least 11GB GPU memory to be run.")
+if args.backend == 'gpu':
+    be.enable_winograd = 4
+    if be.gpu_memory_size < 11 * 1024 * 1024 * 1024:
+        exit("ERROR: This model requires at least 11GB GPU memory to be run.")
 
 # setup training dataset
 train_set = PASCALVOCTrain('trainval', '2007', path=args.data_dir, n_mb=n_mb,
