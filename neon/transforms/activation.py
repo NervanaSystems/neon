@@ -191,7 +191,7 @@ class Normalizer(Transform):
         Returns:
             Tensor or optree: Derivative
         """
-        return x
+        return 1.0 / self.divisor
 
 
 class Softmax(Transform):
