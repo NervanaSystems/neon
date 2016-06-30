@@ -40,7 +40,7 @@ class Identity(Transform):
 
     def bprop(self, x):
         """
-        Returns the derviate.
+        Returns the derivative.
 
         Arguments:
             x (Tensor or optree): Input value
