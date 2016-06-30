@@ -2468,7 +2468,7 @@ class NervanaGPU(Backend):
             num_blocks = (-(-h_s[0].shape[0] // 128)) * (-(-h_s[0].shape[1] // 32))
             num_blocks = (-(-num_blocks // 4))
 
-        if (activation.classnm == 'Rectlinclip' and num_blocks < self.sm_count and
+        if (activation.classnm == 'Rectlinclip' and num_blocks <= self.sm_count and
                 not self.use_cudac_kernels):
             if h_s[0].base is not h_ff_s[0].base:
                 if len(h_s[0].base.shape) == 3:
@@ -2543,7 +2543,7 @@ class NervanaGPU(Backend):
             num_blocks = (-(-delta_s[0].shape[0] // 128)) * (-(-delta_s[0].shape[1] // 32))
             num_blocks = (-(-num_blocks // 4))
 
-        if (activation.classnm == 'Rectlinclip' and num_blocks < self.sm_count and
+        if (activation.classnm == 'Rectlinclip' and num_blocks <= self.sm_count and
                 not self.use_cudac_kernels):
             # Compute activation bprop for first timestep since there is
             # no compounded GEMM
