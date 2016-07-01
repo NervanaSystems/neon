@@ -154,10 +154,10 @@ def check_gru(seq_len, input_size, hidden_size,
                                                                  deltas_ref)
 
     neon_logger.display('====Verifying hidden states====')
-    neon_logger.display(allclose_with_out(gru.outputs.get(),
-                                          h_ref_list,
-                                          rtol=0.0,
-                                          atol=1.0e-5))
+    assert allclose_with_out(gru.outputs.get(),
+                             h_ref_list,
+                             rtol=0.0,
+                             atol=1.0e-5)
 
     neon_logger.display('fprop is verified')
 

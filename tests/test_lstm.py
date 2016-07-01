@@ -77,6 +77,7 @@ def pytest_generate_tests(metafunc):
 def test_ref_compare_ones(backend_default, reflstmargs):
         # run comparison with reference code
         # for all ones init
+        np.random.seed(seed=0)
         seq_len, input_size, hidden_size, batch_size = reflstmargs
         NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
 
@@ -86,7 +87,8 @@ def test_ref_compare_ones(backend_default, reflstmargs):
 
 def test_ref_compare_rand(backend_default, reflstmargs):
         # run comparison with reference code
-        # for all ones init
+        # for Gaussian random init
+        np.random.seed(seed=0)
         seq_len, input_size, hidden_size, batch_size = reflstmargs
         NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
         check_lstm(seq_len, input_size, hidden_size, batch_size,
@@ -138,22 +140,22 @@ def check_lstm(seq_len, input_size, hidden_size,
 
     # compare results
     neon_logger.display('====Verifying IFOG====')
-    allclose_with_out(lstm.ifog_buffer.get(),
-                      IFOGf_ref,
-                      rtol=0.0,
-                      atol=1.5e-5)
+    assert allclose_with_out(lstm.ifog_buffer.get(),
+                             IFOGf_ref,
+                             rtol=0.0,
+                             atol=1.5e-5)
 
     neon_logger.display('====Verifying cell states====')
-    allclose_with_out(lstm.c_act_buffer.get(),
-                      Ct_ref,
-                      rtol=0.0,
-                      atol=1.5e-5)
+    assert allclose_with_out(lstm.c_act_buffer.get(),
+                             Ct_ref,
+                             rtol=0.0,
+                             atol=1.5e-5)
 
     neon_logger.display('====Verifying hidden states====')
-    allclose_with_out(lstm.outputs.get(),
-                      Hout_ref,
-                      rtol=0.0,
-                      atol=1.5e-5)
+    assert allclose_with_out(lstm.outputs.get(),
+                             Hout_ref,
+                             rtol=0.0,
+                             atol=1.5e-5)
 
     neon_logger.display('fprop is verified')
 
