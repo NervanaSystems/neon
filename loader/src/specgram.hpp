@@ -56,7 +56,7 @@ public:
         }
 
         _maxSignalSize = params->_clipDuration * params->_samplingFreq / 1000;
-        _buf = new char[4 *  _maxSignalSize];
+        _buf = new char[_timeSteps * _windowSize * MAX_SAMPLE_SIZE];
         if (params->_window != 0) {
             _window = new Mat(1, _windowSize, CV_32FC1);
             createWindow(params->_window);
@@ -211,7 +211,7 @@ private:
         int windowSizeInBytes = _windowSize * raw->sampleSize();
         int strideInBytes = _stride * raw->sampleSize();
         for (int i = 0; i < count; i++) {
-            memcpy(dst , src, windowSizeInBytes);
+            memcpy(dst, src, windowSizeInBytes);
             dst += windowSizeInBytes;
             src += strideInBytes;
         }
@@ -308,4 +308,5 @@ private:
     Mat                         _fbank;
     cv::RNG                     _rng;
     constexpr static double     PI = 3.14159265358979323846;
+    constexpr static int        MAX_SAMPLE_SIZE = 4;
 };
