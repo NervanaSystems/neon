@@ -19,7 +19,6 @@ This must be kept in sync with loader/media.hpp.
 
 from __future__ import division
 from future.utils import iteritems
-import math
 import logging
 import numpy as np
 import ctypes as ct
@@ -332,19 +331,7 @@ class AudioParams(MediaParams):
         self.feature = self._features_[self.feature_type]
         self.window = self._windows_[self.window_type]
         self.channel_count = 1
-        samples_per_frame = self.sampling_freq * self.frame_duration // 1000
-        # Get the closest power of 2.
-        log = int(math.log(samples_per_frame) / math.log(2))
-        min_pow = 2 ** log
-        max_pow = 2 ** (log + 1)
-
-        if (max_pow - samples_per_frame) < (samples_per_frame - min_pow):
-            self.window_size = max_pow
-        else:
-            self.window_size = min_pow
-
-        real_frame_duration = 1000 * self.window_size // self.sampling_freq
-        logger.info('Effective frame duration: %dms', real_frame_duration)
+        self.window_size = self.sampling_freq * self.frame_duration // 1000
         assert self.overlap_percent < 100
         self.overlap = self.window_size * self.overlap_percent // 100
         self.stride = self.window_size - self.overlap

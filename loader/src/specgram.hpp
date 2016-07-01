@@ -51,10 +51,6 @@ public:
       _numCepstra(params->_numCepstra),
       _window(0), _rng(id) {
         assert(_stride != 0);
-        if (powerOfTwo(_windowSize) == false) {
-            throw std::runtime_error("Window size must be a power of 2");
-        }
-
         _maxSignalSize = params->_clipDuration * params->_samplingFreq / 1000;
         _buf = new char[_timeSteps * _windowSize * MAX_SAMPLE_SIZE];
         if (params->_window != 0) {
@@ -139,33 +135,26 @@ private:
         }
     }
 
-    bool powerOfTwo(int num) {
-        while (((num % 2) == 0) && (num > 1)) {
-            num /= 2;
-        }
-        return (num == 1);
-    }
-
     void none(int) {
     }
 
     void hann(int steps) {
         for (int i = 0; i <= steps; i++) {
-            _window->at<float>(0, i) = 0.5 - 0.5 * cos((2.0 * PI * i) / steps);
+            _window->at<float>(0, i) = 0.5 - 0.5 * cos((2.0 * CV_PI * i) / steps);
         }
     }
 
     void blackman(int steps) {
         for (int i = 0; i <= steps; i++) {
             _window->at<float>(0, i) = 0.42 -
-                                       0.5 * cos((2.0 * PI * i) / steps) +
-                                       0.08 * cos(4.0 * PI * i / steps);
+                                       0.5 * cos((2.0 * CV_PI * i) / steps) +
+                                       0.08 * cos(4.0 * CV_PI * i / steps);
         }
     }
 
     void hamming(int steps) {
         for (int i = 0; i <= steps; i++) {
-            _window->at<float>(0, i) = 0.54 - 0.46 * cos((2.0 * PI * i) / steps);
+            _window->at<float>(0, i) = 0.54 - 0.46 * cos((2.0 * CV_PI * i) / steps);
         }
     }
 
@@ -307,6 +296,5 @@ private:
     Mat*                        _window;
     Mat                         _fbank;
     cv::RNG                     _rng;
-    constexpr static double     PI = 3.14159265358979323846;
     constexpr static int        MAX_SAMPLE_SIZE = 4;
 };
