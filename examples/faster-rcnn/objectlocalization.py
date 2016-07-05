@@ -674,10 +674,9 @@ class ObjectLocalization(Dataset):
             X = self.dev_X_img
             Y = ((self.dev_y_labels, self.dev_y_labels_mask),
                  (self.dev_y_bbtargets, self.dev_y_bbtargets_mask),
-                 (self.dev_y_frcn_labels, self.dev_y_frcn_labels_mask),
-                 (self.dev_y_frcn_bbtargets, self.dev_y_frcn_bbmask))
-                 
-
+                 ((self.dev_y_frcn_labels, self.dev_y_frcn_labels_mask),
+                  (self.dev_y_frcn_bbtargets, self.dev_y_frcn_bbmask)))
+            
             # test against anchor_target_layer.py reference
             if TEST_PY:
                 target = AnchorTargetLayer()

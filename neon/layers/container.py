@@ -253,7 +253,7 @@ class Sequential(LayerContainer):
         Arguments:
             in_obj: any object that has an out_shape (Layer) or shape (Tensor, dataset)
         """
-       if in_obj:
+        if in_obj:
             config_layers = self.layers
             in_obj = in_obj
         else:
@@ -278,6 +278,7 @@ class Sequential(LayerContainer):
         self.out_shape = in_obj.out_shape
         return self
 
+
     def allocate(self, shared_outputs=None):
         """
         Allocate output buffer to store activations from fprop.
@@ -301,8 +302,12 @@ class Sequential(LayerContainer):
                 layer.allocate_deltas(self.global_deltas)
 
             self.global_deltas.allocate_buffers()
-
-        self.set_deltas(self.global_deltas)
+        
+         for l in self.layers:
+            if isinstance(l, LayerContainer):
+                l.allocate_deltas(self.global_deltas)
+            else:
+                l.set_deltas(self.global_deltas)
 
     def fprop(self, inputs, inference=False, beta=0.0):
         """
@@ -350,7 +355,6 @@ class Sequential(LayerContainer):
             altered_tensor = l.be.distribute_data(error, l.parallelism)
             if altered_tensor:
                 l.revert_list.append(altered_tensor)
-            
             if type(l.prev_layer) is BranchNode or l is self._layers[0]:
                 error = l.bprop(error, alpha, beta)
             else:
@@ -472,7 +476,7 @@ class Tree(LayerContainer):
         out = [x] + [l.fprop(None, inference=inference) for l in self.layers[1:]]
         return out
 
-    def bprop(self, error):
+    def bprop(self, error, alpha=1.0, beta=0.0):
         """
         Apply the backward pass transformation to the input data.
 
@@ -1477,7 +1481,7 @@ class Multicost(NervanaObject):
         super(Multicost, self).__init__(name)
         self.costs = costs
         self.weights = [1.0 for c in costs] if weights is None else weights
-        self.errors = None
+        self.deltas = None
         self.inputs = None
         self.costfunc = costs[0].costfunc  # For displaying during callbacks
 
@@ -1488,8 +1492,13 @@ class Multicost(NervanaObject):
         Arguments:
             in_obj (Layer): input layer from which to calculate costs
         """
-        assert hasattr(in_obj, 'layers'), "MultiCost must be passed a layer container"
-        terminals = in_obj.get_terminal()
+        if isinstance(in_obj, LayerContainer):
+            terminals = in_obj.get_terminal()
+        elif isinstance(in_obj, list):
+            terminals = in_obj
+        else:
+            raise RuntimeError("Multicost must be passed a container or list")
+
         for c, ll in zip(self.costs, terminals):
             c.initialize(ll)
 
@@ -1555,12 +1564,16 @@ class Multicost(NervanaObject):
         Returns:
             list of Tensors containing errors for each input
         """
-
         l_targets = targets if type(targets) in (tuple, list) else [targets for c in self.costs]
-        if self.errors is None:
-            self.errors = [c.deltas for c in self.costs]
+        for cost, i, t, we in zip(self.costs, inputs, l_targets, self.weights):
+            cost.get_errors(i, t)
+            if isinstance(cost.deltas, list):
+                for delta in cost.deltas:
+                    delta[:] *= we
+            else:
+                cost.deltas[:] *= we
 
-        for c, i, t in zip(self.costs, inputs, l_targets):
-            c.get_errors(i, t)
+        if self.deltas is None:
+            self.deltas = [c.deltas for c in self.costs]
 
-        return self.errors
+        return self.deltas

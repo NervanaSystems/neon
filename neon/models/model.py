@@ -521,6 +521,7 @@ class Model(NervanaObject):
         # initialize model
         if inference is False and (cost is None or optimizer is None):
             raise RuntimeError("Need cost and optimizer to benchmark bprop")
+        
         self.cost = cost
         self.initialize(dataset, cost)
         self.optimizer = optimizer

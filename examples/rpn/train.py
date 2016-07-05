@@ -53,12 +53,12 @@ from neon.optimizers import GradientDescentMomentum, MultiOptimizer, Schedule
 from neon.callbacks.callbacks import Callbacks, TrainMulticostCallback
 from neon.util.persist import save_obj
 from objectlocalization import PASCAL
-from util import load_vgg_weights, add_vgg_layers
 from neon.initializers import Gaussian, Constant, Xavier, GlorotUniform
 from neon.transforms import Rectlin, Softmax, Identity, Logistic, CrossEntropyMulti, SmoothL1Loss, PixelwiseSoftmax
 from neon.layers import Conv, Pooling, Affine, BranchNode, Tree, Multicost, GeneralizedCostMask
 from neon.models import Model
 import os
+import util
 # main script
 
 # parse the command line arguments
@@ -100,7 +100,7 @@ train_set = PASCAL('trainval', '2007', path=args.data_dir, n_mb=n_mb,
 #                    img_per_batch=img_per_batch, rois_per_img=rois_per_img)
 # setup model
 # add VGG layers
-conv_layers = add_vgg_layers()
+conv_layers = util.add_vgg_layers()
 
 b1 = BranchNode(name="rpn_branch")
 
@@ -135,7 +135,7 @@ optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b})
 # if training a new model, seed the image model conv layers with pre-trained weights
 # otherwise, just load the model file
 if args.model_file is None:
-    load_vgg_weights(model, "~/private-neon/examples/vgg_weights_neon.prm")
+    util.load_vgg_weights(model, "~/private-neon/examples/rpn/")
 
 callbacks = Callbacks(model, eval_set=train_set, **args.callback_args)
 callbacks.add_callback(TrainMulticostCallback())

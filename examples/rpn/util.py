@@ -68,18 +68,24 @@ def add_vgg_layers():
 
     return vgg_layers
 
-def load_vgg_weights(model, weight_path):
-    pdict = load_obj(weight_path)
+def load_vgg_weights(model, path):
+    url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/'
+    filename = 'VGG_D_Conv.p'
+    size = 169645138
 
-    param_layers = [l for l in model.layers_to_optimize]
-    param_dict_list = pdict['layer_params_states']
-    i = 0
+    workdir, filepath = Dataset._valid_path_append(path, '', filename)
+    if not os.path.exists(filepath):
+        Dataset.fetch_dataset(url, filename, filepath, size)
+
+    print 'De-serializing the pre-trained VGG16 model...'
+    pdict = load_obj(filepath)
+
+    param_layers = [l for l in model.layers.layers[0].layers]
+    param_dict_list = pdict['model']['config']['layers']
+
     for layer, ps in zip(param_layers, param_dict_list):
-        i = i+1
-        print i, layer.name
-        layer.set_params(ps)
-        if i == 26:
-            break
+        layer.load_weights(ps, load_states=True)
+        print layer.name + " <-- " + ps['config']['name']
 
 def nonmaximum_suppression(detections, scores, thre):
     """

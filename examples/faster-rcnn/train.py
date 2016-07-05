@@ -92,7 +92,7 @@ RPN_1x1_obj = Conv((1, 1, 18), activation=PixelwiseSoftmax(c=2), padding=0, stri
 RPN_1x1_bbox = Conv((1, 1, 36), activation=Identity(), padding=0, strides=1, **rpn_init)
 
 # define ROI classification network
-ROI = [ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox], 
+ROI = [ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox],
                       train_set.get_global_buffers(),
                       num_rois=frcn_rois_per_img),
        RoiPooling(HW=(7, 7)),
@@ -108,24 +108,29 @@ ROI_bbox = Affine(nout=84, init=Gaussian(scale=0.001), bias=Constant(0), activat
 
 # build the model
 # the four branches of the tree mirror the branches listed above
+frcn_tree = Tree([ROI + [b3, ROI_category],
+                [b3, ROI_bbox]
+                ])
+
 model = Model(layers=Tree([VGG + [b1, RPN_3x3, b2, RPN_1x1_obj],
                            [b2, RPN_1x1_bbox],
-                           [b1] + ROI + [b3, ROI_category],
-                           [b3, ROI_bbox],
+                           [b1] + [frcn_tree],
                            ]))
-
-# test fprop only
-# bob = model.get_outputs(train_set)
 
 # set up cost different branches, respectively
 weights = 1.0 / (rpn_rois_per_img)
+
+frcn_tree_cost = Multicost(costs=[
+                                  GeneralizedCostMask(costfunc=CrossEntropyMulti()),
+                                  GeneralizedCostMask(costfunc=SmoothL1Loss())
+                                  ],
+                           weights=[1, 1])
+
 cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti(), weights=weights),
                         GeneralizedCostMask(costfunc=SmoothL1Loss(sigma=3.0), weights=weights),
-                        GeneralizedCostMask(costfunc=CrossEntropyMulti()),
-                        GeneralizedCostMask(costfunc=SmoothL1Loss())
+                        frcn_tree_cost,
                         ],
-                weights=[1, 1, 0, 0])
-
+                 weights=[1, 1, 1])
 
 # setup optimizer
 schedule_w = Schedule(step_config=[6], change=[0.0001])
@@ -145,18 +150,18 @@ callbacks.add_callback(TrainMulticostCallback())
 
 model.fit(train_set, optimizer=optimizer,
           num_epochs=num_epochs, cost=cost, callbacks=callbacks)
-#
-# # Fast R-CNN model requires scale the bbox regression branch linear layer weights
-# # before saving the model
-# model = scale_bbreg_weights(model, train_set.bbtarget_means, train_set.bbtarget_stds)
-#
+
+# Fast R-CNN model requires scale the bbox regression branch linear layer weights
+# before saving the model
+model = scale_bbreg_weights(model, train_set.bbtarget_means, train_set.bbtarget_stds)
+
 save_obj(model.serialize(keep_states=True), args.save_path)
 
-print 'running eval...'
-#metric_train = model.eval(train_set, metric=ObjectDetection())
-print 'Train: label accuracy - {}%, object deteciton logloss - {}'.format(metric_train[0]*100,
-                                                                          metric_train[1])
+# print 'running eval...'
+# metric_train = model.eval(train_set, metric=ObjectDetection())
+# print 'Train: label accuracy - {}%, object deteciton logloss - {}'.format(metric_train[0]*100,
+#                                                                           metric_train[1])
 
-#metric_test = model.eval(test_set, metric=ObjectDetection())
-print 'Test: label accuracy - {}%, object deteciton logloss - {}'.format(metric_test[0]*100,
-                                                                         metric_test[1])
+# metric_test = model.eval(test_set, metric=ObjectDetection())
+# print 'Test: label accuracy - {}%, object deteciton logloss - {}'.format(metric_test[0]*100,
+#                                                                          metric_test[1])

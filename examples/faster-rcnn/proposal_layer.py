@@ -228,7 +228,7 @@ class ProposalLayer(Layer):
             #self.target_sums += np.sum(targets, axis=0)
             #self.target_sums_sq += np.sum(targets ** 2, axis=0)
             #self.target_count += targets.shape[0]  
-        
+       
             #means = self.target_sums / float(self.target_count)
             #stds = np.sqrt(self.target_sums_sq / self.target_count - means ** 2)
             
