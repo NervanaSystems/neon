@@ -194,11 +194,6 @@ systest:
 	py.test $(TEST_OPTS) $(TEST_DIRS)
 	@echo
 
-examples: env
-	@echo "Running all examples..."
-	@. $(ACTIVATE); tests/run_examples.py
-	@echo
-
 benchmarks: env
 	@echo "Running all benchmarks..."
 	@. $(ACTIVATE); tests/run_benchmarks.py
