@@ -35,12 +35,24 @@ using cv::Mat;
 class AudioParams : public SignalParams {
 };
 
+class NoiseClipsState {
+public:
+    NoiseClipsState(cv::RNG& rng) : _index(0), _offset(0), _rng(rng) {
+    }
+
+public:
+    // Index of the current noise clip.
+    uint                        _index;
+    // Offset within the current noise clip.
+    int                         _offset;
+    cv::RNG&                    _rng;
+};
+
 class NoiseClips {
 public:
     NoiseClips(AudioParams* params, Codec* codec)
     : _indexFile(params->_noiseIndexFile), _indexDir(params->_noiseDir),
-      _buf(0), _bufLen(0),
-      _clipIndex(0), _clipOffset(0) {
+      _buf(0), _bufLen(0) {
         loadIndex(_indexFile);
         loadData(codec);
     }
@@ -52,8 +64,8 @@ public:
         }
     }
 
-    void addNoise(RawMedia* media, cv::RNG& rng) {
-        if (rng(2) == 0) {
+    void addNoise(RawMedia* media, NoiseClipsState* state) {
+        if (state->_rng(2) == 0) {
             // Augment half of the data examples.
             return;
         }
@@ -68,24 +80,24 @@ public:
         int offset = 0;
         // Collect enough noise data to cover the entire input clip.
         while (left > 0) {
-            RawMedia* clipData = _data[_clipIndex];
+            RawMedia* clipData = _data[state->_index];
             assert(clipData->sampleSize() == sampleSize);
-            int clipSize = clipData->numSamples() - _clipOffset;
+            int clipSize = clipData->numSamples() - state->_offset;
             Mat clip(1, clipSize , CV_16S,
-                     clipData->getBuf(0) + sampleSize * _clipOffset);
+                     clipData->getBuf(0) + sampleSize * state->_offset);
             if (clipSize > left) {
                 const Mat& src = clip(Range::all(), Range(0, left));
                 const Mat& dst = noise(Range::all(), Range(offset, offset + left));
                 src.copyTo(dst);
                 left = 0;
-                _clipOffset += left;
+                state->_offset += left;
             } else {
                 const Mat& dst = noise(Range::all(),
                                        Range(offset, offset + clipSize));
                 clip.copyTo(dst);
                 left -= clipSize;
                 offset += clipSize;
-                next(rng);
+                next(state);
             }
         }
         // Superimpose noise without overflowing.
@@ -93,7 +105,7 @@ public:
         data.convertTo(convData, CV_32F);
         Mat convNoise;
         noise.convertTo(convNoise, CV_32F);
-        float noiseLevel = rng.uniform(0.f, 1.0f);
+        float noiseLevel = state->_rng.uniform(0.f, 2.0f);
         convNoise *= noiseLevel;
         convData += convNoise;
         double min, max;
@@ -109,15 +121,15 @@ public:
     }
 
 private:
-    void next(cv::RNG rng) {
-        _clipIndex++;
-        if (_clipIndex != _data.size()) {
-            _clipOffset = 0;
-        } else {
+    void next(NoiseClipsState* state) {
+        state->_index++;
+        if (state->_index == _data.size()) {
             // Wrap around.
-            _clipIndex = 0;
+            state->_index = 0;
             // Start at a random offset.
-            _clipOffset = rng(_data[0]->numSamples());
+            state->_offset = state->_rng(_data[0]->numSamples());
+        } else {
+            state->_offset = 0;
         }
     }
 
@@ -176,15 +188,13 @@ private:
     Index                       _index;
     char*                       _buf;
     int                         _bufLen;
-    uint                        _clipIndex;
-    int                         _clipOffset;
 };
 
 class Audio : public Media {
 public:
     Audio(AudioParams *params, int id)
-    : _params(params), _noiseClips(0), _loadedNoise(false) {
-        _rng.state = 0;
+    : _params(params), _noiseClips(0), _state(0),
+      _loadedNoise(false), _rng(id) {
         _codec = new Codec(params);
         _specgram = new Specgram(params, id);
         if (params->_noiseIndexFile != 0) {
@@ -194,6 +204,7 @@ public:
             }
             _noiseClips = reinterpret_cast<NoiseClips*>(params->_noiseClips);
             assert(_noiseClips != 0);
+            _state = new NoiseClipsState(_rng);
         }
     }
 
@@ -201,6 +212,7 @@ public:
         if (_loadedNoise == true) {
             delete _noiseClips;
         }
+        delete _state;
         delete _specgram;
         delete _codec;
     }
@@ -218,7 +230,7 @@ public:
     void transform(char* item, int itemSize, char* buf, int bufSize, int* meta) {
         RawMedia* raw = _codec->decode(item, itemSize);
         if (_noiseClips != 0) {
-            _noiseClips->addNoise(raw, _rng);
+            _noiseClips->addNoise(raw, _state);
         }
         int len = _specgram->generate(raw, buf, bufSize);
         if (meta != 0) {
@@ -234,6 +246,7 @@ private:
     Codec*                      _codec;
     Specgram*                   _specgram;
     NoiseClips*                 _noiseClips;
+    NoiseClipsState*            _state;
     bool                        _loadedNoise;
     cv::RNG                     _rng;
 };
