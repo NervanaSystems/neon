@@ -28,7 +28,7 @@ RELEASE := $(strip $(shell grep '^VERSION *=' setup.py | cut -f 2 -d '=' \
 
 # basic check to see if any CUDA compatible GPU is installed
 # set this to false to turn off GPU related functionality
-HAS_GPU := $(shell nvcc --version > /dev/null 2>&1 && echo true)
+HAS_GPU := $(shell nvcc neon/backends/util/check_gpu.c > /dev/null 2>&1 && ./a.out && rm a.out && echo true)
 
 ifdef HAS_GPU
 # Get CUDA_ROOT for LD_RUN_PATH
@@ -39,7 +39,7 @@ export CUDA_ROOT:=$(firstword $(wildcard $(addprefix /usr/local/, cuda-8.0 cuda-
 
 ifdef CUDA_ROOT
 export PATH:=$(CUDA_ROOT)/bin:$(PATH)
-HAS_GPU := $(shell $(CUDA_ROOT)/bin/nvcc --version > /dev/null 2>&1 && echo true)
+HAS_GPU := $(shell $(CUDA_ROOT)/bin/nvcc neon/backends/util/check_gpu.c > /dev/null 2>&1 && ./a.out && rm a.out && echo true)
 endif
 endif
 ifdef CUDA_ROOT
