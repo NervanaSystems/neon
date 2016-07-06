@@ -810,8 +810,11 @@ class NervanaGPU(Backend):
 
     def cleanup_backend(self):
         super(NervanaGPU, self).cleanup_backend()
-        self.ctx.pop()
-        self.ctx.detach()
+        try:
+            self.ctx.pop()
+            self.ctx.detach()
+        except:
+            pass
 
     def scratch_buffer(self, size):
 
