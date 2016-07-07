@@ -93,6 +93,8 @@ class Model(NervanaObject):
                 if (lastlayer.__class__ is Activation and
                    lastlayer.transform.__class__ is Logistic):
                     lastlayer.transform.set_shortcut(True)
+        except (SystemExit, KeyboardInterrupt):
+            raise
         except:
             # if any attributes are not set or any other exception
             # is thrown leave transform.shortcut as is (do nothing)

@@ -1489,6 +1489,8 @@ class BiBNRNN(BiRNN):
             self.xvar.auto_reduce = False
             self.beta.auto_reduce = False
             self.gamma.auto_reduce = False
+        except (SystemExit, KeyboardInterrupt):
+            raise
         except:
             pass
 

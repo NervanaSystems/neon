@@ -23,6 +23,7 @@ import numpy as np
 import math
 import pycuda.driver as drv
 import logging
+import pycuda
 from pycuda.tools import context_dependent_memoize
 from pycuda.curandom import MRG32k3aRandomNumberGenerator as rng_mrg
 from pycuda.gpuarray import GPUArray as p_gpuarray
@@ -392,14 +393,23 @@ class GPUTensor(Tensor):
             GPUTensor: self
         """
         stream = self.backend.stream
-        assert ary.size == self.size
+        if ary.size != self.size:
+            raise TypeError(
+                'ary.size {} != self.size {}'.format(ary.size, self.size)
+            )
         assert self.is_contiguous, "Array in set() must be contiguous"
         if ary.dtype is not self.dtype:
             ary = ary.astype(self.dtype)
         if ary.ndim < self._min_dims:
             ary = ary.reshape(ary.size, 1)
-        assert ary.strides == tuple(
-            self.dtype.itemsize * s for s in self.strides)
+
+        strides = tuple(self.dtype.itemsize * s for s in self.strides)
+        if (ary.strides != strides):
+            raise TypeError(
+                'ary.strides != self.strides * self.dtype.itemsize : {} != {} * {}'.format(
+                    ary.strides, self.strides, self.dtype.itemsize
+                )
+            )
 
         drv.memcpy_htod_async(int(self.gpudata), ary, stream)
 
@@ -798,6 +808,21 @@ class NervanaGPU(Backend):
         self.enable_winograd = enable_winograd
         self.cache_dir = get_cache_dir()
 
+        self.use_pinned_mem = True
+
+    def consume(self, buf_index, hostlist, devlist):
+        assert 0 <= buf_index < 2, 'Can only double buffer'
+        self.ctx.push()
+
+        if devlist[buf_index] is None:
+            devlist[buf_index] = self.empty_like(hostlist[buf_index].T)
+
+        # TODO: do the transpose as a DataLoaderTransformer instead of in host
+        # memory like this
+        devlist[buf_index].set(hostlist[buf_index].T.copy())
+
+        self.ctx.pop()
+
     def set_hist_buffers(self, hist_bins, hist_offset):
         if (hist_bins != self.hist_bins or hist_offset != self.hist_offset):
             self.hist_bins = hist_bins
@@ -821,7 +846,7 @@ class NervanaGPU(Backend):
         try:
             self.ctx.pop()
             self.ctx.detach()
-        except:
+        except pycuda.driver.Error:
             pass
 
     def scratch_buffer(self, size):
@@ -867,7 +892,7 @@ class NervanaGPU(Backend):
     def __del__(self):
         try:
             self.ctx.detach()
-        except:
+        except pycuda.driver.Error:
             pass
 
     def get_events(self):
@@ -1381,9 +1406,13 @@ class NervanaGPU(Backend):
         Returns:
             Tensor: array object
         """
+        # if other_ary is a numpy array it wont have attr persist_values or
+        # allocator so use default values in that case.
         return GPUTensor(self, other_ary.shape, dtype=other_ary.dtype,
-                         name=name, persist_values=other_ary.persist_values,
-                         allocator=other_ary.allocator, rounding=self.round_mode)
+                         name=name,
+                         persist_values=getattr(other_ary, 'persist_values', True),
+                         allocator=getattr(other_ary, 'allocator', drv.mem_alloc),
+                         rounding=self.round_mode)
 
     def zeros_like(self, other_ary, name=None):
         """

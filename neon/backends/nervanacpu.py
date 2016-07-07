@@ -555,6 +555,18 @@ class NervanaCPU(Backend):
         self.hist_bins, self.hist_offset = None, None
         self.set_hist_buffers(hist_bins, hist_offset)
 
+        self.use_pinned_mem = False
+
+    def consume(self, buf_index, hostlist, devlist):
+        assert 0 <= buf_index < 2, 'Can only double buffer'
+
+        if devlist[buf_index] is None:
+            devlist[buf_index] = self.empty_like(
+                hostlist[buf_index].T, dtype=hostlist[buf_index].dtype
+            )
+
+        devlist[buf_index][:] = hostlist[buf_index].T
+
     def set_hist_buffers(self, hist_bins, hist_offset):
         if (hist_bins != self.hist_bins or hist_offset != self.hist_offset):
             self.hist_bins = hist_bins

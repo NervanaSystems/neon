@@ -13,9 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""
-Process macro batches of data in a pipelined fashion.
-"""
 from builtins import str, zip
 import logging
 from glob import glob
@@ -24,68 +21,51 @@ import numpy as np
 import os
 import tarfile
 import ctypes as ct
+import tqdm
+import struct
+from collections import defaultdict
+import multiprocessing
 from neon import logger as neon_logger
 
 logger = logging.getLogger(__name__)
 
 
-class BatchWriter(object):
+class Ingester(object):
     """
-    Parent class for batchwriter object for taking a set of input images and outputting
-    macrobatches for use with the ImageLoader data provider. Subclasses include
-    BatchWriterI1K, BatchWriterCIFAR10 and BatchWriterCSV.
+    Parent class for ingest objects for taking a set of input images and a manifest
+    and transformed data for use with the DataLoader data provider. Subclasses include
+    IngestI1k, IngestCIFAR10 and IngestCSV.
 
     Arguments:
         out_dir (str): Directory to output the macrobatches
-        image_dir (str): Directory to find the images.  For general batch writer, directory
+        input_dir (str): Directory to find the images.  For general batch writer, directory
                          should be organized in subdirectories with each subdirectory
                          containing a different category of images.  For imagenet batch writer,
                          directory should contain the ILSVRC provided tar files.
-        target_size (int, optional): Size to which to scale DOWN the shortest side of the
-                                     input image.  For example, if an image is 200 x 300, and
-                                     target_size is 100, then the image will be scaled to
-                                     100 x 150.  However if the input image is 80 x 80, then
-                                     the image will not be resized.
-                                     If target_size is 0, no resizing is done.
-                                     Default is 256.
         validation_pct (float, optional):  Percentage between 0 and 1 indicating what percentage
                                            of the data to hold out for validation. Default is 0.2.
         class_samples_max (int, optional): Maximum number of images to include for each class
                                            from the input image directories.  Default is None,
                                            which indicates no maximum.
-        file_pattern (str, optional): file suffix to use for globbing from the image_dir.
+        file_pattern (str, optional): file suffix to use for globbing from the input_dir.
                                       Default is '.jpg'
-        macro_size (int, optional): number of images to include by default in each macrobatch.
-                                    Default is 3072.
-        pixel_mean (tuple, optional): per pixel mean values to use for saving to metafile.
-                                      Default is (0, 0, 0).
     """
 
-    def __init__(self, out_dir, image_dir, target_size=256, validation_pct=0.2,
-                 class_samples_max=None, file_pattern='*.jpg', macro_size=3072,
-                 pixel_mean=(0, 0, 0)):
-
-        path = os.path.dirname(os.path.realpath(__file__))
-        libpath = os.path.join(path, os.pardir, os.pardir,
-                               'loader', 'bin', 'loader.so')
-        self.writerlib = ct.cdll.LoadLibrary(libpath)
-        self.writerlib.write_batch.restype = None
-        self.writerlib.read_max_item.restype = ct.c_int
+    def __init__(self, out_dir, input_dir, target_size=256, validation_pct=0.2,
+                 class_samples_max=None, file_pattern='*.jpg'):
 
         np.random.seed(0)
         self.out_dir = os.path.expanduser(out_dir)
-        self.image_dir = os.path.expanduser(image_dir) if image_dir is not None else None
-        self.macro_size = macro_size
-        self.target_size = target_size
+        self.input_dir = os.path.expanduser(input_dir) if input_dir is not None else None
         self.file_pattern = file_pattern
         self.class_samples_max = class_samples_max
         self.validation_pct = validation_pct
         self.train_file = os.path.join(self.out_dir, 'train_file.csv.gz')
         self.val_file = os.path.join(self.out_dir, 'val_file.csv.gz')
         self.batch_prefix = 'macrobatch_'
-        self.meta_file = os.path.join(self.out_dir, self.batch_prefix + 'meta')
-        self.pixel_mean = pixel_mean
-        self.item_max_size = 25000  # reasonable default max image size
+
+        self._target_filenames = {}
+
         self.post_init()
 
     def post_init(self):
@@ -94,12 +74,41 @@ class BatchWriter(object):
         """
         pass
 
-    def write_csv_files(self):
+    def _generate_target_file(self, target):
         """
-        Write CSV files to disk.
+        Generate a file whose only contents are the binary representation
+        of `target`.  Returns the filename of this generated file.
+        """
+        assert(isinstance(target, int))
+
+        filename = os.path.join(self.out_dir, str(target) + '.bin')
+
+        with open(filename, 'wb') as f:
+            f.write(struct.pack('i', target))
+
+        return filename
+
+    def _target_filename(self, target):
+        """
+        Return a filename of a file containing a binary representation of
+        target.  If no such file exists, make one.
+        """
+        target_filename = self._target_filenames.get(target)
+        if target_filename is None:
+            target_filename = self._generate_target_file(target)
+            self._target_filenames[target] = target_filename
+
+        return target_filename
+
+    def training_validation_pairs(self):
+        """
+        Returns {
+            'train': [(filename, label_index), ...],
+            'valid': [(filename, label_index), ...],
+        }
         """
         # Get the labels as the subdirs
-        subdirs = glob(os.path.join(self.image_dir, '*'))
+        subdirs = glob(os.path.join(self.input_dir, '*'))
         self.label_names = sorted([os.path.basename(x) for x in subdirs])
 
         indexes = list(range(len(self.label_names)))
@@ -118,118 +127,119 @@ class BatchWriter(object):
             vlines += lines[:v_idx]
         np.random.shuffle(tlines)
 
+        return {
+            'train': tlines,
+            'valid': vlines,
+        }
+
+    def write_csv_files(self, training_validation_pairs):
+        """
+        Write CSV files to disk.
+        """
         if not os.path.exists(self.out_dir):
             os.makedirs(self.out_dir)
 
-        for ff, ll in zip([self.train_file, self.val_file], [tlines, vlines]):
-            with gzip.open(ff, 'wb') as f:
-                f.write('filename,l_id\n')
-                for tup in ll:
-                    f.write('{},{}\n'.format(*tup))
+        for setn, pairs in training_validation_pairs.iteritems():
+            pairs = self.convert_lines(pairs)
 
-        self.train_nrec = len(tlines)
-        self.train_start = 0
+            filename = getattr(self, setn + '_file')
+            with gzip.open(filename, 'wb') as f:
+                for filename, target in pairs:
+                    f.write('{},{}\n'.format(
+                        filename, self._target_filename(int(target))
+                    ))
 
-        self.val_nrec = len(vlines)
-        self.val_start = -(-self.train_nrec // self.macro_size)
+    def transform_pairs(self, pairs):
+        """
+        transform all `pairs` with self.transform function using as many
+        processes as there are cores on this machine.
+        """
+        return multiprocessing.Pool().map(
+            lambda filename, target: self.transform(filename, target),
+            pairs
+        )
 
-    def parse_file_list(self, infile):
-        lines = np.loadtxt(infile, delimiter=',', skiprows=1, dtype={'names': ('fname', 'l_id'),
-                                                                     'formats': (object, 'i4')})
-        imfiles = [l[0] for l in lines]
-        labels = {'l_id': [l[1] for l in lines]}
-        self.nclass = {'l_id': (max(labels['l_id']) + 1)}
-        return imfiles, labels
-
-    def write_individual_batch(self, batch_file, label_batch, jpeg_file_batch):
-        ndata = len(jpeg_file_batch)
-        jpgfiles = (ct.c_char_p * ndata)()
-        jpgfiles[:] = jpeg_file_batch
-
-        # This interface to the batchfile.hpp allows you to specify
-        # destination file, number of input jpg files, list of jpg files,
-        # and corresponding list of integer labels
-        self.writerlib.write_batch(ct.c_char_p(batch_file),
-                                   ct.c_int(ndata),
-                                   jpgfiles,
-                                   (ct.c_int * ndata)(*label_batch),
-                                   ct.c_int(self.target_size))
-
-    def write_batches(self, offset, labels, imfiles):
-        npts = -(-len(imfiles) // self.macro_size)
-        starts = [i * self.macro_size for i in range(npts)]
-        imfiles = [imfiles[s:s + self.macro_size] for s in starts]
-        labels = [{k: v[s:s + self.macro_size] for k, v in labels.items()} for s in starts]
-
-        for i, jpeg_file_batch in enumerate(imfiles):
-            bfile = os.path.join(self.out_dir, '%s%d.cpio' % (self.batch_prefix, offset + i))
-            label_batch = labels[i]['l_id']
-            if os.path.exists(bfile):
-                neon_logger.display("File %s exists, skipping..." % (bfile))
-            else:
-                self.write_individual_batch(bfile, label_batch, jpeg_file_batch)
-                neon_logger.display("Wrote batch %d" % (i))
-
-            # Check the batchfile for the max item value
-            batch_max_item = self.writerlib.read_max_item(ct.c_char_p(bfile))
-            if batch_max_item == 0:
-                raise ValueError("Batch file %s probably empty or corrupt" % (bfile))
-
-            self.item_max_size = max(batch_max_item, self.item_max_size)
-
-    def save_meta(self):
-        with open(self.meta_file, 'w') as f:
-            for settype in ('train', 'val'):
-                f.write('%s_start %d\n' % (settype, getattr(self, settype + '_start')))
-                f.write('%s_nrec %d\n' % (settype, getattr(self, settype + '_nrec')))
-            f.write('nclass %d\n' % (self.nclass['l_id']))
-            f.write('item_max_size %d\n' % (self.item_max_size))
-            f.write('label_size %d\n' % (4))
-            f.write('R_mean      %f\n' % self.pixel_mean[0])
-            f.write('G_mean      %f\n' % self.pixel_mean[1])
-            f.write('B_mean      %f\n' % self.pixel_mean[2])
+    def transform(self, filename, target):
+        """
+        transform filename and target as necessary as part of ingestion.
+        transform also returns a filename and target.
+        """
+        raise NotImplemented()
 
     def run(self):
-        self.write_csv_files()
-        if self.validation_pct == 0:
-            namelist = ['train']
-            filelist = [self.train_file]
-            startlist = [self.train_start]
-        elif self.validation_pct == 1:
-            namelist = ['validation']
-            filelist = [self.val_file]
-            startlist = [self.val_start]
-        else:
-            namelist = ['train', 'validation']
-            filelist = [self.train_file, self.val_file]
-            startlist = [self.train_start, self.val_start]
-        for sname, fname, start in zip(namelist, filelist, startlist):
-            neon_logger.display("Writing %s %s %s" % (sname, fname, start))
-            if fname is not None and os.path.exists(fname):
-                imgs, labels = self.parse_file_list(fname)
-                self.write_batches(start, labels, imgs)
-            else:
-                neon_logger.display("Skipping %s, file missing" % (sname))
-        # Get the max item size and store it for meta file
-        self.save_meta()
+        """
+        perform ingest
+        """
+        training_validation_pairs = self.training_validation_pairs()
+
+        # transform data
+        for setn, pairs in training_validation_pairs.items():
+            training_validation_pairs[setn] = self.transform_pairs(pairs)
+
+        self.write_csv_files(training_validation_pairs)
 
 
-class BatchWriterI1K(BatchWriter):
+class ImageIngester(Ingester):
+    def __init__(self, out_dir, input_dir, target_size=None, **kwargs):
+        """
+        target_size (int, optional): Size to which to scale DOWN the shortest side of the
+                                     input image.  For example, if an image is 200 x 300, and
+                                     target_size is 100, then the image will be scaled to
+                                     100 x 150.  However if the input image is 80 x 80, then
+                                     the image will not be resized.
+                                     If target_size is 0, no resizing is done.
+                                     Default is 256.
+        """
+        super(ImageIngester, self).__init__(out_dir, input_dir, **kwargs)
 
+    def transform(self, filename, target):
+        """
+        transform filename and target as necessary as part of ingestion.
+        transform also returns a filename and target.
+        """
+        return self.resize(filename), target
+
+    def resize(self, filename):
+        """
+        resize filename and return the new filename of the resized image
+        """
+        new_filename = os.path.join(self.out_dir, os.path.basename(filename))
+
+        os.system((
+            'mogrify {filename} '
+            '-resize {target_size}x{target_size}\> '
+            '-nterpolate Catrom '
+            '{new_filename}'
+        ).format(
+            filename=filename,
+            target_size=self.target_size,
+            new_filename=new_filename,
+        ))
+
+        return new_filename
+
+
+class IngestI1K(ImageIngester):
     def post_init(self):
+        self.check_files_exist()
+        self.extract_labels()
+
+    def check_files_exist(self):
+        self.train_tar = os.path.join(self.input_dir, 'ILSVRC2012_img_train.tar')
+        self.val_tar = os.path.join(self.input_dir, 'ILSVRC2012_img_val.tar')
+        self.devkit = os.path.join(self.input_dir, 'ILSVRC2012_devkit_t12.tar.gz')
+
+        for filename in (self.train_tar, self.val_tar, self.devkit):
+            if not os.path.exists(filename):
+                raise IOError((
+                    "{filename} not found. Please ensure you have ImageNet "
+                    "downloaded. More info here: "
+                    "http://www.image-net.org/download-imageurls"
+                ).format(filename=filename))
+
+    def extract_labels(self):
         import zlib
         import re
-
-        load_dir = self.image_dir
-        self.train_tar = os.path.join(load_dir, 'ILSVRC2012_img_train.tar')
-        self.val_tar = os.path.join(load_dir, 'ILSVRC2012_img_val.tar')
-        self.devkit = os.path.join(load_dir, 'ILSVRC2012_devkit_t12.tar.gz')
-
-        for infile in (self.train_tar, self.val_tar, self.devkit):
-            if not os.path.exists(infile):
-                raise IOError(infile + " not found. Please ensure you have ImageNet downloaded."
-                              "More info here: http://www.image-net.org/download-imageurls")
-
         with tarfile.open(self.devkit, "r:gz") as tf:
             synsetfile = 'ILSVRC2012_devkit_t12/data/meta.mat'
             valfile = 'ILSVRC2012_devkit_t12/data/ILSVRC2012_validation_ground_truth.txt'
@@ -243,16 +253,20 @@ class BatchWriterI1K(BatchWriter):
             # get the ground truth validation labels and offset to zero
             self.val_labels = {"%08d" % (i + 1): int(x) - 1 for i, x in
                                enumerate(tf.extractfile(valfile))}
-        self.validation_pct = None
 
-        self.train_nrec = 1281167
-        self.train_start = 0
+    def training_validation_pairs(self, overwrite=False):
+        """
+        untar imagenet tar files into directories that indicate their label.
 
-        self.val_nrec = 50000
-        self.val_start = -(-self.train_nrec // self.macro_size)
-        self.pixel_mean = [104.41227722, 119.21331787, 126.80609131]
+        returns {
+            'train': [(filename, label), ...],
+            'valid': [(filename, label), ...],
+        }
 
-    def extract_images(self, overwrite=False):
+        TODO: transform images while they are in memory instead of extracting
+        to disk and then reading transforming and writing back to disk
+        """
+        pairs = {}
         for setn in ('train', 'val'):
             img_dir = os.path.join(self.out_dir, setn)
 
@@ -260,8 +274,16 @@ class BatchWriterI1K(BatchWriter):
             toptar = getattr(self, setn + '_tar')
             label_dict = getattr(self, setn + '_labels')
             name_slice = slice(None, 9) if setn == 'train' else slice(15, -5)
-            with tarfile.open(toptar) as tf:
-                for s in tf.getmembers():
+
+            try:
+                tf = tarfile.open(toptar)
+            except tarfile.ReadError as e:
+                raise ValueError('ReadError opening {}: {}'.format(
+                    toptar, e
+                ))
+
+            with tf:
+                for s in tqdm.tqdm(tf.getmembers()):
                     label = label_dict[s.name[name_slice]]
                     subpath = os.path.join(img_dir, str(label))
                     if not os.path.exists(subpath):
@@ -278,41 +300,18 @@ class BatchWriterI1K(BatchWriter):
                         if not os.path.exists(fname) or overwrite:
                             with open(fname, 'wb') as jf:
                                 jf.write(tarfp.extractfile(fobj).read())
+                            pairs[setn][fname] = label
 
-    def write_csv_files(self, overwrite=False):
-        self.extract_images()
-        for setn in ('train', 'val'):
-            img_dir = os.path.join(self.out_dir, setn)
-            csvfile = getattr(self, setn + '_file')
-            neon_logger.display("Getting %s file list" % (setn))
-            if os.path.exists(csvfile) and not overwrite:
-                neon_logger.display("File %s exists, not overwriting" % (csvfile))
-                continue
-            flines = []
-
-            subdirs = glob(os.path.join(img_dir, '*'))
-            for subdir in subdirs:
-                subdir_label = os.path.basename(subdir)  # This is the int label
-                files = glob(os.path.join(subdir, self.file_pattern))
-                flines += [(filename, subdir_label) for filename in files]
-
-            if setn == 'train':
-                np.random.seed(0)
-                np.random.shuffle(flines)
-
-            with gzip.open(csvfile, 'wb') as f:
-                f.write('filename,l_id\n')
-                for tup in flines:
-                    f.write('{},{}\n'.format(*tup))
+        return pairs
 
 
-class BatchWriterCSV(BatchWriter):
+class BatchWriterCSV(ImageIngester):
 
     def post_init(self):
         self.imgs, self.labels = dict(), dict()
         # check that the needed csv files exist
         for setn in ('train', 'val'):
-            infile = os.path.join(self.image_dir, setn + '_file.csv.gz')
+            infile = os.path.join(self.input_dir, setn + '_file.csv.gz')
             if not os.path.exists(infile):
                 raise IOError(infile + " not found.  This needs to be created prior to running"
                               "BatchWriter with CSV option")
@@ -320,17 +319,10 @@ class BatchWriterCSV(BatchWriter):
 
         self.validation_pct = None
 
-        self.train_nrec = len(self.imgs['train'])
-        self.val_nrec = len(self.imgs['val'])
-
-        self.train_start = 0
-        self.val_start = -(-self.train_nrec // self.macro_size)
-        self.pixel_mean = [104.41227722, 119.21331787, 126.80609131]
-
     def parse_file_list(self, infile):
         lines = np.loadtxt(infile, delimiter=',', dtype={'names': ('fname', 'l_id'),
                                                          'formats': (object, 'i4')})
-        imfiles = [l[0] if l[0][0] == '/' else os.path.join(self.image_dir, l[0]) for l in lines]
+        imfiles = [l[0] if l[0][0] == '/' else os.path.join(self.input_dir, l[0]) for l in lines]
         labels = {'l_id': [l[1] for l in lines]}
         self.nclass = {'l_id': (max(labels['l_id']) + 1)}
         return imfiles, labels
@@ -345,19 +337,13 @@ class BatchWriterCSV(BatchWriter):
         self.save_meta()
 
 
-class BatchWriterCIFAR10(BatchWriterI1K):
+class BatchWriterCIFAR10(IngestI1K):
 
     def post_init(self):
         self.pad_size = ((self.target_size - 32) // 2) if self.target_size > 32 else 0
         self.pad_width = ((0, 0), (self.pad_size, self.pad_size), (self.pad_size, self.pad_size))
 
         self.validation_pct = None
-
-        self.train_nrec = 50000
-        self.train_start = 0
-
-        self.val_nrec = 10000
-        self.val_start = -(-self.train_nrec // self.macro_size)
 
     def extract_images(self, overwrite=False):
         from neon.data import CIFAR10
@@ -393,10 +379,9 @@ if __name__ == "__main__":
     parser = NeonArgparser(__doc__)
     parser.add_argument('--set_type', help='(i1k|cifar10|directory|csv)', required=True,
                         choices=['i1k', 'cifar10', 'directory', 'csv'])
-    parser.add_argument('--image_dir', help='Directory to find images', default=None)
+    parser.add_argument('--input_dir', help='Directory to find images', default=None)
     parser.add_argument('--target_size', type=int, default=0,
                         help='Size in pixels to scale shortest side DOWN to (0 means no scaling)')
-    parser.add_argument('--macro_size', type=int, default=5000, help='Images per processed batch')
     parser.add_argument('--file_pattern', default='*.jpg', help='Image extension to include in'
                         'directory crawl')
     args = parser.parse_args()
@@ -405,19 +390,19 @@ if __name__ == "__main__":
 
     if args.set_type == 'i1k':
         args.target_size = 256  # (maybe 512 for Simonyan's methodology?)
-        bw = BatchWriterI1K(out_dir=args.data_dir, image_dir=args.image_dir,
-                            target_size=args.target_size, macro_size=args.macro_size,
+        bw = IngestI1K(out_dir=args.data_dir, input_dir=args.input_dir,
+                            target_size=args.target_size,
                             file_pattern="*.JPEG")
     elif args.set_type == 'cifar10':
-        bw = BatchWriterCIFAR10(out_dir=args.data_dir, image_dir=args.image_dir,
-                                target_size=args.target_size, macro_size=args.macro_size,
+        bw = BatchWriterCIFAR10(out_dir=args.data_dir, input_dir=args.input_dir,
+                                target_size=args.target_size,
                                 file_pattern="*.png")
     elif args.set_type == 'csv':
-        bw = BatchWriterCSV(out_dir=args.data_dir, image_dir=args.image_dir,
-                            target_size=args.target_size, macro_size=args.macro_size)
+        bw = BatchWriterCSV(out_dir=args.data_dir, input_dir=args.input_dir,
+                            target_size=args.target_size)
     else:
-        bw = BatchWriter(out_dir=args.data_dir, image_dir=args.image_dir,
-                         target_size=args.target_size, macro_size=args.macro_size,
-                         file_pattern=args.file_pattern)
+        bw = ImageIngester(out_dir=args.data_dir, input_dir=args.input_dir,
+                           target_size=args.target_size,
+                           file_pattern=args.file_pattern)
 
     bw.run()

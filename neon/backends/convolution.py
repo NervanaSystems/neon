@@ -494,7 +494,12 @@ class XpropDirect(KernelGroup):
         X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
         relu=False, brelu=False, slope=0.0, no_op=0):
 
-        assert I.dtype == O.dtype == self.dtype
+        if not (I.dtype == O.dtype == self.dtype):
+            ERR_STR = (
+                'I.dtype: {}, O.dtype: {}, self.dtype: {} should'
+                'all be the same'
+            )
+            raise TypeError(ERR_STR.format(I.dtype, O.dtype, self.dtype))
 
         self.lib.scratch_buffer_init()
         filter_data = self.filter_trans.bind_params(F)
