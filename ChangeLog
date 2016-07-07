@@ -1,5 +1,9 @@
 # ChangeLog
 
+## v1.5.3 (2016-07-07):
+
+* Bug fixes [#267]
+
 ## v1.5.2 (2016-07-06):
 
 * Bug fixes to audio loader
