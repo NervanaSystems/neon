@@ -28,7 +28,11 @@ from neon.backends.util.check_gpu import get_device_count
 
 # These are imported to register the backends with the factory
 import neon.backends.nervanacpu
-import neon.backends.nervanagpu
+
+try:
+    import neon.backends.nervanagpu
+except ImportError:
+    pass
 
 try:
     # Register if it exists
