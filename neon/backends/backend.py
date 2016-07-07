@@ -458,8 +458,7 @@ class Backend(AbstractBackend):
     @staticmethod
     def backend_choices():
         """Return the list of available backends."""
-        names = Backend.backends.keys()
-        names.sort()
+        names = sorted(Backend.backends.keys())
         return names
 
     @staticmethod

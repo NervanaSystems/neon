@@ -393,7 +393,7 @@ class GPUTensor(Tensor):
         assert ary.strides == tuple(
             self.dtype.itemsize * s for s in self.strides)
 
-        drv.memcpy_htod_async(self.gpudata, ary, stream)
+        drv.memcpy_htod_async(int(self.gpudata), ary, stream)
 
         return self
 

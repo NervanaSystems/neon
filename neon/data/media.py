@@ -248,11 +248,11 @@ class AudioParams(MediaParams):
         num_cepstra (int):
             The no. of cepstral coefficients required. This is only applicable
             for MFCC.
-        noise_index_file (str):
+        noise_index_file (bytes):
             Pathname of index file containing a list of files with noise
             content. If this is not None, the data is augmented with the given
             noise.
-        noise_dir (str):
+        noise_dir (bytes):
             Pathname of directory containing noise clips.  This pathname is
             prepended to any filenames in noise_index_file which do not start
             with /
@@ -311,6 +311,9 @@ class AudioParams(MediaParams):
                 raise ValueError('Unknown argument %s' % key)
         for key, value in iteritems(self._defaults_):
             setattr(self, key, value)
+        for key in ['noise_index_file', 'noise_dir']:
+            if key in kwargs and kwargs[key] is not None:
+                kwargs[key] = kwargs[key].encode()
         super(AudioParams, self).__init__(mtype=MediaType.audio, **kwargs)
         for key in ['window_size', 'overlap', 'stride', 'width',
                     'height', 'window', 'feature', 'noise_clips']:
