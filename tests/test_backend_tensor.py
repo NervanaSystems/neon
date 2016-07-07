@@ -130,3 +130,44 @@ def test_slicing(fargs_tests, backend_pair_dtype):
     array_nc[0] = 0
 
     assert tensors_allclose(array_ng, array_nc, rtol=0, atol=1e-3)
+
+
+@pytest.mark.hasgpu
+def test_reshape_separate(fargs_tests, backend_pair_dtype):
+    dims = fargs_tests[0]
+
+    gpu, cpu = backend_pair_dtype
+    dtype = gpu.default_dtype
+
+    array_np = np.random.uniform(-1, 1, dims).astype(dtype)
+    array_ng = gpu.array(array_np, dtype=dtype)
+    array_nc = cpu.array(array_np, dtype=dtype)
+
+    assert array_ng.is_contiguous
+
+    if (dims[0] % 2) == 0:
+        reshaped_ng = array_ng.reshape((2, dims[0] // 2, dims[1]))
+        reshaped_nc = array_nc.reshape((2, dims[0] // 2, dims[1]))
+
+        assert tensors_allclose(reshaped_ng, reshaped_nc, rtol=0, atol=1e-6)
+
+
+@pytest.mark.hasgpu
+def test_reshape_combine(fargs_tests, backend_pair_dtype):
+    dims = fargs_tests[0]
+
+    gpu, cpu = backend_pair_dtype
+    dtype = gpu.default_dtype
+
+    if (dims[0] % 2) == 0:
+        orig_shape = (2, dims[0] // 2, dims[1])
+        array_np = np.random.uniform(-1, 1, orig_shape).astype(dtype)
+        array_ng = gpu.array(array_np, dtype=dtype)
+        array_nc = cpu.array(array_np, dtype=dtype)
+
+        assert array_ng.is_contiguous
+
+        reshaped_ng = array_ng.reshape(dims)
+        reshaped_nc = array_nc.reshape(dims)
+
+        assert tensors_allclose(reshaped_ng, reshaped_nc, rtol=0, atol=1e-6)

@@ -2963,7 +2963,7 @@ def _reshape_strides(orig_strides, orig_shape, new_shape):
     orig_strides = tuple(list(orig_strides) + [1] * (len(new_shape) - len(orig_strides)))
 
     reshape_size = np.prod(new_shape[matched_dims:])
-    orig_size = np.prod(orig_strides[matched_dims:]) * orig_shape[matched_dims]
+    orig_size = np.prod(orig_strides[matched_dims]) * orig_shape[matched_dims]
 
     if orig_size != reshape_size:
         raise ValueError("Reshaping of non-contiguous dimensions unsupported.")
