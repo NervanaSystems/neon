@@ -268,7 +268,8 @@ public:
         createRandomAugParams(decodedDatum.size());
         transformDecodedImage(decodedDatum, datumBuf, datumLen);
         Mat decodedTarget;
-        decode(encTarget, encTargetLen, &decodedTarget);
+        // Assume grayscale masks for now.
+        decodeGrayscale(encTarget, encTargetLen, &decodedTarget);
         transformDecodedImage(decodedTarget, targetBuf, targetLen);
     }
 
@@ -367,13 +368,21 @@ public:
     }
 
 private:
+    void decodeGrayscale(char* item, int itemSize, Mat* dst) {
+        Mat image(1, itemSize, CV_8UC1, item);
+        cv::imdecode(image, CV_LOAD_IMAGE_GRAYSCALE, dst);
+    }
+
+    void decodeColor(char* item, int itemSize, Mat* dst) {
+        Mat image(1, itemSize, CV_8UC3, item);
+        cv::imdecode(image, CV_LOAD_IMAGE_COLOR, dst);
+    }
+
     void decode(char* item, int itemSize, Mat* dst) {
         if (_params->_channelCount == 1) {
-            Mat image(1, itemSize, CV_8UC1, item);
-            cv::imdecode(image, CV_LOAD_IMAGE_GRAYSCALE, dst);
+            decodeGrayscale(item, itemSize, dst);
         } else if (_params->_channelCount == 3) {
-            Mat image(1, itemSize, CV_8UC3, item);
-            cv::imdecode(image, CV_LOAD_IMAGE_COLOR, dst);
+            decodeColor(item, itemSize, dst);
         } else {
             stringstream ss;
             ss << "Unsupported number of channels in image: " << _params->_channelCount;
