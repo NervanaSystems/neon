@@ -22,6 +22,7 @@ from neon.layers import Conv, Pooling
 from neon.util.persist import load_obj
 from neon.data.datasets import Dataset
 from voc_eval import voc_eval
+import numpy as np
 import os
 import cPickle
 
@@ -87,6 +88,44 @@ def load_vgg_weights(model, path):
     for layer, ps in zip(param_layers, param_dict_list):
         layer.load_weights(ps, load_states=True)
         print layer.name + " <-- " + ps['config']['name']
+
+# --------------------------------------------------------
+# Fast R-CNN
+# Copyright (c) 2015 Microsoft
+# Licensed under The MIT License [see LICENSE for details]
+# Written by Ross Girshick
+# --------------------------------------------------------
+
+
+def nms(dets, thresh):
+    """Pure Python NMS baseline."""
+    x1 = dets[:, 0]
+    y1 = dets[:, 1]
+    x2 = dets[:, 2]
+    y2 = dets[:, 3]
+    scores = dets[:, 4]
+
+    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    order = scores.argsort()[::-1]
+
+    keep = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(i)
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+
+        w = np.maximum(0.0, xx2 - xx1 + 1)
+        h = np.maximum(0.0, yy2 - yy1 + 1)
+        inter = w * h
+        ovr = inter / (areas[i] + areas[order[1:]] - inter)
+
+        inds = np.where(ovr <= thresh)[0]
+        order = order[inds + 1]
+
+    return keep
 
 
 def run_voc_eval(annopath, imagesetfile, year, image_set, classes, output_dir):

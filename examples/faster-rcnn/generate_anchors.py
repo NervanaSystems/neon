@@ -52,9 +52,12 @@ def generate_all_anchors(conv_size_x, conv_size_y, im_scale, scales=np.array((8,
     # shift anchors (A, K, 4), then reshape to (A*K, 4) shifted anchors
     K = num_anchors
     A = shifts.shape[0]
-    all_anchors = (anchors.reshape((1, K, 4)) + shifts.reshape((1,A,4)).transpose((1,0,2)))#.transpose((1, 0, 2)) + shifts.reshape((1, A, 4)))
 
-    all_anchors = all_anchors.reshape((K * A, 4))
+    # Generate anchors in A*K order (different from caffe) so that we don't have to 
+    # reshae and re-transpose before loading back to GPU
+    all_anchors = (anchors.reshape((1, K, 4)).transpose((1, 0, 2)) + shifts.reshape((1, A, 4)))
+
+    all_anchors = all_anchors.reshape((A * K, 4))
     # total_anchors = int(K * A)
     return all_anchors
     # all_anchors is in (CHW) format, matching the CHWN output of the conv layer.

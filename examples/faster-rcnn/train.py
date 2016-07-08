@@ -64,7 +64,7 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 train_set = PASCAL('trainval', '2007', path=args.data_dir, n_mb=n_mb,
                    img_per_batch=img_per_batch, rpn_rois_per_img=rpn_rois_per_img,
                    frcn_rois_per_img=frcn_rois_per_img, add_flipped=True, shuffle=True,
-                   rebuild_cache=False)
+                   rebuild_cache=True)
 
 # Faster-RCNN contains three models: VGG, the Region Proposal Network (RPN),
 # and the Classification Network (ROI-pooling + Fully Connected layers), organized

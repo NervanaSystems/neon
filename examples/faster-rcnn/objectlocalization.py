@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Defines PASCAL_VOC datatset handling.
+Defines PASCAL_VOC datatset handling.a
 """
 import numpy as np
 import os
@@ -50,13 +50,13 @@ BB_YMIN_IDX = 1
 BB_XMAX_IDX = 2
 BB_YMAX_IDX = 3
 
-NORMALIZE_BBOX_TARGETS = True
-BBOX_NORMALIZE_TARGETS_PRECOMPUTED = True # True means the values below are used
-BBOX_NORMALIZE_MEANS = [0.0, 0.0, 0.0, 0.0] # taken from py-faster-rcnn caffe implementation
+NORMALIZE_BBOX_TARGETS = False
+BBOX_NORMALIZE_TARGETS_PRECOMPUTED = True  # True means the values below are used
+BBOX_NORMALIZE_MEANS = [0.0, 0.0, 0.0, 0.0]  # taken from py-faster-rcnn caffe implementation
 BBOX_NORMALIZE_STDS = [0.1, 0.1, 0.2, 0.2]
 
 DEBUG = False
-TEST_PY = False
+TEST_PY = True
 
 dataset_meta = {
     'test-2007': dict(size=460032000,
@@ -93,7 +93,7 @@ class ObjectLocalization(Dataset):
     """
     MAX_SIZE = 1000
     MIN_SIZE = 600
-    FRCNN_ROI_PER_IMAGE = 128 # number of rois to train frcnn (needed to initialize global buffers)
+    FRCNN_ROI_PER_IMAGE = 128  # number of rois to train (needed to initialize global buffers)
     RPN_ROI_PER_IMAGE = 256  # number of anchors per image
     IMG_PER_BATCH = 1  # number of images per batch
     CLASSES = None  # list of CLASSES e.g. ['__background__', 'car', 'people',..]
@@ -119,9 +119,8 @@ class ObjectLocalization(Dataset):
         self.rois_per_batch = self.rois_per_img * self.img_per_batch
 
         # how many ROIs to use to train frcnn
-        self.frcn_rois_per_img = frcn_rois_per_img if frcn_rois_per_img else self.FRCNN_ROI_PER_IMAGE
-
-        self.memoized_anchor_inds = {}
+        self.frcn_rois_per_img = frcn_rois_per_img if frcn_rois_per_img \
+            else self.FRCNN_ROI_PER_IMAGE
 
         assert self.img_per_batch == 1, "Only a minibatch of 1 is supported."
 
@@ -194,7 +193,7 @@ class ObjectLocalization(Dataset):
 
             # 3. construct acnhor targets
             self.roi_db = self.add_anchors(roi_db)
-            
+
             if NORMALIZE_BBOX_TARGETS:
                 # 4. normalize bbox targets by class
                 self.roi_db = self.normalize_bbox_targets(self.roi_db)
@@ -254,14 +253,11 @@ class ObjectLocalization(Dataset):
         # 4. class label for each gt box
         # 5. image scale
         # 6. indexes of anchors actually generated for image out of 62x62 possible
-        self.im_shape = self.be.zeros((2, 1))
-        self.gt_boxes = self.be.zeros((64, 4))
+        self.im_shape = self.be.zeros((2, 1), dtype=np.int32)
+        self.gt_boxes = self.be.zeros((64, 4), dtype=np.float32)
         self.num_gt_boxes = self.be.zeros((1, 1), dtype=np.int32)
-        self.gt_classes = self.be.zeros((64, 1))
-        self.im_scale = self.be.zeros((1, 1))
-
-        self.all_anchor_inds = self.be.zeros((self._total_anchors, 1))
-        self.num_anchors_this_img = self.be.zeros((1,1))
+        self.gt_classes = self.be.zeros((64, 1), dtype=np.int32)
+        self.im_scale = self.be.zeros((1, 1), dtype=np.float32)
 
     @abc.abstractmethod
     def load_data(self):
@@ -286,8 +282,6 @@ class ObjectLocalization(Dataset):
         global_buffers['gt_boxes'] = (self.gt_boxes, self.gt_classes, self.num_gt_boxes)
         global_buffers['conv_config'] = (self._conv_size, self.SCALE)
 
-        global_buffers['anchor_config'] = (self.all_anchor_inds, self.num_anchors_this_img)
-
         return global_buffers
 
     def add_anchors(self, roi_db):
@@ -301,7 +295,7 @@ class ObjectLocalization(Dataset):
         # 1.
         # generate list of K anchor boxes, where K = # ratios * # scales
         # anchor boxes are coded as [xmin, ymin, xmax, ymax]
-        all_possible_anchors = generate_all_anchors(self._conv_size, self._conv_size, self.SCALE)
+        all_anchors_this_img = generate_all_anchors(self._conv_size, self._conv_size, self.SCALE)
         # all_anchors are in (CHW) order, matching the CHWN output of the conv layer.
 
         # 2.
@@ -309,19 +303,6 @@ class ObjectLocalization(Dataset):
         for db in roi_db:
 
             im_scale, im_shape = self.calculate_scale_shape(db['img_shape'])
-
-            # compute the actual conv_size for this image, and only generate those anchors, rest will be masked
-            conv_size_x = int(np.floor(im_shape[0] * self.SCALE))
-            conv_size_y = int(np.floor(im_shape[1] * self.SCALE))
-
-            all_anchors_this_img = generate_all_anchors(conv_size_x, conv_size_y, self.SCALE)
-
-            # Get indicies of the anchors generated for this image (conv_size_x & y) in the 
-            # all_possible_anchors for the final unmapping
-            all_anchor_inds, self.memoized_anchor_inds = get_inside_inds_memoized(all_anchors_this_img, 
-                                                                 (conv_size_x, conv_size_y), 
-                                                                 all_possible_anchors, 
-                                                                 self.memoized_anchor_inds)
 
             # only keep anchors inside image
             idx_inside = inside_im_bounds(all_anchors_this_img, im_shape)
@@ -371,26 +352,22 @@ class ObjectLocalization(Dataset):
             gt_max_overlap_classes = overlaps.argmax(axis=1)
 
             # store results in database
-            db['anchors'] = anchors
             db['labels'] = labels
             db['bbox_targets'] = bbox_targets
             db['max_classes'] = gt_max_overlap_classes
             db['total_anchors'] = self._total_anchors
-            db['num_anchors_this_img'] = all_anchors_this_img.shape[0]
             db['idx_inside'] = idx_inside
-            db['all_anchor_inds'] = all_anchor_inds
 
         return roi_db
-
 
     def normalize_bbox_targets(self, roi_db):
         if BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
             # Use fixed / precomputed "means" and "stds" instead of empirical values
             means = np.tile(
-                        np.array(BBOX_NORMALIZE_MEANS), (self.num_classes, 1))
+                np.array(BBOX_NORMALIZE_MEANS), (self.num_classes, 1))
             stds = np.tile(
-                        np.array(BBOX_NORMALIZE_STDS), (self.num_classes, 1))
-        
+                np.array(BBOX_NORMALIZE_STDS), (self.num_classes, 1))
+
         else:
             # Compute values needed for means and stds
             # var(x) = E(x^2) - E(x)^2
@@ -406,17 +383,17 @@ class ObjectLocalization(Dataset):
                         class_counts[cls] += cls_inds.size
                         sums[cls, :] += targets[cls_inds].sum(axis=0)
                         squared_sums[cls, :] += \
-                                (targets[cls_inds] ** 2).sum(axis=0)
+                            (targets[cls_inds] ** 2).sum(axis=0)
 
             means = sums / class_counts
-            stds = np.sqrt(squared_sums / class_counts - means ** 2)    
+            stds = np.sqrt(squared_sums / class_counts - means ** 2)
 
         print 'bbox target means:'
         print means
-        print means[1:, :].mean(axis=0) # ignore bg class
+        print means[1:, :].mean(axis=0)  # ignore bg class
         print 'bbox target stdevs:'
         print stds
-        print stds[1:, :].mean(axis=0) # ignore bg class
+        print stds[1:, :].mean(axis=0)  # ignore bg class
 
         # Normalize targets
         print "Normalizing targets"
@@ -518,7 +495,7 @@ class ObjectLocalization(Dataset):
         # Prevent the biggest axis from being more than FRCN_MAX_SIZE
         if np.round(im_scale * im_size_max) > self.MAX_SIZE:
             im_scale = float(self.MAX_SIZE) / float(im_size_max)
-        im_shape = (im_shape * im_scale).astype(int)
+        im_shape = np.round((im_shape * im_scale)).astype(int)
         return im_scale, im_shape
 
     def reset(self):
@@ -608,15 +585,6 @@ class ObjectLocalization(Dataset):
                 self.gt_boxes[:num_gt_boxes, :] = db['gt_bb'] * im_scale
                 self.gt_classes[:num_gt_boxes] = db['gt_classes']
 
-
-                # set the anchor indicies
-                num_anchors_this_img = np.array(db['num_anchors_this_img'])
-                self.num_anchors_this_img.set(num_anchors_this_img)
-
-                all_anchor_inds = np.zeros((self._total_anchors, 1), dtype=np.int32)
-                all_anchor_inds[:num_anchors_this_img] = db['all_anchor_inds']
-                self.all_anchor_inds[:] = all_anchor_inds
-
                 im = im.resize(im_shape, Image.LINEAR)
 
                 # load it to numpy and flip the channel RGB to BGR
@@ -684,8 +652,8 @@ class ObjectLocalization(Dataset):
                 # prepare inputs
                 bottom = [0, 1, 2]
                 
-                conv_size_x = int(np.floor(im_shape[0] * self.SCALE))
-                conv_size_y = int(np.floor(im_shape[1] * self.SCALE))
+                conv_size_x = 62
+                conv_size_y = 62
 
                 bottom[0] = np.zeros((conv_size_y, conv_size_x))
                 bottom[1] = db['gt_bb'] * im_scale
@@ -696,26 +664,72 @@ class ObjectLocalization(Dataset):
                 target.setup(bottom, top)
                 target.forward(bottom, top)
                 py_labels, py_bbtargets, py_iw, py_ow = top
-        
-        
+
                 # positive labels should match
                 if np.sum(label == 1) < 128:
                     print 'unit testing'
                     
                     # assert positive labels match since positives (usually) dont get under sampled
-                    assert np.allclose(np.where(label[all_anchor_inds[:num_anchors_this_img, 0]] == 1)[0],
+                    assert np.allclose(np.where(label == 1)[0],
                                        np.where(py_labels.flatten() == 1)[0])
 
                     # our bboxes are in 4 * K, whereas reference is in K * 4 order, so reshape
-                    bb = db['bbox_targets'][all_anchor_inds[:num_anchors_this_img], :].T.reshape(-1,1) \
-                            * bbtargets_mask[all_anchor_inds[:num_anchors_this_img], :].T.reshape(-1,1)
+                    bb = db['bbox_targets'].T.reshape(-1,1) \
+                            * bbtargets_mask.T.reshape(-1,1)
                     
-                    pybb = py_bbtargets.T.reshape(-1,1) * py_iw.T.reshape(-1,1)
-
+                    pybb = py_bbtargets * py_iw
+                    pybb = pybb.reshape((1, 9, 4, conv_size_y, conv_size_x)).transpose(0, 2, 1, 3, 4)
+                    pybb = pybb.reshape(1, 36, conv_size_y, conv_size_x).flatten()
+                    
                     # bounding box target locations and values must match
                     assert np.allclose(np.where(bb != 0)[0], np.where(pybb != 0)[0])
                     assert np.allclose(bb[np.where(bb != 0)], pybb[np.where(pybb != 0)])    
             yield X, Y
+
+    def evaluation(self, all_boxes, output_dir='output'):
+        """
+        Evaluations on all detections which are collected into:
+        all_boxes[cls][image] = N x 5 array of detections in (x1, y1, x2, y2, score).
+        It will write outputs into text format.
+        Then call voc_eval function outside of this step to generate mAP metric
+        using the text files.
+
+        Arguments:
+            all_boxes (ndarray): detections over all classes and all images
+            output_dir (str): where to save the output files
+        """
+        print '--------------------------------------------------------------'
+        print 'Computing results with **unofficial** Python eval code.'
+        print '--------------------------------------------------------------'
+
+        if not os.path.isdir(output_dir):
+            os.mkdir(output_dir)
+
+        for cls_ind, cls in enumerate(self.CLASSES):
+            if cls == '__background__':
+                continue
+            print 'Writing {} VOC results file'.format(cls)
+            filename = 'voc_{}_{}_{}.txt'.format(
+                self.year, self.image_set, cls)
+            filepath = os.path.join(output_dir, filename)
+            with open(filepath, 'wt') as f:
+                for im_ind in range(self.nbatches):
+                    index = self.image_index[im_ind]
+                    dets = all_boxes[cls_ind][im_ind]
+                    if dets == []:
+                        continue
+                    # the VOCdevkit expects 1-based indices
+                    for k in xrange(dets.shape[0]):
+                        f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
+                                format(index, dets[k, -1],
+                                       dets[k, 0] + 1, dets[k, 1] + 1,
+                                       dets[k, 2] + 1, dets[k, 3] + 1))
+
+        annopath = os.path.join(self.config['annot_path'],
+                                '{:s}' + self._annotation_file_ext)
+        imagesetfile = self.config['index_path']
+
+        return annopath, imagesetfile
 
 
 class PASCAL(ObjectLocalization):
@@ -774,357 +788,6 @@ class PASCAL(ObjectLocalization):
         config['cache_path'] = os.path.join(datadir, cache_name)
 
         return config
-
-
-class PASCALInference(ObjectLocalization):
-    """Variant of the PASCAL data loader used for testing and inference."""
-    MAX_SIZE = 1000  # 1000 # the max image scales on the max dim
-    MIN_SIZE = 600  # 600 # the max image scales on the min dim
-    ROI_PER_IMAGE = 256
-    IMG_PER_BATCH = 1
-    SCALE = 1.0 / 16
-    NUM_SCALES = 9
-
-    # background class is always indexed at 0
-    CLASSES = ('__background__',
-               'aeroplane', 'bicycle', 'bird', 'boat',
-               'bottle', 'bus', 'car', 'cat', 'chair',
-               'cow', 'diningtable', 'dog', 'horse',
-               'motorbike', 'person', 'pottedplant',
-               'sheep', 'sofa', 'train', 'tvmonitor')
-
-    def __init__(self, image_set, year, path='.', n_mb=None, img_per_batch=None,
-                 rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=False, 
-                 shuffle=False, rebuild_cache=False):
-
-        self.image_set = image_set
-        self.year = year
-        super(PASCALInference, self).__init__(path, n_mb, img_per_batch, rpn_rois_per_img,
-                                     frcn_rois_per_img, add_flipped, shuffle, rebuild_cache)
-
-    def load_data(self):
-        """
-        """
-        dataset = '-'.join([self.image_set, self.year])
-
-        voc = dataset_meta[dataset]
-        workdir, filepath, datadir = self._valid_path_append(
-            self.path, '', voc['file'], voc['subdir'])
-
-        if not os.path.exists(filepath):
-            self.fetch_dataset(voc['url'], voc['file'], filepath, voc['size'])
-            with tarfile.open(filepath) as f:
-                f.extractall(workdir)
-
-        # define the path structure of the dataset
-        config = dict()
-        config['root'] = datadir
-        config['index_path'] = os.path.join(datadir, 'ImageSets', 'Main',
-                                            self.image_set + '.txt')
-        config['image_path'] = os.path.join(datadir, 'JPEGImages')
-        config['annot_path'] = os.path.join(datadir, 'Annotations')
-        config['file_ext'] = ".jpg"
-
-        # write cache name
-        cache_name = 'pascal_inference_{}-{}.pkl'.format(self.image_set, self.year,
-                                               self.MAX_SIZE, self.MIN_SIZE)
-
-        config['cache_path'] = os.path.join(datadir, cache_name)
-
-        return config
-
-    def __iter__(self):
-        """
-        Generator that can be used to iterate over this dataset.
-
-        Yields:
-            X: image data in CHW order and BGR color order
-            Y: imdb used for evaluation
-        """
-        self.batch_index = 0
-
-        # permute the dataset each epoch
-        if self.shuffle is False:
-            shuf_idx = range(self.num_image_entries)
-        else:
-            shuf_idx = self.be.rng.permutation(self.num_image_entries)
-            self.image_index = [self.image_index[i] for i in shuf_idx]
-
-
-        for self.batch_index in xrange(self.nbatches):
-            start = self.batch_index * self.img_per_batch
-            end = (self.batch_index + 1) * self.img_per_batch
-
-            db_inds = shuf_idx[start:end]
-            mb_db = [self.roi_db[i] for i in db_inds]
-
-            self.img_np[:] = 0
-
-            for im_i, db in enumerate(mb_db):
-                # load and process the image using PIL
-                im = Image.open(db['img_path'])  # This is RGB order
-
-                im_scale, im_shape = self.calculate_scale_shape(im.size)
-
-                # store im_shape in buffer for ProposalLayer
-                self.im_shape.set(im_shape)
-                self.im_scale.set(np.array(im_scale))
-                num_gt_boxes = np.array(db['gt_bb'].shape[0])
-                self.num_gt_boxes.set(num_gt_boxes)
-                self.gt_boxes[:num_gt_boxes, :] = db['gt_bb'] * im_scale
-                self.gt_classes[:num_gt_boxes] = db['gt_classes']
-
-                im = im.resize(im_shape, Image.LINEAR)
-
-                # store imheight and imwidth in db for post_processing
-                db['im_height'] = im_shape[1]
-                db['im_width'] = im_shape[0]
-
-                # load it to numpy and flip the channel RGB to BGR
-                im = np.array(im)[:, :, ::-1]
-                if db['flipped']:
-                    im = im[:, ::-1, :]
-
-                # Mean subtract and scale an image
-                im = im.astype(np.float32, copy=False)
-
-                im -= FRCN_PIXEL_MEANS
-
-                self.last_num_boxes = min(self.num_gt_boxes, self.rois_per_img)
-
-                # dont sample for testing just anchors and targets for the final bbox
-                # db['labels'], db['bbox_targets'], db['anchors']
-
-                # write image to backend tensor
-                self.img_np[:, :im_shape[1], :im_shape[0], im_i] = im.transpose(
-                    FRCN_IMG_DIM_SWAP)
-
-            # copy to backend tensors
-            self.dev_X_img_chw.set(self.img_np)
-            self.actual_seq_len = self.last_num_boxes
-            X = self.dev_X_img_chw
-
-            yield X, db
-
-    def post_processing(self, outputs, db):
-        """
-        A post processing on the network output (backend tensor) to get the final
-        bounding boxes and class predictions. This involves two steps: first, computing the 
-        rpn proposals from the anchors and bbox_targets, and then computing the final 
-        bounding box from the rpn proposals and roi_deltas.
-
-        The post processing is done in numpy
-
-        Arguments:
-            outputs: backend tensor (can have paddings)
-            db: the current roi database that was just processed by the network
-        """
-
-        scores = outputs[2].get()
-        roi_deltas = outputs[3].get()
-        
-        print 'scores: {}'.format(scores.shape)
-        print 'deltas: {}'.format(roi_deltas.shape)
-
-        anchors = db['anchors']
-        bbox_deltas = db['bbox_targets'][:anchors.shape[0], :]
-        H = db['im_height']
-        W = db['im_width']
-
-        # compute the rpn rois
-        roi_rp = self.correct_bbox(anchors, bbox_deltas, H, W)
-        
-        print "roi_rp: {}".format(roi_rp.shape)
-
-        nROI = roi_rp.shape[0]#min(roi_rp.shape[0], self.rois_per_img)
-
-        #scores = scores[:, :nROI]
-        #roi_deltas = roi_deltas[:, :nROI].T
-
-        # compute the final rois
-        rois = self.correct_bbox(roi_rp, roi_deltas, H, W)
-
-        #inv_index = db['inv_index']
-        #rois = rois[inv_index]
-        #scores = scores[:, inv_index]
-
-        return scores, rois
-
-    def correct_bbox(self, boxes, box_deltas, im_height, im_width):
-        """
-        Use the network bbox deltas to adjust the original bbox proposals
-
-        Arguments:
-            boxes: (ndarray, (# boxes, 4)): the region proposals from an external routine
-            box_deltas (ndarray, (# boxes, 4)): the bounding box adjustments [dx, dy, dw, dh]
-            im_height (int): the original image height to make sure the box does not go over
-            im_width (int): the original image width to make sure the box does not go over
-
-        """
-
-        if boxes.shape[0] == 0:
-            return np.zeros((0, box_deltas.shape[1]))
-
-        boxes = boxes.astype(np.float, copy=False)
-        widths = boxes[:, BB_XMAX_IDX] - \
-            boxes[:, BB_XMIN_IDX] + FRCN_EPS
-        heights = boxes[:, BB_YMAX_IDX] - \
-            boxes[:, BB_YMIN_IDX] + FRCN_EPS
-
-        ctr_x = boxes[:, BB_XMIN_IDX] + 0.5 * widths
-        ctr_y = boxes[:, BB_YMIN_IDX] + 0.5 * heights
-
-        dx = box_deltas[:, BB_XMIN_IDX::4]
-        dy = box_deltas[:, BB_YMIN_IDX::4]
-        dw = box_deltas[:, BB_XMAX_IDX::4]
-        dh = box_deltas[:, BB_YMAX_IDX::4]
-
-        pred_ctr_x = dx * widths[:, np.newaxis] + ctr_x[:, np.newaxis]
-        pred_ctr_y = dy * heights[:, np.newaxis] + ctr_y[:, np.newaxis]
-        pred_w = np.exp(dw) * widths[:, np.newaxis]
-        pred_h = np.exp(dh) * heights[:, np.newaxis]
-
-        corrected_boxes = np.zeros(box_deltas.shape)
-        # x1
-        corrected_boxes[:, BB_XMIN_IDX::4] = pred_ctr_x - 0.5 * pred_w
-        # y1
-        corrected_boxes[:, BB_YMIN_IDX::4] = pred_ctr_y - 0.5 * pred_h
-        # x2
-        corrected_boxes[:, BB_XMAX_IDX::4] = pred_ctr_x + 0.5 * pred_w
-        # y2
-        corrected_boxes[:, BB_YMAX_IDX::4] = pred_ctr_y + 0.5 * pred_h
-
-        # Clip corrected_boxes to image boundaries
-        corrected_boxes[:, BB_XMIN_IDX::4] = np.maximum(
-            corrected_boxes[:, BB_XMIN_IDX::4], 0)
-
-        corrected_boxes[:, BB_YMIN_IDX::4] = np.maximum(
-            corrected_boxes[:, BB_YMIN_IDX::4], 0)
-
-        corrected_boxes[:, BB_XMAX_IDX::4] = np.minimum(
-            corrected_boxes[:, BB_XMAX_IDX::4], im_width - 1)
-
-        corrected_boxes[:, BB_YMAX_IDX::4] = np.minimum(
-            corrected_boxes[:, BB_YMAX_IDX::4], im_height - 1)
-
-        return corrected_boxes
-
-    def apply_nms(self, all_boxes, thresh):
-        """
-        Apply non-maximum suppression to all predicted boxes output.
-
-        Arguments:
-            all_boxes (ndarray, (N, 5)): detections over all classes and all images
-                                         all_boxes[cls][image]
-                                         N x 5 array of detections in (x1, y1, x2, y2, score)
-            thresh (int): a theshold to eliminate the overlapping boxes
-
-        Returns:
-            nms_boxes (ndarray): boxes after applying the supression
-        """
-        num_classes = len(all_boxes)
-        num_images = len(all_boxes[0])
-        nms_boxes = [[[] for _ in xrange(num_images)]
-                     for _ in xrange(num_classes)]
-        for cls_ind in xrange(num_classes):
-            for im_ind in xrange(num_images):
-                dets = all_boxes[cls_ind][im_ind]
-                if dets == []:
-                    continue
-                keep = self.nonmaximum_suppression(dets[:, :4], dets[:, -1], thresh)
-                if len(keep) == 0:
-                    continue
-                nms_boxes[cls_ind][im_ind] = dets[keep, :].copy()
-        return nms_boxes
-
-    def nonmaximum_suppression(self, detections, scores, thre):
-        """
-        Apply non-maximum suppression (for each class indepdently) that rejects
-        a region if it has an intersection-over-union (IoU) overlap with a higher
-        scoring selected region larger than a learned threshold.
-
-        Arguments:
-            detections (ndarray): N x 4 array for detected bounding boxes
-            scores (ndarray): N x 1 array for scores associated with each box
-            thre (int): a theshold to eliminate the overlapping boxes
-
-        Returns:
-            keep (ndarray): indices to keep after applying supression
-
-        """
-
-        x1 = detections[:, BB_XMIN_IDX]
-        y1 = detections[:, BB_YMIN_IDX]
-        x2 = detections[:, BB_XMAX_IDX]
-        y2 = detections[:, BB_YMAX_IDX]
-
-        areas = (x2 - x1 + 1) * (y2 - y1 + 1)
-        order = scores.argsort()[::-1]
-
-        keep = []
-        while order.size > 0:
-            i = order[0]
-            keep.append(i)
-            xx1 = np.maximum(x1[i], x1[order[1:]])
-            yy1 = np.maximum(y1[i], y1[order[1:]])
-            xx2 = np.minimum(x2[i], x2[order[1:]])
-            yy2 = np.minimum(y2[i], y2[order[1:]])
-
-            w = np.maximum(0.0, xx2 - xx1 + 1)
-            h = np.maximum(0.0, yy2 - yy1 + 1)
-            iou = w * h
-            overlap = iou / (areas[i] + areas[order[1:]] - iou)
-
-            inds = np.where(overlap <= thre)[0]
-            order = order[inds + 1]
-
-        return keep
-
-    def evaluation(self, all_boxes, output_dir='output'):
-        """
-        Evaluations on all detections which are collected into:
-        all_boxes[cls][image] = N x 5 array of detections in (x1, y1, x2, y2, score).
-        It will write outputs into text format.
-        Then call voc_eval function outside of this step to generate mAP metric
-        using the text files.
-
-        Arguments:
-            all_boxes (ndarray): detections over all classes and all images
-            output_dir (str): where to save the output files
-        """
-        print '--------------------------------------------------------------'
-        print 'Computing results with **unofficial** Python eval code.'
-        print '--------------------------------------------------------------'
-
-        if not os.path.isdir(output_dir):
-            os.mkdir(output_dir)
-
-        for cls_ind, cls in enumerate(PASCAL_VOC_CLASSES):
-            if cls == '__background__':
-                continue
-            print 'Writing {} VOC results file'.format(cls)
-            filename = 'voc_{}_{}_{}.txt'.format(
-                self.year, self.image_set, cls)
-            filepath = os.path.join(output_dir, filename)
-            with open(filepath, 'wt') as f:
-                for im_ind in range(self.nbatches):
-                    index = self.image_index[im_ind]
-                    dets = all_boxes[cls_ind][im_ind]
-                    if dets == []:
-                        continue
-                    # the VOCdevkit expects 1-based indices
-                    for k in xrange(dets.shape[0]):
-                        f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
-                                format(index, dets[k, -1],
-                                       dets[k, 0] + 1, dets[k, 1] + 1,
-                                       dets[k, 2] + 1, dets[k, 3] + 1))
-
-        annopath = os.path.join(self.annotation_path,
-                                '{:s}' + self._annotation_file_ext)
-        imagesetfile = self.image_index_file
-
-        return annopath, imagesetfile
-
 
 
 # begin utility functions
@@ -1186,18 +849,14 @@ def unmap(roi_db):
     back to the full canvas size.
     """
     for db in roi_db:
-        db['labels'] = _unmap(db['labels'], db['num_anchors_this_img'], db['idx_inside'], fill=-1)
-        db['labels'] = _unmap(db['labels'], db['total_anchors'], db['all_anchor_inds'], fill=-1)
+        db['labels'] = _unmap(db['labels'], db['total_anchors'], db['idx_inside'], fill=-1)
 
-        db['bbox_targets'] = _unmap(db['bbox_targets'], db['num_anchors_this_img'],
-                                    db['idx_inside'], fill=0)
         db['bbox_targets'] = _unmap(db['bbox_targets'], db['total_anchors'],
-                                    db['all_anchor_inds'][:,0], fill=0)
-        db['max_classes'] = _unmap(db['max_classes'], db['num_anchors_this_img'],
                                     db['idx_inside'], fill=0)
+
         db['max_classes'] = _unmap(db['max_classes'], db['total_anchors'],
-                                    db['all_anchor_inds'], fill=0)
-    
+                                    db['idx_inside'], fill=0)
+
     return roi_db
 
 
@@ -1270,20 +929,3 @@ def calculate_bb_overlap(rp, gt):
                     overlaps[r, g] = iw * ih / ua
     return overlaps
 
-
-def get_inside_inds_memoized(a, size_a, b, memo):
-    if size_a in memo:
-        return memo[size_a], memo
-
-    inds = np.zeros((len(a), 1), dtype=np.int32)
-    last_idx = 0
-
-    for x_i, x in enumerate(a):
-        for y_i, y in enumerate(b[last_idx:]):
-            if np.alltrue(x == y):
-                inds[x_i] = y_i + last_idx
-                last_idx = y_i + last_idx
-                break
-
-    memo[size_a] = inds
-    return inds, memo

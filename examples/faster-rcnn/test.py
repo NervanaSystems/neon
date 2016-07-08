@@ -43,19 +43,19 @@ The mAP evaluation script is adapted from:
 https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc351be7f145499f
 """
 from neon.backends import gen_backend
-from neon.initializers import Gaussian, Constant, Xavier, GlorotUniform
-from neon.transforms import Rectlin, Identity, Softmax, CrossEntropyMulti, SmoothL1Loss, PixelwiseSoftmax
-from neon.layers import Conv, Pooling, Affine, BranchNode, Tree, Multicost, GeneralizedCost, GeneralizedCostMask, Dropout
+from neon.initializers import Gaussian, Constant
+from neon.transforms import Rectlin, Identity, Softmax, PixelwiseSoftmax
+from neon.layers import Conv, Affine, BranchNode, Tree, Dropout
 from neon.models import Model
 from roi_pooling import RoiPooling
 from proposal_layer import ProposalLayer
-from objectlocalization import PASCALInference
+from objectlocalization import PASCAL
 from neon.util.argparser import NeonArgparser, extract_valid_args
+from bbox_transform import bbox_transform_inv, clip_boxes
 import util
 import sys
 import os
 import numpy as np
-import heapq
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -67,19 +67,20 @@ args.batch_size = 1
 n_mb = None
 img_per_batch = args.batch_size
 rois_per_img = 300
-frcn_rois_per_img = 300
-post_nms_N = 300
+frcn_rois_per_img = 128
+rpn_rois_per_img = 256
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
-# setup dataset
 image_set = 'test'
 year = '2007'
-valid_set = PASCALInference(image_set, year, path=args.data_dir,
-                               n_mb=n_mb, rpn_rois_per_img=rois_per_img,
-                               frcn_rois_per_img=frcn_rois_per_img)
+valid_set = PASCAL(image_set, year, path=args.data_dir, n_mb=n_mb,
+                   img_per_batch=img_per_batch, rpn_rois_per_img=rpn_rois_per_img,
+                   frcn_rois_per_img=frcn_rois_per_img, add_flipped=False, shuffle=False,
+                   rebuild_cache=False)
 
+num_classes = valid_set.num_classes
 # Faster-RCNN contains three models: VGG, the Region Proposal Network (RPN),
 # and the Classification Network (ROI-pooling + Fully Connected layers), organized
 # as a tree. Tree has 4 branches:
@@ -100,16 +101,19 @@ VGG = util.add_vgg_layers()
 
 # define RPN
 rpn_init = dict(init=Gaussian(scale=0.01), bias=Constant(0))
+
 # these references are passed to the ProposalLayer.
 RPN_3x3 = Conv((3, 3, 512), activation=Rectlin(), padding=1, strides=1, **rpn_init)
 RPN_1x1_obj = Conv((1, 1, 18), activation=PixelwiseSoftmax(c=2), padding=0, strides=1, **rpn_init)
 RPN_1x1_bbox = Conv((1, 1, 36), activation=Identity(), padding=0, strides=1, **rpn_init)
 
+# create proposal layer
+proposalLayer = ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox],
+                              valid_set.get_global_buffers(),
+                              num_rois=frcn_rois_per_img, inference=True)
+
 # define ROI classification network
-ROI = [ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox], 
-                      valid_set.get_global_buffers(),
-                      num_rois=frcn_rois_per_img,
-                      post_nms_N=post_nms_N),
+ROI = [proposalLayer,
        RoiPooling(HW=(7, 7)),
        Affine(nout=4096, init=Gaussian(scale=0.005),
               bias=Constant(.1), activation=Rectlin()),
@@ -118,8 +122,10 @@ ROI = [ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox],
               bias=Constant(.1), activation=Rectlin()),
        Dropout(keep=0.5)]
 
-ROI_category = Affine(nout=21, init=Gaussian(scale=0.01), bias=Constant(0), activation=Softmax())
-ROI_bbox = Affine(nout=84, init=Gaussian(scale=0.001), bias=Constant(0), activation=Identity())
+ROI_category = Affine(nout=num_classes, init=Gaussian(scale=0.01),
+                      bias=Constant(0), activation=Softmax())
+ROI_bbox = Affine(nout=4 * num_classes, init=Gaussian(scale=0.001),
+                  bias=Constant(0), activation=Identity())
 
 # build the model
 # the four branches of the tree mirror the branches listed above
@@ -129,98 +135,86 @@ model = Model(layers=Tree([VGG + [b1, RPN_3x3, b2, RPN_1x1_obj],
                            [b3, ROI_bbox],
                            ]))
 
-
+# load parameters and initialize model
 model.load_params(args.model_file)
 model.initialize(dataset=valid_set)
 
-# set up the detection params
+# run inference
+
+# detection parameters
 num_images = valid_set.num_image_entries if n_mb is None else n_mb
-num_classes = valid_set.num_classes
-image_index = valid_set.image_index
-# heuristic: keep an average of 40 detections per class per images prior
-# to NMS
-max_per_set = 40 * num_images
-# heuristic: keep at most 100 detection per class per image prior to NMS
-max_per_image = 100
-# detection thresold for each class (this is adaptively set based on the
-# max_per_set constraint)
-thresh = -np.inf * np.ones(num_classes)
-# top_scores will hold one minheap of scores per class (used to enforce
-# the max_per_set constraint)
-top_scores = [[] for _ in xrange(num_classes)]
+max_per_image = 100   # maximum detections per image
+thresh = 0.001  # minimum threshold on score
+nms_thresh = 0.4  # threshold used for non-maximum supression
+
 # all detections are collected into:
 #    all_boxes[cls][image] = N x 5 array of detections in
 #    (x1, y1, x2, y2, score)
 all_boxes = [[[] for _ in xrange(num_images)]
              for _ in xrange(num_classes)]
 
-NMS_THRESH = 0.3
-
-print 'total batches {}'.format(valid_set.nbatches)
-
-PASCAL_VOC_CLASSES = valid_set.CLASSES
-
 last_strlen = 0
-# iterate through minibatches of the dataset
-for mb_idx, (x, db) in enumerate(valid_set):
+for mb_idx, (x, y) in enumerate(valid_set):
 
-    # print testing progress
     prt_str = "Finished: {} / {}".format(mb_idx, valid_set.nbatches)
     sys.stdout.write('\r' + ' '*last_strlen + '\r')
     sys.stdout.write(prt_str.encode('utf-8'))
     last_strlen = len(prt_str)
     sys.stdout.flush()
 
-    if hasattr(valid_set, 'actual_seq_len'):
-        model.set_seq_len(valid_set.actual_seq_len)
-
     outputs = model.fprop(x, inference=True)
 
-    scores, boxes = valid_set.post_processing(outputs, db)
+    # retrieve image metadata
+    im_shape = valid_set.im_shape.get()
+    im_scale = valid_set.im_scale.get()
+
+    # retrieve region proposals generated by the model
+    (proposals, num_proposals) = proposalLayer.get_proposals()
+    proposals = proposals.get()[:num_proposals, :]  # remove padded proposals
+    boxes = proposals[:, 1:5] / im_scale  # scale back to real image space
+
+    # obtain bounding box corrections from the frcn layers
+    scores = outputs[2].get()[:, :num_proposals].T
+    bbox_deltas = outputs[3].get()[:, :num_proposals].T
+
+    # apply bounding box corrections to the region proposals
+    pred_boxes = bbox_transform_inv(boxes, bbox_deltas)
+    pred_boxes = clip_boxes(pred_boxes, im_shape)
 
     # Skip the background class, start processing from class 1
-    for cls in PASCAL_VOC_CLASSES[1:]:
+    for j in xrange(1, valid_set.num_classes):
+        inds = np.where(scores[:, j] > thresh)[0]
 
-        # pick out scores and bboxes replated to this class
-        cls_ind = PASCAL_VOC_CLASSES.index(cls)
-        cls_boxes = boxes[:, 4*cls_ind:4*(cls_ind + 1)]
-        cls_scores = scores[cls_ind]
-        # only keep that ones with high enough scores
-        # and use gt_class being 0 as the ss ROIs, not the gt ones
-        keep = np.where((cls_scores.reshape(-1, 1) > thresh[cls_ind]) & (db['gt_classes'] == 0))[0]
-        if len(keep) == 0:
-            continue
+        # obtain class-speciic boxes and scores
+        cls_scores = scores[inds, j]
+        cls_boxes = pred_boxes[inds, j * 4:(j + 1) * 4]
+        cls_dets = np.hstack((cls_boxes, cls_scores[:, np.newaxis])).astype(np.float32, copy=False)
 
-        # with these, do nonmaximum suppression
-        cls_boxes = cls_boxes[keep]
-        cls_scores = cls_scores[keep]
-        top_inds = np.argsort(-cls_scores)[:max_per_image]
-        cls_scores = cls_scores[top_inds]
-        cls_boxes = cls_boxes[top_inds]
-        # push new scores onto the minheap
-        for val in cls_scores:
-            heapq.heappush(top_scores[cls_ind], val)
-        # if we've collected more than the max number of detection,
-        # then pop items off the minheap and update the class threshold
-        if len(top_scores[cls_ind]) > max_per_set:
-            while len(top_scores[cls_ind]) > max_per_set:
-                heapq.heappop(top_scores[cls_ind])
-            thresh[cls_ind] = top_scores[cls_ind][0]
+        # apply non-max supression
+        keep = util.nms(cls_dets, nms_thresh)
+        cls_dets = cls_dets[keep, :]
 
-        all_boxes[cls_ind][mb_idx] = np.hstack((cls_boxes, cls_scores[:, np.newaxis])).astype(
-            np.float32, copy=False)
+        # store results
+        all_boxes[j][mb_idx] = cls_dets
 
-for j in xrange(1, num_classes):
-    for i in xrange(num_images):
-        if len(all_boxes[j][i]) > 0:
-            inds = np.where(all_boxes[j][i][:, -1] > thresh[j])[0]
-            all_boxes[j][i] = all_boxes[j][i][inds, :]
+    # Limit to max_per_image detections *over all classes*
+    if max_per_image > 0:
 
-print '\nApplying NMS to all detections'
-all_boxes = valid_set.apply_nms(all_boxes, NMS_THRESH)
+        # obtain flattened list of all image scores
+        image_scores = np.hstack([all_boxes[j][mb_idx][:, -1]
+                                  for j in xrange(1, valid_set.num_classes)])
+
+        if len(image_scores) > max_per_image:
+            # compute threshold needed to keep the top max_per_image
+            image_thresh = np.sort(image_scores)[-max_per_image]
+
+            # apply threshold
+            for j in xrange(1, valid_set.num_classes):
+                keep = np.where(all_boxes[j][mb_idx][:, -1] >= image_thresh)[0]
+                all_boxes[j][mb_idx][keep, :]
 
 print 'Evaluating detections'
 output_dir = 'frcn_output'
 annopath, imagesetfile = valid_set.evaluation(all_boxes, os.path.join(args.data_dir, output_dir))
-util.run_voc_eval(annopath, imagesetfile, year, image_set, PASCAL_VOC_CLASSES,
-             os.path.join(args.data_dir, output_dir))
+util.run_voc_eval(annopath, imagesetfile, year, image_set, valid_set.CLASSES,
+                  os.path.join(args.data_dir, output_dir))
