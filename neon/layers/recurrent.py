@@ -90,6 +90,10 @@ class Recurrent(ParameterLayer):
         self.reset_cells = reset_cells
         self.init_inner = init_inner
 
+    def __str__(self):
+        return "Recurrent Layer '%s': %d inputs, %d outputs, %d steps" % (
+            self.name, self.nin, self.nout, self.nsteps)
+
     def configure(self, in_obj):
         """
         Set shape based parameters of this layer given an input tuple, int
@@ -105,6 +109,7 @@ class Recurrent(ParameterLayer):
         super(Recurrent, self).configure(in_obj)
 
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
+        self.in_shape = (self.nin, self.nsteps)
 
         self.out_shape = (self.nout, self.nsteps)
         self.gate_shape = (self.nout * self.ngates, self.nsteps)
@@ -163,7 +168,7 @@ class Recurrent(ParameterLayer):
             if self.x is not None:
                 for buf in self.bufs_to_reset:
                     buf[:] = 0
-            self.x = inputs
+            self.x = inputs.reshape(self.nin, self.nsteps * self.be.bsz)
             self.xs = get_steps(inputs, self.in_shape)
 
     def init_params(self, shape):
