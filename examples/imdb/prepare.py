@@ -130,7 +130,7 @@ def build_data_train(path='.', filepath='labeledTrainData.tsv', vocab_file=None,
             vocab_sorted = sorted(
                 list(vocab.items()), key=lambda kv: kv[1], reverse=True)
             vocab = {}
-            for i, t in enumerate(zip(*vocab_sorted)[0]):
+            for i, t in enumerate(list(zip(*vocab_sorted))[0]):
                 vocab[t] = i
 
         # map text to integers
