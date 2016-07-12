@@ -140,11 +140,9 @@ class DataLoader(NervanaDataIterator):
         self.target_size = target_size
         self.target_conversion = self._converters_[target_conversion]
         if index_file is None:
-            self.index_file = set_name + '-index.csv'
+            self.index_file = os.path.join(parent_dir, set_name + '-index.csv')
         else:
             self.index_file = index_file
-        if not os.path.isabs(self.index_file):
-            self.index_file = os.path.join(parent_dir, self.index_file)
         self.shuffle = shuffle
         self.reshuffle = reshuffle
         self.datum_dtype = datum_dtype

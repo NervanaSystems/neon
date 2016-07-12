@@ -27,7 +27,6 @@ class Indexer(NervanaObject):
     """
     def __init__(self, path, index_file, pattern='*'):
         self.path = path
-        assert os.path.isabs(index_file)
         self.index_file = index_file
         self.pattern = pattern
 
