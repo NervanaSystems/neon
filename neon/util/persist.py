@@ -44,6 +44,29 @@ def get_cache_dir(subdir=None):
     return cache_dir
 
 
+def get_data_cache_dir(data_dir, subdir=None):
+    """
+    Function for getting cache directory to store data cache files.
+
+    Since the data cache contains large files, it is ideal to control the
+    location independently from the system cache, which defaults to
+    the user homedir if not otherwise specified.
+    """
+    data_cache_dir = os.environ.get("NEON_DATA_CACHE_DIR")
+
+    if data_cache_dir is None:
+        data_cache_dir = os.path.join(data_dir, 'cache')
+
+    if subdir:
+        subdir = subdir if isinstance(subdir, list) else [subdir]
+        data_cache_dir = os.path.join(data_cache_dir, *subdir)
+
+    if not os.path.exists(data_cache_dir):
+        os.makedirs(data_cache_dir)
+
+    return data_cache_dir
+
+
 def ensure_dirs_exist(path):
     """
     Simple helper that ensures that any directories specified in the path are

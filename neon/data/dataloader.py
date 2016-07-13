@@ -18,6 +18,8 @@ import numpy as np
 import os
 import atexit
 
+from neon.util.persist import get_data_cache_dir
+
 from .media import MediaParams
 from .indexer import Indexer
 from .dataiterator import NervanaDataIterator
@@ -49,7 +51,8 @@ class DataLoader(NervanaDataIterator):
             directories and index files that may be created while ingesting.
         repo_dir (str):
             Directory to find the data.  This may also be used as the output
-            directory to store ingested data.
+            directory to store ingested data (in case archive_dir is not
+            specified).
         media_params (MediaParams):
             Parameters specific to the media type of the input data.
         target_size (int):
@@ -57,6 +60,9 @@ class DataLoader(NervanaDataIterator):
             label, set this parameter to 1, indicating a single integer.  If
             the target is a mask image, the number of pixels in that image
             should be specified.
+        archive_dir (str):
+            Directory to store ingested data. If this directory does not exist,
+            it will be created.
         target_conversion (str, optional):
             Specifies the method to be used for converting the targets that are
             provided in the index file.  The options are "no_conversion",
@@ -109,6 +115,7 @@ class DataLoader(NervanaDataIterator):
 
     def __init__(self, set_name, repo_dir,
                  media_params, target_size,
+                 archive_dir=None,
                  target_conversion='ascii_to_binary',
                  index_file=None,
                  shuffle=False, reshuffle=False,
@@ -129,7 +136,10 @@ class DataLoader(NervanaDataIterator):
         self.repo_dir = repo_dir
         parent_dir = os.path.split(repo_dir)[0]
         self.archive_prefix = 'archive-'
-        self.archive_dir = os.path.join(parent_dir, set_name + '-ingested')
+        if archive_dir is None:
+            self.archive_dir = get_data_cache_dir(parent_dir, set_name + '-ingested')
+        else:
+            self.archive_dir = os.path.expandvars(os.path.expanduser(archive_dir))
         self.item_count = ct.c_int(0)
         self.bsz = self.be.bsz
         self.buffer_id = 0
