@@ -20,7 +20,6 @@ import numpy as np
 from neon import NervanaObject
 from neon.backends import Autodiff
 from neon.backends.backend import Tensor
-from neon.util.persist import load_class
 
 
 logger = logging.getLogger(__name__)
@@ -575,15 +574,6 @@ class ParameterLayer(Layer):
         self.batch_sum_shape = None
         self.states = []
         self.owns_delta = True
-
-    @classmethod
-    def gen_class(cls, pdict):
-        if 'init' in pdict and pdict['init'] is not None:
-            cname = pdict['init']['type']
-            icls = load_class(cname)
-            init = icls(**pdict['init']['config'])
-            pdict['init'] = init
-        return cls(**pdict)
 
     def allocate(self, shared_outputs=None):
         """
@@ -1179,18 +1169,6 @@ class Activation(Layer):
         return "Activation Layer '%s': %s" % (
                self.name, self.transform.__class__.__name__)
 
-    @classmethod
-    def gen_class(cls, pdict):
-        assert 'transform' in pdict
-        cname = pdict['transform']['type']
-        tcls = load_class(cname)
-        # many activations have no args
-        if 'config' not in pdict['transform']:
-            pdict['transform']['config'] = {}
-        transf = tcls(**pdict['transform']['config'])
-        pdict['transform'] = transf
-        return cls(**pdict)
-
     def configure(self, in_obj):
         """
         Sets shape based parameters of this layer given an input tuple or int
@@ -1258,14 +1236,6 @@ class DataTransform(Layer):
         return "DataTransform Layer '%s': %s" % (
                self.name, self.transform.__class__.__name__)
 
-    @classmethod
-    def gen_class(cls, pdict):
-        if pdict.get('transform') is not None:
-            icls = load_class(pdict['transform']['type'])
-            transform = icls(**pdict['transform']['config'])
-            pdict['transform'] = transform
-        return cls(**pdict)
-
     def configure(self, in_obj):
         """
         Sets shape based parameters of this layer given an input tuple or int
@@ -1311,7 +1281,7 @@ class DataTransform(Layer):
         return None
 
 
-class CompoundLayer(list):
+class CompoundLayer(list, NervanaObject):
     """
     Base class for macro layers.
     """
@@ -1323,17 +1293,6 @@ class CompoundLayer(list):
         self.batch_norm = batch_norm
         self.bias = bias
         self.base_name = name
-
-    @classmethod
-    def gen_class(cls, pdict):
-        for key in ['init', 'bias', 'activation']:
-            if key in pdict and pdict[key] is not None:
-                cname = pdict[key]['type']
-                icls = load_class(cname)
-                if 'config' not in pdict[key]:
-                    pdict[key]['config'] = {}
-                pdict[key] = icls(**pdict[key]['config'])
-        return cls(**pdict)
 
     def init_base_name(self):
         if self.base_name is None:
@@ -1814,15 +1773,6 @@ class GeneralizedCost(NervanaObject):
         self.outputs = None
         self.deltas = None
         self.cost_buffer = self.be.empty((1, 1))
-
-    @classmethod
-    def gen_class(cls, pdict):
-        typ = pdict['costfunc']['type']
-        ccls = load_class(typ)
-        if 'config' not in pdict['costfunc']:
-            pdict['costfunc']['config'] = {}
-        pdict['costfunc'] = ccls.gen_class(pdict['costfunc']['config'])
-        return cls(**pdict)
 
     def initialize(self, in_obj):
         """

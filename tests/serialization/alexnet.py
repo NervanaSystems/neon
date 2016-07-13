@@ -32,6 +32,8 @@ from neon.callbacks.callbacks import Callbacks
 
 # parse the command line arguments (generates the backend)
 parser = NeonArgparser(__doc__)
+parser.add_argument('--direct', action='store_true',
+                    help='do not initialize layers, deserialize directly')
 args = parser.parse_args()
 
 # setup data provider
@@ -61,7 +63,12 @@ layers = [Conv((11, 11, 64), init=Gaussian(scale=0.01), bias=Constant(0),
           Affine(nout=4096, init=Gaussian(scale=0.01), bias=Constant(1), activation=Rectlin()),
           Dropout(keep=1.0),
           Affine(nout=1000, init=Gaussian(scale=0.01), bias=Constant(-7), activation=Softmax())]
-model = Model(layers=layers)
+if args.direct:
+    assert args.model_file is not None
+    model = Model(args.model_file)
+    args.model_file = None
+else:
+    model = Model(layers=layers)
 
 # drop weights LR by 1/250**(1/3) at epochs (23, 45, 66), drop bias LR by 1/10 at epoch 45
 weight_sched = Schedule([22, 44, 65], (1 / 250.)**(1 / 3.))

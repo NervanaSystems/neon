@@ -58,15 +58,6 @@ class Optimizer(NervanaObject):
         """
         super(Optimizer, self).__init__(name=name)
 
-    @classmethod
-    def gen_class(cls, pdict):
-        if 'schedule' in pdict:
-            typ = pdict['schedule']['type']
-            scls = load_class(typ)
-            sched = scls.gen_class(pdict['schedule']['config'])
-            pdict['schedule'] = sched
-        return cls(**pdict)
-
     def optimize(self, layer_list, epoch):
         """
         Update the parameters for a provided list of layers.

@@ -116,8 +116,10 @@ class LayerContainer(Layer):
             ccls = load_class(typ)
             layers.append(ccls.gen_class(layer['config']))
 
-        # layers is special in that there may be parameters
-        # serialized which will be used elsewhere
+        # the 'layers' key  is special in that the layer
+        # parameters are in there and need to be saved the
+        # whole pdict['layers'] element can not be replaced
+        # with the just the layer objects like elsewhere
         lsave = pdict.pop('layers')
         new_cls = cls(layers=layers, **pdict)
         pdict['layers'] = lsave
@@ -1101,16 +1103,6 @@ class Multicost(NervanaObject):
         self.errors = None
         self.inputs = None
         self.costfunc = costs[0].costfunc  # For displaying during callbacks
-
-    @classmethod
-    def gen_class(cls, pdict):
-        costs = []
-        for cost in pdict['costs']:
-            typ = cost['type']
-            ccls = load_class(typ)
-            costs.append(ccls.gen_class(cost['config']))
-        pdict['costs'] = costs
-        return cls(**pdict)
 
     def initialize(self, in_obj):
         """

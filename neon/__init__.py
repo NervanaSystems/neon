@@ -29,6 +29,8 @@ from copy import deepcopy
 import inspect
 import logging
 
+from neon.util.persist import load_class
+
 
 DISPLAY_LEVEL_NUM = 41
 logging.addLevelName(DISPLAY_LEVEL_NUM, "DISPLAY")
@@ -83,8 +85,30 @@ class NervanaObject(object):
         self._desc = None
         type(self).__counter += 1
 
+    @staticmethod
+    def recursive_gen(pdict, key):
+        """
+        helper method to check whether the definition
+        dictionary is defining a NervanaObject child,
+        if so it will instantiate that object and replace
+        the dictionary element with an instance of that object
+        """
+        if type(pdict[key]) is dict and 'type' in pdict[key]:
+            assert 'config' in pdict[key]
+            ccls = load_class(pdict[key]['type'])
+            pdict[key] = ccls.gen_class(pdict[key]['config'])
+
     @classmethod
     def gen_class(cls, pdict):
+        for key in pdict:
+            # check for any nervanaobject types in
+            # the parameter list
+            if type(pdict[key]) in [tuple, list]:
+                for ind, val in enumerate(pdict[key]):
+                    cls.recursive_gen(pdict[key], ind) 
+            else:
+                cls.recursive_gen(pdict, key)
+
         return cls(**pdict)
 
     def __del__(self):
