@@ -438,7 +438,7 @@ class PrecisionRecall(Metric):
             self.bin_buf = None
         self.eps = epsilon
 
-    def __call__(self, y, t):
+    def __call__(self, y, t, calcrange=slice(0, None)):
         """
         Returns a numpy array with the precision and recall metrics.
 
