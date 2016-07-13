@@ -55,8 +55,10 @@ BBOX_NORMALIZE_TARGETS_PRECOMPUTED = True  # True means the values below are use
 BBOX_NORMALIZE_MEANS = [0.0, 0.0, 0.0, 0.0]  # taken from py-faster-rcnn caffe implementation
 BBOX_NORMALIZE_STDS = [0.1, 0.1, 0.2, 0.2]
 
+ASPECT_RATIO_GROUPING = True
+
 DEBUG = False
-TEST_PY = True
+TEST_PY = False
 
 dataset_meta = {
     'test-2007': dict(size=460032000,
@@ -108,7 +110,7 @@ class ObjectLocalization(Dataset):
     FG_FRACTION = 0.5  # at most, positive anchors are 0.5 of the total rois
 
     def __init__(self, path='.', n_mb=None, img_per_batch=None,
-                 rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=False, 
+                 rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=False,
                  shuffle=False, deterministic=False, rebuild_cache=False):
         self.batch_index = 0
         self.path = path
@@ -295,8 +297,9 @@ class ObjectLocalization(Dataset):
         # 1.
         # generate list of K anchor boxes, where K = # ratios * # scales
         # anchor boxes are coded as [xmin, ymin, xmax, ymax]
-        all_anchors_this_img = generate_all_anchors(self._conv_size, self._conv_size, self.SCALE)
+        all_anchors = generate_all_anchors(self._conv_size, self._conv_size, self.SCALE)
         # all_anchors are in (CHW) order, matching the CHWN output of the conv layer.
+        assert self._total_anchors == all_anchors.shape[0]
 
         # 2.
         # Iterate through each image, and build list of positive/negative anchors
@@ -305,13 +308,13 @@ class ObjectLocalization(Dataset):
             im_scale, im_shape = self.calculate_scale_shape(db['img_shape'])
 
             # only keep anchors inside image
-            idx_inside = inside_im_bounds(all_anchors_this_img, im_shape)
+            idx_inside = inside_im_bounds(all_anchors, im_shape)
 
             if DEBUG:
                 print 'im shape', im_shape
                 print 'idx inside', len(idx_inside)
 
-            anchors = all_anchors_this_img[idx_inside, :]
+            anchors = all_anchors[idx_inside, :]
 
             labels = np.empty((len(idx_inside), ), dtype=np.float32)
             labels.fill(-1)
@@ -323,7 +326,7 @@ class ObjectLocalization(Dataset):
             # assign bg labels first
             bg_idx = overlaps.max(axis=1) < self.NEGATIVE_OVERLAP
             labels[bg_idx] = 0
-            
+
             # assing fg labels
 
             # 1. for each gt box, anchor with higher overlaps [including ties]
@@ -357,6 +360,8 @@ class ObjectLocalization(Dataset):
             db['max_classes'] = gt_max_overlap_classes
             db['total_anchors'] = self._total_anchors
             db['idx_inside'] = idx_inside
+            db['im_width'] = im_shape[0]
+            db['im_height'] = im_shape[1]
 
         return roi_db
 
@@ -371,7 +376,7 @@ class ObjectLocalization(Dataset):
         else:
             # Compute values needed for means and stds
             # var(x) = E(x^2) - E(x)^2
-            # Add epsilon for classes with 0 counts (dont think this is a problem?)
+            # Add epsilon for classes with 0 counts
             class_counts = np.zeros((self.num_classes, 1)) + 1e-14
             sums = np.zeros((self.num_classes, 4))
             squared_sums = np.zeros((self.num_classes, 4))
@@ -388,18 +393,19 @@ class ObjectLocalization(Dataset):
             means = sums / class_counts
             stds = np.sqrt(squared_sums / class_counts - means ** 2)
 
-        print 'bbox target means:'
-        print means
-        print means[1:, :].mean(axis=0)  # ignore bg class
-        print 'bbox target stdevs:'
-        print stds
-        print stds[1:, :].mean(axis=0)  # ignore bg class
+        if DEBUG:
+            print 'bbox target means:'
+            print means
+            print means[1:, :].mean(axis=0)  # ignore bg class
+            print 'bbox target stdevs:'
+            print stds
+            print stds[1:, :].mean(axis=0)  # ignore bg class
 
         # Normalize targets
         print "Normalizing targets"
         for im_i in xrange(self.num_image_entries):
             targets = roi_db[im_i]['bbox_targets']
-             
+
             for cls in xrange(1, self.num_classes):
                 cls_inds = np.where(roi_db[im_i]['max_classes'] == cls)[0]
                 roi_db[im_i]['bbox_targets'][cls_inds] -= means[cls, :]
@@ -505,7 +511,7 @@ class ObjectLocalization(Dataset):
         self.batch_index = 0
 
     def _sample_anchors(self, db, nrois, fg_fractions, deterministic=False):
-        
+
         # subsample labels if needed
         num_fg = int(fg_fractions * nrois)
         fg_idx = np.where(db['labels'] == 1)[0]
@@ -526,6 +532,29 @@ class ObjectLocalization(Dataset):
 
         # return labels, bbox_targets, and anchor indicies
         return (db['labels'][idx], db['bbox_targets'][idx, :], idx[:])
+
+    def _shuffle_roidb(self):
+        """
+         Shuffle the indicies but grouping training examples in pairs
+         based on the aspect ratio. Each image is categorized as either
+         Horizontal (H) or Vertical (V) aspect ratio, and the shuffled image order
+         is designed as [H, H, V, V, H, H, H, H, V, V, V, V] (e.g. pairs of images
+         with the same aspect ratio are grouped together).
+        """
+        widths = np.array([r['im_width'] for r in self.roi_db])
+        heights = np.array([r['im_height'] for r in self.roi_db])
+        horz = (widths >= heights)
+        vert = np.logical_not(horz)
+        horz_inds = np.where(horz)[0]
+        vert_inds = np.where(vert)[0]
+        inds = np.hstack((
+                         self.be.rng.permutation(horz_inds),
+                         self.be.rng.permutation(vert_inds)))
+        inds = np.reshape(inds, (-1, 2))
+        row_perm = self.be.rng.permutation(np.arange(inds.shape[0]))
+        inds = np.reshape(inds[row_perm, :], (-1,))
+
+        return inds
 
     def __iter__(self):
         """
@@ -548,7 +577,12 @@ class ObjectLocalization(Dataset):
         if self.shuffle is False:
             shuf_idx = range(self.num_image_entries)
         else:
-            shuf_idx = self.be.rng.permutation(self.num_image_entries)
+            if ASPECT_RATIO_GROUPING:
+                shuf_idx = self._shuffle_roidb()
+            else:
+                shuf_idx = self.be.rng.permutation(self.num_image_entries)
+
+        assert self.img_per_batch == 1, "Only batch size of 1 supported."
 
         # TODO: move these into the minibatch loop
         bbtargets = np.zeros((self._total_anchors, 4), dtype=np.float32)
@@ -557,83 +591,66 @@ class ObjectLocalization(Dataset):
         label_mask = np.zeros((self._total_anchors, 1), dtype=np.int32)
 
         for self.batch_index in xrange(self.nbatches):
-            start = self.batch_index * self.img_per_batch
-            end = (self.batch_index + 1) * self.img_per_batch
 
-            db_inds = shuf_idx[start:end]
-
-            mb_db = [self.roi_db[i] for i in db_inds]
-
-            # TODO: remove redundant blobs
-            bbox_targets_blob = np.zeros((self.rois_per_batch, 4), dtype=np.float32)
-            labels_blob = np.zeros((self.rois_per_batch), dtype=np.uint32)
-            anchors_blob = np.zeros((self.rois_per_batch), dtype=np.int32)
+            db = self.roi_db[shuf_idx[self.batch_index]]
 
             self.img_np[:] = 0
 
-            for im_i, db in enumerate(mb_db):       
-                # load and process the image using PIL
-                im = Image.open(db['img_path'])  # This is RGB order
+            # load and process the image using PIL
+            im = Image.open(db['img_path'])  # This is RGB order
 
-                im_scale, im_shape = self.calculate_scale_shape(im.size)
+            im_scale, im_shape = self.calculate_scale_shape(im.size)
 
-                # store im_shape in buffer for ProposalLayer
-                self.im_shape.set(im_shape)
-                self.im_scale.set(np.array(im_scale))
-                num_gt_boxes = np.array(db['gt_bb'].shape[0])
-                self.num_gt_boxes.set(num_gt_boxes)
-                self.gt_boxes[:num_gt_boxes, :] = db['gt_bb'] * im_scale
-                self.gt_classes[:num_gt_boxes] = db['gt_classes']
+            # store metadata in buffer for ProposalLayer
+            self.im_shape.set(im_shape)
+            self.im_scale.set(np.array(im_scale))
+            num_gt_boxes = np.array(db['gt_bb'].shape[0])
+            self.num_gt_boxes.set(num_gt_boxes)
+            self.gt_boxes[:num_gt_boxes, :] = db['gt_bb'] * im_scale
+            self.gt_classes[:num_gt_boxes] = db['gt_classes']
 
-                im = im.resize(im_shape, Image.LINEAR)
+            im = im.resize(im_shape, Image.LINEAR)
 
-                # load it to numpy and flip the channel RGB to BGR
-                im = np.array(im)[:, :, ::-1]
-                if db['flipped']:
-                    im = im[:, ::-1, :]
+            # load image to numpy and flip the channel RGB to BGR
+            im = np.array(im)[:, :, ::-1]
 
-                # Mean subtract and scale an image
-                im = im.astype(np.float32, copy=False)
+            # flip image if needed
+            if db['flipped']:
+                im = im[:, ::-1, :]
 
-                im -= FRCN_PIXEL_MEANS
+            # Mean subtract and scale an image
+            im = im.astype(np.float32, copy=False)
 
-                # sample anchors to use as targets
-                labels, bbox_targets, anchor_index = self._sample_anchors(db, self.rois_per_img,
-                                                                          self.FG_FRACTION, self.deterministic)
+            im -= FRCN_PIXEL_MEANS
 
-                # add to blobs
-                slice_i = slice(im_i * self.rois_per_img,
-                                (im_i + 1) * self.rois_per_img)
+            # sample anchors to use as targets
+            labels, bbox_targets, anchor_index = self._sample_anchors(db, self.rois_per_img,
+                                                                      self.FG_FRACTION, self.deterministic)
 
-                bbox_targets_blob[slice_i] = bbox_targets
-                labels_blob[slice_i] = labels
-                anchors_blob[slice_i] = anchor_index
+            # write image to backend tensor
+            self.img_np[:, :im_shape[1], :im_shape[0], 0] = im.transpose(FRCN_IMG_DIM_SWAP)
 
-                # write image to backend tensor
-                self.img_np[:, :im_shape[1], :im_shape[0], im_i] = im.transpose(
-                    FRCN_IMG_DIM_SWAP)
-             
             # copy to backend tensors
             self.dev_X_img_chw.set(self.img_np)
 
             # map our labels and bbox_targets back to
             # the full canvas (e.g. 9 * (62 * 62))
             label.fill(0)
-            label[anchors_blob, :] = labels_blob[:, np.newaxis]
+            label[anchor_index, :] = labels[:, np.newaxis]
             self.dev_y_labels_flat[:] = label.reshape((1, -1))
             self.dev_y_labels_onehot[:] = self.be.onehot(self.dev_y_labels_flat, axis=0)
             self.dev_y_labels = self.dev_y_labels_onehot.reshape((-1, 1))
 
             label_mask.fill(0)
-            label_mask[anchors_blob, :] = 1
+            label_mask[anchor_index, :] = 1
             self.dev_y_labels_mask[:] = np.vstack([label_mask, label_mask])
 
             bbtargets.fill(0)
-            bbtargets[anchors_blob, :] = bbox_targets_blob
+            bbtargets[anchor_index, :] = bbox_targets
             # Try not using the sample targets but instead use the full targets
             # (the mask already has the sample info, and this is how caffe does it)
             # self.dev_y_bbtargets[:] =  bbtargets.T.reshape((-1, 1))
-            self.dev_y_bbtargets[:] = db['bbox_targets'].T.reshape((-1,1))
+            self.dev_y_bbtargets[:] = db['bbox_targets'].T.reshape((-1, 1))
 
             bbtargets_mask.fill(0)
             bbtargets_mask[np.where(label == 1)[0]] = 1
@@ -644,18 +661,15 @@ class ObjectLocalization(Dataset):
                  (self.dev_y_bbtargets, self.dev_y_bbtargets_mask),
                  ((self.dev_y_frcn_labels, self.dev_y_frcn_labels_mask),
                   (self.dev_y_frcn_bbtargets, self.dev_y_frcn_bbmask)))
-            
+
             # test against anchor_target_layer.py reference
             if TEST_PY:
                 target = AnchorTargetLayer()
 
                 # prepare inputs
                 bottom = [0, 1, 2]
-                
-                conv_size_x = 62
-                conv_size_y = 62
 
-                bottom[0] = np.zeros((conv_size_y, conv_size_x))
+                bottom[0] = np.zeros((self._conv_size, self._conv_size))
                 bottom[1] = db['gt_bb'] * im_scale
                 bottom[2] = [im_shape[0], im_shape[1], im_scale]
 
@@ -668,22 +682,22 @@ class ObjectLocalization(Dataset):
                 # positive labels should match
                 if np.sum(label == 1) < 128:
                     print 'unit testing'
-                    
+
                     # assert positive labels match since positives (usually) dont get under sampled
                     assert np.allclose(np.where(label == 1)[0],
                                        np.where(py_labels.flatten() == 1)[0])
 
                     # our bboxes are in 4 * K, whereas reference is in K * 4 order, so reshape
-                    bb = db['bbox_targets'].T.reshape(-1,1) \
-                            * bbtargets_mask.T.reshape(-1,1)
-                    
+                    bb = Y[1][0].get() * Y[1][1].get()
+
                     pybb = py_bbtargets * py_iw
-                    pybb = pybb.reshape((1, 9, 4, conv_size_y, conv_size_x)).transpose(0, 2, 1, 3, 4)
-                    pybb = pybb.reshape(1, 36, conv_size_y, conv_size_x).flatten()
-                    
+                    pybb = pybb.reshape((1, 9, 4, self._conv_size, self._conv_size)) \
+                        .transpose(0, 2, 1, 3, 4)
+                    pybb = pybb.reshape(1, 36, self._conv_size, self._conv_size) \
+                        .flatten()
                     # bounding box target locations and values must match
                     assert np.allclose(np.where(bb != 0)[0], np.where(pybb != 0)[0])
-                    assert np.allclose(bb[np.where(bb != 0)], pybb[np.where(pybb != 0)])    
+                    assert np.allclose(bb[np.where(bb != 0)], pybb[np.where(pybb != 0)])
             yield X, Y
 
     def evaluation(self, all_boxes, output_dir='output'):
@@ -749,13 +763,13 @@ class PASCAL(ObjectLocalization):
                'sheep', 'sofa', 'train', 'tvmonitor')
 
     def __init__(self, image_set, year, path='.', n_mb=None, img_per_batch=None,
-                 rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=True, 
+                 rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=True,
                  shuffle=True, deterministic=False, rebuild_cache=False):
 
         self.image_set = image_set
         self.year = year
         super(PASCAL, self).__init__(path, n_mb, img_per_batch, rpn_rois_per_img,
-                                     frcn_rois_per_img, add_flipped, shuffle, 
+                                     frcn_rois_per_img, add_flipped, shuffle,
                                      deterministic, rebuild_cache)
 
     def load_data(self):
@@ -797,6 +811,7 @@ def load_data_from_xml_tag(element, tag):
     Helper function for loading data with specfic tag
     """
     return element.getElementsByTagName(tag)[0].childNodes[0].data
+
 
 def _compute_targets(gt_bb, rp_bb):
     """
@@ -855,7 +870,7 @@ def unmap(roi_db):
                                     db['idx_inside'], fill=0)
 
         db['max_classes'] = _unmap(db['max_classes'], db['total_anchors'],
-                                    db['idx_inside'], fill=0)
+                                   db['idx_inside'], fill=0)
 
     return roi_db
 

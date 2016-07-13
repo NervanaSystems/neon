@@ -14,7 +14,7 @@ BG_THRESH_LO = 0.0
 
 FG_FRACTION = 0.25
 
-REFERENCE_TEST = True
+REFERENCE_TEST = False
 
 BBOX_NORMALIZE_MEANS = [0.0, 0.0, 0.0, 0.0]
 BBOX_NORMALIZE_STDS = [0.1, 0.1, 0.2, 0.2]
@@ -47,7 +47,7 @@ class ProposalLayer(Layer):
     """
 
     def __init__(self, rpn_layers, global_buffers, inference=False, num_rois=128, pre_nms_N=12000,
-                 post_nms_N=2000, nms_thresh=0.7, min_bbox_size=16, num_classes=21, 
+                 post_nms_N=2000, nms_thresh=0.7, min_bbox_size=16, num_classes=21,
                  fg_fraction=None, fg_thresh=None, bg_thresh_hi=None, bg_thresh_lo=None,
                  name=None):
         """
@@ -86,17 +86,12 @@ class ProposalLayer(Layer):
         self.im_shape, self.im_scale = global_buffers['img_info']
         self.gt_boxes, self.gt_classes, self.num_gt_boxes = global_buffers['gt_boxes']
         self._conv_size, self._scale = global_buffers['conv_config']
-        #self.all_anchor_inds, self.num_anchors_this_img = global_buffers['anchor_config']
 
         # generate anchors and load onto device
         # self._anchors has shape (KHW, 4)
         self._anchors = generate_all_anchors(self._conv_size, self._conv_size, self._scale)
         self._dev_anchors = self.be.array(self._anchors)
         self._num_anchors = self._anchors.shape[0]
-
-        self.target_sums = np.zeros(4)
-        self.target_sums_sq = np.zeros(4)
-        self.target_count = 0
 
     def configure(self, in_obj):
         super(ProposalLayer, self).configure(in_obj)
@@ -144,8 +139,6 @@ class ProposalLayer(Layer):
         scores = self.rpn_obj[0].outputs  # shape: (2KHW, 1)
         bbox_deltas = self.rpn_bbox[0].outputs  # shape (4KHW, 1)
 
-        im_shape = self.im_shape.get()
-
         # reshape to (4, KHW) then transpose to (KHW, 4) to
         # match the shape of anchors.
         bbox_deltas = bbox_deltas.reshape((4, -1)).T
@@ -153,13 +146,6 @@ class ProposalLayer(Layer):
         # same transform for scores, except for we slice the
         # score for the label=1 class.
         scores = scores.reshape((2, -1))[1, :].T
-
-        # Extract only the scores and boxes which correspond to the anchors we actually generated
-        # for this image (indexs of anchors are stored in global buffer)
-        # num_anchors_this_img = self.num_anchors_this_img.get()[0][0]
-        # all_anchor_inds = self.all_anchor_inds.get()[:num_anchors_this_img, 0]
-        
-        #print num_anchors_this_img
 
         # 1. Convert anchors into proposals via bbox transformations
         # store output in proposals buffer
@@ -181,7 +167,7 @@ class ProposalLayer(Layer):
         # 5. take top pre_nms_topN (e.g. 12000)
         scores = self.dev_scores.get()
         keeps = list(np.where(scores != -1)[0])
-        
+
         # Combine the filtered index list with the original anchor index list (from global buffer)
         # to get final list of unique proposals to keep
         # keeps = list(set(all_anchor_inds).union(filt_idx))
@@ -209,7 +195,7 @@ class ProposalLayer(Layer):
 
         # If training, sample the proposals and only propagate those forward
         if not inference:
-            # Next, we need to set the target buffers with the class labels, 
+            # Next, we need to set the target buffers with the class labels,
             # and bbox targets for each roi.
             ((frcn_labels, frcn_labels_mask), (frcn_bbtargets, frcn_bbmask)) = self.target_buffers
 
@@ -240,18 +226,6 @@ class ProposalLayer(Layer):
             targets = _compute_targets(non_zero_gt_boxes[gt_assignment[keep_inds]], rois)
 
             targets = (targets - np.array(BBOX_NORMALIZE_MEANS)) / np.array(BBOX_NORMALIZE_STDS)
-
-            # Uncomment to compute running mean and std of rpn proposals
-            # self.target_sums += np.sum(targets, axis=0)
-            # self.target_sums_sq += np.sum(targets ** 2, axis=0)
-            # self.target_count += targets.shape[0]
-            
-            # means = self.target_sums / float(self.target_count)
-            # stds = np.sqrt(self.target_sums_sq / self.target_count - means ** 2)
-
-            # print ""
-            # print "means: {}".format(means)
-            # print "std: {}".format(stds)
 
             num_proposals = rois.shape[0]
             bbox_targets, bbox_inside_weights = \
@@ -307,14 +281,12 @@ class ProposalLayer(Layer):
         scores = scores.reshape((2, -1, H, W)).transpose((0, 1, 2, 3))
         scores = scores.reshape((1, -1, H, W))
 
-        bottom = [0, 1, 2]
+        bottom = [None, None, None]
         bottom[0] = scores
         bottom[1] = bbox_deltas
         bottom[2] = [self.im_shape[1], self.im_shape[0], self.im_scale]
 
-        top = [0, 1]
-        top[0] = None
-        top[1] = None
+        top = [None, None]
 
         prop_layer.setup(bottom, top)
         prop_layer.forward(bottom, top)

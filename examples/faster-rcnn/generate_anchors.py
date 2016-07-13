@@ -44,21 +44,21 @@ def generate_all_anchors(conv_size_x, conv_size_y, im_scale, scales=np.array((8,
     shift_x = np.arange(0, conv_size_x) * 1.0 / im_scale
     shift_y = np.arange(0, conv_size_y) * 1.0 / im_scale
     shift_x, shift_y = np.meshgrid(shift_x, shift_y)
-    
+
     shifts = np.vstack((shift_x.ravel(), shift_y.ravel(),
                         shift_x.ravel(), shift_y.ravel())).transpose()
-    
+
     # add K anchors (1, K, 4) to A shifts (A, 1, 4) to get
     # shift anchors (A, K, 4), then reshape to (A*K, 4) shifted anchors
     K = num_anchors
     A = shifts.shape[0]
 
-    # Generate anchors in A*K order (different from caffe) so that we don't have to 
-    # reshae and re-transpose before loading back to GPU
+    # Generate anchors in A*K order (different from Caffe) so that we don't have to
+    # reshape and transpose before loading back to GPU
     all_anchors = (anchors.reshape((1, K, 4)).transpose((1, 0, 2)) + shifts.reshape((1, A, 4)))
 
     all_anchors = all_anchors.reshape((A * K, 4))
-    # total_anchors = int(K * A)
+
     return all_anchors
     # all_anchors is in (CHW) format, matching the CHWN output of the conv layer.
 
