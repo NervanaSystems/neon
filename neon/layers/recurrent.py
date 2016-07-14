@@ -1409,7 +1409,6 @@ class BiBNRNN(BiRNN):
         self.gamma = None
         self.gmean = None
         self.gvar = None
-        self.states_bn = [[] for i in range(2)]
         self.stats_dtype = np.float64 if self.be.default_dtype is np.float64 else np.float32
 
     def __str__(self):
@@ -1452,7 +1451,7 @@ class BiBNRNN(BiRNN):
         (self.gmean, self.gvar) = self.inf_params
 
         self.allparams = self.params + self.inf_params
-        self.states_bn = [[self.be.zeros_like(gradp)] for gradp in self.grad_params]
+        self.states_bn = [[] for gradp in self.grad_params]
         self.plist_bn = [((p, g), s) for p, g, s in zip(self.params,
                                                         self.grad_params,
                                                         self.states_bn)]

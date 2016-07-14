@@ -89,8 +89,10 @@ elif args.rlayer_type == 'rnn':
     rlayer = Recurrent(hidden_size, g_uni, activation=Tanh(), reset_cells=True)
 elif args.rlayer_type == 'birnn':
     rlayer = DeepBiRNN(hidden_size, g_uni, activation=Tanh(),
-                       depth=1, reset_cells=True)
-
+                       depth=1, reset_cells=True, batch_norm=False)
+elif args.rlayer_type == 'bibnrnn':
+    rlayer = DeepBiRNN(hidden_size, g_uni, activation=Tanh(),
+                       depth=1, reset_cells=True, batch_norm=True)
 
 layers = [
     LookupTable(vocab_size=vocab_size, embedding_dim=embedding_dim, init=uni),
