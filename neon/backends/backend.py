@@ -1271,8 +1271,9 @@ class Backend(AbstractBackend):
         The clipped value will be between [a_min, a_max].
 
         Arguments:
-            a (Tensor, numeric): left-hand side operand.
-            b (Tensor, numeric): right-hand side operand.
+            a (Tensor): the Tensor on which to perform the operation
+            a_min (Tensor, numeric): lower bound for clip (inclusive).
+            a_max (Tensor, numeric): upper bound for clip (inclusive).
             out (Tensor, optional): where the result will be stored. If out is
                                     None, only the op-tree will be returned.
 
