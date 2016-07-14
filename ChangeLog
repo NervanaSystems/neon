@@ -1,5 +1,10 @@
 # ChangeLog
 
+## v1.5.4 (2016-07-15):
+
+* Implement Binarized Neural Networks from http://arxiv.org/pdf/1602.02830v3.pdf
+* Bug fixes [#268]
+
 ## v1.5.3 (2016-07-07):
 
 * Bug fixes [#267]
