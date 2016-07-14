@@ -57,6 +57,8 @@ import sys
 import os
 import numpy as np
 
+SCALE_BBTARGETS = True
+
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
@@ -66,7 +68,7 @@ assert args.model_file is not None, "need a model file to do Faster R-CNN testin
 args.batch_size = 1
 n_mb = None
 img_per_batch = args.batch_size
-rois_per_img = 300
+rois_per_img = 256
 frcn_rois_per_img = 128
 rpn_rois_per_img = 256
 
@@ -129,15 +131,23 @@ ROI_bbox = Affine(nout=4 * num_classes, init=Gaussian(scale=0.001),
 
 # build the model
 # the four branches of the tree mirror the branches listed above
+frcn_tree = Tree([ROI + [b3, ROI_category],
+                 [b3, ROI_bbox]
+                  ])
+
 model = Model(layers=Tree([VGG + [b1, RPN_3x3, b2, RPN_1x1_obj],
                            [b2, RPN_1x1_bbox],
-                           [b1] + ROI + [b3, ROI_category],
-                           [b3, ROI_bbox],
+                           [b1] + [frcn_tree],
                            ]))
+
 
 # load parameters and initialize model
 model.load_params(args.model_file)
 model.initialize(dataset=valid_set)
+
+if SCALE_BBTARGETS:
+    model = util.scale_bbreg_weights(model, [0.0, 0.0, 0.0, 0.0],
+                                     [0.1, 0.1, 0.2, 0.2], num_classes)
 
 # run inference
 
@@ -174,8 +184,8 @@ for mb_idx, (x, y) in enumerate(valid_set):
     boxes = proposals[:, 1:5] / im_scale  # scale back to real image space
 
     # obtain bounding box corrections from the frcn layers
-    scores = outputs[2].get()[:, :num_proposals].T
-    bbox_deltas = outputs[3].get()[:, :num_proposals].T
+    scores = outputs[2][0].get()[:, :num_proposals].T
+    bbox_deltas = outputs[2][1].get()[:, :num_proposals].T
 
     # apply bounding box corrections to the region proposals
     pred_boxes = bbox_transform_inv(boxes, bbox_deltas)

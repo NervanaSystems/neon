@@ -60,6 +60,7 @@ learning_rate_scale = 1.0 / float(args.lr_scale)
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
+be.enable_winograd = 4
 
 train_set = PASCAL('trainval', '2007', path=args.data_dir, n_mb=n_mb,
                    img_per_batch=img_per_batch, rpn_rois_per_img=rpn_rois_per_img,
@@ -137,7 +138,8 @@ schedule_w = Schedule(step_config=[6], change=[0.0001])
 schedule_b = Schedule(step_config=[6], change=[0.0002])
 opt_w = GradientDescentMomentum(0.001 * learning_rate_scale, 0.9, wdecay=0.0005, schedule=schedule_w)
 opt_b = GradientDescentMomentum(0.002 * learning_rate_scale, 0.9, wdecay=0.0005, schedule=schedule_b)
-optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b})
+opt_skip = GradientDescentMomentum(0.0, 0.0)
+optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b, 'skip': opt_skip, 'skip_bias': opt_skip})
 
 # if training a new model, seed the image model conv layers with pre-trained weights
 # otherwise, just load the model file

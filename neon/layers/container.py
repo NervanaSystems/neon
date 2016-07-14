@@ -302,12 +302,10 @@ class Sequential(LayerContainer):
                 layer.allocate_deltas(self.global_deltas)
 
             self.global_deltas.allocate_buffers()
-        
-         for l in self.layers:
-            if isinstance(l, LayerContainer):
-                l.allocate_deltas(self.global_deltas)
-            else:
-                l.set_deltas(self.global_deltas)
+        else:
+            self.global_deltas = global_deltas
+
+        self.set_deltas(self.global_deltas)
 
     def fprop(self, inputs, inference=False, beta=0.0):
         """

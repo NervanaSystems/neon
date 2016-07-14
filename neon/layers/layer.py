@@ -2200,72 +2200,7 @@ class BatchNorm(Layer):
             for dlist, slist in zip(self.states, pdict['states']):
                 for dst, src in zip(dlist, slist):
                     dst.set(src)
-class CrossMapConvolution(ParameterLayer):
 
-    """
-    Convolutional layer implementation. (1x1)
-    Arguments:
-        K (int): number of output feature maps
-        init (Initializer, optional): Initializer object to use for
-            initializing layer weights
-        name (str, optional): layer name. Defaults to "ConvolutionLayer"
-    """
-
-    def __init__(self, K, init=None, bsum=False, name=None, parallelism="Data"):
-        super(CrossMapConvolution, self).__init__(init, name, parallelism)
-        self.bsum = bsum and not self.be.deterministic
-        self.K = K
-        self.outputs_view = None
-        self.deltas_view = None
-        self.errors_view = None
-
-    def __str__(self):
-        return ("CrossMapConvolution Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) outputs" %
-                (self.name,
-                 self.in_shape[0], self.in_shape[1], self.in_shape[2],
-                 self.out_shape[0], self.out_shape[1], self.out_shape[2]))
-
-    def configure(self, in_obj):
-        super(CrossMapConvolution, self).configure(in_obj)
-        self.out_shape = (self.K,) + self.in_shape[1:]
-        if self.weight_shape is None:
-            self.weight_shape = (self.in_shape[0], self.K)
-        if self.bsum:
-            self.batch_sum_shape = (self.K, 1)
-        return self
-
-    def fprop(self, inputs, inference=False, beta=0.0):
-        if self.inputs is None or self.inputs is not inputs:
-            self.inputs = inputs
-            self.inputs_view = inputs.reshape((self.in_shape[0], -1))
-            self.outputs_view = self.outputs.reshape((self.out_shape[0], -1))
-
-        self.be.compound_dot(A=self.W.T, B=self.inputs_view, C=self.outputs_view, beta=beta,
-                             bsum=self.batch_sum)
-        return self.outputs
-
-    def bprop(self, error, alpha=1.0, beta=0.0):
-        if self.errors_view is None:
-            self.errors_view = error.reshape(self.outputs_view.shape)
-        if self.deltas:
-            if self.deltas_view is None:
-                self.deltas_view = self.deltas.reshape(self.inputs_view.shape)
-            self.be.compound_dot(A=self.W, B=self.errors_view, C=self.deltas_view,
-                                 alpha=alpha, beta=beta)
-        self.be.compound_dot(A=self.inputs_view, B=self.errors_view.T, C=self.dW)
-        return self.deltas
-
-class CrossMapConv(CompoundLayer):
-
-    """
-    Same as Conv layer, but specialized for 1x1s1p0
-    """
-
-    def __init__(self, K, init, bias=None, batch_norm=False, activation=None, name=None):
-        super(CrossMapConv, self).__init__(bias=bias, batch_norm=batch_norm,
-                                           activation=activation, name=name)
-        self.append(CrossMapConvolution(K=K, init=init, bsum=batch_norm, name=name))
-        self.add_postfilter_layers()
 
 class BatchNormAutodiff(BatchNorm):
 

@@ -26,6 +26,7 @@ import numpy as np
 import os
 import cPickle
 
+
 def add_vgg_layers():
 
     # setup layers
@@ -42,11 +43,11 @@ def add_vgg_layers():
     vgg_layers = []
 
     # set up 3x3 conv stacks with different feature map sizes
-    vgg_layers.append(Conv((3, 3, 64), **conv_params))
-    vgg_layers.append(Conv((3, 3, 64), **conv_params))
+    vgg_layers.append(Conv((3, 3, 64), name="skip", **conv_params))
+    vgg_layers.append(Conv((3, 3, 64), name="skip", **conv_params))
     vgg_layers.append(Pooling(2, strides=2))
-    vgg_layers.append(Conv((3, 3, 128), **conv_params))
-    vgg_layers.append(Conv((3, 3, 128), **conv_params))
+    vgg_layers.append(Conv((3, 3, 128), name="skip", **conv_params))
+    vgg_layers.append(Conv((3, 3, 128), name="skip", **conv_params))
     vgg_layers.append(Pooling(2, strides=2))
     vgg_layers.append(Conv((3, 3, 256), **conv_params))
     vgg_layers.append(Conv((3, 3, 256), **conv_params))
@@ -68,6 +69,19 @@ def add_vgg_layers():
     # vgg_layers.append(Affine(nout=1000, init=initfc, bias=Constant(0), activation=Softmax()))
 
     return vgg_layers
+
+
+def scale_bbreg_weights(model, means, stds, num_classes):
+    means = np.array(num_classes * means)
+    stds = np.array(num_classes * stds)
+
+    means_be = model.be.array(means)
+    stds_be = model.be.array(stds)
+    model.layers.layers[2].layers[1].layers[1].layers[-3].W[:] = \
+        model.layers.layers[2].layers[1].layers[1].layers[-3].W * stds_be
+    model.layers.layers[2].layers[1].layers[1].layers[-2].W[:] = \
+        model.layers.layers[2].layers[1].layers[1].layers[-2].W * stds_be + means_be
+    return model
 
 
 def load_vgg_weights(model, path):
