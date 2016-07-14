@@ -166,14 +166,20 @@ class ProposalLayer(Layer):
         # 4. sort all (proposal, score) pairs by score from highest to lowest
         # 5. take top pre_nms_topN (e.g. 12000)
         scores = self.dev_scores.get()
-        keeps = list(np.where(scores != -1)[0])
+        proposals = self._proposals.get()
 
+        real_H = np.round(self.im_shape.get()[1] * self._scale).astype(int)
+        real_W = np.round(self.im_shape.get()[0] * self._scale).astype(int)
+        scores = scores.reshape(-1, self._conv_size, self._conv_size)[:, :real_H, :real_W].reshape(-1, 1)
+        proposals = proposals.reshape(-1, self._conv_size, self._conv_size, 4)[:, :real_H, :real_W].reshape(-1, 4)
+
+        keeps = list(np.where(scores != -1)[0])
         # Combine the filtered index list with the original anchor index list (from global buffer)
         # to get final list of unique proposals to keep
         # keeps = list(set(all_anchor_inds).union(filt_idx))
-
         scores = scores[keeps]
-        proposals = self._proposals.get()[keeps]
+        proposals = proposals[keeps]
+
         (scores, proposals) = self.get_top_N(scores, proposals, self.pre_nms_N)
 
         # 6. apply nms (e.g. threshold = 0.7)
@@ -181,7 +187,7 @@ class ProposalLayer(Layer):
         # 8. return the top proposals (-> RoIs top)
         keep = nms(np.hstack((proposals, scores)), self.nms_thresh)
         keep = keep[:self.post_nms_N]
-        proposals = proposals[keep, :]
+        proposals = proposals[keep]
         scores = scores[keep]
         # -- END TODO -- #
 
