@@ -505,6 +505,10 @@ DO_LOADS:
 
 --:-:-:-:1      ISETP.LT.AND P6, PT, idx_P, param_gridP, PT;
 --:-:-:-:0      ISETP.LT.AND P5, PT, idx_Q, param_gridQ, P6;
+
+--:-:-:-:1 @!P6 MOV predI, RZ;
+--:-:-:-:1 @!P6 MOV predE, RZ;
+
 </SCHEDULE_BLOCK>
 --:-:-:-:5      RET;
 

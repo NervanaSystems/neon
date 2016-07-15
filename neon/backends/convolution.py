@@ -612,13 +612,23 @@ class UpdateDirect(KernelGroup):
             if N % blockN == 0:
                 break
 
-        sb_params = {
-            #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN
-            32 : ( 0x000, 0,   0x000, 0,   0x000, 0,   7 ), # 1x1  nnn
-            16 : ( 0x000, 0,   0x000, 0,   0x102, 1,   3 ), # 1x2  xnn
-            8  : ( 0x000, 0,   0x102, 1,   0x101, 1,   1 ), # 2x2  yxn
-            4  : ( 0x000, 0,   0x102, 1,   0x200, 2,   0 ), # 2x4  yxx
-        }
+        if P == 1:
+            # 1D conv
+            sb_params = {
+                #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN
+                32 : ( 0x000, 0,   0x000, 0,   0x000, 0,   7 ), # 1x1  nnn
+                16 : ( 0x000, 0,   0x000, 0,   0x102, 1,   3 ), # 1x2  xnn
+                8  : ( 0x000, 0,   0x000, 0,   0x201, 2,   1 ), # 2x2  xxn
+                4  : ( 0x000, 0,   0x000, 0,   0x300, 3,   0 ), # 2x4  xxx
+            }
+        else:
+            sb_params = {
+                #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN
+                32 : ( 0x000, 0,   0x000, 0,   0x000, 0,   7 ), # 1x1  nnn
+                16 : ( 0x000, 0,   0x000, 0,   0x102, 1,   3 ), # 1x2  xnn
+                4  : ( 0x000, 0,   0x102, 1,   0x200, 2,   0 ), # 2x4  yxx
+                8  : ( 0x000, 0,   0x102, 1,   0x101, 1,   1 ), # 2x2  yxn
+            }
         superM, shiftM, superP, shiftP, superQ, shiftQ, superN = sb_params.get(blockN)
 
         blockM  = 1 << shiftM
@@ -765,7 +775,6 @@ class UpdateDirect(KernelGroup):
                         if small_set or (threshold and filters) or (not threshold and not filters):
 
                             settings = (strideP, strideQ)
-                            #print settings
                             self.init(autotune=settings)
                             self.bind_params(I, E, O, no_op=True)
                             start.record(stream=self.lib.stream)
