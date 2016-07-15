@@ -55,9 +55,10 @@ conv_1x1x1   = ( 7,   7,   7,  1, 1, 1,  0,0,0, 1,1,1)
 conv_3x3x3   = ( 7,   7,   7,  3, 3, 3,  1,1,1, 1,1,1)
 conv_3x3x3s2 = ( 7,   7,   7,  3, 3, 3,  1,1,1, 2,2,2)
 conv_3x3L    = ( 1, 200, 200,  1, 3, 3,  0,1,1, 1,1,1)
+conv_1D      = ( 1, 13, 3263,  1,13,11,  0,0,0, 1,1,3)
 
 # configs = [
-#     (BpropDirect,            32, 64, 32, True,  True,  None,  (conv_3x3L,) ),
+
 # ]
 
 configs = [
@@ -96,6 +97,18 @@ configs = [
     (UpdateDirect,           16,  32,  63, True,  False, None,  (conv_3x3,) ),
     (UpdateDirect,            8,  32,  64, True,  False, None,  (conv_3x3,) ),
     (UpdateDirect,            4,  32, 128, True,  False, None,  (conv_3x3,) ),
+
+    (FpropDirect,            32,   1, 512, True,  False, None,  (conv_1D,) ),
+    (FpropDirect,            16,   1, 512, True,  False, None,  (conv_1D,) ),
+    (FpropDirect,             8,   1, 512, True,  False, None,  (conv_1D,) ),
+    (FpropDirect,             4,   1, 512, True,  False, None,  (conv_1D,) ),
+    (FpropDirect,             2,   1, 512, True,  False, None,  (conv_1D,) ),
+    (FpropDirect,             1,   1, 512, True,  False, None,  (conv_1D,) ),
+
+    (UpdateDirect,           32,   1, 512, True,  False, None,  (conv_1D,) ),
+    (UpdateDirect,           16,   1, 512, True,  False, None,  (conv_1D,) ),
+    (UpdateDirect,            8,   1, 512, True,  False, None,  (conv_1D,) ),
+    (UpdateDirect,            4,   1, 512, True,  False, None,  (conv_1D,) ),
 
     # Kernel                  N,   C,   K  Determ Cmpnd  Xtern, conv
     (FpropDirect,            64,  32,  64, True,  True,  None,  (conv_3x3,) ),

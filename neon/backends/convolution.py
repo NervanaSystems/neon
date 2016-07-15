@@ -412,24 +412,45 @@ class XpropDirect(KernelGroup):
             if N % blockN == 0:
                 break
 
-        sb_params_in = {
-            #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN, shfN
-            32 : ( 0x000, 0,   0x000, 0,   0x000, 0,    7,   5  ), # 1x1  nnn(nn)
-            16 : ( 0x000, 0,   0x000, 0,   0x102, 1,    3,   4  ), # 1x2  xnn(nn)
-            8  : ( 0x000, 0,   0x102, 1,   0x101, 1,    1,   3  ), # 2x2  yxn(nn)
-            4  : ( 0x000, 0,   0x102, 1,   0x200, 2,    0,   2  ), # 2x4  yxx(nn)
-            2  : ( 0x000, 0,   0x201, 2,   0x100, 2,    0,   1  ), # 4x4  yyx(xn)
-            1  : ( 0x000, 0,   0x201, 2,   0x100, 3,    0,   0  ), # 4x8  yyx(xx)
-        }
-        sb_params_out = {
-            #blkN:  supM,  supP,  supQ, supN
-            32 : ( 0x000, 0x000, 0x000, 31 ), # 1x1  nnnnn
-            16 : ( 0x000, 0x000, 0x104, 15 ), # 1x2  xnnnn
-            8  : ( 0x000, 0x104, 0x103,  7 ), # 2x2  yxnnn
-            4  : ( 0x000, 0x104, 0x202,  3 ), # 2x4  yxxnn
-            2  : ( 0x000, 0x203, 0x201,  1 ), # 4x4  yyxxn
-            1  : ( 0x000, 0x203, 0x300,  0 ), # 4x8  yyxxx
-        }
+        if P == 1:
+            # 1D conv
+            sb_params_in = {
+                #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN, shfN
+                32 : ( 0x000, 0,   0x000, 0,   0x000, 0,    7,   5  ), # 1x1  nnn(nn)
+                16 : ( 0x000, 0,   0x000, 0,   0x102, 1,    3,   4  ), # 1x2  xnn(nn)
+                8  : ( 0x000, 0,   0x000, 0,   0x201, 2,    1,   3  ), # 2x2  xxn(nn)
+                4  : ( 0x000, 0,   0x000, 0,   0x300, 3,    0,   2  ), # 2x4  xxx(nn)
+                2  : ( 0x000, 0,   0x000, 0,   0x300, 4,    0,   1  ), # 4x4  xxx(xn)
+                1  : ( 0x000, 0,   0x000, 0,   0x300, 5,    0,   0  ), # 4x8  xxx(xx)
+            }
+            sb_params_out = {
+                #blkN:  supM,  supP,  supQ, supN
+                32 : ( 0x000, 0x000, 0x000, 31 ), # 1x1  nnnnn
+                16 : ( 0x000, 0x000, 0x104, 15 ), # 1x2  xnnnn
+                8  : ( 0x000, 0x000, 0x203,  7 ), # 2x2  xxnnn
+                4  : ( 0x000, 0x000, 0x302,  3 ), # 2x4  xxxnn
+                2  : ( 0x000, 0x000, 0x401,  1 ), # 4x4  xxxxn
+                1  : ( 0x000, 0x000, 0x500,  0 ), # 4x8  xxxxx
+            }
+        else:
+            sb_params_in = {
+                #blkN: supM, shfM, supP, shfP, supQ, shfQ, supN, shfN
+                32 : ( 0x000, 0,   0x000, 0,   0x000, 0,    7,   5  ), # 1x1  nnn(nn)
+                16 : ( 0x000, 0,   0x000, 0,   0x102, 1,    3,   4  ), # 1x2  xnn(nn)
+                8  : ( 0x000, 0,   0x102, 1,   0x101, 1,    1,   3  ), # 2x2  yxn(nn)
+                4  : ( 0x000, 0,   0x102, 1,   0x200, 2,    0,   2  ), # 2x4  yxx(nn)
+                2  : ( 0x000, 0,   0x201, 2,   0x100, 2,    0,   1  ), # 4x4  yyx(xn)
+                1  : ( 0x000, 0,   0x201, 2,   0x100, 3,    0,   0  ), # 4x8  yyx(xx)
+            }
+            sb_params_out = {
+                #blkN:  supM,  supP,  supQ, supN
+                32 : ( 0x000, 0x000, 0x000, 31 ), # 1x1  nnnnn
+                16 : ( 0x000, 0x000, 0x104, 15 ), # 1x2  xnnnn
+                8  : ( 0x000, 0x104, 0x103,  7 ), # 2x2  yxnnn
+                4  : ( 0x000, 0x104, 0x202,  3 ), # 2x4  yxxnn
+                2  : ( 0x000, 0x203, 0x201,  1 ), # 4x4  yyxxn
+                1  : ( 0x000, 0x203, 0x300,  0 ), # 4x8  yyxxx
+            }
         superM, shiftM, superP, shiftP, superQ, shiftQ, superN, shiftN = sb_params_in.get(blockN)
         SuperM, SuperP, SuperQ, SuperN = sb_params_out.get(blockN)
 
