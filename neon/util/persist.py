@@ -55,7 +55,7 @@ def get_data_cache_dir(data_dir, subdir=None):
     data_cache_dir = os.environ.get("NEON_DATA_CACHE_DIR")
 
     if data_cache_dir is None:
-        data_cache_dir = os.path.join(data_dir, 'cache')
+        data_cache_dir = data_dir
 
     if subdir:
         subdir = subdir if isinstance(subdir, list) else [subdir]
