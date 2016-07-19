@@ -108,7 +108,7 @@ class Recurrent(ParameterLayer):
         super(Recurrent, self).configure(in_obj)
 
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
-        self.in_shape = (self.nin, self.nsteps)
+        self.i_shape = (self.nin, self.nsteps)
 
         self.out_shape = (self.nout, self.nsteps)
         self.gate_shape = (self.nout * self.ngates, self.nsteps)
@@ -148,7 +148,7 @@ class Recurrent(ParameterLayer):
         """
         super(Recurrent, self).set_deltas(delta_buffers)
         self.out_deltas_buffer = self.deltas
-        self.out_delta = get_steps(self.out_deltas_buffer, self.in_shape)
+        self.out_delta = get_steps(self.out_deltas_buffer, self.i_shape)
 
     def init_buffers(self, inputs):
         """
@@ -168,7 +168,7 @@ class Recurrent(ParameterLayer):
                 for buf in self.bufs_to_reset:
                     buf[:] = 0
             self.x = inputs.reshape(self.nin, self.nsteps * self.be.bsz)
-            self.xs = get_steps(inputs, self.in_shape)
+            self.xs = get_steps(inputs, self.i_shape)
 
     def init_params(self, shape):
         """
@@ -493,7 +493,8 @@ class LSTM(Recurrent):
 
         # out deltas
         if self.out_deltas_buffer:  # save a bit of computation
-            self.be.compound_dot(self.W_input.T, self.ifog_delta_buffer, self.out_deltas_buffer,
+            self.be.compound_dot(self.W_input.T, self.ifog_delta_buffer,
+                                 self.out_deltas_buffer.reshape(self.nin, -1),
                                  alpha=alpha, beta=beta)
 
         return self.out_deltas_buffer
@@ -730,7 +731,8 @@ class GRU(Recurrent):
 
         # out deltas
         if self.out_deltas_buffer:  # save a bit of computation
-            self.be.compound_dot(self.W_input.T, self.rzhcan_delta_buffer, self.out_deltas_buffer,
+            self.be.compound_dot(self.W_input.T, self.rzhcan_delta_buffer,
+                                 self.out_deltas_buffer.reshape(self.nin, -1),
                                  alpha=alpha, beta=beta)
 
         return self.out_deltas_buffer
@@ -1794,11 +1796,12 @@ class BiLSTM(BiRNN):
         """
         self.dW[:] = 0
 
+        nin = self.nin if not self.split_inputs else (self.nin // 2)
+
         if self.in_deltas_f is None:
             self.in_deltas_f = get_steps(error[:self.o_shape[0]], self.o_shape)
             self.prev_in_deltas = self.in_deltas_f[-1:] + self.in_deltas_f[:-1]
-            self.ifog_delta_last_steps = self.ifog_delta_buffer[
-                :, self.be.bsz:]
+            self.ifog_delta_last_steps = self.ifog_delta_buffer[:, self.be.bsz:]
             self.h_first_steps = self.h_buffer_f[:, :-self.be.bsz]
             # h_delta[5] * h[4] + h_delta[4] * h[3] + ... + h_delta[1] * h[0]
 
@@ -1853,7 +1856,8 @@ class BiLSTM(BiRNN):
         # out deltas to input units
         if self.out_deltas_buffer:
             self.be.compound_dot(
-                self.W_input_f.T, self.ifog_delta_buffer, self.out_deltas_buffer_f,
+                self.W_input_f.T, self.ifog_delta_buffer,
+                self.out_deltas_buffer_f.reshape(nin, -1),
                 alpha=alpha, beta=beta)
 
         # bprop for backward direction connections. Error flow from left to right
@@ -1888,7 +1892,8 @@ class BiLSTM(BiRNN):
         # split_inputs=False
         if self.out_deltas_buffer:
             self.be.compound_dot(self.W_input_b.T, self.ifog_delta_buffer,
-                                 self.out_deltas_buffer_b, alpha=alpha,
+                                 self.out_deltas_buffer_b.reshape(nin, -1),
+                                 alpha=alpha,
                                  beta=beta if self.inputs else 1.0)
 
         return self.out_deltas_buffer

@@ -20,8 +20,9 @@ from neon.backends import gen_backend
 from neon.data import ArrayIterator, load_mnist, Text
 from neon.data.dataloaders import load_ptb_test
 from neon.initializers import Gaussian, Constant
-from neon.layers import GeneralizedCost, Affine
-from neon.layers import Dropout, Conv, Pooling, Sequential, MergeMultistream, Recurrent
+from neon.layers import (GeneralizedCost, Affine, DeepBiRNN, DeepBiLSTM, LSTM, GRU,
+                         Dropout, Conv, Pooling, Sequential, MergeMultistream, Recurrent,
+                         RecurrentMean)
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
@@ -178,7 +179,47 @@ def test_model_serialize(backend_default, data):
 
     os.remove(tmp_save)
 
+
+def test_conv_rnn(backend_default):
+    train_shape = (1, 17, 142)
+
+    be = backend_default
+    inp = be.array(be.rng.randn(np.prod(train_shape), be.bsz))
+    delta = be.array(be.rng.randn(10, be.bsz))
+
+    init_norm = Gaussian(loc=0.0, scale=0.01)
+    bilstm = DeepBiLSTM(128, init_norm, activation=Rectlin(), gate_activation=Rectlin(),
+                        depth=1, reset_cells=True)
+    birnn = DeepBiRNN(128, init_norm, activation=Rectlin(),
+                      depth=1, reset_cells=True, batch_norm=False)
+    bibnrnn = DeepBiRNN(128, init_norm, activation=Rectlin(),
+                        depth=1, reset_cells=True, batch_norm=True)
+    birnnsum = DeepBiRNN(128, init_norm, activation=Rectlin(),
+                         depth=1, reset_cells=True, batch_norm=False, bi_sum=True)
+    rnn = Recurrent(128, init=init_norm, activation=Rectlin(), reset_cells=True)
+    lstm = LSTM(128, init_norm, activation=Rectlin(), gate_activation=Rectlin(), reset_cells=True)
+    gru = GRU(128, init_norm, activation=Rectlin(), gate_activation=Rectlin(), reset_cells=True)
+
+    rlayers = [bilstm, birnn, bibnrnn, birnnsum, rnn, lstm, gru]
+
+    for rl in rlayers:
+        layers = [
+                    Conv((2, 2, 4), init=init_norm, activation=Rectlin(),
+                         strides=dict(str_h=2, str_w=4)),
+                    Pooling(2, strides=2),
+                    Conv((3, 3, 4), init=init_norm, batch_norm=True, activation=Rectlin(),
+                         strides=dict(str_h=1, str_w=2)),
+                    rl,
+                    RecurrentMean(),
+                    Affine(nout=10, init=init_norm, activation=Rectlin()),
+                ]
+        model = Model(layers=layers)
+        cost = GeneralizedCost(costfunc=CrossEntropyBinary())
+        model.initialize(train_shape, cost)
+        model.fprop(inp)
+        model.bprop(delta)
+
+
 if __name__ == '__main__':
-    be = gen_backend(backend='gpu', batch_size=50)
-    test_model_N_S_setter(be)
-    # test_model_get_outputs_rnn(be, '~/nervana/data')
+    be = gen_backend(backend='gpu', batch_size=128)
+    test_conv_rnn(be)
