@@ -1281,7 +1281,7 @@ class DataTransform(Layer):
         return None
 
 
-class CompoundLayer(list, NervanaObject):
+class CompoundLayer(list):
     """
     Base class for macro layers.
     """
