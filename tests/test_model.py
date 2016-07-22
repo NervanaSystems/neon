@@ -190,8 +190,10 @@ def test_conv_rnn(backend_default):
     init_norm = Gaussian(loc=0.0, scale=0.01)
     bilstm = DeepBiLSTM(128, init_norm, activation=Rectlin(), gate_activation=Rectlin(),
                         depth=1, reset_cells=True)
-    birnn = DeepBiRNN(128, init_norm, activation=Rectlin(),
-                      depth=1, reset_cells=True, batch_norm=False)
+    birnn_1 = DeepBiRNN(128, init_norm, activation=Rectlin(),
+                        depth=1, reset_cells=True, batch_norm=False)
+    birnn_2 = DeepBiRNN(128, init_norm, activation=Rectlin(),
+                        depth=2, reset_cells=True, batch_norm=False)
     bibnrnn = DeepBiRNN(128, init_norm, activation=Rectlin(),
                         depth=1, reset_cells=True, batch_norm=True)
     birnnsum = DeepBiRNN(128, init_norm, activation=Rectlin(),
@@ -200,7 +202,7 @@ def test_conv_rnn(backend_default):
     lstm = LSTM(128, init_norm, activation=Rectlin(), gate_activation=Rectlin(), reset_cells=True)
     gru = GRU(128, init_norm, activation=Rectlin(), gate_activation=Rectlin(), reset_cells=True)
 
-    rlayers = [bilstm, birnn, bibnrnn, birnnsum, rnn, lstm, gru]
+    rlayers = [bilstm, birnn_1, birnn_2, bibnrnn, birnnsum, rnn, lstm, gru]
 
     for rl in rlayers:
         layers = [

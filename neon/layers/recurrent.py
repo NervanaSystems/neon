@@ -1093,6 +1093,8 @@ class BiRNN(ParameterLayer):
             self.out_deltas_buffer_b = self.out_deltas_buffer
         self.out_delta_f = get_steps(self.out_deltas_buffer_f, self.i_shape)
         self.out_delta_b = get_steps(self.out_deltas_buffer_b, self.i_shape)
+        self.out_deltas_buffer_f_v = self.out_deltas_buffer_f.reshape(nin, -1)
+        self.out_deltas_buffer_b_v = self.out_deltas_buffer_b.reshape(nin, -1)
 
     def init_buffers(self, inputs):
         """
@@ -1114,15 +1116,18 @@ class BiRNN(ParameterLayer):
             assert inputs.size == self.nin * self.nsteps * self.be.bsz
 
             self.x = inputs.reshape(self.nin, self.nsteps * self.be.bsz)
+            nin = self.i_shape[0]
             if self.split_inputs:
-                self.x_f = self.x[:self.i_shape[0]]
-                self.x_b = self.x[self.i_shape[0]:]
+                self.x_f = self.x[:nin]
+                self.x_b = self.x[nin:]
             else:
                 self.x_f = self.x
                 self.x_b = self.x
 
             self.xs_f = get_steps(self.x_f, self.i_shape)
             self.xs_b = get_steps(self.x_b, self.i_shape)
+            self.x_f_v = self.x_f.reshape(nin, -1)
+            self.x_b_v = self.x_b.reshape(nin, -1)
 
     def init_params(self, shape):
         """
@@ -1221,9 +1226,8 @@ class BiRNN(ParameterLayer):
             self.h_b_last[:] = self.h_b[0]
 
         # Use single multiply for W_input
-        nin = self.nin if not self.split_inputs else (self.nin // 2)
-        self.be.compound_dot(self.W_input_f, self.x_f.reshape((nin, -1)), self.h_buffer_f)
-        self.be.compound_dot(self.W_input_b, self.x_b.reshape((nin, -1)), self.h_buffer_b)
+        self.be.compound_dot(self.W_input_f, self.x_f_v, self.h_buffer_f)
+        self.be.compound_dot(self.W_input_b, self.x_b_v, self.h_buffer_b)
 
         self.be.compound_rnn_unroll_fprop(self.W_recur_f, self.h_prev,
                                           self.h_f, self.h_f, self.b_f,
@@ -1266,8 +1270,6 @@ class BiRNN(ParameterLayer):
             self.in_deltas_b = get_steps(error[self.nout:], self.o_shape)
             self.next_in_deltas = self.in_deltas_b[1:] + [self.next_in_deltas_last]
 
-        nin = self.nin if not self.split_inputs else (self.nin // 2)
-
         self.out_deltas_buffer[:] = 0
 
         self.be.compound_rnn_unroll_bprop(self.W_recur_f.T, self.prev_in_deltas,
@@ -1295,18 +1297,18 @@ class BiRNN(ParameterLayer):
         h_next_all = self.h_buffer_b[:, self.be.bsz:]
         self.be.compound_dot(in_deltas_cur_b, h_next_all.T, self.dW_recur_b)
 
-        self.be.compound_dot(in_deltas_all_f, self.x_f.reshape((nin, -1)).T, self.dW_input_f)
+        self.be.compound_dot(in_deltas_all_f, self.x_f_v.T, self.dW_input_f)
         self.db_f[:] = self.be.sum(in_deltas_all_f, axis=1)
         if self.out_deltas_buffer_f:
             self.be.compound_dot(self.W_input_f.T, in_deltas_all_f,
-                                 self.out_deltas_buffer_f.reshape((nin, -1)),
+                                 self.out_deltas_buffer_f_v,
                                  alpha=alpha, beta=beta)
 
-        self.be.compound_dot(in_deltas_all_b, self.x_b.reshape((nin, -1)).T, self.dW_input_b)
+        self.be.compound_dot(in_deltas_all_b, self.x_b_v.T, self.dW_input_b)
         self.db_b[:] = self.be.sum(in_deltas_all_b, axis=1)
         if self.out_deltas_buffer_b:
             self.be.compound_dot(self.W_input_b.T, in_deltas_all_b,
-                                 self.out_deltas_buffer_b.reshape((nin, -1)),
+                                 self.out_deltas_buffer_b_v,
                                  alpha=alpha, beta=beta)
 
         return self.out_deltas_buffer
@@ -1427,8 +1429,6 @@ class BiBNRNN(BiRNN):
                                   **self.get_param_attrs())
         self.gamma = self.be.ones((nf, 1), dtype=self.stats_dtype,
                                   **self.get_param_attrs())
-        # self.gmean = self.be.zeros((nf, 1), dtype=self.stats_dtype)
-        # self.gvar = self.be.zeros((nf, 1), dtype=self.stats_dtype)
 
         self.params = [self.beta, self.gamma]
         self.grad_params = [self.be.zeros_like(p) for p in self.params]
@@ -1494,9 +1494,8 @@ class BiBNRNN(BiRNN):
             self.h_b_last[:] = self.h_b[0]
 
         # Use single multiply for W_input
-        nin = self.nin if not self.split_inputs else (self.nin // 2)
-        self.be.compound_dot(self.W_input_f, self.x_f.reshape((nin, -1)), self.h_ff_buffer_f)
-        self.be.compound_dot(self.W_input_b, self.x_b.reshape((nin, -1)), self.h_ff_buffer_b)
+        self.be.compound_dot(self.W_input_f, self.x_f_v, self.h_ff_buffer_f)
+        self.be.compound_dot(self.W_input_b, self.x_b_v, self.h_ff_buffer_b)
 
         self._fprop_bn(self.h_ff_buffer, inference)
 
@@ -1554,8 +1553,6 @@ class BiBNRNN(BiRNN):
             self.in_deltas_b = get_steps(error[self.nout:], self.o_shape)
             self.next_in_deltas = self.in_deltas_b[1:] + self.in_deltas_b[:1]
 
-        nin = self.nin if not self.split_inputs else (self.nin // 2)
-
         self.out_deltas_buffer[:] = 0
 
         self.be.compound_rnn_unroll_bprop(self.W_recur_f.T, self.prev_in_deltas,
@@ -1586,18 +1583,18 @@ class BiBNRNN(BiRNN):
         self._bprop_bn(error, self.h_ff_buffer)
 
         # bprop through the ff
-        self.be.compound_dot(in_deltas_all_f, self.x_f.reshape((nin, -1)).T, self.dW_input_f)
+        self.be.compound_dot(in_deltas_all_f, self.x_f_v.T, self.dW_input_f)
         self.db_f[:] = self.be.sum(in_deltas_all_f, axis=1)
         if self.out_deltas_buffer_f:
             self.be.compound_dot(self.W_input_f.T, in_deltas_all_f,
-                                 self.out_deltas_buffer_f.reshape((nin, -1)),
+                                 self.out_deltas_buffer_f_v,
                                  alpha=alpha, beta=beta)
 
-        self.be.compound_dot(in_deltas_all_b, self.x_b.reshape((nin, -1)).T, self.dW_input_b)
+        self.be.compound_dot(in_deltas_all_b, self.x_b_v.T, self.dW_input_b)
         self.db_b[:] = self.be.sum(in_deltas_all_b, axis=1)
         if self.out_deltas_buffer_b:
             self.be.compound_dot(self.W_input_b.T, in_deltas_all_b,
-                                 self.out_deltas_buffer_b.reshape((nin, -1)),
+                                 self.out_deltas_buffer_b_v,
                                  alpha=alpha, beta=beta if self.split_inputs else 1.0)
 
         return self.out_deltas_buffer
@@ -1796,8 +1793,6 @@ class BiLSTM(BiRNN):
         """
         self.dW[:] = 0
 
-        nin = self.nin if not self.split_inputs else (self.nin // 2)
-
         if self.in_deltas_f is None:
             self.in_deltas_f = get_steps(error[:self.o_shape[0]], self.o_shape)
             self.prev_in_deltas = self.in_deltas_f[-1:] + self.in_deltas_f[:-1]
@@ -1857,7 +1852,7 @@ class BiLSTM(BiRNN):
         if self.out_deltas_buffer:
             self.be.compound_dot(
                 self.W_input_f.T, self.ifog_delta_buffer,
-                self.out_deltas_buffer_f.reshape(nin, -1),
+                self.out_deltas_buffer_f_v,
                 alpha=alpha, beta=beta)
 
         # bprop for backward direction connections. Error flow from left to right
@@ -1892,7 +1887,7 @@ class BiLSTM(BiRNN):
         # split_inputs=False
         if self.out_deltas_buffer:
             self.be.compound_dot(self.W_input_b.T, self.ifog_delta_buffer,
-                                 self.out_deltas_buffer_b.reshape(nin, -1),
+                                 self.out_deltas_buffer_b_v,
                                  alpha=alpha,
                                  beta=beta if self.inputs else 1.0)
 
