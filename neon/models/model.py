@@ -527,7 +527,7 @@ class Model(NervanaObject):
 
                 self.be.record_mark(fprop_start)  # mark start of fprop
 
-                x = self.fprop(x)
+                x = self.fprop(x, inference)
 
                 if inference is False:
                     self.total_cost[:] = self.total_cost + self.cost.get_cost(x, t)
