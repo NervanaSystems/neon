@@ -99,17 +99,23 @@ class GPUTensor(Tensor):
 
         dtype = np.dtype(dtype)
 
-        if isinstance(shape, (tuple, list)) and len(shape) < self._min_dims:
-            shape = shape + (1, )
-
-        try:
-            size = 1
-            for dim in shape:
-                size *= dim
-        except TypeError:
+        if not isinstance(shape, (tuple, list)):
             assert isinstance(shape, (int, np.integer))
-            size = shape
-            shape = (shape, 1)
+            shape = (int(shape), )
+
+        if isinstance(shape, (tuple, list)) and len(shape) < self._min_dims:
+            shape = shape + (1, )*(self._min_dims - len(shape))
+
+        shape_ = []
+        size = 1
+        for dim in shape:
+            if int(dim) != dim:
+                raise TypeError('shape dims must be integer values [%s]' % str(dim))
+            dim = int(dim)
+            shape_.append(dim)
+            size *= dim
+        # shape_ will only have int elements (e.g. instead of np.int64)
+        shape = tuple(shape_)
 
         if isinstance(size, np.integer):
             size = np.asscalar(size)

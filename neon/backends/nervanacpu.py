@@ -84,18 +84,19 @@ class CPUTensor(Tensor):
             self._tensor = self._tensor.reshape(self._tensor.shape + (1, ))
 
         if shape is not None and len(shape) < self._min_dims:
-            self.shape = shape + (1, )
+            self.shape = shape + (1, )*(self._min_dims - len(shape))
         else:
             self.shape = self._tensor.shape
 
-        try:
-            size = 1
-            for dim in self.shape:
-                size *= dim
-        except TypeError:
-            assert isinstance(self.shape, (int, np.integer))
-            size = self.shape
-            self.shape = (self.shape,)
+        shape_ = []
+        size = 1
+        for dim in self.shape:
+            if int(dim) != dim:
+                raise TypeError('shape dims must be integer values [%s]' % str(dim))
+            dim = int(dim)
+            shape_.append(dim)
+            size *= dim
+        self.shape = tuple(shape_)
 
         self.size = size
         self.base = base
