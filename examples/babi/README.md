@@ -1,11 +1,11 @@
 ##Model
 
-This is an implementation of Facebook's baseline GRU/LSTM model on the bAbI dataset [Weston et al. 2015](https://research.facebook.com/researchers/1543934539189348). It includes an [interactive demo](https://gist.github.com/SNagappan/a7be6ce6e75c36c7406e#file-demo-py).
+This is an implementation of Facebook's baseline GRU/LSTM model on the bAbI dataset [Weston et al. 2015](https://research.facebook.com/researchers/1543934539189348). It includes an [interactive demo](https://github.com/NervanaSystems/neon/blob/master/examples/babi/demo.py).
 
 The bAbI dataset contains 20 different question answering tasks.
 
 ### Model script
-The model training script [train.py](https://gist.github.com/SNagappan/a7be6ce6e75c36c7406e#file-train-py) and demo script [demo.py](https://gist.github.com/SNagappan/a7be6ce6e75c36c7406e#file-demo-py) are included below.
+The model training script [train.py](https://github.com/NervanaSystems/neon/blob/master/examples/babi/train.py) and demo script [demo.py](https://github.com/NervanaSystems/neon/blob/master/examples/babi/demo.py) are included below.
 
 ### Instructions
 First run the `train.py` script to get a pickle file of model weights. Use the command line arguments `--rlayer_type` to choose between LSTMs or GRUs, `--save_path` to specify the output pickle file location, and `-t` to specify which bAbI task to run.

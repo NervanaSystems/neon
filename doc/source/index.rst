@@ -58,7 +58,7 @@ roles. Apply here_!
 .. _nervana: http://nervanasys.com
 .. |neo| replace:: neon
 .. _neo: https://github.com/nervanasystems/neon
-.. _model zoo: https://github.com/nervanazoo/NervanaModelZoo
+.. _model zoo: https://github.com/NervanaSystems/ModelZoo
 .. _state-of-the-art: https://github.com/soumith/convnet-benchmarks
 .. _customers' problems: http://www.nervanasys.com/solutions
 .. _here: http://www.nervanasys.com/careers

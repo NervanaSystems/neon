@@ -21,7 +21,7 @@ https://github.com/soumith/convnet-benchmarks
 ./googlenet_v1.py -d f16
 
 Derived from full model found here:
-https://gist.github.com/nervanazoo/2e5be01095e935e90dd8
+https://github.com/NervanaSystems/ModelZoo/tree/master/ImageClassification/ILSVRC2012/Googlenet
 """
 
 from neon import NervanaObject

@@ -99,8 +99,8 @@ weights.
    :escape: ~
    :delim: |
 
-   `Alexnet <https://gist.github.com/nervanazoo/14bb75d2bb5f20d9c482>`__ | ImageNet| Implementation of Alexnet described in `Krizhevsky, 2012`_
-   `VGG <https://gist.github.com/nervanazoo/e74ebe6418852f547aa8>`__ | ImageNet| Adapted the 16 and 19 layer `VGG <http://arxiv.org/abs/1409.1556>`__ model from Caffe for use with neon.
+   `Alexnet <https://github.com/NervanaSystems/ModelZoo/tree/master/ImageClassification/ILSVRC2012/Alexnet>`__ | ImageNet| Implementation of Alexnet described in `Krizhevsky, 2012`_
+   `VGG <https://github.com/NervanaSystems/ModelZoo/tree/master/ImageClassification/ILSVRC2012/VGG>`__ | ImageNet| Adapted the 16 and 19 layer `VGG <http://arxiv.org/abs/1409.1556>`__ model from Caffe for use with neon.
    `GoogleNet`_| ImageNet| 22-layer CNN with multiple branches. See `Szegedy, 2014`_
    `ALLCNN`_| CIFAR10| All convolutional model inspired by `Springenberg, 2014`_
    `DeepResNet <https://github.com/apark263/cfmz>`__ | CIFAR10| Deep residual network detailed in `He, 2015`_
@@ -173,29 +173,29 @@ Other Examples
 
 .. |(TM)| unicode:: U+2122
    :ltrim:
-.. _Model Zoo: https://github.com/nervanazoo/NervanaModelZoo
+.. _Model Zoo: https://github.com/NervanaSystems/ModelZoo
 .. _AlexNet: http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks.pdf
 .. _He, 2015: http://arxiv.org/abs/1512.03385
 .. _Springenberg, 2014: http://arxiv.org/pdf/1412.6806.pdf
 .. _R-CNN: http://arxiv.org/pdf/1504.08083v2.pdf
 .. _Krizhevsky, 2012: http://papers.nips.cc/paper/4824-imagenet-classification-with-deep-convolutional-neural-networks
-.. _GoogleNet: https://gist.github.com/nervanazoo/2e5be01095e935e90dd8
+.. _GoogleNet: https://github.com/NervanaSystems/ModelZoo/tree/master/ImageClassification/ILSVRC2012/Googlenet
 .. _Szegedy, 2014: http://arxiv.org/pdf/1409.4842.pdf
-.. _AllCNN: https://gist.github.com/nervanazoo/47198f475260e77f64fe
+.. _AllCNN: https://github.com/NervanaSystems/ModelZoo/tree/master/ImageClassification/CIFAR10/All_CNN
 .. _Deep residual network: http://arxiv.org/abs/1512.03385
-.. _FastRCNN: https://gist.github.com/yinyinl/d12a82dc11df79067740
+.. _FastRCNN: https://github.com/NervanaSystems/ModelZoo/tree/master/ObjectLocalization/FastRCNN
 .. _Fast-RCNN model: http://arxiv.org/pdf/1504.08083v2.pdf
-.. _C3D model: https://gist.github.com/SNagappan/304446c6c2f7afe29629
+.. _C3D model: https://github.com/NervanaSystems/neon/tree/master/examples/video-c3d
 .. _3D convolutional networks: http://arxiv.org/pdf/1412.0767v4.pdf
 .. _LSTM: http://arxiv.org/pdf/1308.0850.pdf
 .. _LSTM/GRU: https://github.com/karpathy/char-rnn
 .. _Li, 2015: http://arxiv.org/pdf/1503.00185v5.pdf
 .. _Karpathy Neural Talk: https://github.com/karpathy/neuraltalk
-.. _Image Captioning: https://gist.github.com/nervanazoo/9b276eaee644d723f4b6
+.. _Image Captioning: https://github.com/NervanaSystems/ModelZoo/tree/master/ImageCaptioning/LSTM
 .. _Vinyals, 2015: http://arxiv.org/abs/1411.4555
 .. _precomputed: http://cs.stanford.edu/people/karpathy/deepimagesent/
-.. _Question & Answering: https://gist.github.com/nervanazoo/3277f9fafd429cb41081
-.. _Sentiment analysis: https://gist.github.com/nervanazoo/976ec931bb4549131ae0
+.. _Question & Answering: https://github.com/NervanaSystems/ModelZoo/tree/master/NLP/QandA/bAbI
+.. _Sentiment analysis: https://github.com/NervanaSystems/ModelZoo/tree/master/NLP/SentimentClassification/IMDB
 .. _Deep-Q Network: https://github.com/tambetm/simple_dqn
 .. _Minh, 2015: http://www.nature.com/nature/journal/v518/n7540/full/nature14236.html
 .. _GRU/LSTM model: https://research.facebook.com/researchers/1543934539189348
