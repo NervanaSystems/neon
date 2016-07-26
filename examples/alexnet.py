@@ -43,38 +43,46 @@ from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassifi
 from neon.models import Model
 from neon.callbacks.callbacks import Callbacks
 from neon.data.dataloader_transformers import OneHot, TypeCast, ImageMeanSubtract
-
+from neon.util.persist import get_data_cache_dir
 from aeon import DataLoader
 
 # parse the command line arguments (generates the backend)
 parser = NeonArgparser(__doc__)
 parser.add_argument('--subset_percent', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
+
 args = parser.parse_args()
+manifest_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_test')
+cpio_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_cache')
 
-config = {
-    'minibatch_size': args.batch_size,
-    'cache_directory': '/usr/local/data/cache',
-    'macrobatch_size': 1024,
-    'subset_percent': args.subset_percent,
 
-    'type': 'image,label',
-    'image': {
-        'height': 224,
-        'width': 224,
-    },
-}
+def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subset_pct=100):
+    image_decode_cfg = dict(
+        height=224, width=224,
+        scale=[0.875, 0.875],        # .875 fraction is 224/256 (short side)
+        flip=do_randomize,           # whether to do random flips
+        center=(not do_randomize))   # whether to do random crops
 
-train_config = dict(
-    manifest_filename='/usr/local/data/i1k_test/train_file.csv',
-    **config
-)
+    return dict(
+        manifest_filename=manifest_filename,
+        minibatch_size=minibatch_size,
+        macrobatch_size=1024,
+        cache_dir=get_data_cache_dir('/usr/local/data', subdir='i1k_cache'),
+        subset_fraction=float(subset_pct/100.0),
+        shuffle_manifest=do_randomize,
+        shuffle_every_epoch=do_randomize,
+        type='image,label',
+        label={'binary': False},
+        image=image_decode_cfg)
 
-valid_config = dict(
-    manifest_filename='/usr/local/data/i1k_test/val_file.csv',
-    **config
-)
 
+train_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'),
+                                args.minibatch_size,
+                                do_randomize=True,
+                                subset_pct=args.subset_percent)
+
+valid_config = make_aeon_config(os.path.join(manifest_dir, 'val_file.csv'),
+                                args.minibatch_size)
 
 def main():
     layers = [

@@ -21,12 +21,11 @@ After unpacking the dataset, point the script to the unpacked directory.
 
 Usage:
 
-    python examples/music_genres.py -e 16 -w </path/to/dataset> -r 0
+    python examples/music_genres.py -e 8 --tar_file </path/to/genres.tar.gz> -w </destination/path> -r 0
 
 """
 
 import os
-import glob
 import numpy as np
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Gaussian, GlorotUniform
@@ -34,50 +33,51 @@ from neon.layers import Conv, Pooling, GeneralizedCost, Affine, DeepBiRNN, Recur
 from neon.optimizers import Adagrad
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
-from neon.data import DataLoader, AudioParams
 from neon.callbacks.callbacks import Callbacks
+from neon.data.dataloader_transformers import OneHot, TypeCast
+from aeon import DataLoader
+from ingesters import ingest_genre_data
+
+def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False):
+    audio_decode_cfg = dict(
+        sample_freq_hz=22050,
+        max_duration="31 seconds",
+        frame_length="20 milliseconds",
+        frame_stride="14 milliseconds",
+        time_scale_fraction=[0.95, 1.05] if do_randomize else [1.0, 1.0])
+
+    return dict(
+        manifest_filename=manifest_filename,
+        minibatch_size=minibatch_size,
+        macrobatch_size=100,
+        cache_dir=get_data_cache_dir('/usr/local/data', subdir='music_genres_cache'),
+        shuffle_manifest=do_randomize,
+        shuffle_every_epoch=do_randomize,
+        type='audio,label',
+        label={'binary': False},
+        audio=audio_decode_cfg)
 
 
-def create_index_files(source_path, train_percent=80, pattern='*'):
-    assert os.path.exists(source_path)
-    train_idx = os.path.join(source_path, 'train-index.csv')
-    val_idx = os.path.join(source_path, 'val-index.csv')
-    if os.path.exists(train_idx) and os.path.exists(val_idx):
-        return train_idx, val_idx
-    subdirs = glob.iglob(os.path.join(source_path, '*'))
-    subdirs = list(filter(lambda x: os.path.isdir(x), subdirs))
-    classes = sorted(map(lambda x: os.path.basename(x), subdirs))
-    class_map = {key: val for key, val in zip(classes, range(len(classes)))}
+def transformers(dl):
+    dl = OneHot(dl, nclasses=10, index=1)
+    dl = TypeCast(dl, index=0, dtype=np.float32)
+    return dl
 
-    # Split into training and validation subsets.
-    np.random.seed(0)
-    with open(train_idx, 'w') as train_fd, open(val_idx, 'w') as val_fd:
-        train_fd.write('filename,label1\n')
-        val_fd.write('filename,label1\n')
-        for subdir in subdirs:
-            label = class_map[os.path.basename(subdir)]
-            files = glob.glob(os.path.join(subdir, pattern))
-            np.random.shuffle(files)
-            train_count = (len(files) * train_percent) // 100
-            for idx, filename in enumerate(files):
-                fd = train_fd if idx < train_count else val_fd
-                rel_path = os.path.join(os.path.basename(subdir),
-                                        os.path.basename(filename))
-                fd.write(rel_path + ',' + str(label) + '\n')
-    return train_idx, val_idx
 
 parser = NeonArgparser(__doc__)
+parser.add_argument('--tar_file', type=string, required=True, help='Input tar filename')
 args = parser.parse_args()
-train_idx, val_idx = create_index_files(args.data_dir)
 
-common_params = dict(sampling_freq=22050, clip_duration=31000, frame_duration=16)
-train_params = AudioParams(random_scale_percent=5, **common_params)
-val_params = AudioParams(**common_params)
-common = dict(target_size=1, nclasses=10, repo_dir=args.data_dir)
-train = DataLoader(set_name='genres-train', media_params=train_params,
-                   index_file=train_idx, shuffle=True, **common)
-val = DataLoader(set_name='genres-val', media_params=val_params,
-                 index_file=val_idx, shuffle=False, **common)
+train_idx, val_idx = ingest_genre_data(args.tar_file, args.data_dir)
+
+# setup data provider
+train_config = make_aeon_config(train_idx, args.batch_size, do_randomize=True)
+val_config = make_aeon_config(val_idx, args.batch_size)
+
+train = transformers(DataLoader(train_config, NervanaObject.be))
+val = transformers(DataLoader(val_config, NervanaObject.be))
+
+
 init = Gaussian(scale=0.01)
 layers = [Conv((7, 7, 32), init=init, activation=Rectlin(),
                strides=dict(str_h=2, str_w=4)),

@@ -63,7 +63,7 @@ class Ingester(object):
         self.train_file = os.path.join(self.out_dir, 'train_file.csv.gz')
         self.val_file = os.path.join(self.out_dir, 'val_file.csv.gz')
         self.batch_prefix = 'macrobatch_'
-
+        self.target_size = target_size
         self._target_filenames = {}
 
         self.post_init()
@@ -190,7 +190,7 @@ class ImageIngester(Ingester):
                                      If target_size is 0, no resizing is done.
                                      Default is 256.
         """
-        super(ImageIngester, self).__init__(out_dir, input_dir, **kwargs)
+        super(ImageIngester, self).__init__(out_dir, input_dir, target_size, **kwargs)
 
     def transform(self, filename, target):
         """
@@ -207,8 +207,8 @@ class ImageIngester(Ingester):
 
         os.system((
             'mogrify {filename} '
-            '-resize {target_size}x{target_size}\> '
-            '-nterpolate Catrom '
+            '-resize \"{target_size}x{target_size}^>\" '
+            '-interpolate Catrom '
             '{new_filename}'
         ).format(
             filename=filename,
@@ -343,7 +343,6 @@ class BatchWriterCIFAR10(IngestI1K):
         self.pad_size = ((self.target_size - 32) // 2) if self.target_size > 32 else 0
         self.pad_width = ((0, 0), (self.pad_size, self.pad_size), (self.pad_size, self.pad_size))
 
-        self.validation_pct = None
 
     def extract_images(self, overwrite=False):
         from neon.data import CIFAR10
@@ -352,6 +351,8 @@ class BatchWriterCIFAR10(IngestI1K):
         cifar10 = CIFAR10(path=self.out_dir, normalize=False)
         dataset['train'], dataset['val'], _ = cifar10.load_data()
 
+        self.records = dict(train=[], val=[])
+
         for setn in ('train', 'val'):
             data, labels = dataset[setn]
 
@@ -359,10 +360,13 @@ class BatchWriterCIFAR10(IngestI1K):
             ulabels = np.unique(labels)
             for ulabel in ulabels:
                 subdir = os.path.join(img_dir, str(ulabel))
+                label_file = os.path.join(subdir, str(ulabel) + '.txt')
+                with open(label_file, 'w') as f:
+                    f.write("%d" % ulabel)
                 if not os.path.exists(subdir):
                     os.makedirs(subdir)
 
-            for idx in range(data.shape[0]):
+            for idx in tqdm.tqdm(range(data.shape[0])):
                 im = np.pad(data[idx].reshape((3, 32, 32)), self.pad_width, mode='mean')
                 im = np.uint8(np.transpose(im, axes=[1, 2, 0]).copy())
                 im = Image.fromarray(im)
@@ -373,6 +377,8 @@ class BatchWriterCIFAR10(IngestI1K):
                 self.pixel_mean = list(data.mean(axis=0).reshape(3, -1).mean(axis=1))
                 self.pixel_mean.reverse()  # We will see this in BGR order b/c of opencv
 
+    def run(self):
+        self.extract_images()
 
 if __name__ == "__main__":
     from neon.util.argparser import NeonArgparser

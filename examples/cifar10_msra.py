@@ -54,8 +54,13 @@ from neon.layers import MergeSum, SkipNode, BatchNorm
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
-from neon.data import DataLoader, ImageParams
 from neon.callbacks.callbacks import Callbacks, BatchNormTuneCallback
+from neon.data.dataloader_transformers import OneHot, TypeCast, ImageMeanSubtract
+from neon.util.persist import get_data_cache_dir
+from neon import NervanaObject
+import numpy as np
+from aeon import DataLoader
+from ingesters import ingest_cifar10
 
 # parse the command line arguments (generates the backend)
 parser = NeonArgparser(__doc__)
@@ -65,35 +70,31 @@ parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 
 
-def extract_images(out_dir, padded_size):
-    '''
-    Save CIFAR-10 dataset as PNG files
-    '''
-    import numpy as np
-    from neon.data import CIFAR10
-    from PIL import Image
-    dataset = dict()
-    cifar10 = CIFAR10(path=out_dir, normalize=False)
-    dataset['train'], dataset['val'], _ = cifar10.load_data()
-    pad_size = (padded_size - 32) // 2 if padded_size > 32 else 0
-    pad_width = ((0, 0), (pad_size, pad_size), (pad_size, pad_size))
+def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subset_pct=100):
+    image_decode_cfg = dict(
+        height=32, width=32,
+        scale=[0.8, 0.8],            # cropboxes of size 0.8 * 40 = 32
+        flip=do_randomize,           # whether to do random flips
+        center=(not do_randomize))   # whether to do random crops
 
-    for setn in ('train', 'val'):
-        data, labels = dataset[setn]
+    return dict(
+        manifest_filename=manifest_filename,
+        minibatch_size=minibatch_size,
+        macrobatch_size=5000,
+        cache_dir=get_data_cache_dir('/usr/local/data', subdir='cifar10_cache'),
+        subset_fraction=float(subset_pct/100.0),
+        shuffle_manifest=do_randomize,
+        shuffle_every_epoch=do_randomize,
+        type='image,label',
+        label={'binary': False},
+        image=image_decode_cfg)
 
-        img_dir = os.path.join(out_dir, setn)
-        ulabels = np.unique(labels)
-        for ulabel in ulabels:
-            subdir = os.path.join(img_dir, str(ulabel))
-            if not os.path.exists(subdir):
-                os.makedirs(subdir)
 
-        for idx in range(data.shape[0]):
-            im = np.pad(data[idx].reshape((3, 32, 32)), pad_width, mode='mean')
-            im = np.uint8(np.transpose(im, axes=[1, 2, 0]).copy())
-            im = Image.fromarray(im)
-            path = os.path.join(img_dir, str(labels[idx][0]), str(idx) + '.png')
-            im.save(path, format='PNG')
+def transformers(dl):
+    dl = OneHot(dl, nclasses=10, index=1)
+    dl = TypeCast(dl, index=0, dtype=np.float32)
+    dl = ImageMeanSubtract(dl, index=0, pixel_mean=[104.41227722, 119.21331787, 126.80609131])
+    return dl
 
 
 def conv_params(fsize, nfm, stride=1, relu=True, batch_norm=True):
@@ -131,22 +132,23 @@ def module_s2(nfm):
 
 args = parser.parse_args()
 
-train_dir = os.path.join(args.data_dir, 'train')
-test_dir = os.path.join(args.data_dir, 'val')
-if not (os.path.exists(train_dir) and os.path.exists(test_dir)):
-    extract_images(args.data_dir, 40)
+image_dir = get_data_cache_dir(args.data_dir, subdir='cifar10_extracted')
+cache_dir = get_data_cache_dir(args.data_dir, subdir='cifar10_cache')
+
+# perform ingest if it hasn't already been done and return manifest files
+train_manifest, val_manifest = ingest_cifar10(out_dir=image_dir, padded_size=40, overwrite=False)
 
 # setup data provider
-shape = dict(channel_count=3, height=32, width=32)
-train_params = ImageParams(center=False, flip=True, aspect_ratio=110, **shape)
-test_params = ImageParams(**shape)
-common = dict(target_size=1, nclasses=10)
+train_config = make_aeon_config(train_manifest, args.batch_size,
+                                do_randomize=True, subset_pct=args.subset_pct)
 
-train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
-                   shuffle=True, subset_percent=args.subset_pct, **common)
-test = DataLoader(set_name='val', repo_dir=test_dir, media_params=test_params, **common)
-tune_set = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
-                      subset_percent=20, **common)
+val_config = make_aeon_config(val_manifest, args.batch_size)
+
+tune_config = make_aeon_config(train_manifest, args.batch_size, subset_pct=20)
+
+train = transformers(DataLoader(train_config, NervanaObject.be))
+test = transformers(DataLoader(val_config, NervanaObject.be))
+tune_set = transformers(DataLoader(tune_config, NervanaObject.be))
 
 
 # Structure of the deep residual part of the network:

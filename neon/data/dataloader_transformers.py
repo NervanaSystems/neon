@@ -100,7 +100,8 @@ class ImageMeanSubtract(DataLoaderTransformer):
 
 
 class DumpImage(DataLoaderTransformer):
-    def __init__(self, dataloader, index, image_index, output_directory=None, *args, **kwargs):
+    def __init__(self, dataloader, index, image_index, outshape,
+                 output_directory=None, *args, **kwargs):
         """
         dump image number `image_index` in data `index` to a random
         file in `output_directory`.
@@ -108,7 +109,7 @@ class DumpImage(DataLoaderTransformer):
         super(DumpImage, self).__init__(
             dataloader, index=index, *args, **kwargs
         )
-
+        self.outshape = outshape
         self.image_index = image_index
         self.output_directory = output_directory or '/tmp'
         if self.output_directory[-1] != '/':
@@ -123,7 +124,7 @@ class DumpImage(DataLoaderTransformer):
 
         a = a[:, self.image_index]
         # coming from DataLoader first dimensioned has been flattened
-        a = a.reshape(3, 224, 224)
+        a = a.reshape(self.outshape)
         # transpose from CHW to H W C
         a = a.transpose(1, 2, 0)
         # reorder color channel
@@ -143,7 +144,7 @@ class DumpImage(DataLoaderTransformer):
         generate random filename
         """
         import random
-        return self.output_directory + str(random.random()) + '.jpg'
+        return self.output_directory + str(random.random()) + '.png'
 
 
 

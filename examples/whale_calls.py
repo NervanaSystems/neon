@@ -18,15 +18,13 @@ Detect presence of whale calls in sound clips.
 
 Download the dataset from https://www.kaggle.com/c/whale-detection-challenge
 After unpacking the dataset, point the script to the unpacked directory.
-
+unzip -q -d dstdir whale_data/whale_data.zip && find dstdir -name '*.aiff'  | parallel --progress 'sox {} {.}.wav && rm {}
 Usage:
 
-    python examples/whale_calls.py -e 16 -w </path/to/dataset> -r 0
+    python examples/whale_calls.py -e 16 --zip_file </path/to/whale_data.zip> -w </destination/path> -r 0
 
 """
 
-import os
-import glob
 import numpy as np
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Gaussian
@@ -35,48 +33,54 @@ from neon.optimizers import Adadelta
 from neon.transforms import Rectlin, Softmax, CrossEntropyBinary, Misclassification
 from neon.models import Model
 from neon.data import DataLoader, AudioParams
+from neon.data.dataloader_transformers import OneHot, TypeCast
 from neon.callbacks.callbacks import Callbacks
+from ingesters import ingest_whale_data
 
 
-def from_csv(filename):
-    return np.genfromtxt(filename, delimiter=',', skip_header=1, dtype=str)
+def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False):
+    audio_decode_cfg = dict(
+        sample_freq_hz=2000,
+        max_duration="2 seconds",
+        frame_length="80 milliseconds",
+        frame_stride="40 milliseconds")
+
+    return dict(
+        manifest_filename=manifest_filename,
+        minibatch_size=minibatch_size,
+        macrobatch_size=1024,
+        cache_dir=get_data_cache_dir('/usr/local/data', subdir='whale_calls_cache'),
+        shuffle_manifest=do_randomize,
+        shuffle_every_epoch=do_randomize,
+        type='audio,label',
+        label={'binary': False},
+        audio=audio_decode_cfg)
 
 
-def to_csv(filename, index, header='filename,label1'):
-    np.savetxt(filename, index, fmt='%s', delimiter=',', header=header)
+def make_aeon_config_inference(manifest_filename, minibatch_size):
+    audio_decode_cfg = dict(
+        sample_freq_hz=2000,
+        max_duration="2 seconds",
+        frame_length="80 milliseconds",
+        frame_stride="40 milliseconds")
+
+    return dict(
+        manifest_filename=manifest_filename,
+        minibatch_size=minibatch_size,
+        macrobatch_size=1024,
+        cache_dir=get_data_cache_dir('/usr/local/data', subdir='whale_calls_cache'),
+        type='audio,inference',
+        audio=audio_decode_cfg)
 
 
-def create_index_files(data_dir, train_percent=80):
-    def get_path(filename):
-        return os.path.join(data_dir, filename)
+def transform_train(dl):
+    dl = OneHot(dl, nclasses=2, index=1)
+    dl = TypeCast(dl, index=0, dtype=np.float32)
+    return dl
 
-    assert os.path.exists(data_dir)
-    train_idx = get_path('train-index.csv')
-    val_idx = get_path('val-index.csv')
-    all_idx = get_path('all-index.csv')
-    test_idx = get_path('test-index.csv')
-    noise_idx = get_path('noise-index.csv')
-    if os.path.exists(test_idx):
-        return train_idx, val_idx, all_idx, test_idx, noise_idx
-
-    train = from_csv(os.path.join(data_dir, 'train.csv'))
-
-    # Split into training and validation subsets
-    np.random.seed(0)
-    np.random.shuffle(train)
-    train_count = (train.shape[0] * train_percent) // 100
-    to_csv(all_idx, train)
-    to_csv(train_idx, train[:train_count])
-    to_csv(val_idx, train[train_count:])
-    noise = train[:train_count]
-    noise = noise[noise[:, 1] == '0']
-    to_csv(noise_idx, noise[:, 0], 'filename')
-    # Test set
-    test_files = glob.glob(os.path.join(data_dir, 'test', '*.aiff'))
-    test = np.zeros((len(test_files), 2), dtype=object)
-    test[:, 0] = map(os.path.basename, test_files)
-    to_csv(test_idx, test)
-    return train_idx, val_idx, all_idx, test_idx, noise_idx
+def transform_inference(dl):
+    dl = TypeCast(dl, index=0, dtype=np.float32)
+    return dl
 
 
 def run(train, test):
@@ -102,29 +106,28 @@ def run(train, test):
 
 
 parser = NeonArgparser(__doc__)
+parser.add_argument('--zip_file', type=string, required=True, help='Input zip filename')
 args = parser.parse_args()
-train_idx, val_idx, all_idx, test_idx, noise_idx = create_index_files(args.data_dir)
 
-train_dir = os.path.join(args.data_dir, 'train')
-common_params = dict(sampling_freq=2000, clip_duration=2000, frame_duration=80, overlap_percent=50)
-train_params = AudioParams(noise_index_file=noise_idx, noise_dir=train_dir, **common_params)
-test_params = AudioParams(**common_params)
-common = dict(target_size=1, nclasses=2)
+train_idx, val_idx, test_idx, all_idx, noise_idx = ingest_whale_data(args.zip_file, args.data_dir)
+
+train_config = make_aeon_config(train_idx, args.batch_size, do_randomize=True)
+val_config = make_aeon_config(val_idx, args.batch_size)
+
+train = transformer_train(DataLoader(train_config, NervanaObject.be))
+val = transformer_train(DataLoader(val_config, NervanaObject.be))
 
 # Validate...
-train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
-                   index_file=train_idx, **common)
-test = DataLoader(set_name='val', repo_dir=train_dir, media_params=test_params,
-                  index_file=val_idx, **common)
-model = run(train, test)
-print('Misclassification error = %.1f%%' % (model.eval(test, metric=Misclassification())*100))
+model = run(train, val)
+print('Misclassification error = %.1f%%' % (model.eval(val, metric=Misclassification())*100))
 
 # Test...
-test_dir = os.path.join(args.data_dir, 'test')
-train = DataLoader(set_name='all', repo_dir=train_dir, media_params=train_params,
-                   index_file=train_idx, **common)
-test = DataLoader(set_name='test', repo_dir=test_dir, media_params=test_params,
-                  index_file=test_idx, **common)
-model = run(train, test)
+all_config = make_aeon_config(all_idx, args.batch_size)
+alltrain = transformer_train(DataLoader(all_config, NervanaObject.be))
+
+test_config = make_aeon_config_inference(test_idx, args.batch_size)
+test = transformer_inference(DataLoader(test_config, NervanaObject.be))
+
+model = run(alltrain, test)
 preds = model.get_outputs(test)
 np.savetxt('subm.txt', preds[:, 1], fmt='%.5f')

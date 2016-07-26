@@ -38,8 +38,10 @@ from neon.layers import MergeSum, SkipNode
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, TopKMisclassification
 from neon.models import Model
-from neon.data import ImageLoader
 from neon.callbacks.callbacks import Callbacks, BatchNormTuneCallback
+from neon.data.dataloader_transformers import OneHot, TypeCast, ImageMeanSubtract
+from neon.util.persist import get_data_cache_dir
+from aeon import DataLoader
 import itertools as itt
 import sys
 
@@ -68,6 +70,49 @@ else:
     sys.exit()
 
 # setup data provider
+manifest_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_test')
+cpio_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_cache')
+
+
+def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subset_pct=100):
+    image_decode_cfg = dict(height=224, width=224, scale=[0.875, 0.875])
+    if do_randomize:
+        image_decode_cfg['scale'] = [0.08, 1.0]  # 8% of area to 100% of area for cropbox
+        image_decode_cfg['do_area_scale'] = True
+        image_decode_cfg['aspect_ratio'] = [0.75, 1.33]
+        image_decode_cfg['photometric'] = [-0.1, 0.1]
+        image_decode_cfg['lighting'] = [0.0, 0.01]
+        image_decode_cfg['flip'] = True
+        image_decode_cfg['lighting'] = False
+
+    return dict(
+        manifest_filename=manifest_filename,
+        minibatch_size=minibatch_size,
+        macrobatch_size=1024,
+        cache_dir=get_data_cache_dir('/usr/local/data', subdir='i1k_cache'),
+        subset_fraction=float(subset_pct/100.0),
+        shuffle_manifest=do_randomize,
+        shuffle_every_epoch=do_randomize,
+        type='image,label',
+        label={'binary': False},
+        image=image_decode_cfg)
+
+def transformers(dl):
+    dl = OneHot(dl, nclasses=1000, index=1)
+    dl = TypeCast(dl, index=0, dtype=np.float32)
+    dl = ImageMeanSubtract(dl, index=0, pixel_mean=[104.41227722, 119.21331787, 126.80609131])
+    return dl
+
+train_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'), args.batch_size,
+                                do_randomize=True, subset_pct=args.subset_percent)
+
+valid_config = make_aeon_config(os.path.join(manifest_dir, 'val_file.csv'), args.batch_size)
+tune_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'), args.batch_size,
+                               subset_pct=20)
+
+train = transformers(DataLoader(train_config, model.be))
+valid = transformers(DataLoader(valid_config, model.be))
+
 img_set_options = dict(repo_dir=args.data_dir,
                        inner_size=224,
                        subset_pct=args.subset_pct)
