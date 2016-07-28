@@ -14,61 +14,38 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Test a trained Fast-RCNN model to do object detection using PASCAL VOC dataset.
+Test a trained Faster-RCNN model to do object detection using PASCAL VOC dataset.
 This test currently runs 1 image at a time.
 
 Reference:
-    "Fast R-CNN"
-    http://arxiv.org/pdf/1504.08083v2.pdf
-    https://github.com/rbgirshick/fast-rcnn
+    "Faster R-CNN"
+    http://arxiv.org/abs/1506.01497
+    https://github.com/rbgirshick/py-faster-rcnn
 
 Usage:
-    python examples/fast-rcnn/test.py --model_file frcn_vgg.pkl
-
-Notes:
-    1. For VGG16 based Fast R-CNN model, we can support testing with batch size as 1
-    images. The testing consumes about 7G memory.
-
-    2. During testing/inference, all the selective search ROIs will be used to go
-    through the network, so the inference time varies based on how many ROIs in each
-    image. For PASCAL VOC 2007, the average number of SelectiveSearch ROIs is around
-    2000.
-
-    3. The dataset will cache the preprocessed file and re-use that if the same
-    configuration of the dataset is used again. The cached file by default is in
-    ~/nervana/data/VOCDevkit/VOC<year>/train_< >.pkl or
-    ~/nervana/data/VOCDevkit/VOC<year>/inference_< >.pkl
+    python examples/faster-rcnn/test.py --model_file frcn_vgg.pkl
 
 The mAP evaluation script is adapted from:
 https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc351be7f145499f
 """
 from neon.backends import gen_backend
-from neon.initializers import Gaussian, Constant
-from neon.transforms import Rectlin, Identity, Softmax, PixelwiseSoftmax
-from neon.layers import Conv, Affine, BranchNode, Tree, Dropout
-from neon.models import Model
-from roi_pooling import RoiPooling
-from proposal_layer import ProposalLayer
 from objectlocalization import PASCAL
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from bbox_transform import bbox_transform_inv, clip_boxes
+import faster_rcnn
 import util
 import sys
 import os
 import numpy as np
 
-SCALE_BBTARGETS = True
-
 # parse the command line arguments
-parser = NeonArgparser(__doc__)
+parser = NeonArgparser(__doc__, default_overrides={'batch_size': 1})
 args = parser.parse_args()
 assert args.model_file is not None, "need a model file to do Faster R-CNN testing"
 
 # hyperparameters
-args.batch_size = 1
+assert args.batch_size is 1, "Faster-RCNN only supports batch size 1"
 n_mb = None
-img_per_batch = args.batch_size
-rois_per_img = 256
 frcn_rois_per_img = 128
 rpn_rois_per_img = 256
 
@@ -78,76 +55,17 @@ be = gen_backend(**extract_valid_args(args, gen_backend))
 image_set = 'test'
 year = '2007'
 valid_set = PASCAL(image_set, year, path=args.data_dir, n_mb=n_mb,
-                   img_per_batch=img_per_batch, rpn_rois_per_img=rpn_rois_per_img,
-                   frcn_rois_per_img=frcn_rois_per_img, add_flipped=False, shuffle=False,
-                   rebuild_cache=False)
+                   rpn_rois_per_img=rpn_rois_per_img, frcn_rois_per_img=frcn_rois_per_img,
+                   add_flipped=False, shuffle=False, rebuild_cache=True)
 
 num_classes = valid_set.num_classes
-# Faster-RCNN contains three models: VGG, the Region Proposal Network (RPN),
-# and the Classification Network (ROI-pooling + Fully Connected layers), organized
-# as a tree. Tree has 4 branches:
-#
-# VGG -> b1 -> Conv (3x3) -> b2 -> Conv (1x1) -> CrossEntropyMulti (objectness label)
-#                            b2 -> Conv (1x1) -> SmoothL1Loss (bounding box targets)
-#        b1 -> PropLayer -> ROI -> Affine -> Affine -> b3 -> Affine -> CrossEntropyMulti (category)
-#                                                      b3 -> Affine -> SmoothL1Loss (bounding box)
-#
 
-# define the branch points
-b1 = BranchNode(name="conv_branch")
-b2 = BranchNode(name="rpn_branch")
-b3 = BranchNode(name="roi_branch")
-
-# define VGG
-VGG = util.add_vgg_layers()
-
-# define RPN
-rpn_init = dict(init=Gaussian(scale=0.01), bias=Constant(0))
-
-# these references are passed to the ProposalLayer.
-RPN_3x3 = Conv((3, 3, 512), activation=Rectlin(), padding=1, strides=1, **rpn_init)
-RPN_1x1_obj = Conv((1, 1, 18), activation=PixelwiseSoftmax(c=2), padding=0, strides=1, **rpn_init)
-RPN_1x1_bbox = Conv((1, 1, 36), activation=Identity(), padding=0, strides=1, **rpn_init)
-
-# create proposal layer
-proposalLayer = ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox],
-                              valid_set.get_global_buffers(),
-                              num_rois=frcn_rois_per_img, inference=True)
-
-# define ROI classification network
-ROI = [proposalLayer,
-       RoiPooling(HW=(7, 7)),
-       Affine(nout=4096, init=Gaussian(scale=0.005),
-              bias=Constant(.1), activation=Rectlin()),
-       Dropout(keep=0.5),
-       Affine(nout=4096, init=Gaussian(scale=0.005),
-              bias=Constant(.1), activation=Rectlin()),
-       Dropout(keep=0.5)]
-
-ROI_category = Affine(nout=num_classes, init=Gaussian(scale=0.01),
-                      bias=Constant(0), activation=Softmax())
-ROI_bbox = Affine(nout=4 * num_classes, init=Gaussian(scale=0.001),
-                  bias=Constant(0), activation=Identity())
-
-# build the model
-# the four branches of the tree mirror the branches listed above
-frcn_tree = Tree([ROI + [b3, ROI_category],
-                 [b3, ROI_bbox]
-                  ])
-
-model = Model(layers=Tree([VGG + [b1, RPN_3x3, b2, RPN_1x1_obj],
-                           [b2, RPN_1x1_bbox],
-                           [b1] + [frcn_tree],
-                           ]))
-
+# build the Faster-RCNN network
+(model, proposalLayer) = faster_rcnn.build_model(valid_set, frcn_rois_per_img, inference=True)
 
 # load parameters and initialize model
 model.load_params(args.model_file)
 model.initialize(dataset=valid_set)
-
-if SCALE_BBTARGETS:
-    model = util.scale_bbreg_weights(model, [0.0, 0.0, 0.0, 0.0],
-                                     [0.1, 0.1, 0.2, 0.2], num_classes)
 
 # run inference
 

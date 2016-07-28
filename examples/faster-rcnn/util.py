@@ -160,5 +160,3 @@ def run_voc_eval(annopath, imagesetfile, year, image_set, classes, output_dir):
         with open(os.path.join(output_dir, cls + '_pr.pkl'), 'w') as f:
             cPickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
     print('Mean AP = {:.4f}'.format(np.mean(aps)))
-
-

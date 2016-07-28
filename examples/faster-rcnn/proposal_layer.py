@@ -107,6 +107,14 @@ class ProposalLayer(Layer):
         #     in_obj = in_obj.prev_layer
         return (in_obj, self)
 
+    def get_description(self, **kwargs):
+        skip = ['rpn_layers', 'global_buffers']
+        if 'skip' in kwargs:
+            kwargs['skip'].append(skip)
+        else:
+            kwargs['skip'] = skip
+        return super(ProposalLayer, self).get_description(**kwargs)
+
     def allocate(self):
         super(ProposalLayer, self).allocate()
 
