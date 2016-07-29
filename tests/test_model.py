@@ -17,8 +17,7 @@ import numpy as np
 import os
 
 from neon.backends import gen_backend
-from neon.data import ArrayIterator, load_mnist, Text
-from neon.data.dataloaders import load_ptb_test
+from neon.data import ArrayIterator, MNIST, PTB
 from neon.initializers import Gaussian, Constant
 from neon.layers import (GeneralizedCost, Affine, DeepBiRNN, DeepBiLSTM, LSTM, GRU,
                          Dropout, Conv, Pooling, Sequential, MergeMultistream, Recurrent,
@@ -30,8 +29,8 @@ from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 
 def test_model_get_outputs_rnn(backend_default, data):
 
-    data_path = load_ptb_test(path=data)
-    data_set = Text(time_steps=50, path=data_path)
+    dataset = PTB(50, path=data)
+    dataiter = dataset.train_iter
 
     # weight initialization
     init = Constant(0.08)
@@ -39,14 +38,13 @@ def test_model_get_outputs_rnn(backend_default, data):
     # model initialization
     layers = [
         Recurrent(150, init, activation=Logistic()),
-        Affine(len(data_set.vocab), init, bias=init, activation=Rectlin())
+        Affine(len(dataiter.vocab), init, bias=init, activation=Rectlin())
     ]
 
     model = Model(layers=layers)
-    output = model.get_outputs(data_set)
+    output = model.get_outputs(dataiter)
 
-    assert output.shape == (
-        data_set.ndata, data_set.seq_length, data_set.nclass)
+    assert output.shape == (dataiter.ndata, dataiter.seq_length, dataiter.nclass)
 
     # since the init are all constant and model is un-trained:
     # along the feature dim, the values should be all the same
@@ -75,8 +73,8 @@ def test_model_N_S_setter(backend_default):
 
 
 def test_model_get_outputs(backend_default, data):
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
-    train_set = ArrayIterator(X_train[:backend_default.bsz * 3])
+    dataset = MNIST(path=data)
+    train_set = dataset.train_iter
 
     init_norm = Gaussian(loc=0.0, scale=0.1)
 
@@ -92,15 +90,15 @@ def test_model_get_outputs(backend_default, data):
 
     train_set.reset()
     output = mlp.get_outputs(train_set)
-    assert np.allclose(output, ref_output)
+    assert np.allclose(output, ref_output[:output.shape[0], :])
 
     # test model benchmark inference
     mlp.benchmark(train_set, inference=True, niterations=5)
 
 
 def test_model_serialize(backend_default, data):
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
-
+    dataset = MNIST(path=data)
+    (X_train, y_train), (X_test, y_test), nclass = dataset.load_data()
     train_set = ArrayIterator(
         [X_train, X_train], y_train, nclass=nclass, lshape=(1, 28, 28))
 

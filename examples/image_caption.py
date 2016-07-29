@@ -36,7 +36,7 @@ Usage:
 
 import os
 from neon.backends import gen_backend
-from neon.data import load_flickr8k, ImageCaption, ImageCaptionTest
+from neon.data import Flickr8k
 from neon.initializers import Uniform, Constant, Array
 from neon.layers import GeneralizedCostMask, LSTM, Affine, Dropout, Sequential, MergeMultistream
 from neon.models import Model
@@ -57,10 +57,9 @@ num_epochs = args.epochs
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download dataset
-data_path = load_flickr8k(path=args.data_dir)  # Other setnames are flickr30k and coco
-
-# load data
-train_set = ImageCaption(path=data_path, max_images=-1)
+dataset = Flickr8k(path=args.data_dir, max_images=-1)  # Other setnames are flickr30k and coco
+train_set = dataset.train_iter
+test_set = dataset.test_iter
 
 # weight initialization
 init = Uniform(low=-0.08, high=0.08)
@@ -99,6 +98,5 @@ model.fit(train_set, optimizer=opt, num_epochs=num_epochs, cost=cost, callbacks=
 # load model (if exited) and evaluate bleu score on test set
 if os.path.exists(args.callback_args['save_path']):
     model.load_params(args.callback_args['save_path'])
-test_set = ImageCaptionTest(path=data_path)
 sents, targets = test_set.predict(model)
 test_set.bleu_score(sents, targets)

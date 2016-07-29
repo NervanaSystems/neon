@@ -25,7 +25,7 @@ Usage:
 """
 
 from neon.callbacks.callbacks import Callbacks
-from neon.data import HDF5IteratorOneHot, load_mnist
+from neon.data import HDF5IteratorOneHot, MNIST
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
@@ -42,8 +42,9 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 # load up the mnist data set
+dataset = MNIST(path=args.data_dir)
 # split into train and tests sets
-(X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
+(X_train, y_train), (X_test, y_test), nclass = dataset.load_data()
 
 # generate the HDF5 file
 datsets = {'train': (X_train, y_train),

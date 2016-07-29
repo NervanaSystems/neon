@@ -31,8 +31,7 @@ Usage:
 
 import numpy as np
 from neon import logger as neon_logger
-from neon.data import Text
-from neon.data.dataloaders import load_shakespeare
+from neon.data import Shakespeare
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, LSTM, Affine
 from neon.models import Model
@@ -55,12 +54,9 @@ hidden_size = 512
 gradient_clip_value = 5
 
 # download shakespeare text
-data_path = load_shakespeare(path=args.data_dir)
-train_path, valid_path = Text.create_valid_file(data_path)
-
-# load data and parse on character-level
-train_set = Text(time_steps, train_path)
-valid_set = Text(time_steps, valid_path, vocab=train_set.vocab)
+dataset = Shakespeare(time_steps, path=args.data_dir)
+train_set = dataset.train_iter
+valid_set = dataset.valid_iter
 
 # weight initialization
 init = Uniform(low=-0.08, high=0.08)

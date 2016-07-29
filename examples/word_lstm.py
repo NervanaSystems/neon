@@ -30,8 +30,7 @@ Usage:
 """
 
 from neon.backends import gen_backend
-from neon.data.text import Text
-from neon.data.dataloaders import load_ptb_train, load_ptb_test
+from neon.data import PTB
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, LSTM, Affine, GRU, LookupTable
 from neon.models import Model
@@ -56,20 +55,9 @@ gradient_clip_norm = 5
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download penn treebank
-train_path = load_ptb_train(path=args.data_dir)
-valid_path = load_ptb_test(path=args.data_dir)
-
-
-# define a custom function to parse the input into individual tokens, which for
-# this data, splits into individual words.  This can be passed into the Text
-# object during dataset creation as seen below.
-def tokenizer(s):
-    return s.replace('\n', '<eos>').split()
-
-# load data and parse on word-level
-train_set = Text(time_steps, train_path, tokenizer=tokenizer, onehot_input=False)
-valid_set = Text(time_steps, valid_path, vocab=train_set.vocab, tokenizer=tokenizer,
-                 onehot_input=False)
+dataset = PTB(time_steps, path=args.data_dir, tokenizer='newline_tokenizer', onehot_input=False)
+train_set = dataset.train_iter
+valid_set = dataset.valid_iter
 
 # weight initialization
 init = Uniform(low=-0.1, high=0.1)

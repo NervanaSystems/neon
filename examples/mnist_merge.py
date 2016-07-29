@@ -22,7 +22,7 @@ Usage:
 
 """
 
-from neon.data import ArrayIterator, load_mnist
+from neon.data import ArrayIterator, MNIST
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine, Sequential, MergeMultistream
 from neon.models import Model
@@ -38,7 +38,8 @@ args = parser.parse_args()
 # hyperparameters
 num_epochs = args.epochs
 
-(X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
+dataset = MNIST(path=args.data_dir)
+(X_train, y_train), (X_test, y_test), nclass = dataset.load_data()
 train_set = ArrayIterator([X_train, X_train], y_train, nclass=nclass, lshape=(1, 28, 28))
 valid_set = ArrayIterator([X_test, X_test], y_test, nclass=nclass, lshape=(1, 28, 28))
 

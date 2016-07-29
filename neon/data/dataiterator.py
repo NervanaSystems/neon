@@ -18,7 +18,7 @@ Defines basic input datatset types.
 from builtins import zip
 import numpy as np
 
-from neon import NervanaObject, logger
+from neon import NervanaObject
 
 
 class NervanaDataIterator(NervanaObject):
@@ -199,29 +199,3 @@ class ArrayIterator(NervanaDataIterator):
             inputs = self.Xbuf[0] if len(self.Xbuf) == 1 else self.Xbuf
             targets = self.ybuf if self.ybuf else inputs
             yield (inputs, targets)
-
-
-class DataIterator(ArrayIterator):
-    """
-    This class has been renamed to ArrayIterator and deprecated.
-    This is just a place holder until the class is removed.  Please
-    use the ArrayIterator class.
-    """
-    def __init__(self, *args, **kwargs):
-        logger.error('DataIterator class has been deprecated and renamed'
-                     '"ArrayIterator" please use that name.')
-        super(DataIterator, self).__init__(*args, **kwargs)
-
-
-if __name__ == '__main__':
-    from neon.data import load_mnist
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
-
-    from neon.backends import gen_backend
-    be = gen_backend('gpu', batch_size=128)
-
-    train_set = ArrayIterator(X_test[:1000], y_test[:1000], nclass=nclass)
-    for i in range(3):
-        for bidx, (X_batch, y_batch) in enumerate(train_set):
-            logger.display("{}".format((bidx, train_set.start)))
-            pass

@@ -30,8 +30,7 @@ Usage:
 
 from neon import logger as neon_logger
 from neon.backends import gen_backend
-from neon.data.text import Text
-from neon.data.dataloaders import load_ptb_train, load_ptb_test
+from neon.data import PTB
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, LSTM, Affine, GRU
 from neon.models import Model
@@ -56,11 +55,9 @@ gradient_clip_value = 5
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # download penn treebank
-train_path = load_ptb_train(path=args.data_dir)
-valid_path = load_ptb_test(path=args.data_dir)
-
-train_set = Text(time_steps, train_path)
-valid_set = Text(time_steps, valid_path, vocab=train_set.vocab)
+dataset = PTB(time_steps, path=args.data_dir)
+train_set = dataset.train_iter
+valid_set = dataset.valid_iter
 
 # weight initialization
 init = Uniform(low=-0.08, high=0.08)

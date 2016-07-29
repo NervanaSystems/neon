@@ -29,9 +29,7 @@ Usage:
 
 from neon import logger as neon_logger
 from neon.backends import gen_backend
-from neon.data.dataloaders import load_imdb
-from neon.data.dataiterator import ArrayIterator
-from neon.data.text_preprocessing import pad_data
+from neon.data import IMDB
 from neon.initializers import Uniform, GlorotUniform
 from neon.layers import (GeneralizedCost, LSTM, Affine, Dropout, LookupTable,
                          RecurrentSum, Recurrent, DeepBiLSTM, DeepBiRNN)
@@ -62,18 +60,15 @@ reset_cells = True
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # make dataset
-path = load_imdb(path=args.data_dir)
-(X_train, y_train), (X_test, y_test), nclass = pad_data(path,
-                                                        vocab_size=vocab_size,
-                                                        sentence_length=sentence_length)
+dataset = IMDB(vocab_size, sentence_length, path=args.data_dir)
+train_set = dataset.train_iter
+valid_set = dataset.test_iter
 
 neon_logger.display("Vocab size - {}".format(vocab_size))
 neon_logger.display("Sentence Length - {}".format(sentence_length))
-neon_logger.display("# of train sentences {}".format(X_train.shape[0]))
-neon_logger.display("# of test sentence {}".format(X_test.shape[0]))
+neon_logger.display("# of train sentences {}".format(train_set.Xdev[0].shape[0]))
+neon_logger.display("# of test sentence {}".format(valid_set.Xdev[0].shape[0]))
 
-train_set = ArrayIterator(X_train, y_train, nclass=2)
-valid_set = ArrayIterator(X_test, y_test, nclass=2)
 
 # weight initialization
 uni = Uniform(low=-0.1 / embedding_dim, high=0.1 / embedding_dim)

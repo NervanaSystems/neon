@@ -360,10 +360,11 @@ class BatchWriterCIFAR10(BatchWriterI1K):
         self.val_start = -(-self.train_nrec // self.macro_size)
 
     def extract_images(self, overwrite=False):
-        from neon.data import load_cifar10
+        from neon.data import CIFAR10
         from PIL import Image
         dataset = dict()
-        dataset['train'], dataset['val'], _ = load_cifar10(self.out_dir, normalize=False)
+        cifar10 = CIFAR10(path=self.out_dir, normalize=False)
+        dataset['train'], dataset['val'], _ = cifar10.load_data()
 
         for setn in ('train', 'val'):
             data, labels = dataset[setn]

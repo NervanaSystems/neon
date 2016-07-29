@@ -245,11 +245,11 @@ class Shakespeare(Dataset):
     def gen_iterators(self):
         self.load_data()
         train_path, valid_path = Text.create_valid_file(self.filepath)
-        self.data_dict = {}
-        self.data_dict['train'] = Text(self.timesteps, train_path)
-        vocab = self.data_dict['train'].vocab
-        self.data_dict['valid'] = Text(self.timesteps, valid_path, vocab=vocab)
-        return self.data_dict
+        self._data_dict = {}
+        self._data_dict['train'] = Text(self.timesteps, train_path)
+        vocab = self._data_dict['train'].vocab
+        self._data_dict['valid'] = Text(self.timesteps, valid_path, vocab=vocab)
+        return self._data_dict
 
 
 class PTB(Dataset):
@@ -326,18 +326,18 @@ class PTB(Dataset):
     def gen_iterators(self):
         self.load_data()
 
-        self.data_dict = {}
+        self._data_dict = {}
         self.vocab = None
         for phase in ['train', 'test', 'valid']:
             file_path = self.file_paths[phase]
-            self.data_dict[phase] = Text(self.timesteps,
-                                         file_path,
-                                         tokenizer=self.tokenizer_func,
-                                         onehot_input=self.onehot_input,
-                                         vocab=self.vocab)
+            self._data_dict[phase] = Text(self.timesteps,
+                                          file_path,
+                                          tokenizer=self.tokenizer_func,
+                                          onehot_input=self.onehot_input,
+                                          vocab=self.vocab)
             if self.vocab is None:
-                self.vocab = self.data_dict['train'].vocab
-        return self.data_dict
+                self.vocab = self._data_dict['train'].vocab
+        return self._data_dict
 
 
 class HutterPrize(Dataset):
@@ -381,7 +381,7 @@ class IMDB(Dataset):
                         sentence_length=self.sentence_length)
         (X_train, y_train), (X_test, y_test), nclass = data
 
-        self.data_dict = {'nclass': nclass}
-        self.data_dict['train'] = ArrayIterator(X_train, y_train, nclass=2)
-        self.data_dict['test'] = ArrayIterator(X_test, y_test, nclass=2)
-        return self.data_dict
+        self._data_dict = {'nclass': nclass}
+        self._data_dict['train'] = ArrayIterator(X_train, y_train, nclass=2)
+        self._data_dict['test'] = ArrayIterator(X_test, y_test, nclass=2)
+        return self._data_dict

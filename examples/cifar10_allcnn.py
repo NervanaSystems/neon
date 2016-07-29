@@ -33,7 +33,7 @@ from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.layers import Conv, Dropout, Activation, Pooling, GeneralizedCost
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
-from neon.data import ArrayIterator, load_cifar10
+from neon.data import CIFAR10
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
 
@@ -49,14 +49,13 @@ args = parser.parse_args()
 # hyperparameters
 num_epochs = args.epochs
 
-(X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir,
-                                                            normalize=False,
-                                                            contrast_normalize=True,
-                                                            whiten=True)
-
-# really 10 classes, pad to nearest power of 2 to match conv output
-train_set = ArrayIterator(X_train, y_train, nclass=16, lshape=(3, 32, 32))
-valid_set = ArrayIterator(X_test, y_test, nclass=16, lshape=(3, 32, 32))
+dataset = CIFAR10(path=args.data_dir,
+                  normalize=False,
+                  contrast_normalize=True,
+                  whiten=True,
+                  pad_classes=True)
+train_set = dataset.train_iter
+valid_set = dataset.valid_iter
 
 init_uni = Gaussian(scale=0.05)
 opt_gdm = GradientDescentMomentum(learning_rate=float(args.learning_rate), momentum_coef=0.9,

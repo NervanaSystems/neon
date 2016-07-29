@@ -24,7 +24,7 @@ Usage:
 """
 
 import numpy as np
-from neon.data import ArrayIterator, load_cifar10
+from neon.data import CIFAR10
 from neon.initializers import Uniform
 from neon.layers import Affine, Conv, Pooling, GeneralizedCost
 from neon.models import Model
@@ -44,10 +44,12 @@ if args.datatype in [np.float16]:
     cost_scale = 10.
 num_epochs = args.epochs
 
-(X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
-
-train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
-test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
+dataset = CIFAR10(path=args.data_dir,
+                  normalize=False,
+                  contrast_normalize=True,
+                  whiten=True)
+train = dataset.train_iter
+test = dataset.valid_iter
 
 init_uni = Uniform(low=-0.1, high=0.1)
 if args.datatype in [np.float32, np.float64]:

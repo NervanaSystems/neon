@@ -24,7 +24,7 @@ Usage:
 
 import numpy as np
 from neon import logger as neon_logger
-from neon.data import ArrayIterator, load_mnist
+from neon.data import ArrayIterator, MNIST
 from neon.initializers import Uniform
 from neon.layers import Conv, Pooling, GeneralizedCost, Deconv
 from neon.models import Model
@@ -38,7 +38,8 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 # Load dataset
-(X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
+dataset = MNIST(path=args.data_dir)
+(X_train, y_train), (X_test, y_test), nclass = dataset.load_data()
 
 # Set input and target to X_train
 train = ArrayIterator(X_train, lshape=(1, 28, 28))

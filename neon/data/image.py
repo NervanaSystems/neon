@@ -86,9 +86,9 @@ class MNIST(Dataset):
                             nclass=nclass,
                             lshape=(1, 28, 28),
                             name='valid')
-        self.data_dict = {'train': train,
-                          'valid': val}
-        return self.data_dict
+        self._data_dict = {'train': train,
+                           'valid': val}
+        return self._data_dict
 
 
 class CIFAR10(Dataset):
@@ -186,9 +186,9 @@ class CIFAR10(Dataset):
                              nclass=nclass,
                              lshape=(3, 32, 32),
                              name='valid')
-        self.data_dict = {'train': train,
-                          'valid': test}
-        return self.data_dict
+        self._data_dict = {'train': train,
+                           'valid': test}
+        return self._data_dict
 
     @staticmethod
     def _compute_zca_transform(imgs, filter_bias=0.1):

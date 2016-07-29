@@ -384,9 +384,9 @@ class Flickr8k(Dataset):
 
     def gen_iterators(self):
         data_path = self.load_data()
-        data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
-        data_dict['test'] = ImageCaptionTest(path=data_path)
-        return data_dict
+        self._data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
+        self._data_dict['test'] = ImageCaptionTest(path=data_path)
+        return self._data_dict
 
     def load_data(self):
         return self.load_zip(self.filename, self.size)
@@ -406,9 +406,9 @@ class Flickr30k(Dataset):
 
     def gen_iterators(self):
         data_path = self.load_data()
-        data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
-        data_dict['test'] = ImageCaptionTest(path=data_path)
-        return data_dict
+        self._data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
+        self._data_dict['test'] = ImageCaptionTest(path=data_path)
+        return self._data_dict
 
     def load_data(self):
         return self.load_zip(self.filename, self.size)
@@ -431,6 +431,6 @@ class Coco(Dataset):
 
     def gen_iterators(self):
         data_path = self.load_data()
-        data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
-        data_dict['test'] = ImageCaptionTest(path=data_path)
-        return data_dict
+        self._data_dict = {'train': ImageCaption(path=data_path, max_images=self.max_images)}
+        self._data_dict['test'] = ImageCaptionTest(path=data_path)
+        return self._data_dict

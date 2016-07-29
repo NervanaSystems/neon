@@ -50,6 +50,7 @@ class Dataset(NervanaObject):
         self.size = size
         self.path = path
         self.subset_pct = subset_pct
+        self._data_dict = None
         if subset_pct != 100:
             # placeholder to use partial data set
             raise NotImplemented('subset percentage feature is not yet implemented')
@@ -154,197 +155,50 @@ class Dataset(NervanaObject):
             neon_logger.display("Download Complete")
 
     def gen_iterators(self):
-        # children of this class will need to implement this method
+        """
+        Method that generates the data set iterators for the
+        train, test and validation data sets.  This method
+        needs to set the instance data_set attribute to a
+        dictionary of data iterators.
+
+        Returns:
+            dict:  dictionary with the various data set iterators
+        """
         raise NotImplemented()
 
+    @property
+    def data_dict(self):
+        if self._data_dict is None:
+            self._data_dict = self.gen_iterators()
+        return self._data_dict
 
-class I1Kmeta(Dataset):
-    """
-    Helper class for loading the I1K dataset meta data
+    def get_iterator(self, setname):
+        """
+        Helper method to get the data iterator for specified dataset
 
-    Not an actual dataset
-    """
-    def __init__(self, path='.'):
-        url = 'https://s3-us-west-1.amazonaws.com/neon-stockdatasets/imagenet',
-        super(I1Kmeta, self).__init__('neon_ILSVRC2012_devmeta.zip',
-                                      url,
-                                      758648,
-                                      path=path)
+        Arguments:
+            setname (str): which iterator to return (e.g. 'train', 'valid')
+        """
+        assert setname in self.data_dict, 'no iterator for set %s' % setname
+        return self.data_dict[setname]
 
-    def load_data(self):
-        self.file_path = Dataset.load_zip('i1kmeta', self.path)
-        return self.file_path
+    @property
+    def train_iter(self):
+        """
+        Helper method to return training set iterator
+        """
+        return self.get_iterator('train')
 
+    @property
+    def valid_iter(self):
+        """
+        Helper method to return validation set iterator
+        """
+        return self.get_iterator('valid')
 
-# functions below are deprecated and will be removed in a future release
-def load_i1kmeta(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_i1kmeta  # noqa
-    return load_i1kmeta(path)
-
-
-def _valid_path_append(path, *args):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import _valid_path_append  # noqa
-    return _valid_path_append(path, *args)
-
-
-def fetch_dataset(url, sourcefile, destfile, totalsz):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import fetch_dataset  # noqa
-    return fetch_dataset(url, sourcefile, destfile, totalsz)
-
-
-def load_mnist(path=".", normalize=True):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_mnist  # noqa
-    return load_mnist(path=path, normalize=normalize)
-
-
-def _compute_zca_transform(imgs, filter_bias=0.1):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import _compute_zca_transform  # noqa
-    return _compute_zca_transform(imgs, filter_bias=filter_bias)
-
-
-def zca_whiten(train, test, cache=None):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import zca_whiten  # noqa
-    return zca_whiten(train, test, cache=cache)
-
-
-def global_contrast_normalize(X, scale=1., min_divisor=1e-8):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import global_contrast_normalize
-    return global_contrast_normalize(X, scale=scale, min_divisor=min_divisor)
-
-
-def load_cifar10(path=".", normalize=True, contrast_normalize=False, whiten=False):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_cifar10  # noqa
-    return load_cifar10(path=path,
-                        normalize=normalize,
-                        contrast_normalize=contrast_normalize,
-                        whiten=whiten)
-
-
-def load_babi(path=".", task='qa1_single-supporting-fact', subset='en'):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    raise NotImplemented('load_babi has been removed')
-
-
-def load_ptb_train(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_ptb_train  # noqa
-    return load_ptb_train(path)
-
-
-def load_ptb_valid(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_ptb_valid  # noqa
-    return load_ptb_valid(path)
-
-
-def load_ptb_test(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_ptb_test  # noqa
-    return load_ptb_test(path)
-
-
-def load_hutter_prize(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_hutter_prize  # noqa
-    return load_hutter_prize(path)
-
-
-def load_shakespeare(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_shakespeare  # noqa
-    return load_shakespeare(path)
-
-
-def load_flickr8k(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_flickr8k  # noqa
-    return load_flickr8k(path)
-
-
-def load_flickr30k(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_flickr30k  # noqa
-    return load_flickr30k(path)
-
-
-def load_coco(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_coco  # noqa
-    return load_coco(path)
-
-
-def load_imdb(path):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_imdb  # noqa
-    return load_imdb(path)
-
-
-def load_text(dataset, path="."):
-    """
-    Deprecated, moved to neon.data.dataloaders.
-    """
-    logger.error('This function has moved, import from neon.data.dataloaders')
-    from neon.data.dataloaders import load_text  # noqa
-    return load_text(dataset, path=path)
+    @property
+    def test_iter(self):
+        """
+        Helper method to return test set iterator
+        """
+        return self.get_iterator('test')

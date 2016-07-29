@@ -23,7 +23,7 @@ Usage:
 
 """
 
-from neon.data import ArrayIterator, load_mnist
+from neon.data import MNIST
 from neon.initializers import Gaussian, Constant
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
@@ -36,9 +36,9 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-(X_train, y_train), (X_test, y_test), nclass = load_mnist(args.data_dir)
-train_set = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
-valid_set = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
+dataset = MNIST(path=args.data_dir)
+train_set = dataset.train_iter
+valid_set = dataset.valid_iter
 
 # weight initialization
 init_norm = Gaussian(loc=0.0, scale=0.01)

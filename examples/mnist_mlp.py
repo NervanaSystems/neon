@@ -43,7 +43,7 @@ Examples:
 """
 
 from neon.callbacks.callbacks import Callbacks
-from neon.data import ArrayIterator, load_mnist
+from neon.data import MNIST
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
@@ -59,13 +59,9 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
 # load up the mnist data set
-# split into train and tests sets
-(X_train, y_train), (X_test, y_test), nclass = load_mnist(path=args.data_dir)
-
-# setup a training set iterator
-train_set = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
-# setup a validation data set iterator
-valid_set = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
+dataset = MNIST(path=args.data_dir)
+train_set = dataset.train_iter
+valid_set = dataset.valid_iter
 
 # setup weight initialization function
 init_norm = Gaussian(loc=0.0, scale=0.01)

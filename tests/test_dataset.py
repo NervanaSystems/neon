@@ -17,14 +17,14 @@ import os
 
 from neon import NervanaObject
 from neon import logger as neon_logger
-from neon.data import ArrayIterator, load_mnist
+from neon.data import MNIST
 from neon.data.text import Text
 
 
 def test_dataset(backend_default, data):
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist(path=data)
-
-    train_set = ArrayIterator(X_train, y_train, nclass=nclass)
+    dataset = MNIST(path=data)
+    dataset.gen_iterators()
+    train_set = dataset.data_dict['train']
     train_set.be = NervanaObject.be
 
     for i in range(2):

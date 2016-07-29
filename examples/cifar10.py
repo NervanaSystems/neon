@@ -23,7 +23,7 @@ Usage:
 """
 
 from neon import logger as neon_logger
-from neon.data import ArrayIterator, load_cifar10
+from neon.data import CIFAR10
 from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, Affine
 from neon.models import Model
@@ -36,10 +36,12 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 
-(X_train, y_train), (X_test, y_test), nclass = load_cifar10(path=args.data_dir)
-
-train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
-test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
+dataset = CIFAR10(path=args.data_dir,
+                  normalize=True,
+                  contrast_normalize=False,
+                  whiten=False)
+train = dataset.train_iter
+test = dataset.valid_iter
 
 init_uni = Uniform(low=-0.1, high=0.1)
 opt_gdm = GradientDescentMomentum(learning_rate=0.01, momentum_coef=0.9)

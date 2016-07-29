@@ -13,12 +13,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from neon.data.dataiterator import NervanaDataIterator, DataIterator, ArrayIterator
+from neon.data.dataiterator import NervanaDataIterator, ArrayIterator
 from neon.data.hdf5iterator import HDF5Iterator, HDF5IteratorOneHot, HDF5IteratorAutoencoder
 from neon.data.datasets import Dataset
-from neon.data.dataloaders import (load_mnist, load_cifar10, load_babi, load_flickr8k,
-                                   load_flickr30k, load_coco, load_i1kmeta, load_text,
-                                   I1Kmeta, load_shakespeare)
 from neon.data.text import Text, Shakespeare, PTB, HutterPrize, IMDB
 from neon.data.batch_writer import BatchWriter, BatchWriterI1K
 from neon.data.dataloader import DataLoader
