@@ -729,7 +729,7 @@ class ObjectLocalization(Dataset):
             with open(filepath, 'wt') as f:
                 for im_ind in range(self.nbatches):
                     index = self.image_index[im_ind]
-                    dets = all_boxes[cls_ind][im_ind]
+                    dets = all_boxes[im_ind][cls_ind]
                     if dets == []:
                         continue
                     # the VOCdevkit expects 1-based indices
