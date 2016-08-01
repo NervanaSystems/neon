@@ -109,11 +109,12 @@ class ObjectLocalization(Dataset):
     POSITIVE_OVERLAP = 0.7  # positive anchors have > 0.7 overlap with at least one gt box
     FG_FRACTION = 0.5  # at most, positive anchors are 0.5 of the total rois
 
-    def __init__(self, path='.', n_mb=None, img_per_batch=None,
+    def __init__(self, path='.', n_mb=None, img_per_batch=None, conv_size=None,
                  rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=False,
-                 shuffle=False, deterministic=False, rebuild_cache=False):
+                 shuffle=False, deterministic=False, rebuild_cache=False, mock_db=None):
         self.batch_index = 0
         self.path = path
+        self.mock_db = mock_db
 
         # how many ROIs per image
         self.rois_per_img = rpn_rois_per_img if rpn_rois_per_img else self.RPN_ROI_PER_IMAGE
@@ -130,7 +131,10 @@ class ObjectLocalization(Dataset):
         self._class_to_index = dict(zip(self.CLASSES, xrange(self.num_classes)))
 
         # shape of the final conv layer
-        self._conv_size = int(np.floor(self.MAX_SIZE * self.SCALE))
+        if conv_size:
+            self._conv_size = conv_size
+        else:
+            self._conv_size = int(np.floor(self.MAX_SIZE * self.SCALE))
         self._feat_stride = 1 / float(self.SCALE)
         self._num_scales = len(self.SCALES) * len(self.RATIOS)
         self._total_anchors = self._conv_size * self._conv_size * self._num_scales
@@ -163,15 +167,19 @@ class ObjectLocalization(Dataset):
         # 0. allocate buffers
         self.allocate()
 
-        # 1. read image index file
-        assert os.path.exists(self.config['image_path']), \
-            'Image index file does not exist: {}'.format(self.config['image_path'])
-        with open(self.config['index_path']) as f:
-            self.image_index = [x.strip() for x in f.readlines()]
+        if not self.mock_db:
+            # 1. read image index file
+            assert os.path.exists(self.config['image_path']), \
+                'Image index file does not exist: {}'.format(self.config['image_path'])
+            with open(self.config['index_path']) as f:
+                self.image_index = [x.strip() for x in f.readlines()]
 
-        num_images = len(self.image_index)
-        self.num_image_entries = num_images * 2 if self.add_flipped else num_images
-        self.ndata = self.num_image_entries * self.rois_per_img
+            num_images = len(self.image_index)
+            self.num_image_entries = num_images * 2 if self.add_flipped else num_images
+            self.ndata = self.num_image_entries * self.rois_per_img
+        else:
+            self.num_image_entries = 1
+            self.ndata = self.num_image_entries * self.rois_per_img
 
         if n_mb is not None:
             self.nbatches = n_mb
@@ -182,11 +190,11 @@ class ObjectLocalization(Dataset):
         # self.cache_file = os.path.join(self.path, 'pascal_cache.pkl')
         self.cache_file = self.config['cache_path']
 
-        if os.path.exists(self.cache_file) and not rebuild_cache:
+        if os.path.exists(self.cache_file) and not rebuild_cache and not self.mock_db:
             self.roi_db = load_obj(self.cache_file)
             print 'ROI dataset loaded from file {}'.format(self.cache_file)
-        else:
-
+        
+        elif not self.mock_db:
             # 2. read object Annotations (XML)
             roi_db = self.load_roi_groundtruth()
 
@@ -202,6 +210,11 @@ class ObjectLocalization(Dataset):
 
             save_obj(self.roi_db, self.cache_file)
             print 'wrote ROI dataset to {}'.format(self.cache_file)
+
+        else:
+            assert self.mock_db is not None
+            roi_db = [self.mock_db]
+            self.roi_db = self.add_anchors(roi_db)
 
         # 4. map anchors back to full canvas.
         # This is neccessary because the network outputs reflect the full canvas.
@@ -595,10 +608,12 @@ class ObjectLocalization(Dataset):
             db = self.roi_db[shuf_idx[self.batch_index]]
 
             self.img_np[:] = 0
-
-            # load and process the image using PIL
-            im = Image.open(db['img_path'])  # This is RGB order
-
+            
+            if not self.mock_db:
+                # load and process the image using PIL
+                im = Image.open(db['img_path'])  # This is RGB order
+            else:
+                im = Image.new('RGB', (db['img_shape'][0], db['img_shape'][1]))
             im_scale, im_shape = self.calculate_scale_shape(im.size)
 
             # store metadata in buffer for ProposalLayer
@@ -763,14 +778,14 @@ class PASCAL(ObjectLocalization):
                'sheep', 'sofa', 'train', 'tvmonitor')
 
     def __init__(self, image_set, year, path='.', n_mb=None, img_per_batch=None,
-                 rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=True,
-                 shuffle=True, deterministic=False, rebuild_cache=False):
+                 conv_size=None, rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=True,
+                 shuffle=True, deterministic=False, rebuild_cache=False, mock_db=None):
 
         self.image_set = image_set
         self.year = year
-        super(PASCAL, self).__init__(path, n_mb, img_per_batch, rpn_rois_per_img,
-                                     frcn_rois_per_img, add_flipped, shuffle,
-                                     deterministic, rebuild_cache)
+        super(PASCAL, self).__init__(path, n_mb, img_per_batch, conv_size, 
+                                     rpn_rois_per_img, frcn_rois_per_img, add_flipped, 
+                                     shuffle, deterministic, rebuild_cache, mock_db)
 
     def load_data(self):
         """

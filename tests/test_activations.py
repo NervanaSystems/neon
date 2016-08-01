@@ -17,7 +17,7 @@ Test of the activation functions
 from math import tanh as true_tanh
 import numpy as np
 from neon import NervanaObject
-from neon.transforms import Identity, Rectlin, Softmax, Tanh, Logistic, Sign
+from neon.transforms import Identity, Rectlin, Softmax, Tanh, Logistic, Sign, PixelwiseSoftmax
 from utils import allclose_with_out
 
 
@@ -173,6 +173,25 @@ def test_softmax_big_inputs(backend_default):
 
     assert allclose_with_out(y_, x.get(), atol=0.0, rtol=1.0e-5)
 
+"""PixelwiseSoftmax
+"""
+
+
+def test_pixelwise_softmax(backend_default):
+    inputs = np.array([0, 1, 3, 1, 2, -2]).reshape((2, 3))
+    outputs = ((1.0 / np.sum(np.exp(inputs - np.max(inputs, axis=0)), axis=0)) *
+               np.exp(inputs - np.max(inputs, axis=0)))
+    inputs = inputs.reshape((1, -1))
+    outputs = outputs.reshape((1, -1))
+    compare_tensors(PixelwiseSoftmax(c=2), inputs, outputs, deriv=False, tol=1e-6)
+
+
+def test_pixelwise_softmax_derivative(backend_default):
+    inputs = np.array([0, 1, 3, 1, 2, -2]).reshape((2, 3))
+    outputs = np.ones((1, 6))
+    inputs = inputs.reshape((1, -1))
+    outputs = outputs.reshape((1, -1))
+    compare_tensors(PixelwiseSoftmax(c=2), inputs, outputs, deriv=True, tol=1e-6)
 
 """Tanh
 """

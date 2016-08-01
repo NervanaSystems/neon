@@ -49,7 +49,7 @@ class ProposalLayer(Layer):
     def __init__(self, rpn_layers, global_buffers, inference=False, num_rois=128, pre_nms_N=12000,
                  post_nms_N=2000, nms_thresh=0.7, min_bbox_size=16, num_classes=21,
                  fg_fraction=None, fg_thresh=None, bg_thresh_hi=None, bg_thresh_lo=None,
-                 name=None):
+                 deterministic=False, name=None):
         """
         Arguments:
             rpn_layers (list): References to the RPN layers: [RPN_1x1_obj, RPN_1x1_bbox]
@@ -74,6 +74,7 @@ class ProposalLayer(Layer):
         self.fg_thresh = fg_thresh if fg_thresh else FG_THRESH
         self.bg_thresh_hi = bg_thresh_hi if bg_thresh_hi else BG_THRESH_HI
         self.bg_thresh_lo = bg_thresh_lo if bg_thresh_lo else BG_THRESH_LO
+        self.deterministic = deterministic
 
         # the output shape of this layer depends on whether the network
         # will be used for inference. In inference mode, the output shape is
@@ -142,7 +143,7 @@ class ProposalLayer(Layer):
         """
         assert self.inference == inference, \
             "Model was configured for inference={}".format(self.inference)
-
+ 
         # get output from the RPN network
         scores = self.rpn_obj[0].outputs  # shape: (2KHW, 1)
         bbox_deltas = self.rpn_bbox[0].outputs  # shape (4KHW, 1)
@@ -173,35 +174,36 @@ class ProposalLayer(Layer):
         # -- TODO: move compute to device -- #
         # 4. sort all (proposal, score) pairs by score from highest to lowest
         # 5. take top pre_nms_topN (e.g. 12000)
-        scores = self.dev_scores.get()
-        proposals = self._proposals.get()
+        # (make scores & proposals attributes of layer for unit testing)
+        self.scores = self.dev_scores.get()
+        self.proposals = self._proposals.get()
 
         real_H = np.round(self.im_shape.get()[1] * self._scale).astype(int)
         real_W = np.round(self.im_shape.get()[0] * self._scale).astype(int)
-        scores = scores.reshape(-1, self._conv_size, self._conv_size)[:, :real_H, :real_W].reshape(-1, 1)
-        proposals = proposals.reshape(-1, self._conv_size, self._conv_size, 4)[:, :real_H, :real_W].reshape(-1, 4)
+        self.scores = self.scores.reshape(-1, self._conv_size, self._conv_size)[:, :real_H, :real_W].reshape(-1, 1)
+        self.proposals = self.proposals.reshape(-1, self._conv_size, self._conv_size, 4)[:, :real_H, :real_W].reshape(-1, 4)
 
-        keeps = list(np.where(scores != -1)[0])
+        keeps = list(np.where(self.scores != -1)[0])
         # Combine the filtered index list with the original anchor index list (from global buffer)
         # to get final list of unique proposals to keep
         # keeps = list(set(all_anchor_inds).union(filt_idx))
-        scores = scores[keeps]
-        proposals = proposals[keeps]
+        self.scores = self.scores[keeps]
+        self.proposals = self.proposals[keeps]
 
-        (scores, proposals) = self.get_top_N(scores, proposals, self.pre_nms_N)
+        (self.scores, self.proposals) = self.get_top_N(self.scores, self.proposals, self.pre_nms_N)
 
         # 6. apply nms (e.g. threshold = 0.7)
         # 7. take post_nms_N (e.g. 2000)
         # 8. return the top proposals (-> RoIs top)
-        keep = nms(np.hstack((proposals, scores)), self.nms_thresh)
+        keep = nms(np.hstack((self.proposals, self.scores)), self.nms_thresh)
         keep = keep[:self.post_nms_N]
-        proposals = proposals[keep]
-        scores = scores[keep]
+        self.proposals = self.proposals[keep]
+        self.scores = self.scores[keep]
         # -- END TODO -- #
 
         # load proposals back to device
-        num_proposals = proposals.shape[0]
-        _proposals = np.hstack([np.zeros((num_proposals, 1)), proposals])
+        num_proposals = self.proposals.shape[0]
+        _proposals = np.hstack([np.zeros((num_proposals, 1)), self.proposals])
         _proposals = np.ascontiguousarray(_proposals, dtype=np.float32)
         self.dev_proposals[:num_proposals, :] = _proposals
 
@@ -218,7 +220,7 @@ class ProposalLayer(Layer):
             non_zero_gt_boxes = non_zero_gt_boxes[:num_gt_boxes]
 
             # Include ground-truth boxes in the set of candidate rois
-            all_rois = np.vstack((proposals, non_zero_gt_boxes))
+            all_rois = np.vstack((self.proposals, non_zero_gt_boxes))
 
             # 1. Compute the overlap of each proposal roi with each ground truth roi
             overlaps = calculate_bb_overlap(all_rois, non_zero_gt_boxes)
@@ -264,7 +266,7 @@ class ProposalLayer(Layer):
             self.num_proposals = num_proposals
 
             if REFERENCE_TEST:
-                self._reference_test(_proposals, scores, labels.ravel(),
+                self._reference_test(_proposals, self.scores, labels.ravel(),
                                      bbox_targets, bbox_inside_weights, keep_inds)
 
             # During training, only propagate sampled proposals
@@ -443,8 +445,10 @@ class ProposalLayer(Layer):
         fg_rois_per_this_image = min(fg_rois_per_image, fg_inds.size)
 
         # Sample foreground regions without replacement
-        if fg_inds.size > 0:
+        if fg_inds.size > 0 and not self.deterministic:
             fg_inds = self.be.rng.choice(fg_inds, size=fg_rois_per_this_image, replace=False)
+        elif fg_inds.size > 0:
+            fg_inds = fg_inds[:fg_rois_per_this_image]
 
         # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
         bg_inds = np.where((max_overlaps < self.bg_thresh_hi) &
@@ -456,8 +460,10 @@ class ProposalLayer(Layer):
         bg_rois_per_this_image = min(bg_rois_per_this_image, bg_inds.size)
 
         # Sample background regions without replacement
-        if bg_inds.size > 0:
+        if bg_inds.size > 0 and not self.deterministic:
             bg_inds = self.be.rng.choice(bg_inds, size=bg_rois_per_this_image, replace=False)
+        elif bg_inds.size > 0:
+            bg_inds = bg_inds[:bg_rois_per_this_image]
 
         # The indices that we're selecting (both fg and bg)
         keep_inds = np.append(fg_inds, bg_inds)

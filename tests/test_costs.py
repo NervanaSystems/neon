@@ -31,11 +31,13 @@ def pytest_generate_tests(metafunc):
             shape1_rng = [2, 3, 4, 5]
             shape2_rng = [3, 5, 10, 20]
             mag_rng = [3, 5, 10, 20]
+            sigma_rng = [1.0, 3.0, 5.0]
         else:
             shape1_rng = [3]
             shape2_rng = [5]
             mag_rng = [10]
-        fargs = itt.product(shape1_rng, shape2_rng, mag_rng)
+            sigma_rng = [1.0, 3.0]
+        fargs = itt.product(shape1_rng, shape2_rng, mag_rng, sigma_rng)
         metafunc.parametrize('fargs', fargs)
 
 
@@ -230,70 +232,74 @@ def test_precision_recall_binarize(backend_default):
 
 
 def test_smoothL1_random(backend_default, fargs):
-    s1, s2, m = fargs
+    s1, s2, m, sigma = fargs
+    sigma2 = sigma**2
     shape = (s1, s2)
     magnitude = m
     outputs = (np.random.random(shape) - 0.5) * magnitude
     targets = np.random.random(shape)
     x = outputs - targets
     expected_result = np.zeros(shape)
-    I1, J1 = np.where(abs(x) < 1)
-    I2, J2 = np.where(abs(x) >= 1)
-    expected_result[I1, J1] = 0.5 * x[I1, J1]**2
-    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5
+    I1, J1 = np.where(abs(x) < 1.0 / sigma2)
+    I2, J2 = np.where(abs(x) >= 1.0 / sigma2)
+    expected_result[I1, J1] = 0.5 * x[I1, J1]**2 * sigma2
+    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5 / sigma2
     expected_result = np.sum(expected_result, axis=0, keepdims=True)
-    compare_tensors(SmoothL1Loss(), outputs,
+    compare_tensors(SmoothL1Loss(sigma=sigma), outputs,
                     targets, expected_result,
                     deriv=False, tol=1e-5)
 
 
 def test_smoothL1_zeros(backend_default, fargs):
-    s1, s2, m = fargs
+    s1, s2, m, sigma = fargs
+    sigma2 = sigma**2
     shape = (s1, s2)
     outputs = np.zeros(shape)
     targets = np.zeros(shape)
     x = outputs - targets
     expected_result = np.zeros(shape)
-    I1, J1 = np.where(abs(x) < 1)
-    I2, J2 = np.where(abs(x) >= 1)
-    expected_result[I1, J1] = 0.5 * x[I1, J1]**2
-    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5
+    I1, J1 = np.where(abs(x) < 1.0 / sigma2)
+    I2, J2 = np.where(abs(x) >= 1.0 / sigma2)
+    expected_result[I1, J1] = 0.5 * x[I1, J1]**2 * sigma2
+    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5 / sigma2
     expected_result = np.sum(expected_result, axis=0, keepdims=True)
-    compare_tensors(SmoothL1Loss(), outputs,
+    compare_tensors(SmoothL1Loss(sigma=sigma), outputs,
                     targets, expected_result,
                     deriv=False, tol=1e-5)
 
 
 def test_smoothL1_ones(backend_default, fargs):
-    s1, s2, m = fargs
+    s1, s2, m, sigma = fargs
+    sigma2 = sigma**2
     shape = (s1, s2)
     outputs = np.ones(shape) * m
     targets = np.ones(shape) * m
     x = outputs - targets
     expected_result = np.zeros(shape)
-    I1, J1 = np.where(abs(x) < 1)
-    I2, J2 = np.where(abs(x) >= 1)
-    expected_result[I1, J1] = 0.5 * x[I1, J1]**2
-    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5
+    I1, J1 = np.where(abs(x) < 1.0 / sigma2)
+    I2, J2 = np.where(abs(x) >= 1.0 / sigma2)
+    expected_result[I1, J1] = 0.5 * x[I1, J1]**2 * sigma2
+    expected_result[I2, J2] = abs(x[I2, J2]) - 0.5 / sigma2
     expected_result = np.sum(expected_result, axis=0, keepdims=True)
-    compare_tensors(SmoothL1Loss(), outputs,
+    compare_tensors(SmoothL1Loss(sigma=sigma), outputs,
                     targets, expected_result,
                     deriv=False, tol=1e-5)
 
 
 def test_smoothL1_random_derivative(backend_default, fargs):
-    s1, s2, m = fargs
+    s1, s2, m, sigma = fargs
+    sigma2 = sigma**2
     shape = (s1, s2)
     magnitude = m
     outputs = (np.random.random(shape) - 0.5) * magnitude
     targets = np.random.random(shape)
     x = outputs - targets
     expected_result = np.zeros(shape)
-    I1, J1 = np.where(abs(x) < 1)
-    I2, J2 = np.where(abs(x) >= 1)
-    expected_result[I1, J1] = x[I1, J1]
+    I1, J1 = np.where(abs(x) < 1.0 / sigma2)
+    I2, J2 = np.where(abs(x) >= 1.0 / sigma2)
+    expected_result[I1, J1] = x[I1, J1] * sigma2
     expected_result[I2, J2] = np.sign(x[I2, J2])
-    compare_tensors(SmoothL1Loss(), outputs,
+    compare_tensors(SmoothL1Loss(sigma=sigma), outputs,
                     targets, expected_result,
                     deriv=True, tol=1e-5)
 
