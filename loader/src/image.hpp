@@ -335,7 +335,7 @@ public:
 
         Size2i size(width, height);
         Mat resizedImage;
-        resize(decodedImage, resizedImage, size);
+        resize(decodedImage, resizedImage, size, size.area());
 
         // Re-encode
         vector<int> param;
@@ -401,9 +401,9 @@ private:
         if (_augParams.cropBox.area() < _numPixels) {
             cbsjitter(croppedImage, _augParams.cbs);
             lighting(croppedImage, _augParams.colornoise);
-            resize(croppedImage, resizedImage, _innerSize);
+            resize(croppedImage, resizedImage, _innerSize, _numPixels);
         } else {
-            resize(croppedImage, resizedImage, _innerSize);
+            resize(croppedImage, resizedImage, _innerSize, _numPixels);
             cbsjitter(croppedImage, _augParams.cbs);
             lighting(croppedImage, _augParams.colornoise);
         }
@@ -428,13 +428,14 @@ private:
         }
     }
 
-    void resize(const Mat& input, Mat& output, const Size2i& size) {
-        if (_innerSize == input.size()) {
+    void resize(const Mat& input, Mat& output, const Size2i& size, int area) {
+        if (size == input.size()) {
             output = input;
-        } else {
-            int inter = input.size().area() < _numPixels ? CV_INTER_CUBIC : CV_INTER_AREA;
-            cv::resize(input, output, _innerSize, 0, 0, inter);
+            return;
         }
+
+        int inter = input.size().area() < area ? CV_INTER_CUBIC : CV_INTER_AREA;
+        cv::resize(input, output, size, 0, 0, inter);
     }
 
     /*
