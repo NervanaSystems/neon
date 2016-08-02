@@ -1215,6 +1215,102 @@ class Activation(Layer):
         return self.deltas
 
 
+class Reshape(Layer):
+
+    """
+    A layer that reshape the input
+
+    Arguments:
+        reshape: (tuple(int)): multi-dimensional shape of how to reshape the input.
+
+        It can contain 0, which will be replaced by the size on that dimension
+        from inputs.
+
+        It can contain -1, which will be configured to match the total
+        size of the tensor.
+
+        The length of the reshape can be smaller or bigger than the input shape.
+
+        The batch size dimension is implicit.The shape interpretation is consistent
+        with rest of neon. If reshape to 2D, it will assume the 2nd dimension is
+        time and combine it with backend batch size. If reshape to 3D, it will
+        assume to be (C, H, W) dimensions and add batch size dimension in the end.
+    """
+
+    def __init__(self, reshape, name=None):
+        super(Reshape, self).__init__(name)
+        if isinstance(reshape, int):
+            reshape = (reshape,)
+        self.reshape = reshape
+        self.owns_output = False
+
+    def __str__(self):
+        return "Reshape Layer '%s' input shape %s to %s" % (self.name, self.in_shape, self.reshape)
+
+    def configure(self, in_obj):
+        """
+        Configure the output shape based on input shape and reshape shape.
+        The function replaces 0 and -1 and add the batch size dimension.
+        """
+        super(Reshape, self).configure(in_obj)
+        if isinstance(self.in_shape, tuple):
+            if len(self.in_shape) == 2:
+                self.in_shape_t = (
+                    self.in_shape[0], self.in_shape[1] * self.be.bsz)
+            else:
+                self.in_shape_t = (int(np.prod(self.in_shape)), self.be.bsz)
+        else:
+            self.in_shape_t = (self.in_shape, self.be.bsz)
+
+        self.out_shape = list(self.reshape)
+
+        if 0 in self.reshape:
+            dim_to_keep = np.where(np.array(self.reshape) == 0)[0]
+            self.out_shape[dim_to_keep] = list(self.in_shape)[dim_to_keep]
+
+        if -1 in self.reshape:
+            missing_dim = -int(np.prod(self.in_shape)) // int(np.prod(self.out_shape))
+            self.out_shape = [missing_dim if x == -1 else x for x in self.out_shape]
+
+        self.out_shape = tuple(self.out_shape)
+
+        if len(self.out_shape) == 2:
+            self.out_shape_t = (
+                self.out_shape[0], self.out_shape[1] * self.be.bsz)
+        else:
+            self.out_shape_t = (int(np.prod(self.out_shape)), self.be.bsz)
+
+        assert np.prod(self.out_shape) == np.prod(self.in_shape)
+        return self
+
+    def fprop(self, inputs, inference=False):
+        """
+        In cases that inputs from previous layer are contiguous tensor, the layer
+        creates a reshaped view.
+        In cases that they are non-contiguous, the layer does a copy of the data
+        and then creates a reshaped view.
+        """
+        if inputs.is_contiguous is False:
+            if self.inputs is None:
+                self.inputs = self.be.empty_like(inputs)
+                self.outputs = self.inputs.reshape(self.out_shape_t)
+            self.inputs.copy(inputs)
+        else:
+            if self.inputs is None or self.inputs is not inputs:
+                self.inputs = inputs
+                self.outputs = self.inputs.reshape(self.out_shape_t)
+
+        return self.outputs
+
+    def bprop(self, error):
+        """
+        Backward propagation reshapes the error inputs for previous layer.
+        """
+        if self.deltas is None:
+            self.deltas = error.reshape(self.in_shape_t)
+        return self.deltas
+
+
 class DataTransform(Layer):
 
     """
