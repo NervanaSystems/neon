@@ -16,7 +16,6 @@
 from builtins import str, zip
 import logging
 from glob import glob
-import gzip
 import numpy as np
 import os
 import tarfile
@@ -25,6 +24,13 @@ import tqdm
 import struct
 from collections import defaultdict
 import multiprocessing
+import subprocess
+import shlex
+from itertools import imap, izip, repeat
+
+import PIL
+from PIL import Image
+
 from neon import logger as neon_logger
 
 logger = logging.getLogger(__name__)
@@ -60,8 +66,8 @@ class Ingester(object):
         self.file_pattern = file_pattern
         self.class_samples_max = class_samples_max
         self.validation_pct = validation_pct
-        self.train_file = os.path.join(self.out_dir, 'train_file.csv.gz')
-        self.val_file = os.path.join(self.out_dir, 'val_file.csv.gz')
+        self.train_file = os.path.join(self.out_dir, 'train_file.csv')
+        self.val_file = os.path.join(self.out_dir, 'val_file.csv')
         self.batch_prefix = 'macrobatch_'
         self.target_size = target_size
         self._target_filenames = {}
@@ -80,12 +86,9 @@ class Ingester(object):
         of `target`.  Returns the filename of this generated file.
         """
         assert(isinstance(target, int))
-
-        filename = os.path.join(self.out_dir, str(target) + '.bin')
-
+        filename = os.path.join(self.out_dir, str(target) + '.txt')
         with open(filename, 'wb') as f:
-            f.write(struct.pack('i', target))
-
+            f.write(str(target))
         return filename
 
     def _target_filename(self, target):
@@ -140,43 +143,18 @@ class Ingester(object):
             os.makedirs(self.out_dir)
 
         for setn, pairs in training_validation_pairs.iteritems():
-            pairs = self.convert_lines(pairs)
-
             filename = getattr(self, setn + '_file')
-            with gzip.open(filename, 'wb') as f:
+            with open(filename, 'wb') as f:
                 for filename, target in pairs:
                     f.write('{},{}\n'.format(
                         filename, self._target_filename(int(target))
                     ))
 
-    def transform_pairs(self, pairs):
-        """
-        transform all `pairs` with self.transform function using as many
-        processes as there are cores on this machine.
-        """
-        return multiprocessing.Pool().map(
-            lambda filename, target: self.transform(filename, target),
-            pairs
-        )
-
-    def transform(self, filename, target):
-        """
-        transform filename and target as necessary as part of ingestion.
-        transform also returns a filename and target.
-        """
-        raise NotImplemented()
-
     def run(self):
         """
         perform ingest
         """
-        training_validation_pairs = self.training_validation_pairs()
-
-        # transform data
-        for setn, pairs in training_validation_pairs.items():
-            training_validation_pairs[setn] = self.transform_pairs(pairs)
-
-        self.write_csv_files(training_validation_pairs)
+        self.write_csv_files(self.training_validation_pairs())
 
 
 class ImageIngester(Ingester):
@@ -192,31 +170,79 @@ class ImageIngester(Ingester):
         """
         super(ImageIngester, self).__init__(out_dir, input_dir, target_size, **kwargs)
 
-    def transform(self, filename, target):
+    def resize(self, image_data):
         """
-        transform filename and target as necessary as part of ingestion.
-        transform also returns a filename and target.
+        resize image in memory and return the new resized image data
         """
-        return self.resize(filename), target
-
-    def resize(self, filename):
-        """
-        resize filename and return the new filename of the resized image
-        """
-        new_filename = os.path.join(self.out_dir, os.path.basename(filename))
-
-        os.system((
-            'mogrify {filename} '
+        stdoutdata, stderrdata = subprocess.Popen(shlex.split((
+            'convert jpg:- '
             '-resize \"{target_size}x{target_size}^>\" '
-            '-interpolate Catrom '
-            '{new_filename}'
-        ).format(
-            filename=filename,
-            target_size=self.target_size,
-            new_filename=new_filename,
-        ))
+            '-interpolate Catrom jpg:-'
+        ).format(target_size=self.target_size)),
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE).communicate(image_data)
+        return stdoutdata
 
-        return new_filename
+def process_i1k_tar_subpath(args):
+    """
+    Process a single subpath in a I1K tar. By process:
+        optionally untar recursive tars (only on 'train')
+        resize/copy images
+    Returns a list of [(fname, label), ...]
+    """
+    target_size, toptar, img_dir, setn, label_dict, subpath = args
+    name_slice = slice(None, 9) if setn == 'train' else slice(15, -5)
+    label = label_dict[subpath.name[name_slice]]
+    outpath = os.path.join(img_dir, str(label))
+    if setn == 'train':
+        tf = tarfile.open(toptar)
+        subtar = tarfile.open(fileobj=tf.extractfile(subpath))
+        file_list = subtar.getmembers()
+        return process_files_in_tar(target_size, label, subtar, file_list, outpath)
+    elif setn == 'val':
+        tf = tarfile.open(toptar)
+        file_list = [subpath]
+        return process_files_in_tar(target_size, label, tf, file_list, outpath)
+
+def process_files_in_tar(target_size, label, tar_handle, file_list, outpath):
+    pair_list = []
+    if not os.path.exists(outpath):
+        os.makedirs(outpath)
+    for fobj in file_list:
+        fname = os.path.join(outpath, fobj.name)
+        if not os.path.exists(fname):
+            transform_and_save(target_size, tar_handle.extractfile(fobj), fname)
+        pair_list.append((fname, label))
+    return pair_list
+
+def transform_and_save(target_size, img_handle, output_filename):
+    """
+    Takes a file handle to an image, optionally transforms it and then writes it out to output_filename
+    """
+    img = Image.open(img_handle)
+    width, height = img.size
+
+    # Take the smaller image dimension down to target_size
+    # while retaining aspect_ration. Otherwise leave it alone
+    if width < height:
+        if width > target_size:
+            scale_factor = float(target_size) / width
+            width = target_size
+            height = int(height*scale_factor)
+            img = img.resize((width, height), resample=PIL.Image.LANCZOS)
+    else:
+        if height > target_size:
+            scale_factor = float(target_size) / height
+            height = target_size
+            width = int(width*scale_factor)
+    if img.size[0] != width or img.size[1] != height:
+        img = img.resize((width, height), resample=PIL.Image.LANCZOS)
+        img.save(output_filename, quality=95)
+    else:
+        # Avoid recompression by saving file out directly without
+        # transformation
+        with open(output_filename, 'wb') as out_handle:
+            out_handle.write(img_handle.read())
 
 
 class IngestI1K(ImageIngester):
@@ -254,6 +280,13 @@ class IngestI1K(ImageIngester):
             self.val_labels = {"%08d" % (i + 1): int(x) - 1 for i, x in
                                enumerate(tf.extractfile(valfile))}
 
+    def transform_and_save(self, tar_object, image_object, output_filename):
+        """
+        Extracts image_object out of tar_object, transforms it and then writes it out to output_filename
+        """
+        with open(output_filename, 'wb') as jf:
+            jf.write(self.resize(tar_object.extractfile(image_object).read()))
+
     def training_validation_pairs(self, overwrite=False):
         """
         untar imagenet tar files into directories that indicate their label.
@@ -262,46 +295,30 @@ class IngestI1K(ImageIngester):
             'train': [(filename, label), ...],
             'valid': [(filename, label), ...],
         }
-
-        TODO: transform images while they are in memory instead of extracting
-        to disk and then reading transforming and writing back to disk
         """
         pairs = {}
         for setn in ('train', 'val'):
+            pairs[setn] = []
             img_dir = os.path.join(self.out_dir, setn)
 
             neon_logger.display("Extracting %s files" % (setn))
-            toptar = getattr(self, setn + '_tar')
+            root_tf_path = getattr(self, setn + '_tar')
             label_dict = getattr(self, setn + '_labels')
-            name_slice = slice(None, 9) if setn == 'train' else slice(15, -5)
 
             try:
-                tf = tarfile.open(toptar)
+                root_tf = tarfile.open(root_tf_path)
             except tarfile.ReadError as e:
-                raise ValueError('ReadError opening {}: {}'.format(
-                    toptar, e
-                ))
+                raise ValueError('ReadError opening {}: {}'.format(root_tf_path, e))
 
-            with tf:
-                for s in tqdm.tqdm(tf.getmembers()):
-                    label = label_dict[s.name[name_slice]]
-                    subpath = os.path.join(img_dir, str(label))
-                    if not os.path.exists(subpath):
-                        os.makedirs(subpath)
-                    if setn == 'train':
-                        tarfp = tarfile.open(fileobj=tf.extractfile(s))
-                        file_list = tarfp.getmembers()
-                    else:
-                        tarfp = tf
-                        file_list = [s]
+            subpaths = root_tf.getmembers()
+            arg_iterator = izip(repeat(self.target_size), repeat(root_tf_path), repeat(img_dir), repeat(setn), repeat(label_dict), subpaths)
+            pool = multiprocessing.Pool()
+            for pair_list in tqdm.tqdm(pool.imap_unordered(process_i1k_tar_subpath, arg_iterator), total=len(subpaths)):
+                pairs[setn].extend(pair_list)
+            pool.close()
+            pool.join()
 
-                    for fobj in file_list:
-                        fname = os.path.join(subpath, fobj.name)
-                        if not os.path.exists(fname) or overwrite:
-                            with open(fname, 'wb') as jf:
-                                jf.write(tarfp.extractfile(fobj).read())
-                            pairs[setn][fname] = label
-
+            root_tf.close()
         return pairs
 
 
@@ -345,8 +362,7 @@ class BatchWriterCIFAR10(IngestI1K):
 
 
     def extract_images(self, overwrite=False):
-        from neon.data import CIFAR10
-        from PIL import Image
+        from neon.data import load_cifar10
         dataset = dict()
         cifar10 = CIFAR10(path=self.out_dir, normalize=False)
         dataset['train'], dataset['val'], _ = cifar10.load_data()

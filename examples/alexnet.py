@@ -33,6 +33,7 @@ Usage:
 
 """
 
+import os
 import numpy as np
 
 from neon.util.argparser import NeonArgparser
@@ -67,7 +68,7 @@ def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subs
         manifest_filename=manifest_filename,
         minibatch_size=minibatch_size,
         macrobatch_size=1024,
-        cache_dir=get_data_cache_dir('/usr/local/data', subdir='i1k_cache'),
+        cache_dir=cpio_dir,
         subset_fraction=float(subset_pct/100.0),
         shuffle_manifest=do_randomize,
         shuffle_every_epoch=do_randomize,
@@ -77,12 +78,12 @@ def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subs
 
 
 train_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'),
-                                args.minibatch_size,
+                                args.batch_size,
                                 do_randomize=True,
                                 subset_pct=args.subset_percent)
 
 valid_config = make_aeon_config(os.path.join(manifest_dir, 'val_file.csv'),
-                                args.minibatch_size)
+                                args.batch_size)
 
 def main():
     layers = [

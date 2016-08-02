@@ -114,13 +114,13 @@ the data is too large to fit in memory, the data must be loaded in
 batches (called "macrobatches", see :doc:`Loading data <loading_data>`
 ). We first write the macrobatches with the
 ``batch_writer.py`` script. ``data_dir`` is where the
-processed batches will be stored, and ``image_dir`` is where the
+processed batches will be stored, and ``input_dir`` is where the
 original tar files are saved.
 
 .. code-block:: bash
 
     python neon/data/batch_writer.py  --data_dir /usr/local/data/tmp \
-                                      --image_dir /usr/local/data/I1K/imagenet_orig \
+                                      --input_dir /usr/local/data/I1K/imagenet_orig \
                                       --set_type i1k
 
 We then create the ImageNet dataset object and get the training data
