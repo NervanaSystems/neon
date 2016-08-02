@@ -58,7 +58,7 @@ def build_model(dataset, frcn_rois_per_img, inference=False):
     RPN_1x1_bbox = Conv((1, 1, 36), activation=Identity(), padding=0, **rpn_init)
 
     # inference uses different network settings
-    if inference:
+    if not inference:
         pre_nms_N = 12000
         post_nms_N = 2000
     else:
