@@ -28,13 +28,21 @@ Usage:
 import os
 import numpy as np
 from neon.util.argparser import NeonArgparser
+<<<<<<< 52b16e0e03c5695563d66eb8979fcdeebd0e2c55
 from neon.initializers import Gaussian, GlorotUniform
 from neon.layers import Conv, Pooling, GeneralizedCost, Affine, DeepBiRNN, RecurrentMean
 from neon.optimizers import Adagrad
+=======
+from neon.util.persist import get_data_cache_dir
+from neon.initializers import Gaussian
+from neon.layers import Conv, Pooling, GeneralizedCost, Affine, BiRNN, RecurrentMean
+from neon.optimizers import Adadelta
+>>>>>>> Modify music_genres for use with aeon, simplify ingest scripts
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
 from neon.callbacks.callbacks import Callbacks
 from neon.data.dataloader_transformers import OneHot, TypeCast
+from neon import NervanaObject
 from aeon import DataLoader
 from ingesters import ingest_genre_data
 
@@ -43,8 +51,9 @@ def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False):
         sample_freq_hz=22050,
         max_duration="31 seconds",
         frame_length="20 milliseconds",
-        frame_stride="14 milliseconds",
-        time_scale_fraction=[0.95, 1.05] if do_randomize else [1.0, 1.0])
+        frame_stride="14 milliseconds", # overlap pct of 30%
+        time_scale_fraction=[0.95, 1.05] if do_randomize else [1.0, 1.0],
+        )
 
     return dict(
         manifest_filename=manifest_filename,
@@ -65,7 +74,7 @@ def transformers(dl):
 
 
 parser = NeonArgparser(__doc__)
-parser.add_argument('--tar_file', type=string, required=True, help='Input tar filename')
+parser.add_argument('--tar_file', default=None, help='Input tar filename')
 args = parser.parse_args()
 
 train_idx, val_idx = ingest_genre_data(args.tar_file, args.data_dir)
@@ -87,7 +96,8 @@ layers = [Conv((7, 7, 32), init=init, activation=Rectlin(),
           DeepBiRNN(128, init=GlorotUniform(), batch_norm=True, activation=Rectlin(),
                     reset_cells=True, depth=3),
           RecurrentMean(),
-          Affine(nout=common['nclasses'], init=init, activation=Softmax())]
+          Affine(128, init=init, batch_norm=True, activation=Rectlin()),
+          Affine(nout=10, init=init, activation=Softmax())]
 
 model = Model(layers=layers)
 opt = Adagrad(learning_rate=0.01)

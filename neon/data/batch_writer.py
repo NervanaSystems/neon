@@ -217,7 +217,8 @@ def process_files_in_tar(target_size, label, tar_handle, file_list, outpath):
 
 def transform_and_save(target_size, img_handle, output_filename):
     """
-    Takes a file handle to an image, optionally transforms it and then writes it out to output_filename
+    Takes a file handle to an image, optionally transforms it and then writes it out to
+    output_filename
     """
     img = Image.open(img_handle)
     width, height = img.size
@@ -282,7 +283,8 @@ class IngestI1K(ImageIngester):
 
     def transform_and_save(self, tar_object, image_object, output_filename):
         """
-        Extracts image_object out of tar_object, transforms it and then writes it out to output_filename
+        Extracts image_object out of tar_object, transforms it and then writes it out to
+        output_filename
         """
         with open(output_filename, 'wb') as jf:
             jf.write(self.resize(tar_object.extractfile(image_object).read()))
@@ -311,9 +313,11 @@ class IngestI1K(ImageIngester):
                 raise ValueError('ReadError opening {}: {}'.format(root_tf_path, e))
 
             subpaths = root_tf.getmembers()
-            arg_iterator = izip(repeat(self.target_size), repeat(root_tf_path), repeat(img_dir), repeat(setn), repeat(label_dict), subpaths)
+            arg_iterator = izip(repeat(self.target_size), repeat(root_tf_path), repeat(img_dir),
+                                repeat(setn), repeat(label_dict), subpaths)
             pool = multiprocessing.Pool()
-            for pair_list in tqdm.tqdm(pool.imap_unordered(process_i1k_tar_subpath, arg_iterator), total=len(subpaths)):
+            for pair_list in tqdm.tqdm(pool.imap_unordered(process_i1k_tar_subpath, arg_iterator),
+                                       total=len(subpaths)):
                 pairs[setn].extend(pair_list)
             pool.close()
             pool.join()

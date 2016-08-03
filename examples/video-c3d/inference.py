@@ -69,20 +69,14 @@ def get_model_pred(model_file, dataset):
 
 def accumulate_video_pred(pred):
     #  Index file will look like:
-    #  filename,label1
     #  WritingOnBoard/v_WritingOnBoard_g05_c06_6.avi,99
     #  video_name will be WritingOnBoard/v_WritingOnBoard_g05
     video_pred = {}
     with open(test_set.index_file, 'r') as index_file:
-        # Skip header
-        index_file.readline()
         for i, clip_file in enumerate(index_file):
             video_name = '_'.join(clip_file.split('_')[:2])
             label = int(clip_file.split(',')[-1])
-            if video_name not in video_pred:
-                video_pred[video_name] = (label, [pred[i, :]])
-            else:
-                video_pred[video_name][1].append(pred[i, :])
+            video_pred.setdefault(video_name, (label, [])).__getitem__(1).append(pred[i, :])
     return video_pred
 
 pred = get_model_pred(args.model_file, test_set)

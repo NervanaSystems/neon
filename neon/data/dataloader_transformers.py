@@ -52,8 +52,8 @@ class OneHot(DataLoaderTransformer):
     """
     OneHot will convert `index` into a onehot vector.
     """
-    def __init__(self, dataloader, nclasses, *args, **kwargs):
-        super(OneHot, self).__init__(dataloader, *args, **kwargs)
+    def __init__(self, dataloader, index, nclasses, *args, **kwargs):
+        super(OneHot, self).__init__(dataloader, index, *args, **kwargs)
 
         self.output = self.be.empty((nclasses, self.be.bsz))
 

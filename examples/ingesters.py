@@ -57,6 +57,9 @@ def ingest_genre_data(in_tar, ingest_dir, train_percent=80):
     if os.path.exists(train_idx) and os.path.exists(val_idx):
         return train_idx, val_idx
 
+    if in_tar is None:
+        print("Must supply genres.tar.gz via --tar_file option")
+
     assert os.path.exists(in_tar)
 
     # convert files as we extract
@@ -82,16 +85,15 @@ def ingest_genre_data(in_tar, ingest_dir, train_percent=80):
             label_fd.write(str(label_idx) + '\n');
 
     np.random.seed(0)
-    with open(train_idx, 'wb') as train_fd, open(val_idx, 'wb') as val_fd:
-        train_csv, val_csv = csv.writer(train_fd), csv.writer(val_fd)
+    with open(train_idx, 'w') as train_fd, open(val_idx, 'w') as val_fd:
         for cls_name in class_files.keys():
             files, label = class_files[cls_name], class_targets[cls_name]
             np.random.shuffle(files)
             train_count = (len(files) * train_percent) // 100
             for filename in files[:train_count]:
-                train_csv.writerow([filename, label])
+                train_fd.write("{},{}\n".format(filename, label))
             for filename in files[train_count:]:
-                val_csv.writerow([filename, label])
+                val_fd.write("{},{}\n".format(filename, label))
 
     return train_idx, val_idx
 
@@ -103,8 +105,14 @@ def ingest_whale_data(in_zip, ingest_dir, train_percent=80):
     all_idx = os.path.join(ingest_dir, 'all-index.csv')
     noise_idx = os.path.join(ingest_dir, 'noise-index.csv')
 
-    if os.path.exists(train_idx) and os.path.exists(val_idx) and os.path.exists(test_idx):
+    if os.path.exists(train_idx) and os.path.exists(val_idx):
         return train_idx, val_idx, test_idx, all_idx, noise_idx
+
+    # if os.path.exists(train_idx) and os.path.exists(val_idx) and os.path.exists(test_idx):
+    #     return train_idx, val_idx, test_idx, all_idx, noise_idx
+
+    if in_zip is None:
+        print("Must supply whale_data.zip via --zip_file option")
 
     assert os.path.exists(in_zip)
 
@@ -138,25 +146,24 @@ def ingest_whale_data(in_zip, ingest_dir, train_percent=80):
             f.write(labelidx + '\n');
 
     np.random.seed(0)
-    with open(train_idx, 'wb') as train_fd, open(val_idx, 'wb') as val_fd, \
-     open(all_idx, 'wb') as all_fd, open(noise_idx, 'w') as noise_fd:
-        train_csv, val_csv, all_csv = csv.writer(train_fd), csv.writer(val_fd), csv.writer(all_fd)
+    with open(train_idx, 'w') as train_fd, open(val_idx, 'w') as val_fd, \
+     open(all_idx, 'w') as all_fd, open(noise_idx, 'w') as noise_fd:
         for cls_name in class_files.keys():
             files, label = class_files[cls_name], class_targets[cls_name]
             np.random.shuffle(files)
             train_count = (len(files) * train_percent) // 100
             for filename in files[:train_count]:
-                train_csv.writerow([filename, label])
-                all_csv.writerow([filename, label])
+                train_fd.write("{},{}\n".format(filename, label))
+                all_fd.write("{},{}\n".format(filename, label))
                 if cls_name == '0':
-                    noise_fd.write(filename + '\n')
+                    noise_fd.write("{}\n".format(filename))
             for filename in files[train_count:]:
-                val_csv.writerow([filename, label])
-                all_csv.writerow([filename, label])
+                val_fd.write("{},{}\n".format(filename, label))
+                all_fd.write("{},{}\n".format(filename, label))
 
     with open(test_idx, 'w') as test_fd:
-        for tf in test_files:
-            test_fd.write(tf + '\n')
+        for filename in test_files:
+            test_fd.write("{}\n".format(filename))
 
     return train_idx, val_idx, test_idx, all_idx, noise_idx
 

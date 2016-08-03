@@ -27,58 +27,52 @@ Usage:
 
 import numpy as np
 from neon.util.argparser import NeonArgparser
+from neon.util.persist import get_data_cache_dir
 from neon.initializers import Gaussian
 from neon.layers import Conv, Pooling, GeneralizedCost, Affine, DeepBiRNN, RecurrentLast
 from neon.optimizers import Adadelta
 from neon.transforms import Rectlin, Softmax, CrossEntropyBinary, Misclassification
 from neon.models import Model
-from neon.data import DataLoader, AudioParams
+# from neon.data import DataLoader, AudioParams
 from neon.data.dataloader_transformers import OneHot, TypeCast
 from neon.callbacks.callbacks import Callbacks
+from neon import NervanaObject
 from ingesters import ingest_whale_data
+from aeon import DataLoader
+import sys
 
+audio_decode_cfg = {'sample_freq_hz':2000,
+                    'max_duration':'2 seconds',
+                    'frame_length':'80 milliseconds',
+                    'frame_stride':'40 milliseconds'}
 
-def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False):
-    audio_decode_cfg = dict(
-        sample_freq_hz=2000,
-        max_duration="2 seconds",
-        frame_length="80 milliseconds",
-        frame_stride="40 milliseconds")
+def make_aeon_config(manifest_filename, minibatch_size, cache_directory=None,
+                     use_labels=True, do_randomize=False, random_seed=0):
 
-    return dict(
-        manifest_filename=manifest_filename,
-        minibatch_size=minibatch_size,
-        macrobatch_size=1024,
-        cache_dir=get_data_cache_dir('/usr/local/data', subdir='whale_calls_cache'),
-        shuffle_manifest=do_randomize,
-        shuffle_every_epoch=do_randomize,
-        type='audio,label',
-        label={'binary': False},
-        audio=audio_decode_cfg)
+    local_audio_cfg = audio_decode_cfg.copy()
+    aeon_config = {'manifest_filename': train_idx,
+                   'minibatch_size': minibatch_size,
+                   'macrobatch_size': minibatch_size * 24,
+                   'shuffle_manifest': do_randomize,
+                   'shuffle_every_epoch': do_randomize,
+                   'type': 'audio,label' if use_labels else 'audio,inference',
+                   'random_seed': random_seed,
+                   'audio': local_audio_cfg}
 
+    if use_labels:
+        aeon_config['label'] = {'binary': False}
 
-def make_aeon_config_inference(manifest_filename, minibatch_size):
-    audio_decode_cfg = dict(
-        sample_freq_hz=2000,
-        max_duration="2 seconds",
-        frame_length="80 milliseconds",
-        frame_stride="40 milliseconds")
+    if cache_directory is not None:
+        aeon_config['cache_directory'] = cache_directory
 
-    return dict(
-        manifest_filename=manifest_filename,
-        minibatch_size=minibatch_size,
-        macrobatch_size=1024,
-        cache_dir=get_data_cache_dir('/usr/local/data', subdir='whale_calls_cache'),
-        type='audio,inference',
-        audio=audio_decode_cfg)
+    return aeon_config
 
-
-def transform_train(dl):
-    dl = OneHot(dl, nclasses=2, index=1)
+def transformer_train(dl):
+    dl = OneHot(dl, index=1, nclasses=2)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
 
-def transform_inference(dl):
+def transformer_inference(dl):
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
 
@@ -93,7 +87,7 @@ def run(train, test):
               DeepBiRNN(256, init=init, activation=Rectlin(), reset_cells=True, depth=3),
               RecurrentLast(),
               Affine(32, init=init, batch_norm=True, activation=Rectlin()),
-              Affine(nout=common['nclasses'], init=init, activation=Softmax())]
+              Affine(nout=2, init=init, activation=Softmax())]
 
     model = Model(layers=layers)
     opt = Adadelta()
@@ -106,12 +100,17 @@ def run(train, test):
 
 
 parser = NeonArgparser(__doc__)
-parser.add_argument('--zip_file', type=string, required=True, help='Input zip filename')
+parser.add_argument('--zip_file', default=None, help='Input zip filename')
 args = parser.parse_args()
+cache_directory = get_data_cache_dir('/usr/local/data', subdir='whale_calls_cache')
 
 train_idx, val_idx, test_idx, all_idx, noise_idx = ingest_whale_data(args.zip_file, args.data_dir)
 
-train_config = make_aeon_config(train_idx, args.batch_size, do_randomize=True)
+train_config = make_aeon_config(train_idx,
+                                args.batch_size,
+                                do_randomize=True,
+                                random_seed=args.rng_seed)
+
 val_config = make_aeon_config(val_idx, args.batch_size)
 
 train = transformer_train(DataLoader(train_config, NervanaObject.be))
@@ -120,12 +119,12 @@ val = transformer_train(DataLoader(val_config, NervanaObject.be))
 # Validate...
 model = run(train, val)
 print('Misclassification error = %.1f%%' % (model.eval(val, metric=Misclassification())*100))
-
+sys.exit()
 # Test...
-all_config = make_aeon_config(all_idx, args.batch_size)
+all_config = make_aeon_config(all_idx, args.batch_size, do_randomize=True, random_seed=args.rng_seed)
 alltrain = transformer_train(DataLoader(all_config, NervanaObject.be))
 
-test_config = make_aeon_config_inference(test_idx, args.batch_size)
+test_config = make_aeon_config(test_idx, args.batch_size, use_labels=False)
 test = transformer_inference(DataLoader(test_config, NervanaObject.be))
 
 model = run(alltrain, test)

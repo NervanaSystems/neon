@@ -6,30 +6,29 @@ This is an implementation of [C3D](http://arxiv.org/pdf/1412.0767v4.pdf) trained
 The model training script train.py will train an action recogition model from scratch on the UCF101 dataset.
 
 ### Dependencies
-The preprocessor and data loader require OpenCV which can be installed with apt-get.
-```
-apt-get install libopencv-dev python-opencv
-```
-This model has been tested with OpenCV 2.4.8. If running the preprocessor with a python virtual env then linking the python-opencv library is needed such as by
-```
-ln -s /usr/lib/python2.7/dist-packages/cv2.so .venv/lib/python2.7/site-packages/cv2.so
-```
+The preprocessor and data loader require ffmpeg which can be installed by following instructions [here](https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu)
 
 ### Instructions
-The first step is to preprocess the UCF101 dataset using preprocess.py which splits videos into smaller clips. Preprocessed videos need to be created for both the training and test splits.
+The first step is to preprocess the UCF101 dataset using preprocess.py which splits videos into smaller clips. Preprocessed videos need to be created for both the training and test splits.  Grab the necessary files (`UCF101.rar` and `UCF101TrainTestSplits-RecognitionTask`), unpack them, then run the following commands to preprocess the data.
 
-```
-python preprocess.py <video_dir> <data_split_file> <class_ind_file> <preprocessed_dir/split_dir>
+```bash
+# Where UCF101.rar was unpacked
+UCF_DATA_DIR=/usr/local/data/UCF-101
+
+# Where UCF101TrainTestSplits-RecognitionTask.zip was unpacked
+UCF_META_DIR=/usr/local/data/ucfTrainTestlist
+
+# Where the processed clips from each split are saved
+OUT_DIR=/usr/local/data/UCF-ingested
+
+# Split the videos into clips
+vid_ingest.sh ${UCF_DATA_DIR} ${UCF_META_DIR}/trainlist01.txt $OUT_DIR/train
+vid_ingest.sh ${UCF_DATA_DIR} ${UCF_META_DIR}/testlist01.txt $OUT_DIR/test
+
+# Create manifest files
+create_manifests.sh $OUT_DIR/train $OUT_DIR/test $OUT_DIR/labels ${UCF_META_DIR}/classInd.txt
 ```
 
-`<video_dir>` is the location of the raw video data, `<data_split_file>` is the name of the training or test split, and `<class_ind_file>` is a text file containing the mapping from class labels to indices. `<preprocessed_dir/split_dir>` is the output directory of the preprocessed videos for a given split.
-
-An example of running this program is:
-```
-python examples/video-c3d/preprocess.py --video_dir ~/data/UCF-101/ --data_split_file ~/data/ucfTrainTestlist/trainlist01.txt --class_ind_file ~/data/ucfTrainTestlist/classInd.txt --preprocessed_dir ~/data/ucf_preprocessed/train1
-
-python examples/video-c3d/preprocess.py --video_dir ~/data/UCF-101/ --data_split_file ~/data/ucfTrainTestlist/testlist01.txt --class_ind_file ~/data/ucfTrainTestlist/classInd.txt --preprocessed_dir ~/data/ucf_preprocessed/test1
-```
 Once the preprocessed video directories are created for both the training and test splits, the model can be trained with the following:
 ```
 python examples/video-c3d/train.py --data_dir <preprocessed_dir> --batch_size 32 --epochs 18 --save_path UCF101-C3D.p
