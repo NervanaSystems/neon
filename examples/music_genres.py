@@ -21,7 +21,7 @@ After unpacking the dataset, point the script to the unpacked directory.
 
 Usage:
 
-    python examples/music_genres.py -e 8 -w </path/to/dataset> -r 0
+    python examples/music_genres.py -e 16 -w </path/to/dataset> -r 0
 
 """
 
@@ -29,9 +29,9 @@ import os
 import glob
 import numpy as np
 from neon.util.argparser import NeonArgparser
-from neon.initializers import Gaussian
-from neon.layers import Conv, Pooling, GeneralizedCost, Affine, BiRNN, RecurrentMean
-from neon.optimizers import Adadelta
+from neon.initializers import Gaussian, GlorotUniform
+from neon.layers import Conv, Pooling, GeneralizedCost, Affine, DeepBiRNN, RecurrentMean
+from neon.optimizers import Adagrad
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti, Misclassification
 from neon.models import Model
 from neon.data import DataLoader, AudioParams
@@ -70,7 +70,7 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args()
 train_idx, val_idx = create_index_files(args.data_dir)
 
-common_params = dict(sampling_freq=22050, clip_duration=31000, frame_duration=20)
+common_params = dict(sampling_freq=22050, clip_duration=31000, frame_duration=16)
 train_params = AudioParams(random_scale_percent=5, **common_params)
 val_params = AudioParams(**common_params)
 common = dict(target_size=1, nclasses=10, repo_dir=args.data_dir)
@@ -79,18 +79,18 @@ train = DataLoader(set_name='genres-train', media_params=train_params,
 val = DataLoader(set_name='genres-val', media_params=val_params,
                  index_file=val_idx, shuffle=False, **common)
 init = Gaussian(scale=0.01)
-layers = [Conv((5, 5, 64), init=init, activation=Rectlin(),
+layers = [Conv((7, 7, 32), init=init, activation=Rectlin(),
                strides=dict(str_h=2, str_w=4)),
           Pooling(2, strides=2),
           Conv((5, 5, 64), init=init, batch_norm=True, activation=Rectlin(),
                strides=dict(str_h=1, str_w=2)),
-          BiRNN(256, init=init, activation=Rectlin(), reset_cells=True),
+          DeepBiRNN(128, init=GlorotUniform(), batch_norm=True, activation=Rectlin(),
+                    reset_cells=True, depth=3),
           RecurrentMean(),
-          Affine(128, init=init, batch_norm=True, activation=Rectlin()),
           Affine(nout=common['nclasses'], init=init, activation=Softmax())]
 
 model = Model(layers=layers)
-opt = Adadelta()
+opt = Adagrad(learning_rate=0.01)
 metric = Misclassification()
 callbacks = Callbacks(model, eval_set=val, metric=metric, **args.callback_args)
 cost = GeneralizedCost(costfunc=CrossEntropyMulti())
