@@ -25,18 +25,24 @@ wt_init: &wt_init
 
 layers:
 -
-    type: Affine
+    type: Linear
     config:
         nout: 100
         init: *wt_init
-        activation:
+-
+    type: Activation
+    config:
+        transform:
             type: Rectlin
 -
-    type: Affine
+    type: Linear
     config:
         nout: 10
         init: *wt_init
-        activation:
+-
+    type: Activation
+    config:
+        transform:
             type: Logistic
             config:
                 shortcut: True

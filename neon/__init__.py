@@ -94,7 +94,10 @@ class NervanaObject(object):
         the dictionary element with an instance of that object
         """
         if type(pdict[key]) is dict and 'type' in pdict[key]:
-            assert 'config' in pdict[key]
+            if 'config' not in pdict[key]:
+                # assume empty params if 'config' key missing
+                # needed to keep yaml deserialization short
+                pdict[key]['config'] = {}
             ccls = load_class(pdict[key]['type'])
             pdict[key] = ccls.gen_class(pdict[key]['config'])
 

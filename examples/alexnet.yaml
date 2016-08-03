@@ -48,15 +48,23 @@ relu: &relu_act
 
 layers:
 -
-    type: Conv # Convolution + Bias + Activation
+    type: Convolution
     config:
         name: conv1
         fshape: [11, 11, 64]
         strides: 4
         padding: 3
         init: *wt_init1
-        bias: *b_init0
-        activation: *relu_act
+-
+    type: Bias
+    config:
+        name: conv1_bias
+        init: *b_init0
+-
+    type: Activation
+    config:
+        name: conv1_relu
+        transform: *relu_act
 -
     type: Pooling
     config:
@@ -64,14 +72,22 @@ layers:
         fshape: 3
         strides: 2
 -
-    type: Conv
+    type: Convolution
     config:
         name: conv2
         fshape: [5, 5, 192]
         padding: 2
         init: *wt_init1
-        bias: *b_init1
-        activation: *relu_act
+-
+    type: Bias
+    config:
+        name: conv2_bias
+        init: *b_init1
+-
+    type: Activation
+    config:
+        name: conv2_relu
+        transform: *relu_act
 -
     type: Pooling
     config:
@@ -79,32 +95,56 @@ layers:
         fshape: 3
         strides: 2
 -
-    type: Conv
+    type: Convolution
     config:
         name: conv3
         fshape: [3, 3, 384]
         padding: 1
         init: *wt_init1b
-        bias: *b_init0
-        activation: *relu_act
 -
-    type: Conv
+    type: Bias
+    config:
+        name: conv3_bias
+        init: *b_init0
+-
+    type: Activation
+    config:
+        name: conv3_relu
+        transform: *relu_act
+-
+    type: Convolution
     config:
         name: conv4
         fshape: [3, 3, 256]
         padding: 1
         init: *wt_init1b
-        bias: *b_init1
-        activation: *relu_act
 -
-    type: Conv
+    type: Bias
+    config:
+        name: conv4_bias
+        init: *b_init1
+-
+    type: Activation
+    config:
+        name: conv4_relu
+        transform: *relu_act
+-
+    type: Convolution
     config:
         name: conv5
         fshape: [3, 3, 256]
         padding: 1
         init: *wt_init1b
-        bias: *b_init1
-        activation: *relu_act
+-
+    type: Bias
+    config:
+        name: conv5_bias
+        init: *b_init1
+-
+    type: Activation
+    config:
+        name: conv5_relu
+        transform: *relu_act
 -
     type: Pooling
     config:
@@ -112,39 +152,63 @@ layers:
         fshape: 3
         strides: 2
 -
-    type: Affine
+    type: Linear
     config:
         name: fc6
         nout: 4096
         init: *wt_init1
-        bias: *b_init1
-        activation: *relu_act
+-
+    type: Bias
+    config:
+        name: fc6_bias
+        init: *b_init1
+-
+    type: Activation
+    config:
+        name: fc6_relu
+        transform: *relu_act
 -
     type: Dropout
     config:
         name: drop6
         keep: 0.5
 -
-    type: Affine
+    type: Linear
     config:
         name: fc7
         nout: 4096
         init: *wt_init1
-        bias: *b_init1
-        activation: *relu_act
+-
+    type: Bias
+    config:
+        name: fc7_bias
+        init: *b_init1
+-
+    type: Activation
+    config:
+        name: fc7_relu
+        transform: *relu_act
 -
     type: Dropout
     config:
         name: drop7
         keep: 0.5
 -
-    type: Affine
+    type: Linear
     config:
         name: fc8
         nout: 1000
         init: *wt_init1
-        bias: *b_init7
-        activation:
+-
+    type: Bias
+    config:
+        name: fc8_bias
+        init: *b_init7
+-
+    type: Activation
+    config:
+        name: fc8_relu
+        transform:
             type: Softmax
 
 schedule: &sched1
