@@ -39,9 +39,11 @@ directory and loads it into memory.
 
 .. code-block:: python
 
-    from neon.data import load_mnist
+    from neon.data import MNIST
 
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
+    mnist = MNIST()
+
+    (X_train, y_train), (X_test, y_test), nclass = mnist.load_data()
 
 This function automatically splits the images ``X`` and labels ``y``
 into training (60,000 examples) and testing (10,000 examples) data. The
@@ -68,6 +70,18 @@ large datasets that cannot fit into memory (e.g.
 data has to be efficiently loaded and fed to the optimizer in batches.
 This requires more advanced iterators described in `Loading
 data <loading_data.md>`__.
+
+Since it is a common function, the data iterator generation for stock
+datasets can be done directly through helper methods contained in the
+DataSet class.  For example, the MNIST training and validation set
+iterators can be obtained with the following code:
+
+.. code-block:: python
+
+    from neon.data import MNIST
+    mnist = MNIST()
+    train_set = mnist.train_iter
+    test_set = mnist.valid_iter
 
 Model specification
 -------------------

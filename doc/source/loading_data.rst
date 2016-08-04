@@ -141,10 +141,12 @@ Autoencoders are a special case of regression where the desired outputs :math:`y
 .. code-block:: python
 
     # Example construction of ArrayIterator for Autoencoder task with MNIST
-    from neon.data import ArrayIterator, load_mnist
+    from neon.data import MNIST
+
+    mnist = MNIST()
 
     # load the MNIST data
-    (X_train, y_train), (X_test, y_test), nclass = load_mnist()
+    (X_train, y_train), (X_test, y_test), nclass = mnist.load_data()
 
     # Set input and target to X_train
     train = ArrayIterator(X_train, lshape=(1, 28, 28))

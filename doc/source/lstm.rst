@@ -35,20 +35,14 @@ imdb data.
 
 .. code-block:: python
 
-    from neon.data.dataloaders import load_imdb
-    from neon.data.text_preprocessing import pad_data
-    from neon.data.dataiterator import ArrayIterator
+    from neon.data import IMDB
 
     # load the imdb data
-    data = load_imdb(path=args.data_dir)
-
-    # perform pre-processing functions
     # 1. Limit vocab size, 2. Truncate length, 3. Pad with whitespace
-    (X_train, y_train), (X_test, y_test), nclass = pad_data(data, vocab_size=vocab_size, sentence_length=max_len)
+    data = IMDB(vocab_size, max_len, path=args.data_dir)
 
-    # generate the ArrayIterators
-    train_set = ArrayIterator(X_train, y_train, nclass=2)
-    test_set = ArrayIterator(X_test, y_test, nclass=2)
+    train_set = imdb.train_iter
+    test_set = imdb.test_iter
 
 Now we have the iterators needed for training and evaluation.
 

@@ -38,9 +38,14 @@ MNIST can be fetched in the following manner:
 
     from neon.data import MNIST
 
-    (X_train, y_train), (X_test, y_test), nclass = MNIST().load_data()
-    train_set = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(1, 28, 28))
-    valid_set = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(1, 28, 28))
+    mnist = MNIST(path='path/to/save/downloadeddata/')
+    train_set = mnist.train_iter
+    valid_set = mnist.valid_iter
+
+The ``path`` argument desigates the directory to store
+the downloaded dataset.  If the dataset already exists in that directory,
+download will be skipped.  The default data path will be used if ``path``
+is not provided.
 
 CIFAR10
 -------
@@ -54,9 +59,9 @@ CIFAR10 can be fetched in the following manner:
 .. code-block:: python
 
     from neon.data import CIFAR10
-    (X_train, y_train), (X_test, y_test), nclass = CIFAR10().load_data()
-    train = ArrayIterator(X_train, y_train, nclass=nclass, lshape=(3, 32, 32))
-    test = ArrayIterator(X_test, y_test, nclass=nclass, lshape=(3, 32, 32))
+    cifar10 = CIFAR10()
+    train = cifar10.train_iter 
+    test = cifar10.valid_iter
 
 ImageCaption
 ------------
@@ -76,11 +81,8 @@ The image caption data can be fetched in the following manner:
 
     # download dataset
     from neon.data import Flickr8k
-    data_path = Flickr8k().load_data()  # Other set names are Flickr30k and Coco
-
-    # load data
-    from neon.data import ImageCaption
-    train_set = ImageCaption(path=data_path, max_images=-1)
+    flickr8k = Flickr8k()  # Other set names are Flickr30k and Coco
+    train_set = flickr8k.train_iter
 
 Text
 ----
@@ -89,7 +91,11 @@ For existing datasets (e.g. Penn Treebank, Hutter Prize, and
 Shakespeare), we have object classes for loading, and sometimes
 pre-processing, the data. The online source are stored in the
 ``__init__`` method. Some datasets (such as Penn Treebank) also accept a
-tokenizer (string) to parse the file. These datasets use ``gen_iterators()``
+tokenizer (string) to parse the file. The tokenizer is a string which
+matches the name of one of the tokenizers functions that are included in
+the class definition.  For example, the method ``newline_tokenizer`` in
+the ``PTB`` class replaces all newline characters (i.e. ``\n``) with
+the string ``<eos>`` and splits the string.  These datasets use ``gen_iterators()``
 to return a iterator (:py:class:`Text<neon.data.text.Text>`)
 
 .. code-block:: python
@@ -97,14 +103,8 @@ to return a iterator (:py:class:`Text<neon.data.text.Text>`)
     from neon.data import PTB
 
     # download Penn Treebank and parse at the word level
-    ptb = PTB(tokenizer="str.split")
-    ptb.load_data()
-
-    # create dict of iterators
-    # iters['train'] is an iterator (neon.data.Text) for the training data
-    # iters['test'] is an iterator for the testing data
-    # iters['valid'] is an iterator for the validation data
-    iters = ptb.gen_iterators()
+    ptb = PTB(time_steps, tokenizer="newline_tokenizer")
+    train_set = ptb.train_iter
 
 ImageNet
 --------
@@ -161,3 +161,24 @@ iterator for training.
     # create a QA iterator
     train_set = QA(*babi.train)
     valid_set = QA(*babi.test)
+
+Low level dataset operations
+----------------------------
+
+Some applications require access to the underlying data to generate more
+complex data iterators. This can be done by using the ``load_data``
+method of the DataSet class and its subclasses.  The method returns
+the data arrays which are used to generate the data iterators. For
+example, the code below shows how to generate a data iterator to
+train an autoencoder on the MNIST dataset:
+
+.. code-block:: python
+
+    from neon.data import MNIST
+    mnist = MNIST()
+    # get the raw data arrays, both train set and validation set
+    (X_train, y_train), (X_test, y_test), nclass = mnist.load_data()
+    
+    # generate and ArrayIterator with no target data
+    # this will return the image itself as the target
+    train = ArrayIterator(X_train, lshape=(1, 28, 28))
