@@ -783,7 +783,6 @@ class NervanaGPU(Backend):
         self.compute_capability = drv.Device(self.device_id).compute_capability()
         if self.compute_capability[0] < 5:
             self.use_cudac_kernels = True
-            self.cublas_handle = cublas.cublasCreate()
 
             logger.warn("Neon is highly optimized for Maxwell GPUs. Although "
                         "you might get speedups over CPUs, note that you are "
@@ -793,6 +792,7 @@ class NervanaGPU(Backend):
                         "info@nervanasys.com")
         else:
             self.use_cudac_kernels = False
+        self.cublas_handle = cublas.cublasCreate()
 
         self.enable_winograd = enable_winograd
         self.cache_dir = get_cache_dir()
@@ -1402,7 +1402,9 @@ class NervanaGPU(Backend):
                          allocator=other_ary.allocator,
                          rounding=self.round_mode)._assign(0)
 
-    def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False, bsum=None, repeat=1, size=None):
+    def compound_dot(self, A, B, C, alpha=1.0, beta=0.0, relu=False, bsum=None,
+                     repeat=1, size=None):
+
         """
         Doing following operations (* is dot product)
         C = alpha * A * B   + beta * C
@@ -1424,7 +1426,7 @@ class NervanaGPU(Backend):
         """
         assert A.dtype.type == B.dtype.type == C.dtype.type
 
-        if self.use_cudac_kernels:
+        if self.use_cudac_kernels or B.shape[1] == 1:
             for r in range(repeat):
                 self.cublas_dot(A=A, B=B, C=C, alpha=alpha, beta=beta)
 
@@ -2931,8 +2933,13 @@ class NervanaGPU(Backend):
 
         # Swap A and B to map from C order to Fortran
         if A.dtype == np.float32:
-            cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha, B.gpudata,
-                               ldb, A.gpudata, lda, beta, C.gpudata, ldc)
+            if n != 1 or (opA == 't' and opB == 'n'):
+                cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha, B.gpudata,
+                                   ldb, A.gpudata, lda, beta, C.gpudata, ldc)
+            else:
+                cublas.cublasSgemv(self.cublas_handle, 't', k, m, alpha, A.gpudata,
+                                   k, B.gpudata, ldb, beta, C.gpudata, ldc)
+
         elif A.dtype == np.float16:
             #fp16 gemm not supported by cublas until 7.5, so do conversion
             A_temp = self._buf_malloc((A.shape[0], A.shape[1] * 2))
@@ -2949,8 +2956,15 @@ class NervanaGPU(Backend):
             A_fp32[:] = A
             B_fp32[:] = B
             C_fp32[:] = C
-            cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha, B_fp32.gpudata,
-                               ldb, A_fp32.gpudata, lda, beta, C_fp32.gpudata, ldc)
+
+            if n != 1 or (opA == 't' and opB == 'n'):
+                cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha,
+                                   B_fp32.gpudata, ldb, A_fp32.gpudata, lda, beta,
+                                   C_fp32.gpudata, ldc)
+            else:
+                cublas.cublasSgemv(self.cublas_handle, 't', k, m, alpha, A_fp32.gpudata,
+                                   k, B_fp32.gpudata, ldb, beta, C_fp32.gpudata, ldc)
+
             C[:] = C_fp32
 
             self._buf_free()
