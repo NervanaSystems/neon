@@ -444,7 +444,7 @@ class ProposalLayer(Layer):
 
         # Sample foreground regions without replacement
         if fg_inds.size > 0:
-            fg_inds = np.random.choice(fg_inds, size=fg_rois_per_this_image, replace=False)
+            fg_inds = self.be.rng.choice(fg_inds, size=fg_rois_per_this_image, replace=False)
 
         # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
         bg_inds = np.where((max_overlaps < self.bg_thresh_hi) &
@@ -457,7 +457,7 @@ class ProposalLayer(Layer):
 
         # Sample background regions without replacement
         if bg_inds.size > 0:
-            bg_inds = np.random.choice(bg_inds, size=bg_rois_per_this_image, replace=False)
+            bg_inds = self.be.rng.choice(bg_inds, size=bg_rois_per_this_image, replace=False)
 
         # The indices that we're selecting (both fg and bg)
         keep_inds = np.append(fg_inds, bg_inds)

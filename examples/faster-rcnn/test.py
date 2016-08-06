@@ -39,10 +39,15 @@ import os
 # parse the command line arguments
 parser = NeonArgparser(__doc__, default_overrides={'batch_size': 1})
 parser.add_argument('--normalize', action='store_true', help='Normalize the fc layers.')
-parser.add_argument('--output_dir', default='frcn_output',
-                    help='Directory to save AP metric results. Path is relative to data_dir.')
+parser.add_argument('--output_dir', default=None,
+                    help='Directory to save AP metric results. Default is [data_dir]/frcn_output/')
+parser.add_argument('--nms_thresh', type=float, default=0.3, help='Threshold used for NMS.')
+parser.add_argument('--score_thresh', type=float, default=0.001, help='Threshold on object score.')
 
 args = parser.parse_args()
+if args.output_dir is None:
+    args.output_dir = os.path.join(args.data_dir, 'frcn_output')
+
 assert args.model_file is not None, "Model file required for Faster-RCNN testing"
 
 # hyperparameters
@@ -81,8 +86,8 @@ if args.normalize:
 # detection parameters
 num_images = valid_set.num_image_entries if n_mb is None else n_mb
 max_per_image = 100   # maximum detections per image
-thresh = 0.001  # minimum threshold on score
-nms_thresh = 0.4  # threshold used for non-maximum supression
+thresh = args.score_thresh  # minimum threshold on score
+nms_thresh = args.nms_thresh  # threshold used for non-maximum supression
 
 # all detections are collected into:
 #    all_boxes[cls][image] = N x 5 array of detections in
@@ -116,7 +121,5 @@ for mb_idx, (x, y) in enumerate(valid_set):
     all_boxes[mb_idx] = boxes
 
 print 'Evaluating detections'
-output_dir = 'frcn_output'
-annopath, imagesetfile = valid_set.evaluation(all_boxes, os.path.join(args.data_dir, output_dir))
-util.run_voc_eval(annopath, imagesetfile, year, image_set, valid_set.CLASSES,
-                  os.path.join(args.data_dir, output_dir))
+annopath, imagesetfile = valid_set.evaluation(all_boxes, args.output_dir)
+util.run_voc_eval(annopath, imagesetfile, year, image_set, valid_set.CLASSES, args.output_dir)
