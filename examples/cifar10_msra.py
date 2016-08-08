@@ -81,7 +81,7 @@ def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subs
         manifest_filename=manifest_filename,
         minibatch_size=minibatch_size,
         macrobatch_size=5000,
-        cache_dir=get_data_cache_dir('/usr/local/data', subdir='cifar10_cache'),
+        cache_directory=get_data_cache_dir('/usr/local/data', subdir='cifar10_cache'),
         subset_fraction=float(subset_pct/100.0),
         shuffle_manifest=do_randomize,
         shuffle_every_epoch=do_randomize,

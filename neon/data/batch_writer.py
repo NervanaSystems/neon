@@ -26,6 +26,7 @@ from collections import defaultdict
 import multiprocessing
 import subprocess
 import shlex
+import shutil
 from itertools import imap, izip, repeat
 
 import PIL
@@ -207,19 +208,25 @@ def process_i1k_tar_subpath(args):
 def process_files_in_tar(target_size, label, tar_handle, file_list, outpath):
     pair_list = []
     if not os.path.exists(outpath):
-        os.makedirs(outpath)
+        # This avoids race conditions that sometimes happen when doing these
+        # checks in parallel
+        try:
+            os.makedirs(outpath)
+        except OSError:
+            pass
     for fobj in file_list:
         fname = os.path.join(outpath, fobj.name)
         if not os.path.exists(fname):
-            transform_and_save(target_size, tar_handle.extractfile(fobj), fname)
+            transform_and_save(target_size, tar_handle, fobj, fname)
         pair_list.append((fname, label))
     return pair_list
 
-def transform_and_save(target_size, img_handle, output_filename):
+def transform_and_save(target_size, tar_handle, img_object, output_filename):
     """
-    Takes a file handle to an image, optionally transforms it and then writes it out to
-    output_filename
+    Takes a tar file handle and a TarInfo object inside that tarfile and
+    optionally transforms it and then writes it out to output_filename
     """
+    img_handle = tar_handle.extractfile(img_object)
     img = Image.open(img_handle)
     width, height = img.size
 
@@ -230,7 +237,6 @@ def transform_and_save(target_size, img_handle, output_filename):
             scale_factor = float(target_size) / width
             width = target_size
             height = int(height*scale_factor)
-            img = img.resize((width, height), resample=PIL.Image.LANCZOS)
     else:
         if height > target_size:
             scale_factor = float(target_size) / height
@@ -242,8 +248,12 @@ def transform_and_save(target_size, img_handle, output_filename):
     else:
         # Avoid recompression by saving file out directly without
         # transformation
-        with open(output_filename, 'wb') as out_handle:
-            out_handle.write(img_handle.read())
+        tar_handle.extract(img_object, path=os.path.dirname(output_filename))
+        if os.path.basename(output_filename) != img_object.name:
+            # Rename if name inside of tar is different than what we want it
+            # called on the outside
+            shutil.move(os.path.join(os.path.dirname(output_filename), img_object.name), output_filename)
+    assert(os.stat(output_filename).st_size > 0), "{} has size 0".format(output_filename)
 
 
 class IngestI1K(ImageIngester):

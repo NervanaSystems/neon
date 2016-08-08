@@ -59,7 +59,7 @@ def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False):
         manifest_filename=manifest_filename,
         minibatch_size=minibatch_size,
         macrobatch_size=100,
-        cache_dir=get_data_cache_dir('/usr/local/data', subdir='music_genres_cache'),
+        cache_directory=get_data_cache_dir('/usr/local/data', subdir='music_genres_cache'),
         shuffle_manifest=do_randomize,
         shuffle_every_epoch=do_randomize,
         type='audio,label',
