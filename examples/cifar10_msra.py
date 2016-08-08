@@ -138,7 +138,7 @@ if not (os.path.exists(train_dir) and os.path.exists(test_dir)):
 
 # setup data provider
 shape = dict(channel_count=3, height=32, width=32)
-train_params = ImageParams(center=False, aspect_ratio=110, **shape)
+train_params = ImageParams(center=False, flip=True, aspect_ratio=110, **shape)
 test_params = ImageParams(**shape)
 common = dict(target_size=1, nclasses=10)
 

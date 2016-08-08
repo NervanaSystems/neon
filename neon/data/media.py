@@ -158,6 +158,8 @@ class ImageParams(MediaParams):
             if getattr(self, key) != self._defaults_[key]:
                 raise ValueError('Argument %s must not be specified' % key)
         self.color_noise_std = (self.contrast_max - 100) / 400.
+        if self.scale_min == 0:
+            self.scale_min = self.scale_max = min(self.height, self.width)
 
     def get_shape(self):
         return (self.channel_count, self.height, self.width)
