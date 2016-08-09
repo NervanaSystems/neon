@@ -35,6 +35,7 @@ from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
 from neon.backends.kernels.cuda import pooling, roipooling, binary
+from neon.backends.util.check_gpu import get_compute_capability
 from neon.util.persist import get_cache_dir
 from scikits.cuda import cublas
 
@@ -2932,7 +2933,7 @@ class NervanaGPU(Backend):
         k = A.shape[1]
 
         # Swap A and B to map from C order to Fortran
-        if A.dtype == np.float32:
+        if A.dtype == np.float32 or (A.dtype == np.float16 and get_compute_capability() >= 5.2):
             if n != 1 or (opA == 't' and opB == 'n'):
                 cublas.cublasSgemm(self.cublas_handle, opB, opA, n, m, k, alpha, B.gpudata,
                                    ldb, A.gpudata, lda, beta, C.gpudata, ldc)
