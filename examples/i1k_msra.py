@@ -71,10 +71,10 @@ else:
 
 # setup data provider
 manifest_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_test')
-cpio_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_cache')
+cache_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_cache')
 
 
-def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subset_pct=100):
+def make_aeon_config(manifest_filename, cache_directory, minibatch_size, do_randomize=False, subset_pct=100):
     image_decode_cfg = dict(height=224, width=224, scale=[0.875, 0.875])
     if do_randomize:
         image_decode_cfg['scale'] = [0.08, 1.0]  # 8% of area to 100% of area for cropbox
@@ -82,14 +82,14 @@ def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subs
         image_decode_cfg['aspect_ratio'] = [0.75, 1.33]
         image_decode_cfg['photometric'] = [-0.1, 0.1]
         image_decode_cfg['lighting'] = [0.0, 0.01]
-        image_decode_cfg['flip'] = True
+        image_decode_cfg['flip_enable'] = True
         image_decode_cfg['lighting'] = False
 
     return dict(
         manifest_filename=manifest_filename,
         minibatch_size=minibatch_size,
         macrobatch_size=1024,
-        cache_dir=get_data_cache_dir('/usr/local/data', subdir='i1k_cache'),
+        cache_directory=cache_directory,
         subset_fraction=float(subset_pct/100.0),
         shuffle_manifest=do_randomize,
         shuffle_every_epoch=do_randomize,
@@ -103,11 +103,11 @@ def transformers(dl):
     dl = ImageMeanSubtract(dl, index=0, pixel_mean=[104.41227722, 119.21331787, 126.80609131])
     return dl
 
-train_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'), args.batch_size,
+train_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'), cache_dir, args.batch_size,
                                 do_randomize=True, subset_pct=args.subset_percent)
 
-valid_config = make_aeon_config(os.path.join(manifest_dir, 'val_file.csv'), args.batch_size)
-tune_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'), args.batch_size,
+valid_config = make_aeon_config(os.path.join(manifest_dir, 'val_file.csv'), cache_dir, args.batch_size)
+tune_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'), cache_dir, args.batch_size,
                                subset_pct=20)
 
 train = transformers(DataLoader(train_config, model.be))

@@ -54,21 +54,22 @@ parser.add_argument('--subset_percent', type=float, default=100,
 
 args = parser.parse_args()
 manifest_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_test')
-cpio_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_cache')
+cache_dir = get_data_cache_dir('/usr/local/data', subdir='i1k_cache')
 
 
-def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subset_pct=100):
+def make_aeon_config(manifest_filename, cache_directory, minibatch_size,
+                     do_randomize=False, subset_pct=100):
     image_decode_cfg = dict(
         height=224, width=224,
         scale=[0.875, 0.875],        # .875 fraction is 224/256 (short side)
-        flip=do_randomize,           # whether to do random flips
+        flip_enable=do_randomize,    # whether to do random flips
         center=(not do_randomize))   # whether to do random crops
 
     return dict(
         manifest_filename=manifest_filename,
         minibatch_size=minibatch_size,
         macrobatch_size=1024,
-        cache_directory=cpio_dir,
+        cache_directory=cache_directory,
         subset_fraction=float(subset_pct/100.0),
         shuffle_manifest=do_randomize,
         shuffle_every_epoch=do_randomize,
@@ -78,11 +79,13 @@ def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subs
 
 
 train_config = make_aeon_config(os.path.join(manifest_dir, 'train_file.csv'),
+                                cache_dir,
                                 args.batch_size,
                                 do_randomize=True,
                                 subset_pct=args.subset_percent)
 
 valid_config = make_aeon_config(os.path.join(manifest_dir, 'val_file.csv'),
+                                cache_dir,
                                 args.batch_size)
 
 def main():

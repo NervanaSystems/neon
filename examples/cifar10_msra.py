@@ -70,18 +70,18 @@ parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 
 
-def make_aeon_config(manifest_filename, minibatch_size, do_randomize=False, subset_pct=100):
+def make_aeon_config(manifest_filename, cache_directory, minibatch_size, do_randomize=False, subset_pct=100):
     image_decode_cfg = dict(
         height=32, width=32,
         scale=[0.8, 0.8],            # cropboxes of size 0.8 * 40 = 32
-        flip=do_randomize,           # whether to do random flips
+        flip_enable=do_randomize,    # whether to do random flips
         center=(not do_randomize))   # whether to do random crops
 
     return dict(
         manifest_filename=manifest_filename,
         minibatch_size=minibatch_size,
         macrobatch_size=5000,
-        cache_directory=get_data_cache_dir('/usr/local/data', subdir='cifar10_cache'),
+        cache_directory=cache_directory,
         subset_fraction=float(subset_pct/100.0),
         shuffle_manifest=do_randomize,
         shuffle_every_epoch=do_randomize,
@@ -139,12 +139,12 @@ cache_dir = get_data_cache_dir(args.data_dir, subdir='cifar10_cache')
 train_manifest, val_manifest = ingest_cifar10(out_dir=image_dir, padded_size=40, overwrite=False)
 
 # setup data provider
-train_config = make_aeon_config(train_manifest, args.batch_size,
+train_config = make_aeon_config(train_manifest, cache_dir, args.batch_size,
                                 do_randomize=True, subset_pct=args.subset_pct)
 
-val_config = make_aeon_config(val_manifest, args.batch_size)
+val_config = make_aeon_config(val_manifest, cache_dir, args.batch_size)
 
-tune_config = make_aeon_config(train_manifest, args.batch_size, subset_pct=20)
+tune_config = make_aeon_config(train_manifest, cache_dir, args.batch_size, subset_pct=20)
 
 train = transformers(DataLoader(train_config, NervanaObject.be))
 test = transformers(DataLoader(val_config, NervanaObject.be))
