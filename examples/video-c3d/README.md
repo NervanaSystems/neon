@@ -1,47 +1,54 @@
-##Model
+#Model
 
-This is an implementation of [C3D](http://arxiv.org/pdf/1412.0767v4.pdf) trained on the [UCF101](http://crcv.ucf.edu/data/UCF101.php) dataset.
+This is an implementation of [C3D][c3d] trained on the [UCF101][ucf101] dataset.
 
-### Model script
-The model training script train.py will train an action recogition model from scratch on the UCF101 dataset.
+## Model script
+The model training script train.py will train an action recogition model from scratch on the UCF101 dataset.  All of the scripts here have defaults set to use batch size of 32 inside the script.
 
-### Dependencies
-The preprocessor and data loader require ffmpeg which can be installed by following instructions [here](https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu)
+## Dependencies
+* [unrar-nonfree][unrar]: used for extracting videos from the provided rar file.
+* [ffmpeg][ffmpeg]: used for transcoding, scaling, splitting videos in ingestion, as well as for overlaying category hypotheses on original videos during demo
+* [gnu parallel][parallel]: used for speeding up the video ingestion process by distributing across all available cores on the local machine
 
-### Instructions
-The first step is to preprocess the UCF101 dataset using preprocess.py which splits videos into smaller clips. Preprocessed videos need to be created for both the training and test splits.  Grab the necessary files (`UCF101.rar` and `UCF101TrainTestSplits-RecognitionTask`), unpack them, then run the following commands to preprocess the data.
+## Instructions
+### Preprocessing (Ingestion)
+The ingestion script will scale the input videos down to uniform 171x128 framesizes, strip out audio, transcode them to use the MJPEG codec and break the input video into uniform length clips.  This sets the data up so that it is in a form that can be used for training in `neon`.
+
+Preprocessing needs to be done for both training and test partitions of the dataset.  Grab the necessary files (`UCF101.rar` and `UCF101TrainTestSplits-RecognitionTask.zip` from [here][ucf101]), then run the `vid_ingest.sh` script which preprocesses the entire dataset and generates the manifest files that can be used by neon for training and testing.
+
+First, we have to set a location where the data will be written out.  Both `neon` and the ingest script use the environment variable `V3D_DATA_PATH` as the parent directory where the processed video files, labels, and manifests will live.
+```bash
+export V3D_DATA_PATH=/usr/local/data
+```
 
 ```bash
-# Where UCF101.rar was unpacked
-UCF_DATA_DIR=/usr/local/data/UCF-101
+UCF_RAR_FILE=/usr/local/data/UCF101.rar
+UCF_ZIP_FILE=/usr/local/data/UCF101TrainTestSplits-RecognitionTask.zip
 
-# Where UCF101TrainTestSplits-RecognitionTask.zip was unpacked
-UCF_META_DIR=/usr/local/data/ucfTrainTestlist
+vid_ingest.sh $UCF_RAR_FILE $UCF_ZIP_FILE
+```
+The split files will be written into the output directory `$V3D_DATA_PATH/ucf-ingested` along with the necessary manifest files (list of records for training and validation).
 
-# Where the processed clips from each split are saved
-OUT_DIR=/usr/local/data/UCF-ingested
-
-# Split the videos into clips
-vid_ingest.sh ${UCF_DATA_DIR} ${UCF_META_DIR}/trainlist01.txt $OUT_DIR/train
-vid_ingest.sh ${UCF_DATA_DIR} ${UCF_META_DIR}/testlist01.txt $OUT_DIR/test
-
-# Create manifest files
-create_manifests.sh $OUT_DIR/train $OUT_DIR/test $OUT_DIR/labels ${UCF_META_DIR}/classInd.txt
+### Training
+To train, just run the following command, which will (by default) train for 18 epochs with a batch size of 32.  The model weights will be saved to `UCF101-C3D.p`:
+```bash
+python examples/video-c3d/train.py --save_path UCF101-C3D.p
 ```
 
-Once the preprocessed video directories are created for both the training and test splits, the model can be trained with the following:
+### Testing
+The classification performance displayed during execution of this script will be on the individual subclips of each test video.  To get the aggregated predictions over each video, one can get final error rates with the testing script:
 ```
-python examples/video-c3d/train.py --data_dir <preprocessed_dir> --batch_size 32 --epochs 18 --save_path UCF101-C3D.p
+python examples/video-c3d/inference.py --model_file UCF101-C3D.p
 ```
-The data loader will automatically create index files mapping each video clip to its label. Alternatively, an index file can be provided to the data loader.
 
-After the model converges, the demo can be run which predicts the most probable class for each clip and aggregates them into one output video which displays the class labels and their probabilities.
+### Inference Demo
+Finally, we also provide a demo script which performs inference on a given input video.  After the model converges, the demo can be run which takes an input video (any format), does the necessary resizing, transcoding, and splitting, to perform inference on the subclips, then generates an output video with the five likeliest predictions overlaid on the video.
 ```
-python examples/video-c3d/demo.py --data_dir <preprocessed_dir/split_dir> --model_weights UCF101-C3D.p --class_ind_file ~/data/ucfTrainTestlist/classInd.txt
+python examples/video-c3d/demo.py --model_weights UCF101-C3D.p --input_video <in.avi> --output_video <out.avi>
 ```
 
 ### Trained weights
-The weights file for the trained C3D model on the UCF101 action recognition training split 1 can be downloaded from AWS using the following link: [trained model weights](https://s3-us-west-1.amazonaws.com/nervana-modelzoo/video-c3d/UCF101-C3D.p).
+The weights file for the trained C3D model on the UCF101 action recognition training split 1 can be downloaded from AWS using the following link: [trained model weights][awswts].
 
 ### Performance
 The model achieves 46.3% clip accuracy on the action recognition test split 1 when trained on training split 1.
@@ -57,3 +64,10 @@ http://vlg.cs.dartmouth.edu/c3d/
 ```
 https://github.com/facebook/C3D
 ```
+
+   [c3d]: <http://arxiv.org/pdf/1412.0767v4.pdf>
+   [ucf101]: <http://crcv.ucf.edu/data/UCF101.php>
+   [ffmpeg]: <https://trac.ffmpeg.org/wiki/CompilationGuide/Ubuntu>
+   [parallel]: <https://savannah.gnu.org/projects/parallel/>
+   [unrar]: <https://launchpad.net/ubuntu/+source/unrar-nonfree>
+   [awswts]: <https://s3-us-west-1.amazonaws.com/nervana-modelzoo/video-c3d/UCF101-C3D.p>

@@ -1,48 +1,72 @@
 #!/bin/bash
-len=16  # number of frames per video
 
 usage() {
     cat <<EOM
     Usage:
-    $(basename $0) list_file video_directory output_directory
-    list_file: either trainlist01.txt or testlist01.txt
-    video_directory: location where UCF101.rar was extracted to
-    output_directory: location to write segmented clips
+    $(basename $0) input_rar input_zip
+    input_rar: raw video files, can be obtained from http://crcv.ucf.edu/data/UCF101/UCF101.rar
+    input_zip: zip of train/test partitions, UCF101TrainTestSplits-RecognitionTask.zip
 EOM
     exit 0
 }
 
-[ -z $3 ] && { usage; }
-
-VIDLIST=$1
-INPATH=$2
-OUTDIR=$3
-mkdir -p $OUTDIR
-
-type ffmpeg >/dev/null 2>&1 || { echo >&2 "ffmpeg required but not installed.  Aborting."; exit 1; }
-
-function split_vid {
+# This function rescales the input video and breaks it up into clips of 16 frames each
+split_vid() {
     VIDPATH=$1
-    VID=`basename $VIDPATH`
-    frame_dir=$OUTDIR/${VID%.avi}
-    mkdir -p $frame_dir
-    ffmpeg -v quiet -i $VIDPATH -vf scale=171:128 $frame_dir/f%04d.jpg
-    frames=($frame_dir/*.jpg)
-    nvids=$((${#frames[@]}/len))
-    for i in $(seq 0 $((nvids-1))); do
-        ofile=`printf "%s/%s_%02d.mp4" $OUTDIR ${VID%.avi} $i`
-        ffmpeg -v quiet -f image2 -start_number $((i*len+1)) -i $frame_dir/f%04d.jpg -framerate 25 -c:v mjpeg -q:v 3 -vframes 16 $ofile
-    done
-    rm -rf $frame_dir
+    ffmpeg -v quiet -i $VIDPATH \
+           -an -vf scale=171:128 -framerate 25 \
+           -c:v mjpeg -q:v 3 \
+           -f segment -segment_time 0.64 -reset_timestamps 1 \
+           -segment_list ${VIDPATH%.avi}.csv \
+           -segment_list_entry_prefix `dirname $VIDPATH`/ \
+           -y ${VIDPATH%.avi}_%02d.avi
 }
 
-TOTAL=`cat $VIDLIST | wc -l`
-STARTTIME=`date +%s`
-curvid=0
-for FF in $(cat $VIDLIST | sed "s|.*/\(.*.avi\).*$|\1|"); do
-    split_vid $INPATH/$FF;
-    echo -n "$curvid / $TOTAL   Elapsed Time: $(($(date +%s) - STARTTIME))" seconds $'\r'
-    curvid=$((curvid+1))
+require() {
+    type $1 > /dev/null 2>&1 || { echo >&2 $1 "required but not installed. Aborting."; exit 1; }
+}
+
+
+export -f split_vid
+
+require ffmpeg
+require unrar-nonfree
+require parallel
+
+if [ -z ${V3D_DATA_PATH+x} ]; then echo "V3D_DATA_PATH not set. Aborting."; exit 1; fi
+
+[ -z $2 ] && { usage; }
+
+RARFILE=$1
+ZIPFILE=$2
+
+OUTDIR=${V3D_DATA_PATH%/}/ucf-extracted
+VIDDIR=$OUTDIR/UCF-101
+
+mkdir -p $OUTDIR
+
+# Extract the video files
+unrar-nonfree x -o- $RARFILE $OUTDIR
+
+# Make label index files
+rm -f $OUTDIR/category-index.csv
+idx=0
+for i in $(find $VIDDIR -maxdepth 1 -mindepth 1 | sort); do
+    echo $idx > $i/label.txt;
+    echo `(basename $i)`,$idx >> $OUTDIR/category-index.csv
+    idx=$((idx+1));
+done
+
+
+for setn in train test; do
+    echo Processing $setn data...
+    listfile=$OUTDIR/${setn}list.txt
+    unzip -q -c $ZIPFILE ucfTrainTestlist/${setn}list01.txt | col -b | awk -vO=$VIDDIR/ '{print O$1}' > $listfile
+    # Split the raw video files
+    cat $listfile | parallel --joblog $OUTDIR/${setn}split.log --progress split_vid {}
+    cat $(cat $listfile | sed "s/.avi$/.csv/") |
+        awk -vFS=',' '{if ($3-$2>=0.63) {print $1}}' |
+        sed "s|^\(.*\)/\(.*.avi\)|\1/\2,\1/label.txt|" > $OUTDIR/${setn}-index.csv
 done
 
 echo Done

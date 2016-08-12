@@ -17,11 +17,7 @@ class DataLoaderTransformer(NervanaObject):
 
         if self.index is not None:
             # input shape is contiguous
-            data_size = reduce(
-                lambda x, y: x * y,
-                self.dataloader.shapes()[index],
-            )
-
+            data_size = np.prod(self.dataloader.shapes()[index])
             self._shape = (data_size, self.be.bsz)
 
     def __getattr__(self, key):
@@ -62,6 +58,24 @@ class OneHot(DataLoaderTransformer):
         return self.output
 
 
+class PixelWiseOneHot(DataLoaderTransformer):
+    """
+    OneHot will convert `index` into a onehot vector.
+    """
+    def __init__(self, dataloader, index, nclasses, *args, **kwargs):
+        super(PixelWiseOneHot, self).__init__(dataloader, index, *args, **kwargs)
+
+        self.output = None
+        self.nclasses = nclasses
+
+    def transform(self, t):
+        if self.output is None:
+            self.output = self.be.iobuf(self.nclasses*t.shape[0], dtype=np.int32)
+            self.outview = self.output.reshape((self.nclasses, -1))
+        self.outview[:] = self.be.onehot(t.reshape((1, -1)), axis=0)
+        return self.output
+
+
 class TypeCast(DataLoaderTransformer):
     """
     TypeCast data from dataloader at `index` to dtype and move into
@@ -79,12 +93,12 @@ class TypeCast(DataLoaderTransformer):
         return self.output
 
 
-class ImageMeanSubtract(DataLoaderTransformer):
+class BGRMeanSubtract(DataLoaderTransformer):
     """
     subtract pixel_mean from data at `index`.  Assumes data is in CxHxWxN
     """
-    def __init__(self, dataloader, index, pixel_mean, *args, **kwargs):
-        super(ImageMeanSubtract, self).__init__(
+    def __init__(self, dataloader, index, pixel_mean=[127, 119, 104], *args, **kwargs):
+        super(BGRMeanSubtract, self).__init__(
             dataloader, index=index, *args, **kwargs
         )
 
@@ -123,8 +137,19 @@ class DumpImage(DataLoaderTransformer):
             a = t.get()
 
         a = a[:, self.image_index]
-        # coming from DataLoader first dimensioned has been flattened
-        a = a.reshape(self.outshape)
+
+        # hack to convert single channel image to 3 channel for later processing
+        if self.outshape[0] is 1:
+            nshape = (3, self.outshape[1], self.outshape[2])
+            img2 = np.ndarray(nshape, dtype='uint8')
+            a = a.reshape((self.outshape[1], self.outshape[2]))
+            img2[0, :, :] = a
+            img2[1, :, :] = a
+            img2[2, :, :] = a
+            a = img2
+        else:
+            # coming from DataLoader first dimensioned has been flattened
+            a = a.reshape(self.outshape)
         # transpose from CHW to H W C
         a = a.transpose(1, 2, 0)
         # reorder color channel
@@ -145,6 +170,3 @@ class DumpImage(DataLoaderTransformer):
         """
         import random
         return self.output_directory + str(random.random()) + '.png'
-
-
-

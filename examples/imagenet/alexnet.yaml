@@ -247,3 +247,21 @@ optimizer:
 
 dataset:
     name: i1k
+    train_config:
+        shuffle_manifest: True
+        shuffle_every_epoch: True
+        image:
+            height: 224
+            width: 224
+            scale: [0.875, 0.875]
+            flip_enable: True
+            center: False
+        label:
+            binary: False
+    test_config:
+        image:
+            height: 224
+            width: 224
+            scale: [0.875, 0.875]
+        label:
+            binary: False

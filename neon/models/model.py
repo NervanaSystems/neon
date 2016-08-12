@@ -290,8 +290,8 @@ class Model(NervanaObject):
         x = self.layers.layers[-1].outputs
         assert not isinstance(x, list), "Can not get_outputs with Branch terminal"
         Ypred = None
-        for idx, (x, t) in enumerate(dataset):
-            x = self.fprop(x, inference=True)
+        for idx, input_data in enumerate(dataset):
+            x = self.fprop(input_data[0], inference=True)
             if Ypred is None:
                 (dim0, dim1) = x.shape
                 Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)

@@ -17,7 +17,6 @@ from neon.data.dataiterator import NervanaDataIterator, ArrayIterator
 from neon.data.hdf5iterator import HDF5Iterator, HDF5IteratorOneHot, HDF5IteratorAutoencoder
 from neon.data.datasets import Dataset
 from neon.data.text import Text, Shakespeare, PTB, HutterPrize, IMDB
-from neon.data.batch_writer import ImageIngester, IngestI1K
 from neon.data.dataloader import DataLoader
 from neon.data.media import ImageParams, ImageIngestParams, VideoParams, AudioParams
 from neon.data.imageloader import ImageLoader

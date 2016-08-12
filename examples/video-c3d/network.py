@@ -13,9 +13,9 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 from neon.initializers import Constant, Gaussian
-from neon.layers import Conv, Dropout, Pooling, Affine
+from neon.layers import Conv, Dropout, Pooling, Affine, GeneralizedCost
 from neon.models import Model
-from neon.transforms import Rectlin, Softmax
+from neon.transforms import Rectlin, Softmax, CrossEntropyMulti
 
 
 def create_network():
@@ -45,4 +45,4 @@ def create_network():
         Dropout(keep=0.5),
         Affine(nout=101, init=g1, bias=c0, activation=Softmax())
     ]
-    return Model(layers=layers)
+    return Model(layers=layers), GeneralizedCost(costfunc=CrossEntropyMulti())

@@ -97,7 +97,7 @@ def parse_args():
     return root_yaml, args, be_name, num_epochs, batch_size
 
 
-def load_data(data_dir="."):
+def load_data(data_dir=".", backend_obj=None):
     """
     Load the specified dataset.
 
@@ -109,13 +109,40 @@ def load_data(data_dir="."):
     """
 
     if root_yaml['dataset']['name'].upper() == 'I1K':
+        # TODO: NEED TO FIX THIS FOR AEON
         # we are using an ImageLoader type dataset:
-        from neon.data import ImageLoader
+
         try:
-            train = ImageLoader(repo_dir=data_dir, inner_size=224, scale_range=(256, 384),
-                                set_name='train', shuffle=True, do_transforms=True)
-            test = ImageLoader(repo_dir=data_dir, inner_size=224, scale_range=(256, 256),
-                               set_name='validation', do_transforms=False)
+            import os
+            import numpy as np
+            from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
+            from aeon import DataLoader
+
+            train_config = root_yaml['dataset']['train_config']
+            test_config = root_yaml['dataset']['test_config']
+            train_config['manifest_filename'] = os.path.join(data_dir,
+                                                             'i1k-extracted',
+                                                             'train-index.csv')
+
+            test_config['manifest_filename'] = os.path.join(data_dir,
+                                                            'i1k-extracted',
+                                                            'val-index.csv')
+
+            for config in (train_config, test_config):
+                config['type'] = 'image,label'
+                config['minibatch_size'] = backend_obj.bsz
+                config['macrobatch_size'] = backend_obj.bsz * 12
+                config['cache_directory'] = os.path.join(data_dir, 'i1k-cache')
+
+            def wrap_dataloader(dl):
+                dl = OneHot(dl, index=1, nclasses=1000)
+                dl = TypeCast(dl, index=0, dtype=np.float32)
+                dl = BGRMeanSubtract(dl, index=0)
+                return dl
+
+            train = wrap_dataloader(DataLoader(train_config, backend_obj))
+            test = wrap_dataloader(DataLoader(test_config, backend_obj))
+
         except (OSError, IOError, ValueError) as err:
             logger.error(err)
             sys.exit(0)
@@ -144,7 +171,7 @@ if __name__ == "__main__":
 
     if args.model_file:
         model.load_params(args.model_file)
-    train, test = load_data(data_dir=args.data_dir)
+    train, test = load_data(data_dir=args.data_dir, backend_obj=model.be)
     # configure callbacks
     callbacks = Callbacks(model, eval_set=test, **args.callback_args)
 
