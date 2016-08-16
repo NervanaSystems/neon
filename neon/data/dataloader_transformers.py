@@ -91,6 +91,35 @@ class TypeCast(DataLoaderTransformer):
         return self.output
 
 
+class Retuple(DataLoaderTransformer):
+    """
+    Converts data from dataloader to a tuple of tuples with first element as
+    the input tuple and second element as the target tuple.
+    """
+    def __init__(self, dataloader, data=(0,), target=(1,), *args, **kwargs):
+        super(Retuple, self).__init__(
+            dataloader, index=None, *args, **kwargs
+        )
+
+        self._data = data
+        self._target = target
+        self.output = None
+
+    def transform(self, t):
+
+        if len(self._data) > 1:
+            data = tuple(t[ii] for ii in self._data)
+        else:
+            data = t[self._data[0]]
+
+        if len(self._target) > 1:
+            target = tuple(t[ii] for ii in self._target)
+        else:
+            target = t[self._target[0]]
+
+        return (data, target)
+
+
 class BGRMeanSubtract(DataLoaderTransformer):
     """
     subtract pixel_mean from data at `index`.  Assumes data is in CxHxWxN
