@@ -32,6 +32,13 @@ from neon.data import NervanaDataIterator, Ticker
 from neon.util.compat import PY3
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.layers import Convolution, BatchNorm
+
+try:
+    # Register if it exists
+    from cloud_metrics import CloudMetricsCallback
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,7 +61,8 @@ class Callbacks(NervanaObject):
                  history=1,
                  model_file=None,
                  eval_set=None,
-                 metric=None):
+                 metric=None,
+                 log_token=None):
         """
         Create a callbacks container with the default callbacks.
 
@@ -124,6 +132,12 @@ class Callbacks(NervanaObject):
 
         self.add_callback(TrainLoggerCallback())
         self.add_callback(RunTimerCallback())
+
+        try:
+            # this will only work if the cloud_metrics package is installed
+            self.add_callback(CloudMetricsCallback(log_token=log_token, klass=Callback))
+        except NameError:
+            pass
 
     def __del__(self):
         try:

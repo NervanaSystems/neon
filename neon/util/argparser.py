@@ -134,6 +134,9 @@ class NeonArgparser(configargparse.ArgumentParser):
         rt_grp.add_argument('-H', '--history', type=int,
                             default=self.defaults.get('history', 1),
                             help='number of checkpoint files to retain')
+        rt_grp.add_argument('--log_token', type=str,
+                            default='',
+                            help='access token for data logging in real time')
 
         be_grp = self.add_argument_group('backend')
         be_grp.add_argument('-b', '--backend', choices=Backend.backend_choices(),
