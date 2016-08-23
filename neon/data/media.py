@@ -76,10 +76,12 @@ class ImageParams(MediaParams):
             center crop will be taken).  If scale_min and scale_max are
             (256, 300) then the resize dimension will be randomly selected
             between 256 and 300 (unless center is True, in which case the
-            lower value, 256, will always be used).  If scale_min and scale_max
-            are (0, 0), then the entire image will be used, without regard to
-            aspect ratio.  For the 100 x 200 image, the entire image will be
-            used and rescaled into a height x width output.
+            lower value, 256, will always be used).  If scale_min is not specified
+            or initialized to 0, then both scale_min and scale_max will be set to
+            the shorter of height or width. If the image is 100 x 200 and height
+            and width are 224, then scale_min = scale_max = 224 and the image
+            will be first scaled to 224 x 448, and then a random crop of size
+            224 x 224 will be taken from the result (if center if False).
         scale_max (int):
             See scale_min.
         contrast_min (int):
