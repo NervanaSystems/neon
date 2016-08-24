@@ -363,7 +363,7 @@ __global__ void spool_fprop_avg(
         }
 
         // TODO confirm kepler OK
-        unsigned int shrN_mask = (shrN < 32) ? max(1, ((1 << shrN) - 1)) : 0xffffffff;
+        unsigned int shrN_mask = (shrN < 32) ? max(0, ((1 << shrN) - 1)) : 0xffffffff;
         if((tid & shrN_mask) == 0)
             rcpWindowSize[sb] = 1.0f / (float)window_size;
     }
@@ -1020,7 +1020,7 @@ __global__ void spool_bprop_avg(
             jrst += inc;
         }
         // TODO confirm kepler OK
-        unsigned int shrN_mask = (shrN < 32) ? max(1, ((1 << shrN) - 1)) : 0xffffffff;
+        unsigned int shrN_mask = (shrN < 32) ? max(0, ((1 << shrN) - 1)) : 0xffffffff;
         if((tid & shrN_mask) == 0)
             rcpWindowSize[sb] = 1.0f / (float)window_size;
     }
