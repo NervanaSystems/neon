@@ -13,6 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+"""
+Train a Faster-RCNN model to do object detection using PASCAL VOC dataset.
+This training currently runs 1 image at a time.
+
+Reference:
+    "Faster R-CNN"
+    http://arxiv.org/abs/1506.01497
+    https://github.com/rbgirshick/py-faster-rcnn
+
+Usage:
+    python examples/faster-rcnn/train.py -r0 -e 16 -s frcn_model.pkl -vv \
+    --epoch_step 5 --roi_branch_scale --lr_scale 1.0 -H 16
+
+"""
+from __future__ import division
+
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, StepSchedule
@@ -21,21 +37,19 @@ from neon.util.persist import save_obj
 from objectlocalization import PASCAL
 from neon.transforms import CrossEntropyMulti, SmoothL1Loss
 from neon.layers import Multicost, GeneralizedCostMask
+
 import util
-import sys
-import os
-import faster_rcnn
-# main script
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__, default_overrides={'batch_size': 1})
-parser.add_argument('--lr_scale', type=float, help='learning rate scale', default=16.0)
+parser.add_argument('--lr_scale', type=float, help='learning rate scale', default=1.0)
 parser.add_argument('--lr_step', type=float, help="step for learning schedule", default=10.0)
-parser.add_argument('--epoch_step', type=float, help="epoch to step the learning rate", default=6)
+parser.add_argument('--epoch_step', type=int, help="epoch to step the learning rate", default=5)
 parser.add_argument('--roi_branch_scale', action='store_true',
                     help="Scale ROI branchs by rois_per_img.")
 
 args = parser.parse_args(gen_be=False)
+args.roi_branch_scale = True
 
 # hyperparameters
 assert args.batch_size is 1, "Faster-RCNN only supports batch size 1"
@@ -56,7 +70,7 @@ train_set = PASCAL('trainval', year, path=args.data_dir, n_mb=n_mb,
                    add_flipped=True, shuffle=True, rebuild_cache=True)
 
 # build the Faster-RCNN model
-model = faster_rcnn.build_model(train_set, frcn_rois_per_img, inference=False)
+model = util.build_model(train_set, frcn_rois_per_img, inference=False)
 
 # set up cost different branches, respectively
 weights = 1.0 / (rpn_rois_per_img)
@@ -97,10 +111,10 @@ if args.model_file is None:
 callbacks = Callbacks(model, eval_set=train_set, **args.callback_args)
 callbacks.add_callback(TrainMulticostCallback())
 
+# model.benchmark(train_set, optimizer=optimizer, cost=cost)
 model.fit(train_set, optimizer=optimizer, cost=cost, num_epochs=args.epochs, callbacks=callbacks)
 
-# Scale the bbox regression branch linear layer weights
-# before saving the model
+# Scale the bbox regression branch linear layer weights before saving the model
 model = util.scale_bbreg_weights(model, [0.0, 0.0, 0.0, 0.0],
                                  [0.1, 0.1, 0.2, 0.2], train_set.num_classes)
 

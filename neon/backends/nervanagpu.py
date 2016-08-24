@@ -34,7 +34,7 @@ from neon import logger as neon_logger
 from neon.backends import kernel_specs
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_gpu import ConvLayer, DeconvLayer, PoolLayer, _get_sm_count
-from neon.backends.kernels.cuda import pooling, roipooling, binary
+from neon.backends.kernels.cuda import pooling, roipooling, binary, nms
 from neon.backends.util.check_gpu import get_compute_capability
 from neon.util.persist import get_cache_dir
 from scikits.cuda import cublas
@@ -2365,6 +2365,55 @@ class NervanaGPU(Backend):
 
         kernel.prepared_async_call(*params)
 
+    def nms(self, detections, threshold):
+        """
+        Function to perform non-maximal supression.
+
+        Arguments:
+            detections (Tensor): detection boxes (box_count, 5), each row has
+                                 (x1, y1, x2, y2, score). Assume the boxes have already
+                                 been sorted based on score in descending order
+            threshold (float): box overlap threshold, boxes with smaller overlaps will be kept
+
+        Outputs:
+            keep_ind (list): list of indices 
+        """
+        def div_ceil(N, thread):
+            return int((N) / (thread) + ((N) % (thread) > 0))
+
+        box_count = detections.shape[0]
+        threadsPerBlock = 32
+        # decide on how many blocks to use for each dimension, and use 2D blocks
+        col_blocks = div_ceil(box_count, threadsPerBlock)
+
+        assert detections.shape == (box_count, 5)
+
+        mask_size = box_count*col_blocks
+        output_mask = self.zeros((mask_size), dtype=np.uint32)
+
+        params = [(col_blocks, col_blocks, 1), (threadsPerBlock, 1, 1), self.stream, box_count,
+                   threshold, detections.gpudata, output_mask.gpudata]
+
+        kernel = nms._get_nms_kernel()
+
+        kernel.prepared_async_call(*params)
+
+        mask_cpu = output_mask.get().ravel()
+        num_to_keep = 0
+        keep = np.zeros((box_count), dtype=np.int32)
+        remv = np.zeros((col_blocks), dtype=np.uint32)
+
+        for i in range(box_count):
+            nblock = int(i / threadsPerBlock)
+            inblock = int(i % threadsPerBlock)
+
+            if (remv[nblock] & (1 << inblock)) == 0:
+                keep[num_to_keep] = i
+                num_to_keep += 1
+                for j in range(nblock, col_blocks):
+                    remv[j] |= mask_cpu[i * col_blocks + j]
+
+        return keep[:num_to_keep].tolist()
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
                           accumbeta=0.0, relu=False, threads=None, repeat=1,

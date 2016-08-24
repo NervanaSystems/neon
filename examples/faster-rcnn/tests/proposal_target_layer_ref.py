@@ -4,12 +4,12 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick and Sean Bell
 # --------------------------------------------------------
+from __future__ import division
+from __future__ import print_function
+from builtins import object
 
-#import caffe
-import yaml
 import numpy as np
 import numpy.random as npr
-#from fast_rcnn.config import cfg
 from bbox_transform import bbox_transform
 from objectlocalization import calculate_bb_overlap
 
@@ -25,17 +25,18 @@ BBOX_NORMALIZE_TARGETS_PRECOMPUTED = True
 BBOX_NORMALIZE_MEANS = [0.0, 0.0, 0.0, 0.0]
 BBOX_NORMALIZE_STDS = [0.1, 0.1, 0.2, 0.2]
 
-class PyCaffeProposalTargetLayer():
+
+class PyCaffeProposalTargetLayer(object):
     """
     Assign object detection proposals to ground-truth targets. Produces proposal
     classification labels and bounding-box regression targets.
     """
 
-    def setup(self, bottom, top, keep_inds):
+    def setup(self, bottom, top, deterministic=False):
         # layer_params = yaml.load(self.param_str_)
-        
+
         self._num_classes = 21
-        self.keep_inds = keep_inds
+        self.deterministic = deterministic
 
         # sampled rois (0, x1, y1, x2, y2)
         # top[0].reshape(1, 5)
@@ -63,9 +64,8 @@ class PyCaffeProposalTargetLayer():
 
         # Sanity check: single batch only
         assert np.all(all_rois[:, 0] == 0), \
-                'Only single item batches are supported'
+            'Only single item batches are supported'
 
-        num_images = 1
         rois_per_image = 128
         fg_rois_per_image = np.round(FG_FRAC * rois_per_image)
 
@@ -73,17 +73,17 @@ class PyCaffeProposalTargetLayer():
         # targets
         labels, rois, bbox_targets, bbox_inside_weights = _sample_rois(
             all_rois, gt_boxes, fg_rois_per_image,
-            rois_per_image, self._num_classes, self.keep_inds)
+            rois_per_image, self._num_classes, self.deterministic)
 
         if DEBUG:
-            print 'num fg: {}'.format((labels > 0).sum())
-            print 'num bg: {}'.format((labels == 0).sum())
+            print('num fg: {}'.format((labels > 0).sum()))
+            print('num bg: {}'.format((labels == 0).sum()))
             self._count += 1
             self._fg_num += (labels > 0).sum()
             self._bg_num += (labels == 0).sum()
-            print 'num fg avg: {}'.format(self._fg_num / self._count)
-            print 'num bg avg: {}'.format(self._bg_num / self._count)
-            print 'ratio: {:.3f}'.format(float(self._fg_num) / float(self._bg_num))
+            print('num fg avg: {}'.format(self._fg_num / self._count))
+            print('num bg avg: {}'.format(self._bg_num / self._count))
+            print('ratio: {:.3f}'.format(float(self._fg_num) / float(self._bg_num)))
 
         # sampled rois
         # top[0].reshape(*rois.shape)
@@ -94,11 +94,11 @@ class PyCaffeProposalTargetLayer():
         top[1] = labels
 
         # bbox_targets
-        #top[2].reshape(*bbox_targets.shape)
+        # top[2].reshape(*bbox_targets.shape)
         top[2] = bbox_targets
 
         # bbox_inside_weights
-        #top[3].reshape(*bbox_inside_weights.shape)
+        # top[3].reshape(*bbox_inside_weights.shape)
         top[3] = bbox_inside_weights
 
         # bbox_outside_weights
@@ -147,12 +147,13 @@ def _compute_targets(ex_rois, gt_rois, labels):
     targets = bbox_transform(ex_rois, gt_rois)
     if BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
         # Optionally normalize targets by a precomputed mean and stdev
-        targets = ((targets - np.array(BBOX_NORMALIZE_MEANS))
-                / np.array(BBOX_NORMALIZE_STDS))
+        targets = (targets - np.array(BBOX_NORMALIZE_MEANS)) / np.array(BBOX_NORMALIZE_STDS)
     return np.hstack(
             (labels[:, np.newaxis], targets)).astype(np.float32, copy=False)
 
-def _sample_rois(all_rois, gt_boxes, fg_rois_per_image, rois_per_image, num_classes, keep_inds):
+
+def _sample_rois(all_rois, gt_boxes, fg_rois_per_image,
+                 rois_per_image, num_classes, deterministic=False):
     """Generate a random sample of RoIs comprising foreground and background
     examples.
     """
@@ -168,8 +169,10 @@ def _sample_rois(all_rois, gt_boxes, fg_rois_per_image, rois_per_image, num_clas
     # foreground RoIs
     fg_rois_per_this_image = min(fg_rois_per_image, fg_inds.size)
     # Sample foreground regions without replacement
-    if fg_inds.size > 0:
+    if fg_inds.size > 0 and not deterministic:
         fg_inds = npr.choice(fg_inds, size=fg_rois_per_this_image, replace=False)
+    elif fg_inds.size > 0:
+        fg_inds = fg_inds[:fg_rois_per_this_image]
 
     # Select background RoIs as those within [BG_THRESH_LO, BG_THRESH_HI)
     bg_inds = np.where((max_overlaps < BG_THRESH_HI) &
@@ -179,11 +182,13 @@ def _sample_rois(all_rois, gt_boxes, fg_rois_per_image, rois_per_image, num_clas
     bg_rois_per_this_image = rois_per_image - fg_rois_per_this_image
     bg_rois_per_this_image = min(bg_rois_per_this_image, bg_inds.size)
     # Sample background regions without replacement
-    if bg_inds.size > 0:
+    if bg_inds.size > 0 and not deterministic:
         bg_inds = npr.choice(bg_inds, size=bg_rois_per_this_image, replace=False)
+    elif bg_inds.size > 0:
+        bg_inds = bg_inds[:bg_rois_per_this_image]
 
     # The indices that we're selecting (both fg and bg)
-    #keep_inds = np.append(fg_inds, bg_inds)
+    keep_inds = np.append(fg_inds, bg_inds)
     # Select sampled values from various arrays:
     labels = labels[keep_inds]
     # Clamp labels for the background RoIs to 0

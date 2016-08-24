@@ -271,43 +271,30 @@ class Model(NervanaObject):
         running_error /= nprocessed
         return running_error
 
-    def get_outputs(self, dataset, n_mb=None):
+    def get_outputs(self, dataset):
         """
         Get the activation outputs of the final model layer for the dataset
 
         Arguments:
-            dataset (iterable): Dataset iterator to perform fit on
+            dataset (NervanaDataIterator): Dataset iterator to perform fit on
 
         Returns:
             Host numpy array: the output of the final layer for the entire Dataset
         """
         self.initialize(dataset)
         dataset.reset()  # Move "pointer" back to beginning of dataset
-        if n_mb is None:
-            n = dataset.nbatches
-        else:
-            n = n_mb
-
+        n = dataset.nbatches
         x = self.layers.layers[-1].outputs
         assert not isinstance(x, list), "Can not get_outputs with Branch terminal"
         Ypred = None
         for idx, (x, t) in enumerate(dataset):
             x = self.fprop(x, inference=True)
-
-            # initialize Ypred for each output in x
             if Ypred is None:
-                for i, xi in enumerate(x):
-                    (dim0, dim1) = xi.shape
-                    Ypred[i] = np.empty((n * dim1, dim0), dtype=x.dtype)
-                    nsteps = dim1 / self.be.bsz
-
-            for i, xi in enumerate(x):
-                (dim0, dim1) = xi.shape
-                cur_batch = slice(idx * dim1, (idx + 1) * dim1)
-                Ypred[i][cur_batch] = xi.get().T
-
-            if idx > n:
-                break
+                (dim0, dim1) = x.shape
+                Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)
+                nsteps = dim1 // self.be.bsz
+            cur_batch = slice(idx * dim1, (idx + 1) * dim1)
+            Ypred[cur_batch] = x.get().T
 
         # Handle the recurrent case.
         if nsteps != 1:
@@ -521,7 +508,7 @@ class Model(NervanaObject):
         # initialize model
         if inference is False and (cost is None or optimizer is None):
             raise RuntimeError("Need cost and optimizer to benchmark bprop")
-        
+
         self.cost = cost
         self.initialize(dataset, cost)
         self.optimizer = optimizer

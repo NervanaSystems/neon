@@ -198,16 +198,24 @@ class MeanSquared(Cost):
 class SmoothL1Loss(Cost):
 
     """
-    A smooth L1 loss cost function from Fast-RCNN
-    http://arxiv.org/pdf/1504.08083v2.pdf
-    L1 loss is less sensitive to the outlier than L2 loss used in RCNN
+    Smooth L1 cost function.
+
+    The L1 loss is less sensitive to outliers than the L2 loss.
+    See `Girshick 2015 <http://arxiv.org/pdf/1504.08083v2.pdf>`__. This
+    cost is used for training object localization models such as Fast-RCNN.
     """
 
     def smoothL1(self, x):
+        """
+        Returns the Smooth-L1 cost
+        """
         return (0.5 * self.be.square(x) * self._sigma2 * (self.be.absolute(x) < 1/self._sigma2) +
                 (self.be.absolute(x) - 0.5/self._sigma2) * (self.be.absolute(x) >= 1/self._sigma2))
 
     def smoothL1grad(self, x):
+        """
+        Returns the gradient of the Smooth-L1 cost.
+        """
         return (x * self._sigma2 * (self.be.absolute(x) < 1/self._sigma2) +
                 self.be.sgn(x) * (self.be.absolute(x) >= 1/self._sigma2))
 

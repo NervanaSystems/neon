@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -13,26 +13,23 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Defines PASCAL_VOC datatset handling.a
+Defines PASCAL_VOC datatset handling
 """
+from __future__ import division
+from builtins import zip, range
+
 import numpy as np
 import os
-import xml.dom.minidom as minidom
+import xml.etree.ElementTree as ET
 import tarfile
 from PIL import Image
 import abc
+
 from generate_anchors import generate_all_anchors
 
 from neon.data.datasets import Dataset
 from neon.util.persist import save_obj, load_obj
-from anchor_target_layer import AnchorTargetLayer
-
-# TODO: cache and remove import
-import pyximport
-pyximport.install(setup_args={"include_dirs": np.get_include()},
-                  reload_support=True)
-from bbox import bbox_overlaps
-
+from neon import logger as neon_logger
 
 # From Caffe:
 # Pixel mean values (BGR order) as a (1, 1, 3) array
@@ -58,7 +55,6 @@ BBOX_NORMALIZE_STDS = [0.1, 0.1, 0.2, 0.2]
 ASPECT_RATIO_GROUPING = True
 
 DEBUG = False
-TEST_PY = False
 
 dataset_meta = {
     'test-2007': dict(size=460032000,
@@ -128,7 +124,7 @@ class ObjectLocalization(Dataset):
         assert self.img_per_batch == 1, "Only a minibatch of 1 is supported."
 
         self.num_classes = len(self.CLASSES)
-        self._class_to_index = dict(zip(self.CLASSES, xrange(self.num_classes)))
+        self._class_to_index = dict(list(zip(self.CLASSES, list(range(self.num_classes)))))
 
         # shape of the final conv layer
         if conv_size:
@@ -159,8 +155,9 @@ class ObjectLocalization(Dataset):
         # need to control the batch size here
         assert self.img_per_batch is 1, "Only a batch size of 1 image is supported"
 
-        print "Backend batchsize is changed to be {} from Object Localization dataset".format(
-            self.img_per_batch)
+        neon_logger.display("Backend batchsize is changed to be {} "
+                            "from Object Localization dataset".format(
+                             self.img_per_batch))
 
         self.be.bsz = self.img_per_batch
 
@@ -184,16 +181,14 @@ class ObjectLocalization(Dataset):
         if n_mb is not None:
             self.nbatches = n_mb
         else:
-            self.nbatches = self.num_image_entries / self.img_per_batch
+            self.nbatches = int(self.num_image_entries / self.img_per_batch)
 
-        # TODO: make this dataset specific
-        # self.cache_file = os.path.join(self.path, 'pascal_cache.pkl')
         self.cache_file = self.config['cache_path']
 
         if os.path.exists(self.cache_file) and not rebuild_cache and not self.mock_db:
             self.roi_db = load_obj(self.cache_file)
-            print 'ROI dataset loaded from file {}'.format(self.cache_file)
-        
+            neon_logger.display('ROI dataset loaded from file {}'.format(self.cache_file))
+
         elif not self.mock_db:
             # 2. read object Annotations (XML)
             roi_db = self.load_roi_groundtruth()
@@ -209,7 +204,7 @@ class ObjectLocalization(Dataset):
                 self.roi_db = self.normalize_bbox_targets(self.roi_db)
 
             save_obj(self.roi_db, self.cache_file)
-            print 'wrote ROI dataset to {}'.format(self.cache_file)
+            neon_logger.display('wrote ROI dataset to {}'.format(self.cache_file))
 
         else:
             assert self.mock_db is not None
@@ -324,8 +319,8 @@ class ObjectLocalization(Dataset):
             idx_inside = inside_im_bounds(all_anchors, im_shape)
 
             if DEBUG:
-                print 'im shape', im_shape
-                print 'idx inside', len(idx_inside)
+                neon_logger.display('im shape', im_shape)
+                neon_logger.display('idx inside', len(idx_inside))
 
             anchors = all_anchors[idx_inside, :]
 
@@ -333,8 +328,9 @@ class ObjectLocalization(Dataset):
             labels.fill(-1)
 
             # compute bbox overlaps
-            overlaps = bbox_overlaps(np.ascontiguousarray(anchors, dtype=np.float),
-                                     np.ascontiguousarray(db['gt_bb'] * im_scale, dtype=np.float))
+            overlaps = calculate_bb_overlap(np.ascontiguousarray(anchors, dtype=np.float),
+                                            np.ascontiguousarray(db['gt_bb'] * im_scale,
+                                            dtype=np.float))
 
             # assign bg labels first
             bg_idx = overlaps.max(axis=1) < self.NEGATIVE_OVERLAP
@@ -351,11 +347,11 @@ class ObjectLocalization(Dataset):
             labels[fg_idx] = 1
 
             if DEBUG:
-                print 'max_overlap: {}'.format(overlaps.max())
-                print 'Assigned {} bg labels'.format(bg_idx.sum())
-                print 'Assigned {}+{} fg labels'.format(fg_idx.sum(), len(gt_idx))
-                print 'Total fg labels: {}'.format(np.sum(labels == 1))
-                print 'Total bg labels: {}'.format(np.sum(labels == 0))
+                neon_logger.display('max_overlap: {}'.format(overlaps.max()))
+                neon_logger.display('Assigned {} bg labels'.format(bg_idx.sum()))
+                neon_logger.display('Assigned {}+{} fg labels'.format(fg_idx.sum(), len(gt_idx)))
+                neon_logger.display('Total fg labels: {}'.format(np.sum(labels == 1)))
+                neon_logger.display('Total bg labels: {}'.format(np.sum(labels == 0)))
 
             # For every anchor, compute the regression target compared
             # to the gt box that it has the highest overlap with
@@ -393,9 +389,9 @@ class ObjectLocalization(Dataset):
             class_counts = np.zeros((self.num_classes, 1)) + 1e-14
             sums = np.zeros((self.num_classes, 4))
             squared_sums = np.zeros((self.num_classes, 4))
-            for im_i in xrange(self.num_image_entries):
+            for im_i in (self.num_image_entries):
                 targets = roi_db[im_i]['bbox_targets']
-                for cls in xrange(1, self.num_classes):
+                for cls in range(1, self.num_classes):
                     cls_inds = np.where(roi_db[im_i]['gt_classes'] == cls)[0]
                     if cls_inds.size > 0:
                         class_counts[cls] += cls_inds.size
@@ -407,19 +403,19 @@ class ObjectLocalization(Dataset):
             stds = np.sqrt(squared_sums / class_counts - means ** 2)
 
         if DEBUG:
-            print 'bbox target means:'
-            print means
-            print means[1:, :].mean(axis=0)  # ignore bg class
-            print 'bbox target stdevs:'
-            print stds
-            print stds[1:, :].mean(axis=0)  # ignore bg class
+            neon_logger.display('bbox target means:')
+            neon_logger.display(means)
+            neon_logger.display(means[1:, :].mean(axis=0))  # ignore bg class
+            neon_logger.display('bbox target stdevs:')
+            neon_logger.display(stds)
+            neon_logger.display(stds[1:, :].mean(axis=0))  # ignore bg class
 
         # Normalize targets
-        print "Normalizing targets"
-        for im_i in xrange(self.num_image_entries):
+        neon_logger.display("Normalizing targets")
+        for im_i in range(self.num_image_entries):
             targets = roi_db[im_i]['bbox_targets']
 
-            for cls in xrange(1, self.num_classes):
+            for cls in range(1, self.num_classes):
                 cls_inds = np.where(roi_db[im_i]['max_classes'] == cls)[0]
                 roi_db[im_i]['bbox_targets'][cls_inds] -= means[cls, :]
                 roi_db[im_i]['bbox_targets'][cls_inds] /= stds[cls, :]
@@ -442,14 +438,13 @@ class ObjectLocalization(Dataset):
         annotation_file = os.path.join(self.config['annot_path'],
                                        image_index + self._annotation_file_ext)
 
-        with open(annotation_file) as f:
-            annotation_data = minidom.parseString(f.read())
-
-        # how many objects in it
-        objs = annotation_data.getElementsByTagName(self._annotation_obj_tag)
-
-        # filter by difficulty
-        objs = [o for o in objs if not int(load_data_from_xml_tag(o, 'difficult'))]
+        tree = ET.parse(annotation_file)
+        objs = tree.findall('object')
+        if not self.config['use_diff']:
+            # Exclude the samples labeled as difficult
+            non_diff_objs = [
+                obj for obj in objs if int(obj.find('difficult').text) == 0]
+            objs = non_diff_objs
         num_objs = len(objs)
 
         # initialize ground truth classes and bb
@@ -458,15 +453,16 @@ class ObjectLocalization(Dataset):
 
         # load all the info
         for idx, obj in enumerate(objs):
-            x1 = float(load_data_from_xml_tag(obj, self._annotation_xmin_tag)) - 1
-            y1 = float(load_data_from_xml_tag(obj, self._annotation_ymin_tag)) - 1
-            x2 = float(load_data_from_xml_tag(obj, self._annotation_xmax_tag)) - 1
-            y2 = float(load_data_from_xml_tag(obj, self._annotation_ymax_tag)) - 1
-            cls = self._class_to_index[
-                str(load_data_from_xml_tag(obj, self._annotation_class_tag)).
-                lower().strip()]
+            bbox = obj.find('bndbox')
+            # Make pixel indexes 0-based
+            x1 = float(bbox.find(self._annotation_xmin_tag).text) - 1
+            y1 = float(bbox.find(self._annotation_ymin_tag).text) - 1
+            x2 = float(bbox.find(self._annotation_xmax_tag).text) - 1
+            y2 = float(bbox.find(self._annotation_ymax_tag).text) - 1
+            cls_label = self._class_to_index[obj.find('name').text.lower().strip()]
+
             gt_bb[idx] = [x1, y1, x2, y2]
-            gt_classes[idx] = cls
+            gt_classes[idx] = cls_label
 
         # load image and store shape
         img_path = os.path.join(self.config['image_path'],
@@ -588,7 +584,7 @@ class ObjectLocalization(Dataset):
 
         # permute the dataset each epoch
         if self.shuffle is False:
-            shuf_idx = range(self.num_image_entries)
+            shuf_idx = list(range(self.num_image_entries))
         else:
             if ASPECT_RATIO_GROUPING:
                 shuf_idx = self._shuffle_roidb()
@@ -603,12 +599,12 @@ class ObjectLocalization(Dataset):
         label = np.zeros((self._total_anchors, 1), dtype=np.float32)
         label_mask = np.zeros((self._total_anchors, 1), dtype=np.int32)
 
-        for self.batch_index in xrange(self.nbatches):
+        for self.batch_index in range(self.nbatches):
 
             db = self.roi_db[shuf_idx[self.batch_index]]
 
             self.img_np[:] = 0
-            
+
             if not self.mock_db:
                 # load and process the image using PIL
                 im = Image.open(db['img_path'])  # This is RGB order
@@ -640,7 +636,8 @@ class ObjectLocalization(Dataset):
 
             # sample anchors to use as targets
             labels, bbox_targets, anchor_index = self._sample_anchors(db, self.rois_per_img,
-                                                                      self.FG_FRACTION, self.deterministic)
+                                                                      self.FG_FRACTION,
+                                                                      self.deterministic)
 
             # write image to backend tensor
             self.img_np[:, :im_shape[1], :im_shape[0], 0] = im.transpose(FRCN_IMG_DIM_SWAP)
@@ -677,42 +674,6 @@ class ObjectLocalization(Dataset):
                  ((self.dev_y_frcn_labels, self.dev_y_frcn_labels_mask),
                   (self.dev_y_frcn_bbtargets, self.dev_y_frcn_bbmask)))
 
-            # test against anchor_target_layer.py reference
-            if TEST_PY:
-                target = AnchorTargetLayer()
-
-                # prepare inputs
-                bottom = [0, 1, 2]
-
-                bottom[0] = np.zeros((self._conv_size, self._conv_size))
-                bottom[1] = db['gt_bb'] * im_scale
-                bottom[2] = [im_shape[0], im_shape[1], im_scale]
-
-                # obtain forward pass output
-                top = [0, 1, 2, 3]
-                target.setup(bottom, top)
-                target.forward(bottom, top)
-                py_labels, py_bbtargets, py_iw, py_ow = top
-
-                # positive labels should match
-                if np.sum(label == 1) < 128:
-                    print 'unit testing'
-
-                    # assert positive labels match since positives (usually) dont get under sampled
-                    assert np.allclose(np.where(label == 1)[0],
-                                       np.where(py_labels.flatten() == 1)[0])
-
-                    # our bboxes are in 4 * K, whereas reference is in K * 4 order, so reshape
-                    bb = Y[1][0].get() * Y[1][1].get()
-
-                    pybb = py_bbtargets * py_iw
-                    pybb = pybb.reshape((1, 9, 4, self._conv_size, self._conv_size)) \
-                        .transpose(0, 2, 1, 3, 4)
-                    pybb = pybb.reshape(1, 36, self._conv_size, self._conv_size) \
-                        .flatten()
-                    # bounding box target locations and values must match
-                    assert np.allclose(np.where(bb != 0)[0], np.where(pybb != 0)[0])
-                    assert np.allclose(bb[np.where(bb != 0)], pybb[np.where(pybb != 0)])
             yield X, Y
 
     def evaluation(self, all_boxes, output_dir='output'):
@@ -727,9 +688,9 @@ class ObjectLocalization(Dataset):
             all_boxes (ndarray): detections over all classes and all images
             output_dir (str): where to save the output files
         """
-        print '--------------------------------------------------------------'
-        print 'Computing results with **unofficial** Python eval code.'
-        print '--------------------------------------------------------------'
+        neon_logger.display('--------------------------------------------------------------')
+        neon_logger.display('Computing results with **unofficial** Python eval code.')
+        neon_logger.display('--------------------------------------------------------------')
 
         if not os.path.isdir(output_dir):
             os.mkdir(output_dir)
@@ -737,7 +698,7 @@ class ObjectLocalization(Dataset):
         for cls_ind, cls in enumerate(self.CLASSES):
             if cls == '__background__':
                 continue
-            print 'Writing {} VOC results file'.format(cls)
+            neon_logger.display('Writing {} VOC results file'.format(cls))
             filename = 'voc_{}_{}_{}.txt'.format(
                 self.year, self.image_set, cls)
             filepath = os.path.join(output_dir, filename)
@@ -748,7 +709,7 @@ class ObjectLocalization(Dataset):
                     if dets == []:
                         continue
                     # the VOCdevkit expects 1-based indices
-                    for k in xrange(dets.shape[0]):
+                    for k in range(dets.shape[0]):
                         f.write('{:s} {:.3f} {:.1f} {:.1f} {:.1f} {:.1f}\n'.
                                 format(index, dets[k, -1],
                                        dets[k, 0] + 1, dets[k, 1] + 1,
@@ -783,8 +744,8 @@ class PASCAL(ObjectLocalization):
 
         self.image_set = image_set
         self.year = year
-        super(PASCAL, self).__init__(path, n_mb, img_per_batch, conv_size, 
-                                     rpn_rois_per_img, frcn_rois_per_img, add_flipped, 
+        super(PASCAL, self).__init__(path, n_mb, img_per_batch, conv_size,
+                                     rpn_rois_per_img, frcn_rois_per_img, add_flipped,
                                      shuffle, deterministic, rebuild_cache, mock_db)
 
     def load_data(self):
@@ -815,6 +776,7 @@ class PASCAL(ObjectLocalization):
                                                self.MAX_SIZE, self.MIN_SIZE)
 
         config['cache_path'] = os.path.join(datadir, cache_name)
+        config['use_diff'] = False
 
         return config
 
@@ -958,4 +920,3 @@ def calculate_bb_overlap(rp, gt):
                     )
                     overlaps[r, g] = iw * ih / ua
     return overlaps
-

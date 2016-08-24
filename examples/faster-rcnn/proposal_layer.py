@@ -1,8 +1,25 @@
+# ----------------------------------------------------------------------------
+# Copyright 2016 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+"""
+Define a layer that takes Region Proposal Network's output and generate
+region proposals in the format of bounding boxes, compares with ground truth boxes
+and generates bounding box target labels and regression targets
+"""
+from __future__ import division
 from neon.layers.layer import Layer
 from generate_anchors import generate_all_anchors
-from py_cpu_nms import py_cpu_nms as nms
-from pycaffe_proposal_layer import PyCaffeProposalLayer
-from pycaffe_proposal_target_layer import PyCaffeProposalTargetLayer
 from objectlocalization import _compute_targets, calculate_bb_overlap
 import numpy as np
 
@@ -12,9 +29,8 @@ FG_THRESH = 0.5
 BG_THRESH_HI = 0.5
 BG_THRESH_LO = 0.0
 
+# The percentage of ROIs are from foreground within a minibatch
 FG_FRACTION = 0.25
-
-REFERENCE_TEST = False
 
 BBOX_NORMALIZE_MEANS = [0.0, 0.0, 0.0, 0.0]
 BBOX_NORMALIZE_STDS = [0.1, 0.1, 0.2, 0.2]
@@ -27,21 +43,23 @@ BBOX_NORMALIZE_STDS = [0.1, 0.1, 0.2, 0.2]
 class ProposalLayer(Layer):
     """
     Proposal layer takes as input:
-    (1) output of cls_score
-    (2) output of bbox regression
+    (1) output of RPN cls_score
+    (2) output of RPN bbox regression
 
     Converts that to an output ROIs
-    (5, num_ROIs) <- [batch_size, x_min, y_min, x_max, y_max]
+    (5, num_ROIs) <- [image_idx, x_min, y_min, x_max, y_max]
 
     Steps:
     1. For each anchor, generate anchor boxes and apply bbox deltas to get
        bbox proposals
     2. Clip bboxes to image
     3. remove bbox with H < threshold or W < threshold
-    4. Take top pre_nms_N scores
-    5. apply NMS with threshold 0.7
-    6. return the top num_ROIs proposals
-    7. compute bbox targets and store in target_buffers
+    4. set the scores to be -1 for the padded area
+    5. Take top pre_nms_N scores
+    6. apply NMS with a threshold
+    7. return the top num_ROIs proposals
+    8. provide ROIs
+    9. compute bbox targets and store in target_buffers
 
 
     """
@@ -49,7 +67,7 @@ class ProposalLayer(Layer):
     def __init__(self, rpn_layers, global_buffers, inference=False, num_rois=128, pre_nms_N=12000,
                  post_nms_N=2000, nms_thresh=0.7, min_bbox_size=16, num_classes=21,
                  fg_fraction=None, fg_thresh=None, bg_thresh_hi=None, bg_thresh_lo=None,
-                 deterministic=False, name=None):
+                 deterministic=False, name=None, debug=False):
         """
         Arguments:
             rpn_layers (list): References to the RPN layers: [RPN_1x1_obj, RPN_1x1_bbox]
@@ -75,6 +93,7 @@ class ProposalLayer(Layer):
         self.bg_thresh_hi = bg_thresh_hi if bg_thresh_hi else BG_THRESH_HI
         self.bg_thresh_lo = bg_thresh_lo if bg_thresh_lo else BG_THRESH_LO
         self.deterministic = deterministic
+        self.debug = debug
 
         # the output shape of this layer depends on whether the network
         # will be used for inference. In inference mode, the output shape is
@@ -103,9 +122,7 @@ class ProposalLayer(Layer):
             self.out_shape = ((5, self.num_rois))
 
         self.in_shape = in_obj.out_shape
-        # from neon.layers import BranchNode
-        # if type(in_obj) is BranchNode:
-        #     in_obj = in_obj.prev_layer
+
         return (in_obj, self)
 
     def get_description(self, **kwargs):
@@ -122,8 +139,12 @@ class ProposalLayer(Layer):
         # internal buffer to store transformed proposals
         self._proposals = self.be.zeros((self._num_anchors, 4))
 
+        # to store the dets (scores + proposals)
+        self.dets = self.be.zeros((self.pre_nms_N, 5))
+
         # buffer to store proposals after they have sorted
         # and filtered with NMS.
+
         # Note: The buffer has shape (num_ROIs, 5), where each column
         # is (0, x_min, y_min, x_max, y_max)
         # This format is designed to be compatible with the
@@ -134,8 +155,13 @@ class ProposalLayer(Layer):
         # this is passed forward during training.
         self.dev_proposals_filtered = self.be.zeros((self.num_rois, 5))
 
-        # buffer to store scores
-        self.dev_scores = self.be.zeros((self._num_anchors, 1))
+        # class member as a view to get scores from RPN outputs
+        self.rpn_scores_v = None
+        self.bbox_deltas_v = None
+
+        # create a local buffer for the rpn scores, otherwise, any in-place
+        # memory change will affect the final cost and training
+        self._scores = self.be.zeros((self._num_anchors, 1))
 
     def fprop(self, inputs, inference=False):
         """
@@ -143,22 +169,25 @@ class ProposalLayer(Layer):
         """
         assert self.inference == inference, \
             "Model was configured for inference={}".format(self.inference)
- 
-        # get output from the RPN network
-        scores = self.rpn_obj[0].outputs  # shape: (2KHW, 1)
-        bbox_deltas = self.rpn_bbox[0].outputs  # shape (4KHW, 1)
 
-        # reshape to (4, KHW) then transpose to (KHW, 4) to
-        # match the shape of anchors.
-        bbox_deltas = bbox_deltas.reshape((4, -1)).T
+        # real H and W need to get in fprop, as every image is different
+        real_H = int(np.round(self.im_shape.get()[1] * self._scale))
+        real_W = int(np.round(self.im_shape.get()[0] * self._scale))
 
-        # same transform for scores, except for we slice the
-        # score for the label=1 class.
-        scores = scores.reshape((2, -1))[1, :].T
+        if self.rpn_scores_v is None:
+            # get output from the RPN network
+            # transform the scores and slice the score for the label=1 class
+            # shape: (KWH, 1)
+            self.rpn_scores_v = self.rpn_obj[0].outputs.reshape((2, -1))[1].T
+
+        if self.bbox_deltas_v is None:
+            # transform the bbox deltas, reshape to (4, KHW) then transpose to
+            # (KHW, 4) to match the shape of anchors.
+            self.bbox_deltas_v = self.rpn_bbox[0].outputs.reshape((4, -1)).T
 
         # 1. Convert anchors into proposals via bbox transformations
         # store output in proposals buffer
-        self._bbox_transform_inv(self._dev_anchors, bbox_deltas, output=self._proposals)
+        self._bbox_transform_inv(self._dev_anchors, self.bbox_deltas_v, output=self._proposals)
 
         # 2. clip predicted boxes to image
         self._clip_boxes(self._proposals, self.im_shape)
@@ -167,47 +196,43 @@ class ProposalLayer(Layer):
         # (NOTE: convert min_size to input image scale stored in im_scale)
         keep = self._filter_boxes(self._proposals,
                                   self.min_bbox_size * float(self.im_scale.get()))
+
         # we set the score of those we discard to -1
-        # the result is stored in this layers' own buffer.
-        self.dev_scores[:] = (scores * keep) - (1 - keep)
+        self._scores[:] = (self.rpn_scores_v * keep) - (1 - keep)
 
-        # -- TODO: move compute to device -- #
-        # 4. sort all (proposal, score) pairs by score from highest to lowest
-        # 5. take top pre_nms_topN (e.g. 12000)
+        # 4. set the scores to be -1 for the padded area
+        # set the scores of all the proposals from the padded area to be -1
+        # in order to ignore them after sorting
+        scores_np = self._scores.get()
+        scores_np.reshape(-1, self._conv_size, self._conv_size)[:, real_H:] = -1
+        scores_np.reshape(-1, self._conv_size, self._conv_size)[:, :, real_W:] = -1
+        self._scores[:] = self.be.array(scores_np)
+
+        # 5. sort the scores from highest to lowest and take top pre_nms_topN
+        top_N_ind = self.get_top_N_index(self._scores, self.pre_nms_N)
+
+        # take top pre_nms_topN (e.g. 12000)
         # (make scores & proposals attributes of layer for unit testing)
-        self.scores = self.dev_scores.get()
-        self.proposals = self._proposals.get()
-
-        real_H = np.round(self.im_shape.get()[1] * self._scale).astype(int)
-        real_W = np.round(self.im_shape.get()[0] * self._scale).astype(int)
-        self.scores = self.scores.reshape(-1, self._conv_size, self._conv_size)[:, :real_H, :real_W].reshape(-1, 1)
-        self.proposals = self.proposals.reshape(-1, self._conv_size, self._conv_size, 4)[:, :real_H, :real_W].reshape(-1, 4)
-
-        keeps = list(np.where(self.scores != -1)[0])
-        # Combine the filtered index list with the original anchor index list (from global buffer)
-        # to get final list of unique proposals to keep
-        # keeps = list(set(all_anchor_inds).union(filt_idx))
-        self.scores = self.scores[keeps]
-        self.proposals = self.proposals[keeps]
-
-        (self.scores, self.proposals) = self.get_top_N(self.scores, self.proposals, self.pre_nms_N)
+        self.dets.fill(0)
+        self.dets[:len(top_N_ind), :4] = self._proposals[top_N_ind]
+        self.dets[:len(top_N_ind), 4] = self._scores[top_N_ind]
 
         # 6. apply nms (e.g. threshold = 0.7)
+        keep = self.be.nms(self.dets, self.nms_thresh)
+
         # 7. take post_nms_N (e.g. 2000)
-        # 8. return the top proposals (-> RoIs top)
-        keep = nms(np.hstack((self.proposals, self.scores)), self.nms_thresh)
         keep = keep[:self.post_nms_N]
-        self.proposals = self.proposals[keep]
-        self.scores = self.scores[keep]
-        # -- END TODO -- #
+        self.num_proposals = len(keep)
 
-        # load proposals back to device
-        num_proposals = self.proposals.shape[0]
-        _proposals = np.hstack([np.zeros((num_proposals, 1)), self.proposals])
-        _proposals = np.ascontiguousarray(_proposals, dtype=np.float32)
-        self.dev_proposals[:num_proposals, :] = _proposals
+        # if it is not for debug (unit test) or for training, no need to copy these to host
+        if self.debug or not inference:
+            # make scores & proposals attributes of layer for unit testing
+            self.proposals = self.dets[keep, :4].get()
+            self.scores = self.dets[keep, -1].get()
 
-        self.num_proposals = num_proposals
+        # 8. provide ROIs in the format of [0, x1, y1, x2, y2]
+        self.dev_proposals.fill(0)
+        self.dev_proposals[:self.num_proposals, 1:] = self.dets[keep, :4]
 
         # If training, sample the proposals and only propagate those forward
         if not inference:
@@ -262,12 +287,9 @@ class ProposalLayer(Layer):
             rois = np.hstack([np.zeros((num_proposals, 1)), rois])
             rois = np.ascontiguousarray(rois, dtype=np.float32)
 
+            self.dev_proposals_filtered.fill(0)
             self.dev_proposals_filtered[:num_proposals, :] = rois
             self.num_proposals = num_proposals
-
-            if REFERENCE_TEST:
-                self._reference_test(_proposals, self.scores, labels.ravel(),
-                                     bbox_targets, bbox_inside_weights, keep_inds)
 
             # During training, only propagate sampled proposals
             return (inputs, self.dev_proposals_filtered.T)
@@ -279,75 +301,15 @@ class ProposalLayer(Layer):
     def get_proposals(self):
         return (self.dev_proposals, self.num_proposals)
 
-    def _reference_test(self, target_proposals, target_scores,
-                        frcn_labels, frcn_bbtargets, frcn_bbmask, keep_inds):
-        prop_layer = PyCaffeProposalLayer()
-        (H, W) = (62, 62)
-
-        # prepare top and bottom data buffers
-        scores = self.rpn_obj[0].outputs.get()  # shape: (2KHW, 1)
-        bbox_deltas = self.rpn_bbox[0].outputs.get()  # shape (4KHW, 1)
-
-        # reshape from (4KHW, 1) -> (1, K4, H, W) format for pycaffe
-        # NB: pycaffe uses A where we use K
-        bbox_deltas = bbox_deltas.reshape((4, -1, H, W)).transpose((1, 0, 2, 3))
-        bbox_deltas = bbox_deltas.reshape((1, -1, H, W))
-
-        # reshape from (2KHW, 1) -> (1, K2, H, W)
-        scores = scores.reshape((2, -1, H, W)).transpose((0, 1, 2, 3))
-        scores = scores.reshape((1, -1, H, W))
-
-        bottom = [None, None, None]
-        bottom[0] = scores
-        bottom[1] = bbox_deltas
-        bottom[2] = [self.im_shape[1], self.im_shape[0], self.im_scale]
-
-        top = [None, None]
-
-        prop_layer.setup(bottom, top)
-        prop_layer.forward(bottom, top)
-
-        # Test proposed bounding boxes against PyCaffeProposalLayer
-        # Because the two implementations handle ties in different ways,
-        # a direct comparison is currently not possible.
-        # assert len(np.setdiff1d(top[0], target_proposals)) / float(target_proposals.size) < 0.2
-        # assert len(np.setdiff1d(top[1], target_scores)) / float(target_scores.size) < 0.02
-
-        # Test the proposal target generation
-        target_layer = PyCaffeProposalTargetLayer()
-
-        t_bottom = [0, 1]
-        # use target proposals from neon RPN
-        t_bottom[0] = target_proposals
-        # convert format of gt_boxes from (num_classes, 4) to (num_gt_boxes, 5)
-        # concat the boxes and the classes and clip to num_gt_boxes and pass it in 
-        t_bottom[1] = np.hstack((self.gt_boxes.get(),
-                                 self.gt_classes.get()))[:self.num_gt_boxes.get()[0][0]]
-
-        t_top = [None, None, None, None, None]
-
-        target_layer.setup(t_bottom, t_top, keep_inds)
-        target_layer.forward(t_bottom, t_top)
-
-        frcn_bbtargets_reference = np.zeros(frcn_bbtargets.shape, dtype=np.float32)
-        frcn_bbmask_reference = np.zeros(frcn_bbmask.shape, dtype=np.float32)
-
-        frcn_bbtargets_reference[:t_top[2].shape[0]] = t_top[2]
-        frcn_bbmask_reference[:t_top[3].shape[0]] = t_top[3]
-
-        # Test proposal layer targets against pycaffe layer
-        assert (np.alltrue(t_top[1] == frcn_labels))  # target labels
-        assert (np.allclose(frcn_bbtargets_reference, frcn_bbtargets, atol=0.01))  # target bbox
-        assert (np.alltrue(frcn_bbmask_reference == frcn_bbmask))   # target bbox mask
-
-    def get_top_N(self, scores, proposals, N):
-        order = scores.ravel().argsort()[::-1]
+    def get_top_N_index(self, scores, N):
+        # this function handles scores still being device tensors
+        count = len(np.where(scores.get() > -1)[0])
+        order = scores.get().ravel().argsort()[::-1].tolist()
+        order = order[:count]
         if N > 0:
             order = order[:N]
-        proposals = proposals[order, :]
-        scores = scores[order]
 
-        return (scores, proposals)
+        return order
 
     def bprop(self, errors, alpha=1.0, beta=0.0):
         """This layer propagate gradients from ROIs back to lower VGG layers"""
@@ -416,8 +378,7 @@ class ProposalLayer(Layer):
             bbox_targets (ndarray): N x 4K blob of regression targets
             bbox_inside_weights (ndarray): N x 4K blob of loss weights
         """
-        bbox_targets = np.zeros((self.num_rois, 4 * self.num_classes), 
-                                dtype=np.float32)
+        bbox_targets = np.zeros((self.num_rois, 4 * self.num_classes), dtype=np.float32)
         bbox_inside_weights = np.zeros(bbox_targets.shape, dtype=np.float32)
         inds = np.where(labels > 0)[0]
         for ind in inds:
@@ -429,9 +390,9 @@ class ProposalLayer(Layer):
         return bbox_targets, bbox_inside_weights
 
     def _sample_fg_bg(self, max_overlaps):
-        """Return sample of at most fg_fraction * num_rois foreground indicies, padding 
+        """Return sample of at most fg_fraction * num_rois foreground indicies, padding
         the remaining num_rois with background indicies. Foreground and background labels
-        are determined based on max_overlaps and the thresholds fg_thresh, bg_thresh_hi, 
+        are determined based on max_overlaps and the thresholds fg_thresh, bg_thresh_hi,
         bg_thresh_lo.
         Returns:
             keep_inds (array): (num_rois,) sampled indicies of bboxes.

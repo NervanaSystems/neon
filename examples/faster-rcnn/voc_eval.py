@@ -21,10 +21,13 @@
 The mAP evaluation script and various util functions are from:
 https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc351be7f145499f
 """
+from __future__ import division
+from __future__ import print_function
+from builtins import range
 
 import xml.etree.ElementTree as ET
 import os
-import cPickle
+import pickle
 import numpy as np
 
 
@@ -129,16 +132,16 @@ def voc_eval(detpath,
         for i, imagename in enumerate(imagenames):
             recs[imagename] = parse_rec(annopath.format(imagename))
             if i % 100 == 0:
-                print 'Reading annotation for {:d}/{:d}'.format(
-                    i + 1, len(imagenames))
+                print('Reading annotation for {:d}/{:d}'.format(
+                    i + 1, len(imagenames)))
         # save
-        print 'Saving cached annotations to {:s}'.format(cachefile)
+        print('Saving cached annotations to {:s}'.format(cachefile))
         with open(cachefile, 'w') as f:
-            cPickle.dump(recs, f)
+            pickle.dump(recs, f)
     else:
         # load
         with open(cachefile, 'r') as f:
-            recs = cPickle.load(f)
+            recs = pickle.load(f)
 
     # extract gt objects for this class
     class_recs = {}

@@ -13,19 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+"""
+Test for proposal layer and proposal target layer. It uses the layer implementations from
+faster rcnn code (https://github.com/rbgirshick/py-faster-rcnn) and currently in the file
+proposal_layer_ref.py
+proposal_target_layer_ref.py
 
-import os
-import sys
-# Modify python path at runtime to allow testing of current Objectlocalization
-sys.path.append(os.path.dirname(os.path.expanduser('~/private-neon/examples/faster-rcnn/')))
-
+"""
+from __future__ import division
+from builtins import range
+from builtins import object
 import numpy as np
-import numpy.random as npr
 import itertools as itt
-from neon import NervanaObject
+
 from neon.backends import gen_backend
+
 from proposal_layer_ref import PyCaffeProposalLayer
 from proposal_target_layer_ref import PyCaffeProposalTargetLayer
+
 from proposal_layer import ProposalLayer
 
 
@@ -40,7 +45,7 @@ def pytest_generate_tests(metafunc):
             nms_thresh = [0.7]
             min_size = [16]
         else:
-            _conv_size = [62]
+            _conv_size = [63]
             im_shape = [[800, 600]]
             SCALE = [1.6, 2.5]
             pre_nms_topN = [12000]
@@ -61,32 +66,36 @@ class mock_layer(object):
 
 
 def test_proposal_layer(backend_default, fargs):
+
+    np.random.seed(seed=0)
+
     # Get a backend for tensor allocation
-    NervanaObject.be.bsz = 1
+    be = backend_default
+    be.bsz = 1
 
     _conv_size, im_shape_arr, SCALE, pre_nms_topN, post_nms_topN, nms_thresh, min_size = fargs
 
-    im_shape = NervanaObject.be.zeros((2, 1), dtype=np.float32)
+    im_shape = be.zeros((2, 1), dtype=np.float32)
     im_shape[:] = np.array(im_shape_arr)
-    im_scale = NervanaObject.be.ones((1, 1), dtype=np.float32).fill(1.0 / 16.0)
-    SCALE = NervanaObject.be.ones((1, 1), dtype=np.float32).fill(SCALE)
+    im_scale = be.ones((1, 1), dtype=np.float32).fill(1.0 / 16.0)
+    SCALE = be.ones((1, 1), dtype=np.float32).fill(SCALE)
 
     real_H = np.round(im_shape.get()[1] * im_scale.get()).astype(int).reshape((1,))[0]
     real_W = np.round(im_shape.get()[0] * im_scale.get()).astype(int).reshape((1,))[0]
 
-    frcn_labels = NervanaObject.be.zeros((21, 128), dtype=np.int32)
-    frcn_labels_mask = NervanaObject.be.zeros(frcn_labels.shape, dtype=np.int32)
-    frcn_bbtargets = NervanaObject.be.zeros((21*4, 128), dtype=np.float32)
-    frcn_bbmask = NervanaObject.be.zeros(frcn_bbtargets.shape, dtype=np.float32)
+    frcn_labels = be.zeros((21, 128), dtype=np.int32)
+    frcn_labels_mask = be.zeros(frcn_labels.shape, dtype=np.int32)
+    frcn_bbtargets = be.zeros((21*4, 128), dtype=np.float32)
+    frcn_bbmask = be.zeros(frcn_bbtargets.shape, dtype=np.float32)
 
-    gt_boxes = NervanaObject.be.zeros((64, 4), dtype=np.float32)
+    gt_boxes = be.zeros((64, 4), dtype=np.float32)
     gt_boxes[:3, :] = np.array([[262, 210, 323, 338],
                                [164, 263, 252, 371],
                                [240, 193, 294, 298]])
 
-    gt_classes = NervanaObject.be.zeros((64, 1), dtype=np.int32)
+    gt_classes = be.zeros((64, 1), dtype=np.int32)
     gt_classes[:3, :] = np.array([[9], [9], [9]])
-    num_gt_boxes = NervanaObject.be.zeros((1, 1), dtype=np.int32).fill(3)
+    num_gt_boxes = be.zeros((1, 1), dtype=np.int32).fill(3)
 
     # mock global buffer
     global_buffer = {
@@ -97,8 +106,10 @@ def test_proposal_layer(backend_default, fargs):
         "conv_config": (_conv_size, im_scale.get())  # (conv_size, im_scale)
     }
 
-    rpn_obj_scores_dev = NervanaObject.be.array(npr.random((2 * 9 * _conv_size * _conv_size, 1)))
-    rpn_bbox_deltas_dev = NervanaObject.be.array(npr.random((4 * 9 * _conv_size * _conv_size, 1)))
+    num_scores = 2 * 9 * _conv_size * _conv_size
+    rpn_obj_scores_dev = be.array(np.random.choice(num_scores * 2, size=num_scores,
+                                  replace=False) / float(num_scores * 2.0))
+    rpn_bbox_deltas_dev = be.array(np.random.random((4 * 9 * _conv_size * _conv_size, 1)))
 
     RPN_1x1_obj = mock_layer(rpn_obj_scores_dev)
     RPN_1x1_bbox = mock_layer(rpn_bbox_deltas_dev)
@@ -109,7 +120,7 @@ def test_proposal_layer(backend_default, fargs):
     prop_layer = ProposalLayer([[RPN_1x1_obj], [RPN_1x1_bbox]], global_buffer,
                                pre_nms_N=pre_nms_topN, post_nms_N=post_nms_topN,
                                nms_thresh=nms_thresh, min_bbox_size=min_size, num_rois=128,
-                               deterministic=True, inference=False)
+                               deterministic=True, inference=False, debug=True)
     prop_layer.configure(mock_layer([]))
     prop_layer.allocate()
 
@@ -155,8 +166,8 @@ def test_proposal_layer(backend_default, fargs):
     prop_layer_ref.forward(bottom, top)
 
     # Compare proposals and scores from proposal layer
-    assert np.allclose(top[0][:, 1:], target_proposals, atol=1e-4)
-    assert np.allclose(top[1], target_scores, atol=1e-4)
+    assert np.allclose(top[0][:, 1:], target_proposals, atol=1e-5, rtol=1e-4)
+    assert np.allclose(top[1], target_scores, atol=1e-5, rtol=1e-4)
 
     # Now testing proposal target layer
     t_bottom = [0, 1]

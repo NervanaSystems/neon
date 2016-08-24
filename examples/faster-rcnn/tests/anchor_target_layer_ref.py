@@ -1,3 +1,7 @@
+from __future__ import division
+from __future__ import print_function
+from builtins import range
+from builtins import object
 # --------------------------------------------------------
 # Faster R-CNN
 # Copyright (c) 2015 Microsoft
@@ -5,21 +9,16 @@
 # Written by Ross Girshick and Sean Bell
 # --------------------------------------------------------
 
-import os
-import yaml
 import numpy as np
 import numpy.random as npr
+
 from generate_anchors import generate_anchors
-from bbox_transform import bbox_transform
-import pyximport
-pyximport.install(setup_args={"include_dirs": np.get_include()},
-                  reload_support=True)
-from bbox import bbox_overlaps
+from util import bbox_transform
 
 DEBUG = False
 
 
-class AnchorTargetLayer:
+class AnchorTargetLayer(object):
     """
     Assign anchors to ground-truth targets. Produces anchor classification
     labels and bounding-box regression targets.
@@ -66,7 +65,6 @@ class AnchorTargetLayer:
         # if DEBUG:
         #     print 'AnchorTargetLayer: height', height, 'width', width
 
-        A = self._num_anchors
         # labels
         # top[0].reshape(1, 1, A * height, width)
         # # bbox_targets
@@ -96,12 +94,12 @@ class AnchorTargetLayer:
         im_info = bottom[2]
 
         if DEBUG:
-            print ''
-            print 'im_size: ({}, {})'.format(im_info[0], im_info[1])
-            print 'scale: {}'.format(im_info[2])
-            print 'height, width: ({}, {})'.format(height, width)
-            print 'rpn: gt_boxes.shape', gt_boxes.shape
-            print 'rpn: gt_boxes', gt_boxes
+            print('')
+            print('im_size: ({}, {})'.format(im_info[0], im_info[1]))
+            print('scale: {}'.format(im_info[2]))
+            print('height, width: ({}, {})'.format(height, width))
+            print('rpn: gt_boxes.shape', gt_boxes.shape)
+            print('rpn: gt_boxes', gt_boxes)
 
         # 1. Generate proposals from bbox deltas and shifted anchors
         shift_x = np.arange(0, width) * self._feat_stride
@@ -129,20 +127,20 @@ class AnchorTargetLayer:
         )[0]
 
         if DEBUG:
-            print 'total_anchors', total_anchors
-            print 'inds_inside', len(inds_inside)
+            print('total_anchors', total_anchors)
+            print('inds_inside', len(inds_inside))
 
         # keep only inside anchors
         anchors = all_anchors[inds_inside, :]
         if DEBUG:
-            print 'anchors.shape', anchors.shape
+            print('anchors.shape', anchors.shape)
 
         # label: 1 is positive, 0 is negative, -1 is dont care
         labels = np.empty((len(inds_inside), ), dtype=np.float32)
         labels.fill(-1)
         # overlaps between the anchors and the gt boxes
         # overlaps (ex, gt)
-        overlaps = bbox_overlaps(
+        overlaps = calculate_bb_overlap(
             np.ascontiguousarray(anchors, dtype=np.float),
             np.ascontiguousarray(gt_boxes, dtype=np.float))
         argmax_overlaps = overlaps.argmax(axis=1)
@@ -161,9 +159,9 @@ class AnchorTargetLayer:
         labels[max_overlaps >= self.RPN_POSITIVE_OVERLAP] = 1
 
         if DEBUG:
-            print 'rpn: max max_overlap', np.max(max_overlaps)
-            print 'rpn: num_positive', np.sum(labels == 1)
-            print 'rpn: num_negative', np.sum(labels == 0)
+            print('rpn: max max_overlap', np.max(max_overlaps))
+            print('rpn: num_positive', np.sum(labels == 1))
+            print('rpn: num_negative', np.sum(labels == 0))
 
         # if cfg.TRAIN.RPN_CLOBBER_POSITIVES:
         #     # assign bg labels last so that negative labels can clobber positives
@@ -199,10 +197,8 @@ class AnchorTargetLayer:
         else:
             assert ((self.RPN_POSITIVE_WEIGHT > 0) &
                     (self.RPN_POSITIVE_WEIGHT < 1))
-            positive_weights = (self.RPN_POSITIVE_WEIGHT /
-                                np.sum(labels == 1))
-            negative_weights = ((1.0 - self.RPN_POSITIVE_WEIGHT) /
-                                np.sum(labels == 0))
+            positive_weights = self.RPN_POSITIVE_WEIGHT / np.sum(labels == 1)
+            negative_weights = (1.0 - self.RPN_POSITIVE_WEIGHT) / np.sum(labels == 0)
         bbox_outside_weights[labels == 1, :] = positive_weights
         bbox_outside_weights[labels == 0, :] = negative_weights
 
@@ -212,10 +208,10 @@ class AnchorTargetLayer:
             self._counts += np.sum(labels == 1)
             means = self._sums / self._counts
             stds = np.sqrt(self._squared_sums / self._counts - means ** 2)
-            print 'means:'
-            print means
-            print 'stdevs:'
-            print stds
+            print('means:')
+            print(means)
+            print('stdevs:')
+            print(stds)
 
         # map up to original set of anchors
         labels = _unmap(labels, total_anchors, inds_inside, fill=-1)
@@ -224,14 +220,14 @@ class AnchorTargetLayer:
         bbox_outside_weights = _unmap(bbox_outside_weights, total_anchors, inds_inside, fill=0)
 
         if DEBUG:
-            print 'rpn: max max_overlap', np.max(max_overlaps)
-            print 'rpn: num_positive', np.sum(labels == 1)
-            print 'rpn: num_negative', np.sum(labels == 0)
+            print('rpn: max max_overlap', np.max(max_overlaps))
+            print('rpn: num_positive', np.sum(labels == 1))
+            print('rpn: num_negative', np.sum(labels == 0))
             self._fg_sum += np.sum(labels == 1)
             self._bg_sum += np.sum(labels == 0)
             self._count += 1
-            print 'rpn: num_positive avg', self._fg_sum / self._count
-            print 'rpn: num_negative avg', self._bg_sum / self._count
+            print('rpn: num_positive avg', self._fg_sum / self._count)
+            print('rpn: num_negative avg', self._bg_sum / self._count)
 
         # labels
         labels = labels.reshape((1, height, width, A)).transpose(0, 3, 1, 2)
@@ -287,3 +283,44 @@ def _compute_targets(ex_rois, gt_rois):
     # assert gt_rois.shape[1] == 5
 
     return bbox_transform(ex_rois, gt_rois[:, :4]).astype(np.float32, copy=False)
+
+
+def calculate_bb_overlap(rp, gt):
+    """
+    Returns a matrix of overlaps between every possible pair of the two provided
+    bounding box lists.
+
+    Arguments:
+        rp (list): an array of region proposals, shape (R, 4)
+        gt (list): an array of ground truth ROIs, shape (G, 4)
+
+    Outputs:
+        overlaps: a matrix of overlaps between 2 list, shape (R, G)
+    """
+    R = rp.shape[0]
+    G = gt.shape[0]
+    overlaps = np.zeros((R, G), dtype=np.float32)
+
+    for g in range(G):
+        gt_box_area = float(
+            (gt[g, 2] - gt[g, 0] + 1) *
+            (gt[g, 3] - gt[g, 1] + 1)
+        )
+        for r in range(R):
+            iw = float(
+                min(rp[r, 2], gt[g, 2]) -
+                max(rp[r, 0], gt[g, 0]) + 1
+            )
+            if iw > 0:
+                ih = float(
+                    min(rp[r, 3], gt[g, 3]) -
+                    max(rp[r, 1], gt[g, 1]) + 1
+                )
+                if ih > 0:
+                    ua = float(
+                        (rp[r, 2] - rp[r, 0] + 1) *
+                        (rp[r, 3] - rp[r, 1] + 1) +
+                        gt_box_area - iw * ih
+                    )
+                    overlaps[r, g] = iw * ih / ua
+    return overlaps

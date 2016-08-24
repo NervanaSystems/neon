@@ -651,7 +651,7 @@ def multicost_recurse(x):
     Arguments:
         x (Cost): cost object
     """
-    # recurse into nested multicosts to grab all cost branches   
+    # recurse into nested multicosts to grab all cost branches
     if type(x) == Multicost:
         return [z for z in map(multicost_recurse, x.costs)]
     else:
@@ -659,21 +659,21 @@ def multicost_recurse(x):
 
 
 def separate_branch_costs(x):
-   """
-   Called on list of lists of costs, where each nested list is a separate multicost,
-   and returns the un-summed individual branch costs.
-   
-   Arguments:
-       x (list): list of lists of costs as returned by multicost_recurse 
-   """
-   # Subtract branch costs from total cost
-   x[0] -= np.sum([c[0] if type(c) == list else c for c in x[1:]])
-   # Recurse into non-trunk branches
-   for branch in x:
-       if type(branch) == list:
-           separate_branch_costs(branch)
-   # Return a flattened version of the list
-   return np.array([item for sublist in x for item in sublist])
+    """
+    Called on list of lists of costs, where each nested list is a separate multicost,
+    and returns the un-summed individual branch costs.
+
+    Arguments:
+       x (list): list of lists of costs as returned by multicost_recurse
+    """
+    # Subtract branch costs from total cost
+    x[0] -= np.sum([c[0] if type(c) == list else c for c in x[1:]])
+    # Recurse into non-trunk branches
+    for branch in x:
+        if type(branch) == list:
+            separate_branch_costs(branch)
+    # Return a flattened version of the list
+    return np.array([item for sublist in x for item in sublist])
 
 
 def recursive_multicost_len(item):
@@ -688,7 +688,7 @@ def recursive_multicost_len(item):
         return sum(recursive_multicost_len(subitem) for subitem in item.costs)
     else:
         return 1
- 
+
 
 class TrainMulticostCallback(Callback):
     """
@@ -716,7 +716,8 @@ class TrainMulticostCallback(Callback):
         # preallocate space for the number of minibatches in the whole run
         points = callback_data['config'].attrs['total_minibatches']
         callback_data.create_dataset("multicost/train", (points, self.ncosts), dtype='float64')
-        callback_data.create_dataset("multicost/train_allbranches", (points, self.ncosts_allbranches), dtype='float64')
+        callback_data.create_dataset("multicost/train_allbranches",
+                                     (points, self.ncosts_allbranches), dtype='float64')
 
         # make sure our window size is less than or equal to total number of minibatches
         self.wsz = min(points, self.wsz)
@@ -725,7 +726,6 @@ class TrainMulticostCallback(Callback):
         # clue in the data reader to use the 'minibatch' time_markers
         callback_data['multicost/train'].attrs['time_markers'] = 'minibatch'
         callback_data['multicost/train_allbranches'].attrs['time_markers'] = 'minibatch'
-
 
     def on_minibatch_end(self, callback_data, model, epoch, minibatch):
         """
@@ -747,7 +747,8 @@ class TrainMulticostCallback(Callback):
         costs_allbranches = np.array([multicost_recurse(c) for c in model.cost.costs])
         # Subtract non-trunk branches from summed trunk cost to get individual branch costs
         costs_allbranches = separate_branch_costs(costs_allbranches)
-        callback_data['multicost/train_allbranches'][mbstart + minibatch, :] = costs_allbranches.squeeze()
+        callback_data['multicost/train_allbranches'][mbstart + minibatch, :] =\
+            costs_allbranches.squeeze()
 
 
 class LossCallback(Callback):

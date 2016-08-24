@@ -14,15 +14,14 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-import os
-import sys
-# Modify python path at runtime to allow testing of current Objectlocalization
-sys.path.append(os.path.dirname(os.path.expanduser('~/private-neon/examples/faster-rcnn/')))
+from __future__ import division
+from builtins import next
 
 import numpy as np
 import itertools as itt
 from neon import NervanaObject
 from neon.backends import gen_backend
+
 from anchor_target_layer_ref import AnchorTargetLayer
 from objectlocalization import PASCAL
 

@@ -4,17 +4,18 @@
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick and Sean Bell
 # --------------------------------------------------------
+from __future__ import print_function
+from builtins import object
 
 import numpy as np
-import yaml
+
 from generate_anchors import generate_anchors
-from bbox_transform import bbox_transform_inv, clip_boxes
-from py_cpu_nms import py_cpu_nms as nms
+from util import bbox_transform_inv, clip_boxes, nms
 
 DEBUG = False
 
 
-class PyCaffeProposalLayer():
+class PyCaffeProposalLayer(object):
     """
     Outputs object detection proposals by applying estimated bounding-box
     transformations to a set of regular boxes (called "anchors").
@@ -22,8 +23,7 @@ class PyCaffeProposalLayer():
 
     def setup(self, bottom, top, pre_nms_topN=12000, post_nms_topN=2000,
               nms_thresh=0.7, min_size=16):
-        # parse the layer parameter string, which must be valid YAML
-        # layer_params = yaml.load(self.param_str_)
+
         self._feat_stride = 16
         anchor_scales = (8, 16, 32)
         self._anchors = generate_anchors(scales=np.array(anchor_scales))
@@ -35,9 +35,9 @@ class PyCaffeProposalLayer():
         self.min_size = min_size
 
         if DEBUG:
-            print 'feat_stride: {}'.format(self._feat_stride)
-            print 'anchors:'
-            print self._anchors
+            print('feat_stride: {}'.format(self._feat_stride))
+            print('anchors:')
+            print(self._anchors)
 
         # rois blob: holds R regions of interest, each is a 5-tuple
         # (n, x1, y1, x2, y2) specifying an image batch index n and a
@@ -72,14 +72,14 @@ class PyCaffeProposalLayer():
         im_info = [float(x.get()) for x in bottom[2]]
 
         if DEBUG:
-            print 'im_size: ({}, {})'.format(im_info[0], im_info[1])
-            print 'scale: {}'.format(im_info[2])
+            print('im_size: ({}, {})'.format(im_info[0], im_info[1]))
+            print('scale: {}'.format(im_info[2]))
 
         # 1. Generate proposals from bbox deltas and shifted anchors
         height, width = scores.shape[-2:]
 
         if DEBUG:
-            print 'score map size: {}'.format(scores.shape)
+            print('score map size: {}'.format(scores.shape))
 
         # Enumerate all shifts
         shift_x = np.arange(0, width) * self._feat_stride
@@ -143,7 +143,7 @@ class PyCaffeProposalLayer():
         scores = scores[keep]
 
         if DEBUG:
-            print "(CAFFE) len(keep) before nms: {}".format(len(keep))
+            print("(CAFFE) len(keep) before nms: {}".format(len(keep)))
 
         # 4. sort all (proposal, score) pairs by score from highest to lowest
         # 5. take top pre_nms_topN (e.g. 6000)
@@ -154,7 +154,7 @@ class PyCaffeProposalLayer():
         scores = scores[order]
 
         if DEBUG:
-            print "(CAFFE) len(proposals) after get_top_N: {}".format(len(proposals))
+            print("(CAFFE) len(proposals) after get_top_N: {}".format(len(proposals)))
 
         # 6. apply nms (e.g. threshold = 0.7)
         # 7. take after_nms_topN (e.g. 300)
@@ -162,7 +162,7 @@ class PyCaffeProposalLayer():
         keep = nms(np.hstack((proposals, scores)), self.nms_thresh)
 
         if DEBUG:
-            print "(CAFFE) len(keep) before clipping: {}".format(len(keep))
+            print("(CAFFE) len(keep) before clipping: {}".format(len(keep)))
 
         if self.post_nms_topN > 0:
             keep = keep[:self.post_nms_topN]
@@ -170,7 +170,7 @@ class PyCaffeProposalLayer():
         scores = scores[keep]
 
         if DEBUG:
-            print "(CAFFE) len(keep) after nms: {}".format(len(keep))
+            print("(CAFFE) len(keep) after nms: {}".format(len(keep)))
 
         # Output rois blob
         # Our RPN implementation only supports a single input image, so all

@@ -25,20 +25,27 @@ Reference:
 Usage:
     python examples/faster-rcnn/test.py --model_file frcn_vgg.pkl
 
+At the end of the a training process, the model is serialized with the bounding box
+regression layer normalized. If you like to test on a model file before the training
+is finished, use --normalize flag to do the normalization here.
+
 The mAP evaluation script is adapted from:
-https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc351be7f145499f
+https://github.com/rbgirshick/py-faster-rcnn/
 """
+
 from neon.backends import gen_backend
 from objectlocalization import PASCAL
 from neon.util.argparser import NeonArgparser, extract_valid_args
-import faster_rcnn
+from neon import logger as neon_logger
 import util
 import sys
 import os
+from builtins import range
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__, default_overrides={'batch_size': 1})
-parser.add_argument('--normalize', action='store_true', help='Normalize the fc layers.')
+parser.add_argument('--normalize', action='store_true',
+                    help='Normalize the final bounding box regression layers.')
 parser.add_argument('--output_dir', default=None,
                     help='Directory to save AP metric results. Default is [data_dir]/frcn_output/')
 parser.add_argument('--nms_thresh', type=float, default=0.3, help='Threshold used for NMS.')
@@ -68,7 +75,7 @@ valid_set = PASCAL(image_set, year, path=args.data_dir, n_mb=n_mb,
 num_classes = valid_set.num_classes
 
 # build the Faster-RCNN network
-(model, proposalLayer) = faster_rcnn.build_model(valid_set, frcn_rois_per_img, inference=True)
+(model, proposalLayer) = util.build_model(valid_set, frcn_rois_per_img, inference=True)
 
 # load parameters and initialize model
 model.load_params(args.model_file)
@@ -82,6 +89,7 @@ if args.normalize:
                                      [0.1, 0.1, 0.2, 0.2], num_classes)
 
 # run inference
+# model.benchmark(valid_set, inference=True)
 
 # detection parameters
 num_images = valid_set.num_image_entries if n_mb is None else n_mb
@@ -92,8 +100,8 @@ nms_thresh = args.nms_thresh  # threshold used for non-maximum supression
 # all detections are collected into:
 #    all_boxes[cls][image] = N x 5 array of detections in
 #    (x1, y1, x2, y2, score)
-all_boxes = [[[] for _ in xrange(num_classes)]
-             for _ in xrange(num_images)]
+all_boxes = [[[] for _ in range(num_classes)]
+             for _ in range(num_images)]
 
 last_strlen = 0
 for mb_idx, (x, y) in enumerate(valid_set):
@@ -115,11 +123,11 @@ for mb_idx, (x, y) in enumerate(valid_set):
     (proposals, num_proposals) = proposalLayer.get_proposals()
 
     # convert outputs to bounding boxes
-    boxes = faster_rcnn.get_bboxes(outputs, proposals, num_proposals, valid_set.num_classes,
-                                   im_shape, im_scale, max_per_image, thresh, nms_thresh)
+    boxes = util.get_bboxes(outputs, proposals, num_proposals, valid_set.num_classes,
+                            im_shape, im_scale, max_per_image, thresh, nms_thresh)
 
     all_boxes[mb_idx] = boxes
 
-print 'Evaluating detections'
+neon_logger.display('Evaluating detections')
 annopath, imagesetfile = valid_set.evaluation(all_boxes, args.output_dir)
 util.run_voc_eval(annopath, imagesetfile, year, image_set, valid_set.CLASSES, args.output_dir)
