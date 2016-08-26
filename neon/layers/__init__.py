@@ -19,4 +19,4 @@ from neon.layers.layer import (Linear, Bias, Affine, Conv, Convolution, Generali
 from neon.layers.recurrent import (Recurrent, LSTM, GRU, RecurrentSum, RecurrentMean, RecurrentLast,
                                    BiRNN, BiBNRNN, BiLSTM, DeepBiRNN, DeepBiLSTM)
 from neon.layers.container import (Tree, Sequential, MergeMultistream, MergeBroadcast, Multicost,
-                                   RoiPooling, MergeSum, SingleOutputTree)
+                                   RoiPooling, MergeSum, SingleOutputTree, Seq2Seq)

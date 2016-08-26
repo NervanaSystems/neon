@@ -23,7 +23,7 @@ from neon.backends.backend import Block
 from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.util.modeldesc import ModelDescription
-from neon.layers import Sequential, Activation, Tree, SingleOutputTree
+from neon.layers import Sequential, Activation, Tree, SingleOutputTree, Seq2Seq
 from neon.layers.container import DeltasTree
 import numpy as np
 
@@ -70,7 +70,7 @@ class Model(NervanaObject):
             self.load_params(layers, load_states=(not weights_only))
         else:
             # Wrap the list of layers in a Sequential container if a raw list of layers
-            if type(layers) in (Sequential, Tree, SingleOutputTree):
+            if type(layers) in (Sequential, Tree, SingleOutputTree, Seq2Seq):
                 self.layers = layers
             else:
                 self.layers = Sequential(layers)

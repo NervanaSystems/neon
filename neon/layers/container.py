@@ -19,7 +19,8 @@ import itertools as itt
 from operator import add
 
 from neon import NervanaObject
-from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform
+from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform, LookupTable
+from neon.layers.recurrent import Recurrent, get_steps
 from neon.util.persist import load_class
 from functools import reduce
 
@@ -111,6 +112,7 @@ class LayerContainer(Layer):
     @classmethod
     def gen_class(cls, pdict):
         layers = []
+
         for layer in pdict['layers']:
             typ = layer['type']
             ccls = load_class(typ)
@@ -252,6 +254,7 @@ class Sequential(LayerContainer):
             in_obj: any object that has an out_shape (Layer) or shape (Tensor, dataset)
         """
         config_layers = self.layers if in_obj else self._layers
+
         in_obj = in_obj if in_obj else self.layers[0]
         super(Sequential, self).configure(in_obj)
         prev_layer = None
@@ -309,9 +312,9 @@ class Sequential(LayerContainer):
             l.revert_list = [altered_tensor] if altered_tensor else []
 
             if l is self.layers[-1] and beta != 0:
-                x = l.fprop(x, inference, beta=beta)
+                x = l.fprop(x, inference=inference, beta=beta)
             else:
-                x = l.fprop(x, inference)
+                x = l.fprop(x, inference=inference)
 
         if inference:
             self.revert_tensors()
@@ -1082,6 +1085,336 @@ class RoiPooling(Sequential):
         """
         terminals = [l.get_terminal() for l in self.layers]
         return terminals
+
+
+class Encoder(Sequential):
+    """
+    Encoder stack for the Seq2Seq container. Acts like a sequential
+    except for bprop which are connected as specified to Decoder recurrent layers
+    """
+    def __init__(self, layers, name=None):
+        super(Encoder, self).__init__(layers, name)
+
+    def bprop(self, hidden_error_list, inference=False, alpha=1.0, beta=0.0):
+        """
+            Arguments:
+            hidden_error_list: Decoder container bprop output. List of errors
+                           associated with decoder recurrent layers
+        """
+        ienc = len(self._recurrent)-1  # index into recurrent layers, in reverse order
+
+        # initialize error to zeros (shape of last enc layer output)
+        if not hasattr(self, "error_buf"):
+            out_shape = self._layers[-1].out_shape
+            self.error_buf = self.be.iobuf(out_shape)
+            self.error_slices = get_steps(self.error_buf, out_shape)
+
+        error = self.error_buf
+        error.fill(0)
+
+        # bprop through layers, setting up connections from decoder layers for recurrent layers
+        for l in reversed(self._layers):
+            altered_tensor = l.be.distribute_data(error, l.parallelism)
+            if altered_tensor:
+                l.revert_list.append(altered_tensor)
+
+            if isinstance(l, Recurrent):
+                for idec in self.connections[ienc]:
+                    self.error_slices[-1][:] = self.error_slices[-1] + hidden_error_list[idec]
+                ienc -= 1
+            if type(l.prev_layer) is BranchNode or l is self._layers[0]:
+                error = l.bprop(error, alpha, beta)
+            else:
+                error = l.bprop(error)
+
+            for tensor in l.revert_list:
+                self.be.revert_tensor(tensor)
+
+
+class Decoder(Sequential):
+    """
+    Decoder stack for the Seq2Seq container. Acts like a sequential
+    except for fprop which takes the additional init_state_list, and bprop
+    which takes additional hidden_delta
+    """
+    def __init__(self, layers, name=None):
+        super(Decoder, self).__init__(layers, name)
+
+    def allocate(self, shared_outputs=None):
+        """
+        Allocate output buffer to store activations from fprop.
+
+        Arguments:
+            shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
+                                               computed into
+        """
+        # get the layers that own their outputs
+        alloc_layers = [l for l in self.layers if l.owns_output]
+        alloc_layers[-1].allocate(shared_outputs)
+        for l in self.layers:
+            l.outputs = self.be.iobuf(l.out_shape)  # TODO: added this for resizing
+            l.allocate()
+
+    def fprop(self, x, inference=False, init_state_list=None):
+
+        if init_state_list is None:
+            init_state_list = [None for _ in range(len(self._recurrent))]
+
+        ii = 0  # index into init_state_list (decoder recurrent layer number)
+        for l in self.layers:
+            altered_tensor = l.be.distribute_data(x, l.parallelism)
+            l.revert_list = [altered_tensor] if altered_tensor else []
+
+            # special fprop for recurrent layers with init state
+            if isinstance(l, Recurrent):
+                x = l.fprop(x, inference=inference, init_state=init_state_list[ii])
+                ii = ii + 1
+            else:
+                x = l.fprop(x, inference=inference)  # LUT or Affine
+
+        return x
+
+    def bprop(self, error, inference=False, alpha=1.0, beta=0.0):
+        """
+        bprop through layers, saving hidden_error for Recurrent layers
+        """
+        hidden_error_list = []
+        for l in reversed(self.layers):
+            altered_tensor = l.be.distribute_data(error, l.parallelism)
+            if altered_tensor:
+                l.revert_list.append(altered_tensor)
+
+            error = l.bprop(error)
+            if isinstance(l, Recurrent):
+                hidden_error_list.append(l.get_final_hidden_error())
+
+            for tensor in l.revert_list:
+                self.be.revert_tensor(tensor)
+
+        # return hidden error in order of decoder layers
+        # (to match init_from_layers)
+        hidden_error_list.reverse()
+
+        return hidden_error_list
+
+
+class Seq2Seq(LayerContainer):
+    """
+    Layer container that encapsulates encoder decoder pathways
+    used for sequence to sequence models.
+
+    Arguments:
+        layers (list): List of Sequential containers corresponding to the encoder and decoder.
+                       The encoder must be provided as the first list element.
+                       Similar to Tree and Broadcast containers, list elements can be
+                       list of layers or individual layers, which are converted to Sequential.
+        init_from_layers (list of ints): for every recurrent decoder layer, specifies the
+                                         corresponding encoder layer index (recurrent layers only)
+                                         to get initial state from, or None to not initialize
+    """
+    def __init__(self, layers, init_from_layers=None, conditional=False, name=None):
+
+        assert len(layers) == 2, self.__class__.__name__ + " layers argument must be length 2 list"
+
+        super(Seq2Seq, self).__init__(name=name)
+
+        def get_container(l, cls):
+            if isinstance(l, cls):
+                return l
+            elif isinstance(l, list):
+                return cls(l)
+            elif isinstance(l, Layer):
+                return cls([l])
+            else:
+                ValueError("Incompatible element for " + self.__class__.__name__ + " container")
+
+        self.encoder = get_container(layers[0], Encoder)
+        self.decoder = get_container(layers[1], Decoder)
+        self.layers = self.encoder.layers + self.decoder.layers
+
+        # list of recurrent layers only:
+        self.encoder._recurrent = [l for l in self.encoder.layers if isinstance(l, Recurrent)]
+        self.decoder._recurrent = [l for l in self.decoder.layers if isinstance(l, Recurrent)]
+
+        self.conditional = conditional
+        self.hasLUT = isinstance(self.encoder.layers[0], LookupTable)
+        if init_from_layers:
+            self.init_from_layers = init_from_layers
+        else:
+            # TODO: some sensible default behavior
+            raise NotImplementedError
+        # create list of decoder recurrent layers initialized by each encoder recurrent layer
+        connections = []
+        for ii in range(len(self.encoder._recurrent)):
+            dlayers = [idec for idec, ienc in enumerate(init_from_layers) if ienc == ii]
+            connections.append(dlayers)
+        self.encoder.connections = connections
+
+    @classmethod
+    def gen_class(cls, pdict):
+        layers = [[], []]  # Seq2Seq container
+        for i, layer in enumerate(pdict['layers']):
+            typ = layer['type']
+            ccls = load_class(typ)
+            # Seq2Seq container
+            if i < pdict['num_encoder_layers']:
+                layers[0].append(ccls.gen_class(layer['config']))
+            else:
+                layers[1].append(ccls.gen_class(layer['config']))
+
+        # layers is special in that there may be parameters
+        # serialized which will be used elsewhere
+        lsave = pdict.pop('layers')
+        pdict.pop('num_encoder_layers', None)
+        new_cls = cls(layers=layers, **pdict)
+        pdict['layers'] = lsave
+        return new_cls
+
+    def get_description(self, get_weights=False, keep_states=False):
+        """
+        Get layer parameters. All parameters are needed for optimization, but
+        only weights are serialized.
+
+        Arguments:
+            get_weights (bool, optional): Control whether all parameters are returned or
+                                          just weights for serialization.
+            keep_states (bool, optional): Control whether all parameters are returned
+                                          or just weights for serialization.
+        """
+        desc = super(Seq2Seq, self).get_description(get_weights=get_weights,
+                                                    keep_states=keep_states)
+
+        desc['config']['num_encoder_layers'] = len(self.encoder.layers)
+        desc['config']['init_from_layers'] = self.init_from_layers
+        desc['config']['conditional'] = self.conditional
+        self._desc = desc
+        return desc
+
+    @property
+    def layers_to_optimize(self):
+        return self.encoder.layers_to_optimize + self.decoder.layers_to_optimize
+
+    def propagate_parallelism(self, p):
+        self.encoder.propagate_parallelism(p)
+        p = self.encoder.layers[-1].parallelism  # TODO: understand this better
+        self.decoder.propagate_parallelism(p)
+
+    def configure(self, in_obj):
+        in_obj = in_obj if in_obj else self.encoder.layers[0]  # TODO: not relevant for Seq2Seq?
+        self.encoder.configure(in_obj)
+        self.decoder.configure(in_obj)
+        self.parallelism = self.decoder.parallelism
+        self.out_shape = self.decoder.out_shape
+        self.in_shape = self.decoder.layers[-1].in_shape if self.hasLUT else self.decoder.in_shape
+        return self
+
+    def allocate(self, shared_outputs=None):
+        self.decoder.allocate(shared_outputs)
+        if any([l.owns_output for l in self.decoder.layers]):
+            self.encoder.allocate()
+        else:
+            self.encoder.allocate(shared_outputs)
+        # buffer for collecting time loop outputs
+        self.xbuf = self.be.iobuf(self.out_shape)
+
+    def allocate_deltas(self, global_deltas=None):
+        self.encoder.allocate_deltas(global_deltas)
+        self.decoder.allocate_deltas(global_deltas)
+
+    def resize_buffers(self, old_size, new_size):
+        """
+        Dynamically grow or shrink the number of time steps to perform
+        single time step fprop during inference
+        """
+        if old_size != new_size:
+            if self.hasLUT:
+                in_obj = (new_size, 1)
+            else:
+                in_obj = (self.out_shape[0], new_size)
+            self.decoder.configure(in_obj=in_obj)
+            self.decoder.allocate(shared_outputs=None)  # re-allocate deltas, but not weights
+            for l in self.decoder.layers:
+                l.name += "'"
+
+    def fprop(self, inputs, inference=False, beta=0.0):
+        """
+        TODO:  Handle final layers that don't own their own outputs (bias, activation)
+        """
+
+        new_steps = 1
+        full_steps = self.in_shape[1]
+        # major hackfest because of LUT layer inconsistency:
+        cur_steps = self.decoder.in_shape[0] if self.hasLUT else self.decoder.in_shape[1]
+
+        if not (inference and self.conditional):
+            self.resize_buffers(cur_steps, full_steps)
+            # load data
+            if self.conditional:
+                (x, z) = inputs
+            else:
+                x = inputs
+                z = x.backend.zeros(x.shape)
+
+            # fprop through Encoder layers
+            # TODO: look at impact of revert_tensors call inside encoder fprop
+            x = self.encoder.fprop(x, inference=inference, beta=0.0)
+            # initialize hidden state from encoder hidden state.
+            init_state_list = [self.encoder._recurrent[ii].final_state()
+                               if ii is not None else None
+                               for ii in self.init_from_layers]
+
+            # fprop through Decoder layers
+            x = self.decoder.fprop(z, inference=inference, init_state_list=init_state_list)
+        else:
+            # Loopy inference.
+            self.resize_buffers(cur_steps, new_steps)
+            # prep data
+            # TODO: this assumes inputs will be given properly
+            x = inputs
+            if self.hasLUT:
+                z_shape = new_steps
+            else:
+                z_shape = (self.out_shape[0], new_steps)
+            z = x.backend.iobuf(z_shape)
+
+            # encoder
+            x = self.encoder.fprop(x, inference=inference, beta=0.0)
+            init_state_list = [self.encoder._recurrent[ii].final_state()
+                               if ii is not None else None
+                               for ii in self.init_from_layers]
+            # decoder
+            steps = self.in_shape[1]
+            if self.hasLUT:
+                z_argmax = x.backend.zeros((1, z.shape[0]*z.shape[1]))
+            for t in range(steps):
+                z = self.decoder.fprop(z, inference=inference, init_state_list=init_state_list)
+
+                # transfer hidden state from DECODER to next step
+                init_state_list = [recurrent.final_state()
+                                   for recurrent in self.decoder._recurrent]
+
+                # and write to output buffer
+                self.xbuf[:, t*self.be.bsz:(t+1)*self.be.bsz] = z
+
+                # some hacky LUT magic:
+                if self.hasLUT:
+                    z_argmax[:] = self.be.argmax(z, axis=0)
+                    z = z_argmax
+
+            x = self.xbuf
+
+        if inference:
+            self.revert_tensors()
+
+        return x
+
+    def bprop(self, error, inference=False, alpha=1.0, beta=0.0):
+        # TODO: implement loopy training case
+        hidden_error_list = self.decoder.bprop(error)
+        # TODO: this just implements special case of one-one encoder-decoder recurrent layers
+        self.encoder.bprop(hidden_error_list)
+
+        return self.encoder.layers[0].deltas
 
 
 class Multicost(NervanaObject):

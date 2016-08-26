@@ -24,7 +24,6 @@ from neon.data.dataiterator import NervanaDataIterator, ArrayIterator
 from neon.data.datasets import Dataset
 from neon.data.text_preprocessing import pad_sentences, pad_data
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -226,6 +225,51 @@ class Text(NervanaDataIterator):
             yield self.dev_X, self.dev_y
 
 
+class TextAE(Text):
+    """
+    Autoencoder text data: Output is time reversed input.
+    Arguments:
+        conditional (bool, default False): If true, yield a tuple that contains
+                                           a second copy of the outputs as input
+    """
+    def __init__(self, time_steps, path, vocab=None, tokenizer=None,
+                 onehot_input=True, conditional=False):
+        super(TextAE, self).__init__(time_steps, path, vocab, tokenizer, onehot_input)
+        self.conditional = conditional
+        if conditional:
+            self.dev_Z = self.be.iobuf((self.nout, time_steps))
+
+    def __iter__(self):
+        """
+        Generator that can be used to iterate over this dataset.
+
+        Yields:
+            tuple : the next minibatch of data.
+        """
+        self.batch_index = 0
+        while self.batch_index < self.nbatches:
+            X_batch = self.X[:, self.batch_index, :].T.astype(np.float32, order='C')
+            y_batch = self.X[:, self.batch_index, ::-1].T.astype(np.float32, order='C')
+
+            if self.onehot_input:
+                self.dev_lbl.set(X_batch)
+                self.dev_X[:] = self.be.onehot(self.dev_lblflat, axis=0)
+            else:
+                self.dev_X.set(X_batch)
+
+            self.dev_lbl.set(y_batch)
+            self.dev_y[:] = self.be.onehot(self.dev_lblflat, axis=0)
+            if self.conditional:
+                self.dev_Z[:, self.be.bsz:] = self.dev_y[:, :-self.be.bsz]
+                self.dev_Z[:, 0:self.be.bsz] = 0  # 0 is not a good token, it means newline!
+            self.batch_index += 1
+
+            if self.conditional:
+                yield (self.dev_X, self.dev_Z), self.dev_y
+            else:
+                yield self.dev_X, self.dev_y
+
+
 class Shakespeare(Dataset):
     """
     Shakespeare data set from http://cs.stanford.edu/people/karpathy/char-rnn.
@@ -335,6 +379,43 @@ class PTB(Dataset):
                                           tokenizer=self.tokenizer_func,
                                           onehot_input=self.onehot_input,
                                           vocab=self.vocab)
+            if self.vocab is None:
+                self.vocab = self._data_dict['train'].vocab
+        return self._data_dict
+
+
+class PTBAE(PTB):
+    """
+    Penn Treebank Autoencoder data set from http://arxiv.org/pdf/1409.2329v5.pdf
+
+    Arguments:
+        timesteps (int): number of timesteps to embed the data
+        onehot_input (bool):
+        tokenizer (str): name of the tokenizer function within this
+                         class to use on the data
+    """
+    def __init__(self, timesteps, path='.',
+                 onehot_input=True,
+                 tokenizer=None,
+                 conditional=False):
+        super(PTBAE, self).__init__(timesteps, path=path,  onehot_input=onehot_input,
+                                    tokenizer=tokenizer)
+        self.conditional = conditional
+
+    def gen_iterators(self):
+        self.load_data()
+
+        self._data_dict = {}
+        self.vocab = None
+        for phase in ['train', 'test', 'valid']:
+            file_path = self.file_paths[phase]
+            conditional = self.conditional if phase is 'train' else False
+            self._data_dict[phase] = TextAE(self.timesteps,
+                                            file_path,
+                                            tokenizer=self.tokenizer_func,
+                                            onehot_input=self.onehot_input,
+                                            vocab=self.vocab,
+                                            conditional=conditional)
             if self.vocab is None:
                 self.vocab = self._data_dict['train'].vocab
         return self._data_dict

@@ -1504,6 +1504,9 @@ class Backend(AbstractBackend):
         """
         if axis not in (0, 1):
             raise ValueError("bad axis for onehot")
+        type_ = indices.dtype if self.device_type == 0 else indices.dtype.type
+        msg = "onehot indices should be int32, got " + str(type_)
+        assert (type_ is np.dtype(np.int32)) or (type_ is np.int32), msg
         return OpTreeNode.build("onehot", None, None, idx=indices, axis=axis, out=out)
 
     def update_fc_bias(self, err, out):
