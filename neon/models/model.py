@@ -254,6 +254,10 @@ class Model(NervanaObject):
         running_error = np.zeros((len(metric.metric_names)), dtype=np.float32)
         nprocessed = 0
         dataset.reset()
+        if hasattr(dataset, 'seq_length'):
+            ndata = dataset.ndata*dataset.seq_length
+        else:
+            ndata = dataset.ndata
         for x, t in dataset:
             x = self.fprop(x, inference=True)
 
@@ -261,7 +265,7 @@ class Model(NervanaObject):
             nsteps = x.shape[1] // self.be.bsz if not isinstance(x, list) else \
                 x[0].shape[1] // self.be.bsz
 
-            bsz = min(dataset.ndata - nprocessed, self.be.bsz)
+            bsz = min(ndata - nprocessed, self.be.bsz)
             running_error += metric(x, t, calcrange=slice(0, nsteps * bsz)) * nsteps * bsz
             nprocessed += bsz * nsteps
         running_error /= nprocessed

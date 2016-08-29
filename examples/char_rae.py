@@ -15,16 +15,23 @@
 # ----------------------------------------------------------------------------
 """
 Character-level recurrent autoencoder. This model shows how to use the
-Seqquence2Sequence container class to build an Encoder-Decoder style RNN.
+Seq2Seq container class to build an Encoder-Decoder style RNN.
+
+Usage:
+
+    python examples/char_rae.py -e10
+
 """
+from builtins import str
+from builtins import range
 
 from neon.backends import gen_backend
-from neon.data import PTBAE
-from neon.initializers import Uniform, IdentityInit
+from neon.data import PTB
+from neon.initializers import Uniform
 from neon.layers import GeneralizedCost, Affine, GRU, Seq2Seq
 from neon.models import Model
 from neon.optimizers import RMSProp
-from neon.transforms import Tanh, Logistic, Softmax, CrossEntropyMulti
+from neon.transforms import Tanh, Logistic, Softmax, CrossEntropyMulti, Misclassification
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon import logger as neon_logger
@@ -36,41 +43,88 @@ parser = NeonArgparser(__doc__)
 args = parser.parse_args(gen_be=False)
 
 args.batch_size = 128
-time_steps = 50
+time_steps = 20
 hidden_size = 512
 gradient_clip_value = 5
-num_beams = 0  # set to 0 to turn off beamsearch
+
+
+def get_predictions(model, valid_set, time_steps):
+    ypred = model.get_outputs(valid_set)
+    shape = (valid_set.nbatches, model.be.bsz, time_steps)
+
+    # get_outputs is in shape (n*b, s, f), do a reduction on f dimension to
+    # get the class ID
+    prediction = ypred.argmax(2).reshape(shape).transpose(1, 0, 2)
+    groundtruth = valid_set.X[:, :valid_set.nbatches, ::-1]
+    prediction = prediction[:, :, ::-1].flatten()
+    groundtruth = groundtruth[:, :, ::-1].flatten()
+
+    return prediction, groundtruth
+
+
+def display_text(index_to_token, gt, pr):
+
+    index_to_token[0] = '|'  # remove actual line breaks
+
+    display_len = 3 * time_steps
+
+    # sample 3 sentences and its start and end time steps
+    (s1_s, s1_e) = (0, time_steps)
+    (s2_s, s2_e) = (time_steps, 2*time_steps)
+    (s3_s, s3_e) = (2*time_steps, 3*time_steps)
+
+    gt_string = "".join([index_to_token[gt[k]] for k in range(display_len)])
+    pr_string = "".join([index_to_token[pr[k]] for k in range(display_len)])
+
+    match = np.where([gt_string[k] == pr_string[k] for k in range(display_len)])
+
+    di_string = "".join([gt_string[k] if k in match[0] else '.'
+                        for k in range(display_len)])
+
+    neon_logger.display('GT:   [' + gt_string[s1_s:s1_e] + '] '
+                        '[' + gt_string[s2_s:s2_e] + '] '
+                        '[' + gt_string[s3_s:s3_e] + '] ')
+
+    neon_logger.display('Pred: [' + pr_string[s1_s:s1_e] + '] '
+                        '[' + pr_string[s2_s:s2_e] + '] '
+                        '[' + pr_string[s3_s:s3_e] + '] ')
+
+    neon_logger.display('Difference indicated by .')
+    neon_logger.display('Diff: [' + di_string[s1_s:s1_e] + '] '
+                        '[' + di_string[s2_s:s2_e] + '] '
+                        '[' + di_string[s3_s:s3_e] + '] ')
+
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # instanciate dataset
-dataset = PTBAE(time_steps, path=args.data_dir, conditional=True)
+dataset = PTB(time_steps, path=args.data_dir, reverse_target=True, conditional=True)
 train_set = dataset.train_iter
 valid_set = dataset.valid_iter
 
 # weight initialization
 init = Uniform(low=-0.08, high=0.08)
-init_eye = IdentityInit()
-
 
 # conditional recurrent autoencoder model
 num_layers = 1
 encoder, decoder = [], []
-init_from_layers = []
+
+# decoder_connections indicates the encoder layer indicies to receive conditional inputs from
+decoder_connections = []
 for ii in range(num_layers):
     name = "GRU" + str(ii+1)
     encoder.append(GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic(),
                        reset_cells=True, name=name+"Enc"))
     decoder.append(GRU(hidden_size, init, activation=Tanh(), gate_activation=Logistic(),
                        reset_cells=True, name=name+"Dec"))
-    init_from_layers.append(ii)
+    decoder_connections.append(ii)
 decoder.append(Affine(train_set.nout, init, bias=init, activation=Softmax(), name="AffOut"))
 
 layers = Seq2Seq([encoder, decoder],
                  conditional=True,
-                 init_from_layers=init_from_layers,
-                 name="Seq2Sec")
+                 decoder_connections=decoder_connections,
+                 name="Seq2Seq")
 
 cost = GeneralizedCost(costfunc=CrossEntropyMulti(usebits=True))
 model = Model(layers=layers)
@@ -83,39 +137,12 @@ model.fit(train_set,
           num_epochs=args.epochs,
           cost=cost, callbacks=callbacks)
 
-# get predictions
-# ypred = model.get_outputs(valid_set, num_beams=num_beams, eos=50)  # beamsearch coming soon
-ypred = model.get_outputs(valid_set)
-shape = (valid_set.nbatches, args.batch_size, time_steps)
-if ypred.shape[2] == 1:
-    # beamsearch
-    prediction = ypred.reshape(shape).transpose(1, 0, 2)
-else:
-    # no beamsearch
-    prediction = ypred.argmax(2).reshape(shape).transpose(1, 0, 2)
-groundtruth = valid_set.X[:, :valid_set.nbatches, ::-1]
-fraction_correct = (prediction == groundtruth).mean()
-
-neon_logger.display('Misclassification error = %.3f%%' % ((1-fraction_correct)*100))
+# Misclassification rate on validation set
+error_rate = model.eval(valid_set, metric=Misclassification(steps=time_steps))
+neon_logger.display('Misclassification error = %.2f%%' % (error_rate * 100))
 
 # Print some example predictions.
-valid_set.index_to_token[0] = '|'  # remove actual line breaks
+prediction, groundtruth = get_predictions(model, valid_set, time_steps)
 
-gt_string = "".join([valid_set.index_to_token[k]
-                     for k in groundtruth[:, :, ::-1].transpose((0, 1, 2)).flatten()])
-pr_string = "".join([valid_set.index_to_token[k]
-                     for k in prediction[:, :, ::-1].transpose((0, 1, 2)).flatten()])
-locas = np.where([gt_string[k] == pr_string[k] for k in range(500)])
-di_string = "".join([gt_string[k] if k in locas[0] else '.' for k in range(500)])
-
-neon_logger.display('GT:   [' + gt_string[0*time_steps:1*time_steps] + '] [' +
-                    gt_string[1*time_steps:2*time_steps] + '] [' +
-                    gt_string[2*time_steps:3*time_steps] + ']')
-
-neon_logger.display('Pred: [' + pr_string[0*time_steps:1*time_steps] + '] [' +
-                    pr_string[1*time_steps:2*time_steps] + '] [' +
-                    pr_string[2*time_steps:3*time_steps] + ']')
-
-neon_logger.display('Diff: [' + di_string[0*time_steps:1*time_steps] + '] [' +
-                    di_string[1*time_steps:2*time_steps] + '] [' +
-                    di_string[2*time_steps:3*time_steps] + ']')
+# convert them into text and display
+display_text(valid_set.index_to_token, groundtruth, prediction)

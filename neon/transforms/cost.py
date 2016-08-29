@@ -353,12 +353,12 @@ class Misclassification(Metric):
     Misclassification error metric.
     """
 
-    def __init__(self):
+    def __init__(self, steps=1):
         """
         Initialize the metric.
         """
-        self.preds = self.be.iobuf(1, persist_values=False)
-        self.hyps = self.be.iobuf(1, persist_values=False)
+        self.preds = self.be.iobuf((1, steps), persist_values=False)
+        self.hyps = self.be.iobuf((1, steps), persist_values=False)
         self.outputs = self.preds  # Contains per record metric
         self.metric_names = ['Top1Misclass']
 

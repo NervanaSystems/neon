@@ -100,6 +100,7 @@ class CPUTensor(Tensor):
 
         self.size = size
         self.base = base
+        self.dtype = dtype
 
         self.is_contiguous = self._tensor.flags.c_contiguous
 
