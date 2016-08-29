@@ -19,10 +19,15 @@ import itertools as itt
 import numpy as np
 import pytest
 from neon import NervanaObject
-from neon.backends.nervanagpu import NervanaGPU
 from neon.layers.layer import Convolution
 from neon.initializers.initializer import Uniform
 from utils import allclose_with_out
+try:
+    from neon.backends.nervanagpu import NervanaGPU
+except:
+    # stub out the class
+    class NervanaGPU(object):
+        pass
 
 
 def pytest_generate_tests(metafunc):
@@ -355,7 +360,7 @@ class ConvLayerRef(object):
         self.z = np.zeros((mbs, self.nout), dtype=dtypeu)
         self.y = np.zeros((mbs, self.nout), dtype=dtypeu)
         ofmstarts = np.array(list(range(0, (self.ofmsize * nofm), self.ofmsize)))
-        self.ofmlocs = np.zeros((self.ofmsize, nofm), dtype='int32')
+        self.ofmlocs = np.zeros((self.ofmsize, nofm), dtype=np.int32)
         for dst in range(self.ofmsize):
             self.ofmlocs[dst, :] = ofmstarts + dst
         # Figure out the connections with the previous layer.

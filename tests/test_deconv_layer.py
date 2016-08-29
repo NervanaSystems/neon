@@ -16,9 +16,14 @@ import itertools as itt
 import numpy as np
 import pytest
 from neon import NervanaObject
-from neon.backends.nervanagpu import NervanaGPU
 from neon.layers import Deconvolution
 from neon.initializers import Uniform
+try:
+    from neon.backends.nervanagpu import NervanaGPU
+except:
+    # stub out the class
+    class NervanaGPU(object):
+        pass
 
 
 def pytest_generate_tests(metafunc):
@@ -276,7 +281,7 @@ class DeconvRefLayer(object):
         self.y = np.zeros((mbs, self.nout), dtype=dtypeu)
         ofmstarts = np.array(
             list(range(0, (self.ofmsize * self.nofm), self.ofmsize)))
-        self.ofmlocs = np.zeros((self.ofmsize, self.nofm), dtype='int32')
+        self.ofmlocs = np.zeros((self.ofmsize, self.nofm), dtype=np.int32)
         for dst in range(self.ofmsize):
             self.ofmlocs[dst, :] = ofmstarts + dst
 
