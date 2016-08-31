@@ -355,7 +355,7 @@ class ConvLayerRef(object):
         self.z = np.zeros((mbs, self.nout), dtype=dtypeu)
         self.y = np.zeros((mbs, self.nout), dtype=dtypeu)
         ofmstarts = np.array(list(range(0, (self.ofmsize * nofm), self.ofmsize)))
-        self.ofmlocs = np.zeros((self.ofmsize, nofm), dtype='i32')
+        self.ofmlocs = np.zeros((self.ofmsize, nofm), dtype='int32')
         for dst in range(self.ofmsize):
             self.ofmlocs[dst, :] = ofmstarts + dst
         # Figure out the connections with the previous layer.

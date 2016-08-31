@@ -276,7 +276,7 @@ class DeconvRefLayer(object):
         self.y = np.zeros((mbs, self.nout), dtype=dtypeu)
         ofmstarts = np.array(
             list(range(0, (self.ofmsize * self.nofm), self.ofmsize)))
-        self.ofmlocs = np.zeros((self.ofmsize, self.nofm), dtype='i32')
+        self.ofmlocs = np.zeros((self.ofmsize, self.nofm), dtype='int32')
         for dst in range(self.ofmsize):
             self.ofmlocs[dst, :] = ofmstarts + dst
 
