@@ -113,8 +113,8 @@ def test_linear_ones(backend_default, basic_linargs, deltas_buffer):
 
     # for larger layers need to estimate numerical precision
     # atol = est_mm_prec(w, inp.get())
-    assert (np.allclose(sums, out, atol=0.0, rtol=0.0), '%e'
-            % np.max(np.abs(out - sums)))
+    assert np.allclose(sums, out, atol=0.0, rtol=0.0), \
+        '%e' % np.max(np.abs(out - sums))
     return
 
 
@@ -150,8 +150,8 @@ def test_all_rand(backend_default, allrand_args, deltas_buffer):
 
     # for larger layers need to estimate numerical precision
     atol = 2 * est_mm_prec(w, inp, ntrials=1)
-    assert (np.allclose(out_exp, out, atol=atol, rtol=0.0),
-            '%e %e' % (np.max(np.abs(out - out_exp)), atol))
+    assert np.allclose(out_exp, out, atol=atol, rtol=0.0), \
+        '%e %e' % (np.max(np.abs(out - out_exp)), atol)
 
     err = np.random.random((nout, batch_size))
     err = err * (inp_rng[1] - inp_rng[0]) + inp_rng[0]
@@ -161,13 +161,13 @@ def test_all_rand(backend_default, allrand_args, deltas_buffer):
 
     deltas_exp = np.dot(w.T, err)
     atol = 2 * est_mm_prec(w.T, err, ntrials=1)
-    assert (np.allclose(deltas_exp, deltas, atol=atol, rtol=0.0),
-            '%e %e' % (np.max(np.abs(deltas_exp - deltas)), atol))
+    assert np.allclose(deltas_exp, deltas, atol=atol, rtol=0.0), \
+        '%e %e' % (np.max(np.abs(deltas_exp - deltas)), atol)
 
     dw_exp = np.dot(err, inp.T)
     atol = 2 * est_mm_prec(err, inp.T, ntrials=1)
-    assert (np.allclose(dw_exp, dw, atol=atol, rtol=0.0),
-            '%e %e' % (np.max(np.abs(dw_exp - dw)), atol))
+    assert np.allclose(dw_exp, dw, atol=atol, rtol=0.0), \
+        '%e %e' % (np.max(np.abs(dw_exp - dw)), atol)
 
     return
 

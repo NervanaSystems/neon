@@ -221,8 +221,8 @@ def test_dconv_rand(backend_default, rand_convargs, deltas_buffer):
     ref_layer.fprop(inpa.T, permute=True)
     ref_out2 = ref_layer.berror
     atol = 10 * np.max(np.abs(ref_out - ref_out2))
-    assert (np.allclose(ref_out.T, neon_out, atol=atol, rtol=0.0),
-            '%e %e' % (np.max(np.abs(ref_out.T - neon_out)), atol))
+    assert np.allclose(ref_out.T, neon_out, atol=atol, rtol=0.0), \
+        '%e %e' % (np.max(np.abs(ref_out.T - neon_out)), atol)
 
     # generate err array
     erra = np.random.random(neon_out.shape)
