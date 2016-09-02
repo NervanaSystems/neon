@@ -19,7 +19,7 @@ from neon.transforms import Accuracy
 from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser
 
-from data import make_train_loader, make_validation_loader
+from data import make_train_loader, make_test_loader
 from network import create_network
 
 # parse the command line arguments
@@ -34,7 +34,7 @@ model, cost = create_network()
 
 # setup data provider
 train = make_train_loader(model.be, args.subset_pct, random_seed)
-valid = make_validation_loader(model.be, args.subset_pct)
+valid = make_test_loader(model.be, args.subset_pct)
 
 # setup callbacks
 callbacks = Callbacks(model, eval_set=valid, **args.callback_args)

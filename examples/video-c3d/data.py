@@ -47,18 +47,20 @@ def common_config(manifest_file, batch_size):
             }
 
 
-def make_test_loader(backend_obj):
+def make_test_loader(backend_obj, subset_pct=100):
     manifest_file = get_ingest_file('test-index.csv')
     aeon_config = common_config(manifest_file, backend_obj.bsz)
+    aeon_config['subset_fraction'] = float(subset_pct/100.0)
     dl = DataLoader(aeon_config, backend_obj)
     dl = OneHot(dl, index=1, nclasses=101)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
 
 
-def make_train_loader(backend_obj, random_seed=0):
+def make_train_loader(backend_obj, subset_pct=100, random_seed=0):
     manifest_file = get_ingest_file('train-index.csv')
     aeon_config = common_config(manifest_file, backend_obj.bsz)
+    aeon_config['subset_fraction'] = float(subset_pct/100.0)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
