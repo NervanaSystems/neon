@@ -44,13 +44,13 @@ class Text(NervanaDataIterator):
             tokenizer (function) : Tokenizer function.
             onehot_input (boolean): One-hot representation of input
             reverse_target (boolean): for sequence to sequence models,
-                                      set to True to reverse target sequence
+                                      set to True to reverse target sequence.
             conditional (boolean): for sequence to sequence models, set to
                                    True for training data to provide correct
                                    target from previous time step as decoder
                                    input. If condition, shape will be a tuple
                                    of shapes, corresponding to encoder and
-                                   decoder inputs
+                                   decoder inputs.
         """
         super(Text, self).__init__(name=None)
 

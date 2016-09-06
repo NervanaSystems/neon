@@ -5,6 +5,7 @@ https://github.com/DoctorTeeth/gru/blob/master/gru.py
 The adaptation includes
   - remove the GRU to output affine transformation
   - provide inputs for forward pass and errors for backward pass
+  - being able to provide init_state
   - initialize weights and biases into zeros, as the main test script will externally
     initialize the weights and biases
   - being able to read out hashable values to compare with another GRU
@@ -62,7 +63,7 @@ class GRU(object):
         self.weights_ind_br = 7
         self.weights_ind_bz = 8
 
-    def lossFun(self, inputs, errors):
+    def lossFun(self, inputs, errors, init_state=None):
         """
         Does a forward and backward pass on the network using (inputs, errors)
         inputs is a bit-vector of seq-length
@@ -76,7 +77,10 @@ class GRU(object):
 
         # This resets the hidden state after every new sequence
         # TODO: maybe we don't need to
-        hs[-1] = np.zeros((self.hidden_size, 1))
+        if init_state is None:
+            hs[-1] = np.zeros((self.hidden_size, 1))
+        else:
+            hs[-1] = init_state
 
         seq_len = len(inputs)
 

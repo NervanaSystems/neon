@@ -250,11 +250,11 @@ class Recurrent(ParameterLayer):
         if self.reset_cells:
             self.h[-1][:] = 0
 
-        if init_state:
-            self.h[-1][:] = init_state
-
         # recurrent layer needs a h_prev buffer for bprop
         self.h_prev_bprop = [0] + self.h[:-1]
+
+        if init_state:
+            self.h[-1][:] = init_state
 
         # feedforward input
         self.be.compound_dot(self.W_input, self.x, self.h_ff_buffer)
@@ -319,7 +319,7 @@ class Recurrent(ParameterLayer):
     def get_final_hidden_error(self):
         """
         Return hidden delta after bprop and adjusting for bprop from decoder
-        to encoder in sequence to sequence models
+        to encoder in sequence to sequence models.
         """
         return self.final_hidden_error
 
@@ -689,7 +689,7 @@ class GRU(Recurrent):
             self.hcan[-1][:] = 0
 
         if init_state:
-            assert init_state.shape == self.h[-1].shape, "init_state shape missmatch"
+            assert init_state.shape == self.h[-1].shape, "init_state shape mismatch"
             self.h[-1][:] = init_state
             self.h_prev_bprop[0] = init_state
 

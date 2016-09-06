@@ -17,9 +17,12 @@
 Character-level recurrent autoencoder. This model shows how to use the
 Seq2Seq container class to build an Encoder-Decoder style RNN.
 
+The model uses a sequence from the PTB dataset as input, and learn to output
+the same sequence in reverse order.
+
 Usage:
 
-    python examples/char_rae.py -e10
+    python examples/char_rae.py -e2
 
 """
 from builtins import str
@@ -98,7 +101,7 @@ def display_text(index_to_token, gt, pr):
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
-# instanciate dataset
+# instantiate dataset
 dataset = PTB(time_steps, path=args.data_dir, reverse_target=True, conditional=True)
 train_set = dataset.train_iter
 valid_set = dataset.valid_iter

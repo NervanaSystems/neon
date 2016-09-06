@@ -1109,7 +1109,7 @@ class Encoder(Sequential):
     def set_connections(self, decoder_cons):
         """
         Based on decoder connections, create the list of which layers encoder are
-        connected to
+        connected to.
         """
         cons = []
         for ii in range(len(self._recurrent)):
@@ -1131,7 +1131,7 @@ class Encoder(Sequential):
         """
         Arguments:
             hidden_error_list: Decoder container bprop output. List of errors
-                               associated with decoder recurrent layers
+                               associated with decoder recurrent layers.
         """
         i_enc = len(self._recurrent) - 1  # index into recurrent layers, in reverse order
 
@@ -1222,7 +1222,7 @@ class Decoder(Sequential):
     def switch_mode(self, inference, conditional):
         """
         Dynamically grow or shrink the number of time steps to perform
-        single time step fprop during inference
+        single time step fprop during inference.
         """
         # set up parameters
         hasLUT = isinstance(self.layers[0], LookupTable)
@@ -1377,9 +1377,6 @@ class Seq2Seq(LayerContainer):
         self.decoder.allocate_deltas(global_deltas)
 
     def fprop(self, inputs, inference=False, beta=0.0):
-        """
-        TODO:  Handle final layers that don't own their own outputs (bias, activation)
-        """
         if not (inference and self.conditional):
 
             # make sure we are in the correct decoder mode

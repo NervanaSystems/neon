@@ -93,13 +93,23 @@ def test_ref_compare_rand(backend_default, refgruargs):
               Gaussian())
 
 
+def test_ref_compare_rand_init_state(backend_default, refgruargs):
+    seq_len, input_size, hidden_size, batch_size = refgruargs
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
+
+    check_gru(seq_len, input_size, hidden_size, batch_size,
+              Gaussian(), add_init_state=True)
+
+
 # compare neon GRU to reference GRU implementation
 def check_gru(seq_len, input_size, hidden_size,
-              batch_size, init_func, inp_moms=[0.0, 1.0]):
+              batch_size, init_func, inp_moms=[0.0, 1.0], add_init_state=False):
     # init_func is the initializer for the model params
     # inp_moms is the [ mean, std dev] of the random input
     input_shape = (input_size, seq_len * batch_size)
     output_shape = (hidden_size, seq_len * batch_size)
+    slice_shape = (hidden_size, batch_size)
+
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
 
     # neon GRU
@@ -110,7 +120,7 @@ def check_gru(seq_len, input_size, hidden_size,
 
     # generate random input tensor
     inp = np.random.rand(*input_shape) * inp_moms[1] + inp_moms[0]
-    inpa = gru.be.array(inp)
+    inp_dev = gru.be.array(inp)
     # generate random deltas tensor
     deltas = np.random.randn(*output_shape)
 
@@ -124,7 +134,12 @@ def check_gru(seq_len, input_size, hidden_size,
     test_buffer.allocate_buffers()
     gru.set_deltas(test_buffer)
 
-    gru.fprop(inpa)
+    if add_init_state:
+        init_state = np.random.rand(*slice_shape)*inp_moms[1] + inp_moms[0]
+        init_state_dev = gru.be.array(init_state)
+        gru.fprop(inp_dev, init_state=init_state_dev)
+    else:
+        gru.fprop(inp_dev)
 
     # reference numpy GRU
     gru_ref = RefGRU(input_size, hidden_size)
@@ -156,9 +171,16 @@ def check_gru(seq_len, input_size, hidden_size,
     deltas_ref = deltas.copy().T.reshape(
         seq_len, batch_size, hidden_size).swapaxes(1, 2)
 
-    (dWGRU_ref, h_ref_list, dh_ref_list,
-        dr_ref_list, dz_ref_list, dc_ref_list) = gru_ref.lossFun(inp_ref,
-                                                                 deltas_ref)
+    if add_init_state:
+        init_state_ref = init_state.copy()
+        (dWGRU_ref, h_ref_list, dh_ref_list,
+            dr_ref_list, dz_ref_list, dc_ref_list) = gru_ref.lossFun(inp_ref,
+                                                                     deltas_ref,
+                                                                     init_state_ref)
+    else:
+        (dWGRU_ref, h_ref_list, dh_ref_list,
+            dr_ref_list, dz_ref_list, dc_ref_list) = gru_ref.lossFun(inp_ref,
+                                                                     deltas_ref)
 
     neon_logger.display('====Verifying hidden states====')
     assert allclose_with_out(gru.outputs.get(),
@@ -293,8 +315,14 @@ def test_gradient_neon_gru(backend_default, gradgruargs):
     gradient_check(seq_len, input_size, hidden_size, batch_size)
 
 
+def test_gradient_neon_gru_init_state(backend_default, gradgruargs):
+    seq_len, input_size, hidden_size, batch_size = gradgruargs
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
+    gradient_check(seq_len, input_size, hidden_size, batch_size, True)
+
+
 def gradient_check(seq_len, input_size, hidden_size, batch_size,
-                   threshold=1.0e-3):
+                   add_init_state=False, threshold=1.0e-3):
     # 'threshold' is the max fractional difference
     #             between gradient estimate and
     #             bprop deltas (def is 5%)
@@ -323,6 +351,7 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
                                            input_size,
                                            hidden_size,
                                            batch_size,
+                                           add_init_state=add_init_state,
                                            epsilon=pert_mag,
                                            rand_scale=rand_scale,
                                            inp_bl=inp)
@@ -340,7 +369,7 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
     assert min_max_err < threshold
 
 
-def gradient_calc(seq_len, input_size, hidden_size, batch_size,
+def gradient_calc(seq_len, input_size, hidden_size, batch_size, add_init_state=False,
                   epsilon=None, rand_scale=None, inp_bl=None):
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
 
@@ -364,7 +393,13 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
     test_buffer.allocate_buffers()
     gru.set_deltas(test_buffer)
 
-    out_bl = gru.fprop(inpa).get()
+    if add_init_state is True:
+        slice_shape = (hidden_size, batch_size)
+        ini_s = np.random.randn(*slice_shape)
+        ini_s_dev = gru.be.array(ini_s.copy())
+        out_bl = gru.fprop(inpa, ini_s_dev).get()
+    else:
+        out_bl = gru.fprop(inpa).get()
 
     # random scaling/hash to generate fake loss
     if rand_scale is None:
@@ -385,12 +420,20 @@ def gradient_calc(seq_len, input_size, hidden_size, batch_size,
         inp_pert.flat[pert_ind] = save_val + epsilon
         reset_gru(gru)
         gru.allocate()
-        out_pos = gru.fprop(gru.be.array(inp_pert)).get()
+        if add_init_state is True:
+            ini_s_dev = gru.be.array(ini_s.copy())
+            out_pos = gru.fprop(gru.be.array(inp_pert), ini_s_dev).get()
+        else:
+            out_pos = gru.fprop(gru.be.array(inp_pert)).get()
 
         inp_pert.flat[pert_ind] = save_val - epsilon
         reset_gru(gru)
         gru.allocate()
-        out_neg = gru.fprop(gru.be.array(inp_pert)).get()
+        if add_init_state is True:
+            ini_s_dev = gru.be.array(ini_s.copy())
+            out_neg = gru.fprop(gru.be.array(inp_pert), ini_s_dev).get()
+        else:
+            out_neg = gru.fprop(gru.be.array(inp_pert)).get()
 
         # calculate the loss with perturbations
         loss_pos = np.sum(rand_scale * out_pos)
