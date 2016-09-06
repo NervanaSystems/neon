@@ -83,7 +83,7 @@ ifeq ($(PY), 2)
 else
 	VIRTUALENV_EXE := python3 -m venv
 	PYLINT3K_ARGS :=
-	VIRTUALENV_DIR = $(VIRTUALENV_DIR_BASE)$(PY)
+	VIRTUALENV_DIR = $(VIRTUALENV_DIR_BASE)3
 	ACTIVATE = $(VIRTUALENV_DIR)/bin/activate
 endif
 
