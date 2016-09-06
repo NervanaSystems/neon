@@ -149,7 +149,7 @@ sysinstall_nodeps: $(DATA_LOADER) neon_install
 sysinstall: sysdeps $(DATA_LOADER) neon_install
 neon_install:
 	@echo "Installing neon system wide..."
-	@pip install .
+	@python setup.py install
 	@echo
 
 sysdeps:
