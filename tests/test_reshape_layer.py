@@ -25,9 +25,9 @@ from neon.models import Model
 
 def pytest_generate_tests(metafunc):
     if metafunc.config.option.all:
-        bsz_rng = [4, 16, 32, 64]
+        bsz_rng = [32, 64]
     else:
-        bsz_rng = [4]
+        bsz_rng = [32]
 
     if 'fargs' in metafunc.fixturenames:
         fargs = []
@@ -93,8 +93,8 @@ def test_reshape_layer_model(backend_default, fargs):
     delta = be.array(delta_np)
 
     conv_lut_1 = [
-        LookupTable(vocab_size=2000, embedding_dim=300, init=init),
-        Reshape(reshape=(1, 100, -1)),
+        LookupTable(vocab_size=2000, embedding_dim=400, init=init),
+        Reshape(reshape=(4, 100, -1)),
         Conv((3, 3, 16), init=init),
         LSTM(64, g_uni, activation=Tanh(),
              gate_activation=Logistic(), reset_cells=True),
@@ -103,26 +103,26 @@ def test_reshape_layer_model(backend_default, fargs):
     ]
 
     conv_lut_2 = [
-        LookupTable(vocab_size=1000, embedding_dim=300, init=init),
-        Reshape(reshape=(2, 50, -1)),
+        LookupTable(vocab_size=1000, embedding_dim=400, init=init),
+        Reshape(reshape=(4, 50, -1)),
         Conv((3, 3, 16), init=init),
         Pooling(2, strides=2),
         Affine(nout=nout, init=init, bias=init, activation=Softmax()),
     ]
 
     conv_rnn_1 = [
-        LookupTable(vocab_size=2000, embedding_dim=300, init=init),
+        LookupTable(vocab_size=2000, embedding_dim=400, init=init),
         LSTM(64, g_uni, activation=Tanh(),
              gate_activation=Logistic(), reset_cells=True),
-        Reshape(reshape=(1, 40, -1)),
+        Reshape(reshape=(4, 32, -1)),
         Conv((3, 3, 16), init=init),
         Affine(nout, init, bias=init, activation=Softmax())
     ]
 
     conv_rnn_2 = [
-        LookupTable(vocab_size=2000, embedding_dim=300, init=init),
-        Recurrent(63, g_uni, activation=Tanh(), reset_cells=True),
-        Reshape(reshape=(1, -1, 30)),
+        LookupTable(vocab_size=2000, embedding_dim=400, init=init),
+        Recurrent(64, g_uni, activation=Tanh(), reset_cells=True),
+        Reshape(reshape=(4, -1, 32)),
         Conv((3, 3, 16), init=init),
         Affine(nout, init, bias=init, activation=Softmax())
     ]
@@ -134,10 +134,10 @@ def test_reshape_layer_model(backend_default, fargs):
     ]
 
     lut_birnn_1 = [
-        LookupTable(vocab_size=1000, embedding_dim=300, init=init),
+        LookupTable(vocab_size=1000, embedding_dim=200, init=init),
         DeepBiRNN(32, init=GlorotUniform(), batch_norm=True, activation=Tanh(),
                   reset_cells=True, depth=1),
-        Reshape((1, 32, -1)),
+        Reshape((4, 32, -1)),
         Conv((3, 3, 16), init=init),
         Affine(nout=nout, init=init, bias=init, activation=Softmax())
     ]
