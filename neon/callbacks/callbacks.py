@@ -33,12 +33,6 @@ from neon.util.compat import PY3
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.layers import Convolution, BatchNorm
 
-try:
-    # Register if it exists
-    from cloud_metrics import CloudMetricsCallback
-except ImportError:
-    pass
-
 logger = logging.getLogger(__name__)
 
 
@@ -134,9 +128,10 @@ class Callbacks(NervanaObject):
         self.add_callback(RunTimerCallback())
 
         try:
-            # this will only work if the cloud_metrics package is installed
-            self.add_callback(CloudMetricsCallback(log_token=log_token, klass=Callback))
-        except NameError:
+            # Register if it exists
+            from cloud_metrics import CloudMetricsCallback
+            self.add_callback(CloudMetricsCallback(log_token, eval_freq, metric))
+        except ImportError:
             pass
 
     def __del__(self):
