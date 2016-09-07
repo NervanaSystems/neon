@@ -68,8 +68,7 @@ large datasets that cannot fit into memory (e.g.
 `ImageNet <http://image-net.org/>`__ or
 `Sports-1M <http://cs.stanford.edu/people/karpathy/deepvideo/>`__), the
 data has to be efficiently loaded and fed to the optimizer in batches.
-This requires more advanced iterators described in `Loading
-data <loading_data.md>`__.
+This requires more advanced iterators described in :doc:`Loading Data <loading_data>`.
 
 Since it is a common function, the data iterator generation for stock
 datasets can be done directly through helper methods contained in the
