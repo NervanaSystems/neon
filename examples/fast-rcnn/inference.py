@@ -23,7 +23,7 @@ Reference:
     https://github.com/rbgirshick/fast-rcnn
 
 Usage:
-    python examples/fast-rcnn/test.py --model_file frcn_vgg.pkl
+    python examples/fast-rcnn/inference.py --model_file frcn_vgg.pkl
 
 Notes:
     1. For VGG16 based Fast R-CNN model, we can support testing with batch size as 1

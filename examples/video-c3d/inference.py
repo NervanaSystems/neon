@@ -24,9 +24,9 @@ Reference:
 Usage:
     First train a video-c3d model using train.py. Then run testing with:
 
-    python examples/video-c3d/test.py  --data_dir <preprocessed_video_dir>
-                                       --batch_size 32
-                                       --model_file UCF101-C3D.p
+    python examples/video-c3d/inference.py --data_dir <preprocessed_video_dir>
+                                           --batch_size 32
+                                           --model_file UCF101-C3D.p
 """
 
 import os
