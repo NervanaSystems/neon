@@ -877,7 +877,7 @@ class PASCALVOCInference(PASCALVOC):
                 self.last_im_height = im_shape[1]
                 self.last_im_width = im_shape[0]
 
-                im_shape *= im_scale
+                im_shape = (im_shape * im_scale).astype(int)
                 im = im.resize(im_shape, Image.LINEAR)
                 im = np.array(im)[:, :, ::-1]
                 # Mean subtract and scale an image
@@ -1085,8 +1085,8 @@ class PASCALVOCInference(PASCALVOC):
 
         dx = box_deltas[:, BB_XMIN_IDX::4]
         dy = box_deltas[:, BB_YMIN_IDX::4]
-        dw = box_deltas[:, BB_XMAX_IDX::4]
-        dh = box_deltas[:, BB_YMAX_IDX::4]
+        dw = box_deltas[:, BB_XMAX_IDX::4].astype(np.longfloat)
+        dh = box_deltas[:, BB_YMAX_IDX::4].astype(np.longfloat)
 
         pred_ctr_x = dx * widths[:, np.newaxis] + ctr_x[:, np.newaxis]
         pred_ctr_y = dy * heights[:, np.newaxis] + ctr_y[:, np.newaxis]
@@ -1355,7 +1355,7 @@ def _get_bbox_regression_labels(bbox_target_data, num_classes):
     bbox_loss_weights = np.zeros(bbox_targets.shape, dtype=np.float32)
     inds = np.where(clss > 0)[0]
     for ind in inds:
-        cls = clss[ind]
+        cls = clss[ind].astype(int)
         start = 4 * cls
         end = start + 4
         bbox_targets[ind, start:end] = bbox_target_data[ind, 1:]
