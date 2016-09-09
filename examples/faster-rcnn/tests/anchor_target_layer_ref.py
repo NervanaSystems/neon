@@ -1,13 +1,13 @@
-from __future__ import division
-from __future__ import print_function
-from builtins import range
-from builtins import object
 # --------------------------------------------------------
 # Faster R-CNN
 # Copyright (c) 2015 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick and Sean Bell
 # --------------------------------------------------------
+from __future__ import division
+from __future__ import print_function
+from builtins import range
+from builtins import object
 
 import numpy as np
 import numpy.random as npr

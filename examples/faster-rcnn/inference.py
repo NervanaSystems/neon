@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -23,7 +23,7 @@ Reference:
     https://github.com/rbgirshick/py-faster-rcnn
 
 Usage:
-    python examples/faster-rcnn/test.py --model_file frcn_model.pkl
+    python examples/faster-rcnn/inference.py --model_file faster_rcnn.pkl
 
 At the end of the a training process, the model is serialized with the bounding box
 regression layer normalized. If you like to test on a model file before the training
@@ -33,14 +33,17 @@ The mAP evaluation script is adapted from:
 https://github.com/rbgirshick/py-faster-rcnn/
 """
 
-from neon.backends import gen_backend
-from objectlocalization import PASCAL
-from neon.util.argparser import NeonArgparser, extract_valid_args
-from neon import logger as neon_logger
-import util
 import sys
 import os
 from builtins import range
+
+import util
+from objectlocalization import PASCAL
+
+from neon.backends import gen_backend
+from neon.util.argparser import NeonArgparser, extract_valid_args
+from neon import logger as neon_logger
+
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__, default_overrides={'batch_size': 1})

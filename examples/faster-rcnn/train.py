@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -27,7 +27,7 @@ Reference:
     https://github.com/rbgirshick/py-faster-rcnn
 
 Usage:
-    python examples/faster-rcnn/train.py -r0 -e7 -s frcn_model.pkl -vv
+    python examples/faster-rcnn/train.py -r0 -e7 -s faster_rcnn.pkl -vv
 
 """
 from __future__ import division

@@ -278,7 +278,6 @@ class Sequential(LayerContainer):
         self.out_shape = in_obj.out_shape
         return self
 
-
     def allocate(self, shared_outputs=None):
         """
         Allocate output buffer to store activations from fprop.

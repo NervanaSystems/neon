@@ -644,52 +644,6 @@ class TrainCostCallback(Callback):
         callback_data['cost/train'][mbstart + minibatch] = mean_cost
 
 
-def multicost_recurse(x):
-    """
-    Called on a cost object to extract all costs of nested-multicosts, else return main cost.
-
-    Arguments:
-        x (Cost): cost object
-    """
-    # recurse into nested multicosts to grab all cost branches
-    if type(x) == Multicost:
-        return [z for z in map(multicost_recurse, x.costs)]
-    else:
-        return x.cost
-
-
-def separate_branch_costs(x):
-    """
-    Called on list of lists of costs, where each nested list is a separate multicost,
-    and returns the un-summed individual branch costs.
-
-    Arguments:
-       x (list): list of lists of costs as returned by multicost_recurse
-    """
-    # Subtract branch costs from total cost
-    x[0] -= np.sum([c[0] if type(c) == list else c for c in x[1:]])
-    # Recurse into non-trunk branches
-    for branch in x:
-        if type(branch) == list:
-            separate_branch_costs(branch)
-    # Return a flattened version of the list
-    return np.array([item for sublist in x for item in sublist])
-
-
-def recursive_multicost_len(item):
-    """
-    Called on a cost object and returns the number of actual cost values.
-
-    Arguments:
-       item (Cost): cost object
-    """
-    # compute number of costs nested in multicosts
-    if type(item) == Multicost:
-        return sum(recursive_multicost_len(subitem) for subitem in item.costs)
-    else:
-        return 1
-
-
 class TrainMulticostCallback(Callback):
     """
     Callback for computing average training cost periodically during training.
@@ -711,7 +665,7 @@ class TrainMulticostCallback(Callback):
         assert isinstance(model.cost, Multicost), "Cost must be a Multicost"
         self.ncosts = len(model.cost.costs)
         # get number of nested-costs
-        self.ncosts_allbranches = sum([recursive_multicost_len(c) for c in model.cost.costs])
+        self.ncosts_allbranches = sum([self.recursive_multicost_len(c) for c in model.cost.costs])
 
         # preallocate space for the number of minibatches in the whole run
         points = callback_data['config'].attrs['total_minibatches']
@@ -744,11 +698,54 @@ class TrainMulticostCallback(Callback):
         callback_data['multicost/train'][mbstart + minibatch, :] = mean_cost.squeeze()
 
         # Extract all nested-multicosts
-        costs_allbranches = np.array([multicost_recurse(c) for c in model.cost.costs])
+        costs_allbranches = np.array([self.multicost_recurse(c) for c in model.cost.costs])
         # Subtract non-trunk branches from summed trunk cost to get individual branch costs
-        costs_allbranches = separate_branch_costs(costs_allbranches)
+        costs_allbranches = self.separate_branch_costs(costs_allbranches)
         callback_data['multicost/train_allbranches'][mbstart + minibatch, :] =\
             costs_allbranches.squeeze()
+
+    def multicost_recurse(self, x):
+        """
+        Called on a cost object to extract all costs of nested-multicosts, else return main cost.
+
+        Arguments:
+            x (Cost): cost object
+        """
+        # recurse into nested multicosts to grab all cost branches
+        if type(x) == Multicost:
+            return [z for z in map(self.multicost_recurse, x.costs)]
+        else:
+            return x.cost
+
+    def separate_branch_costs(self, x):
+        """
+        Called on list of lists of costs, where each nested list is a separate multicost,
+        and returns the un-summed individual branch costs.
+
+        Arguments:
+           x (list): list of lists of costs as returned by multicost_recurse
+        """
+        # Subtract branch costs from total cost
+        x[0] -= np.sum([c[0] if type(c) == list else c for c in x[1:]])
+        # Recurse into non-trunk branches
+        for branch in x:
+            if type(branch) == list:
+                self.separate_branch_costs(branch)
+        # Return a flattened version of the list
+        return np.array([item for sublist in x for item in sublist])
+
+    def recursive_multicost_len(self, item):
+        """
+        Called on a cost object and returns the number of actual cost values.
+
+        Arguments:
+           item (Cost): cost object
+        """
+        # compute number of costs nested in multicosts
+        if type(item) == Multicost:
+            return sum(self.recursive_multicost_len(subitem) for subitem in item.costs)
+        else:
+            return 1
 
 
 class LossCallback(Callback):

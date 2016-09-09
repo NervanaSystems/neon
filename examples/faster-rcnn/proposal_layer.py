@@ -18,10 +18,10 @@ region proposals in the format of bounding boxes, compares with ground truth box
 and generates bounding box target labels and regression targets
 """
 from __future__ import division
+import numpy as np
 from neon.layers.layer import Layer
 from generate_anchors import generate_all_anchors
 from objectlocalization import _compute_targets, calculate_bb_overlap
-import numpy as np
 
 # Thresholds for the IoU overlap to consider a proposed ROI as
 # foreground or background. Less than BG_THRESH_LO is ignored.
@@ -383,8 +383,8 @@ class ProposalLayer(Layer):
         inds = np.where(labels > 0)[0]
         for ind in inds:
             l = labels[ind]
-            start = 4 * l
-            end = start + 4
+            start = int(4 * l)
+            end = int(start + 4)
             bbox_targets[ind, start:end] = bbox_target_data[ind]
             bbox_inside_weights[ind, start:end] = 1.0
         return bbox_targets, bbox_inside_weights
@@ -407,7 +407,7 @@ class ProposalLayer(Layer):
 
         # Sample foreground regions without replacement
         if fg_inds.size > 0 and not self.deterministic:
-            fg_inds = self.be.rng.choice(fg_inds, size=fg_rois_per_this_image, replace=False)
+            fg_inds = self.be.rng.choice(fg_inds, size=int(fg_rois_per_this_image), replace=False)
         elif fg_inds.size > 0:
             fg_inds = fg_inds[:fg_rois_per_this_image]
 
@@ -422,10 +422,10 @@ class ProposalLayer(Layer):
 
         # Sample background regions without replacement
         if bg_inds.size > 0 and not self.deterministic:
-            bg_inds = self.be.rng.choice(bg_inds, size=bg_rois_per_this_image, replace=False)
+            bg_inds = self.be.rng.choice(bg_inds, size=int(bg_rois_per_this_image), replace=False)
         elif bg_inds.size > 0:
             bg_inds = bg_inds[:bg_rois_per_this_image]
 
         # The indices that we're selecting (both fg and bg)
         keep_inds = np.append(fg_inds, bg_inds)
-        return keep_inds, fg_rois_per_this_image
+        return keep_inds, int(fg_rois_per_this_image)
