@@ -15,7 +15,11 @@
 # ----------------------------------------------------------------------------
 """
 Train a Faster-RCNN model to do object detection using PASCAL VOC dataset.
-This training currently runs 1 image at a time.
+This training currently runs 1 image at a time. All parameters are from the
+reference. The training will get to the reference performance after 7 epochs.
+
+At the end of the a training process, the model is serialized with the bounding box
+regression layer normalized.
 
 Reference:
     "Faster R-CNN"
@@ -23,8 +27,7 @@ Reference:
     https://github.com/rbgirshick/py-faster-rcnn
 
 Usage:
-    python examples/faster-rcnn/train.py -r0 -e 16 -s frcn_model.pkl -vv \
-    --epoch_step 5 --roi_branch_scale --lr_scale 1.0 -H 16
+    python examples/faster-rcnn/train.py -r0 -e7 -s frcn_model.pkl -vv
 
 """
 from __future__ import division
@@ -42,14 +45,7 @@ import util
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__, default_overrides={'batch_size': 1})
-parser.add_argument('--lr_scale', type=float, help='learning rate scale', default=1.0)
-parser.add_argument('--lr_step', type=float, help="step for learning schedule", default=10.0)
-parser.add_argument('--epoch_step', type=int, help="epoch to step the learning rate", default=5)
-parser.add_argument('--roi_branch_scale', action='store_true',
-                    help="Scale ROI branchs by rois_per_img.")
-
 args = parser.parse_args(gen_be=False)
-args.roi_branch_scale = True
 
 # hyperparameters
 assert args.batch_size is 1, "Faster-RCNN only supports batch size 1"
@@ -57,11 +53,10 @@ assert args.batch_size is 1, "Faster-RCNN only supports batch size 1"
 n_mb = None
 rpn_rois_per_img = 256  # number of rois to sample to train rpn
 frcn_rois_per_img = 128  # number of rois to sample to train frcn
-lr_scale = 1.0 / float(args.lr_scale)
 
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
-be.enable_winograd = 4
+be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
 year = '2007'
 
@@ -74,11 +69,7 @@ model = util.build_model(train_set, frcn_rois_per_img, inference=False)
 
 # set up cost different branches, respectively
 weights = 1.0 / (rpn_rois_per_img)
-
-if args.roi_branch_scale is True:
-    roi_w = 1.0 / (frcn_rois_per_img)
-else:
-    roi_w = 1.0
+roi_w = 1.0 / (frcn_rois_per_img)
 
 frcn_tree_cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti(), weights=roi_w),
                                   GeneralizedCostMask(costfunc=SmoothL1Loss(), weights=roi_w)
@@ -91,13 +82,11 @@ cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti(), weight
                  weights=[1, 1, 1])
 
 # setup optimizer
-schedule_w = StepSchedule(step_config=[args.epoch_step],
-                          change=[0.001 * lr_scale / args.lr_step])
-schedule_b = StepSchedule(step_config=[args.epoch_step],
-                          change=[0.002 * lr_scale / args.lr_step])
+schedule_w = StepSchedule(step_config=[5], change=[0.001 / 10])
+schedule_b = StepSchedule(step_config=[5], change=[0.002 / 10])
 
-opt_w = GradientDescentMomentum(0.001 * lr_scale, 0.9, wdecay=0.0005, schedule=schedule_w)
-opt_b = GradientDescentMomentum(0.002 * lr_scale, 0.9, wdecay=0.0005, schedule=schedule_b)
+opt_w = GradientDescentMomentum(0.001, 0.9, wdecay=0.0005, schedule=schedule_w)
+opt_b = GradientDescentMomentum(0.002, 0.9, wdecay=0.0005, schedule=schedule_b)
 opt_skip = GradientDescentMomentum(0.0, 0.0)
 
 optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b,

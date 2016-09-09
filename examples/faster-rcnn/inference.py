@@ -23,7 +23,7 @@ Reference:
     https://github.com/rbgirshick/py-faster-rcnn
 
 Usage:
-    python examples/faster-rcnn/test.py --model_file frcn_vgg.pkl
+    python examples/faster-rcnn/test.py --model_file frcn_model.pkl
 
 At the end of the a training process, the model is serialized with the bounding box
 regression layer normalized. If you like to test on a model file before the training
@@ -48,8 +48,6 @@ parser.add_argument('--normalize', action='store_true',
                     help='Normalize the final bounding box regression layers.')
 parser.add_argument('--output_dir', default=None,
                     help='Directory to save AP metric results. Default is [data_dir]/frcn_output/')
-parser.add_argument('--nms_thresh', type=float, default=0.3, help='Threshold used for NMS.')
-parser.add_argument('--score_thresh', type=float, default=0.001, help='Threshold on object score.')
 
 args = parser.parse_args()
 if args.output_dir is None:
@@ -94,8 +92,8 @@ if args.normalize:
 # detection parameters
 num_images = valid_set.num_image_entries if n_mb is None else n_mb
 max_per_image = 100   # maximum detections per image
-thresh = args.score_thresh  # minimum threshold on score
-nms_thresh = args.nms_thresh  # threshold used for non-maximum supression
+thresh = 0.001  # minimum threshold on score
+nms_thresh = 0.3  # threshold used for non-maximum supression
 
 # all detections are collected into:
 #    all_boxes[cls][image] = N x 5 array of detections in
