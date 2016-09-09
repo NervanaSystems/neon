@@ -25,6 +25,7 @@ from neon.util.persist import load_obj, save_obj, load_class
 from neon.util.modeldesc import ModelDescription
 from neon.layers import Sequential, Activation, Tree, SingleOutputTree, Seq2Seq
 from neon.layers.container import DeltasTree
+from neon.util.beamsearch import BeamSearch
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -298,6 +299,51 @@ class Model(NervanaObject):
 
         # Handle the recurrent case.
         if nsteps != 1:
+            b, s = (self.be.bsz, nsteps)
+            Ypred = Ypred.reshape((n, s, b, -1)).transpose(0, 2, 1, 3).copy().reshape(n * b, s, -1)
+
+        return Ypred[:dataset.ndata]
+
+    def get_outputs_beam(self, dataset, num_beams=0):
+        """
+        Get the activation outputs of the final model layer for the dataset
+
+        Arguments:
+            dataset (NervanaDataIterator) Dataset iterator to perform fit on
+            num_beams (int, optional) Nonzero to use beamsearch for sequence to sequence models
+
+        Returns:
+            Host numpy array: the output of the final layer for the entire Dataset
+        """
+        self.initialize(dataset)
+        dataset.reset()  # Move "pointer" back to beginning of dataset
+        n = dataset.nbatches
+        x = self.layers.layers[-1].outputs
+        assert not isinstance(x, list), "Can not get_outputs with Branch terminal"
+        if num_beams > 0:
+            beamsearch = BeamSearch(self.layers)
+        Ypred = None
+        logger.info('Performing beam search with ' + str(num_beams) + ' beams')
+        for idx, (x, t) in enumerate(dataset):
+            if num_beams > 0:
+                x = beamsearch.beamsearch(x, num_beams)
+            else:
+                x = self.fprop(x, inference=True)
+            if Ypred is None:
+                (dim0, dim1) = x.shape
+                Ypred = np.empty((n * dim1, dim0), dtype=x.dtype)
+                nsteps = dim1 // self.be.bsz
+            cur_batch = slice(idx * dim1, (idx + 1) * dim1)
+            Ypred[cur_batch] = x.get().T
+
+        # Handle the beam search case.
+        if dim0 == getattr(dataset, 'seq_length', None):
+            b = self.be.bsz
+            s = dataset.seq_length
+            Ypred = Ypred.reshape((n*b, s, -1))
+
+        # Handle the recurrent case.
+        elif nsteps != 1:
             b, s = (self.be.bsz, nsteps)
             Ypred = Ypred.reshape((n, s, b, -1)).transpose(0, 2, 1, 3).copy().reshape(n * b, s, -1)
 

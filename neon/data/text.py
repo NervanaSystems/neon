@@ -19,6 +19,7 @@ Defines text datatset handling.
 import logging
 import numpy as np
 import os
+import h5py
 
 from neon.data.dataiterator import NervanaDataIterator, ArrayIterator
 from neon.data.datasets import Dataset
@@ -33,7 +34,7 @@ class Text(NervanaDataIterator):
     """
 
     def __init__(self, time_steps, path, vocab=None, tokenizer=None,
-                 onehot_input=True, autoencoder=False, conditional=False):
+                 onehot_input=True, reverse_target=False, get_prev_target=False):
         """
         Construct a text dataset object.
 
@@ -43,23 +44,23 @@ class Text(NervanaDataIterator):
             vocab (python.set) : A set of unique tokens.
             tokenizer (function) : Tokenizer function.
             onehot_input (boolean): One-hot representation of input
-            autoencoder (boolean): for sequence to sequence autoencoder,
-                                   set to True to reverse target sequence.
-                                   Otherwise, target will be shifted by one.
-            conditional (boolean): for sequence to sequence models, set to
-                                   True for training data to provide correct
-                                   target from previous time step as decoder
-                                   input. If condition, shape will be a tuple
-                                   of shapes, corresponding to encoder and
-                                   decoder inputs.
+            reverse_target (boolean): for sequence to sequence models, set to
+                                      True to reverse target sequence. Also
+                                      disables shifting target by one.
+            get_prev_target (boolean): for sequence to sequence models, set to
+                                       True for training data to provide correct
+                                       target from previous time step as decoder
+                                       input. If condition, shape will be a tuple
+                                       of shapes, corresponding to encoder and
+                                       decoder inputs.
         """
         super(Text, self).__init__(name=None)
 
         self.seq_length = time_steps
         self.onehot_input = onehot_input
         self.batch_index = 0
-        self.autoencoder = autoencoder
-        self.conditional = conditional
+        self.reverse_target = reverse_target
+        self.get_prev_target = get_prev_target
 
         X, y = self._get_data(path, tokenizer, vocab)
 
@@ -72,12 +73,12 @@ class Text(NervanaDataIterator):
         if self.onehot_input:
             self.shape = (self.nout, time_steps)
             self.dev_X = self.be.iobuf((self.nout, time_steps))
-            if self.conditional:
+            if self.get_prev_target:
                 self.dev_Z = self.be.iobuf((self.nout, time_steps))
         else:
             self.shape = (time_steps, 1)
             self.dev_X = self.be.iobuf(time_steps, dtype=np.int32)
-            if self.conditional:
+            if self.get_prev_target:
                 self.dev_Z = self.be.iobuf(time_steps, dtype=np.int32)
         self.decoder_shape = self.shape
 
@@ -106,7 +107,7 @@ class Text(NervanaDataIterator):
 
         # map tokens to indices
         X = np.asarray([self.token_to_index[t] for t in tokens], dtype=np.uint32)
-        if self.autoencoder:
+        if self.reverse_target:
             y = X.copy()
         else:
             y = np.concatenate((X[1:], X[:1]))
@@ -234,7 +235,7 @@ class Text(NervanaDataIterator):
         self.batch_index = 0
         while self.batch_index < self.nbatches:
             X_batch = self.X[:, self.batch_index, :].T.astype(np.float32, order='C')
-            if self.autoencoder is False:
+            if self.reverse_target is False:
                 y_batch = self.y[:, self.batch_index, :].T.astype(np.float32, order='C')
             else:
                 # reverse target sequence
@@ -246,22 +247,95 @@ class Text(NervanaDataIterator):
             if self.onehot_input:
                 self.dev_lbl.set(X_batch)
                 self.dev_X[:] = self.be.onehot(self.dev_lblflat, axis=0)
-                if self.conditional:
+                if self.get_prev_target:
                     self.dev_Z[:, self.be.bsz:] = self.dev_y[:, :-self.be.bsz]
                     self.dev_Z[:, 0:self.be.bsz] = 0  # zero-hot, no input
             else:
                 self.dev_X.set(X_batch)
-                if self.conditional:
+                if self.get_prev_target:
                     self.dev_lbl.set(y_batch)
                     self.dev_Z[1:, :] = self.dev_lbl[:-1, :]
                     self.dev_Z[0, :] = 0
 
             self.batch_index += 1
 
-            if self.conditional:
+            if self.get_prev_target:
                 yield (self.dev_X, self.dev_Z), self.dev_y
             else:
                 yield self.dev_X, self.dev_y
+
+
+class TextNMT(Text):
+    """
+    Datasets for neural machine translation on French / English bilingual datasets.
+    Available at http://www-lium.univ-lemans.fr/~schwenk/cslm_joint_paper/data/bitexts.tgz
+
+    Arguments:
+        time_steps (int) : Length of a sequence.
+        path (str) : Path to text file.
+        tokenizer (function) : Tokenizer function.
+        onehot_input (boolean): One-hot representation of input
+        get_prev_target (boolean): for sequence to sequence models, set to
+                               True for training data to provide correct
+                               target from previous time step as decoder
+                               input. If condition, shape will be a tuple
+                               of shapes, corresponding to encoder and
+                               decoder inputs.
+        split (str): "train" or "valid" split of the dataset
+        dataset (str): 'un2000' for the United Nations dataset or 'eurparl7'
+                       for the European Parliament datset.
+        subset_pct (float): Percentage of the dataset to use (100 is the full dataset)
+    """
+    def __init__(self, time_steps, path, tokenizer=None,
+                 onehot_input=False, get_prev_target=False, split=None,
+                 dataset='un2000', subset_pct=100):
+        """
+        Load French and English sentence data from file.
+        """
+        assert dataset in ('europarl7', 'un2000'), "invalid dataset"
+        processed_file = os.path.join(path, dataset + '-' + split + '.h5')
+        assert os.path.exists(processed_file), "Dataset at '" + processed_file + "' not found"
+        self.subset_pct = subset_pct
+
+        super(TextNMT, self).__init__(time_steps, processed_file, vocab=None, tokenizer=tokenizer,
+                                      onehot_input=onehot_input, get_prev_target=get_prev_target,
+                                      reverse_target=True)
+
+    def _get_data(self, path, tokenizer, vocab):
+        """
+        Tokenizer and vocab are unused but provided to match superclass method signature
+        """
+        def vocab_to_dicts(vocab):
+            t2i = dict((t, i) for i, t in enumerate(vocab))
+            i2t = dict((i, t) for i, t in enumerate(vocab))
+            return t2i, i2t
+
+        # get saved processed data
+        logger.debug("Loading parsed data from %s", path)
+        with h5py.File(path, 'r') as f:
+            self.s_vocab = f['s_vocab'][:].tolist()
+            self.t_vocab = f['t_vocab'][:].tolist()
+            self.s_token_to_index, self.s_index_to_token = vocab_to_dicts(self.s_vocab)
+            self.t_token_to_index, self.t_index_to_token = vocab_to_dicts(self.t_vocab)
+            X = f['X'][:]
+            y = f['y'][:]
+        self.nclass = len(self.t_vocab)
+
+        # Trim subset and patial minibatch
+        if self.subset_pct < 100:
+            X = X[:int(X.shape[0] * self.subset_pct / 100.), :]
+            y = y[:int(y.shape[0] * self.subset_pct / 100.), :]
+            logger.debug("subset %d%% of data", self.subset_pct*100)
+
+        extra_sentences = X.shape[0] % self.be.bsz
+        if extra_sentences:
+            X = X[:-extra_sentences, :]
+            y = y[:-extra_sentences, :]
+            logger.debug("removing %d extra sentences", extra_sentences)
+        self.nbatches = X.shape[0] // self.be.bsz
+        self.ndata = self.nbatches * self.be.bsz  # no leftovers
+
+        return X, y
 
 
 class Shakespeare(Dataset):
@@ -303,8 +377,8 @@ class PTB(Dataset):
     def __init__(self, timesteps, path='.',
                  onehot_input=True,
                  tokenizer=None,
-                 autoencoder=False,
-                 conditional=False):
+                 reverse_target=False,
+                 get_prev_target=False):
         url = 'https://raw.githubusercontent.com/wojzaremba/lstm/master/data'
         self.filemap = {'train': 5101618,
                         'test': 449945,
@@ -325,8 +399,8 @@ class PTB(Dataset):
         else:
             self.tokenizer_func = None
 
-        self.autoencoder = autoencoder
-        self.conditional = conditional
+        self.reverse_target = reverse_target
+        self.get_prev_target = get_prev_target
 
     @staticmethod
     def newline_tokenizer(s):
@@ -373,14 +447,14 @@ class PTB(Dataset):
         self.vocab = None
         for phase in ['train', 'test', 'valid']:
             file_path = self.file_paths[phase]
-            conditional = self.conditional if phase is 'train' else False
+            get_prev_target = self.get_prev_target if phase is 'train' else False
             self._data_dict[phase] = Text(self.timesteps,
                                           file_path,
                                           tokenizer=self.tokenizer_func,
                                           onehot_input=self.onehot_input,
                                           vocab=self.vocab,
-                                          autoencoder=self.autoencoder,
-                                          conditional=conditional)
+                                          reverse_target=self.reverse_target,
+                                          get_prev_target=get_prev_target)
             if self.vocab is None:
                 self.vocab = self._data_dict['train'].vocab
         return self._data_dict

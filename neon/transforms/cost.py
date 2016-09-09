@@ -16,6 +16,8 @@ from __future__ import division
 from builtins import str
 from neon import NervanaObject
 import numpy as np
+from collections import Counter
+from neon import logger as neon_logger
 
 
 class Cost(NervanaObject):
@@ -548,3 +550,101 @@ class ObjectDetection(Metric):
 
         return np.array((self.labelMetric.get()[:, calcrange].mean(),
                          self.detectionMetric.get()[:, calcrange].mean()))
+
+
+class BLEUScore(Metric):
+    """
+    Compute BLEU score metric
+    """
+
+    def __init__(self, unk='<unk>'):
+        self.metric_names = ['BLEU']
+        self.end_token = '.'
+        self.unk_symbol = unk
+
+    def __call__(self, y, t, N=4, brevity_penalty=False, lower_case=True):
+        """
+        Args:
+            y (list): list of predicted sentences
+            t (list): list of reference sentences where each element is a list
+                      of multiple references
+            N (int, optional): compute all ngram modified precisions up to this N
+            brevity_penalty (bool, optional): if True, use brevity penalty
+            lower_case (bool, optional): if True, convert all words to lower case
+        """
+
+        y_list = list(y)
+        t_list = list(t)
+
+        if lower_case:
+            for ii, sent in enumerate(y_list):
+                y_list[ii] = sent.lower()
+
+        # convert all sentences to lists of words
+        for ii, sent in enumerate(y_list):
+            y_list[ii] = sent.strip(self.end_token).split()
+
+        for ii, refs in enumerate(t_list):
+            tmp = []
+            for ref in refs:
+                tmp += [ref.split()]
+            t_list[ii] = tmp
+
+        def ngram_counts(sentence, counts, N):
+            for n in range(1, N+1):
+                num = len(sentence) - n + 1     # number of n-grams
+                for jj in range(num):
+                    ngram = ' '.join(sentence[jj:jj+n])
+                    ngram = repr(n) + ' ' + ngram
+                    counts[ngram] += 1
+
+        # compute ngram counts
+        totals = np.zeros(N)    # ngram counts over all candidates
+        correct = np.zeros(N)   # correct ngrams (compared to max over references)
+        len_translation, len_reference = (0, 0)
+        for ii, sent in enumerate(y_list):
+            counts_ref_max = Counter()    # maximum ngram count over all references for an example
+            # count ngrams in candidate sentence
+            counts_cand = Counter()
+            ngram_counts(sent, counts_cand, N)
+            # process reference sentences
+            closest_diff, closest_len = (float("inf"), float("inf"))
+            for ref in t_list[ii]:
+                counts_ref = Counter()
+                # find closest length of reference sentence for current example
+                diff = abs(len(sent) - len(ref))
+                if diff < closest_diff:
+                    closest_len = len(ref)
+                elif diff == closest_diff:
+                    closest_len = min(closest_len, len(ref))
+                # compute all ngram counts up to specified n=N for this reference
+                ngram_counts(ref, counts_ref, N)
+                for ngram, count in counts_ref.items():
+                    if counts_ref_max[ngram] < count:
+                        counts_ref_max[ngram] = count
+            len_reference += closest_len
+            len_translation += len(sent)
+            for ngram, count in counts_cand.items():
+                n = int(ngram[0])
+                ind = n - 1
+                totals[ind] += count
+                # only match if there are no UNK
+                if ngram.find(self.unk_symbol) == -1:
+                    r = counts_ref_max[ngram]
+                    c = count if r >= count else r
+                    correct[ind] += c
+
+        # calculate bleu scores
+        precision = correct/totals + 0.0000001
+
+        if (brevity_penalty and len_translation < len_reference):
+            bp = np.exp(1-float(len_reference)/len_translation)
+        else:
+            bp = 1.0
+
+        logprec = np.log(precision)
+        self.bleu_n = [100*bp*np.exp(sum(logprec[:nn+1])/(nn+1)) for nn in range(N)]
+
+        neon_logger.display("Bleu scores: " + " ".join([str(np.round(f, 2)) for f in self.bleu_n]))
+
+        return self.bleu_n[-1]

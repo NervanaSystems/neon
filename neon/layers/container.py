@@ -1237,6 +1237,7 @@ class Decoder(Sequential):
         """
         # set up parameters
         hasLUT = isinstance(self.layers[0], LookupTable)
+
         # sequence length is different dimension depending on whether there is LUT
         cur_steps = self.in_shape[0] if hasLUT else self.in_shape[1]
         if not inference:
@@ -1251,6 +1252,8 @@ class Decoder(Sequential):
         if old_size != new_size:
             if hasLUT:
                 in_obj = (new_size, 1)
+                self.layers[0].inputs = None  # ensure "allocate" will reallocate this buffer
+                self.layers[0].outputs_t = None
             else:
                 in_obj = (self.out_shape[0], new_size)
             self.configure(in_obj=in_obj)

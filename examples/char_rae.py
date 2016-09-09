@@ -17,7 +17,7 @@
 Character-level recurrent autoencoder. This model shows how to use the
 Seq2Seq container class to build an Encoder-Decoder style RNN.
 
-The model uses a sequence from the PTB dataset as input, and learn to output
+The model uses a sequence from the PTB dataset as input, and learns to output
 the same sequence in reverse order.
 
 Usage:
@@ -51,13 +51,18 @@ hidden_size = 512
 gradient_clip_value = 5
 
 
-def get_predictions(model, valid_set, time_steps):
-    ypred = model.get_outputs(valid_set)
+def get_predictions(model, valid_set, time_steps, beam_search=True, num_beams=5):
+    """
+    Get model outputs for displaying.
+    """
     shape = (valid_set.nbatches, model.be.bsz, time_steps)
+    if beam_search:
+        ypred = model.get_outputs_beam(valid_set, num_beams=num_beams)
+        prediction = ypred.reshape(shape).transpose(1, 0, 2)
+    else:
+        ypred = model.get_outputs(valid_set)
+        prediction = ypred.argmax(2).reshape(shape).transpose(1, 0, 2)
 
-    # get_outputs is in shape (n*b, s, f), do a reduction on f dimension to
-    # get the class ID
-    prediction = ypred.argmax(2).reshape(shape).transpose(1, 0, 2)
     groundtruth = valid_set.X[:, :valid_set.nbatches, ::-1]
     prediction = prediction[:, :, ::-1].flatten()
     groundtruth = groundtruth[:, :, ::-1].flatten()
@@ -66,12 +71,14 @@ def get_predictions(model, valid_set, time_steps):
 
 
 def display_text(index_to_token, gt, pr):
-
+    """
+    Print out some example strings of input - output pairs.
+    """
     index_to_token[0] = '|'  # remove actual line breaks
 
     display_len = 3 * time_steps
 
-    # sample 3 sentences and its start and end time steps
+    # sample 3 sentences and their start and end time steps
     (s1_s, s1_e) = (0, time_steps)
     (s2_s, s2_e) = (time_steps, 2*time_steps)
     (s3_s, s3_e) = (2*time_steps, 3*time_steps)
@@ -102,7 +109,7 @@ def display_text(index_to_token, gt, pr):
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # instantiate dataset
-dataset = PTB(time_steps, path=args.data_dir, autoencoder=True, conditional=True)
+dataset = PTB(time_steps, path=args.data_dir, reverse_target=True, get_prev_target=True)
 train_set = dataset.train_iter
 valid_set = dataset.valid_iter
 

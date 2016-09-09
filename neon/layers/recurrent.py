@@ -438,7 +438,7 @@ class LSTM(Recurrent):
             self.h[-1][:] = 0
             self.c[-1][:] = 0
 
-        if init_state:
+        if init_state is not None:
             self.h[-1][:] = init_state
 
         params = (self.h, self.h_prev, self.ifog, self.ifo,
@@ -688,7 +688,7 @@ class GRU(Recurrent):
             self.rz[-1][:] = 0
             self.hcan[-1][:] = 0
 
-        if init_state:
+        if init_state is not None:
             assert init_state.shape == self.h[-1].shape, "init_state shape mismatch"
             self.h[-1][:] = init_state
             self.h_prev_bprop[0] = init_state
