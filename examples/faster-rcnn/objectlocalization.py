@@ -28,7 +28,7 @@ import abc
 from generate_anchors import generate_all_anchors
 
 from neon.data.datasets import Dataset
-from neon.util.persist import save_obj, load_obj
+from neon.util.persist import save_obj, load_obj, get_data_cache_dir
 from neon import logger as neon_logger
 
 # From Caffe:
@@ -775,7 +775,8 @@ class PASCAL(ObjectLocalization):
         cache_name = 'pascal_{}-{}.pkl'.format(self.image_set, self.year,
                                                self.MAX_SIZE, self.MIN_SIZE)
 
-        config['cache_path'] = os.path.join(datadir, cache_name)
+        cache_dir = get_data_cache_dir(datadir, subdir='pascalvoc_cache')
+        config['cache_path'] = os.path.join(cache_dir, cache_name)
         config['use_diff'] = False
 
         return config
