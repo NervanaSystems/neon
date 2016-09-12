@@ -10,12 +10,10 @@ First, set an environment variable to a local directory for extracting the files
 export WHALE_DATA_PATH=/usr/local/data
 ```
 
-Then, use the `ingest.sh` script to unpack the zip file and create manifest files for training.  This step requires the audio processing command line tool `sox`, GNU `parallel`.  It should take about 1-2 minutes depending on the speed of your machine:
+Then, run the ingest script to unpack the zip file and create manifest files for training.
 
 ```bash
-sudo apt-get install -y sox parallel
-
-ingest.sh </path/to/whale_data.zip>
+python examples/whale_calls/data.py --zipfile </path/to/whale_data.zip>
 ```
 
 

@@ -16,7 +16,7 @@ import os
 import numpy as np
 from neon.util.persist import ensure_dirs_exist
 from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
-from aeon import DataLoader
+from neon.data.aeon_shim import AeonDataLoader
 
 
 def get_ingest_file(filename):
@@ -62,7 +62,7 @@ def make_alexnet_train_loader(backend_obj, subset_pct=100, random_seed=0):
     aeon_config['image']['center'] = False
     aeon_config['image']['flip_enable'] = True
 
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
 def make_msra_train_loader(backend_obj, subset_pct=100, random_seed=0):
@@ -78,17 +78,17 @@ def make_msra_train_loader(backend_obj, subset_pct=100, random_seed=0):
                             'lighting': [0.0, 0.01],
                             'photometric': [-0.1, 0.1]}
 
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
 def make_validation_loader(backend_obj, subset_pct=100):
     aeon_config = common_config('val', backend_obj.bsz, subset_pct)
 
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
 def make_tuning_loader(backend_obj):
     aeon_config = common_config('train', backend_obj.bsz, subset_pct=10)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))

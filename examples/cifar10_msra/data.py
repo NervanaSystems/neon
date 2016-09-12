@@ -15,10 +15,10 @@
 import numpy as np
 import os
 from tqdm import tqdm
-from neon.data import load_cifar10
+from neon.data import CIFAR10, AeonDataLoader
+from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
 from neon.util.persist import ensure_dirs_exist
-from aeon import DataLoader
 from PIL import Image
 
 
@@ -28,7 +28,8 @@ def ingest_cifar10(padded_size, overwrite=False):
     '''
     out_dir = os.path.join(os.environ['CIFAR_DATA_PATH'], 'cifar-extracted')
     dataset = dict()
-    dataset['train'], dataset['val'], _ = load_cifar10(out_dir, normalize=False)
+    cifar10 = CIFAR10(path=out_dir, normalize=False)
+    dataset['train'], dataset['val'], _ = cifar10.load_data()
     pad_size = (padded_size - 32) // 2 if padded_size > 32 else 0
     pad_width = ((0, 0), (pad_size, pad_size), (pad_size, pad_size))
 
@@ -101,16 +102,16 @@ def make_train_loader(backend_obj, subset_pct=100, random_seed=0):
     aeon_config['image']['center'] = False
     aeon_config['image']['flip_enable'] = True
 
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
 def make_validation_loader(backend_obj, subset_pct=100):
     aeon_config = common_config('val', backend_obj.bsz, subset_pct)
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
 def make_tuning_loader(backend_obj):
     aeon_config = common_config('train', backend_obj.bsz, subset_pct=20)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))

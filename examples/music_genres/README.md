@@ -9,8 +9,6 @@ The training script will unpack the data, ingest it into a format that can be lo
 
 Usage:
 ```bash
-sudo apt-get -y install sox              # to install sox tool
-
 export MUSIC_DATA_PATH=/usr/local/data   # or your preferred local directory
 
 python examples/music_genres/train.py -e 16 --tar_file </path/to/genres.tar.gz> 

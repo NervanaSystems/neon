@@ -120,6 +120,8 @@ $(ACTIVATE): requirements.txt gpu_requirements.txt vis_requirements.txt
 	@# https://github.com/h5py/h5py/issues/535
 	@. $(ACTIVATE); pip install cython==0.23.1
 	@. $(ACTIVATE); pip install -r requirements.txt
+	@echo "Attempting to install optional aeon dataloader..."
+	-@. $(ACTIVATE); pip install git+https://github.com/NervanaSystems/aeon.git
 ifeq ($(VIS), true)
 	@echo "Updating visualization related dependecies in $(VIRTUALENV_DIR)..."
 	@. $(ACTIVATE); pip install -r vis_requirements.txt

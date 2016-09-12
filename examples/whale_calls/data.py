@@ -14,9 +14,11 @@
 # ----------------------------------------------------------------------------
 import os
 import numpy as np
+from zipfile import ZipFile
+from glob import glob
 from neon.util.persist import ensure_dirs_exist
+from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast
-from aeon import DataLoader
 
 
 def get_ingest_file(filename):
@@ -27,6 +29,63 @@ def get_ingest_file(filename):
         raise RuntimeError("Missing required env variable WHALE_DATA_PATH")
 
     return os.path.join(os.environ['WHALE_DATA_PATH'], 'whale-extracted', filename)
+
+
+def ingest_whales(zfilename, train_frac=0.8):
+    '''
+    save_ingested_whale_files
+    '''
+    set_names = ['all', 'val', 'train', 'noise', 'test']
+
+    manifests = {s: get_ingest_file(s + '-index.csv') for s in set_names}
+
+    if all([os.path.exists(manifests[sn]) for sn in set_names]):
+       return
+
+    out_dir = os.path.join(os.environ['WHALE_DATA_PATH'], 'whale-extracted')
+
+    with ZipFile(zfilename, 'r') as zf:
+        zf.extractall(out_dir)
+
+        # create label files
+        lbl_files = [os.path.join(out_dir, 'data', lbl + '.txt') for lbl in ('neg', 'pos')]
+
+        np.savetxt(lbl_files[0], [0], fmt='%d')
+        np.savetxt(lbl_files[1], [1], fmt='%d')
+
+        input_csv = os.path.join(out_dir, 'data', 'train.csv')
+        train_records = np.genfromtxt(input_csv, delimiter=',', skip_header=1, dtype=None)
+
+        pos_list, neg_list = [], []
+
+        for aiff, lbl in train_records:
+            record = (os.path.join(out_dir, 'data', 'train', aiff), lbl_files[lbl])
+            if lbl == 1:
+                pos_list.append(record)
+            else:
+                neg_list.append(record)
+
+        neg_part, pos_part = int(len(neg_list) * train_frac), int(len(pos_list) * train_frac)
+
+        set_lists = dict()
+        set_lists['all'] = neg_list + pos_list
+        set_lists['train'] = neg_list[:neg_part] + pos_list[:pos_part]
+        set_lists['val'] = neg_list[neg_part:] + pos_list[pos_part:]
+
+        # Use just the files from the non-whale calls to use as a set of noise samples
+        set_lists['noise'] = [(a) for a, l in neg_list[:neg_part]]
+
+        # Write out the test files
+        set_lists['test'] = glob(os.path.join(out_dir, 'data', 'test', '*.aiff'))
+
+        np.random.seed(0)
+
+        for sn in set_names:
+            if sn != 'test':
+                np.random.shuffle(set_lists[sn])
+
+            format_str = '%s' if sn in ('noise', 'test') else '%s,%s'
+            np.savetxt(manifests[sn], set_lists[sn], fmt=format_str)
 
 
 def wrap_dataloader(dl):
@@ -55,7 +114,7 @@ def common_config(set_name, batch_size):
 
 def make_val_loader(set_name, backend_obj):
     aeon_config = common_config(set_name, backend_obj.bsz)
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
 def make_train_loader(set_name, backend_obj, random_seed=0):
@@ -68,13 +127,23 @@ def make_train_loader(set_name, backend_obj, random_seed=0):
     aeon_config['audio']['add_noise_probability'] = 0.5
     # aeon_config['audio']['noise_level'] = [0.0, 0.5]
 
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
 def make_test_loader(set_name, backend_obj):
     aeon_config = common_config(set_name, backend_obj.bsz)
     aeon_config['type'] = 'audio'  # No labels provided
     aeon_config.pop('label', None)
-    dl = DataLoader(aeon_config, backend_obj)
+    dl = AeonDataLoader(aeon_config, backend_obj)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
+
+
+if __name__ == '__main__':
+    from configargparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('--zipfile', required=True, help='path to whale_data.zip')
+    args = parser.parse_args()
+
+    ingest_whales(args.zipfile)
+

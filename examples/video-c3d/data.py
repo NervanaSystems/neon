@@ -15,9 +15,9 @@
 
 import os
 import numpy as np
+from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast
 from neon.util.persist import ensure_dirs_exist
-from aeon import DataLoader
 
 
 def get_ingest_file(filename):
@@ -51,7 +51,7 @@ def make_test_loader(backend_obj, subset_pct=100):
     manifest_file = get_ingest_file('test-index.csv')
     aeon_config = common_config(manifest_file, backend_obj.bsz)
     aeon_config['subset_fraction'] = float(subset_pct/100.0)
-    dl = DataLoader(aeon_config, backend_obj)
+    dl = AeonDataLoader(aeon_config, backend_obj)
     dl = OneHot(dl, index=1, nclasses=101)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
@@ -68,7 +68,7 @@ def make_train_loader(backend_obj, subset_pct=100, random_seed=0):
     aeon_config['video']['frame']['center'] = False
     aeon_config['video']['frame']['flip_enable'] = True
 
-    dl = DataLoader(aeon_config, backend_obj)
+    dl = AeonDataLoader(aeon_config, backend_obj)
     dl = OneHot(dl, index=1, nclasses=101)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
@@ -78,7 +78,7 @@ def make_inference_loader(manifest_file, backend_obj):
     aeon_config = common_config(manifest_file, backend_obj.bsz)
     aeon_config['type'] = 'video'  # No labels provided
     aeon_config.pop('label', None)
-    dl = DataLoader(aeon_config, backend_obj)
+    dl = AeonDataLoader(aeon_config, backend_obj)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
 

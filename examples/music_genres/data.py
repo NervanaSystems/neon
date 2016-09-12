@@ -16,11 +16,9 @@ import os
 import tarfile
 import numpy as np
 from neon.util.persist import ensure_dirs_exist
+from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast
-from subprocess import Popen, PIPE
 from tqdm import tqdm
-
-from aeon import DataLoader
 
 
 def get_ingest_file(filename):
@@ -57,10 +55,9 @@ def ingest_genre_data(in_tar, train_percent=80):
             if tf_elem.isdir() and not os.path.exists(outpath):
                 os.makedirs(outpath)
             elif tf_elem.isfile():
-                outfile = outpath.replace('.au', '.wav')
-                snd_files.setdefault(dirpath[1], []).append(outfile)
-                a = tf_archive.extractfile(tf_elem)
-                Popen(('sox', '-', outfile), stdin=PIPE).communicate(input=a.read())
+                snd_files.setdefault(dirpath[1], []).append(outpath)
+                with open(outpath, 'wb') as of:
+                    of.write(tf_archive.extractfile(tf_elem).read())
 
     # make target files
     lbl_files = dict()
@@ -112,7 +109,7 @@ def common_config(manifest_file, batch_size):
 
 def make_val_loader(manifest_file, backend_obj):
     aeon_config = common_config(manifest_file, backend_obj.bsz)
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
 def make_train_loader(manifest_file, backend_obj, random_seed=0):
@@ -123,4 +120,14 @@ def make_train_loader(manifest_file, backend_obj, random_seed=0):
 
     aeon_config['audio']['time_scale_fraction'] = [0.95, 1.05]
 
-    return wrap_dataloader(DataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
+
+
+if __name__ == '__main__':
+    from configargparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('--tar_file', required=True, help='path to genres.tar.gz')
+    args = parser.parse_args()
+
+    ingest_genre_data(args.tar_file)
+
