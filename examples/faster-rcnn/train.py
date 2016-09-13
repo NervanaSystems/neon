@@ -45,6 +45,8 @@ import util
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__, default_overrides={'batch_size': 1})
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args(gen_be=False)
 
 # hyperparameters
@@ -62,7 +64,7 @@ year = '2007'
 
 train_set = PASCAL('trainval', year, path=args.data_dir, n_mb=n_mb,
                    rpn_rois_per_img=rpn_rois_per_img, frcn_rois_per_img=frcn_rois_per_img,
-                   add_flipped=True, shuffle=True, rebuild_cache=True)
+                   add_flipped=True, shuffle=True, rebuild_cache=True, subset_pct=args.subset_pct)
 
 # build the Faster-RCNN model
 model = util.build_model(train_set, frcn_rois_per_img, inference=False)

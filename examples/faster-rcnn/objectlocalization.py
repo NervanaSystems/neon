@@ -88,6 +88,9 @@ class ObjectLocalization(Dataset):
         frcn_rois_per_img (int, optional): how many rois to sample to train frcnn
         shuffle (boolean, optional): shuffle the image order during training
         rebuild_cache (boolean, optional): force the cache to be built from scratch
+        subset_pct (float, optional): value between 0 and 100 indicating what percentage of the
+                              dataset partition to use.  Defaults to 100.
+
     """
     MAX_SIZE = 1000
     MIN_SIZE = 600
@@ -107,7 +110,8 @@ class ObjectLocalization(Dataset):
 
     def __init__(self, path='.', n_mb=None, img_per_batch=None, conv_size=None,
                  rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=False,
-                 shuffle=False, deterministic=False, rebuild_cache=False, mock_db=None):
+                 shuffle=False, deterministic=False, rebuild_cache=False, subset_pct=100,
+                 mock_db=None):
         self.batch_index = 0
         self.path = path
         self.mock_db = mock_db
@@ -178,10 +182,12 @@ class ObjectLocalization(Dataset):
             self.num_image_entries = 1
             self.ndata = self.num_image_entries * self.rois_per_img
 
+        assert (subset_pct > 0 and subset_pct <= 100), ('subset_pct must be between 0 and 100')
+
         if n_mb is not None:
             self.nbatches = n_mb
         else:
-            self.nbatches = int(self.num_image_entries / self.img_per_batch)
+            self.nbatches = int(self.num_image_entries / self.img_per_batch * subset_pct / 100)
 
         self.cache_file = self.config['cache_path']
 
@@ -740,13 +746,14 @@ class PASCAL(ObjectLocalization):
 
     def __init__(self, image_set, year, path='.', n_mb=None, img_per_batch=None,
                  conv_size=None, rpn_rois_per_img=None, frcn_rois_per_img=None, add_flipped=True,
-                 shuffle=True, deterministic=False, rebuild_cache=False, mock_db=None):
+                 shuffle=True, deterministic=False, rebuild_cache=False, subset_pct=100,
+                 mock_db=None):
 
         self.image_set = image_set
         self.year = year
         super(PASCAL, self).__init__(path, n_mb, img_per_batch, conv_size,
                                      rpn_rois_per_img, frcn_rois_per_img, add_flipped,
-                                     shuffle, deterministic, rebuild_cache, mock_db)
+                                     shuffle, deterministic, rebuild_cache, subset_pct, mock_db)
 
     def load_data(self):
         """
