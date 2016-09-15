@@ -1145,27 +1145,28 @@ class NervanaCPU(Backend):
                      pad_d=0, pad_h=0, pad_w=0,
                      str_d=1, str_h=1, str_w=1):
         """
-        Create a new PoolLayer parameter object.
-        This then is passed as an argument to all pooling kernels.
+        Create a new DeconvLayer parameter object.
+        This then is passed as an argument to all the convolution operations.
 
-        op: max, avg, l2 pooling
         N: Number of images in mini-batch
+        C: Number of output feature maps
+        K: Number of input feature maps
 
-        C: Number of input feature maps
-        D: Depth  of input image
-        H: Height of input image
-        W: Width  of input image
+        P: Height of input
+        Q: Width of input
 
-        J: Size of feature map pooling window (maxout n_pieces)
-        T: Depth  of pooling window
-        R: Height of pooling window
-        S: Width  of pooling window
+        D: Depth  of output image
+        H: Height of output image
+        W: Width  of output image
 
-        padding: amount of zero-padding around the given image or feature map edge
-        strides: factor to step the window by in a given direction (overlap allowed)
+        T: Depth  of filter kernel
+        R: Height of filter kernel
+        S: Width  of filter kernel
 
-        Leave spatial dimensions at 1 to allow feature map pooling in the fc layers.
+        padding: amount of zero-padding around the given edge
+        strides: factor to step the filters by in a given direction
 
+        dtype: need to know dtype to setup proper kernels and params.
         """
         return DeconvLayer(self, dtype, N, C, K, P, Q, R, S,
                            pad_d, pad_h, pad_w, str_d, str_h, str_w)
