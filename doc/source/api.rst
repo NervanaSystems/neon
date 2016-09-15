@@ -102,6 +102,21 @@ and iterating through minibatches of data during training.
   neon.data.media.VideoParams
   neon.data.media.AudioParams
 
+.. warning:: The :py:class:`.DataLoader` and :py:class:`.ImageLoader` classes will be deprecated with the upcoming release of neon v2.0 in favor of the new Aeon-based DataLoader. For documentation of the aeon package, see http://aeon.nervanasys.com.
+
+The new Aeon-based dataloader supports several classes that perform transformations on the data provisioned by aeon:
+
+.. autosummary::
+  :toctree: generated/
+  :nosignatures:
+
+  neon.data.dataloader_transformers.DataLoaderTransformer
+  neon.data.dataloader_transformers.OneHot
+  neon.data.dataloader_transformers.PixelWiseOneHot
+  neon.data.dataloader_transformers.TypeCast
+  neon.data.dataloader_transformers.BGRMeanSubtract
+  neon.data.dataloader_transformers.DumpImage
+
 Dataset objects for storing data from common modalities (e.g. Text), as well as specific stock datasets (e.g. MNIST, CIFAR-10, Penn Treebank) are included.
 
 .. autosummary::

@@ -19,7 +19,7 @@ call.
 
 * If your data is too large:
     * For data in the HDF5 format, use the |HDF5Iterator| to load chunks of data to send to the model. This approach is flexible for
-      any type of data. 
+      any type of data.
     * For other types of data, use the macrobatching DataLoader, a specialized loader that loads macrobatches of data into memory, and then splits the macrobatches into minibatches to feed the model. This can be used for images, audio, video datasets and is recommended for large datasets or high-performance applications.
 
 ArrayIterator
@@ -192,7 +192,7 @@ an HDF5 formatted data file to store the input and target data arrays so the dat
 by on-host and/or on-device memory capacity.  To use the |HDF5Iterator|, the data arrays need to be
 stored in an HDF5 file with the following format:
 
-* The input data is in an HDF5 dataset named `input` and the target output, if needed, in a dataset named `output`. The data arrays are of the same format as the arrays used to initialize the |ArrayIterator| class. 
+* The input data is in an HDF5 dataset named `input` and the target output, if needed, in a dataset named `output`. The data arrays are of the same format as the arrays used to initialize the |ArrayIterator| class.
 
 * The `input` data class also requires an attribute named `lshape` which specifies the shape of the flattened input data array. For mean subtraction, an additional dataset named `mean` can be included in the HDF5 file which includes either a channel-wise mean vector or a complete mean image to subtract from the input data.
 
@@ -204,248 +204,113 @@ or transformations.
 See the example, `examples/mnist_hdf5.py`, for how to format the HDF5 data file
 for use with the |HDF5Iterator| class.
 
-DataLoader
-----------
+
+
+Aeon DataLoader
+---------------
 
 If your data is too large to load directly into memory, use a
 macrobatching approach. In macrobatching, the data is loaded in smaller
 batches, then split further into minibatches to feed the model.
 neon supports macrobatching with image, audio, and video datasets using
-the :py:class:`.DataLoader` class. 
+the ``AeonDataLoader`` class.
 
-:py:class:`.DataLoader` was created to provide a way to feed images
-from disk to neon with minimal latency. The module takes advantage of
-the high compressibility of images to conserve disk space and disk to
-host memory IO. DataLoader uses a multithreaded library to hide the
-latency of decoding images, applying augmentation and/or
-transformations, and transferring the resulting outputs to device memory
+`Aeon <https://github.com/NervanaSystems/aeon>`_ is a new dataloader module we developed to load
+macrobatches of data with ease and low latency. This module
+uses a multithreaded library to hide the latency of decoding images,
+applying augmentation and/or transformations, and transferring the resulting outputs to device memory
 (if necessary). The module also adds optional functionality for applying
-transformations to images (scale, flip, and rotation).
+transformations (scale, flip, and rotation).
+
+.. warning:: The old :py:class:`.DataLoader` and :py:class:`.ImageLoader` classes will be deprecated with the upcoming release of neon v2.0. Documentation for these classes can be found `here <http://neon.nervanasys.com/docs/latest/previous_versions.html#neon-v1-5.4>`_.
 
 
-Data format
-~~~~~~~~~~~
+Quick start guide
+~~~~~~~~~~~~~~~~~
 
-The :py:class:`.DataLoader` supports several ways to organize the data:
+The user guide for aeon is found at http://aeon.nervanasys.com. Here we provide a quick start guide, but please consult the aeon user guide for important configurations and details.
 
-1. CSV manifest files
-2. General directory structure
-3. Macrobatched data
+Users interact with the aeon dataloader by providing two items:
 
+1. Manifest file, a comma-separated file (*.csv).
+2. Configuration parameters, as a python dictionary.
 
-CSV manifest files
-~~~~~~~~~~~~~~~~~~
+Operations such as generating training/testing splits, or balancing labels for imbalanced datasets should be implemented outside of the dataloader by the user during **ingest** to create the appropriate manifest files. Several example ingest scripts are in the neon repository.
 
-The most common approach is to provide training and validation *.csv* files, each containing
-file path and label indexes (for classification). The manifest file should contain a header line
-(that is ignored). Subsequent lines will have one record per line, formatted as:
+**Manifest files**
+
+Manifest files are comma-separated files. Each row is a path to the input and the target. For example:
 
 .. code-block:: bash
 
-    filename, label
-    <path_to_image_1>,<label_1>
-    <path_to_image_2>,<label_2>
+    /image_dir/faces/naveen_rao.jpg,/labels/0.txt
+    /image_dir/faces/arjun_bansal.jpg,/labels/0.txt
+    /image_dir/faces/amir_khosrowshahi.jpg, /labels/0.txt
+    /image_dir/fruits/apple.jpg,/labels/1.txt
+    /image_dir/fruits/pear.jpg,/labels/1.txt
+    /image_dir/animals/lion.jpg,/labels/2.txt
+    /image_dir/animals/tiger.jpg,/labels/2.txt
     ...
-    <path_to_image_N>,<label_N>
+    /image_dir/vehicles/toyota.jpg,/labels/3.txt
 
-For example:
+**Configuration parameters**
 
-.. code-block:: bash
-
-    filename, label
-    /image_dir/faces/naveen_rao.jpg, 0
-    /image_dir/faces/arjun_bansal.jpg, 0
-    /image_dir/faces/amir_khosrowshahi.jpg, 0
-    /image_dir/fruits/apple.jpg, 1
-    /image_dir/fruits/pear.jpg, 1
-    /image_dir/animals/lion.jpg, 2
-    /image_dir/animals/tiger.jpg, 2
-    ...
-    /image_dir/vehicles/toyota.jpg, 3
-
-The manifest file is shuffled if the ``shuffle`` parameter to the DataLoader constructor is set to ``True``
-
-If the specified paths are not absolute (i.e. starts with ‘/’), then the
-path will be assumed to be relative to the location of the csv file.
-
-For example, see the ``examples/whale_calls.py`` script.
-
-
-General Directory Structure
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-This option presumes that your data is provided as a directory of
-images, that are organized in a hierarchy as follows:
-
-.. figure:: assets/image_loader_data_structure_v2.jpg
-
-In this organization, there are :math:`K=4` categories, with each category containing a variable number of images.
-The :py:class:`.DataLoader` will write out CSV files mapping the file location
-to an integer corresponding to the category label index. Note that to generate training/validation splits, the user
-should provide separate directories for training and testing. Alternatively, use the generated manifest file and partition into separate manifest files.
-
-
-Macrobatches
-~~~~~~~~~~~~
-
-Macrobatches are simply archive files that package
-together many data files (jpegs) to take advantage of disk locality. The
-container for these macrobatches is designed to be compatible with the
-GNU tool ``cpio``.
-
-
-During runtime, the :py:class:`.DataLoader` will generate macrobatches from the
-data, if they do not exist. These macrobatches can then be used as direct input
-on subsequent training runs.
-
-Alternatively, users can pre-generate macrobatches using the 
-``neon.util.batch_writer.py`` script. Macrobatch datasets can be generated with this script 
-from four types of raw image sources:
-
-1. General directory structure
-
-Assuming the same directory structure as mentioned above, the following command illustrates how to 
-invoke ``batch_writer.py`` in this scenario:
+Aeon is divided into separate providers for different modalities and problems. For image classification, we use the ``image,label`` provider. The configuration parameters include some base parameters for the dataloader itself, then a set of parameters for the input and target types of the provider. The configurations are provided as python dictionaries:
 
 .. code-block:: python
 
-    python neon/data/batch_writer.py  --data_dir /usr/local/data/macrobatch_out \
-                                      --image_dir /usr/local/data/raw_images \
-                                      --set_type directory \
-                                      --target_size 256 \
-                                      --macro_size 5000 \
-                                      --file_pattern "*.jpg"
+    image_config = dict(height=40, width=50)
+    label_config = dict(binary=False)
 
-In this command, the images will be loaded from
-*/usr/local/data/raw_images* and the macrobatches written to
-*/usr/local/data/macrobatch_out*. Images that are larger than the
-``target_size=256`` will be scaled down (e.g. a 512x768 image will be
-rescaled to 256x384, but a 128x128 will be untouched). Each macrobatch
-will have at most ``macro_size=5000`` images.
+    config = dict(type="image,label",
+                  image=image_config,
+                  label=label_config,
+                  manifest_filename='train.csv',
+                  minibatch_size=128)
 
-2. CSV Manifest file
+For a full list of supported providers and their associated configurations, see documentation at: http://aeon.nervanasys.com.
 
-For data formatted as a CSV Manifest file (see above), the batch writer 
-can then be invoked by calling:
+**Dataloader Transformers**
 
-.. code-block:: bash
-
-    python neon/data/batch_writer.py  --data_dir /usr/local/data/macrobatch_out \
-                                      --image_dir /location/of/csv_files \
-                                      --set_type csv
-
-3. ImageNet 1K tar files
-
-The ImageNet task is recognition task is described on the
-`ILSVRC <http://www.image-net.org/challenges/LSVRC/>`__ website. The
-1.3M training images, 50K validation images, and development kit are
-provided as TAR archives. Because the images are organized in a way that
-makes them unamenable to the generalized directory structure described
-above, we provide some special handling to properly unpack the TARs and
-correctly associate the category names to the integer labels. ImageNet
-macrobatches can be created using the following command:
-
-.. code-block:: bash
-
-    python neon/data/batch_writer.py  --data_dir /usr/local/data/macrobatch_out \
-                                      --image_dir /usr/local/data/I1K_tar_location \
-                                      --set_type i1k
-
-In this command, the ``file_pattern``, ``target_size``, and
-``macro_size`` arguments are handled as defaults. The only difference
-are the ``set_type`` argument and the ``image_dir`` argument. The
-``image_dir`` should contain the three TAR files that are provided by
-ILSVRC:
-
-.. code-block:: bash
-
-    ILSVRC2012_img_train.tar
-    ILSVRC2012_img_val.tar
-    ILSVRC2012_devkit_t12.tar.gz
-
-Ensure that the disk where ``data_dir`` is located has sufficient space
-to hold the resulting macrobatches as well as space for the unpacked
-images (these can be deleted once the macrobatches have been written).
-Since the dataset is relatively large, an SSD can greatly speed up the
-batch writing process.
-
-4. CIFAR-10 numpy arrays (pickled)
-
-The CIFAR10 dataset is provided as a pickled set of numpy arrays
-containing the uncompressed pixel buffers of each image. This dataset is
-small enough to easily fit in host memory. However, the
-|ArrayIterator| module does not allow for random flipping, cropping,
-or shuffling. We therefore added the ability to write out CIFAR10 data
-as macrobatches to work with :py:class:`.ImageLoader` :
-
-.. code-block:: bash
-
-    python neon/data/batch_writer.py  --data_dir /usr/local/data/macrobatch_out \
-                                      --set_type cifar10 \
-                                      --target_size 40
-
-CIFAR10 images are 32x32, so if the ``target_size`` argument is omitted,
-then the images will be written out as 32x32. However, in many
-scenarios, one might wish to zero-pad the images so that random cropping
-can be done without further reducing the feature map size. Setting
-``target_size`` to the desired padded image size instructs the batch
-writer to center the image in the target feature map size and pad the
-border with the means of that image along each channel. See
-``numpy.pad`` for more details.
-
-Because CIFAR images are so small, we have found that JPEG encoding of
-the images can negatively impact the accuracy of classification
-algorithms, so in this case we use lossless PNG encoding as the format
-to dump into the macrobatches.
-
-
-Invoking the DataLoader
-~~~~~~~~~~~~~~~~~~~~~~~
-
-The :py:class:`.DataLoader` constructor takes several arguments (see the API), including a `media_params`, which
-specifies the type of media being loaded and provides additional parameters. For images, an example invocation is:
+Users often need to apply additonal transformations to the data being provided by aeon. Included in neon are several
+:py:class:`.DataLoaderTransformer` classes that can be used to wrap the aeon dataloader. For example, we know that the ``image,label`` provider yields a pair of data ``(input, label)``. For classification tasks, to transform the label data into a one-hot representation (see Classification section above to learn about one-hot), we use the :py:class:`.OneHot` class:
 
 .. code-block:: python
+    from neon.data import AeonDataLoader
+    from neon.data.dataloader_transformers import OneHot
+    loader = AeonDataLoader(config, be)  # here be refers to the compute backend created with ``gen_backend`` function.
+    loader = OneHot(loader, index=1, nclasses = 10)
 
-    shape = dict(channel_count=3, height=32, width=32)
-    train_params = ImageParams(center=False, aspect_ratio=110, **shape)
-    train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
-                       shuffle=True, target_size=1, nclasses=10)
+During run-time, ``OneHot`` will apply the one-hot transformation to the data in ``index=1``. Neon includes several useful dataloader transformers for these purposes:
 
-For images, transformations specified by :py:class:`.ImageParams` will be performed on-the-fly. For supported
-transformations, see the :py:class:`.ImageParams` documentation.
-
-For audio, use the :py:class:`.AudioParams` object to provide the needed parameters to the data loader:
-
-.. code-block:: python
-
-    common_params = dict(sampling_freq=2000, clip_duration=2000, frame_duration=80, overlap_percent=50)
-    train_params = AudioParams(random_scale_percent=5, **common_params)
-    train = DataLoader(set_name='train', repo_dir=train_dir, media_params=train_params,
-                       index_file=train_idx, target_size=1, nclasses=2)
-
-Here, several important metadata are supplied, such as the sampling frequency and the maximum duration of audio clips, as well as FFT-related parameters for generating the spectrogram such as frame_duration and overlap_percent. For more information, see the :py:class:`.AudioParams` documentation and the ``whale_calls.py`` and ``music_genres.py`` scripts.
-
-For video, use the :py:class:`.VideoParams` class. We first define image parameters for the frames, and those parameters are then supplied to constructor the VideoParams object. For example:
-
-.. code-block:: python
-
-    shape = dict(channel_count=3, height=112, width=112, scale_min=128, scale_max=128)
-    frame_params = ImageParams(center=False, flip=True, **shape)
-    trainParams = VideoParams(frame_params=frame_params, frames_per_clip=16)
-    train = DataLoader(set_name='train', repo_dir=traindir, media_params=trainParams,
-                       shuffle=True, target_size=1, nclasses=101, datum_dtype=np.uint8)
+- :py:class:`.OneHot`: applies the one-hot transformation
+- :py:class:`.PixelWiseOneHot`: applies the one-hot transformation on an image (e.g. image with HW -> HWK), where K is the number of classes.
+- :py:class:`.TypeCast`: type cast a data to a different data type
+- :py:class:`.BGRMeanSubtract`: Subtract pixel_mean from the data. Assumes data is in CHWN format, with C=3.
 
 
-ImageLoader
-~~~~~~~~~~~
-
-neon maintains backwards compatibility with the old :py:class:`.ImageLoader` class. For more details
-on how to use the old system, see documentation for neon v1.4.0.
-
+.. _aeon: https://github.com/NervanaSystems/aeon
 .. |ArrayIterator| replace:: :py:class:`.ArrayIterator`
 .. |DataLoader| replace:: :py:class:`.DataLoader`
 .. |HDF5Iterator| replace:: :py:class:`.HDF5Iterator`
 .. |HDF5IteratorOneHot| replace:: :py:class:`.HDF5IteratorOneHot`
 .. |HDF5IteratorAutoencoder| replace:: :py:class:`.HDF5IteratorAutoencoder`
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
