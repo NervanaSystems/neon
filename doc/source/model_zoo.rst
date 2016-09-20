@@ -77,10 +77,9 @@ adapted to any dataset.
 
    `cifar10_allcnn.py <https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_allcnn.py>`__| CIFAR-10| All-convolutional neural network
    `cifar10_conv.py <https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_conv.py>`__| CIFAR-10| Small all-convolution network demonstrating use of fp16 data format
-   `cifar10_msra.py <https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_msra.py>`__| CIFAR-10| Deep residual network detailed in `He, 2015`_
-   `alexnet.py <https://github.com/NervanaSystems/neon/blob/master/examples/alexnet.py>`__| ImageNet| Implementation of `AlexNet`_
-   `imagenet_allcnn.py <https://github.com/NervanaSystems/neon/blob/master/examples/imagenet_allcnn.py>`__| ImageNet| All-convolutional network based on `Springenberg, 2014`_
-   `vgg_bn.py <https://github.com/NervanaSystems/neon/blob/master/examples/vgg_bn.py>`__| ImageNet| Simplified version of the `VGG <http://arxiv.org/abs/1409.1556>`__ network (see model zoo for full implementation)
+   `cifar10_msra <https://github.com/NervanaSystems/neon/blob/master/examples/cifar10_msra>`__| CIFAR-10| Deep residual network detailed in `He, 2015`_
+   `alexnet.py <https://github.com/NervanaSystems/neon/blob/master/examples/imagenet/alexnet.py>`__| ImageNet| Implementation of `AlexNet`_
+   `imagenet_allcnn.py <https://github.com/NervanaSystems/neon/blob/master/examples/imagenet/allcnn.py>`__| ImageNet| All-convolutional network based on `Springenberg, 2014`_
    `fast_rcnn <https://github.com/NervanaSystems/neon/tree/master/examples/fast-rcnn>`__| PASCAL VOC| Fast region-based CNN (`R-CNN`_) for object localization and detection. Uses a pre-trained VGG16 network trained on ImageI1K to initialize the convolution layers.
    `conv_autoencoder.py <https://github.com/NervanaSystems/neon/blob/master/examples/conv_autoencoder.py>`__| MNIST| Autoencoder convolutional network that reconstructs the image with deconvolutional layers
 

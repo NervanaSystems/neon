@@ -68,7 +68,7 @@ class CrossEntropyBinary(Cost):
 
     Note:
     The backpropagation assumes that this cost is coupled with an output layer
-    that uses the Softmax() activation function. This allows for a shortcut in
+    that uses the Logistic() activation function. This allows for a shortcut in
     the deriviate that saves computation.
     """
 

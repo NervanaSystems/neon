@@ -13,9 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from builtins import str
+from builtins import str, zip
 from configargparse import ArgParser
-from itertools import izip, repeat
+from itertools import repeat
 from neon import logger as neon_logger
 from neon.util.persist import ensure_dirs_exist
 from PIL import Image
@@ -105,13 +105,11 @@ def transform_and_save(target_size, tar_handle, img_object, output_filename):
 
 
 class IngestI1K(object):
-    def __init__(self, input_dir, target_size=256):
+    def __init__(self, input_dir, out_dir, target_size=256):
         np.random.seed(0)
 
-        if os.environ.get('I1K_DATA_PATH') is None:
-            raise RuntimeError("Missing required env variable I1K_DATA_PATH")
-
-        self.out_dir = os.path.join(os.environ['I1K_DATA_PATH'], 'i1k-extracted')
+        self.orig_out_dir = out_dir
+        self.out_dir = os.path.join(out_dir, 'i1k-extracted')
         self.input_dir = os.path.expanduser(input_dir) if input_dir is not None else None
         self.devkit = os.path.join(self.input_dir, 'ILSVRC2012_devkit_t12.tar.gz')
 
@@ -180,8 +178,8 @@ class IngestI1K(object):
 
         label_dict = self.extract_labels(setn)
         subpaths = root_tf.getmembers()
-        arg_iterator = izip(repeat(self.target_size), repeat(root_tf_path), repeat(img_dir),
-                            repeat(setn), repeat(label_dict), subpaths)
+        arg_iterator = zip(repeat(self.target_size), repeat(root_tf_path), repeat(img_dir),
+                           repeat(setn), repeat(label_dict), subpaths)
         pool = multiprocessing.Pool()
 
         pairs = []
@@ -198,7 +196,16 @@ class IngestI1K(object):
         """
         extract and resize images then write manifest files to disk.
         """
-        for setn, manifest in self.manifests.iteritems():
+        cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
+        log_file = os.path.join(self.orig_out_dir, 'train.log')
+        manifest_list_cfg = ', '.join([k+':'+v for k, v in self.manifests.items()])
+
+        with open(cfg_file, 'w') as f:
+            f.write('manifest = [{}]\n'.format(manifest_list_cfg))
+            f.write('log = {}\n'.format(log_file))
+            f.write('epochs = 90\nrng_seed = 0\nverbose = True\neval_freq = 1\n')
+
+        for setn, manifest in self.manifests.items():
             if not os.path.exists(manifest):
                 pairs = self.train_or_val_pairs(setn)
                 records = [(fname, self._target_filename(int(tgt))) for fname, tgt in pairs]
@@ -206,13 +213,14 @@ class IngestI1K(object):
 
 if __name__ == "__main__":
     parser = ArgParser()
-    parser.add_argument('--input_dir', help='Directory to find images', default=None)
+    parser.add_argument('--input_dir', help='Directory to find input tars', default=None)
+    parser.add_argument('--out_dir', help='Directory to write ingested files', default=None)
     parser.add_argument('--target_size', type=int, default=256,
                         help='Size in pixels to scale shortest side DOWN to (0 means no scaling)')
     args = parser.parse_args()
 
     logger = logging.getLogger(__name__)
 
-    bw = IngestI1K(input_dir=args.input_dir, target_size=args.target_size)
+    bw = IngestI1K(input_dir=args.input_dir, out_dir=args.out_dir, target_size=args.target_size)
 
     bw.run()

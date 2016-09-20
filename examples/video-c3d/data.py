@@ -17,22 +17,11 @@ import os
 import numpy as np
 from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast
-from neon.util.persist import ensure_dirs_exist
-
-
-def get_ingest_file(filename):
-    '''
-    prepends the environment variable data path after checking that it has been set
-    '''
-    if os.environ.get('V3D_DATA_PATH') is None:
-        raise RuntimeError("Missing required env variable V3D_DATA_PATH")
-
-    return os.path.join(os.environ['V3D_DATA_PATH'], 'ucf-extracted', filename)
+from neon.util.persist import get_data_cache_or_nothing
 
 
 def common_config(manifest_file, batch_size):
-    root_dir = os.environ['V3D_DATA_PATH']
-    cache_root = ensure_dirs_exist(os.path.join(root_dir, 'ucf-cache/'))
+    cache_root = get_data_cache_or_nothing('ucf-cache/')
     return {
                'manifest_filename': manifest_file,
                'minibatch_size': batch_size,
@@ -47,8 +36,7 @@ def common_config(manifest_file, batch_size):
             }
 
 
-def make_test_loader(backend_obj, subset_pct=100):
-    manifest_file = get_ingest_file('test-index.csv')
+def make_test_loader(manifest_file, backend_obj, subset_pct=100):
     aeon_config = common_config(manifest_file, backend_obj.bsz)
     aeon_config['subset_fraction'] = float(subset_pct/100.0)
     dl = AeonDataLoader(aeon_config, backend_obj)
@@ -57,8 +45,7 @@ def make_test_loader(backend_obj, subset_pct=100):
     return dl
 
 
-def make_train_loader(backend_obj, subset_pct=100, random_seed=0):
-    manifest_file = get_ingest_file('train-index.csv')
+def make_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0):
     aeon_config = common_config(manifest_file, backend_obj.bsz)
     aeon_config['subset_fraction'] = float(subset_pct/100.0)
     aeon_config['shuffle_manifest'] = True
@@ -83,19 +70,12 @@ def make_inference_loader(manifest_file, backend_obj):
     return dl
 
 
-def make_category_map():
-    category_file = get_ingest_file('category-index.csv')
-    categories = np.genfromtxt(category_file, dtype=None, delimiter=',')
-    return {t[0]: t[1] for t in categories}
-
-
-def accumulate_video_pred(clip_preds):
+def accumulate_video_pred(manifest_file, clip_preds):
     #  Index file will look like:
     #  video_clip_file,label_file
     #  video_clip_file will be video_path/v_WritingOnBoard_g05,
     #  where WritingOnBoard_g05 is the video name
     video_pred = {}
-    manifest_file = get_ingest_file('test-index.csv')
     clip_files = np.genfromtxt(manifest_file, dtype=None, delimiter=',', usecols=(0))
     for clip_file, pred in zip(clip_files, clip_preds):
         video_name = '_'.join(os.path.basename(clip_file).split('_')[1:-2])

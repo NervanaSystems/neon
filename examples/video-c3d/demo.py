@@ -21,7 +21,7 @@ import shutil
 from tempfile import mkdtemp
 from neon.models import Model
 from neon.util.argparser import NeonArgparser
-from data import make_inference_loader, make_category_map
+from data import make_inference_loader
 
 
 def segment_video(infile, tmpdir):
@@ -48,20 +48,23 @@ def caption_video(infile, caption, outfile):
 
 
 # parse the command line arguments
-default_overrides = dict(batch_size=32)
-parser = NeonArgparser(__doc__, default_overrides=default_overrides)
+demo_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'test.cfg')
+parser = NeonArgparser(__doc__, default_config_files=[demo_config])
 parser.add_argument('--input_video', help='video file')
 parser.add_argument('--output_video', help='Video file with overlayed inference hypotheses')
 args = parser.parse_args()
+
 assert args.model_file is not None, "need a model file for testing"
 model = Model(args.model_file)
+
+assert 'categories' in args.manifest, "Missing categories file"
+category_map = {t[0]: t[1] for t in np.genfromtxt(args.manifest['categories'],
+                                                  dtype=None, delimiter=',')}
 
 # Make a temporary directory and clean up afterwards
 outdir = mkdtemp()
 atexit.register(shutil.rmtree, outdir)
 caption_file = os.path.join(outdir, 'caption.txt')
-
-category_map = make_category_map()
 
 manifest = segment_video(args.input_video, outdir)
 

@@ -23,7 +23,6 @@ import numpy as np
 import math
 import pycuda.driver as drv
 import logging
-import pycuda
 from pycuda.tools import context_dependent_memoize
 from pycuda.curandom import MRG32k3aRandomNumberGenerator as rng_mrg
 from pycuda.gpuarray import GPUArray as p_gpuarray
@@ -846,7 +845,7 @@ class NervanaGPU(Backend):
         try:
             self.ctx.pop()
             self.ctx.detach()
-        except pycuda.driver.Error:
+        except drv.Error:
             pass
 
     def scratch_buffer(self, size):
@@ -892,7 +891,7 @@ class NervanaGPU(Backend):
     def __del__(self):
         try:
             self.ctx.detach()
-        except pycuda.driver.Error:
+        except drv.Error:
             pass
 
     def get_events(self):
@@ -2405,7 +2404,7 @@ class NervanaGPU(Backend):
             threshold (float): box overlap threshold, boxes with smaller overlaps will be kept
 
         Outputs:
-            keep_ind (list): list of indices 
+            keep_ind (list): list of indices
         """
         def div_ceil(N, thread):
             return int((N) / (thread) + ((N) % (thread) > 0))

@@ -16,33 +16,37 @@ import os
 import numpy as np
 from zipfile import ZipFile
 from glob import glob
-from neon.util.persist import ensure_dirs_exist
+from neon.util.persist import get_data_cache_or_nothing
 from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast
 
 
-def get_ingest_file(filename):
-    '''
-    prepends the environment variable data path after checking that it has been set
-    '''
-    if os.environ.get('WHALE_DATA_PATH') is None:
-        raise RuntimeError("Missing required env variable WHALE_DATA_PATH")
-
-    return os.path.join(os.environ['WHALE_DATA_PATH'], 'whale-extracted', filename)
-
-
-def ingest_whales(zfilename, train_frac=0.8):
+def ingest_whales(input_dir, out_dir, train_frac=0.8):
     '''
     save_ingested_whale_files
     '''
+    zfilename = os.path.join(input_dir, 'whale_data.zip')
+    orig_out_dir = out_dir
+    out_dir = os.path.join(orig_out_dir, 'whale-extracted')
     set_names = ['all', 'val', 'train', 'noise', 'test']
+    manifests = {s: os.path.join(out_dir, s + '-index.csv') for s in set_names}
 
-    manifests = {s: get_ingest_file(s + '-index.csv') for s in set_names}
+    manifest_list_cfg = ', '.join([k+':'+v for k, v in manifests.items()])
+
+    cfg_path = os.path.dirname(os.path.realpath(__file__))
+    for runtype in ('eval', 'subm'):
+        cfg_file = os.path.join(cfg_path, 'whale_' + runtype + '.cfg')
+        log_file = os.path.join(orig_out_dir, 'train_' + runtype + '.log')
+        with open(cfg_file, 'w') as f:
+            f.write('manifest = [{}]\n'.format(manifest_list_cfg))
+            f.write('log = {}\n'.format(log_file))
+            f.write('epochs = 16\nrng_seed = 0\nverbose = True\n')
+            if runtype == 'subm':
+                f.write('save_path = {}\n'.format(os.path.join(orig_out_dir, 'model.p')))
+                f.write('submission_file = {}\n'.format(os.path.join(orig_out_dir, 'subm.txt')))
 
     if all([os.path.exists(manifests[sn]) for sn in set_names]):
-       return
-
-    out_dir = os.path.join(os.environ['WHALE_DATA_PATH'], 'whale-extracted')
+        return [manifests[sn] for sn in set_names]
 
     with ZipFile(zfilename, 'r') as zf:
         zf.extractall(out_dir)
@@ -87,6 +91,8 @@ def ingest_whales(zfilename, train_frac=0.8):
             format_str = '%s' if sn in ('noise', 'test') else '%s,%s'
             np.savetxt(manifests[sn], set_lists[sn], fmt=format_str)
 
+    return [manifests[sn] for sn in set_names]
+
 
 def wrap_dataloader(dl):
     dl = OneHot(dl, index=1, nclasses=2)
@@ -94,9 +100,8 @@ def wrap_dataloader(dl):
     return dl
 
 
-def common_config(set_name, batch_size):
-    manifest_file = get_ingest_file(set_name + '-index.csv')
-    cache_root = ensure_dirs_exist(os.path.join(os.environ['WHALE_DATA_PATH'], 'whale-cache/'))
+def common_config(manifest_file, batch_size):
+    cache_root = get_data_cache_or_nothing('whale-cache/')
 
     return {
                'manifest_filename': manifest_file,
@@ -112,26 +117,27 @@ def common_config(set_name, batch_size):
             }
 
 
-def make_val_loader(set_name, backend_obj):
-    aeon_config = common_config(set_name, backend_obj.bsz)
+def make_val_loader(manifest_file, backend_obj):
+    aeon_config = common_config(manifest_file, backend_obj.bsz)
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_train_loader(set_name, backend_obj, random_seed=0):
-    aeon_config = common_config(set_name, backend_obj.bsz)
+def make_train_loader(manifest_file, backend_obj, noise_file=None, random_seed=0):
+    aeon_config = common_config(manifest_file, backend_obj.bsz)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
 
-    aeon_config['audio']['noise_index_file'] = get_ingest_file('noise-index.csv')
-    aeon_config['audio']['add_noise_probability'] = 0.5
-    # aeon_config['audio']['noise_level'] = [0.0, 0.5]
+    if noise_file is not None:
+        aeon_config['audio']['noise_index_file'] = noise_file
+        aeon_config['audio']['add_noise_probability'] = 0.5
+        aeon_config['audio']['noise_level'] = [0.0, 0.5]
 
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_test_loader(set_name, backend_obj):
-    aeon_config = common_config(set_name, backend_obj.bsz)
+def make_test_loader(manifest_file, backend_obj):
+    aeon_config = common_config(manifest_file, backend_obj.bsz)
     aeon_config['type'] = 'audio'  # No labels provided
     aeon_config.pop('label', None)
     dl = AeonDataLoader(aeon_config, backend_obj)
@@ -142,8 +148,10 @@ def make_test_loader(set_name, backend_obj):
 if __name__ == '__main__':
     from configargparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument('--zipfile', required=True, help='path to whale_data.zip')
+    parser.add_argument('--input_dir', required=True, help='path to whale_data.zip')
+    parser.add_argument('--out_dir', required=True, help='destination path of extracted files')
     args = parser.parse_args()
 
-    ingest_whales(args.zipfile)
+    generated_files = ingest_whales(args.input_dir, args.out_dir)
 
+    print("Manifest files written to:\n" + "\n".join(generated_files))

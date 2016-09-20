@@ -53,17 +53,11 @@ Layer deconvolution visualization
 `Guided Backprop <http://arxiv.org/pdf/1412.6806.pdf>`__ based
 visualization of convolutional layer activations is also supported via
 the :py:class:`DeconvCallback<neon.callbacks.callbacks.DeconvCallback>` class or :py:meth:`add_deconv_callback()<neon.callbacks.callbacks.Callbacks.add_deconv_callback>` function.
-For example, add the following line to ``examples/imagenet_allcnn.py``:
-
-.. code-block:: python
-
-    callbacks.add_deconv_callback(train, test)
-
-Then we run the model and generate the visualization:
+For example, one can provide the `--deconv` argument to ``examples/imagenet/allcnn.py`` to ensure that the callback gets added:
 
 .. code-block:: bash
 
-    examples/imagenet_allcnn.py -o data.h5
+    examples/imagenet/allcnn.py -o data.h5 --deconv
     nvis -i data.h5 -o .
 
 Here’s an example of the output.

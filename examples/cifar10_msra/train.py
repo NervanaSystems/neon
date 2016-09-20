@@ -13,16 +13,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import os
 from neon.optimizers import GradientDescentMomentum, Schedule
 from neon.transforms import Misclassification
 from neon.callbacks.callbacks import Callbacks, BatchNormTuneCallback
 from neon.util.argparser import NeonArgparser
 
 from network import create_network
-from data import ingest_cifar10, make_train_loader, make_validation_loader, make_tuning_loader
+from data import make_train_loader, make_validation_loader, make_tuning_loader
 
 # parse the command line arguments (generates the backend)
-parser = NeonArgparser(__doc__)
+train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
+parser = NeonArgparser(__doc__, default_config_files=[train_config])
 parser.add_argument('--depth', type=int, default=9,
                     help='depth of each stage (network depth will be 9n+2)')
 parser.add_argument('--subset_pct', type=float, default=100,
@@ -30,17 +32,18 @@ parser.add_argument('--subset_pct', type=float, default=100,
 args = parser.parse_args()
 random_seed = args.rng_seed if args.rng_seed else 0
 
-# perform ingest if it hasn't already been done (No op if already existing)
-ingest_cifar10(padded_size=40, overwrite=False)
+# Check that the proper manifest sets have been supplied
+assert 'train' in args.manifest, "Missing train manifest"
+assert 'val' in args.manifest, "Missing validation manifest"
 
 model, cost = create_network(args.depth)
 
 # setup data provider
-train = make_train_loader(model.be, args.subset_pct, random_seed)
-test = make_validation_loader(model.be, args.subset_pct)
+train = make_train_loader(args.manifest['train'], model.be, args.subset_pct, random_seed)
+test = make_validation_loader(args.manifest['val'], model.be, args.subset_pct)
 
 # tune batch norm parameters on subset of train set with no augmentations
-tune_set = make_tuning_loader(model.be)
+tune_set = make_tuning_loader(args.manifest['train'], model.be)
 
 # configure callbacks
 callbacks = Callbacks(model, eval_set=test, metric=Misclassification(), **args.callback_args)

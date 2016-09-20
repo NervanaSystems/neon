@@ -89,7 +89,8 @@ class NeonArgparser(configargparse.ArgumentParser):
         """
 
         self.add_argument('--version', action='version', version=neon_version)
-        self.add_argument('-c', '--config', is_config_file=True,
+        self.add_argument('-c', '--config',
+                          is_config_file=True,
                           help='Read values for these arguments from the '
                                'configuration file specified here first.')
         self.add_argument('-v', '--verbose', action='count',
@@ -137,6 +138,7 @@ class NeonArgparser(configargparse.ArgumentParser):
         rt_grp.add_argument('--log_token', type=str,
                             default='',
                             help='access token for data logging in real time')
+        rt_grp.add_argument('--manifest', action='append', help="manifest files")
 
         be_grp = self.add_argument_group('backend')
         be_grp.add_argument('-b', '--backend', choices=Backend.backend_choices(),
@@ -354,6 +356,9 @@ class NeonArgparser(configargparse.ArgumentParser):
 
         # display what command line / config options were set (and from where)
         logger.info(self.format_values())
+
+        if args.manifest:
+            args.manifest = {k: v for k, v in [ss.split(':') for ss in args.manifest]}
 
         self._PARSED = True
         self.args = args

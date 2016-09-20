@@ -50,8 +50,7 @@ class OneHot(DataLoaderTransformer):
     """
     def __init__(self, dataloader, index, nclasses, *args, **kwargs):
         super(OneHot, self).__init__(dataloader, index, *args, **kwargs)
-
-        self.output = self.be.empty((nclasses, self.be.bsz))
+        self.output = self.be.iobuf(nclasses, parallelism='Data')
 
     def transform(self, t):
         self.output[:] = self.be.onehot(t, axis=0)
@@ -85,8 +84,7 @@ class TypeCast(DataLoaderTransformer):
         super(TypeCast, self).__init__(
             dataloader, index=index, *args, **kwargs
         )
-
-        self.output = self.be.empty(self._shape, dtype=dtype)
+        self.output = self.be.iobuf(self._shape[0], dtype=dtype, parallelism='Data')
 
     def transform(self, t):
         self.output[:] = t

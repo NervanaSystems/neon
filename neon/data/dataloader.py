@@ -137,7 +137,7 @@ class DataLoader(NervanaDataIterator):
         parent_dir = os.path.split(repo_dir)[0]
         self.archive_prefix = 'archive-'
         if archive_dir is None:
-            self.archive_dir = get_data_cache_dir(parent_dir, set_name + '-ingested')
+            self.archive_dir = get_data_cache_dir(set_name + '-ingested')
         else:
             self.archive_dir = os.path.expandvars(os.path.expanduser(archive_dir))
         self.item_count = ct.c_int(0)

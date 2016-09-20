@@ -75,6 +75,17 @@ def get_data_cache_dir(data_dir, subdir=None):
     return data_cache_dir
 
 
+def get_data_cache_or_nothing(subdir=None):
+    cache_root = os.environ.get("NEON_DATA_CACHE_DIR")
+
+    if cache_root is None:
+        cache_root = ''
+    else:
+        cache_root = ensure_dirs_exist(os.path.join(cache_root, subdir if subdir else ""))
+
+    return cache_root
+
+
 def ensure_dirs_exist(path):
     """
     Simple helper that ensures that any directories specified in the path are

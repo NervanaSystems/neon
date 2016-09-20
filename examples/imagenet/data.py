@@ -12,26 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-import os
 import numpy as np
-from neon.util.persist import ensure_dirs_exist
+from neon.util.persist import get_data_cache_or_nothing
 from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
 from neon.data.aeon_shim import AeonDataLoader
 
 
-def get_ingest_file(filename):
-    '''
-    prepends the environment variable data path after checking that it has been set
-    '''
-    if os.environ.get('I1K_DATA_PATH') is None:
-        raise RuntimeError("Missing required env variable I1K_DATA_PATH")
-
-    return os.path.join(os.environ['I1K_DATA_PATH'], 'i1k-extracted', filename)
-
-
-def common_config(set_name, batch_size, subset_pct):
-    manifest_file = get_ingest_file(set_name + '-index.csv')
-    cache_root = ensure_dirs_exist(os.path.join(os.environ['I1K_DATA_PATH'], 'i1k-cache/'))
+def common_config(manifest_file, batch_size, subset_pct):
+    cache_root = get_data_cache_or_nothing('i1k-cache/')
 
     return {
                'manifest_filename': manifest_file,
@@ -54,8 +42,8 @@ def wrap_dataloader(dl):
     return dl
 
 
-def make_alexnet_train_loader(backend_obj, subset_pct=100, random_seed=0):
-    aeon_config = common_config('train', backend_obj.bsz, subset_pct)
+def make_alexnet_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0):
+    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
@@ -65,30 +53,32 @@ def make_alexnet_train_loader(backend_obj, subset_pct=100, random_seed=0):
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_msra_train_loader(backend_obj, subset_pct=100, random_seed=0):
-    aeon_config = common_config('train', backend_obj.bsz, subset_pct)
+def make_msra_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0):
+    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
-    aeon_config['image'] = {'height': 224,
-                            'width': 224,
-                            'scale': [0.08, 1.0],
-                            'do_area_scale': True,
-                            'horizontal_distortion': [0.75, 1.33],
-                            'lighting': [0.0, 0.01],
-                            'photometric': [-0.1, 0.1]}
+    aeon_config['image']['center'] = False
+    aeon_config['image']['flip_enable'] = True
+    aeon_config['image']['scale'] = [0.08, 1.0]
+    aeon_config['image']['do_area_scale'] = True
+    aeon_config['image']['horizontal_distortion'] = [0.75, 1.33]
+    aeon_config['image']['lighting'] = [0.0, 0.01]
+    aeon_config['image']['contrast'] = [0.9, 1.1]
+    aeon_config['image']['brightness'] = [0.9, 1.1]
+    aeon_config['image']['saturation'] = [0.9, 1.1]
 
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_validation_loader(backend_obj, subset_pct=100):
-    aeon_config = common_config('val', backend_obj.bsz, subset_pct)
+def make_validation_loader(manifest_file, backend_obj, subset_pct=100):
+    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
 
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_tuning_loader(backend_obj):
-    aeon_config = common_config('train', backend_obj.bsz, subset_pct=10)
+def make_tuning_loader(manifest_file, backend_obj):
+    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct=10)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))

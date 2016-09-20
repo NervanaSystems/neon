@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import os
 from neon import logger as neon_logger
 from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
 from neon.transforms import Accuracy
@@ -23,8 +24,8 @@ from data import make_train_loader, make_test_loader
 from network import create_network
 
 # parse the command line arguments
-default_overrides = dict(batch_size=32, epochs=18)
-parser = NeonArgparser(__doc__, default_overrides=default_overrides)
+train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
+parser = NeonArgparser(__doc__, default_config_files=[train_config])
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
@@ -33,8 +34,11 @@ random_seed = 0 if args.rng_seed is None else args.rng_seed
 model, cost = create_network()
 
 # setup data provider
-train = make_train_loader(model.be, args.subset_pct, random_seed)
-valid = make_test_loader(model.be, args.subset_pct)
+assert 'train' in args.manifest, "Missing train manifest"
+assert 'test' in args.manifest, "Missing validation manifest"
+
+train = make_train_loader(args.manifest['train'], model.be, args.subset_pct, random_seed)
+valid = make_test_loader(args.manifest['test'], model.be, args.subset_pct)
 
 # setup callbacks
 callbacks = Callbacks(model, eval_set=valid, **args.callback_args)

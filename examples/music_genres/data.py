@@ -15,35 +15,32 @@
 import os
 import tarfile
 import numpy as np
-from neon.util.persist import ensure_dirs_exist
+from neon.util.persist import ensure_dirs_exist, get_data_cache_or_nothing
 from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast
 from tqdm import tqdm
 
 
-def get_ingest_file(filename):
-    '''
-    prepends the environment variable data path after checking that it has been set
-    '''
-    if os.environ.get('MUSIC_DATA_PATH') is None:
-        raise RuntimeError("Missing required env variable MUSIC_DATA_PATH")
+def ingest_genre_data(input_dir, out_dir, train_percent=80):
+    in_tar = os.path.join(input_dir, 'genres.tar.gz')
+    ingest_dir = os.path.join(out_dir, 'music-extracted')
 
-    return os.path.join(os.environ['MUSIC_DATA_PATH'], 'music-extracted', filename)
+    train_idx = os.path.join(ingest_dir, 'train-index.csv')
+    val_idx = os.path.join(ingest_dir, 'val-index.csv')
 
+    cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
+    log_file = os.path.join(out_dir, 'train.log')
+    manifest_list_cfg = ', '.join(['train:' + train_idx, 'val:' + val_idx])
 
-def ingest_genre_data(in_tar, train_percent=80):
-    train_idx = get_ingest_file('train-index.csv')
-    val_idx = get_ingest_file('val-index.csv')
+    with open(cfg_file, 'w') as f:
+        f.write('manifest = [{}]\n'.format(manifest_list_cfg))
+        f.write('log = {}\n'.format(log_file))
+        f.write('epochs = 16\nrng_seed = 0\nverbose = True\neval_freq = 1\n')
 
     if os.path.exists(train_idx) and os.path.exists(val_idx):
         return train_idx, val_idx
 
-    if in_tar is None:
-        print("Must supply genres.tar.gz via --tar_file option")
-
     assert os.path.exists(in_tar)
-
-    ingest_dir = os.path.join(os.environ['MUSIC_DATA_PATH'], 'music-extracted')
 
     # convert files as we extract
     snd_files = dict()
@@ -91,7 +88,7 @@ def wrap_dataloader(dl):
 
 
 def common_config(manifest_file, batch_size):
-    cache_root = ensure_dirs_exist(os.path.join(os.environ['MUSIC_DATA_PATH'], 'music-cache/'))
+    cache_root = get_data_cache_or_nothing('music-cache/')
 
     return {
                'manifest_filename': manifest_file,
@@ -118,7 +115,7 @@ def make_train_loader(manifest_file, backend_obj, random_seed=0):
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
 
-    aeon_config['audio']['time_scale_fraction'] = [0.95, 1.05]
+    # aeon_config['audio']['time_scale_fraction'] = [0.95, 1.05]
 
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
@@ -126,8 +123,10 @@ def make_train_loader(manifest_file, backend_obj, random_seed=0):
 if __name__ == '__main__':
     from configargparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument('--tar_file', required=True, help='path to genres.tar.gz')
+    parser.add_argument('--input_dir', required=True, help='path to genres.tar.gz')
+    parser.add_argument('--out_dir', required=True, help='path to extract files into')
     args = parser.parse_args()
 
-    ingest_genre_data(args.tar_file)
+    generated_files = ingest_genre_data(args.input_dir, args.out_dir)
 
+    print("Manifest files written to:\n" + "\n".join(generated_files))

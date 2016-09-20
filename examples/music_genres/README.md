@@ -3,18 +3,17 @@ This example demonstrates how to classify music clips according to genre from be
 
 Download the example dataset from [here](http://marsyasweb.appspot.com/download/data_sets/).
 
-First, set an environment variable to a local directory for extracting the files and saving any cached outputs used during training.  All scripts in this training process require that `$MUSIC_DATA_PATH` has been set.
+First, use the included ingest script to unpack the data and create manifest files
+```bash
+python examples/music_genres/data.py --tar_file </path/to/genres.tar.gz> --out_dir </path/to/extract/files>
+```
 
-The training script will unpack the data, ingest it into a format that can be loaded into neon, and then begin training.  The ingestion component requires the `sox` audio processing tool, so After downloading the tar, point the script at the file
+Once the files have been extracted and the manifest files have been created, call the training script, providing the manifest files.
 
 Usage:
 ```bash
-export MUSIC_DATA_PATH=/usr/local/data   # or your preferred local directory
-
-python examples/music_genres/train.py -e 16 --tar_file </path/to/genres.tar.gz> 
+python examples/music_genres/train.py
 ```
-
-The `--tar_file` option only needs to provided on the first run.  Subsequent runs will pick up the pre-ingested files.
 
 ### Performance
 Upon training, the model should achieve better than 50 percent misclassification accuracy.

@@ -13,6 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import os
 from neon.util.argparser import NeonArgparser
 from neon.optimizers import GradientDescentMomentum, Schedule, MultiOptimizer
 from neon.transforms import TopKMisclassification
@@ -23,17 +24,20 @@ from network_alexnet import create_network
 
 
 # parse the command line arguments (generates the backend)
-parser = NeonArgparser(__doc__)
-parser.add_argument('--subset_percent', type=float, default=100,
+train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
+parser = NeonArgparser(__doc__, default_config_files=[train_config])
+parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
 
 model, cost = create_network()
-random_seed = 0 if args.rng_seed is None else args.rng_seed
+rseed = 0 if args.rng_seed is None else args.rng_seed
 
 # setup data provider
-train = make_alexnet_train_loader(model.be, args.subset_percent, random_seed)
-valid = make_validation_loader(model.be, args.subset_percent)
+assert 'train' in args.manifest, "Missing train manifest"
+assert 'val' in args.manifest, "Missing validation manifest"
+train = make_alexnet_train_loader(args.manifest['train'], model.be, args.subset_pct, rseed)
+valid = make_validation_loader(args.manifest['val'], model.be, args.subset_pct)
 
 # drop weights LR by 1/250**(1/3) at epochs (23, 45, 66), drop bias LR by 1/10 at epoch 45
 sched_weight = Schedule([22, 44, 65], 0.15874)

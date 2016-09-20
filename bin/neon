@@ -109,14 +109,11 @@ def load_data(data_dir=".", backend_obj=None):
     """
 
     if root_yaml['dataset']['name'].upper() == 'I1K':
-        # TODO: NEED TO FIX THIS FOR AEON
-        # we are using an ImageLoader type dataset:
-
         try:
             import os
             import numpy as np
             from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
-            from aeon import DataLoader
+            from neon.data.aeon_shim import AeonDataLoader
 
             train_config = root_yaml['dataset']['train_config']
             test_config = root_yaml['dataset']['test_config']
@@ -140,8 +137,8 @@ def load_data(data_dir=".", backend_obj=None):
                 dl = BGRMeanSubtract(dl, index=0)
                 return dl
 
-            train = wrap_dataloader(DataLoader(train_config, backend_obj))
-            test = wrap_dataloader(DataLoader(test_config, backend_obj))
+            train = wrap_dataloader(AeonDataLoader(train_config, backend_obj))
+            test = wrap_dataloader(AeonDataLoader(test_config, backend_obj))
 
         except (OSError, IOError, ValueError) as err:
             logger.error(err)

@@ -15,18 +15,17 @@
 import numpy as np
 import os
 from tqdm import tqdm
-from neon.data import CIFAR10, AeonDataLoader
+from neon.data import CIFAR10
 from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
-from neon.util.persist import ensure_dirs_exist
+from neon.util.persist import get_data_cache_or_nothing, ensure_dirs_exist
 from PIL import Image
 
 
-def ingest_cifar10(padded_size, overwrite=False):
+def ingest_cifar10(out_dir, padded_size, overwrite=False):
     '''
     Save CIFAR-10 dataset as PNG files
     '''
-    out_dir = os.path.join(os.environ['CIFAR_DATA_PATH'], 'cifar-extracted')
     dataset = dict()
     cifar10 = CIFAR10(path=out_dir, normalize=False)
     dataset['train'], dataset['val'], _ = cifar10.load_data()
@@ -36,8 +35,18 @@ def ingest_cifar10(padded_size, overwrite=False):
     set_names = ('train', 'val')
     manifest_files = [os.path.join(out_dir, setn + '-index.csv') for setn in set_names]
 
+    cfg_file = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
+    log_file = os.path.join(out_dir, 'train.log')
+    manifest_list_cfg = ', '.join([k+':'+v for k, v in zip(set_names, manifest_files)])
+
+    with open(cfg_file, 'w') as f:
+        f.write('manifest = [{}]\n'.format(manifest_list_cfg))
+        f.write('log = {}\n'.format(log_file))
+        f.write('epochs = 165\nrng_seed = 0\nverbose = True\neval_freq = 1\n')
+        f.write('backend = gpu\nbatch_size = 64\n')
+
     if (all([os.path.exists(manifest) for manifest in manifest_files]) and not overwrite):
-        return
+        return manifest_files
 
     # Write out label files and setup directory structure
     lbl_paths, img_paths = dict(), dict(train=dict(), val=dict())
@@ -50,7 +59,7 @@ def ingest_cifar10(padded_size, overwrite=False):
     # Now write out image files and manifests
     for setn, manifest in zip(set_names, manifest_files):
         records = []
-        for idx, (img, lbl) in tqdm(enumerate(zip(*dataset[setn]))):
+        for idx, (img, lbl) in enumerate(tqdm(zip(*dataset[setn]))):
             img_path = os.path.join(img_paths[setn][lbl[0]], str(idx) + '.png')
             im = np.pad(img.reshape((3, 32, 32)), pad_width, mode='mean')
             im = Image.fromarray(np.uint8(np.transpose(im, axes=[1, 2, 0]).copy()))
@@ -58,20 +67,11 @@ def ingest_cifar10(padded_size, overwrite=False):
             records.append((img_path, lbl_paths[lbl[0]]))
         np.savetxt(manifest, records, fmt='%s,%s')
 
-
-def get_ingest_file(filename):
-    '''
-    prepends the environment variable data path after checking that it has been set
-    '''
-    if os.environ.get('CIFAR_DATA_PATH') is None:
-        raise RuntimeError("Missing required env variable CIFAR_DATA_PATH")
-
-    return os.path.join(os.environ['CIFAR_DATA_PATH'], 'cifar-extracted', filename)
+    return manifest_files
 
 
-def common_config(set_name, batch_size, subset_pct):
-    manifest_file = get_ingest_file(set_name + '-index.csv')
-    cache_root = ensure_dirs_exist(os.path.join(os.environ['CIFAR_DATA_PATH'], 'cifar-cache/'))
+def common_config(manifest_file, batch_size, subset_pct):
+    cache_root = get_data_cache_or_nothing('cifar-cache/')
 
     return {
                'manifest_filename': manifest_file,
@@ -94,8 +94,8 @@ def wrap_dataloader(dl):
     return dl
 
 
-def make_train_loader(backend_obj, subset_pct=100, random_seed=0):
-    aeon_config = common_config('train', backend_obj.bsz, subset_pct)
+def make_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0):
+    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
@@ -105,13 +105,27 @@ def make_train_loader(backend_obj, subset_pct=100, random_seed=0):
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_validation_loader(backend_obj, subset_pct=100):
-    aeon_config = common_config('val', backend_obj.bsz, subset_pct)
+def make_validation_loader(manifest_file, backend_obj, subset_pct=100):
+    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_tuning_loader(backend_obj):
-    aeon_config = common_config('train', backend_obj.bsz, subset_pct=20)
+def make_tuning_loader(manifest_file, backend_obj):
+    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct=20)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
+
+
+if __name__ == '__main__':
+    from configargparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument('--out_dir', required=True, help='path to extract files into')
+    parser.add_argument('--input_dir', default=None, help='unused argument')
+    parser.add_argument('--padded_size', type=int, default=40,
+                        help='Size of image after padding (each side)')
+    args = parser.parse_args()
+
+    generated_files = ingest_cifar10(args.out_dir, args.padded_size)
+
+    print("Manifest files written to:\n" + "\n".join(generated_files))

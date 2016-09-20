@@ -138,10 +138,8 @@ class Callbacks(NervanaObject):
     def __del__(self):
         try:
             self.callback_data.close()
-        except Exception as e:
-            logger.warn('exception: {} while closing callback_data: {}'.format(
-                e, self.callback_data
-            ))
+        except Exception:
+            pass
 
     def serialize(self):
         """

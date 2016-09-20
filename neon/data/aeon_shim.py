@@ -14,12 +14,13 @@
 # ----------------------------------------------------------------------------
 
 import sys
+from neon import logger as neon_logger
+
 
 try:
-    from aeon import DataLoader as AeonDataLoader
+    from aeon import DataLoader as AeonDataLoader  # noqa
 except ImportError:
-    print('Unable to load aeon dataloading module.')
-    print('Please follow installation instructions at:')
-    print('https://github.com/NervanaSystems/aeon')
+    neon_logger.error('Unable to load aeon dataloading module.')
+    neon_logger.error('Please follow installation instructions at:')
+    neon_logger.error('https://github.com/NervanaSystems/aeon')
     sys.exit(1)
-

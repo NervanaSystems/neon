@@ -13,25 +13,27 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import os
 from neon.util.argparser import NeonArgparser
 from neon.optimizers import Adagrad
 from neon.transforms import Misclassification
 from neon.callbacks.callbacks import Callbacks
 
-from data import ingest_genre_data, make_train_loader, make_val_loader
+from data import make_train_loader, make_val_loader
 from network import create_network
 
-parser = NeonArgparser(__doc__)
-parser.add_argument('--tar_file', default=None, help='Input tar filename')
+train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
+parser = NeonArgparser(__doc__, default_config_files=[train_config])
 args = parser.parse_args()
 
-train_idx, val_idx = ingest_genre_data(args.tar_file)
+assert 'train' in args.manifest, "Missing train manifest"
+assert 'val' in args.manifest, "Missing validation manifest"
 
 model, cost = create_network()
 
 # setup data provider
-train = make_train_loader(train_idx, model.be)
-val = make_val_loader(val_idx, model.be)
+train = make_train_loader(args.manifest['train'], model.be)
+val = make_val_loader(args.manifest['val'], model.be)
 
 opt = Adagrad(learning_rate=0.01)
 metric = Misclassification()

@@ -13,28 +13,33 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+import os
 import numpy as np
 from neon import logger as neon_logger
 from neon.models import Model
 from neon.util.argparser import NeonArgparser
-from data import make_test_loader, make_category_map, accumulate_video_pred
+from data import make_test_loader, accumulate_video_pred
 
 
 # parse the command line arguments
-default_overrides = dict(batch_size=32)
-parser = NeonArgparser(__doc__, default_overrides=default_overrides)
+test_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'test.cfg')
+parser = NeonArgparser(__doc__, default_config_files=[test_config])
 args = parser.parse_args()
-assert args.model_file is not None, "need a model file for testing"
 
+assert args.model_file is not None, "need a model file for testing"
 model = Model(args.model_file)
 
-category_map = make_category_map()
+assert 'test' in args.manifest, "Missing test manifest"
+assert 'categories' in args.manifest, "Missing categories file"
 
-test = make_test_loader(model.be)
+category_map = {t[0]: t[1] for t in np.genfromtxt(args.manifest['categories'],
+                                                  dtype=None, delimiter=',')}
+
+test = make_test_loader(args.manifest['test'], model.be)
 
 clip_pred = model.get_outputs(test)
 
-video_pred = accumulate_video_pred(clip_pred)
+video_pred = accumulate_video_pred(args.manifest['test'], clip_pred)
 
 correct = np.zeros((len(video_pred), 2))
 

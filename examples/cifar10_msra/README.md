@@ -8,17 +8,16 @@ The first time the training script is run, the data must be retrieved and prepro
 Training a 1001 layer network can be accomplished with the following command:
 
 ```bash
-export CIFAR_DATA_PATH=</some/local/directory>
+CIFAR_DATA_PATH=</some/local/directory>
 
-python examples/cifar10_msra/train.py -r 0 -vv \
-        --log <logfile> \
+#Ingestion
+python examples/cifar10_msra/data.py --out_dir $CIFAR_DATA_PATH
+
+#Training
+python examples/cifar10_msra/train.py \
         --no_progress_bar \
-        --epochs 165 \
         --depth 111 \
-        --save_path <save-path> \
-        --eval_freq 1 \
-        --backend gpu \
-        --batch_size 64
+        --save_path <save-path>
 ```
 This setting should get to ~4.84% top-1 error. (Could be as low as 4.7)
 

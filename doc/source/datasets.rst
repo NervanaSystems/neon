@@ -60,7 +60,7 @@ CIFAR10 can be fetched in the following manner:
 
     from neon.data import CIFAR10
     cifar10 = CIFAR10()
-    train = cifar10.train_iter 
+    train = cifar10.train_iter
     test = cifar10.valid_iter
 
 ImageCaption
@@ -110,34 +110,14 @@ ImageNet
 --------
 
 The raw images need to be downloaded from ILSVRC as a tar file. Because
-the data is too large to fit in memory, the data must be loaded in
-batches (called "macrobatches", see :doc:`Loading data <loading_data>`
-). We first write the macrobatches with the
-``batch_writer.py`` script. ``data_dir`` is where the
-processed batches will be stored, and ``input_dir`` is where the
-original tar files are saved.
+the data is too large to fit in memory, the data must be loaded from disk to host,
+and then from host to device (if using a non-cpu backend), while being augmented
+appropriately.  For this type of data, we use the `aeon` dataloader which is
+described in :doc:`Loading data <loading_data>`.  Example of how to use `aeon`
+with ImageNet in particular are shown in ``examples/imagenet``, with the data
+preparation procedure (extracting from tar, resizing the images, generating manifest
+files listing images and labels) encapsulated in the script ``examples/imagenet/data.py``.
 
-.. code-block:: bash
-
-    python neon/data/batch_writer.py  --data_dir /usr/local/data/tmp \
-                                      --input_dir /usr/local/data/I1K/imagenet_orig \
-                                      --set_type i1k
-
-We then create the ImageNet dataset object and get the training data
-iterator, which is of the :py:class:`.ImageLoader` class. :py:class:`.ImageLoader` allows
-for fast loading and feeding of macrobatches to the model.
-
-.. code-block:: python
-
-    from neon.data import I1K
-
-    # create the I1K object
-    i1k = I1K(data_dir = args.data_dir, inner_size=224, subset_pct=100)
-
-    # fetch a dict of iterators
-    # iter['train'] is an iterator (neon.data.ImageLoader) for the training data
-    # iter['val'] is an iterator for the validation data
-    iters = i1k.gen_iterators()
 
 QA and bAbI
 -----------
@@ -178,7 +158,7 @@ train an autoencoder on the MNIST dataset:
     mnist = MNIST()
     # get the raw data arrays, both train set and validation set
     (X_train, y_train), (X_test, y_test), nclass = mnist.load_data()
-    
+
     # generate and ArrayIterator with no target data
     # this will return the image itself as the target
     train = ArrayIterator(X_train, lshape=(1, 28, 28))

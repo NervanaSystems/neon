@@ -16,35 +16,35 @@ The ingestion script will scale the input videos down to uniform 171x128 framesi
 
 Preprocessing needs to be done for both training and test partitions of the dataset.  Grab the necessary files (`UCF101.rar` and `UCF101TrainTestSplits-RecognitionTask.zip` from [here][ucf101]), then run the `vid_ingest.sh` script which preprocesses the entire dataset and generates the manifest files that can be used by neon for training and testing.
 
-First, we have to set a location where the data will be written out.  Both `neon` and the ingest script use the environment variable `V3D_DATA_PATH` as the parent directory where the processed video files, labels, and manifests will live.
-```bash
-export V3D_DATA_PATH=/usr/local/data
-```
+For convenience, we use the local shell variable `V3D_DATA_PATH` to indicate where ingested files will be written to and read from.
 
 ```bash
 UCF_RAR_FILE=/usr/local/data/UCF101.rar
 UCF_ZIP_FILE=/usr/local/data/UCF101TrainTestSplits-RecognitionTask.zip
+V3D_DATA_PATH=/usr/local/data
 
-vid_ingest.sh $UCF_RAR_FILE $UCF_ZIP_FILE
+vid_ingest.sh $UCF_RAR_FILE $UCF_ZIP_FILE $V3D_DATA_PATH
 ```
-The split files will be written into the output directory `$V3D_DATA_PATH/ucf-ingested` along with the necessary manifest files (list of records for training and validation).
+The split files will be written into the output directory `$V3D_DATA_PATH/ucf-extracted` along with the necessary manifest files (list of records for training and validation).
 
 ### Training
-To train, just run the following command, which will (by default) train for 18 epochs with a batch size of 32.  The model weights will be saved to `UCF101-C3D.p`:
+To train, just run the following command, which will (by default) train for 18 epochs with a batch size of 32.  The model weights will be saved to `$V3D_DATA_PATH/UCF101-C3D.p`:
+
 ```bash
-python examples/video-c3d/train.py --save_path UCF101-C3D.p
+python examples/video-c3d/train.py
 ```
+
 
 ### Testing
 The classification performance displayed during execution of this script will be on the individual subclips of each test video.  To get the aggregated predictions over each video, one can get final error rates with the testing script:
 ```
-python examples/video-c3d/inference.py --model_file UCF101-C3D.p
+python examples/video-c3d/inference.py
 ```
 
 ### Inference Demo
 Finally, we also provide a demo script which performs inference on a given input video.  After the model converges, the demo can be run which takes an input video (any format), does the necessary resizing, transcoding, and splitting, to perform inference on the subclips, then generates an output video with the five likeliest predictions overlaid on the video.
 ```
-python examples/video-c3d/demo.py --model_weights UCF101-C3D.p --input_video <in.avi> --output_video <out.avi>
+python examples/video-c3d/demo.py --input_video <in.avi> --output_video <out.avi>
 ```
 
 ### Trained weights

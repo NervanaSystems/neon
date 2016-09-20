@@ -14,33 +14,34 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os
+import numpy as np
 from neon import logger as neon_logger
 from neon.util.argparser import NeonArgparser
 from neon.optimizers import Adadelta
-from neon.transforms import Misclassification
 from neon.callbacks.callbacks import Callbacks
 from network import create_network
-from data import make_train_loader, make_val_loader
+from data import make_train_loader, make_test_loader
 
-eval_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'whale_eval.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[eval_config])
+submission_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'whale_subm.cfg')
+parser = NeonArgparser(__doc__, default_config_files=[submission_config])
+parser.add_argument('--submission_file', help='where to write prediction output')
 args = parser.parse_args()
 
 model, cost_obj = create_network()
 
-assert 'train' in args.manifest, "Missing train manifest"
-assert 'val' in args.manifest, "Missing val manifest"
+assert 'all' in args.manifest, "Missing train manifest"
+assert 'test' in args.manifest, "Missing test manifest"
+assert args.submission_file is not None, "Must supply a submission file to output scores to"
 
-train = make_train_loader(args.manifest['train'], model.be, noise_file=args.manifest.get('noise'))
-
-neon_logger.display('Performing train and test in validation mode')
-val = make_val_loader(args.manifest['val'], model.be)
-metric = Misclassification()
+neon_logger.display('Performing train and test in submission mode')
+train = make_train_loader(args.manifest['all'], model.be, noise_file=args.manifest.get('noise'))
+test = make_test_loader(args.manifest['test'], model.be)
 
 model.fit(dataset=train,
           cost=cost_obj,
           optimizer=Adadelta(),
           num_epochs=args.epochs,
-          callbacks=Callbacks(model, eval_set=val, metric=metric, **args.callback_args))
+          callbacks=Callbacks(model, **args.callback_args))
 
-neon_logger.display('Misclassification error = %.1f%%' % (model.eval(val, metric=metric) * 100))
+preds = model.get_outputs(test)
+np.savetxt(args.submission_file, preds[:, 1], fmt='%.5f')
