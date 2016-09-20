@@ -36,11 +36,11 @@ packages (different system names shown):
    libyaml-dev, pyaml, Parses YAML format inputs
    pkg-config, pkg-config, Retrieves information about installed libraries
 
+.. note::
+   To enable neon's :py:class:`.DataLoader`, several optional libraries should be installed. For image processing, install `OpenCV <http://opencv.org/>`__. For audio and video data, install `ffmpeg <https://ffmpeg.org/>`__. We recommend installing with a package manager (e.g. apt-get or homebrew). 
 
-`OpenCV <http://opencv.org/>`__ is also a required package. We recommend installing
-with a package manager (e.g. apt-get or homebrew).
 
-Additionally, there are several optional libraries.
+Additionally, there are several other optional libraries.
 
 * To enable multi-threading operations on a CPU, install `OpenBLAS <http://www.openblas.net/>`__, then recompile numpy with links to openBLAS (see sample instructions `here <https://hunseblog.wordpress.com/2014/09/15/installing-numpy-and-openblas/>`_). While Neon will run on the CPU, you'll get far better performance using GPUs.
 * Enabling Neon to use GPUs requires installation of `CUDA SDK and drivers <https://developer.nvidia.com/cuda-downloads>`__. We support `Pascal <http://developer.nvidia.com/pascal>`__ ,  `Maxwell <http://maxwell.nvidia.com/>`__ and `Kepler <http://www.nvidia.com/object/nvidia-kepler.html>`__ GPU architectures, but our backend is optimized for Maxwell GPUs. Remember to add the CUDA path to your environment variables.
