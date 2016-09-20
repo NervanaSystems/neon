@@ -193,7 +193,7 @@ private:
 class Audio : public Media {
 public:
     Audio(AudioParams *params, int id)
-    : _params(params), _noiseClips(0), _state(0),
+    : _noiseClips(0), _state(0),
       _loadedNoise(false), _rng(id) {
         _codec = new Codec(params);
         _specgram = new Specgram(params, id);
@@ -242,7 +242,6 @@ public:
     }
 
 private:
-    AudioParams*                _params;
     Codec*                      _codec;
     Specgram*                   _specgram;
     NoiseClips*                 _noiseClips;

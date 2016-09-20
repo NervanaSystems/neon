@@ -43,7 +43,7 @@ class Specgram {
 public:
     Specgram(SignalParams* params, int id)
     : _feature(params->_feature),
-      _clipDuration(params->_clipDuration), _windowSize(params->_windowSize),
+      _windowSize(params->_windowSize),
       _stride(params->_stride), _timeSteps(params->_width),
       _numFreqs(params->_windowSize / 2 + 1),
       _height(params->_height), _samplingFreq(params->_samplingFreq),
@@ -276,8 +276,6 @@ private:
 
 private:
     int                         _feature;
-    // Maximum duration in milliseconds.
-    int                         _clipDuration;
     // Window size and stride are in terms of samples.
     int                         _windowSize;
     int                         _stride;
@@ -292,7 +290,6 @@ private:
     float                       _scaleMin;
     float                       _scaleMax;
     char*                       _buf;
-    Mat*                        _image;
     Mat*                        _window;
     Mat                         _fbank;
     cv::RNG                     _rng;
