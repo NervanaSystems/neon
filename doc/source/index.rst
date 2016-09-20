@@ -36,17 +36,27 @@ Features include:
 
 New features in this release:
 
-* Python2/Python3 compatibility [#191]
-* Support for Pascal GPUs
-* Persistent RNN kernels [#262]
-* Dataloader enhancements (audio loader with examples)
-* HDF5 file data iterator
-* Convolution kernel improvements
-* Winograd kernel for fprop/bprop and 5x5 stride 1 filters
-* API documentation improvements [#234, #244, #263]
-* Cache directory cleanup
-* Reorganization of all unit tests
-* and `many more`_.
+* Faster RCNN model
+* Sequence to Sequence container and char_rae recurrent autoencoder model
+* Reshape Layer that reshapes the input [#221]
+* Pip requirements in requirements.txt updated to latest versions [#289]
+* Remove deprecated data loaders and update docs
+* Use NEON_DATA_CACHE_DIR envvar as archive dir to store DataLoader ingested data
+* Eliminate type conversion for FP16 for CUDA compute capability >= 5.2
+* Use GEMV kernels for batch size 1
+* Alter delta buffers for nesting of merge-broadcast layers
+* Support for ncloud real-time logging
+* Add fast_style Makefile target
+* Fix Python 3 builds on Ubuntu 16.04
+* Run setup.py for sysinstall to generate version.py [#282]
+* Fix broken link in mnist docs
+* Fix conv/deconv tests for CPU execution and fix i32 data type
+* Fix for average pooling with batch size 1
+* Change default scale_min to allow random cropping if omitted
+* Fix yaml loading
+* Fix bug with image resize during injest
+* Update references to the ModelZoo and neon examples to their new locations
+* See `change log`_.
 
 We use neon internally at Nervana to solve our `customers' problems`_
 in many domains. Consider joining us. We are hiring across several
@@ -63,7 +73,7 @@ roles. Apply here_!
 .. _customers' problems: http://www.nervanasys.com/solutions
 .. _here: http://www.nervanasys.com/careers
 .. _highest performance: https://github.com/soumith/convnet-benchmarks
-.. _many more: https://github.com/NervanaSystems/neon/blob/master/ChangeLog
+.. _change log: https://github.com/NervanaSystems/neon/blob/master/ChangeLog
 
 
 

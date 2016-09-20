@@ -17,6 +17,64 @@
 Previous Versions
 =================
 
+neon v1.5.4
+-----------
+
+|Docs154|_
+
+neon v1.5.4 released July 15 2016 supporting:
+
+* Implement Binarized Neural Networks from http://arxiv.org/pdf/1602.02830v3.pdf
+* Bug fixes [#268]
+
+neon v1.5.3
+-----------
+
+|Docs153|_
+
+neon v1.5.3 released July 7 2016 supporting:
+
+* Bug fixes [#267]
+
+neon v1.5.2
+-----------
+
+|Docs152|_
+
+neon v1.5.2 released July 6 2016 supporting:
+
+* Bug fixes to audio loader
+
+
+neon v1.5.1
+-----------
+
+|Docs151|_
+
+neon v1.5.1 released June 30 2016 supporting:
+
+* Bug fixes
+
+neon v1.5.0
+-----------
+
+|Docs150|_
+
+neon v1.5.0 released June 29 2016 supporting:
+
+* Python2/Python3 compatibility [#191]
+* Support for Pascal GPUs
+* Persistent RNN kernels [#262]
+* Dataloader enhancements (audio loader with examples)
+* HDF5 file data iterator
+* Convolution kernel improvements
+* Winograd kernel for fprop/bprop and 5x5 stride 1 filters
+* API documentation improvements [#234, #244, #263]
+* Cache directory cleanup
+* Reorganization of all unit tests
+* Check for compatible shapes before doing a memcpy [#182, #183]
+* Bug fixes [#231, #241, #253, #257, #259]
+
 neon v1.4.0
 -----------
 
@@ -271,6 +329,11 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs154| replace:: Docs
+.. |Docs153| replace:: Docs
+.. |Docs152| replace:: Docs
+.. |Docs151| replace:: Docs
+.. |Docs150| replace:: Docs
 .. |Docs140| replace:: Docs
 .. |Docs130| replace:: Docs
 .. |Docs122| replace:: Docs
@@ -286,6 +349,11 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs154: http://neon.nervanasys.com/docs/1.5.4
+.. _Docs153: http://neon.nervanasys.com/docs/1.5.3
+.. _Docs152: http://neon.nervanasys.com/docs/1.5.2
+.. _Docs151: http://neon.nervanasys.com/docs/1.5.1
+.. _Docs150: http://neon.nervanasys.com/docs/1.5.0
 .. _Docs140: http://neon.nervanasys.com/docs/1.4.0
 .. _Docs130: http://neon.nervanasys.com/docs/1.3.0
 .. _Docs122: http://neon.nervanasys.com/docs/1.2.2
