@@ -21,7 +21,7 @@ from __future__ import division
 import numpy as np
 from neon.layers.layer import Layer
 from generate_anchors import generate_all_anchors
-from objectlocalization import _compute_targets, calculate_bb_overlap
+from util import compute_targets, calculate_bb_overlap
 
 # Thresholds for the IoU overlap to consider a proposed ROI as
 # foreground or background. Less than BG_THRESH_LO is ignored.
@@ -64,8 +64,8 @@ class ProposalLayer(Layer):
 
     """
 
-    def __init__(self, rpn_layers, global_buffers, inference=False, num_rois=128, pre_nms_N=12000,
-                 post_nms_N=2000, nms_thresh=0.7, min_bbox_size=16, num_classes=21,
+    def __init__(self, rpn_layers, dataloader, inference=False, num_rois=128, pre_nms_N=12000,
+                 post_nms_N=2000, nms_thresh=0.7, min_bbox_size=16,
                  fg_fraction=None, fg_thresh=None, bg_thresh_hi=None, bg_thresh_lo=None,
                  deterministic=False, name=None, debug=False):
         """
@@ -87,7 +87,7 @@ class ProposalLayer(Layer):
         self.post_nms_N = post_nms_N
         self.nms_thresh = nms_thresh
         self.min_bbox_size = min_bbox_size
-        self.num_classes = num_classes
+        self.num_classes = dataloader.num_classes
         self.fg_fraction = fg_fraction if fg_fraction else FG_FRACTION
         self.fg_thresh = fg_thresh if fg_thresh else FG_THRESH
         self.bg_thresh_hi = bg_thresh_hi if bg_thresh_hi else BG_THRESH_HI
@@ -102,14 +102,14 @@ class ProposalLayer(Layer):
         self.inference = inference
 
         # set references to dataset object buffers
-        self.target_buffers = global_buffers['target_buffers']
-        self.im_shape, self.im_scale = global_buffers['img_info']
-        self.gt_boxes, self.gt_classes, self.num_gt_boxes = global_buffers['gt_boxes']
-        self._conv_size, self._scale = global_buffers['conv_config']
+        self.dataloader = dataloader
+        self._conv_height = dataloader.conv_height
+        self._conv_width = dataloader.conv_width
+        self._scale = dataloader.conv_scale
 
         # generate anchors and load onto device
         # self._anchors has shape (KHW, 4)
-        self._anchors = generate_all_anchors(self._conv_size, self._conv_size, self._scale)
+        self._anchors = generate_all_anchors(self._conv_height, self._conv_width, self._scale)
         self._dev_anchors = self.be.array(self._anchors)
         self._num_anchors = self._anchors.shape[0]
 
@@ -126,7 +126,7 @@ class ProposalLayer(Layer):
         return (in_obj, self)
 
     def get_description(self, **kwargs):
-        skip = ['rpn_layers', 'global_buffers']
+        skip = ['rpn_layers', 'global_buffers', 'dataloader']
         if 'skip' in kwargs:
             kwargs['skip'].append(skip)
         else:
@@ -139,12 +139,11 @@ class ProposalLayer(Layer):
         # internal buffer to store transformed proposals
         self._proposals = self.be.zeros((self._num_anchors, 4))
 
-        # to store the dets (scores + proposals)
+        # to store the detections (scores + proposals)
         self.dets = self.be.zeros((self.pre_nms_N, 5))
 
         # buffer to store proposals after they have sorted
         # and filtered with NMS.
-
         # Note: The buffer has shape (num_ROIs, 5), where each column
         # is (0, x_min, y_min, x_max, y_max)
         # This format is designed to be compatible with the
@@ -169,6 +168,10 @@ class ProposalLayer(Layer):
         """
         assert self.inference == inference, \
             "Model was configured for inference={}".format(self.inference)
+
+        # get needed metadata from the dataloader
+        (self.im_shape, self.im_scale, self.gt_boxes,
+            self.gt_classes, self.num_gt_boxes, _) = self.dataloader.get_metadata_buffers()
 
         # real H and W need to get in fprop, as every image is different
         real_H = int(np.round(self.im_shape.get()[1] * self._scale))
@@ -204,8 +207,8 @@ class ProposalLayer(Layer):
         # set the scores of all the proposals from the padded area to be -1
         # in order to ignore them after sorting
         scores_np = self._scores.get()
-        scores_np.reshape(-1, self._conv_size, self._conv_size)[:, real_H:] = -1
-        scores_np.reshape(-1, self._conv_size, self._conv_size)[:, :, real_W:] = -1
+        scores_np.reshape(-1, self._conv_height, self._conv_width)[:, real_H:] = -1
+        scores_np.reshape(-1, self._conv_height, self._conv_width)[:, :, real_W:] = -1
         self._scores[:] = self.be.array(scores_np)
 
         # 5. sort the scores from highest to lowest and take top pre_nms_topN
@@ -224,7 +227,7 @@ class ProposalLayer(Layer):
         keep = keep[:self.post_nms_N]
         self.num_proposals = len(keep)
 
-        # if it is not for debug (unit test) or for training, no need to copy these to host
+        # for training or debugging, we need to copy these detections to host.
         if self.debug or not inference:
             # make scores & proposals attributes of layer for unit testing
             self.proposals = self.dets[keep, :4].get()
@@ -238,7 +241,8 @@ class ProposalLayer(Layer):
         if not inference:
             # Next, we need to set the target buffers with the class labels,
             # and bbox targets for each roi.
-            ((frcn_labels, frcn_labels_mask), (frcn_bbtargets, frcn_bbmask)) = self.target_buffers
+            ((frcn_labels, frcn_labels_mask),
+             (frcn_bbtargets, frcn_bbmask)) = self.dataloader.get_target_buffers()
 
             non_zero_gt_boxes = self.gt_boxes.get()
             num_gt_boxes = self.num_gt_boxes.get()[0][0]
@@ -264,7 +268,7 @@ class ProposalLayer(Layer):
             labels[fg_rois_this_img:] = 0
 
             rois = all_rois[keep_inds]
-            targets = _compute_targets(non_zero_gt_boxes[gt_assignment[keep_inds]], rois)
+            targets = compute_targets(non_zero_gt_boxes[gt_assignment[keep_inds]], rois)
 
             targets = (targets - np.array(BBOX_NORMALIZE_MEANS)) / np.array(BBOX_NORMALIZE_STDS)
 

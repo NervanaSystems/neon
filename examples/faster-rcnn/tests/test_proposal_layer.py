@@ -65,6 +65,33 @@ class mock_layer(object):
         self.parallelism = False
 
 
+class mock_dataloader(object):
+    def __init__(self, conv_size, conv_scale, im_shape, SCALE, gt_boxes, gt_classes, num_gt_boxes,
+                 frcn_labels, frcn_labels_mask, frcn_bbtargets, frcn_bbmask):
+
+        self.im_shape = im_shape
+        self.im_scale = SCALE
+        self.gt_boxes = gt_boxes
+        self.gt_classes = gt_classes
+        self.num_gt_boxes = num_gt_boxes
+        self.frcn_labels = frcn_labels
+        self.frcn_labels_mask = frcn_labels_mask
+        self.frcn_bbtargets = frcn_bbtargets
+        self.frcn_bbmask = frcn_bbmask
+        self.conv_height = conv_size
+        self.conv_width = conv_size
+        self.conv_scale = conv_scale.get()
+        self.num_classes = 21
+
+    def get_metadata_buffers(self):
+        return (self.im_shape, self.im_scale, self.gt_boxes,
+                self.gt_classes, self.num_gt_boxes, None)
+
+    def get_target_buffers(self):
+        return ((self.frcn_labels, self.frcn_labels_mask),
+                (self.frcn_bbtargets, self.frcn_bbmask))
+
+
 def test_proposal_layer(backend_default, fargs):
 
     np.random.seed(seed=0)
@@ -85,7 +112,7 @@ def test_proposal_layer(backend_default, fargs):
 
     frcn_labels = be.zeros((21, 128), dtype=np.int32)
     frcn_labels_mask = be.zeros(frcn_labels.shape, dtype=np.int32)
-    frcn_bbtargets = be.zeros((21*4, 128), dtype=np.float32)
+    frcn_bbtargets = be.zeros((21 * 4, 128), dtype=np.float32)
     frcn_bbmask = be.zeros(frcn_bbtargets.shape, dtype=np.float32)
 
     gt_boxes = be.zeros((64, 4), dtype=np.float32)
@@ -97,15 +124,6 @@ def test_proposal_layer(backend_default, fargs):
     gt_classes[:3, :] = np.array([[9], [9], [9]])
     num_gt_boxes = be.zeros((1, 1), dtype=np.int32).fill(3)
 
-    # mock global buffer
-    global_buffer = {
-        "target_buffers": ((frcn_labels, frcn_labels_mask),
-                           (frcn_bbtargets, frcn_bbmask)),  # Used by proposal target layer
-        "img_info": (im_shape, SCALE),  # im_shape, im_scale
-        "gt_boxes": [gt_boxes, gt_classes, num_gt_boxes],  # Used by proposal target layer
-        "conv_config": (_conv_size, im_scale.get())  # (conv_size, im_scale)
-    }
-
     num_scores = 2 * 9 * _conv_size * _conv_size
     rpn_obj_scores_dev = be.array(np.random.choice(num_scores * 2, size=num_scores,
                                   replace=False) / float(num_scores * 2.0))
@@ -114,13 +132,18 @@ def test_proposal_layer(backend_default, fargs):
     RPN_1x1_obj = mock_layer(rpn_obj_scores_dev)
     RPN_1x1_bbox = mock_layer(rpn_bbox_deltas_dev)
 
-    # Mock global buffers
+    # Mock loader
     # mock RPN_1x1_obj and RPN_1x1_bbox
     # set inference to true to skip proposal target layer
-    prop_layer = ProposalLayer([[RPN_1x1_obj], [RPN_1x1_bbox]], global_buffer,
+    mock_loader = mock_dataloader(_conv_size, im_scale, im_shape, SCALE,
+                                  gt_boxes, gt_classes, num_gt_boxes,
+                                  frcn_labels, frcn_labels_mask, frcn_bbtargets, frcn_bbmask)
+
+    prop_layer = ProposalLayer([[RPN_1x1_obj], [RPN_1x1_bbox]], mock_loader,
                                pre_nms_N=pre_nms_topN, post_nms_N=post_nms_topN,
                                nms_thresh=nms_thresh, min_bbox_size=min_size, num_rois=128,
                                deterministic=True, inference=False, debug=True)
+
     prop_layer.configure(mock_layer([]))
     prop_layer.allocate()
 
@@ -204,6 +227,7 @@ def test_proposal_layer(backend_default, fargs):
     assert (np.alltrue(t_top[1] == neon_labels))  # target labels
     assert (np.allclose(frcn_bbtargets_reference, frcn_bbtargets.get(), atol=1e-4))  # target bbox
     assert (np.alltrue(frcn_bbmask_reference == frcn_bbmask.get()))   # target bbox mask
+
 
 if __name__ == "__main__":
     be = gen_backend(backend='gpu', batch_size=1)

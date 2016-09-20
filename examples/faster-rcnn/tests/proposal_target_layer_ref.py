@@ -10,8 +10,7 @@ from builtins import object
 
 import numpy as np
 import numpy.random as npr
-from util import bbox_transform
-from objectlocalization import calculate_bb_overlap
+from util import bbox_transform, calculate_bb_overlap
 
 DEBUG = False
 

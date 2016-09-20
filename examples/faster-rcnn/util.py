@@ -13,7 +13,10 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-Utility functions for Faster-RCNN example and demo.
+Utility functions for Faster-RCNN model. Includes methods for:
+- Defining and loading VGG weights
+- Non-max suppression
+- Bounding box calculations
 
 Reference:
     "Faster R-CNN"
@@ -24,21 +27,24 @@ Reference:
 from __future__ import division
 from __future__ import print_function
 from builtins import zip
-from builtins import range
 import numpy as np
 import os
-import pickle
 
-from neon.initializers import Constant, Xavier, Gaussian
-from neon.transforms import Rectlin, Identity, Softmax, PixelwiseSoftmax
-from neon.layers import Conv, Pooling, Affine, BranchNode, Tree, Dropout
-from neon.models import Model
 from neon.util.persist import load_obj
 from neon.data.datasets import Dataset
-from voc_eval import voc_eval
+from neon.initializers import Constant, Xavier
+from neon.transforms import Rectlin
+from neon.layers import Conv, Pooling
 
-from roi_pooling import RoiPooling
-from proposal_layer import ProposalLayer
+BB_XMIN_IDX = 0
+BB_YMIN_IDX = 1
+BB_XMAX_IDX = 2
+BB_YMAX_IDX = 3
+FRCN_EPS = 1.0
+
+# Pixel mean values (BGR order) as a (1, 1, 3) array
+# These are the values originally used for training VGG16
+FRCN_PIXEL_MEANS = np.array([102.9801, 115.9465, 122.7717])
 
 
 def add_vgg_layers():
@@ -152,183 +158,15 @@ def load_vgg_weights(model, path):
         print(layer.name + " <-- " + ps['config']['name'])
 
 
-def build_model(dataset, frcn_rois_per_img, inference=False):
-    """
-    Returns the Faster-RCNN model. For inference, also returns a reference to the
-    proposal layer.
-
-    Faster-RCNN contains three modules: VGG, the Region Proposal Network (RPN),
-    and the Classification Network (ROI-pooling + Fully Connected layers), organized
-    as a tree. Tree has 4 branches:
-
-    VGG -> b1 -> Conv (3x3) -> b2 -> Conv (1x1) -> CrossEntropyMulti (objectness label)
-                               b2 -> Conv (1x1) -> SmoothL1Loss (bounding box targets)
-           b1 -> PropLayer -> ROI -> Affine -> Affine -> b3 -> Affine -> CrossEntropyMulti
-                                                         b3 -> Affine -> SmoothL1Loss
-
-    When the model is constructed for inference, several elements are different:
-    - The number of regions to keep before and after non-max suppression is (6000, 300) for
-      training and (12000, 2000) for inference.
-    - The out_shape of the proposalLayer of the network is equal to post_nms_N (number of rois
-      to keep after performaing nms). This is configured by passing the inference flag to the
-      proposalLayer constructor.
-
-    Arguments:
-        dataset (objectlocalization): Dataset object.
-        frcn_rois_per_img (int): Number of ROIs per image considered by the classification network.
-        inference (bool): Construct the model for inference. Default is False.
-
-    Returns:
-        model (Model): Faster-RCNN model.
-        proposalLayer (proposalLayer): Reference to proposalLayer in the model.
-                                       Returned only for inference=True.
-    """
-    num_classes = dataset.num_classes
-
-    # define the branch points
-    b1 = BranchNode(name="conv_branch")
-    b2 = BranchNode(name="rpn_branch")
-    b3 = BranchNode(name="roi_branch")
-
-    # define VGG
-    VGG = add_vgg_layers()
-
-    # define RPN
-    rpn_init = dict(strides=1, init=Gaussian(scale=0.01), bias=Constant(0))
-    # these references are passed to the ProposalLayer.
-    RPN_3x3 = Conv((3, 3, 512), activation=Rectlin(), padding=1, **rpn_init)
-    RPN_1x1_obj = Conv((1, 1, 18), activation=PixelwiseSoftmax(c=2), padding=0, **rpn_init)
-    RPN_1x1_bbox = Conv((1, 1, 36), activation=Identity(), padding=0, **rpn_init)
-
-    # inference uses different network settings
-    if not inference:
-        pre_nms_N = 12000
-        post_nms_N = 2000
-    else:
-        pre_nms_N = 6000
-        post_nms_N = 300
-
-    proposalLayer = ProposalLayer([RPN_1x1_obj, RPN_1x1_bbox],
-                                  dataset.get_global_buffers(), pre_nms_N=pre_nms_N,
-                                  post_nms_N=post_nms_N, num_rois=frcn_rois_per_img,
-                                  inference=inference)
-
-    # define ROI classification network
-    ROI = [proposalLayer,
-           RoiPooling(HW=(7, 7)),
-           Affine(nout=4096, init=Gaussian(scale=0.005),
-                  bias=Constant(.1), activation=Rectlin()),
-           Dropout(keep=0.5),
-           Affine(nout=4096, init=Gaussian(scale=0.005),
-                  bias=Constant(.1), activation=Rectlin()),
-           Dropout(keep=0.5)]
-
-    ROI_category = Affine(nout=num_classes, init=Gaussian(scale=0.01),
-                          bias=Constant(0), activation=Softmax())
-    ROI_bbox = Affine(nout=4 * num_classes, init=Gaussian(scale=0.001),
-                      bias=Constant(0), activation=Identity())
-
-    # build the model
-    # the four branches of the tree mirror the branches listed above
-    frcn_tree = Tree([ROI + [b3, ROI_category],
-                     [b3, ROI_bbox]
-                      ])
-
-    model = Model(layers=Tree([VGG + [b1, RPN_3x3, b2, RPN_1x1_obj],
-                               [b2, RPN_1x1_bbox],
-                               [b1] + [frcn_tree],
-                               ]))
-
-    if inference:
-        return (model, proposalLayer)
-    else:
-        return model
-
-
-def get_bboxes(outputs, proposals, num_proposals, num_classes,
-               im_shape, im_scale, max_per_image=100, thresh=0.001, nms_thresh=0.4):
-    """
-    Returns bounding boxes for detected objects, organized by class.
-
-    Transforms the proposals from the region proposal network to bounding box predictions
-    using the bounding box regressions from the classification network:
-    (1) Applying bounding box regressions to the region proposals.
-    (2) For each class, take proposed boxes where the corresponding objectness score is greater
-        then THRESH.
-    (3) Apply non-maximum suppression across classes using NMS_THRESH
-    (4) Limit the maximum number of detections over all classes to MAX_PER_IMAGE
-
-    Arguments:
-        outputs (list of tensors): Faster-RCNN model outputs
-        proposals (Tensor): Proposed boxes from the model's proposalLayer
-        num_proposals (int): Number of proposals
-        num_classes (int): Number of classes
-        im_shape (tuple): Shape of image
-        im_scale (float): Scaling factor of image
-        max_per_image (int): Maximum number of allowed detections per image. Default is 100.
-                             None indicates no enforced maximum.
-        thresh (float): Threshold for objectness score. Default is 0.001.
-        nms_thresh (float): Threshold for non-maximum suppression. Default is 0.4.
-
-    Returns:
-        detections (list): List of bounding box detections, organized by class. Each element
-                           contains a numpy array of bounding boxes for detected objects
-                           of that class.
-    """
-    detections = [[] for _ in range(num_classes)]
-
-    proposals = proposals.get()[:num_proposals, :]  # remove padded proposals
-    boxes = proposals[:, 1:5] / im_scale  # scale back to real image space
-
-    # obtain bounding box corrections from the frcn layers
-    scores = outputs[2][0].get()[:, :num_proposals].T
-    bbox_deltas = outputs[2][1].get()[:, :num_proposals].T
-
-    # apply bounding box corrections to the region proposals
-    pred_boxes = bbox_transform_inv(boxes, bbox_deltas)
-    pred_boxes = clip_boxes(pred_boxes, im_shape)
-
-    # Skip the background class, start processing from class 1
-    for j in range(1, num_classes):
-        inds = np.where(scores[:, j] > thresh)[0]
-
-        # obtain class-specific boxes and scores
-        cls_scores = scores[inds, j]
-        cls_boxes = pred_boxes[inds, j * 4:(j + 1) * 4]
-        cls_dets = np.hstack((cls_boxes, cls_scores[:, np.newaxis])).astype(np.float32, copy=False)
-
-        # apply non-max suppression
-        keep = nms(cls_dets, nms_thresh)
-        cls_dets = cls_dets[keep, :]
-
-        # store results
-        detections[j] = cls_dets
-
-    # Limit to max_per_image detections *over all classes*
-    if max_per_image is not None:
-
-        # obtain flattened list of all image scores
-        image_scores = np.hstack([detections[j][:, -1]
-                                  for j in range(1, num_classes)])
-
-        if len(image_scores) > max_per_image:
-            # compute threshold needed to keep the top max_per_image
-            image_thresh = np.sort(image_scores)[-max_per_image]
-
-            # apply threshold
-            for j in range(1, num_classes):
-                keep = np.where(detections[j][:, -1] >= image_thresh)[0]
-                detections[j] = detections[j][keep, :]
-
-    return detections
-
-
+# Below utility functions were modified from:
 # --------------------------------------------------------
 # Fast R-CNN
 # Copyright (c) 2015 Microsoft
 # Licensed under The MIT License [see LICENSE for details]
 # Written by Ross Girshick
 # --------------------------------------------------------
+
+
 def nms(dets, thresh):
     """Pure Python NMS baseline."""
     x1 = dets[:, 0]
@@ -358,26 +196,6 @@ def nms(dets, thresh):
         order = order[inds + 1]
 
     return keep
-
-
-def run_voc_eval(annopath, imagesetfile, year, image_set, classes, output_dir):
-    aps = []
-    # The PASCAL VOC metric changed in 2010
-    use_07_metric = True if int(year) < 2010 else False
-    print('VOC07 metric? ' + ('Yes' if use_07_metric else 'No'))
-    for i, cls in enumerate(classes):
-        if cls == '__background__':
-            continue
-        filename = 'voc_{}_{}_{}.txt'.format(
-            year, image_set, cls)
-        filepath = os.path.join(output_dir, filename)
-        rec, prec, ap = voc_eval(filepath, annopath, imagesetfile, cls,
-                                 output_dir, ovthresh=0.5, use_07_metric=use_07_metric)
-        aps += [ap]
-        print('AP for {} = {:.4f}'.format(cls, ap))
-        with open(os.path.join(output_dir, cls + '_pr.pkl'), 'w') as f:
-            pickle.dump({'rec': rec, 'prec': prec, 'ap': ap}, f)
-    print('Mean AP = {:.4f}'.format(np.mean(aps)))
 
 
 def bbox_transform(ex_rois, gt_rois):
@@ -449,3 +267,89 @@ def clip_boxes(boxes, im_shape):
     # y2 < im_shape[0]
     boxes[:, 3::4] = np.maximum(np.minimum(boxes[:, 3::4], im_shape[0] - 1), 0)
     return boxes
+
+
+def compute_targets(gt_bb, rp_bb):
+    """
+    Given ground truth bounding boxes and proposed boxes, compute the regresssion
+    targets according to:
+
+    t_x = (x_gt - x) / w
+    t_y = (y_gt - y) / h
+    t_w = log(w_gt / w)
+    t_h = log(h_gt / h)
+
+    where (x,y) are bounding box centers and (w,h) are the box dimensions
+    """
+    # calculate the region proposal centers and width/height
+    (x, y, w, h) = _get_xywh(rp_bb)
+    (x_gt, y_gt, w_gt, h_gt) = _get_xywh(gt_bb)
+
+    # the target will be how to adjust the bbox's center and width/height
+    # note that the targets are generated based on the original RP, which has not
+    # been scaled by the image resizing
+    targets_dx = (x_gt - x) / w
+    targets_dy = (y_gt - y) / h
+    targets_dw = np.log(w_gt / w)
+    targets_dh = np.log(h_gt / h)
+
+    targets = np.concatenate((targets_dx[:, np.newaxis],
+                              targets_dy[:, np.newaxis],
+                              targets_dw[:, np.newaxis],
+                              targets_dh[:, np.newaxis],
+                              ), axis=1)
+    return targets
+
+
+def _get_xywh(bb):
+    """
+    Given bounding boxes with coordinates (x_min, y_min, x_max, y_max), transform to
+    (x_center, y_center, width, height)
+    """
+    w = bb[:, BB_XMAX_IDX] - bb[:, BB_XMIN_IDX] + FRCN_EPS
+    h = bb[:, BB_YMAX_IDX] - bb[:, BB_YMIN_IDX] + FRCN_EPS
+    x = bb[:, BB_XMIN_IDX] + 0.5 * w
+    y = bb[:, BB_YMIN_IDX] + 0.5 * h
+
+    return (x, y, w, h)
+
+
+def calculate_bb_overlap(rp, gt):
+    """
+    Returns a matrix of overlaps between every possible pair of the two provided
+    bounding box lists.
+
+    Arguments:
+        rp (list): an array of region proposals, shape (R, 4)
+        gt (list): an array of ground truth ROIs, shape (G, 4)
+
+    Outputs:
+        overlaps: a matrix of overlaps between 2 list, shape (R, G)
+    """
+    R = rp.shape[0]
+    G = gt.shape[0]
+    overlaps = np.zeros((R, G), dtype=np.float32)
+
+    for g in range(G):
+        gt_box_area = float(
+            (gt[g, 2] - gt[g, 0] + 1) *
+            (gt[g, 3] - gt[g, 1] + 1)
+        )
+        for r in range(R):
+            iw = float(
+                min(rp[r, 2], gt[g, 2]) -
+                max(rp[r, 0], gt[g, 0]) + 1
+            )
+            if iw > 0:
+                ih = float(
+                    min(rp[r, 3], gt[g, 3]) -
+                    max(rp[r, 1], gt[g, 1]) + 1
+                )
+                if ih > 0:
+                    ua = float(
+                        (rp[r, 2] - rp[r, 0] + 1) *
+                        (rp[r, 3] - rp[r, 1] + 1) +
+                        gt_box_area - iw * ih
+                    )
+                    overlaps[r, g] = iw * ih / ua
+    return overlaps

@@ -1,60 +1,91 @@
-## Model
+## Faster-RCNN
 
-This example demonstrates how to train and test a faster R-CNN model using PASCAL VOC dataset.
-
-The script will download the PASCAL dataset and ingest and provide the data for training and inference.
+This example demonstrates how to train and test the Faster R-CNN model on the [PASCAL VOC](http://host.robots.ox.ac.uk/pascal/VOC/) dataset. This object localization model learns to detect objects in natural scenes and provide bounding boxes and category information for each object
 
 Reference:
 
-"Faster R-CNN"\
-http://arxiv.org/abs/1506.01497\
-https://github.com/rbgirshick/py-faster-rcnn
+"Faster R-CNN"http://arxiv.org/abs/1506.01497, https://github.com/rbgirshick/py-faster-rcnn
 
-### Model script
-#### train.py
+### Data preparation
 
-Trains a Faster-RCNN model to do object localization using PASCAL VOC dataset.
+Note: This example requires installing our new dataloader: [aeon](https://github.com/NervanaSystems/aeon). For more information, see the [aeon documentation](http://aeon.nervanasys.com/index.html/)
 
-By default, the faster R-CNN model has several convolution and linear layers initialized from a pre-trained VGG16 model, and this script will download the VGG model from neon model zoo and load the weights for those layers. If the script is given --model_file, it will continue training the Faster R-CNN from the given model file. 
+First, download and unzip the PASCALVOC 2007 [training](http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtrainval_06-Nov-2007.tar) and [testing](http://host.robots.ox.ac.uk/pascal/VOC/voc2007/VOCtest_06-Nov-2007.tar) datasets to a local directory, which we call `PASCAL_DATA_PATH`. These datasets consist of images of scenes and corresponding annotation files with bounding box and category information for each object in the scene.
 
-Usage:
+Then, run the `ingest_pascalvoc.py` script to ingest the data:
+
 ```
-python examples/faster-rcnn/train.py -r0 -e7 -s faster_rcnn.pkl -vv
+python ingest_pascal.py --input_dir $PASCAL_DATA_PATH
+```
+The above script will:
+
+1. Convert the annotations from the XML format to the json format expected by our dataloader. The converted json files to the folders `Annotations-json` and `Annotations-json-inference`. When training the model, we exclude objects with the 'difficult' metadata tag. For evaluating the model however, the 'difficult' objects are included (following the above reference), so we create separate folders for the two conditions.
+
+2. Write manifest files for the training and testing sets. These are written to `$PASCAL_DATA_PATH`
+
+3. Write a configuration file to pass to neon. The config file is written to the `faster_rcnn` folder as `pascalvoc.cfg`. The config file contains the paths to the manifest files, as well as some other dataset-specific settings. For example:
+
+```
+manifest = [train:/usr/local/data/VOCdevkit/VOC2007/trainval.csv, val:/usr/local/data/VOCdevkit/VOC2007/val.csv]
+epochs = 14
+height = 1000
+width = 1000
+batch_size = 1
+```
+
+
+#### Training
+
+To train the model on the PASCALVOC 2007 dataset, use:
+```
+python examples/faster-rcnn/train.py -c <path-to-config-file> --verbose --rng_seed 0 -s frcn_model.prm
 ````
 
-Notes:
+The above command will train the model for 14 epochs (~70K iterations), saving the model to the file `frcn_model.prm`. Note that the training uses a minibatch of 1 image.
 
-1. The training currently runs 1 image in each minibatch.
+By default, the Faster R-CNN model has several convolution and linear layers that are initialized from a pre-trained VGG16 model. These VGG weights will be automatically downloaded from the [neon model zoo](https://github.com/NervanaSystems/ModelZoo) and saved in `$PASCAL_DATA_PATH/pascalvoc_cache/`.
 
-2. The original caffe model goes through 40000 iteration (mb) of training, with
-1 images per minibatch (iteration), but 2 iterations per weight updates.
+Note: the config file passes its contents to the python script as command-line arguments. The equivalent command by passing in the arguments directly is:
+```
+python examples/faster-rcnn/train.py --manifest train:$PASCAL_DATA_PATH/VOC2007/trainval.csv \
+--manifest val:$PASCAL_DATA_PATH/VOC2007/val.csv \
+-e 14 --height 1000 --width 1000 --batch_size 1 --verbose --rng_seed 0 -s frcn_model.prm
+```
 
-3. The model converges after training for 7 epochs.
+### Testing
 
-4. The dataset can be cached as the preprocessed file and re-use if the same
-configuration of the dataset is used again. The cached file by default ~/nervana/data
-    
-### inference.py
-
-Test a trained Faster-RCNN model to do object detection using PASCAL VOC dataset.
+To evaluate the trained model using the Mean Average Precision (MAP) metric, use the below command.
 
 Usage:
 ```
-    python examples/faster-rcnn/inference.py --model_file faster_rcnn.pkl
+    python examples/faster-rcnn/inference.py -c <path-to-config-file> --model_file frcn_model.prm
 ```
-Notes:
 
-1. This test currently runs 1 image at a time.
+A fully trained model should yield a MAP of >69%. The mAP evaluation script is adapted from: https://github.com/rbgirshick/py-faster-rcnn/
 
-2. The dataset can be cached as the preprocessed file and re-use that if the same
-configuration of the dataset is used again. 
+### Other files
 
-3. The mAP evaluation script is adapted from:
-https://github.com/rbgirshick/py-faster-rcnn/
+This folder includes several other key files, which we describe here:
+- `faster_rcnn.py`: Functions for creating the Faster R-CNN network and transforming the output to bounding box predictions.
+- `roi_pooling.py`: ROI-pooling layer.
+- `proposal_layer.py`: Proposal layer.
+- `objectlocalization.py`: Dataset-specific configurations and settings.
 
+Several utility functions are also included:
+- `voc_eval.py`: computes the MAP on the voc dataset.
+- `util.py`: Bounding box calculations and non-max suppression.
+- `generate_anchors.py`: Generate anchor boxes.
+- `convert_xml_to_json.py`: Converts PASCAL XML format to json format.
 
 ### Tests
-There are a few unit tests for components of the model. It is setup based on the py.test framework. To run the tests,
+There are a few unit tests for components of the model, set up using the py.test framework. To run these tests, use the below command. The unit tests require defining the environment variable
 ```
 py.test examples/faster-rcnn/tests
 ```
+
+### Other datasets
+
+To extend Faster-RCNN to other datasets, write a script to ingest the data by converting the annotations into json format, and generate a manifest file according to the specifications in our [aeon documentation](http://aeon.nervanasys.com/index.html/). As an example, we included the ingest script for the KITTI dataset `ingest_kitti.py` and the configuration class `KITTI` in `objectlocalization.py`.
+
+
+

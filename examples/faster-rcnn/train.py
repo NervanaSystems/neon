@@ -36,23 +36,27 @@ from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, StepSchedule
 from neon.callbacks.callbacks import Callbacks, TrainMulticostCallback
-from neon.util.persist import save_obj
-from objectlocalization import PASCAL
+from neon.util.persist import save_obj, get_data_cache_dir
+from objectlocalization import ObjectLocalization, PASCALVOC
 from neon.transforms import CrossEntropyMulti, SmoothL1Loss
 from neon.layers import Multicost, GeneralizedCostMask
-
+from neon.data.dataloader_transformers import BGRMeanSubtract, TypeCast
+from aeon import DataLoader
+import numpy as np
 import util
+import faster_rcnn
+
 
 # parse the command line arguments
-parser = NeonArgparser(__doc__, default_overrides={'batch_size': 1})
-parser.add_argument('--subset_pct', type=float, default=100,
-                    help='subset of training dataset to use (percentage)')
+parser = NeonArgparser(__doc__)
+parser.add_argument('--width', type=int, default=1000, help='Width of input image')
+parser.add_argument('--height', type=int, default=1000, help='Height of input image')
 args = parser.parse_args(gen_be=False)
 
 # hyperparameters
 assert args.batch_size is 1, "Faster-RCNN only supports batch size 1"
+assert 'train' in args.manifest
 
-n_mb = None
 rpn_rois_per_img = 256  # number of rois to sample to train rpn
 frcn_rois_per_img = 128  # number of rois to sample to train frcn
 
@@ -60,14 +64,21 @@ frcn_rois_per_img = 128  # number of rois to sample to train frcn
 be = gen_backend(**extract_valid_args(args, gen_backend))
 be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
-year = '2007'
+cache_dir = get_data_cache_dir(args.data_dir, subdir='pascalvoc_cache')
 
-train_set = PASCAL('trainval', year, path=args.data_dir, n_mb=n_mb,
-                   rpn_rois_per_img=rpn_rois_per_img, frcn_rois_per_img=frcn_rois_per_img,
-                   add_flipped=True, shuffle=True, rebuild_cache=True, subset_pct=args.subset_pct)
+# build data loader
+# get config file for PASCALVOC
+config = PASCALVOC(args.manifest['train'], cache_dir,
+                   width=args.width, height=args.height,
+                   rois_per_img=rpn_rois_per_img, inference=False)
+
+dl = DataLoader(config, be)
+dl = TypeCast(dl, index=0, dtype=np.float32)  # cast image to float
+dl = BGRMeanSubtract(dl, index=0, pixel_mean=util.FRCN_PIXEL_MEANS)  # subtract means
+train_set = ObjectLocalization(dl, frcn_rois_per_img=frcn_rois_per_img)
 
 # build the Faster-RCNN model
-model = util.build_model(train_set, frcn_rois_per_img, inference=False)
+model = faster_rcnn.build_model(train_set, frcn_rois_per_img, inference=False)
 
 # set up cost different branches, respectively
 weights = 1.0 / (rpn_rois_per_img)
@@ -84,8 +95,8 @@ cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti(), weight
                  weights=[1, 1, 1])
 
 # setup optimizer
-schedule_w = StepSchedule(step_config=[5], change=[0.001 / 10])
-schedule_b = StepSchedule(step_config=[5], change=[0.002 / 10])
+schedule_w = StepSchedule(step_config=[10], change=[0.001 / 10])
+schedule_b = StepSchedule(step_config=[10], change=[0.002 / 10])
 
 opt_w = GradientDescentMomentum(0.001, 0.9, wdecay=0.0005, schedule=schedule_w)
 opt_b = GradientDescentMomentum(0.002, 0.9, wdecay=0.0005, schedule=schedule_b)
@@ -97,12 +108,11 @@ optimizer = MultiOptimizer({'default': opt_w, 'Bias': opt_b,
 # if training a new model, seed the image model conv layers with pre-trained weights
 # otherwise, just load the model file
 if args.model_file is None:
-    util.load_vgg_all_weights(model, args.data_dir)
+    util.load_vgg_all_weights(model, cache_dir)
 
 callbacks = Callbacks(model, eval_set=train_set, **args.callback_args)
 callbacks.add_callback(TrainMulticostCallback())
 
-# model.benchmark(train_set, optimizer=optimizer, cost=cost)
 model.fit(train_set, optimizer=optimizer, cost=cost, num_epochs=args.epochs, callbacks=callbacks)
 
 # Scale the bbox regression branch linear layer weights before saving the model
