@@ -1230,7 +1230,7 @@ class Decoder(Sequential):
 
         return hidden_error_list
 
-    def switch_mode(self, inference, conditional):
+    def switch_mode(self, inference):
         """
         Dynamically grow or shrink the number of time steps to perform
         single time step fprop during inference.
@@ -1239,13 +1239,14 @@ class Decoder(Sequential):
         hasLUT = isinstance(self.layers[0], LookupTable)
         # sequence length is different dimension depending on whether there is LUT
         cur_steps = self.in_shape[0] if hasLUT else self.in_shape[1]
-        if not (inference and conditional):
+        if not inference:
             old_size = cur_steps
             # assumes encoder and decoder have the same sequence length
             new_size = self.full_steps
         else:
             old_size = cur_steps
             new_size = 1
+
         # resize buffers
         if old_size != new_size:
             if hasLUT:
@@ -1281,9 +1282,8 @@ class Seq2Seq(LayerContainer):
                                          If not given, the container will try to make a
                                          one-to-one connections, which assumes an equal number
                                          of encoder and decoder recurrent layers.
-        conditional (boolean): if True, decoder uses output at previous time step as input
     """
-    def __init__(self, layers, decoder_connections=None, conditional=False, name=None):
+    def __init__(self, layers, decoder_connections=None, name=None):
 
         assert len(layers) == 2, self.__class__.__name__ + " layers argument must be length 2 list"
 
@@ -1303,7 +1303,6 @@ class Seq2Seq(LayerContainer):
         self.decoder = get_container(layers[1], Decoder)
         self.layers = self.encoder.layers + self.decoder.layers
 
-        self.conditional = conditional
         self.hasLUT = isinstance(self.encoder.layers[0], LookupTable)
 
         if decoder_connections:
@@ -1353,20 +1352,14 @@ class Seq2Seq(LayerContainer):
 
         desc['config']['num_encoder_layers'] = len(self.encoder.layers)
         desc['config']['decoder_connections'] = self.decoder_connections
-        desc['config']['conditional'] = self.conditional
         self._desc = desc
         return desc
 
     def configure(self, in_obj):
         # assumes Seq2Seq will always get dataset as in_obj
-        if not self.conditional:
-            self.encoder.configure(in_obj)
-            self.decoder.configure(in_obj)
-        else:
-            assert in_obj.conditional is True, \
-                   "In conditional AE case, the input should have 2 elements"
-            self.encoder.configure(in_obj.shape[0])
-            self.decoder.configure(in_obj.shape[1])
+        self.encoder.configure(in_obj.shape)
+        self.decoder.configure(in_obj.decoder_shape)
+
         self.parallelism = self.decoder.parallelism
         self.out_shape = self.decoder.out_shape
         self.in_shape = self.decoder.layers[-1].in_shape if self.hasLUT else self.decoder.in_shape
@@ -1388,17 +1381,18 @@ class Seq2Seq(LayerContainer):
         self.decoder.allocate_deltas(global_deltas)
 
     def fprop(self, inputs, inference=False, beta=0.0):
-        if not (inference and self.conditional):
+        """
+        Forward propagation for sequence to sequence container. Calls
+        fprop for the Encoder container followed by fprop for the Decoder
+        container. If inference is True, the Decoder will be called with
+        individual time steps in a for loop.
+        """
+        # make sure we are in the correct decoder mode
+        self.decoder.switch_mode(inference)
 
-            # make sure we are in the correct decoder mode
-            self.decoder.switch_mode(inference, self.conditional)
-
+        if not inference:
             # load data
-            if self.conditional:
-                (x, z) = inputs
-            else:
-                x = inputs
-                z = x.backend.zeros(x.shape)
+            (x, z) = inputs
 
             # fprop through Encoder layers
             x = self.encoder.fprop(x, inference=inference, beta=0.0)
@@ -1408,10 +1402,7 @@ class Seq2Seq(LayerContainer):
 
             # fprop through Decoder layers
             x = self.decoder.fprop(z, inference=inference, init_state_list=init_state_list)
-        else:
-
-            # Loopy inference.
-            self.decoder.switch_mode(inference, self.conditional)
+        else:  # Loopy inference
 
             # prep data
             x = inputs
@@ -1456,6 +1447,11 @@ class Seq2Seq(LayerContainer):
         return x
 
     def bprop(self, error, inference=False, alpha=1.0, beta=0.0):
+        """
+        Backpropagation for sequence to sequence container. Calls Decoder container
+        bprop followed by Encoder container bprop.
+        """
+
         hidden_error_list = self.decoder.bprop(error)
         self.encoder.bprop(hidden_error_list)
 

@@ -102,7 +102,7 @@ def display_text(index_to_token, gt, pr):
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
 # instantiate dataset
-dataset = PTB(time_steps, path=args.data_dir, reverse_target=True, conditional=True)
+dataset = PTB(time_steps, path=args.data_dir, autoencoder=True, conditional=True)
 train_set = dataset.train_iter
 valid_set = dataset.valid_iter
 
@@ -125,7 +125,6 @@ for ii in range(num_layers):
 decoder.append(Affine(train_set.nout, init, bias=init, activation=Softmax(), name="AffOut"))
 
 layers = Seq2Seq([encoder, decoder],
-                 conditional=True,
                  decoder_connections=decoder_connections,
                  name="Seq2Seq")
 

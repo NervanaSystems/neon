@@ -33,7 +33,7 @@ class Text(NervanaDataIterator):
     """
 
     def __init__(self, time_steps, path, vocab=None, tokenizer=None,
-                 onehot_input=True, reverse_target=False, conditional=False):
+                 onehot_input=True, autoencoder=False, conditional=False):
         """
         Construct a text dataset object.
 
@@ -43,8 +43,9 @@ class Text(NervanaDataIterator):
             vocab (python.set) : A set of unique tokens.
             tokenizer (function) : Tokenizer function.
             onehot_input (boolean): One-hot representation of input
-            reverse_target (boolean): for sequence to sequence models,
-                                      set to True to reverse target sequence.
+            autoencoder (boolean): for sequence to sequence autoencoder,
+                                   set to True to reverse target sequence.
+                                   Otherwise, target will be shifted by one.
             conditional (boolean): for sequence to sequence models, set to
                                    True for training data to provide correct
                                    target from previous time step as decoder
@@ -57,7 +58,7 @@ class Text(NervanaDataIterator):
         self.seq_length = time_steps
         self.onehot_input = onehot_input
         self.batch_index = 0
-        self.reverse_target = reverse_target
+        self.autoencoder = autoencoder
         self.conditional = conditional
 
         X, y = self._get_data(path, tokenizer, vocab)
@@ -78,8 +79,7 @@ class Text(NervanaDataIterator):
             self.dev_X = self.be.iobuf(time_steps, dtype=np.int32)
             if self.conditional:
                 self.dev_Z = self.be.iobuf(time_steps, dtype=np.int32)
-        if self.conditional:
-            self.shape = (self.shape, self.shape)
+        self.decoder_shape = self.shape
 
         self.dev_y = self.be.iobuf((self.nout, time_steps))
         self.dev_lbl = self.be.iobuf(time_steps, dtype=np.int32)
@@ -106,7 +106,10 @@ class Text(NervanaDataIterator):
 
         # map tokens to indices
         X = np.asarray([self.token_to_index[t] for t in tokens], dtype=np.uint32)
-        y = np.concatenate((X[1:], X[:1]))
+        if self.autoencoder:
+            y = X.copy()
+        else:
+            y = np.concatenate((X[1:], X[:1]))
 
         return X, y
 
@@ -231,11 +234,11 @@ class Text(NervanaDataIterator):
         self.batch_index = 0
         while self.batch_index < self.nbatches:
             X_batch = self.X[:, self.batch_index, :].T.astype(np.float32, order='C')
-            if self.reverse_target is False:
+            if self.autoencoder is False:
                 y_batch = self.y[:, self.batch_index, :].T.astype(np.float32, order='C')
             else:
                 # reverse target sequence
-                y_batch = self.X[:, self.batch_index, ::-1].T.astype(np.float32, order='C')
+                y_batch = self.y[:, self.batch_index, ::-1].T.astype(np.float32, order='C')
 
             self.dev_lbl.set(y_batch)
             self.dev_y[:] = self.be.onehot(self.dev_lblflat, axis=0)
@@ -300,7 +303,7 @@ class PTB(Dataset):
     def __init__(self, timesteps, path='.',
                  onehot_input=True,
                  tokenizer=None,
-                 reverse_target=False,
+                 autoencoder=False,
                  conditional=False):
         url = 'https://raw.githubusercontent.com/wojzaremba/lstm/master/data'
         self.filemap = {'train': 5101618,
@@ -322,7 +325,7 @@ class PTB(Dataset):
         else:
             self.tokenizer_func = None
 
-        self.reverse_target = reverse_target
+        self.autoencoder = autoencoder
         self.conditional = conditional
 
     @staticmethod
@@ -376,7 +379,7 @@ class PTB(Dataset):
                                           tokenizer=self.tokenizer_func,
                                           onehot_input=self.onehot_input,
                                           vocab=self.vocab,
-                                          reverse_target=self.reverse_target,
+                                          autoencoder=self.autoencoder,
                                           conditional=conditional)
             if self.vocab is None:
                 self.vocab = self._data_dict['train'].vocab
