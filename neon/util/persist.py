@@ -51,6 +51,14 @@ def get_data_cache_dir(data_dir, subdir=None):
     Since the data cache contains large files, it is ideal to control the
     location independently from the system cache, which defaults to
     the user homedir if not otherwise specified.
+
+    This function will make the directory if it doesn't yet exist.
+
+    Arguments:
+        data_dir (str): the dir to use if NEON_DATA_CACHE_DIR is not
+                        present in the environment.
+        subdir (str): sub directory inside of the cache dir that should
+                      be returned.
     """
     data_cache_dir = os.environ.get("NEON_DATA_CACHE_DIR")
 
