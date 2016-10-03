@@ -684,7 +684,9 @@ class Convolution(ParameterLayer):
     Convolutional layer implementation.
 
     Arguments:
-        fshape (tuple(int)): three dimensional shape of convolution window
+        fshape (tuple(int)): three dimensional shape of convolution window.
+            Order of the axis should be height, width, channels.  For 4d
+            convolution, the order should be depth, height, width, channels.
         strides (int, dict, optional): strides to apply convolution
             window over. An int applies to both dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
