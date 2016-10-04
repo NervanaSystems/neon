@@ -16,7 +16,6 @@
 
 SRCS            := $(wildcard src/*.hpp)
 CFLAGS          := -Wall -Wno-deprecated-declarations -O3 -std=c++11
-CFLAGSDBG       := -g -Wall -O0 -std=c++11
 CC              := g++
 THREAD_TEST     := bin/thread_test
 DECODE_TEST     := bin/decode_test
@@ -28,20 +27,17 @@ endif
 
 ifeq ($(shell pkg-config --exists opencv; echo $$?), 0)
 	IMGFLAG     := -DHAS_IMGLIB
-	INC         := $(shell pkg-config --cflags opencv)
-	IMGLDIR     := $(shell pkg-config --libs-only-L opencv)
-	IMGLIBS     := $(shell pkg-config --libs-only-l opencv)
+	CFLAGS      := $(shell pkg-config --cflags opencv) $(CFLAGS)
+	LDFLAGS     := $(shell pkg-config --libs opencv)
 ifeq ($(shell pkg-config --exists libavutil libavformat libavcodec libswscale; echo $$?), 0)
 	VIDFLAG     := -DHAS_VIDLIB
 	AUDFLAG     := -DHAS_AUDLIB
-	VIDLDIR     := $(shell pkg-config --libs-only-L libavutil libavformat libavcodec libswscale)
-	VIDLIBS     := -lavutil -lavformat -lavcodec -lswscale
+	CFLAGS      := $(shell pkg-config --cflags libavutil libavformat libavcodec libswscale) $(CFLAGS)
+	LDFLAGS     := $(shell pkg-config --libs libavutil libavformat libavcodec libswscale) $(LDFLAGS)
 endif
 endif
 
 MEDIAFLAGS      := $(IMGFLAG) $(VIDFLAG) $(AUDFLAG)
-LDIR            := $(IMGLDIR) $(VIDLDIR)
-LIBS            := $(IMGLIBS) $(VIDLIBS)
 
 ifeq ($(HAS_GPU), true)
 ifeq ($(CUDA_ROOT),)
@@ -49,13 +45,13 @@ ifeq ($(CUDA_ROOT),)
 endif
 
 	GPUFLAG     := -DHAS_GPU
-	INC         := -I$(CUDA_ROOT)/include $(INC)
+	CFLAGS      := -I$(CUDA_ROOT)/include $(CFLAGS)
 	ifeq ($(shell uname -s),Darwin)
-		LDIR    := -L$(CUDA_ROOT)/lib $(LDIR)
+		LDFLAGS := -L$(CUDA_ROOT)/lib $(LDFLAGS)
 	else
-		LDIR    := -L$(CUDA_ROOT)/lib64 $(LDIR)
+		LDFLAGS := -L$(CUDA_ROOT)/lib64 $(LDFLAGS)
 	endif
-	LIBS        := -lcuda -lcudart $(LIBS)
+	LDFLAGS     := -lcuda -lcudart $(LDFLAGS)
 endif
 
 $(shell mkdir -p bin)
@@ -66,15 +62,15 @@ all: $(THREAD_TEST) $(DECODE_TEST) $(LOADER_SO)
 
 $(THREAD_TEST): test/thread_test.cpp src/loader.cpp $(SRCS)
 	@echo "Building $@..."
-	$(CC) -o $@ $(CFLAGSDBG) $(GPUFLAG) $(MEDIAFLAGS) $< $(INC) -Isrc $(LDIR) $(LIBS)
+	$(CC) -o $@ $(CFLAGS) -g -O0 $(GPUFLAG) $(MEDIAFLAGS) -Isrc $< $(LDFLAGS)
 
 $(DECODE_TEST): test/decode_test.cpp $(SRCS)
 	@echo "Building $@..."
-	$(CC) -o $@ $(CFLAGSDBG) $(MEDIAFLAGS) $< $(INC) -Isrc $(LDIR) $(LIBS)
+	$(CC) -o $@ $(CFLAGS) -g -O0 $(MEDIAFLAGS) -Isrc $< $(LDFLAGS)
 
 $(LOADER_SO): src/loader.cpp $(SRCS)
 	@echo "Building $@..."
-	$(CC) -shared -o $@ -fPIC $(CFLAGS) $(GPUFLAG) $(MEDIAFLAGS) $< $(INC) $(LDIR) $(LIBS)
+	$(CC) -shared -o $@ -fPIC $(CFLAGS) $(GPUFLAG) $(MEDIAFLAGS) $< $(LDFLAGS)
 
 clean:
 	@rm -vf *.o $(THREAD_TEST) $(DECODE_TEST) $(LOADER_SO)
