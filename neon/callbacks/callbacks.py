@@ -839,7 +839,8 @@ class MetricCallback(Callback):
             model (Model): model object
             epochs (int): Total epochs
         """
-        callback_data.create_group("metrics")
+        if 'metrics' not in callback_data:
+            callback_data.create_group("metrics")
         for met in self.metric.metric_names:
             group_name = "metrics/%s" % met
             callback_data.create_dataset(group_name, (epochs // self.epoch_freq,))
