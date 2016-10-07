@@ -1497,13 +1497,15 @@ def _get_copy_transpose_kernel(dtype, shape, axes=None):
     # Add params for src strides and generate src offset
     # The param values will be added externally
     for s in src:
-        params.append("int src_str_%d" % s)
+        params.append("long long src_str_%d" % s)
         src_offset.append("src_str_%d*idx_%d" % (s, s))
 
     # Add params for dst strides and generate dst offset
     for d in dst:
-        params.append("int dst_str_%d" % d)
+        params.append("long long dst_str_%d" % d)
         dst_offset.append("dst_str_%d*idx_%d" % (d, d))
+
+    num_strides = len(src) + len(dst)
 
     if shared_tile:
         copy_transpose = r"""
@@ -1620,7 +1622,7 @@ __global__ void copy_transpose(%(type)s* out, const %(type)s* in, %(params)s)
     # print code
     module = SourceModule(code)
     kernel = module.get_function("copy_transpose")
-    kernel.prepare("PP" + "I" * len(params))
+    kernel.prepare("PP" + ("I" * (len(params) - num_strides)) + "q" * num_strides)
 
     grid_x = grid_shape[src_dim]
     grid_y = grid_shape[dst_dim]
