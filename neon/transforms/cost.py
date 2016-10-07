@@ -147,7 +147,12 @@ class CrossEntropyMulti(Cost):
         Returns:
             OpTree: Returns the multiclass cross entropy cost
         """
-        assert y.shape == t.shape, "CrossEntropy requires network output shape to match targets"
+        if y.shape != t.shape:
+            raise ValueError((
+                "CrossEntropy requires network output shape to match "
+                "targets. Network output shape was {} and targets shape "
+                "was {}"
+            ).format(y.shape, t.shape))
         return (self.be.sum(-t * self.logscale * self.be.safelog(y), axis=0))
 
     def bprop(self, y, t):
