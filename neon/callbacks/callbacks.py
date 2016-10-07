@@ -32,6 +32,7 @@ from neon.data import NervanaDataIterator, Ticker
 from neon.util.compat import PY3
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.layers import Convolution, BatchNorm, Multicost
+from neon.transforms.cost import Metric
 
 logger = logging.getLogger(__name__)
 
@@ -818,6 +819,12 @@ class MetricCallback(Callback):
     """
     def __init__(self, eval_set, metric, epoch_freq=1):
         super(MetricCallback, self).__init__(epoch_freq=epoch_freq)
+        if isinstance(metric, type) and issubclass(metric, Metric):
+            raise ValueError((
+                'metric passed in was the class {}.  Pass an instance '
+                'of this class instead.'
+            ).format(metric))
+
         self.eval_set = eval_set
         self.metric = metric
         self.metric_cnt = len(self.metric.metric_names)
