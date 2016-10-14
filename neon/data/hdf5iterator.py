@@ -179,6 +179,8 @@ class HDF5Iterator(ArrayIterator):
 
     def __del__(self):
         self.cleanup()
+        # needed for python3 to exit cleanly
+        super(HDF5Iterator, self).__del__()
 
     def cleanup(self):
         """
