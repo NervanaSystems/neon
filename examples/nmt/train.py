@@ -89,7 +89,7 @@ train_path = os.path.join(args.data_dir, 'nmt', dataset)
 train_set = TextNMT(time_steps, train_path, get_prev_target=True, onehot_input=False,
                     split='train', dataset=dataset, subset_pct=args.subset_pct)
 valid_set = TextNMT(time_steps, train_path, get_prev_target=False, onehot_input=False,
-                    split='valid', dataset=dataset, subset_pct=args.subset_pct)
+                    split='valid', dataset=dataset)
 
 # weight initialization
 init = Uniform(low=-0.08, high=0.08)
