@@ -139,7 +139,9 @@ class NeonArgparser(configargparse.ArgumentParser):
                             default='',
                             help='access token for data logging in real time')
         rt_grp.add_argument('--manifest', action='append', help="manifest files")
-
+        rt_grp.add_argument('--manifest_root', type=str, default=None,
+                            help='Common root path for relative path items in the '
+                                 'supplied manifest files')
         be_grp = self.add_argument_group('backend')
         be_grp.add_argument('-b', '--backend', choices=Backend.backend_choices(),
                             default='gpu' if get_compute_capability() >= 3.0

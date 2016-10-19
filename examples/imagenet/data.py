@@ -18,11 +18,12 @@ from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
 from neon.data.aeon_shim import AeonDataLoader
 
 
-def common_config(manifest_file, batch_size, subset_pct):
+def common_config(manifest_file, manifest_root, batch_size, subset_pct):
     cache_root = get_data_cache_or_nothing('i1k-cache/')
 
     return {
                'manifest_filename': manifest_file,
+               'manifest_root': manifest_root,
                'minibatch_size': batch_size,
                'subset_fraction': float(subset_pct/100.0),
                'macrobatch_size': 5000,
@@ -42,8 +43,9 @@ def wrap_dataloader(dl):
     return dl
 
 
-def make_alexnet_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0):
-    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
+def make_alexnet_train_loader(manifest_file, manifest_root, backend_obj,
+                              subset_pct=100, random_seed=0):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
@@ -53,8 +55,9 @@ def make_alexnet_train_loader(manifest_file, backend_obj, subset_pct=100, random
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_msra_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0):
-    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
+def make_msra_train_loader(manifest_file, manifest_root, backend_obj,
+                           subset_pct=100, random_seed=0):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
@@ -71,14 +74,14 @@ def make_msra_train_loader(manifest_file, backend_obj, subset_pct=100, random_se
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_validation_loader(manifest_file, backend_obj, subset_pct=100):
-    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
+def make_validation_loader(manifest_file, manifest_root, backend_obj, subset_pct=100):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
 
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_tuning_loader(manifest_file, backend_obj):
-    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct=10)
+def make_tuning_loader(manifest_file, manifest_root, backend_obj):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct=10)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))

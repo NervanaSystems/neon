@@ -22,8 +22,9 @@ from neon.callbacks.callbacks import Callbacks
 from network import create_network
 from data import make_train_loader, make_test_loader
 
-submission_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'whale_subm.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[submission_config])
+subm_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'whale_subm.cfg')
+config_files = [subm_config] if os.path.exists(subm_config) else []
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 parser.add_argument('--submission_file', help='where to write prediction output')
 args = parser.parse_args()
 
@@ -34,8 +35,9 @@ assert 'test' in args.manifest, "Missing test manifest"
 assert args.submission_file is not None, "Must supply a submission file to output scores to"
 
 neon_logger.display('Performing train and test in submission mode')
-train = make_train_loader(args.manifest['all'], model.be, noise_file=args.manifest.get('noise'))
-test = make_test_loader(args.manifest['test'], model.be)
+train = make_train_loader(args.manifest['all'], args.manifest_root, model.be,
+                          noise_file=args.manifest.get('noise'))
+test = make_test_loader(args.manifest['test'], args.manifest_root, model.be)
 
 model.fit(dataset=train,
           cost=cost_obj,

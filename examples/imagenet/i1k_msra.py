@@ -24,7 +24,9 @@ from network_msra import create_network
 
 # parse the command line arguments (generates the backend)
 train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[train_config])
+config_files = [train_config] if os.path.exists(train_config) else []
+
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 parser.add_argument('--depth', type=int, default=0, help='network configuration')
 parser.add_argument('--bottleneck', action="store_true",
                     help="use bottleneck modules compared to double 3x3 modules")
@@ -38,9 +40,11 @@ rseed = 0 if args.rng_seed is None else args.rng_seed
 # setup data provider
 assert 'train' in args.manifest, "Missing train manifest"
 assert 'val' in args.manifest, "Missing validation manifest"
-train = make_msra_train_loader(args.manifest['train'], model.be, args.subset_pct, rseed)
-valid = make_validation_loader(args.manifest['val'], model.be, args.subset_pct)
-tune = make_tuning_loader(args.manifest['train'], model.be)
+train = make_msra_train_loader(args.manifest['train'], args.manifest_root,
+                               model.be, args.subset_pct, rseed)
+valid = make_validation_loader(args.manifest['val'], args.manifest_root,
+                               model.be, args.subset_pct)
+tune = make_tuning_loader(args.manifest['train'], args.manifest_root, model.be)
 
 weight_sched = Schedule([30, 60], 0.1)
 opt = GradientDescentMomentum(0.1, 0.9, wdecay=0.0001, schedule=weight_sched)

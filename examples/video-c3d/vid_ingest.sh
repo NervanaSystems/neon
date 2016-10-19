@@ -32,6 +32,7 @@ mkdir -p $OUTDIR
 
 # Save train config
 echo "manifest = [test:$OUTDIR/test-index.csv, train:$OUTDIR/train-index.csv]" > $SCRIPT_DIR/train.cfg
+echo "manifest_root = $OUTDIR" >> $SCRIPT_DIR/train.cfg
 echo -e "epochs = 18\nbatch_size = 32\nrng_seed = 0\nverbose = True" >> $SCRIPT_DIR/train.cfg
 echo "eval_freq = 1" >> $SCRIPT_DIR/train.cfg
 echo "log = $V3D_DATA_PATH/train.log" >> $SCRIPT_DIR/train.cfg
@@ -39,6 +40,7 @@ echo "save_path = $V3D_DATA_PATH/UCF101-C3D.p"  >> $SCRIPT_DIR/train.cfg
 
 # Save test config
 echo "manifest = [categories:$OUTDIR/category-index.csv, test:$OUTDIR/test-index.csv]" > $SCRIPT_DIR/test.cfg
+echo "manifest_root = $OUTDIR" >> $SCRIPT_DIR/test.cfg
 echo -e "batch_size = 32\nrng_seed = 0\nverbose = True" >> $SCRIPT_DIR/test.cfg
 echo "log = $V3D_DATA_PATH/test.log" >> $SCRIPT_DIR/test.cfg
 echo "model_file = $V3D_DATA_PATH/UCF101-C3D.p"  >> $SCRIPT_DIR/test.cfg
@@ -93,7 +95,7 @@ for setn in train test; do
     cat $listfile | parallel --joblog $OUTDIR/${setn}split.log --progress split_vid {}
     cat $(cat $listfile | sed "s/.avi$/.csv/") |
         awk -vFS=',' '{if ($3-$2>=0.63) {print $1}}' |
-        sed "s|^\(.*\)/\(.*.avi\)|\1/\2,\1/label.txt|" > $OUTDIR/${setn}-index.csv
+        sed "s|^$OUTDIR/\(.*\)/\(.*.avi\)|\1/\2,\1/label.txt|" > $OUTDIR/${setn}-index.csv
 done
 
 unset split_vid

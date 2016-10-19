@@ -49,7 +49,9 @@ def caption_video(infile, caption, outfile):
 
 # parse the command line arguments
 demo_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'test.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[demo_config])
+config_files = [demo_config] if os.path.exists(demo_config) else []
+
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 parser.add_argument('--input_video', help='video file')
 parser.add_argument('--output_video', help='Video file with overlayed inference hypotheses')
 args = parser.parse_args()

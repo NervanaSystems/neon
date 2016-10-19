@@ -202,13 +202,16 @@ class IngestI1K(object):
 
         with open(cfg_file, 'w') as f:
             f.write('manifest = [{}]\n'.format(manifest_list_cfg))
+            f.write('manifest_root = {}\n'.format(self.out_dir))
             f.write('log = {}\n'.format(log_file))
             f.write('epochs = 90\nrng_seed = 0\nverbose = True\neval_freq = 1\n')
 
         for setn, manifest in self.manifests.items():
             if not os.path.exists(manifest):
                 pairs = self.train_or_val_pairs(setn)
-                records = [(fname, self._target_filename(int(tgt))) for fname, tgt in pairs]
+                records = [(os.path.relpath(fname, self.out_dir),
+                            os.path.relpath(self._target_filename(int(tgt)), self.out_dir))
+                           for fname, tgt in pairs]
                 np.savetxt(manifest, records, fmt='%s,%s')
 
 if __name__ == "__main__":

@@ -34,6 +34,7 @@ def ingest_genre_data(input_dir, out_dir, train_percent=80):
 
     with open(cfg_file, 'w') as f:
         f.write('manifest = [{}]\n'.format(manifest_list_cfg))
+        f.write('manifest_root = {}\n'.format(ingest_dir))
         f.write('log = {}\n'.format(log_file))
         f.write('epochs = 16\nrng_seed = 0\nverbose = True\neval_freq = 1\n')
 
@@ -71,9 +72,11 @@ def ingest_genre_data(input_dir, out_dir, train_percent=80):
         np.random.shuffle(files)
         train_count = (len(files) * train_percent) // 100
         for filename in files[:train_count]:
-            train_records.append((filename, label))
+            train_records.append((os.path.relpath(filename, ingest_dir),
+                                  os.path.relpath(label, ingest_dir)))
         for filename in files[train_count:]:
-            val_records.append((filename, label))
+            val_records.append((os.path.relpath(filename, ingest_dir),
+                                os.path.relpath(label, ingest_dir)))
 
     np.savetxt(train_idx, train_records, fmt='%s,%s')
     np.savetxt(val_idx, val_records, fmt='%s,%s')
@@ -87,11 +90,12 @@ def wrap_dataloader(dl):
     return dl
 
 
-def common_config(manifest_file, batch_size):
+def common_config(manifest_file, manifest_root, batch_size):
     cache_root = get_data_cache_or_nothing('music-cache/')
 
     return {
                'manifest_filename': manifest_file,
+               'manifest_root': manifest_root,
                'minibatch_size': batch_size,
                'macrobatch_size': batch_size * 12,
                'type': 'audio,label',
@@ -104,13 +108,13 @@ def common_config(manifest_file, batch_size):
             }
 
 
-def make_val_loader(manifest_file, backend_obj):
-    aeon_config = common_config(manifest_file, backend_obj.bsz)
+def make_val_loader(manifest_file, manifest_root, backend_obj):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_train_loader(manifest_file, backend_obj, random_seed=0):
-    aeon_config = common_config(manifest_file, backend_obj.bsz)
+def make_train_loader(manifest_file, manifest_root, backend_obj, random_seed=0):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed

@@ -39,6 +39,7 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
         log_file = os.path.join(orig_out_dir, 'train_' + runtype + '.log')
         with open(cfg_file, 'w') as f:
             f.write('manifest = [{}]\n'.format(manifest_list_cfg))
+            f.write('manifest_root = {}\n'.format(out_dir))
             f.write('log = {}\n'.format(log_file))
             f.write('epochs = 16\nrng_seed = 0\nverbose = True\n')
             if runtype == 'subm':
@@ -52,10 +53,10 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
         zf.extractall(out_dir)
 
         # create label files
-        lbl_files = [os.path.join(out_dir, 'data', lbl + '.txt') for lbl in ('neg', 'pos')]
+        lbl_files = [os.path.join('data', lbl + '.txt') for lbl in ('neg', 'pos')]
 
-        np.savetxt(lbl_files[0], [0], fmt='%d')
-        np.savetxt(lbl_files[1], [1], fmt='%d')
+        np.savetxt(os.path.join(out_dir, lbl_files[0]), [0], fmt='%d')
+        np.savetxt(os.path.join(out_dir, lbl_files[1]), [1], fmt='%d')
 
         input_csv = os.path.join(out_dir, 'data', 'train.csv')
         train_records = np.genfromtxt(input_csv, delimiter=',', skip_header=1, dtype=None)
@@ -63,7 +64,7 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
         pos_list, neg_list = [], []
 
         for aiff, lbl in train_records:
-            record = (os.path.join(out_dir, 'data', 'train', aiff), lbl_files[lbl])
+            record = (os.path.join('data', 'train', aiff), lbl_files[lbl])
             if lbl == 1:
                 pos_list.append(record)
             else:
@@ -80,7 +81,8 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
         set_lists['noise'] = [(a) for a, l in neg_list[:neg_part]]
 
         # Write out the test files
-        set_lists['test'] = glob(os.path.join(out_dir, 'data', 'test', '*.aiff'))
+        set_lists['test'] = [os.path.relpath(fn, out_dir) for fn in glob(
+                                                os.path.join(out_dir, 'data', 'test', '*.aiff'))]
 
         np.random.seed(0)
 
@@ -100,11 +102,12 @@ def wrap_dataloader(dl):
     return dl
 
 
-def common_config(manifest_file, batch_size):
+def common_config(manifest_file, manifest_root, batch_size):
     cache_root = get_data_cache_or_nothing('whale-cache/')
 
     return {
                'manifest_filename': manifest_file,
+               'manifest_root': manifest_root,
                'minibatch_size': batch_size,
                'macrobatch_size': batch_size * 12,
                'type': 'audio,label',
@@ -117,27 +120,28 @@ def common_config(manifest_file, batch_size):
             }
 
 
-def make_val_loader(manifest_file, backend_obj):
-    aeon_config = common_config(manifest_file, backend_obj.bsz)
+def make_val_loader(manifest_file, manifest_root, backend_obj):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_train_loader(manifest_file, backend_obj, noise_file=None, random_seed=0):
-    aeon_config = common_config(manifest_file, backend_obj.bsz)
+def make_train_loader(manifest_file, manifest_root, backend_obj, noise_file=None, random_seed=0):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
 
     if noise_file is not None:
         aeon_config['audio']['noise_index_file'] = noise_file
+        aeon_config['audio']['noise_root'] = manifest_root
         aeon_config['audio']['add_noise_probability'] = 0.5
         aeon_config['audio']['noise_level'] = [0.0, 0.5]
 
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_test_loader(manifest_file, backend_obj):
-    aeon_config = common_config(manifest_file, backend_obj.bsz)
+def make_test_loader(manifest_file, manifest_root, backend_obj):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['type'] = 'audio'  # No labels provided
     aeon_config.pop('label', None)
     dl = AeonDataLoader(aeon_config, backend_obj)

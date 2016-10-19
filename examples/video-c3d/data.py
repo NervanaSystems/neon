@@ -20,10 +20,11 @@ from neon.data.dataloader_transformers import OneHot, TypeCast
 from neon.util.persist import get_data_cache_or_nothing
 
 
-def common_config(manifest_file, batch_size):
+def common_config(manifest_file, manifest_root, batch_size):
     cache_root = get_data_cache_or_nothing('ucf-cache/')
     return {
                'manifest_filename': manifest_file,
+               'manifest_root': manifest_root,
                'minibatch_size': batch_size,
                'macrobatch_size': batch_size * 12,
                'type': 'video,label',
@@ -36,8 +37,8 @@ def common_config(manifest_file, batch_size):
             }
 
 
-def make_test_loader(manifest_file, backend_obj, subset_pct=100):
-    aeon_config = common_config(manifest_file, backend_obj.bsz)
+def make_test_loader(manifest_file, manifest_root, backend_obj, subset_pct=100):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['subset_fraction'] = float(subset_pct/100.0)
     dl = AeonDataLoader(aeon_config, backend_obj)
     dl = OneHot(dl, index=1, nclasses=101)
@@ -45,8 +46,8 @@ def make_test_loader(manifest_file, backend_obj, subset_pct=100):
     return dl
 
 
-def make_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0):
-    aeon_config = common_config(manifest_file, backend_obj.bsz)
+def make_train_loader(manifest_file, manifest_root, backend_obj, subset_pct=100, random_seed=0):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['subset_fraction'] = float(subset_pct/100.0)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
@@ -62,7 +63,8 @@ def make_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0)
 
 
 def make_inference_loader(manifest_file, backend_obj):
-    aeon_config = common_config(manifest_file, backend_obj.bsz)
+    manifest_root = ""  # This is used for demo script which generates abs path manifest
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['type'] = 'video'  # No labels provided
     aeon_config.pop('label', None)
     dl = AeonDataLoader(aeon_config, backend_obj)
@@ -70,7 +72,7 @@ def make_inference_loader(manifest_file, backend_obj):
     return dl
 
 
-def accumulate_video_pred(manifest_file, clip_preds):
+def accumulate_video_pred(manifest_file, manifest_root, clip_preds):
     #  Index file will look like:
     #  video_clip_file,label_file
     #  video_clip_file will be video_path/v_WritingOnBoard_g05,
@@ -78,8 +80,9 @@ def accumulate_video_pred(manifest_file, clip_preds):
     video_pred = {}
     clip_files = np.genfromtxt(manifest_file, dtype=None, delimiter=',', usecols=(0))
     for clip_file, pred in zip(clip_files, clip_preds):
-        video_name = '_'.join(os.path.basename(clip_file).split('_')[1:-2])
-        category = os.path.split(os.path.dirname(clip_file))[-1]
+        clip_file_abs = os.path.join(manifest_root, clip_file)
+        video_name = '_'.join(os.path.basename(clip_file_abs).split('_')[1:-2])
+        category = os.path.split(os.path.dirname(clip_file_abs))[-1]
         video_pred.setdefault(video_name, (category, [])).__getitem__(1).append(pred)
 
     return video_pred

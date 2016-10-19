@@ -23,7 +23,9 @@ from data import make_test_loader, accumulate_video_pred
 
 # parse the command line arguments
 test_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'test.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[test_config])
+config_files = [test_config] if os.path.exists(test_config) else []
+
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 args = parser.parse_args()
 
 assert args.model_file is not None, "need a model file for testing"
@@ -35,11 +37,11 @@ assert 'categories' in args.manifest, "Missing categories file"
 category_map = {t[0]: t[1] for t in np.genfromtxt(args.manifest['categories'],
                                                   dtype=None, delimiter=',')}
 
-test = make_test_loader(args.manifest['test'], model.be)
+test = make_test_loader(args.manifest['test'], args.manifest_root, model.be)
 
 clip_pred = model.get_outputs(test)
 
-video_pred = accumulate_video_pred(args.manifest['test'], clip_pred)
+video_pred = accumulate_video_pred(args.manifest['test'], args.manifest_root, clip_pred)
 
 correct = np.zeros((len(video_pred), 2))
 

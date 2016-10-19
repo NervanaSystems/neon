@@ -22,8 +22,11 @@ from neon.callbacks.callbacks import Callbacks
 from data import make_train_loader, make_val_loader
 from network import create_network
 
+
 train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[train_config])
+config_files = [train_config] if os.path.exists(train_config) else []
+
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 args = parser.parse_args()
 
 assert 'train' in args.manifest, "Missing train manifest"
@@ -32,8 +35,8 @@ assert 'val' in args.manifest, "Missing validation manifest"
 model, cost = create_network()
 
 # setup data provider
-train = make_train_loader(args.manifest['train'], model.be)
-val = make_val_loader(args.manifest['val'], model.be)
+train = make_train_loader(args.manifest['train'], args.manifest_root, model.be)
+val = make_val_loader(args.manifest['val'], args.manifest_root, model.be)
 
 opt = Adagrad(learning_rate=0.01)
 metric = Misclassification()

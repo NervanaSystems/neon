@@ -25,7 +25,9 @@ from network import create_network
 
 # parse the command line arguments
 train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[train_config])
+config_files = [train_config] if os.path.exists(train_config) else []
+
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
@@ -37,8 +39,9 @@ model, cost = create_network()
 assert 'train' in args.manifest, "Missing train manifest"
 assert 'test' in args.manifest, "Missing validation manifest"
 
-train = make_train_loader(args.manifest['train'], model.be, args.subset_pct, random_seed)
-valid = make_test_loader(args.manifest['test'], model.be, args.subset_pct)
+train = make_train_loader(args.manifest['train'], args.manifest_root, model.be, args.subset_pct,
+                          random_seed)
+valid = make_test_loader(args.manifest['test'], args.manifest_root, model.be, args.subset_pct)
 
 # setup callbacks
 callbacks = Callbacks(model, eval_set=valid, **args.callback_args)

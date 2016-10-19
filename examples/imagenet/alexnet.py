@@ -25,7 +25,9 @@ from network_alexnet import create_network
 
 # parse the command line arguments (generates the backend)
 train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[train_config])
+config_files = [train_config] if os.path.exists(train_config) else []
+
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
@@ -36,8 +38,11 @@ rseed = 0 if args.rng_seed is None else args.rng_seed
 # setup data provider
 assert 'train' in args.manifest, "Missing train manifest"
 assert 'val' in args.manifest, "Missing validation manifest"
-train = make_alexnet_train_loader(args.manifest['train'], model.be, args.subset_pct, rseed)
-valid = make_validation_loader(args.manifest['val'], model.be, args.subset_pct)
+
+train = make_alexnet_train_loader(args.manifest['train'], args.manifest_root,
+                                  model.be, args.subset_pct, rseed)
+valid = make_validation_loader(args.manifest['val'], args.manifest_root,
+                               model.be, args.subset_pct)
 
 # drop weights LR by 1/250**(1/3) at epochs (23, 45, 66), drop bias LR by 1/10 at epoch 45
 sched_weight = Schedule([22, 44, 65], 0.15874)

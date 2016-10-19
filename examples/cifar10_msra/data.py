@@ -41,6 +41,7 @@ def ingest_cifar10(out_dir, padded_size, overwrite=False):
 
     with open(cfg_file, 'w') as f:
         f.write('manifest = [{}]\n'.format(manifest_list_cfg))
+        f.write('manifest_root = {}\n'.format(out_dir))
         f.write('log = {}\n'.format(log_file))
         f.write('epochs = 165\nrng_seed = 0\nverbose = True\neval_freq = 1\n')
         f.write('backend = gpu\nbatch_size = 64\n')
@@ -63,18 +64,20 @@ def ingest_cifar10(out_dir, padded_size, overwrite=False):
             img_path = os.path.join(img_paths[setn][lbl[0]], str(idx) + '.png')
             im = np.pad(img.reshape((3, 32, 32)), pad_width, mode='mean')
             im = Image.fromarray(np.uint8(np.transpose(im, axes=[1, 2, 0]).copy()))
-            im.save(img_path, format='PNG')
-            records.append((img_path, lbl_paths[lbl[0]]))
+            im.save(os.path.join(out_dir, img_path), format='PNG')
+            records.append((os.path.relpath(img_path, out_dir),
+                            os.path.relpath(lbl_paths[lbl[0]], out_dir)))
         np.savetxt(manifest, records, fmt='%s,%s')
 
     return manifest_files
 
 
-def common_config(manifest_file, batch_size, subset_pct):
+def common_config(manifest_file, manifest_root, batch_size, subset_pct):
     cache_root = get_data_cache_or_nothing('cifar-cache/')
 
     return {
                'manifest_filename': manifest_file,
+               'manifest_root': manifest_root,
                'minibatch_size': batch_size,
                'subset_fraction': float(subset_pct/100.0),
                'macrobatch_size': 5000,
@@ -94,8 +97,8 @@ def wrap_dataloader(dl):
     return dl
 
 
-def make_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0):
-    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
+def make_train_loader(manifest_file, manifest_root, backend_obj, subset_pct=100, random_seed=0):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
@@ -105,13 +108,13 @@ def make_train_loader(manifest_file, backend_obj, subset_pct=100, random_seed=0)
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_validation_loader(manifest_file, backend_obj, subset_pct=100):
-    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct)
+def make_validation_loader(manifest_file, manifest_root, backend_obj, subset_pct=100):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
 
 
-def make_tuning_loader(manifest_file, backend_obj):
-    aeon_config = common_config(manifest_file, backend_obj.bsz, subset_pct=20)
+def make_tuning_loader(manifest_file, manifest_root, backend_obj):
+    aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct=20)
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_every_epoch'] = True
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))

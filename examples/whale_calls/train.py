@@ -23,7 +23,8 @@ from network import create_network
 from data import make_train_loader, make_val_loader
 
 eval_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'whale_eval.cfg')
-parser = NeonArgparser(__doc__, default_config_files=[eval_config])
+config_files = [eval_config] if os.path.exists(eval_config) else []
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 args = parser.parse_args()
 
 model, cost_obj = create_network()
@@ -31,10 +32,11 @@ model, cost_obj = create_network()
 assert 'train' in args.manifest, "Missing train manifest"
 assert 'val' in args.manifest, "Missing val manifest"
 
-train = make_train_loader(args.manifest['train'], model.be, noise_file=args.manifest.get('noise'))
+train = make_train_loader(args.manifest['train'], args.manifest_root, model.be,
+                          noise_file=args.manifest.get('noise'))
 
 neon_logger.display('Performing train and test in validation mode')
-val = make_val_loader(args.manifest['val'], model.be)
+val = make_val_loader(args.manifest['val'], args.manifest_root, model.be)
 metric = Misclassification()
 
 model.fit(dataset=train,
