@@ -29,32 +29,29 @@ from neon.callbacks.callbacks import Callbacks
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.transforms.cost import BLEUScore
 import os
+import itertools as itt
 
 
-def bleu_format(examples, eos=0):
+def bleu_format(examples, tgt_dict, num_batches, batch_size, eos=0):
     """
     BLEU score
     """
-    sentences = []
-    for b in range(valid_set.nbatches):
-        for ex in range(args.batch_size):
-            sentences.append(" ".join([valid_set.t_index_to_token[k]
-                                       for k in examples[ex, b, :] if k != eos]))
-    return sentences
+    sents = [examples[ex, b, :] for b, ex in itt.product(range(num_batches), range(batch_size))]
+    return [" ".join([tgt_dict[k].decode("utf-8") for k in sent if k != eos]) for sent in sents]
 
 
-def print_sample(batch_num, ex_num):
+def print_sample(ex_source, ex_reference, ex_prediction, src_dict, tgt_dict):
     """
     Print some example predictions.
     """
-    # TODO: deal with strings in Py 3. quick patch right now
-    print("")
-    print("Input Sentence:  '" + " ".join([str(valid_set.s_index_to_token[k])
-                                          for k in valid_set.X[ex_num, batch_num, :]]) + "'")
-    print("GT Translation:  '" + " ".join([str(valid_set.t_index_to_token[k])
-                                          for k in groundtruth[ex_num, batch_num, :]]) + "'")
-    print("Our Translation: '" + " ".join([str(valid_set.t_index_to_token[k])
-                                          for k in prediction[ex_num, batch_num, :]]) + "'")
+    sample_output = R"""
+    Source Sentence: {source}
+    Reference Translation: {reference}
+    Predicted Translation: {prediction}
+    """.format(source=" ".join([src_dict[k].decode("utf-8") for k in ex_source]),
+               reference=" ".join([tgt_dict[k].decode("utf-8") for k in ex_reference]),
+               prediction=" ".join([tgt_dict[k].decode("utf-8") for k in ex_prediction]))
+    print(sample_output)
 
 
 # parse the command line arguments
@@ -136,18 +133,21 @@ if num_beams == 0:
 else:
     ypred = model.get_outputs_beam(valid_set, num_beams=num_beams)
     prediction = ypred.reshape(shape).transpose(1, 0, 2)[:, :, ::-1]
-groundtruth = valid_set.y
 
 # print some examples
+src_dict, tgt_dict = valid_set.s_index_to_token, valid_set.t_index_to_token
 for i in range(3):
-    print_sample(0, i)
+    print_sample(ex_source=valid_set.X[i, 0, :],
+                 ex_reference=valid_set.y[i, 0, :],
+                 ex_prediction=prediction[i, 0, :],
+                 src_dict=src_dict, tgt_dict=tgt_dict)
 
 # compute BLEU scores
 inputs = valid_set.X[:, :valid_set.nbatches, :]
-source_sentences = bleu_format(inputs)
+source_sentences = bleu_format(inputs, tgt_dict, valid_set.nbatches, args.batch_size)
 
-generated = bleu_format(prediction)
-references = bleu_format(groundtruth)
+generated = bleu_format(prediction, tgt_dict, valid_set.nbatches, args.batch_size)
+references = bleu_format(valid_set.y, tgt_dict, valid_set.nbatches, args.batch_size)
 references = [[r] for r in references]
 bleu_score = BLEUScore()
 bleu4 = bleu_score(generated, references, N=4, brevity_penalty=False, lower_case=True)
