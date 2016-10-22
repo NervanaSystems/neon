@@ -189,7 +189,7 @@ clean: clean_py clean_so
 
 test: env
 	@echo "Running unit tests..."
-	@. $(ACTIVATE); py.test $(TEST_OPTS) $(TEST_DIRS)
+	@. $(ACTIVATE); py.test --cov=neon $(TEST_OPTS) $(TEST_DIRS); coverage xml
 	@echo
 
 systest:
