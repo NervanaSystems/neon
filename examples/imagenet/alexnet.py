@@ -38,11 +38,10 @@ rseed = 0 if args.rng_seed is None else args.rng_seed
 # setup data provider
 assert 'train' in args.manifest, "Missing train manifest"
 assert 'val' in args.manifest, "Missing validation manifest"
-
 train = make_alexnet_train_loader(args.manifest['train'], args.manifest_root,
-                                  model.be, args.subset_pct, rseed)
+                                  model.be, args.subset_pct, rseed, dtype=args.datatype)
 valid = make_validation_loader(args.manifest['val'], args.manifest_root,
-                               model.be, args.subset_pct)
+                               model.be, args.subset_pct, dtype=args.datatype)
 
 # drop weights LR by 1/250**(1/3) at epochs (23, 45, 66), drop bias LR by 1/10 at epoch 45
 sched_weight = Schedule([22, 44, 65], 0.15874)
