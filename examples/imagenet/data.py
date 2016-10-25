@@ -74,7 +74,8 @@ def make_msra_train_loader(manifest_file, manifest_root, backend_obj,
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj), dtype)
 
 
-def make_validation_loader(manifest_file, manifest_root, backend_obj, subset_pct=100, dtype=np.float32):
+def make_validation_loader(manifest_file, manifest_root, backend_obj, subset_pct=100,
+                           dtype=np.float32):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
 
     return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj), dtype)
