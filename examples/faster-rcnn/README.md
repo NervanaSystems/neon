@@ -4,7 +4,11 @@ This example demonstrates how to train and test the Faster R-CNN model on the [P
 
 Reference:
 
-"Faster R-CNN"http://arxiv.org/abs/1506.01497, https://github.com/rbgirshick/py-faster-rcnn
+"Faster R-CNN"
+
+http://arxiv.org/abs/1506.01497
+
+https://github.com/rbgirshick/py-faster-rcnn
 
 ### Data preparation
 
@@ -21,7 +25,7 @@ The above script will:
 
 1. Convert the annotations from the XML format to the json format expected by our dataloader. The converted json files to the folders `Annotations-json` and `Annotations-json-inference`. When training the model, we exclude objects with the 'difficult' metadata tag. For evaluating the model however, the 'difficult' objects are included (following the above reference), so we create separate folders for the two conditions.
 
-2. Write manifest files for the training and testing sets. These are written to `$PASCAL_DATA_PATH`
+2. Write manifest files for the training and testing sets. These are written to $PASCAL_DATA_PATH
 
 3. Write a configuration file to pass to neon. The config file is written to the `faster_rcnn` folder as `pascalvoc.cfg`. The config file contains the paths to the manifest files, as well as some other dataset-specific settings. For example:
 
@@ -67,7 +71,6 @@ A fully trained model should yield a MAP of >69%. The mAP evaluation script is a
 
 This folder includes several other key files, which we describe here:
 - `faster_rcnn.py`: Functions for creating the Faster R-CNN network and transforming the output to bounding box predictions.
-- `roi_pooling.py`: ROI-pooling layer.
 - `proposal_layer.py`: Proposal layer.
 - `objectlocalization.py`: Dataset-specific configurations and settings.
 

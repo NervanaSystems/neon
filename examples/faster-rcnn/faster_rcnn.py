@@ -14,9 +14,8 @@
 # ----------------------------------------------------------------------------
 from neon.initializers import Constant, Gaussian
 from neon.transforms import Rectlin, Identity, Softmax, PixelwiseSoftmax
-from neon.layers import Conv, Affine, BranchNode, Tree, Dropout
+from neon.layers import Conv, Affine, BranchNode, Tree, Dropout, RoiPooling
 from neon.models import Model
-from roi_pooling import RoiPooling
 from proposal_layer import ProposalLayer
 import util
 import numpy as np
