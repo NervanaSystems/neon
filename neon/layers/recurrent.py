@@ -689,7 +689,15 @@ class GRU(Recurrent):
             self.hcan[-1][:] = 0
 
         if init_state is not None:
-            assert init_state.shape == self.h[-1].shape, "init_state shape mismatch"
+            if init_state.shape != self.h[-1].shape:
+                raise ValueError((
+                    "init_state shape mismatch.  Expected: {expected}, "
+                    "found: {found}."
+                ).format(
+                    expected=self.h[-1].shape,
+                    found=init_state.shape,
+                ))
+
             self.h[-1][:] = init_state
             self.h_prev_bprop[0] = init_state
 
