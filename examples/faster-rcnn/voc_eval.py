@@ -153,6 +153,6 @@ def voc_eval(all_boxes, all_gt_boxes, classes, ovthresh=0.5, use_07_metric=False
         ap = voc_ap(rec, prec, True)
         MAP[cls_idx] = ap
         print "AP for {} = {:.4f}".format(cls, ap)
-        # return rec, prec, ap
 
     print "Mean AP = {:.4f}".format(MAP[1:].mean())
+    return MAP[1:]  # return MAP (except background class)

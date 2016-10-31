@@ -1,5 +1,17 @@
-#!/usr/bin/python
-
+# ----------------------------------------------------------------------------
+# Copyright 2016 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 import json
 import glob
 import collections
@@ -123,7 +135,15 @@ def parse_single_file(path, difficult):
     return trimmed
 
 
-def main(args):
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="convert xml to json for pascalvoc dataset")
+    parser.add_argument('-i, --input', dest='input', help='input directory with xml files.')
+    parser.add_argument('-o, --output', dest='output', help='output directory of json files.')
+    parser.add_argument('-p, --parse', dest='parse', help='parse a single xml file.')
+    parser.add_argument('--difficult', dest='difficult', action='store_true',
+                        help='include objects with the difficult tag. Default is to exclude.')
+
+    args = parser.parse_args()
     input_path = args.input
     output_path = args.output
     parse_file = args.parse
@@ -135,15 +155,3 @@ def main(args):
         print(json1)
     elif input_path:
         convert_xml_to_json(input_path, output_path, args.difficult)
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="convert xml to json for pascalvoc dataset")
-    parser.add_argument('-i, --input', dest='input', help='input directory with xml files.')
-    parser.add_argument('-o, --output', dest='output', help='output directory of json files.')
-    parser.add_argument('-p, --parse', dest='parse', help='parse a single xml file.')
-    parser.add_argument('--difficult', dest='difficult', action='store_true',
-                        help='include objects with the difficult tag. Default is to exclude.')
-
-    args = parser.parse_args()
-    main(args)

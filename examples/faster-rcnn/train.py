@@ -37,12 +37,9 @@ from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, StepSchedule
 from neon.callbacks.callbacks import Callbacks, TrainMulticostCallback
 from neon.util.persist import save_obj, get_data_cache_dir
-from objectlocalization import ObjectLocalization, PASCALVOC
+from objectlocalization import PASCALVOC
 from neon.transforms import CrossEntropyMulti, SmoothL1Loss
 from neon.layers import Multicost, GeneralizedCostMask
-from neon.data.dataloader_transformers import BGRMeanSubtract, TypeCast
-from aeon import DataLoader
-import numpy as np
 import util
 import faster_rcnn
 
@@ -64,18 +61,17 @@ frcn_rois_per_img = 128  # number of rois to sample to train frcn
 be = gen_backend(**extract_valid_args(args, gen_backend))
 be.enable_winograd = 4  # default to winograd 4 for fast autotune
 
+# directory to store VGG weights
 cache_dir = get_data_cache_dir(args.data_dir, subdir='pascalvoc_cache')
 
 # build data loader
 # get config file for PASCALVOC
-config = PASCALVOC(args.manifest['train'], cache_dir,
+config = PASCALVOC(args.manifest['train'], args.manifest_root,
                    width=args.width, height=args.height,
                    rois_per_img=rpn_rois_per_img, inference=False)
 
-dl = DataLoader(config, be)
-dl = TypeCast(dl, index=0, dtype=np.float32)  # cast image to float
-dl = BGRMeanSubtract(dl, index=0, pixel_mean=util.FRCN_PIXEL_MEANS)  # subtract means
-train_set = ObjectLocalization(dl, frcn_rois_per_img=frcn_rois_per_img)
+
+train_set = faster_rcnn.build_dataloader(config, be, frcn_rois_per_img)
 
 # build the Faster-RCNN model
 model = faster_rcnn.build_model(train_set, frcn_rois_per_img, inference=False)

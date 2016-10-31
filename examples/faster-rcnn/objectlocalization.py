@@ -17,6 +17,7 @@ Defines PASCAL_VOC datatset handling.
 """
 import numpy as np
 from neon.data.dataloader_transformers import DataLoaderTransformer
+from neon.util.persist import get_data_cache_or_nothing
 
 
 class ObjectLocalization(DataLoaderTransformer):
@@ -110,7 +111,7 @@ class ObjectLocalization(DataLoaderTransformer):
         return (X, Y)
 
 
-def PASCALVOC(manifest_file, cache_dir, rois_per_img=256,
+def PASCALVOC(manifest_file, manifest_root, rois_per_img=256,
               height=1000, width=1000, inference=False):
     """
     Returns the aeon dataloader configuration for PASCAL VOC dataset.
@@ -133,9 +134,10 @@ def PASCALVOC(manifest_file, cache_dir, rois_per_img=256,
 
     return dict(
         manifest_filename=manifest_file,
+        manifest_root=manifest_root,
         type='image,localization',
         image=image_decode_cfg,
-        cache_directory=cache_dir,
+        cache_directory=get_data_cache_or_nothing(subdir='pascalvoc_cache'),
         shuffle_every_epoch=do_transforms,
         shuffle_manifest=do_transforms,
         minibatch_size=1,
@@ -144,7 +146,7 @@ def PASCALVOC(manifest_file, cache_dir, rois_per_img=256,
     )
 
 
-def KITTI(manifest_file, cache_dir, rois_per_img=256,
+def KITTI(manifest_file, manifest_root, rois_per_img=256,
           height=375, width=1242, inference=False):
     """
     Returns the aeon dataloader configuration for KITTI dataset.
@@ -165,9 +167,10 @@ def KITTI(manifest_file, cache_dir, rois_per_img=256,
 
     return dict(
         manifest_filename=manifest_file,
+        manifest_root=manifest_root,
         type='image,localization',
         image=image_decode_cfg,
-        cache_directory=cache_dir,
+        cache_directory=get_data_cache_or_nothing(subdir='kitti_cache'),
         shuffle_every_epoch=do_transforms,
         shuffle_manifest=do_transforms,
         minibatch_size=1,

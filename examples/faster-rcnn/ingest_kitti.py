@@ -1,10 +1,26 @@
+# ----------------------------------------------------------------------------
+# Copyright 2016 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
 import os
 import glob
 import json
 import numpy as np
 from PIL import Image
+from zipfile import ZipFile
 import math
-from ingest_pascalvoc import create_manifest
+from neon.util.persist import ensure_dirs_exist
+from tqdm import tqdm
 
 
 def convert_annot_to_json(path, im_path, out_path, difficult):
@@ -90,55 +106,70 @@ def convert_annot_to_json(path, im_path, out_path, difficult):
         json.dump(annot, f, indent=4)
 
 
-def ingest_kitti(data_dir, train_percent=90):
+def ingest_kitti(input_dir, out_dir, train_percent=90, overwrite=False):
     """
     Ingests the KITTI dataset. Peforms the following ops:
+    0. Unzips the files into output directory.
     1. Convert annotations to json format
     2. Split the training data into train and validation sets
     3. Write manifest file
     4. Write configuration file
 
     Arguments:
-        data_dir (string): path to KITTI data
+        input_dir (string): path to folder with KITTI zip files.
+        out_dir (string): path to unzip KITTI data
         train_percent (float): percent of data to use for training.
+        overwrite (bool): overwrite existing files
     """
-    assert os.path.exists(data_dir)
 
-    img_path = os.path.join(data_dir, 'image_2')
-    annot_path = os.path.join(data_dir, 'label_2')
+    # define paths
+    data_dir = ensure_dirs_exist(os.path.join(out_dir, 'kitti'))
+    train_manifest = os.path.join(data_dir, 'train.csv')
+    val_manifest = os.path.join(data_dir, 'val.csv')
+
+    if not overwrite and os.path.exists(train_manifest) and os.path.exists(val_manifest):
+        print("""Found existing manfiest files, skipping ingest,
+              Use --overwrite to rerun ingest anyway.""")
+        return (train_manifest, val_manifest)
+
+    # unzip files to output directory
+    zipfiles = [os.path.join(input_dir, zipfile) for
+                zipfile in ['data_object_image_2.zip', 'data_object_label_2.zip']]
+
+    for file in zipfiles:
+        with ZipFile(file, 'r') as zf:
+            print("Extracting {} to {}".format(file, data_dir))
+            zf.extractall(data_dir)
 
     # get list of images
-    ext = '.png'
-    images = glob.glob(os.path.join(img_path, '*' + ext))
-    images = [os.path.splitext(im)[0] for im in images]
-    images = [os.path.split(im)[1] for im in images]
+    img_path = os.path.join(data_dir, 'training', 'image_2')
+    annot_path = os.path.join(data_dir, 'training', 'label_2')
+
+    images = [os.path.splitext(os.path.basename(im))[0] for
+              im in glob.glob(os.path.join(img_path, '*.png'))]
 
     print "Found {} images".format(len(images))
     assert len(images) > 0, "Did not found any images. Check your input_dir."
 
     # for each image, convert the annotation to json
-    annot_save_dir = os.path.join(data_dir, 'label_2-json')
-    annot_save_dir_difficult = os.path.join(data_dir, 'label_2-json-difficult')
 
-    if not os.path.exists(annot_save_dir):
-        os.mkdir(annot_save_dir)
+    # create folder names for annotations
+    annot_save_dir = ensure_dirs_exist(os.path.join(data_dir, 'training', 'label_2-json/'))
+    annot_save_dir_difficult = ensure_dirs_exist(os.path.join(
+                                   data_dir, 'training', 'label_2-json-difficult/'))
 
-    if not os.path.exists(annot_save_dir_difficult):
-        os.mkdir(annot_save_dir_difficult)
-
-    for im in images:
+    print("Writing annotations to: {} and {}".format(annot_save_dir, annot_save_dir_difficult))
+    for im in tqdm(images):
         path = os.path.join(annot_path, im + '.txt')
-        im_path = os.path.join(img_path, im + ext)
+        im_path = os.path.join(img_path, im + '.png')
 
         assert os.path.exists(im_path)
 
         out_path = os.path.join(annot_save_dir, im + '.json')
         convert_annot_to_json(path, im_path, out_path, difficult=False)
-        print("Writing to: {}".format(out_path))
 
         out_path = os.path.join(annot_save_dir_difficult, im + '.json')
         convert_annot_to_json(path, im_path, out_path, difficult=True)
-        print("Writing to: {}".format(out_path))
 
     # shuffle files and split into training and validation set.
     np.random.seed(0)
@@ -149,16 +180,14 @@ def ingest_kitti(data_dir, train_percent=90):
     val = images[train_count:]
 
     # write manifest files
-    train_manifest = os.path.join(data_dir, 'train.csv')
-    create_manifest(train_manifest, train, annot_save_dir, img_path, ext=ext, overwrite=True)
-
-    val_manifest = os.path.join(data_dir, 'val.csv')
-    create_manifest(val_manifest, val, annot_save_dir_difficult, img_path, ext=ext, overwrite=True)
+    create_manifest(train_manifest, train, annot_save_dir, img_path, data_dir)
+    create_manifest(val_manifest, val, annot_save_dir_difficult, img_path, data_dir)
 
     # write configuration file
     config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'kitti.cfg')
     with open(config_path, 'w') as f:
         f.write('manifest = [train:{}, val:{}]\n'.format(train_manifest, val_manifest))
+        f.write('manifest_root = {}\n'.format(data_dir))
         f.write('epochs = 14\n')
         f.write('height = 375\n')
         f.write('width = 1242\n')
@@ -166,10 +195,30 @@ def ingest_kitti(data_dir, train_percent=90):
     print("Wrote config file to: {}".format(config_path))
 
 
+def create_manifest(manifest_path, index_list, annot_dir, image_dir, root_dir):
+    records = []
+
+    for tag in index_list:
+        image = os.path.join(image_dir, tag + '.png')
+        annot = os.path.join(annot_dir, tag + '.json')
+
+        assert os.path.exists(image), 'Path {} not found'.format(image)
+        assert os.path.exists(annot), 'Path {} not found'.format(annot)
+
+        records.append((os.path.relpath(image, root_dir),
+                        os.path.relpath(annot, root_dir)))
+
+    print("Writing manifest file to: {}".format(manifest_path))
+    np.savetxt(manifest_path, records, fmt='%s,%s')
+
+
 if __name__ == '__main__':
     from configargparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument('--input_dir', required=True, help='path to KITTI dataset')
+    parser.add_argument('--input_dir', required=True, help='path to dir with KITTI zip files.')
+    parser.add_argument('--output_dir', required=True, help='path to unzip data.')
+    parser.add_argument('--overwrite', action='store_true', help='overwrite files')
+    parser.add_argument('--training_pct', default=90, help='fraction of data used for training.')
     args = parser.parse_args()
 
-    ingest_kitti(os.path.join(args.input_dir, 'training'))
+    ingest_kitti(args.input_dir, args.output_dir, args.training_pct, overwrite=args.overwrite)

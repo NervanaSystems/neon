@@ -16,7 +16,10 @@ from neon.initializers import Constant, Gaussian
 from neon.transforms import Rectlin, Identity, Softmax, PixelwiseSoftmax
 from neon.layers import Conv, Affine, BranchNode, Tree, Dropout, RoiPooling
 from neon.models import Model
+from neon.data.dataloader_transformers import BGRMeanSubtract, TypeCast
+from aeon import DataLoader
 from proposal_layer import ProposalLayer
+from objectlocalization import ObjectLocalization
 import util
 import numpy as np
 
@@ -113,6 +116,34 @@ def build_model(dataset, frcn_rois_per_img, train_pre_nms_N=12000,
         return (model, proposalLayer)
     else:
         return model
+
+
+def build_dataloader(config, be, frcn_rois_per_img):
+    """
+    Builds the dataloader for the Faster-RCNN network using our aeon loader.
+    Besides, the base loader, we add several operations:
+    1. Cast the image data into float32 format
+    2. Subtract the BGRMean from the image. We used pre-defined means from training
+       the VGG network.
+    3. Repack the data for Faster-RCNN model. This model has several nested branches, so
+       The buffers have to repacked into nested tuples to match the branch leafs. Additionally,
+       buffers for training the RCNN portion of the model are also allocated and provisioned
+       to the model.
+
+    Arguments:
+        config (dict): dataloader configuration
+        be (backend): compute backend
+        frcn_rois_per_img (int): Number of ROIs to use for training the RCNN portion of the
+            model. This is used to create the target buffers for RCNN.
+
+    Returns:
+        dataloader object.
+    """
+    dl = DataLoader(config, be)
+    dl = TypeCast(dl, index=0, dtype=np.float32)  # cast image to float
+    dl = BGRMeanSubtract(dl, index=0, pixel_mean=util.FRCN_PIXEL_MEANS)  # subtract means
+    dl = ObjectLocalization(dl, frcn_rois_per_img=frcn_rois_per_img)  # repack for faster-rcnn
+    return dl
 
 
 def get_bboxes(outputs, proposals, num_proposals, num_classes,

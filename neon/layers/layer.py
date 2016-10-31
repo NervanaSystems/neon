@@ -2339,8 +2339,6 @@ class RoiPooling(Layer):
 
         self.bprop_enabled = bprop_enabled
 
-        # self.rois_per_batch = self.be.bsz * 64
-
     def configure(self, in_obj):
         """
         Must receive a list of shapes for configurations

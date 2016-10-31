@@ -44,7 +44,10 @@ def test_anchor_target_layer(backend_default, fargs):
     manifest_path = os.environ['PASCAL_MANIFEST_PATH']
     assert manifest_path is not None, "Please set the PASCAL_MANIFEST_PATH variable."
 
-    config = PASCALVOC(manifest_path, cache_dir='',
+    manifest_root = os.environ['PASCAL_MANIFEST_ROOT']
+    assert manifest_root is not None, "Please set the PASCAL_MANIFEST_ROOT variable."
+
+    config = PASCALVOC(manifest_path, manifest_root, cache_dir='',
                        height=height, width=width, inference=False)
     config['subset_fraction'] = 0.1
 
