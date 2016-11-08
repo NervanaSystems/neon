@@ -814,7 +814,7 @@ class Adam(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, learning_rate=0.001, beta_1=0.9, beta_2=0.999,
-                 epsilon=1e-8, name="adam"):
+                 epsilon=1e-8, gradient_clip_norm=None, gradient_clip_value=None, name="adam"):
         """
         Class constructor.
 
@@ -827,6 +827,10 @@ class Adam(Optimizer):
             beta_1 (float): Adam parameter beta1
             beta_2 (float): Adam parameter beta2
             epsilon (float): numerical stability parameter
+            gradient_clip_norm (float, optional): Target gradient norm.
+                                                  Defaults to None.
+            gradient_clip_value (float, optional): Value to element-wise clip gradients.
+                                                   Defaults to None.
         """
         super(Adam, self).__init__(name=name)
         self.beta_1 = beta_1
@@ -834,6 +838,8 @@ class Adam(Optimizer):
         self.epsilon = epsilon
         self.learning_rate = learning_rate
         self.stochastic_round = stochastic_round
+        self.gradient_clip_norm = gradient_clip_norm
+        self.gradient_clip_value = gradient_clip_value
 
     def optimize(self, layer_list, epoch):
         """
@@ -849,6 +855,8 @@ class Adam(Optimizer):
 
         param_list = get_param_list(layer_list)
 
+        scale_factor = self.clip_gradient_norm(param_list, self.gradient_clip_norm)
+
         for (param, grad), states in param_list:
             param.rounding = self.stochastic_round
             if len(states) == 0:
@@ -856,11 +864,13 @@ class Adam(Optimizer):
                 states.extend([self.be.zeros_like(grad) for i in range(2)])
 
             grad = grad / self.be.bsz
+            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
+
             m, v = states
             m[:] = m * self.beta_1 + (1. - self.beta_1) * grad
             v[:] = v * self.beta_2 + (1. - self.beta_2) * grad * grad
 
-            param[:] = param - l * m / (self.be.sqrt(v) + self.epsilon)
+            param[:] = param - (scale_factor * l * m) / (self.be.sqrt(v) + self.epsilon)
 
 
 class ShiftAdaMax(Optimizer):
