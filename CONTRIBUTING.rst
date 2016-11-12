@@ -99,7 +99,7 @@ Contribution Process
    by following step 7.  They will automatically be added to this same merge
    request.
 
-8. Once your change has been successfully merged, you can remove the source
+10. Once your change has been successfully merged, you can remove the source
    branch and ensure your local copy is up to date:
 
 .. code-block:: bash
@@ -110,4 +110,4 @@ Contribution Process
     git branch -d my_new_feature_branch
     git branch -d -r origin/my_new_feature_branch
 
-9. Give yourself a high five for a job well done!
+11. Give yourself a high five for a job well done!
