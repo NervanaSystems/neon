@@ -1418,7 +1418,7 @@ class Affine(CompoundLayer):
     Arguments:
         nout (int, tuple): Desired size or shape of layer output
         init (Initializer, optional): Initializer object to use for
-            initializing layer weights and bias
+            initializing layer weights
         bias (Initializer): an initializer to use for bias parameters
         activation (Transform): a transform object with fprop and bprop
             functions to apply
@@ -1446,7 +1446,7 @@ class BinaryAffine(CompoundLayer):
     Arguments:
         nout (int, tuple): Desired size or shape of layer output
         init (Initializer, optional): Initializer object to use for
-            initializing layer weights and bias
+            initializing layer weights
         bias (Initializer): an initializer to use for bias parameters
         activation (Transform): a transform object with fprop and bprop
             functions to apply
@@ -1484,7 +1484,7 @@ class Conv(CompoundLayer):
     Arguments:
         fshape (tuple(int)): three dimensional shape of convolution window
         init (Initializer, optional): Initializer object to use for
-            initializing layer weights and bias
+            initializing layer weights
         strides (int, dict, optional): strides to apply convolution
             window over. An int applies to both dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
