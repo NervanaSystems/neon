@@ -23,10 +23,10 @@ ML Operational Layer (MOP) API
 
 We expose the following API which we refer to as our Machine learning
 Operational Layer (MOP layer). This layer abstracts the backend, so the
-some operations can be performed on a CPU, GPU, or future hardware
+same operations can be performed on a CPU, GPU, or future hardware
 backends.
 
-The API consists of the two interface classes:
+The API consists of two interface classes:
 
 .. csv-table::
     :header: "Interface", "Description"
@@ -41,7 +41,7 @@ Basic Data Structure
 
 The :py:class:`.Tensor` class is used to represent an arbitrary dimensional array
 in which each element is stored using a consistent underlying type. For
-the CPU and GPU backends, Tensors are stored as the :py:class:`.CPUTensor` and
+the CPU and GPU backends, Tensors are stored as :py:class:`.CPUTensor` and
 :py:class:`.GPUTensor` subclasses, respectively.
 
 We have the ability to instantiate and copy instances of this data
@@ -58,8 +58,8 @@ Tensor Creation
 
     :py:meth:`neon.backends.Backend.empty<.Backend.empty>` | Instantiate an empty Tensor
     :py:meth:`neon.backends.Backend.array<.Backend.array>` | Instantiate a new Tensor, populating elements based on a provided array.
-    :py:meth:`neon.backends.Backend.zeros<.Backend.zeros>` | Instantiate a new Tensor, population each element with the value of 0.
-    :py:meth:`neon.backends.Backend.ones<.Backend.ones>` | Instantiate a new Tensor, population each element with the value of 1.
+    :py:meth:`neon.backends.Backend.zeros<.Backend.zeros>` | Instantiate a new Tensor, populating each element with the value of 0.
+    :py:meth:`neon.backends.Backend.ones<.Backend.ones>` | Instantiate a new Tensor, populating each element with the value of 1.
     :py:meth:`neon.backends.Tensor.copy<.Tensor.copy>` | Construct and return a deep copy of the Tensor passed.
 
 Tensor Manipulation
@@ -70,13 +70,13 @@ Tensor Manipulation
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Tensor.get<.Tensor.get>` |	Convert the tensor to an in host memory numpy.ndarray.
+    :py:meth:`neon.backends.Tensor.get<.Tensor.get>` |	Convert the tensor to a host memory numpy.ndarray.
     :py:meth:`neon.backends.Tensor.take<.Tensor.take>` | Select a subset of elements from an array across an axis
     :py:meth:`neon.backends.Tensor.__getitem__<.Tensor.__getitem__>` |	Extract a subset view of the items via slice style indexing along each dimension.
     :py:meth:`neon.backends.Tensor.__setitem__<.Tensor.__setitem__>` | Assign the specified value to a subset of elements found via slice style indexing along each dimension.
     :py:meth:`neon.backends.Tensor.fill<.Tensor.fill>` |	Assign specified value to each element of this Tensor.
     :py:meth:`neon.backends.Tensor.transpose<.Tensor.transpose>` | Return a transposed view of the data.
-    :py:meth:`neon.backends.Tensor.reshape<.Tensor.reshape>` | Adjusts the dimensions of the data to the specified shape.
+    :py:meth:`neon.backends.Tensor.reshape<.Tensor.reshape>` | Adjust the dimensions of the data to the specified shape.
     :py:meth:`neon.backends.Backend.take<neon.backends.Backend.take>` | Select a subset of elements (based on provided indices) from a supplied dimension
 
 
@@ -108,7 +108,7 @@ Tensor. If ``out=None`` (default), an op-tree is returned.
     :py:meth:`neon.backends.Backend.power(a, b)<.Backend.power>` | :math:`a^b`
     :py:meth:`neon.backends.Backend.maximum(a, b)<.Backend.maximum>`| :math:`\max(a, b)`
     :py:meth:`neon.backends.Backend.minimum(a, b)<.Backend.minimum>` | :math:`\min(a,b)`
-    :py:meth:`neon.backends.Backend.clip(a, a_min, a_max)<.Backend.clip>` | Clips each element of :math:`a` between the corresponding elements in :math:`a_\text{min}` and :math:`a_\text{max}`
+    :py:meth:`neon.backends.Backend.clip(a, a_min, a_max)<.Backend.clip>` | Clip each element of :math:`a` between the corresponding elements in :math:`a_\text{min}` and :math:`a_\text{max}`
 
 Element-wise Unary Functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -168,14 +168,14 @@ tensor ``a`` along a specified ``axis`` dimension. If ``axis=None``
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Backend.sum<.Backend.sum>` | Sums elements over the ``axis`` dimension
-    :py:meth:`neon.backends.Backend.mean<.Backend.mean>` | Computes the arithmetic mean over the ``axis`` dimension
-    :py:meth:`neon.backends.Backend.var<.Backend.var>` | Computes the variance of the elements over the ``axis`` dimension
-    :py:meth:`neon.backends.Backend.std<.Backend.std>` | Computes the standard deviation of the elements along the ``axis`` dimension
-    :py:meth:`neon.backends.Backend.min<.Backend.min>` |	Calculates the minimal element value over the ``axis`` dimension
-    :py:meth:`neon.backends.Backend.max<.Backend.max>` |	Calculates the maximal element value over the ``axis`` dimension
-    :py:meth:`neon.backends.Backend.argmin<.Backend.argmin>` | Calculates the indices of the minimal element value along the ``axis`` dimension
-    :py:meth:`neon.backends.Backend.argmax<.Backend.argmax>` | Calculates the indices of the maximal element value along the ``axis`` dimension
+    :py:meth:`neon.backends.Backend.sum<.Backend.sum>` | Sum elements over the ``axis`` dimension
+    :py:meth:`neon.backends.Backend.mean<.Backend.mean>` | Compute the arithmetic mean over the ``axis`` dimension
+    :py:meth:`neon.backends.Backend.var<.Backend.var>` | Compute the variance of the elements over the ``axis`` dimension
+    :py:meth:`neon.backends.Backend.std<.Backend.std>` | Compute the standard deviation of the elements along the ``axis`` dimension
+    :py:meth:`neon.backends.Backend.min<.Backend.min>` |	Calculate the minimal element value over the ``axis`` dimension
+    :py:meth:`neon.backends.Backend.max<.Backend.max>` |	Calculate the maximal element value over the ``axis`` dimension
+    :py:meth:`neon.backends.Backend.argmin<.Backend.argmin>` | Calculate the indices of the minimal element value along the ``axis`` dimension
+    :py:meth:`neon.backends.Backend.argmax<.Backend.argmax>` | Calculate the indices of the maximal element value along the ``axis`` dimension
 
 Random Number Generator
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -192,7 +192,7 @@ number generator (``np.random.RandomState``).
     :py:meth:`neon.backends.Backend.rng_get_state<.Backend.rng_get_state>` | Return the state of the rng
     :py:meth:`neon.backends.Backend.rng_set_state<.Backend.rng_set_state>` | Set the state of the rng
     :py:meth:`neon.backends.Backend.rng_reset<.Backend.rng_reset>` | Reset the state to the initial state
-    :py:meth:`neon.backends.NervanaGPU.rand<.nervanagpu.NervanaGPU.rand>` | Generates random numbers uniformly distributed between 0 and 1.
+    :py:meth:`neon.backends.NervanaGPU.rand<.nervanagpu.NervanaGPU.rand>` | Generate random numbers uniformly distributed between 0 and 1.
 
 To generate a Tensor with shape ``(100,100)``, where each element is
 uniformly distributed between 0 and 1, we can call
@@ -236,11 +236,11 @@ Operations
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Backend.onehot<.Backend.onehot>` | Generates a one-hot representation from a set of indices (see :doc:`Loading data<loading_data>`)
-    :py:meth:`neon.backends.Backend.fill_normal<.NervanaGPU.fill_normal>` | Fills a tensor with gaussian random variables
-    :py:meth:`neon.backends.Backend.compound_dot<.Backend.compound_dot>` | Depending on the size of the input :math:`A`, :math:`B`, :math:`C`, performs :math:`\alpha A B + \beta C`
-    :py:meth:`neon.backends.NervanaGPU.make_binary_mask<.NervanaGPU.make_binary_mask>` | Creates a randomized binary mask for dropout layers
-    :py:meth:`neon.backends.NervanaCPU.make_binary_mask<.NervanaCPU.make_binary_mask>` | Creates a randomized binary mask for dropout layers
+    :py:meth:`neon.backends.Backend.onehot<.Backend.onehot>` | Generate a one-hot representation from a set of indices (see :doc:`Loading data<loading_data>`)
+    :py:meth:`neon.backends.Backend.fill_normal<.NervanaGPU.fill_normal>` | Fill a tensor with gaussian random variables
+    :py:meth:`neon.backends.Backend.compound_dot<.Backend.compound_dot>` | Depending on the size of the input :math:`A`, :math:`B`, :math:`C`, perform :math:`\alpha A B + \beta C`
+    :py:meth:`neon.backends.NervanaGPU.make_binary_mask<.NervanaGPU.make_binary_mask>` | Create a randomized binary mask for dropout layers
+    :py:meth:`neon.backends.NervanaCPU.make_binary_mask<.NervanaCPU.make_binary_mask>` | Create a randomized binary mask for dropout layers
 
 Convolutional Layers
 ~~~~~~~~~~~~~~~~~~~~
@@ -250,11 +250,11 @@ Convolutional Layers
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Backend.conv_layer<.Backend.conv_layer>` | Creates a ``ConvLayer`` object that holds the filter parameters. This is passed to the below functions.
+    :py:meth:`neon.backends.Backend.conv_layer<.Backend.conv_layer>` | Create a ``ConvLayer`` object that holds the filter parameters. This is passed to the below functions.
     :py:meth:`neon.backends.Backend.fprop_conv<.Backend.fprop_conv>` | Forward propagate the inputs of a convolutional network layer
     :py:meth:`neon.backends.Backend.bprop_conv<.Backend.bprop_conv>` | Backward propagate the error through a convolutional network layer.
     :py:meth:`neon.backends.Backend.update_conv<.Backend.update_conv>` |	Compute the updated gradient for a convolutional network layer.
-    :py:meth:`neon.backends.Backend.deconv_layer<.Backend.deconv_layer>` | Creates a ``DeconvLayer`` object that holds the filter parameters. This is passed to the above functions.
+    :py:meth:`neon.backends.Backend.deconv_layer<.Backend.deconv_layer>` | Create a ``DeconvLayer`` object that holds the filter parameters. This is passed to the above functions.
 
 Pooling Layers
 ~~~~~~~~~~~~~~
@@ -277,8 +277,8 @@ window sizes are themselves hyper-parameters.
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Backend.roipooling_fprop<.NervanaGPU.roipooling_fprop>` | Forward propagation through ROI-pooling layer
-    :py:meth:`neon.backends.Backend.roipooling_bprop<.NervanaGPU.roipooling_bprop>` | Backward propagation through ROI-pooling layer
+    :py:meth:`neon.backends.Backend.roipooling_fprop<.NervanaGPU.roipooling_fprop>` | Forward propagate through ROI-pooling layer
+    :py:meth:`neon.backends.Backend.roipooling_bprop<.NervanaGPU.roipooling_bprop>` | Backward propagate through ROI-pooling layer
 
 Local Response Normalization
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -289,8 +289,8 @@ Local Response Normalization
     :delim: |
 
     :py:meth:`neon.backends.Backend.lrn_layer<.NervanaGPU.lrn_layer>` | Create the `LRNLayer` parameter object
-    :py:meth:`neon.backends.Backend.fprop_lrn<.NervanaGPU.fprop_lrn>` | Forward propagation through LRN layer
-    :py:meth:`neon.backends.Backend.bprop_lrn<.NervanaGPU.bprop_lrn>` | Backward propagation through LRN layer
+    :py:meth:`neon.backends.Backend.fprop_lrn<.NervanaGPU.fprop_lrn>` | Forward propagate through LRN layer
+    :py:meth:`neon.backends.Backend.bprop_lrn<.NervanaGPU.bprop_lrn>` | Backward propagate through LRN layer
 
 Batch Normalization
 ~~~~~~~~~~~~~~~~~~~
@@ -300,8 +300,8 @@ Batch Normalization
     :widths: 20, 40
     :delim: |
 
-    :py:meth:`neon.backends.Backend.compound_fprop_bn<.NervanaGPU.compound_fprop_bn>` | Forward propagation through BatchNorm layer
-    :py:meth:`neon.backends.Backend.compound_bprop_bn<.NervanaGPU.compound_bprop_bn>` | Backward propagation through BatchNorm layer
+    :py:meth:`neon.backends.Backend.compound_fprop_bn<.NervanaGPU.compound_fprop_bn>` | Forward propagate through BatchNorm layer
+    :py:meth:`neon.backends.Backend.compound_bprop_bn<.NervanaGPU.compound_bprop_bn>` | Backward propagate through BatchNorm layer
 
 
 Linear layer with bias
