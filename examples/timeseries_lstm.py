@@ -197,10 +197,10 @@ class DataIteratorSequence(NervanaObject):
         while self.batch_index < self.nbatches:
             # get the data for this batch and reshape to fit the device buffer
             # shape
-            X_batch = self.X[:, self.batch_index].reshape(
-                self.X_dev.shape[::-1]).T.copy()
-            y_batch = self.y[:, self.batch_index].reshape(
-                self.y_dev.shape[::-1]).T.copy()
+            X_batch = self.X[:, self.batch_index].T.reshape(
+                self.X_dev.shape).copy()
+            y_batch = self.y[:, self.batch_index].T.reshape(
+                self.y_dev.shape).copy()
 
             # make the data for this batch as backend tensor
             self.X_dev.set(X_batch)
