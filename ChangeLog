@@ -1,5 +1,17 @@
 # ChangeLog
 
+## v1.7.0 (2016-11-21):
+
+* Update Data Loader to aeon https://github.com/NervanaSystems/aeon for flexible,
+  multi-threaded data loading and transformations
+* Add Neural Machine Translation model
+* Remove Fast RCNN model (use Faster RCNN model instead)
+* Remove music_genres example
+* Fix super blocking for small N with 1D conv
+* Fix update-direct conv kernel for small N
+* Add gradient clipping to Adam optimizer
+* Documentation updates and bug fixes
+
 ## v1.6.0 (2016-09-21):
 
 * Faster RCNN model

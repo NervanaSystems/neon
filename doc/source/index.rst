@@ -36,26 +36,14 @@ Features include:
 
 New features in this release:
 
-* Faster RCNN model
-* Sequence to Sequence container and char_rae recurrent autoencoder model
-* Reshape Layer that reshapes the input [#221]
-* Pip requirements in requirements.txt updated to latest versions [#289]
-* Remove deprecated data loaders and update docs
-* Use NEON_DATA_CACHE_DIR envvar as archive dir to store DataLoader ingested data
-* Eliminate type conversion for FP16 for CUDA compute capability >= 5.2
-* Use GEMV kernels for batch size 1
-* Alter delta buffers for nesting of merge-broadcast layers
-* Support for ncloud real-time logging
-* Add fast_style Makefile target
-* Fix Python 3 builds on Ubuntu 16.04
-* Run setup.py for sysinstall to generate version.py [#282]
-* Fix broken link in mnist docs
-* Fix conv/deconv tests for CPU execution and fix i32 data type
-* Fix for average pooling with batch size 1
-* Change default scale_min to allow random cropping if omitted
-* Fix yaml loading
-* Fix bug with image resize during injest
-* Update references to the ModelZoo and neon examples to their new locations
+* Update Data Loader to aeon https://github.com/NervanaSystems/aeon
+* Add Neural Machine Translation model
+* Remove Fast RCNN model (use Faster RCNN model instead)
+* Remove music_genres example
+* Fix super blocking for small N with 1D conv
+* Fix update-direct conv kernel for small N
+* Add gradient clipping to Adam optimizer
+* Documentation updates and bug fixes
 * See `change log`_.
 
 We use neon internally at Nervana to solve our `customers' problems`_
