@@ -44,7 +44,7 @@ def print_sample(ex_source, ex_reference, ex_prediction, src_dict, tgt_dict):
     """
     Print some example predictions.
     """
-    sample_output = R"""
+    sample_output = u"""
     Source Sentence: {source}
     Reference Translation: {reference}
     Predicted Translation: {prediction}
