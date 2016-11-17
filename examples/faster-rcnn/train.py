@@ -26,9 +26,6 @@ Reference:
     http://arxiv.org/abs/1506.01497
     https://github.com/rbgirshick/py-faster-rcnn
 
-Usage:
-    python examples/faster-rcnn/train.py -r0 -e7 -s faster_rcnn.pkl -vv
-
 """
 from __future__ import division
 
@@ -42,12 +39,17 @@ from neon.transforms import CrossEntropyMulti, SmoothL1Loss
 from neon.layers import Multicost, GeneralizedCostMask
 import util
 import faster_rcnn
+import os
 
+train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pascalvoc.cfg')
+config_files = [train_config] if os.path.exists(train_config) else []
 
 # parse the command line arguments
-parser = NeonArgparser(__doc__)
+parser = NeonArgparser(__doc__, default_config_files=config_files)
 parser.add_argument('--width', type=int, default=1000, help='Width of input image')
 parser.add_argument('--height', type=int, default=1000, help='Height of input image')
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args(gen_be=False)
 
 # hyperparameters
@@ -69,7 +71,7 @@ cache_dir = get_data_cache_dir(args.data_dir, subdir='pascalvoc_cache')
 config = PASCALVOC(args.manifest['train'], args.manifest_root,
                    width=args.width, height=args.height,
                    rois_per_img=rpn_rois_per_img, inference=False)
-
+config['subset_fraction'] = float(args.subset_pct / 100.0)
 
 train_set = faster_rcnn.build_dataloader(config, be, frcn_rois_per_img)
 

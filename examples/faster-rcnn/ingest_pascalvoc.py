@@ -26,6 +26,18 @@ def ingest_pascal(data_dir, out_dir, year='2007', overwrite=False):
     manifest_train = os.path.join(root_dir, 'trainval.csv')
     manifest_inference = os.path.join(root_dir, 'val.csv')
 
+    # write configuration file
+    config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pascalvoc.cfg')
+    with open(config_path, 'w') as f:
+        f.write('manifest = [train:{}, val:{}]\n'.format(manifest_train, manifest_inference))
+        f.write('manifest_root = {}\n'.format(out_dir))
+        f.write('epochs = 14\n')
+        f.write('height = 1000\n')
+        f.write('width = 1000\n')
+        f.write('batch_size = 1\n')
+        f.write('rng_seed = 0')
+    print("Wrote config file to: {}".format(config_path))
+
     if not overwrite and os.path.exists(manifest_train) and os.path.exists(manifest_inference):
         print("""Found existing manfiest files, skipping ingest,
               Use --overwrite to rerun ingest anyway.""")
@@ -63,18 +75,6 @@ def ingest_pascal(data_dir, out_dir, year='2007', overwrite=False):
     # for testing, we inlude the difficult objects, so use annot_path_difficult
     index_path = os.path.join(root_dir, 'ImageSets', 'Main', 'test.txt')
     create_manifest(manifest_inference, index_path, annot_path_difficult, img_dir, out_dir)
-
-    # write configuration file
-    config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'pascalvoc.cfg')
-    with open(config_path, 'w') as f:
-        f.write('manifest = [train:{}, val:{}]\n'.format(manifest_train, manifest_inference))
-        f.write('manifest_root = {}\n'.format(out_dir))
-        f.write('epochs = 14\n')
-        f.write('height = 1000\n')
-        f.write('width = 1000\n')
-        f.write('batch_size = 1\n')
-        f.write('rng_seed = 0')
-    print("Wrote config file to: {}".format(config_path))
 
 
 def create_manifest(manifest_path, index_file, annot_dir, image_dir, root_dir):
