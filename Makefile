@@ -155,7 +155,7 @@ neon_install:
 
 aeon_install:
 	@echo "Attempting to install optional aeon dataloader..."
-	-@pip install git+https://github.com/NervanaSystems/aeon.git@v0.2.5
+	-@pip install git+https://github.com/NervanaSystems/aeon.git@v0.2.6
 
 sysdeps:
 	@echo "Installing neon dependencies system wide..."
