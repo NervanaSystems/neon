@@ -251,8 +251,8 @@ class Callbacks(NervanaObject):
         config = self.callback_data.create_group('config')
         total_minibatches = -((-self.model().ndata * epochs) // self.be.bsz)
         config.attrs['total_minibatches'] = total_minibatches
-        config.attrs['total_epochs'] = epochs
 
+        config.attrs['total_epochs'] = epochs
         time_markers = self.callback_data.create_group("time_markers")
         time_markers.create_dataset("minibatch", (epochs,))
         if self.model_file:
@@ -624,7 +624,7 @@ class TrainCostCallback(Callback):
 
         # make sure our window size is less than or equal to total number of minibatches
         self.wsz = min(points, self.wsz)
-        self.cost_history = deque([], maxlen=self.wsz)
+        self.cost_history = deque([], maxlen=int(self.wsz))
 
         # clue in the data reader to use the 'minibatch' time_markers
         callback_data['cost/train'].attrs['time_markers'] = 'minibatch'
@@ -676,7 +676,7 @@ class TrainMulticostCallback(Callback):
 
         # make sure our window size is less than or equal to total number of minibatches
         self.wsz = min(points, self.wsz)
-        self.cost_history = deque([], maxlen=self.wsz)
+        self.cost_history = deque([], maxlen=int(self.wsz))
 
         # clue in the data reader to use the 'minibatch' time_markers
         callback_data['multicost/train'].attrs['time_markers'] = 'minibatch'
