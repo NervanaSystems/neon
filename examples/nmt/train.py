@@ -51,7 +51,7 @@ def print_sample(ex_source, ex_reference, ex_prediction, src_dict, tgt_dict):
     """.format(source=" ".join([src_dict[k].decode("utf-8") for k in ex_source]),
                reference=" ".join([tgt_dict[k].decode("utf-8") for k in ex_reference]),
                prediction=" ".join([tgt_dict[k].decode("utf-8") for k in ex_prediction]))
-    print(sample_output)
+    print(sample_output.encode("utf-8"))
 
 
 # parse the command line arguments
