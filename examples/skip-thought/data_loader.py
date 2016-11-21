@@ -1,6 +1,18 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2016 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # ----------------------------------------------------------------------------
+from __future__ import print_function
 
 import os
 import h5py
@@ -8,16 +20,19 @@ import json
 import numpy as np
 import cPickle
 from collections import defaultdict, OrderedDict
-from sklearn.linear_model import LinearRegression
 import re
 import sys
 
 from neon.backends import gen_backend
-from neon.layers import LookupTable, RecurrentSum, RecurrentLast
-from neon.initializers import Uniform
+from neon.backends.nervanagpu import GPUTensor
+from neon.layers import LookupTable, RecurrentSum, RecurrentLast, Linear, Bias, GeneralizedCost
+from neon.initializers import Gaussian, Constant
+from neon.data import ArrayIterator
+from neon.optimizers import GradientDescentMomentum
+from neon.transforms import SumSquared
+from neon.callbacks.callbacks import Callbacks
 from neon.models import Model
 
-from skip_thought import SkipThought
 
 def clean_string(string):
     string = re.sub(r"[^A-Za-z(),!?\'\`]", " ", string)
@@ -73,7 +88,7 @@ def load_txt_sent(flist_txt):
     """
     all_sent = []
     for txt_file in flist_txt:
-        print "Reading file: {}".format(txt_file)
+        print("Reading file: {}".format(txt_file))
         with open(txt_file, 'r') as f:
             data = f.read()
         sent = data.split('\n')
@@ -128,9 +143,6 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
     file_str = get_file_str(path, len(file_names), labelled=False,
                             output_path=output_path, valid_split=valid_split)
 
-
-    file_str = 'doc__books_txt_processed_2_'
-
     # file name to store the vocabulary
     if vocab_file_name is None:
         vocab_file_name = file_str + '.vocab'
@@ -146,8 +158,8 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
     h5_file_name = os.path.join(output_path, file_str + '.h5')
 
     if os.path.exists(h5_file_name) and os.path.exists(vocab_file_name):
-        print "dataset files {} and vocabulary file {} already exist. "\
-              "will use cached data. ".format(h5_file_name, vocab_file_name)
+        print("dataset files {} and vocabulary file {} already exist. "
+              "will use cached data. ".format(h5_file_name, vocab_file_name))
         return h5_file_name, vocab_file_name
 
     # split into training/valid set
@@ -169,7 +181,7 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
             train_sent = all_sent[:train_split]
             valid_sent = all_sent[train_split:]
         else:
-            print "Unsure how to load file_ext {}, please use 'json' or 'txt'.".format(file_ext)
+            print("Unsure how to load file_ext {}, please use 'json' or 'txt'.".format(file_ext))
     else:
         train_files = file_names
         if 'json' in file_ext:
@@ -177,14 +189,14 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
         elif 'txt' in file_ext:
             train_sent = load_txt_sent(train_files)
         else:
-            print "Unsure how to load file_ext {}, please use 'json' or 'txt'.".format(file_ext)
+            print("Unsure how to load file_ext {}, please use 'json' or 'txt'.".format(file_ext))
         all_sent = train_sent
 
     if os.path.exists(vocab_file_name):
-        print "open existing vocab file: {}".format(vocab_file_name)
+        print("open existing vocab file: {}".format(vocab_file_name))
         vocab, rev_vocab, word_count = cPickle.load(open(vocab_file_name, 'rb'))
     else:
-        print "Building  vocab file"
+        print("Building  vocab file")
 
         # build vocab
         word_count = defaultdict(int)
@@ -213,13 +225,13 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
         # generate the reverse vocab
         rev_vocab = dict((wrd_id, wrd) for wrd, wrd_id in vocab.iteritems())
 
-        print "vocabulary from {} is saved into {}".format(path, vocab_file_name)
+        print("vocabulary from {} is saved into {}".format(path, vocab_file_name))
         cPickle.dump((vocab, rev_vocab, word_count), open(vocab_file_name, 'wb'))
 
     vocab_size = len(vocab)
-    print "\nVocab size from the dataset is: {}".format(vocab_size)
+    print("\nVocab size from the dataset is: {}".format(vocab_size))
 
-    print "\nProcessing and saving training data into {}".format(h5_file_name)
+    print("\nProcessing and saving training data into {}".format(h5_file_name))
 
     # now process and save the train/valid data
     h5f = h5py.File(h5_file_name, 'w', libver='latest')
@@ -257,7 +269,7 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
     report_text_train.attrs['vocab_size'] = vocab_size
 
     if valid_split:
-        print "\nProcessing and saving validation data into {}".format(h5_file_name)
+        print("\nProcessing and saving validation data into {}".format(h5_file_name))
         shape = (len(valid_sent),)
         report_text_valid = h5f.create_dataset('report_valid', shape=shape,
                                                maxshape=maxshape, dtype=dt,
@@ -291,9 +303,9 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
 
 def get_google_word2vec_W(fname, vocab, index_from=2):
     """
-    Extract the embedding matrix from the given word2vec binary file and use this 
+    Extract the embedding matrix from the given word2vec binary file and use this
     to initalize a new embedding matrix for words found in vocab.
-    
+
     Conventions are to save indices for pad, oov, etc.:
     index 0: pad
     index 1: oov (or <unk>)
@@ -341,8 +353,8 @@ def get_google_word2vec_W(fname, vocab, index_from=2):
             unfound_words += [wrd]
 
     if len(unfound_words) > 0:
-        print "some of the unfound words are:"
-        print unfound_words[:30]
+        print("some of the unfound words are:")
+        print(unfound_words[:30])
 
     assert cnt + len(found_words_idx) == vocab_size
 
@@ -352,9 +364,9 @@ def get_google_word2vec_W(fname, vocab, index_from=2):
 
 
 def compute_vocab_expansion(orig_word_vectors, w2v_W, w2v_vocab):
-    print "Learning linear mapping from w2v -> rnn embedding..."
+    print("Learning linear mapping from w2v -> rnn embedding...")
     clf = train_regressor(orig_word_vectors, w2v_W, w2v_vocab)
-    print "Contructing map..."
+    print("Contructing map...")
     init_embed = apply_regressor(clf, w2v_W, w2v_vocab)
     return init_embed
 
@@ -367,19 +379,19 @@ def get_w2v_vocab(fname, cache=True):
         cache_fname = fname.split('.')[0] + ".vocab"
 
         if os.path.isfile(cache_fname):
-            print "Found cached W2V vocab, reloading..."
+            print("Found cached W2V vocab, reloading...")
             with open(cache_fname, 'r') as f:
                 vocab, vocab_size = cPickle.load(f)
-                print "Word2Vec vocab size is: {}".format(vocab_size)
+                print("Word2Vec vocab size is: {}".format(vocab_size))
             return vocab, vocab_size
 
     with open(fname, 'rb') as f:
-        print "No W2V vocab cache found, recomputing..."
+        print("No W2V vocab cache found, recomputing...")
         header = f.readline()
         vocab_size, embed_dim = map(int, header.split())
         binary_len = np.dtype('float32').itemsize * embed_dim
 
-        print "Word2Vec vocab size is: {}".format(vocab_size)
+        print("Word2Vec vocab size is: {}".format(vocab_size))
 
         vocab = OrderedDict()
 
@@ -406,7 +418,8 @@ def get_embeddings(lookup_layer, word_idict):
     """
     Extract RNN embeddings from the lookup layer of the model
 
-    Function modified from: https://github.com/ryankiros/skip-thoughts/blob/master/training/tools.py
+    Function modified from:
+    https://github.com/ryankiros/skip-thoughts/blob/master/training/tools.py
     """
     f_emb = lookup_layer.W.get()
     d = OrderedDict()
@@ -420,7 +433,8 @@ def train_regressor(orig_wordvecs, w2v_W, w2v_vocab):
     """
     Return regressor to map word2vec to RNN word space
 
-    Function modified from: https://github.com/ryankiros/skip-thoughts/blob/master/training/tools.py
+    Function modified from:
+    https://github.com/ryankiros/skip-thoughts/blob/master/training/tools.py
     """
     # Gather all words from word2vec that appear in wordvecs
     d = defaultdict(lambda: 0)
@@ -440,8 +454,17 @@ def train_regressor(orig_wordvecs, w2v_W, w2v_vocab):
         w2v[shared[w]] = w2v_W[w2v_vocab[w]]
         sg[shared[w]] = orig_wordvecs[w]
 
-    clf = LinearRegression()
-    clf.fit(w2v, sg)
+    train_set = ArrayIterator(X=w2v, y=sg, make_onehot=False)
+
+    layers = [Linear(nout=620, init=Gaussian(loc=0.0, scale=0.1)),
+              Bias(init=Constant(0.0))]
+    clf = Model(layers=layers)
+
+    cost = GeneralizedCost(costfunc=SumSquared())
+    opt = GradientDescentMomentum(0.1, 0.9, gradient_clip_value=5.0)
+    callbacks = Callbacks(clf)
+
+    clf.fit(train_set, num_epochs=2, optimizer=opt, cost=cost, callbacks=callbacks)
     return clf
 
 
@@ -449,13 +472,17 @@ def apply_regressor(clf, w2v_W, w2v_vocab):
     """
     Map words from word2vec into RNN word space
 
-    Function modifed from: https://github.com/ryankiros/skip-thoughts/blob/master/training/tools.py
+    Function modifed from:
+    https://github.com/ryankiros/skip-thoughts/blob/master/training/tools.py
     """
     init_embed = np.zeros((len(w2v_vocab), 620), dtype='float32')
 
+    word_vec = GPUTensor(clf.be, shape=(300, 1))
+
     for i, w in enumerate(w2v_vocab.keys()):
         if '_' not in w:
-            init_embed[w2v_vocab[w], :] = clf.predict(w2v_W[w2v_vocab[w]]).astype('float32')
+            word_vec.set(w2v_W[w2v_vocab[w]].reshape(300, 1))
+            init_embed[w2v_vocab[w], :] = clf.fprop(word_vec).get().reshape((620,))
 
     return init_embed
 
@@ -480,20 +507,11 @@ def load_sent_encoder(load_path, expand_vocab=False, orig_vocab=None,
     load_path = open(load_path)
     model_dict = cPickle.load(load_path)
 
-    vocab_size = model_dict['model']['config']['vocab_size']
     embed_dim = model_dict['model']['config']['embed_dim']
-    nhidden = model_dict['model']['config']['nhidden']
-    # only the encoder input is use
-    input_shape = model_dict['train_input_shape'][0]
 
-    init_embed_dev = Uniform(low=-0.1, high=0.1)
-    skip = SkipThought(vocab_size, embed_dim, init_embed_dev, nhidden)
-    model_train = Model(skip)
-
-    if model_train.be is None:
-        gen_backend('gpu', batch_size=1)
-
-    model_train.deserialize(model_dict, load_states=True)
+    # Load the full model, batch size = 1 for inference
+    gen_backend('gpu', batch_size=1)
+    model_train = Model(model_dict)
 
     # RecurrentLast should be used for semantic similarity evaluation
     if use_recur_last:
@@ -505,7 +523,7 @@ def load_sent_encoder(load_path, expand_vocab=False, orig_vocab=None,
         assert orig_vocab and w2v_vocab, ("All vocabs and w2v_path " +
                                           "need to be specified when using expand_vocab")
 
-        print "Computing vocab expansion regression..."
+        print("Computing vocab expansion regression...")
         # Build inverse word dictionary (word -> index)
         word_idict = dict()
         for kk, vv in orig_vocab.iteritems():
@@ -538,8 +556,6 @@ def load_sent_encoder(load_path, expand_vocab=False, orig_vocab=None,
         model = Model(layers=[model_train.layers.layer_dict['lookupTable'],
                               model_train.layers.layer_dict['encoder'],
                               last_layer])
-    # model.be.bsz = 1
-    # model.initialize(dataset=input_shape)
     return model
 
 

@@ -1,3 +1,22 @@
+# ----------------------------------------------------------------------------
+# Copyright 2016 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ----------------------------------------------------------------------------
+# --------------------------------------------------------
+# Skip-Thoughts
+# Licensed under Apache License 2.0 [see LICENSE for details]
+# Written by Ryan Kiros
+# --------------------------------------------------------
 '''
 Evaluation code for the SICK dataset (SemEval 2014 Task 1)
 
@@ -11,18 +30,20 @@ import cPickle
 import copy
 
 from neon.util.argparser import NeonArgparser
+from neon.initializers import Gaussian
+from neon.layers import GeneralizedCost, Affine
+from neon.data import ArrayIterator
+from neon.models import Model
+from neon.optimizers import Adam
+from neon.transforms import Softmax, CrossEntropyMulti
+from neon.callbacks.callbacks import Callbacks
+from neon.data import SICK
 
 from data_iterator import SentenceEncode
 from data_loader import load_sent_encoder, load_data, tokenize, get_w2v_vocab
 
-from sklearn.metrics import mean_squared_error as mse
-from sklearn.utils import shuffle
-
 from scipy.stats import pearsonr
 from scipy.stats import spearmanr
-
-from keras.models import Sequential
-from keras.layers.core import Dense, Activation
 
 
 def main():
@@ -36,23 +57,18 @@ def main():
                         help='')
     args = parser.parse_args(gen_be=False)
 
-    # Suppress sklearn deprecation warnings...
-    import warnings
-    warnings.filterwarnings("ignore", category=DeprecationWarning)
+    if args.batch_size is None:
+        args.batch_size = 128
 
-    # batch size 1 for testing individual sentences
-    args.batch_size = 128
     # No validation was used for training
     valid_split = None
 
-    # to run it on the cloud, can use ncloud train resume-training <id>, then it
-    # will look for the file defaulted named to be model.prm
     if args.model_file is None:
         args.model_file = 'model.prm'
 
     args.callback_args['model_file'] = None
 
-    # load the documents by giving the path and what extension the files are
+    # load vocab file from training
     _, vocab_file = load_data(args.data_dir, valid_split=valid_split,
                               output_path=args.output_path)
     vocab, _, _ = cPickle.load(open(vocab_file, 'rb'))
@@ -87,10 +103,16 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
     """
     Run experiment
     """
-    print('Preparing data...')
-    train, dev, test, scores = load_eval_data(data_path)
-    train_A_shuf, train_B_shuf, scores_shuf = shuffle(train[0], train[1], scores[0],
-                                                      random_state=seed)
+    print('Preparing SICK evaluation data...')
+    # Check if SICK data exists in specified directory, otherwise download
+    sick_data = SICK(path=data_path)
+    train, dev, test, scores = sick_data.load_eval_data()
+
+    np.random.seed(seed)
+    shuf_idxs = np.random.permutation(range(len(train[0])))
+    train_A_shuf = train[0][shuf_idxs]
+    train_B_shuf = train[1][shuf_idxs]
+    scores_shuf = scores[0][shuf_idxs]
 
     print('Tokenizing data...')
     train_A_tok = tokenize_input(train_A_shuf, vocab=vocab)
@@ -99,7 +121,7 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
     dev_B_tok = tokenize_input(dev[1], vocab=vocab)
 
     print('Computing training skipthoughts...')
-    # Get iterator from tokenized data. Second argument (train_text) not needed for evaluation
+    # Get iterator from tokenized data
     train_set_A = SentenceEncode(train_A_tok, [], len(train_A_tok), vocab_size_layer,
                                  max_len=30, index_from=2)
     train_set_B = SentenceEncode(train_B_tok, [], len(train_B_tok), vocab_size_layer,
@@ -127,10 +149,11 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
     devY = encode_labels(scores[1], ndata=len(devF))
 
     print('Compiling model...')
-    lrmodel = prepare_model(ninputs=trainF.shape[1])
+    lrmodel, opt, cost = prepare_model(ninputs=trainF.shape[1])
 
     print('Training...')
-    bestlrmodel = train_model(lrmodel, trainF, trainY, devF, devY, scores[1][:len(devF)])
+    bestlrmodel = train_model(lrmodel, opt, cost, trainF,
+                              trainY, devF, devY, scores[1][:len(devF)])
 
     if evaltest:
         print('Tokenizing test sentences....')
@@ -151,10 +174,10 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
 
         print('Evaluating...')
         r = np.arange(1, 6)
-        yhat = np.dot(bestlrmodel.predict_proba(testF, verbose=2), r)
+        yhat = np.dot(bestlrmodel.get_outputs(ArrayIterator(testF)), r)
         pr = pearsonr(yhat, scores[2][:len(yhat)])[0]
         sr = spearmanr(yhat, scores[2][:len(yhat)])[0]
-        se = mse(yhat, scores[2][:len(yhat)])
+        se = np.mean((yhat - scores[2][:len(yhat)]) ** 2)
         print('Test Pearson: ' + str(pr))
         print('Test Spearman: ' + str(sr))
         print('Test MSE: ' + str(se))
@@ -166,14 +189,16 @@ def prepare_model(ninputs=9600, nclass=5):
     """
     Set up and compile the model architecture (Logistic regression)
     """
-    lrmodel = Sequential()
-    lrmodel.add(Dense(nclass, input_shape=(ninputs,)))
-    lrmodel.add(Activation('softmax'))
-    lrmodel.compile(loss='categorical_crossentropy', optimizer='adam')
-    return lrmodel
+    layers = [Affine(nout=nclass, init=Gaussian(loc=0.0, scale=0.01), activation=Softmax())]
+
+    cost = GeneralizedCost(costfunc=CrossEntropyMulti())
+    opt = Adam()
+    lrmodel = Model(layers=layers)
+
+    return lrmodel, opt, cost
 
 
-def train_model(lrmodel, X, Y, devX, devY, devscores):
+def train_model(lrmodel, opt, cost, X, Y, devX, devY, devscores):
     """
     Train model, using pearsonr on dev for early stopping
     """
@@ -181,21 +206,32 @@ def train_model(lrmodel, X, Y, devX, devY, devscores):
     best = -1.0
     r = np.arange(1, 6)
 
+    train_set = ArrayIterator(X=X, y=Y, make_onehot=False)
+    valid_set = ArrayIterator(X=devX, y=devY, make_onehot=False)
+
+    eval_epoch = 10
+
     while not done:
-        # Every 100 epochs, check Pearson on development set
-        lrmodel.fit(X, Y, verbose=2, shuffle=False, validation_data=(devX, devY))
-        yhat = np.dot(lrmodel.predict_proba(devX, verbose=2), r)
+        callbacks = Callbacks(lrmodel, eval_set=valid_set)
+
+        lrmodel.fit(train_set, optimizer=opt, num_epochs=eval_epoch,
+                    cost=cost, callbacks=callbacks)
+
+        # Every 10 epochs, check Pearson on development set
+        yhat = np.dot(lrmodel.get_outputs(valid_set), r)
         score = pearsonr(yhat, devscores)[0]
         if score > best:
-            print(score)
+            print('Dev Pearson: {}'.format(score))
             best = score
-            bestlrmodel = copy.deepcopy(lrmodel)
+            bestlrmodel = copy.copy(lrmodel)
         else:
             done = True
 
-    yhat = np.dot(bestlrmodel.predict_proba(devX, verbose=2), r)
+        eval_epoch += 10
+
+    yhat = np.dot(bestlrmodel.get_outputs(valid_set), r)
     score = pearsonr(yhat, devscores)[0]
-    print('Dev Pearson: ' + str(score))
+    print('Dev Pearson: {}'.format(score))
     return bestlrmodel
 
 
@@ -214,42 +250,6 @@ def encode_labels(labels, nclass=5, ndata=None):
         Y = Y[:ndata]
 
     return Y
-
-
-def load_eval_data(path):
-    """
-    Load the SICK semantic-relatedness dataset
-    """
-    trainA, trainB, devA, devB, testA, testB = [], [], [], [], [], []
-    trainS, devS, testS = [], [], []
-
-    with open(path + 'SICK_train.txt', 'rb') as f:
-        for line in f:
-            text = line.strip().split('\t')
-            trainA.append(text[1])
-            trainB.append(text[2])
-            trainS.append(text[3])
-
-    with open(path + 'SICK_trial.txt', 'rb') as f:
-        for line in f:
-            text = line.strip().split('\t')
-            devA.append(text[1])
-            devB.append(text[2])
-            devS.append(text[3])
-
-    with open(path + 'SICK_test_annotated.txt', 'rb') as f:
-        for line in f:
-            text = line.strip().split('\t')
-            testA.append(text[1])
-            testB.append(text[2])
-            testS.append(text[3])
-
-    trainS = [float(s) for s in trainS[1:]]
-    devS = [float(s) for s in devS[1:]]
-    testS = [float(s) for s in testS[1:]]
-
-    return ((trainA[1:], trainB[1:]), (devA[1:], devB[1:]),
-            (testA[1:], testB[1:]), (trainS, devS, testS))
 
 
 def tokenize_input(input_sent, vocab):

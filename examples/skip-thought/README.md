@@ -7,15 +7,6 @@ This is an implementation of [Skip-Thought Vectors](http://arxiv.org/abs/1506.06
 <i>For data loading:</i><br>
 * [h5py](http://www.h5py.org/)
 
-<i>For evaluation:</i><br>
-* [Keras](https://keras.io/)
-* [scikit-learn](http://scikit-learn.org/stable/)
-
-<i>For visualization:</i><br>
-* [tsne](https://pypi.python.org/pypi/tsne)
-* [matplotlib](matplotlib.org)
-
-
 ### Data
 
 Due to a necessary copyright agreement, to download the BookCorpus dataset, please contact the authors of [Aligning Books and Movies: Towards Story-like Visual Explanations by Watching Movies and Reading Books](http://www.cs.toronto.edu/~zemel/documents/align.pdf)  
@@ -44,10 +35,13 @@ python inference_sent2vec.py --model_file output/s2v_model.prm --data_dir books_
 
 ### Evaluation
 
-A trained sentence2vec model can also be evaluated on the SemEval 2014 Task 1: semantic relatedness SICK dataset. The data can be downloded here: [SemEval-2014 Task1](http://alt.qcri.org/semeval2014/task1/index.php?id=data-and-tools). Download *TRAINING DATA*, *TEST DATA(including gold scores)*, and *TRIAL DATA* and collect the data into a directory.
+A trained sentence2vec model can also be evaluated on the SemEval 2014 Task 1: semantic relatedness SICK dataset. Running the `eval_sick.py` script will download the data if it's unable to find it locally. The evaluation can be performed with the following command:
+
 ```
 python eval_sick.py --model_file output/s2v_model.prm --data_dir books_txt/ --eval_data_path SICK_data/ --output_path output/
 ```
+
+The data can also be found/downloded manually here: [SemEval-2014 Task1](http://alt.qcri.org/semeval2014/task1/index.php?id=data-and-tools). Download *TRAINING DATA*, *TEST DATA(including gold scores)*, and *TRIAL DATA* and collect the data into a directory.
 
 ## Citations
 

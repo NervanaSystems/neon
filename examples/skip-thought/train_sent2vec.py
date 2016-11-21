@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015-2016 Nervana Systems Inc.
+# Copyright 2016 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -18,7 +18,7 @@ Train a sentence embedding model on the BookCorpus dataset.
 
 Reference:
     "Skip-thought vectors"
-    http://arxiv.org/abs/1506.06726 
+    http://arxiv.org/abs/1506.06726
 
 Usage:
     python train_sent2vec.py -e 2 -eval 1 -r 0 --data_dir book_corpus/ \
@@ -28,18 +28,19 @@ Usage:
 from __future__ import division
 from __future__ import print_function
 import cPickle
+import os
 
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
-from neon.initializers import Uniform, Array
-from neon.layers import GeneralizedCostMask, Multicost
+from neon.initializers import Uniform, Orthonormal, Constant
+from neon.layers import GeneralizedCostMask, Multicost, GRU
 from neon.models import Model
-from neon.transforms import CrossEntropyMulti
+from neon.transforms import CrossEntropyMulti, Logistic, Tanh
 from neon.callbacks.callbacks import Callbacks, MetricCallback
 
 from data_loader import load_data
 from data_iterator import Sentence_Homogenous
-from skip_thought import SkipThought
+from neon.layers.container import SkipThought
 
 from neon.optimizers import Adam
 
@@ -57,7 +58,6 @@ args = parser.parse_args(gen_be=False)
 args.batch_size = 64
 embed_dim = 620
 
-#valid_split = 0.2
 valid_split = None
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
@@ -87,16 +87,28 @@ gradient_clip_norm = 5.0
 print("\nMax sentence length set to be: {}".format(args.max_len_w))
 
 train_set = Sentence_Homogenous(data_file=data_file, sent_name='train', text_name='report_train',
-                     nwords=vocab_size_layer, max_len=args.max_len_w, index_from=index_from)
+                                nwords=vocab_size_layer, max_len=args.max_len_w,
+                                index_from=index_from)
 print("Training set prepared.")
 
 if valid_split > 0.0:
-    valid_set = Sentence_Homogenous(data_file=data_file, sent_name='valid', text_name='report_valid',
-                         nwords=vocab_size_layer, max_len=args.max_len_w, index_from=index_from)
+    valid_set = Sentence_Homogenous(data_file=data_file, sent_name='valid',
+                                    text_name='report_valid', nwords=vocab_size_layer,
+                                    max_len=args.max_len_w, index_from=index_from)
 print("Validation set prepared.")
 
-skip = SkipThought(vocab_size_layer, embed_dim, init_embed_dev, nhidden)
+skip = SkipThought(vocab_size_layer, embed_dim, init_embed_dev, nhidden, rec_layer=GRU,
+                   init_rec=Orthonormal(), activ_rec=Tanh(), activ_rec_gate=Logistic(),
+                   init_ff=Uniform(low=-0.1, high=0.1), init_const=Constant(0.0))
 model = Model(skip)
+
+if args.model_file and os.path.isfile(args.model_file):
+    print("Loading saved weights from: {}".format(args.model_file))
+    load_path = open(args.model_file)
+    model_dict = cPickle.load(load_path)
+    model.deserialize(model_dict, load_states=True)
+elif args.model_file:
+    print("Unable to find model file {}, restarting training.".format(args.model_file))
 
 cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti(usebits=True)),
                         GeneralizedCostMask(costfunc=CrossEntropyMulti(usebits=True))],

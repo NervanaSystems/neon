@@ -505,3 +505,110 @@ class IMDB(Dataset):
         self._data_dict['train'] = ArrayIterator(X_train, y_train, nclass=2)
         self._data_dict['test'] = ArrayIterator(X_test, y_test, nclass=2)
         return self._data_dict
+
+
+class SICK(Dataset):
+    """
+    Semantic Similarity dataset from qcri.org (Semeval 2014).
+
+    Arguments:
+        path (str): path to SICK_data directory
+    """
+    def __init__(self, path='SICK_data/'):
+        url = 'http://alt.qcri.org/semeval2014/task1/data/uploads/'
+        self.filemap = {'train': 87341,
+                        'test_annotated': 93443,
+                        'trial': 16446}
+        keys = list(self.filemap.keys())
+        self.zip_paths = None
+        self.file_paths = [self.gen_filename(phase) for phase in keys]
+        self.sizes = [self.filemap[phase] for phase in keys]
+
+        super(SICK, self).__init__(filename=self.file_paths,
+                                   url=url,
+                                   size=self.sizes,
+                                   path=path)
+
+    @staticmethod
+    def gen_zipname(phase):
+        """
+        Zip filename generator.
+
+        Arguments:
+            phase(str): Phase of training/evaluation
+
+        Returns:
+            string: sick_<phase>.zip
+        """
+        return "sick_{}.zip".format(phase)
+
+    @staticmethod
+    def gen_filename(phase):
+        """
+        Filename generator for the extracted zip files.
+
+        Arguments:
+            phase(str): Phase of training/evaluation
+
+        Returns:
+            string: SICK_<phase>.txt
+        """
+        return "SICK_{}.txt".format(phase)
+
+    def load_data(self):
+        """
+        Conditional data loader will download and extract zip files if not found locally.
+        """
+        self.zip_paths = {}
+        for phase in self.filemap:
+            zn = self.gen_zipname(phase)
+            size = self.filemap[phase]
+            self.zip_paths[phase] = self.load_zip(zn, size)
+        return self.zip_paths
+
+    def load_eval_data(self):
+        """
+        Load the SICK semantic-relatedness dataset. Data is a tab-delimited txt file,
+        in the format: Sentence1\tSentence2\tScore. Data is downloaded and extracted
+        from zip files if not found in directory specified by self.path.
+
+        Returns:
+            tuple of tuples of np.array: three tuples containing A & B sentences
+                for train, dev, and text, along with a fourth tuple containing
+                the scores for each AB pair.
+        """
+        if self.zip_paths is None:
+            self.load_data()
+
+        trainA, trainB, devA, devB, testA, testB = [], [], [], [], [], []
+        trainS, devS, testS = [], [], []
+
+        with open(self.path + self.gen_filename('train'), 'rb') as f:
+            for line in f:
+                text = line.strip().split('\t')
+                trainA.append(text[1])
+                trainB.append(text[2])
+                trainS.append(text[3])
+
+        with open(self.path + self.gen_filename('trial'), 'rb') as f:
+            for line in f:
+                text = line.strip().split('\t')
+                devA.append(text[1])
+                devB.append(text[2])
+                devS.append(text[3])
+
+        with open(self.path + self.gen_filename('test_annotated'), 'rb') as f:
+            for line in f:
+                text = line.strip().split('\t')
+                testA.append(text[1])
+                testB.append(text[2])
+                testS.append(text[3])
+
+        trainS = [float(s) for s in trainS[1:]]
+        devS = [float(s) for s in devS[1:]]
+        testS = [float(s) for s in testS[1:]]
+
+        return ((np.array(trainA[1:]), np.array(trainB[1:])),
+                (np.array(devA[1:]), np.array(devB[1:])),
+                (np.array(testA[1:]), np.array(testB[1:])),
+                (np.array(trainS), np.array(devS), np.array(testS)))

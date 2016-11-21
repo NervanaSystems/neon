@@ -24,7 +24,7 @@ from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.util.modeldesc import ModelDescription
 from neon.layers import Sequential, Activation, Tree, SingleOutputTree, Seq2Seq
-from neon.layers.container import DeltasTree
+from neon.layers.container import DeltasTree, SkipThought
 from neon.util.beamsearch import BeamSearch
 import numpy as np
 
@@ -73,6 +73,10 @@ class Model(NervanaObject):
             # Wrap the list of layers in a Sequential container if a raw list of layers
             if type(layers) in (Sequential, Tree, SingleOutputTree, Seq2Seq):
                 self.layers = layers
+            elif type(layers) == SkipThought:
+                self.layers = layers
+                if hasattr(layers, 'layer_dict'):
+                    self.layer_dict = layers.layer_dict
             else:
                 self.layers = Sequential(layers)
         self.layers.propagate_parallelism("Data")

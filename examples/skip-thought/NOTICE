@@ -1,0 +1,13 @@
+This directory uses the open sourced code in the following files:
+
+# ----------------------------------------------------------------------------
+data_iterator.py
+eval_sick.py
+#
+# --------------------------------------------------------
+# Skip-Thoughts
+# Licensed under Apache License 2.0 [see LICENSE for details]
+# Written by Ryan Kiros
+# --------------------------------------------------------
+Data iterator modified from: https://github.com/ryankiros/skip-thoughts/blob/master/training/homogeneous_data.py
+SICK evaluation script modified from: https://github.com/ryankiros/skip-thoughts/blob/master/eval_sick.py

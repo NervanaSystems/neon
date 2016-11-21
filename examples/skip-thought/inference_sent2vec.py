@@ -1,6 +1,17 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015 Nervana Systems Inc.
+# Copyright 2016 Nervana Systems Inc.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 # ----------------------------------------------------------------------------
 """
     $python inference_sent2vec.py --model_file output/model.prm
@@ -8,7 +19,7 @@
                                    --output_dir output/
                                    --vector_name output/book_vectors.pkl
 """
-
+from __future__ import print_function
 import cPickle
 import numpy as np
 import h5py
@@ -16,14 +27,8 @@ import os
 
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
-from neon.initializers import Uniform, GlorotUniform, Array, Orthonormal
-from neon.layers import Sequential, RecurrentLast, RecurrentSum
-from neon.models import Model
-from neon.transforms import Softmax, CrossEntropyMulti, Logistic, Tanh
-from neon.callbacks.callbacks import Callbacks
-from neon.util.persist import save_obj
 
-from data_loader import load_data, clean_string, load_sent_encoder, prep_data
+from data_loader import load_data, load_sent_encoder, prep_data
 from sent_vectors import SentenceVector
 from data_iterator import SentenceEncode
 
@@ -56,7 +61,7 @@ data_file, vocab_file = load_data(args.data_dir,
 vocab, rev_vocab, word_count = cPickle.load(open(vocab_file, 'rb'))
 
 vocab_size = len(vocab)
-print "\nVocab size from the dataset is: {}".format(vocab_size)
+print("\nVocab size from the dataset is: {}".format(vocab_size))
 
 index_from = 2  # 0: padding 1: oov
 oov = 1
@@ -75,13 +80,13 @@ else:
     h5train_text = h5f['report_train']
 
 if os.path.exists(args.vector_name):
-    print "cached encoded vectors exists: {}".format(args.vector_name)
+    print("cached encoded vectors exists: {}".format(args.vector_name))
     f = open(args.vector_name, 'rb')
     (train_vec, sentences) = cPickle.load(f)
     model.be.bsz = 1
     model.initialize(dataset=(max_len, 1))
 else:
-    print "Encoding the entire training set...."
+    print("Encoding the entire training set....")
     # encode all the training sentences
     # set the backend bsz to be 1 for inference
     model.be.bsz = args.batch_size
@@ -90,7 +95,7 @@ else:
                                max_len=max_len, index_from=index_from)
     sentences = h5train_text[:train_set.ndata].reshape(-1, 1)
     train_vec = model.get_outputs(train_set)
-    print "Encoding complete. Saving to {}".format(args.vector_name)
+    print("Encoding complete. Saving to {}".format(args.vector_name))
     f = open(args.vector_name, 'wb')
     cPickle.dump((train_vec, sentences), f)
 
@@ -99,17 +104,22 @@ s2v = SentenceVector(train_vec, sentences)
 xdev = be.zeros((max_len, 1), dtype=np.int32)  # bsz is 1, feature size
 xbuf = np.zeros((max_len, 1), dtype=np.int32)
 
+# Add python 2 & 3 support for raw_input
+try:
+    input = raw_input
+except NameError:
+    pass
+
 while True:
-    line = raw_input('\nEnter a new sentence for inference: \n')
+    line = input('\nEnter a new sentence for inference: \n')
     xbuf = prep_data(line, 'text', max_len, vocab)
     xdev[:] = xbuf
     query_vec = model.fprop(xdev, inference=True).get().T
 
-    print "Query vec: {}".format(query_vec)
+    print("Query vec: {}".format(query_vec))
 
     sim_sent, _ = s2v.find_similar(query_vec, n=8)
 
-    print "\nSimilar sentences:\n"
+    print("\nSimilar sentences:\n")
     for sent in sim_sent:
-        print sent
-        print "\n"
+        print(sent + "\n")

@@ -13,14 +13,16 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
+from __future__ import division
 from builtins import str, zip, range
 import numpy as np
 import itertools as itt
 from operator import add
 
 from neon import NervanaObject
-from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform, LookupTable
+from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform, LookupTable, Affine
 from neon.layers.recurrent import Recurrent, get_steps
+from neon.transforms import Softmax
 from neon.util.persist import load_class
 from functools import reduce
 
@@ -1361,3 +1363,233 @@ class Multicost(NervanaObject):
             self.deltas = [c.deltas for c in self.costs]
 
         return self.deltas
+
+
+class SkipThought(Sequential):
+
+    """
+    A skip-thought container that encapsulates the network architectue:
+                                       ,--> Previous Sentence
+        Source sentence --> Embedding <
+                                       `--> Next Sentence
+    Arguments:
+        vocab_size: vocabulary size
+        embed_dim: word embedding dimension
+        init_embed: word embedding initialization
+        nhidden: number of hidden units
+        rec_layer: recurrent layer type to use for encoder and decoder (GRU or LSTM)
+        init_rec: initializer to use for recurrent connections
+        activ_rec: activation function to use for recurrent connections
+        activ_rec_gate: activation function to use for gated connections in recurrent layer
+        init_ff: initializer to use for final decoder feed forward layers
+        init_const: constant initializer to use for biases
+    """
+
+    def __init__(self, vocab_size, embed_dim, init_embed, nhidden,
+                 rec_layer, init_rec, activ_rec, activ_rec_gate,
+                 init_ff, init_const, layers=None, name=None):
+
+        self.vocab_size = vocab_size
+        self.embed_dim = embed_dim
+        self.init_embed = init_embed
+        self.nhidden = nhidden
+        self.owns_output = True
+        self.owns_delta = True
+
+        self.rec_layer = rec_layer
+        self.init_rec = init_rec
+        self.activ_rec = activ_rec
+        self.activ_rec_gate = activ_rec_gate
+
+        self.init_ff = init_ff
+        self.init_const = init_const
+
+        if layers is None:
+            self.embed_s = LookupTable(vocab_size=vocab_size, embedding_dim=embed_dim,
+                                       init=init_embed, pad_idx=0)
+            self.embed_p = LookupTable(vocab_size=vocab_size, embedding_dim=embed_dim,
+                                       init=init_embed, pad_idx=0)
+            self.embed_n = LookupTable(vocab_size=vocab_size, embedding_dim=embed_dim,
+                                       init=init_embed, pad_idx=0)
+
+            self.encoder = rec_layer(nhidden, init=init_ff, init_inner=init_rec,
+                                     activation=activ_rec, gate_activation=activ_rec_gate,
+                                     reset_cells=True)
+            self.decoder_p = rec_layer(nhidden, init=init_ff, init_inner=init_rec,
+                                       activation=activ_rec, gate_activation=activ_rec_gate,
+                                       reset_cells=True)
+            self.decoder_n = rec_layer(nhidden, init=init_ff, init_inner=init_rec,
+                                       activation=activ_rec, gate_activation=activ_rec_gate,
+                                       reset_cells=True)
+
+            self.affine_p = Affine(
+                vocab_size, init=init_ff, bias=init_const, activation=Softmax())
+            self.affine_n = Affine(
+                vocab_size, init=init_ff, bias=init_const, activation=Softmax())
+
+            self.layers = [self.embed_s, self.embed_p, self.embed_n, self.encoder,
+                           self.decoder_p, self.decoder_n] + self.affine_p + self.affine_n
+
+            # Create a layer dict to re-load the model for evaluation
+            self.layer_dict = dict()
+            self.layer_dict['lookupTable'] = self.embed_s
+            self.layer_dict['encoder'] = self.encoder
+            self.layer_dict['decoder_previous'] = self.decoder_p
+            self.layer_dict['decoder_next'] = self.decoder_n
+            self.layer_dict['affine'] = self.affine_p
+        else:
+            assert len(layers) == 12
+            self.layers = layers
+
+            # Create a layer dict to re-load the model for evaluation
+            self.layer_dict = dict()
+            self.layer_dict['lookupTable'] = self.layers[0]
+            self.layer_dict['encoder'] = self.layers[3]
+            self.layer_dict['decoder_previous'] = self.layers[4]
+            self.layer_dict['decoder_next'] = self.layers[5]
+            self.layer_dict['affine'] = self.layers[6:9]
+
+        super(SkipThought, self).__init__(layers=self.layers, name=name)
+
+    def allocate(self, shared_outputs=None):
+        """
+        Allocate backend memory for dW's. Sync initial affine layer weights.
+        """
+        super(SkipThought, self).allocate(shared_outputs)
+        self.error_ctx = self.be.iobuf((self.nhidden, self.encoder.nsteps))
+
+        self.dW_embed = self.be.empty_like(self.embed_s.dW)
+        self.dW_linear = self.be.empty_like(self.affine_p[0].dW)
+        self.dW_bias = self.be.empty_like(self.affine_p[1].dW)
+
+        # two affine layers are init differently, need to syn the weights
+        self.affine_p[0].W[:] = self.affine_n[0].W
+
+    def configure(self, in_obj):
+        """
+        in_obj should be one single input shape as all three sentences will go through the
+        word embedding layer first.
+        """
+        if not isinstance(in_obj, list):
+            in_obj = in_obj.shape
+        self.in_shape = in_obj
+        self.embed_s.configure(in_obj[0])
+        self.embed_s.set_next(self.encoder)
+        self.encoder.configure(self.embed_s)
+
+        self.embed_p.configure(in_obj[1])
+        self.embed_p.set_next(self.decoder_p)
+        self.decoder_p.configure(self.embed_p)
+        self.decoder_p.set_next(self.affine_p)
+        prev_in = self.decoder_p
+        for l in self.affine_p:
+            l.configure(prev_in)
+            prev_in.set_next(l)
+            prev_in = l
+
+        self.embed_n.configure(in_obj[2])
+        self.embed_n.set_next(self.decoder_n)
+        self.decoder_n.configure(self.embed_n)
+        self.decoder_n.set_next(self.affine_n)
+        prev_in = self.decoder_n
+        for l in self.affine_n:
+            l.configure(prev_in)
+            prev_in.set_next(l)
+            prev_in = l
+
+        self.out_shape = [
+            self.affine_p[-1].out_shape, self.affine_n[-1].out_shape]
+
+        return self
+
+    def fprop(self, inputs, inference=False):
+        """
+        Encode source sentence and use embedding to initialize state of two decoders to predict the
+        next and previous sentences.
+
+        Arguments:
+            inputs (list): Length 3 list of [source_sentence, previous_sentence, next_sentence]
+            inference (bool): Not implemented.
+        """
+        assert len(inputs) == 3
+
+        s_sent = inputs[0]
+        p_sent = inputs[1]
+        n_sent = inputs[2]
+
+        # process the source sentence
+        emb_s = self.embed_s.fprop(s_sent, inference)
+        enc_s = self.encoder.fprop(emb_s, inference)
+        context_state = enc_s[:, -self.be.bsz:]
+
+        # process the previous sentence
+        emb_p = self.embed_p.fprop(p_sent, inference)
+        dec_p = self.decoder_p.fprop(emb_p, inference=inference, init_state=context_state)
+        x = dec_p
+        for l in self.affine_p:
+            x = l.fprop(x, inference)
+        aff_p = x
+
+        # process the next sentence
+        emb_n = self.embed_n.fprop(n_sent, inference)
+        dec_n = self.decoder_n.fprop(emb_n, inference=inference, init_state=context_state)
+        x = dec_n
+        for l in self.affine_n:
+            x = l.fprop(x, inference)
+        aff_n = x
+
+        return [aff_p, aff_n]
+
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Backpropagate the error from both output branches (forward and backward, 2 elements).
+        Sync the dW's of the word-embedding layers, and the feed-forward output layers.
+
+        Arguments:
+            error (list): error from previous sentence reconstruction,
+                          error from next sentence reconstruction
+        """
+        assert len(error) == 2
+
+        error_p = error[0]
+        error_n = error[1]
+
+        for l in reversed(self.affine_p):
+            error_p = l.bprop(error_p)
+        error_p = self.decoder_p.bprop(error_p)
+        error_ctx_p = self.decoder_p.h_delta[0]
+        error_p = self.embed_p.bprop(error_p)
+
+        for l in reversed(self.affine_n):
+            error_n = l.bprop(error_n)
+        error_n = self.decoder_n.bprop(error_n)
+        error_ctx_n = self.decoder_n.h_delta[0]
+        error_n = self.embed_n.bprop(error_n)
+
+        self.error_ctx.fill(0)
+        self.error_ctx[:, -self.be.bsz:] = error_ctx_p + error_ctx_n
+
+        error_s = self.encoder.bprop(self.error_ctx)
+        error_s = self.embed_s.bprop(error_s)
+
+        # sync the three embedding layers' dW
+        self.dW_embed[:] = (
+            self.embed_s.dW + self.embed_p.dW + self.embed_n.dW)/3
+        self.embed_s.dW[:] = self.dW_embed
+        self.embed_p.dW[:] = self.dW_embed
+        self.embed_n.dW[:] = self.dW_embed
+
+        # sync the two affine layers' dW
+        self.dW_linear[:] = (self.affine_p[0].dW + self.affine_n[0].dW)/2
+        self.affine_p[0].dW[:] = self.dW_linear
+        self.affine_n[0].dW[:] = self.dW_linear
+        self.dW_bias[:] = (self.affine_p[1].dW + self.affine_n[1].dW)/2
+        self.affine_p[1].dW[:] = self.dW_bias
+        self.affine_n[1].dW[:] = self.dW_bias
+
+        return error_s
+
+    def get_terminal(self):
+        terminal = [
+            self.affine_p[-1].get_terminal(), self.affine_n[-1].get_terminal()]
+        return terminal
