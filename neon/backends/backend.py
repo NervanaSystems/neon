@@ -500,7 +500,7 @@ class Backend(AbstractBackend):
         """Release any resources that have been acquired by this backend."""
         pass
 
-    def output_dim(self, X, S, padding, strides, pooling=False):
+    def output_dim(self, X, S, padding, strides, pooling=False, dilation=1):
         """
         Compute along 1 dimension, with these sizes, what will be the output dimension.
 
@@ -510,7 +510,10 @@ class Backend(AbstractBackend):
             padding (int): padding on each side
             strides (int): striding
             pooling (bool): flag for setting pooling layer size
+            dilation (int): dilation of filter
         """
+
+        S = dilation * (S - 1) + 1
 
         if self.check_caffe_compat() and pooling:
             size = int(ceil((float(X - S + 2 * padding) / strides))) + 1

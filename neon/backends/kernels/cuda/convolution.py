@@ -60,8 +60,8 @@ def _get_conv_kernel(dtype, filter_size, bsum, operation, filter_bounds_check=Fa
             int filter_x, filter_y;
             _idiv_magic32(rs, magic_s, shift_s, S, filter_y, filter_x);
 
-            int index_x = base_x + filter_x;
-            int index_y = base_y + filter_y;
+            int index_x = base_x + filter_x * dilation_w;
+            int index_y = base_y + filter_y * dilation_h;
 
             //Check if the index is valid
             int in_bounds = (index_x >= 0 && index_x < W && index_y >= 0 && index_y < H);
@@ -91,8 +91,8 @@ def _get_conv_kernel(dtype, filter_size, bsum, operation, filter_bounds_check=Fa
         int rs = tid;
         int base_q, base_p;
 
-        base_q = output_pixel_x - (S - padding_w - 1);
-        base_p = output_pixel_y - (R - padding_h - 1);
+        base_q = output_pixel_x - ((S - 1) * dilation_w - padding_w);
+        base_p = output_pixel_y - ((R - 1) * dilation_h - padding_h);
 
         unsigned int mask = (1 << tid) - 1;
 
@@ -101,8 +101,8 @@ def _get_conv_kernel(dtype, filter_size, bsum, operation, filter_bounds_check=Fa
             int filter_x, filter_y;
             _idiv_magic32(rs, magic_s, shift_s, S, filter_y, filter_x);
 
-            int index_q = base_q + filter_x;
-            int index_p = base_p + filter_y;
+            int index_q = base_q + filter_x * dilation_w;
+            int index_p = base_p + filter_y * dilation_h;
 
             //Check if the index is valid
             int in_bounds = (((index_q % stride_w) | (index_p % stride_h)) == 0);
@@ -228,6 +228,7 @@ __global__ void conv_%(operation)s(
                            int T, int R, int S, int K,
                            int M, int P, int Q,
                            int stride_w, int stride_h, int padding_w, int padding_h,
+                           int dilation_w, int dilation_h,
                            int input_channel_size, int filter_channel_size,
                            int output_filter_size,
                            int output_pixels, int grid_p, int grid_q,

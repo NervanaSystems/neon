@@ -57,7 +57,11 @@ class ConvLayer(object):
                  D=1, H=1, W=1,
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1):
+                 str_d=1, str_h=1, str_w=1,
+                 dil_d=1, dil_h=1, dil_w=1):
+
+        # TODO: remove
+        assert (dil_d == 1 and dil_h == 1 and dil_w == 1)
 
         # Compute the output spatial dimensions
         M = lib.output_dim(D, T, pad_d, str_d)

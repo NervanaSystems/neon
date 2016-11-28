@@ -224,7 +224,8 @@ class FpropWinograd_2x2_3x3(XpropWinograd_2x2_3x3):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w, filter_extern=None):
+                 str_d, str_h, str_w,
+                 dil_d, dil_h, dil_w, filter_extern=None):
 
         super(FpropWinograd_2x2_3x3, self).__init__("fprop", lib, dtype,
             N, C, K, H, W, P, Q, pad_h, pad_w, filter_extern)
@@ -249,7 +250,8 @@ class BpropWinograd_2x2_3x3(XpropWinograd_2x2_3x3):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w, filter_extern=None):
+                 str_d, str_h, str_w,
+                 dil_d, dil_h, dil_w, filter_extern=None):
 
         # Swap C<=>K and HW<=>PQ, invert padding
         super(BpropWinograd_2x2_3x3, self).__init__("bprop", lib, dtype,
@@ -289,7 +291,8 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w):
+                 str_d, str_h, str_w,
+                 dil_d, dil_h, dil_w):
 
         # Support N = 1,2 and multiples of 4 for now
         assert N in (1,2) or N % 4 == 0
@@ -774,7 +777,8 @@ class FpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w, external=None):
+                 str_d, str_h, str_w,
+                 dil_d, dil_h, dil_w, external=None):
 
         super(FpropWinograd_4x4_3x3, self).__init__(
                  "fprop", lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w, external)
@@ -800,7 +804,8 @@ class BpropWinograd_4x4_3x3(XpropWinograd_4x4_3x3):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w, external=None):
+                 str_d, str_h, str_w,
+                 dil_d, dil_h, dil_w, external=None):
 
         super(BpropWinograd_4x4_3x3, self).__init__(
                  "bprop", lib, dtype, N, K, C, P, Q, H, W, 2 - pad_h, 2 - pad_w, external, bprop=True)
@@ -826,7 +831,8 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
                  T, R, S,
                  M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w):
+                 str_d, str_h, str_w,
+                 dil_d, dil_h, dil_w):
 
         super(UpdateWinograd_3x3_4x4, self).__init__(lib, dtype,
              N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
@@ -1220,7 +1226,8 @@ class FpropWinograd_2x2_5x5(XpropWinograd_2x2_5x5):
                  N, C, K, D, H, W,
                  T, R, S, M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w):
+                 str_d, str_h, str_w,
+                 dil_d, dil_h, dil_w):
         super(FpropWinograd_2x2_5x5, self).__init__(
                  "fprop", lib, dtype, N, C, K, H, W, P, Q, pad_h, pad_w)
 
@@ -1235,7 +1242,8 @@ class BpropWinograd_2x2_5x5(XpropWinograd_2x2_5x5):
                  N, C, K, D, H, W,
                  T, R, S, M, P, Q,
                  pad_d, pad_h, pad_w,
-                 str_d, str_h, str_w):
+                 str_d, str_h, str_w,
+                 dil_d, dil_h, dil_w):
         super(BpropWinograd_2x2_5x5, self).__init__(
                  "bprop", lib, dtype, N, K, C, P, Q, H, W, 4-pad_h, 4-pad_w, bprop=True)
 

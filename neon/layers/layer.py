@@ -700,13 +700,14 @@ class Convolution(ParameterLayer):
         name (str, optional): layer name. Defaults to "ConvolutionLayer"
     """
 
-    def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
-                 name=None, parallelism="Data"):
+    def __init__(self, fshape, strides={}, padding={}, dilation={}, init=None,
+                 bsum=False, name=None, parallelism="Data"):
         super(Convolution, self).__init__(init, name, parallelism)
         self.nglayer = None
         self.bsum = bsum
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                            'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
+                           'dil_h': 1, 'dil_w': 1, 'dil_d': 1,
                            'T': 1, 'D': 1}  # 3D paramaters
 
         # keep around args in __dict__ for get_description.
@@ -721,7 +722,9 @@ class Convolution(ParameterLayer):
             strides = {'str_h': strides, 'str_w': strides}
         if isinstance(padding, int):
             padding = {'pad_h': padding, 'pad_w': padding}
-        for d in [fshape, strides, padding]:
+        if isinstance(dilation, int):
+            dilation = {'dil_h': dilation, 'dil_w': dilation}
+        for d in [fshape, strides, padding, dilation]:
             self.convparams.update(d)
 
     def __str__(self):
@@ -732,11 +735,14 @@ class Convolution(ParameterLayer):
 
         pad_tuple = tuple(self.convparams[k] for k in ['pad_' + d for d in padstr_dim])
         str_tuple = tuple(self.convparams[k] for k in ['str_' + d for d in padstr_dim])
+        dil_tuple = tuple(self.convparams[k] for k in ['dil_' + d for d in padstr_dim])
 
-        fmt_tuple = (self.name,) + self.in_shape + self.out_shape + pad_tuple + str_tuple
+        fmt_tuple = (self.name,) + self.in_shape + self.out_shape + pad_tuple + str_tuple + \
+                    dil_tuple
         fmt_string = "Convolution Layer '%s': " + \
                      spatial_str + " inputs, " + spatial_str + " outputs, " + \
-                     padstr_str + " padding, " + padstr_str + " stride"
+                     padstr_str + " padding, " + padstr_str + " stride, " + \
+                     padstr_str + " dilation"
 
         return ((fmt_string % fmt_tuple))
 

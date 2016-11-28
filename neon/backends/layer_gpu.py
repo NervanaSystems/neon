@@ -359,14 +359,15 @@ class ConvLayer(Layer):
                  D=1, H=1, W=1,
                  T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1):
+                 str_d=1, str_h=1, str_w=1,
+                 dil_d=1, dil_h=1, dil_w=1):
 
         super(ConvLayer, self).__init__(lib, dtype, N, np.float32)
 
         # Compute the output spatial dimensions
-        M = lib.output_dim(D, T, pad_d, str_d)
-        P = lib.output_dim(H, R, pad_h, str_h)
-        Q = lib.output_dim(W, S, pad_w, str_w)
+        M = lib.output_dim(D, T, pad_d, str_d, pooling=False, dilation=dil_d)
+        P = lib.output_dim(H, R, pad_h, str_h, pooling=False, dilation=dil_h)
+        Q = lib.output_dim(W, S, pad_w, str_w, pooling=False, dilation=dil_w)
 
         self.C = C
         self.K = K
@@ -380,7 +381,8 @@ class ConvLayer(Layer):
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
 
-        self.all_params = (N, C, K, D, H, W, T, R, S, pad_d, pad_h, pad_w, str_d, str_h, str_w)
+        self.all_params = (N, C, K, D, H, W, T, R, S, pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                           dil_d, dil_h, dil_w)
 
         self.dimI   = (C, D, H, W, N)
         self.dimF   = (C, T, R, S, K)
@@ -400,12 +402,15 @@ class ConvLayer(Layer):
         self.flops = P * Q * M * K * N * C * R * S * T * 2.0
 
         args = (lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                pad_d, pad_h, pad_w, str_d, str_h, str_w)
+                pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d,
+                dil_h, dil_w)
 
         #lib.enable_winograd = 0
 
+        dilated_conv = (dil_d != 1 or dil_h != 1 or dil_w != 1)
+
         ####### Cuda C ###########
-        if lib.use_cudac_kernels:
+        if lib.use_cudac_kernels or dilated_conv:
 
             #3D conv not supported yet
             if T > 1 or D > 1:
