@@ -62,7 +62,7 @@ def ingest_pascal(data_dir, out_dir, year='2007', overwrite=False):
     # convert the annotations to json, including difficult objects (used for inference)
     annot_path_difficult = os.path.join(root_dir, 'Annotations-json-difficult')
     print("Converting XML files to json format (including objects with difficult flag),")
-    print ("writing to: {}".format(annot_path_difficult))
+    print("writing to: {}".format(annot_path_difficult))
     convert_xml_to_json(input_path, annot_path_difficult, difficult=True)
 
     img_dir = os.path.join(root_dir, 'JPEGImages')

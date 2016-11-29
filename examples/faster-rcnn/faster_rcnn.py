@@ -190,7 +190,7 @@ def get_bboxes(outputs, proposals, num_proposals, num_classes,
 
     detections = []
     # Skip the background class, start processing from class 1
-    for j in xrange(1, num_classes):
+    for j in range(1, num_classes):
         inds = np.where(scores[:, j] > thresh)[0]
 
         # obtain class-specific boxes and scores

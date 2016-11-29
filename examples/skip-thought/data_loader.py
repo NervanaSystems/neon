@@ -18,28 +18,33 @@ import os
 import h5py
 import json
 import numpy as np
-import cPickle
 from collections import defaultdict, OrderedDict
 import sys
 
 from neon import logger as neon_logger
+from neon.util.persist import load_obj, save_obj
 
 from util import tokenize, clean_string
 
 
 def load_json(fname):
+    """
+    load json object from file
+    """
     with open(fname) as f:
         data = json.load(f)
     return data
 
 
-def load_json_sent(flist_json):
+def load_json_sent(flist_json, subset_pct):
     """
     load all the sentences from a list of JSON files (with out data format)
     and return a list
     """
+    subset_fnum = int(np.ceil((subset_pct / 100.0) * len(flist_json)))
+
     all_sent = []
-    for f in flist_json:
+    for f in flist_json[:subset_fnum]:
         data = load_json(f)
         num_sent = len(data['text'])
         if num_sent <= 0:
@@ -50,20 +55,35 @@ def load_json_sent(flist_json):
     return all_sent
 
 
-def load_txt_sent(flist_txt):
+def load_txt_sent(flist_txt, subset_pct):
     """
     load all the senteces from a list of txt files using standard file io
     """
+    # Subset dataset based on percentage of bytes
+    total_size = sum(map(os.path.getsize, flist_txt))
+    subset_size = int((subset_pct / 100.0) * total_size)
+
     all_sent = []
     for txt_file in flist_txt:
-        with open(txt_file, 'r') as f:
-            data = f.read()
-        sent = data.split('\n')
-        all_sent += sent
+        if subset_size > 0:
+            with open(txt_file, 'r') as f:
+                data = f.read(subset_size)
+
+            subset_size -= sys.getsizeof(data)
+
+            sent = data.split('\n')
+            # Discard the last sentence since it is most likely partial
+            if subset_size <= 0:
+                sent = sent[:-1]
+            all_sent += sent
+
     return all_sent
 
 
 def get_file_list(data_dir, file_ext):
+    """
+    Return list of files with the given extension in the data_dir
+    """
     file_ext = file_ext if isinstance(file_ext, list) else [file_ext]
     file_names = [os.path.join(data_dir, fn) for fn in os.listdir(data_dir)
                   if any(fn.endswith(ext) for ext in file_ext)]
@@ -71,8 +91,12 @@ def get_file_list(data_dir, file_ext):
     return file_names
 
 
-def get_file_str(path, num_files, labelled=False, output_path=None,
-                 valid_split=None, split_count_thre=None):
+def get_file_str(path, num_files, labelled=False, valid_split=None,
+                 split_count_thre=None, subset_pct=100):
+    """
+    Create unique file name for processed data from the number of files, directory name,
+    validation split type, and subset percentage
+    """
     # grab the directory name as part of the names
     dir_name = path.split('/')[-1] if len(path.split('/')[-1]) > 0 else path.split('/')[-2]
     label_str = 'labelled' if labelled else ''
@@ -82,12 +106,16 @@ def get_file_str(path, num_files, labelled=False, output_path=None,
         split_str = '_split_{}'.format(valid_split*100)
     else:
         split_str = ''
-    file_str = dir_str + split_str
+    if subset_pct != 100:
+        subset_str = '_subset_{}'.format(subset_pct)
+    else:
+        subset_str = ''
+    file_str = dir_str + split_str + subset_str
     return file_str
 
 
 def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
-              max_vocab_size=None, max_len_w=None, output_path=None):
+              max_vocab_size=None, max_len_w=None, output_path=None, subset_pct=100):
     """
     Given a path where data are saved, look for the ones with the right extensions
     If a split factor is given, it will split all the files into training and valid
@@ -99,6 +127,10 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
         valid_split: to split the data into train/valid set. If None, no split
         vocab_file_name: optional file name. If None, the script will decide a name
                          given path and split
+        max_vocab_size: maximum number of words to use in vocabulary (by most frequent)
+        max_len_w: maximum length of sentences in words
+        output_path: path used to save preprocessed data and resuts
+        subset_pct: subset of dataset to load into H5 file (percentage)
 
     Returns:
         The function saves 2 files:
@@ -108,7 +140,11 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
     file_names = get_file_list(path, file_ext)
 
     file_str = get_file_str(path, len(file_names), labelled=False,
-                            output_path=output_path, valid_split=valid_split)
+                            valid_split=valid_split, subset_pct=subset_pct)
+
+    # create output dir if needed
+    if not os.path.isdir(output_path):
+        os.makedirs(output_path)
 
     # file name to store the vocabulary
     if vocab_file_name is None:
@@ -117,9 +153,9 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
 
     # If max sizes arent set, assume no limit
     if not max_len_w:
-        max_len_w = sys.maxint
+        max_len_w = sys.maxsize
     if not max_vocab_size:
-        max_vocab_size = sys.maxint
+        max_vocab_size = sys.maxsize
 
     # file name to store the pre-processed train/valid dataset
     h5_file_name = os.path.join(output_path, file_str + '.h5')
@@ -137,12 +173,12 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
             train_files = file_names[:train_split]
             valid_files = file_names[train_split:]
 
-            train_sent = load_json_sent(train_files)
-            valid_sent = load_json_sent(valid_files)
+            train_sent = load_json_sent(train_files, subset_pct)
+            valid_sent = load_json_sent(valid_files, subset_pct)
             all_sent = train_sent + valid_sent
         elif 'txt' in file_ext:
             # Split based on number of lines (since only 2 files)
-            all_sent = load_txt_sent(file_names)
+            all_sent = load_txt_sent(file_names, subset_pct)
             train_split = int(np.ceil(len(all_sent) * (1 - valid_split)))
 
             train_sent = all_sent[:train_split]
@@ -153,9 +189,9 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
     else:
         train_files = file_names
         if 'json' in file_ext:
-            train_sent = load_json_sent(train_files)
+            train_sent = load_json_sent(train_files, subset_pct)
         elif 'txt' in file_ext:
-            train_sent = load_txt_sent(train_files)
+            train_sent = load_txt_sent(train_files, subset_pct)
         else:
             neon_logger.display("Unsure how to load file_ext {}, please use 'json' or 'txt'."
                                 .format(file_ext))
@@ -163,13 +199,13 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
 
     if os.path.exists(vocab_file_name):
         neon_logger.display("open existing vocab file: {}".format(vocab_file_name))
-        vocab, rev_vocab, word_count = cPickle.load(open(vocab_file_name, 'rb'))
+        vocab, rev_vocab, word_count = load_obj(vocab_file_name)
     else:
         neon_logger.display("Building  vocab file")
 
         # build vocab
         word_count = defaultdict(int)
-        for s_idx, sent in enumerate(all_sent):
+        for sent in all_sent:
             sent_words = tokenize(sent)
 
             if len(sent_words) > max_len_w or len(sent_words) == 0:
@@ -186,16 +222,16 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
 
         # get word count as array in same ordering as vocab (but with maximum length)
         word_count_ = np.zeros((len(word_count), ), dtype=np.int64)
-        for i, t in enumerate(zip(*vocab_sorted)[0][:max_vocab_size]):
+        for i, t in enumerate(list(zip(*vocab_sorted))[0][:max_vocab_size]):
             word_count_[i] = word_count[t]
             vocab[t] = i
         word_count = word_count_
 
         # generate the reverse vocab
-        rev_vocab = dict((wrd_id, wrd) for wrd, wrd_id in vocab.iteritems())
+        rev_vocab = dict((wrd_id, wrd) for wrd, wrd_id in vocab.items())
 
         neon_logger.display("vocabulary from {} is saved into {}".format(path, vocab_file_name))
-        cPickle.dump((vocab, rev_vocab, word_count), open(vocab_file_name, 'wb'))
+        save_obj((vocab, rev_vocab, word_count), vocab_file_name)
 
     vocab_size = len(vocab)
     neon_logger.display("\nVocab size from the dataset is: {}".format(vocab_size))
@@ -206,8 +242,7 @@ def load_data(path, file_ext=['txt'], valid_split=None, vocab_file_name=None,
     h5f = h5py.File(h5_file_name, 'w', libver='latest')
     shape, maxshape = (len(train_sent),), (None)
     dt = np.dtype([('text', h5py.special_dtype(vlen=str)),
-                   ('num_words', np.uint16),
-                   ])
+                   ('num_words', np.uint16)])
     report_text_train = h5f.create_dataset('report_train', shape=shape,
                                            maxshape=maxshape, dtype=dt,
                                            compression='gzip')

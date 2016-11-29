@@ -101,7 +101,7 @@ nms_thresh = 0.3  # threshold used for non-maximum supression
 #    (x1, y1, x2, y2, score)
 all_boxes = [[[] for _ in range(num_classes)]
              for _ in range(num_images)]
-all_gt_boxes = [[] for _ in xrange(num_images)]
+all_gt_boxes = [[] for _ in range(num_images)]
 
 last_strlen = 0
 with tqdm(total=num_images) as pbar:  # progress bar

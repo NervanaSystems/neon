@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from __future__ import print_function
 import os
 import glob
 import json
@@ -148,7 +149,7 @@ def ingest_kitti(input_dir, out_dir, train_percent=90, overwrite=False):
     images = [os.path.splitext(os.path.basename(im))[0] for
               im in glob.glob(os.path.join(img_path, '*.png'))]
 
-    print "Found {} images".format(len(images))
+    print("Found {} images".format(len(images)))
     assert len(images) > 0, "Did not found any images. Check your input_dir."
 
     # for each image, convert the annotation to json

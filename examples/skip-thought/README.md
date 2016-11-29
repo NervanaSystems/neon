@@ -6,6 +6,8 @@ This is an implementation of [Skip-Thought Vectors](http://arxiv.org/abs/1506.06
 
 <i>For data loading:</i><br>
 * [h5py](http://www.h5py.org/)
+<i>For evaluation on SICK dataset:</i><br>
+* [scipy](https://www.scipy.org/)
 
 ### Data
 
@@ -44,6 +46,8 @@ python eval_sick.py --model_file s2v_model.prm --data_dir books_txt/ --eval_data
 ```
 
 `--data_dir` points to the training data directory used for the saved model, so the script can locate the training data used and vocabulary file.
+
+Optionally, can use `--w2v_path` to specify location of the Google W2V file to expand the vocabulary from training to a larger set.
 
 The data can also be found/downloded manually here: [SemEval-2014 Task1](http://alt.qcri.org/semeval2014/task1/index.php?id=data-and-tools). Download *TRAINING DATA*, *TEST DATA(including gold scores)*, and *TRIAL DATA* and collect the data into a directory.
 

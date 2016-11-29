@@ -14,7 +14,6 @@
 # ----------------------------------------------------------------------------
 import os
 import numpy as np
-import cPickle
 from collections import defaultdict, OrderedDict
 import re
 
@@ -25,6 +24,7 @@ from neon.optimizers import GradientDescentMomentum
 from neon.transforms import SumSquared
 from neon.callbacks.callbacks import Callbacks
 from neon.models import Model
+from neon.util.persist import load_obj, save_obj
 from neon import logger as neon_logger
 
 
@@ -146,6 +146,7 @@ def prep_data(raw_input, input_type, max_len, vocab, dtype='int32',
 
 
 def clean_string(string):
+    string = str(string)
     string = re.sub(r"[^A-Za-z(),!?\'\`]", " ", string)
     string = re.sub(r"\'s", " \'s", string)
     string = re.sub(r"\'ve", " \'ve", string)
@@ -183,7 +184,7 @@ def get_google_word2vec_W(fname, vocab, index_from=2):
     """
     f = open(fname, 'rb')
     header = f.readline()
-    vocab_w2v, embedding_dim = map(int, header.split())
+    orig_w2v_size, embedding_dim = map(int, header.split())
     binary_len = np.dtype('float32').itemsize * embedding_dim
     vocab_size = len(vocab) + index_from
     W = np.zeros((vocab_size, embedding_dim))
@@ -191,14 +192,14 @@ def get_google_word2vec_W(fname, vocab, index_from=2):
     found_words_idx = defaultdict(int)
     found_words = defaultdict(int)
 
-    for i, line in enumerate(range(vocab_w2v)):
+    for i in range(vocab_size):
         word = []
         while True:
             ch = f.read(1)
-            if ch == ' ':
-                word = ''.join(word)
+            if ch == b' ':
+                word = (b''.join(word)).decode('utf-8')
                 break
-            if ch != '\n':
+            if ch != b'\n':
                 word.append(ch)
         if word in vocab:
             wrd_id = vocab[word] + index_from
@@ -228,15 +229,15 @@ def get_google_word2vec_W(fname, vocab, index_from=2):
     return W, embedding_dim, found_words
 
 
-def compute_vocab_expansion(orig_word_vectors, w2v_W, w2v_vocab):
+def compute_vocab_expansion(orig_word_vectors, w2v_W, w2v_vocab, word_idict):
     neon_logger.display("Learning linear mapping from w2v -> rnn embedding...")
     clf = train_regressor(orig_word_vectors, w2v_W, w2v_vocab)
-    neon_logger.display("Contructing map...")
-    init_embed = apply_regressor(clf, w2v_W, w2v_vocab)
+    neon_logger.display("Constructing map...")
+    init_embed = apply_regressor(clf, w2v_W, w2v_vocab, orig_word_vectors, word_idict)
     return init_embed
 
 
-def get_w2v_vocab(fname, cache=True):
+def get_w2v_vocab(fname, max_vocab_size, cache=True):
     """
     Get ordered dict of vocab from google word2vec
     """
@@ -244,8 +245,8 @@ def get_w2v_vocab(fname, cache=True):
         cache_fname = fname.split('.')[0] + ".vocab"
 
         if os.path.isfile(cache_fname):
-            with open(cache_fname, 'r') as f:
-                vocab, vocab_size = cPickle.load(f)
+            vocab, vocab_size = load_obj(cache_fname)
+            neon_logger.display("Word2Vec vocab cached, size is: {}".format(vocab_size))
             return vocab, vocab_size
 
     with open(fname, 'rb') as f:
@@ -254,24 +255,25 @@ def get_w2v_vocab(fname, cache=True):
         binary_len = np.dtype('float32').itemsize * embed_dim
 
         neon_logger.display("Word2Vec vocab size is: {}".format(vocab_size))
+        vocab_size = min(max_vocab_size, vocab_size)
+        neon_logger.display("Reducing vocab size to: {}".format(vocab_size))
 
         vocab = OrderedDict()
 
-        for i in range(vocab_size):
+        for i, line in enumerate(range(vocab_size)):
             word = []
             while True:
                 ch = f.read(1)
-                if ch == ' ':
-                    word = ''.join(word)
+                if ch == b' ':
+                    word = (b''.join(word)).decode('utf-8')
                     break
-                if ch != '\n':
+                if ch != b'\n':
                     word.append(ch)
             f.read(binary_len)
             vocab[word] = i
 
     if cache:
-        with open(cache_fname, 'w') as f:
-            cPickle.dump((vocab, vocab_size), f)
+        save_obj((vocab, vocab_size), cache_fname)
 
     return vocab, vocab_size
 
@@ -304,7 +306,8 @@ def train_regressor(orig_wordvecs, w2v_W, w2v_vocab):
         d[w] = 1
     shared = OrderedDict()
     count = 0
-    for w in orig_wordvecs.keys()[:-2]:
+
+    for w in list(orig_wordvecs.keys())[:-2]:
         if d[w] > 0:
             shared[w] = count
             count += 1
@@ -322,31 +325,42 @@ def train_regressor(orig_wordvecs, w2v_W, w2v_vocab):
               Bias(init=Constant(0.0))]
     clf = Model(layers=layers)
 
+    # regression model is trained using default global batch size
     cost = GeneralizedCost(costfunc=SumSquared())
     opt = GradientDescentMomentum(0.1, 0.9, gradient_clip_value=5.0)
     callbacks = Callbacks(clf)
 
-    clf.fit(train_set, num_epochs=2, optimizer=opt, cost=cost, callbacks=callbacks)
+    clf.fit(train_set, num_epochs=20, optimizer=opt, cost=cost, callbacks=callbacks)
     return clf
 
 
-def apply_regressor(clf, w2v_W, w2v_vocab):
+def apply_regressor(clf, w2v_W, w2v_vocab, orig_word_vectors, word_idict):
     """
     Map words from word2vec into RNN word space
 
     Function modifed from:
     https://github.com/ryankiros/skip-thoughts/blob/master/training/tools.py
     """
-    init_embed = np.zeros((len(w2v_vocab), 620), dtype='float32')
+    init_embed = clf.be.zeros((len(w2v_vocab), 620), dtype=np.float32)
 
     word_vec = clf.be.empty((300, 1))
 
-    for i, w in enumerate(w2v_vocab.keys()):
-        if '_' not in w:
-            word_vec.set(w2v_W[w2v_vocab[w]].reshape(300, 1))
-            init_embed[w2v_vocab[w], :] = clf.fprop(word_vec).get().reshape((620,))
+    # to apply the regression model for expansion, can only do one word at a time
+    # so to set the actual batch_size to be 1
+    actual_bsz = 1
+    clf.set_batch_size(N=actual_bsz)
 
-    return init_embed
+    for i, w in enumerate(w2v_vocab.keys()):
+        word_vec.set(w2v_W[w2v_vocab[w]].reshape(300, 1))
+        init_embed[w2v_vocab[w]][:] = clf.fprop(word_vec)[:, :actual_bsz]
+
+    word_vec_l = clf.be.empty((620, 1))
+    for w in word_idict.values():
+        if w in w2v_vocab:
+            word_vec_l.set(orig_word_vectors[w])
+            init_embed[w2v_vocab[w]][:] = word_vec_l
+
+    return init_embed.get()
 
 
 def load_sent_encoder(model_dict, expand_vocab=False, orig_vocab=None,
@@ -382,10 +396,10 @@ def load_sent_encoder(model_dict, expand_vocab=False, orig_vocab=None,
         neon_logger.display("Computing vocab expansion regression...")
         # Build inverse word dictionary (word -> index)
         word_idict = dict()
-        for kk, vv in orig_vocab.iteritems():
-            # Add 2 to the index to allow for EOS and oov tokens as 0 and 1
+        for kk, vv in orig_vocab.items():
+            # Add 2 to the index to allow for padding and oov tokens as 0 and 1
             word_idict[vv + 2] = kk
-        word_idict[0] = '<eos>'
+        word_idict[0] = ''
         word_idict[1] = 'UNK'
 
         # Create dictionary of word -> vec
@@ -396,7 +410,7 @@ def load_sent_encoder(model_dict, expand_vocab=False, orig_vocab=None,
 
         # Compute the expanded vocab lookup table from a linear mapping of
         # words2vec into RNN word space
-        init_embed = compute_vocab_expansion(orig_word_vecs, w2v_W, w2v_vocab)
+        init_embed = compute_vocab_expansion(orig_word_vecs, w2v_W, w2v_vocab, word_idict)
 
         init_embed_dev = model_train.be.array(init_embed)
         w2v_vocab_size = len(w2v_vocab)

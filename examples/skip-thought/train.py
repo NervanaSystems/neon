@@ -20,17 +20,13 @@ Reference:
     "Skip-thought vectors"
     http://arxiv.org/abs/1506.06726
 
-Usage:
-    python train.py -e 2 -eval 1 -r 0 --data_dir book_corpus/ \
-                            --model_file output/sent2vecNet.prm \
-                            -s s2v.prm --output_dir ./output/
 """
 from __future__ import division
 from __future__ import print_function
-import cPickle
 import os
 
 from neon.backends import gen_backend
+from neon.util.persist import load_obj
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.initializers import Uniform, Orthonormal, Constant
 from neon.layers import GeneralizedCostMask, Multicost, GRU, SkipThought
@@ -41,16 +37,16 @@ from neon.optimizers import Adam
 from neon import logger as neon_logger
 
 from data_loader import load_data
-from data_iterator import Sentence_Homogenous
+from data_iterator import SentenceHomogenous
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
-parser.add_argument('--output_dir', default='/output',
+parser.add_argument('--output_dir', default='output/',
                     help='choose the directory to save the files')
 parser.add_argument('--max_vocab_size', default=20000,
                     help='number of (most frequent) words to use from vocabulary')
 parser.add_argument('--max_len_w', default=30,
-                    help='number of (most frequent) words to use from vocabulary')
+                    help='maximum sentence length for training')
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args(gen_be=False)
@@ -68,8 +64,9 @@ data_file, vocab_file = load_data(args.data_dir, valid_split=valid_split,
                                   max_vocab_size=args.max_vocab_size,
                                   max_len_w=args.max_len_w,
                                   output_path=args.output_dir,
-                                  file_ext=['txt'])
-vocab, rev_vocab, word_count = cPickle.load(open(vocab_file, 'rb'))
+                                  file_ext=['txt'],
+                                  subset_pct=args.subset_pct)
+vocab, rev_vocab, word_count = load_obj(vocab_file)
 
 vocab_size = len(vocab)
 neon_logger.display("\nData loading complete.")
@@ -84,14 +81,15 @@ init_embed_dev = Uniform(low=-0.1, high=0.1)
 nhidden = 2400
 gradient_clip_norm = 5.0
 
-train_set = Sentence_Homogenous(data_file=data_file, sent_name='train', text_name='report_train',
-                                nwords=vocab_size_layer, max_len=args.max_len_w,
-                                index_from=index_from)
+train_set = SentenceHomogenous(data_file=data_file, sent_name='train', text_name='report_train',
+                               nwords=vocab_size_layer, max_len=args.max_len_w,
+                               index_from=index_from)
 
-if valid_split > 0.0:
-    valid_set = Sentence_Homogenous(data_file=data_file, sent_name='valid',
-                                    text_name='report_valid', nwords=vocab_size_layer,
-                                    max_len=args.max_len_w, index_from=index_from)
+
+if valid_split and valid_split > 0.0:
+    valid_set = SentenceHomogenous(data_file=data_file, sent_name='valid',
+                                   text_name='report_valid', nwords=vocab_size_layer,
+                                   max_len=args.max_len_w, index_from=index_from)
 
 skip = SkipThought(vocab_size_layer, embed_dim, init_embed_dev, nhidden, rec_layer=GRU,
                    init_rec=Orthonormal(), activ_rec=Tanh(), activ_rec_gate=Logistic(),
@@ -100,8 +98,7 @@ model = Model(skip)
 
 if args.model_file and os.path.isfile(args.model_file):
     neon_logger.display("Loading saved weights from: {}".format(args.model_file))
-    load_path = open(args.model_file)
-    model_dict = cPickle.load(load_path)
+    model_dict = load_obj(args.model_file)
     model.deserialize(model_dict, load_states=True)
 elif args.model_file:
     neon_logger.display("Unable to find model file {}, restarting training.".
@@ -116,7 +113,7 @@ optimizer = Adam(gradient_clip_norm=gradient_clip_norm)
 # metric
 valmetric = None
 # configure callbacks
-if valid_split > 0.0:
+if valid_split and valid_split > 0.0:
     callbacks = MetricCallback(eval_set=valid_set, metric=valmetric, epoch_freq=args.eval_freq)
 else:
     callbacks = Callbacks(model, metric=valmetric, **args.callback_args)

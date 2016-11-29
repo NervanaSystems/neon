@@ -21,6 +21,7 @@
 The mAP evaluation script and various util functions are adapted from:
 https://github.com/rbgirshick/py-faster-rcnn/commit/45e0da9a246fab5fd86e8c96dc351be7f145499f
 """
+from __future__ import print_function
 import numpy as np
 
 
@@ -152,7 +153,7 @@ def voc_eval(all_boxes, all_gt_boxes, classes, ovthresh=0.5, use_07_metric=False
         prec = tp / (tp + fp + 1e-10)
         ap = voc_ap(rec, prec, True)
         MAP[cls_idx] = ap
-        print "AP for {} = {:.4f}".format(cls, ap)
+        print("AP for {} = {:.4f}".format(cls, ap))
 
-    print "Mean AP = {:.4f}".format(MAP[1:].mean())
+    print("Mean AP = {:.4f}".format(MAP[1:].mean()))
     return MAP[1:]  # return MAP (except background class)

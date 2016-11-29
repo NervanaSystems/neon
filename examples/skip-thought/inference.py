@@ -13,25 +13,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-"""
-    $python inference_sent2vec.py --model_file output/model.prm
-                                   --data_dir book_corpus/
-                                   --output_dir output/
-                                   --vector_name output/book_vectors.pkl
-"""
+
 from __future__ import print_function
-import cPickle
 import numpy as np
 import h5py
 import os
 
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
+from neon.util.persist import load_obj, save_obj
 from neon import logger as neon_logger
 
 from data_loader import load_data
-from util import SentenceVector, prep_data, load_sent_encoder
 from data_iterator import SentenceEncode
+from util import SentenceVector, prep_data, load_sent_encoder
+
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -48,18 +44,11 @@ valid_split = None
 # setup backend
 be = gen_backend(**extract_valid_args(args, gen_backend))
 
-# to run it on the cloud, can use ncloud train resume-training <id>, then it
-# will look for the file defaulted named to be model.prm
-if args.model_file is None:
-    args.model_file = 'model.prm'
-
-args.callback_args['model_file'] = None
-
 # load the documents by giving the path and what extension the files are
 data_file, vocab_file = load_data(args.data_dir,
                                   valid_split=valid_split,
                                   output_path=args.output_dir)
-vocab, rev_vocab, word_count = cPickle.load(open(vocab_file, 'rb'))
+vocab, rev_vocab, word_count = load_obj(vocab_file)
 
 vocab_size = len(vocab)
 neon_logger.display("\nVocab size from the dataset is: {}".format(vocab_size))
@@ -70,7 +59,7 @@ vocab_size_layer = vocab_size + index_from
 max_len = 30
 
 # load trained model
-model_dict = cPickle.load(open(args.model_file))
+model_dict = load_obj(args.model_file)
 model = load_sent_encoder(model_dict)
 
 h5f = h5py.File(data_file, 'r')
@@ -84,8 +73,7 @@ else:
 
 if os.path.exists(args.vector_name):
     neon_logger.display("cached encoded vectors exists: {}".format(args.vector_name))
-    f = open(args.vector_name, 'rb')
-    (train_vec, sentences) = cPickle.load(f)
+    (train_vec, sentences) = load_obj(args.vector_name)
     model.initialize(dataset=(max_len, 1))
 else:
     neon_logger.display("Encoding the entire training set....")
@@ -96,8 +84,7 @@ else:
     sentences = h5train_text[:train_set.ndata].reshape(-1, 1)
     train_vec = model.get_outputs(train_set)
     neon_logger.display("Encoding complete. Saving to {}".format(args.vector_name))
-    f = open(args.vector_name, 'wb')
-    cPickle.dump((train_vec, sentences), f)
+    save_obj((train_vec, sentences), args.vector_name)
 
 s2v = SentenceVector(train_vec, sentences)
 

@@ -125,7 +125,17 @@ def get_paddedXY(X, y, vocab_size=20000, sentence_length=100, oov=2,
     return X, y
 
 
-def get_google_word2vec_W(fname, vocab, vocab_size=50000, index_from=3):
+def get_google_word2vec_W(fname, vocab, vocab_size=1000000, index_from=3):
+    """
+    Extract the embedding matrix from the given word2vec binary file and use this
+    to initalize a new embedding matrix for words found in vocab.
+
+    Conventions are to save indices for pad, oov, etc.:
+    index 0: pad
+    index 1: oov (or <unk>)
+    index 2: <eos>. But often cases, the <eos> has already been in the
+    preprocessed data, so no need to save an index for <eos>
+    """
     f = open(fname, 'rb')
     header = f.readline()
     vocab1_size, embedding_dim = list(map(int, header.split()))
@@ -158,4 +168,7 @@ def get_google_word2vec_W(fname, vocab, vocab_size=50000, index_from=3):
             W[wrd_id] = np.random.uniform(-0.25, 0.25, embedding_dim)
             cnt += 1
     assert cnt + len(found_words) == vocab_size
+
+    f.close()
+
     return W, embedding_dim, vocab_size

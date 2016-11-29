@@ -585,21 +585,21 @@ class SICK(Dataset):
 
         with open(self.path + self.gen_filename('train'), 'rb') as f:
             for line in f:
-                text = line.strip().split('\t')
+                text = line.strip().split(b'\t')
                 trainA.append(text[1])
                 trainB.append(text[2])
                 trainS.append(text[3])
 
         with open(self.path + self.gen_filename('trial'), 'rb') as f:
             for line in f:
-                text = line.strip().split('\t')
+                text = line.strip().split(b'\t')
                 devA.append(text[1])
                 devB.append(text[2])
                 devS.append(text[3])
 
         with open(self.path + self.gen_filename('test_annotated'), 'rb') as f:
             for line in f:
-                text = line.strip().split('\t')
+                text = line.strip().split(b'\t')
                 testA.append(text[1])
                 testB.append(text[2])
                 testS.append(text[3])

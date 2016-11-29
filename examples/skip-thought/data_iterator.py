@@ -13,6 +13,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
+from __future__ import division
+
 import numpy as np
 import h5py
 import copy
@@ -50,7 +52,7 @@ class SentenceEncode(NervanaDataIterator):
         source_text = sentence_text[:nsamples]
         extra_sent = len(source) % self.be.bsz
 
-        self.nbatches = len(source) / self.be.bsz
+        self.nbatches = len(source) // self.be.bsz
         self.ndata = self.nbatches * self.be.bsz  # no leftovers
 
         if extra_sent:
@@ -104,7 +106,7 @@ class SentenceEncode(NervanaDataIterator):
 # Licensed under Apache License 2.0 [see LICENSE for details]
 # Written by Ryan Kiros
 # --------------------------------------------------------
-class Sentence_Homogenous(NervanaDataIterator):
+class SentenceHomogenous(NervanaDataIterator):
     """
     This class defines an iterator for loading and iterating the sentences in
     a structure to train the skip-thought vectors
@@ -124,7 +126,7 @@ class Sentence_Homogenous(NervanaDataIterator):
             index_from (int): index offset for padding (0) and OOV (1)
             eos (int): index of EOS token
         """
-        super(Sentence_Homogenous, self).__init__(name=None)
+        super(SentenceHomogenous, self).__init__(name=None)
         self.nwords = nwords
         self.batch_index = 0
         self.nbatches = 0
@@ -322,3 +324,5 @@ class Sentence_Homogenous(NervanaDataIterator):
             return [None for b in range(self.be.bsz)]
         xs = x.reshape(-1, nsteps, self.be.bsz)
         return [xs[:, :, b] for b in range(self.be.bsz)]
+
+    __next__ = next  # Python 3.X compatability

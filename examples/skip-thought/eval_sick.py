@@ -26,13 +26,13 @@ from __future__ import division
 from __future__ import print_function
 
 import numpy as np
-import cPickle
 import copy
 
 from scipy.stats import pearsonr
 from scipy.stats import spearmanr
 
 from neon.util.argparser import NeonArgparser
+from neon.util.persist import load_obj
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine
 from neon.data import ArrayIterator
@@ -57,20 +57,17 @@ def main():
                         help='Path to GoogleNews w2v file for voab expansion.')
     parser.add_argument('--eval_data_path', required=True, default='./SICK_data',
                         help='')
+    parser.add_argument('--max_vocab_size', required=False, default=1000000,
+                        help='Limit the vocabulary expansion to fit in GPU memory')
+    parser.add_argument('--subset_pct', required=False, default=100,
+                        help='subset of training dataset to use (use to retreive \
+                        preprocessed data from training)')
     args = parser.parse_args(gen_be=True)
 
-    # No validation was used for training
-    valid_split = None
-
-    if args.model_file is None:
-        args.model_file = 'model.prm'
-
-    args.callback_args['model_file'] = None
-
     # load vocab file from training
-    _, vocab_file = load_data(args.data_dir, valid_split=valid_split,
-                              output_path=args.output_path)
-    vocab, _, _ = cPickle.load(open(vocab_file, 'rb'))
+    _, vocab_file = load_data(args.data_dir, output_path=args.output_path,
+                              subset_pct=float(args.subset_pct))
+    vocab, _, _ = load_obj(vocab_file)
 
     vocab_size = len(vocab)
     neon_logger.display("\nVocab size from the dataset is: {}".format(vocab_size))
@@ -80,12 +77,14 @@ def main():
     max_len = 30
 
     # load trained model
-    model_dict = cPickle.load(open(args.model_file))
+    model_dict = load_obj(args.model_file)
 
     # Vocabulary expansion trick needs to pass the correct vocab set to evaluate (for tokenization)
     if args.w2v_path:
         neon_logger.display("Performing Vocabulary Expansion... Loading W2V...")
-        w2v_vocab, w2v_vocab_size = get_w2v_vocab(args.w2v_path, cache=True)
+        w2v_vocab, w2v_vocab_size = get_w2v_vocab(args.w2v_path,
+                                                  int(args.max_vocab_size), cache=True)
+
         vocab_size_layer = w2v_vocab_size + index_from
         model = load_sent_encoder(model_dict, expand_vocab=True, orig_vocab=vocab,
                                   w2v_vocab=w2v_vocab, w2v_path=args.w2v_path, use_recur_last=True)
