@@ -29,6 +29,9 @@ import numpy as np
 import cPickle
 import copy
 
+from scipy.stats import pearsonr
+from scipy.stats import spearmanr
+
 from neon.util.argparser import NeonArgparser
 from neon.initializers import Gaussian
 from neon.layers import GeneralizedCost, Affine
@@ -38,12 +41,11 @@ from neon.optimizers import Adam
 from neon.transforms import Softmax, CrossEntropyMulti
 from neon.callbacks.callbacks import Callbacks
 from neon.data import SICK
+from neon import logger as neon_logger
 
 from data_iterator import SentenceEncode
-from data_loader import load_sent_encoder, load_data, tokenize, get_w2v_vocab
-
-from scipy.stats import pearsonr
-from scipy.stats import spearmanr
+from data_loader import load_data
+from util import load_sent_encoder, tokenize, get_w2v_vocab
 
 
 def main():
@@ -55,10 +57,7 @@ def main():
                         help='Path to GoogleNews w2v file for voab expansion.')
     parser.add_argument('--eval_data_path', required=True, default='./SICK_data',
                         help='')
-    args = parser.parse_args(gen_be=False)
-
-    if args.batch_size is None:
-        args.batch_size = 128
+    args = parser.parse_args(gen_be=True)
 
     # No validation was used for training
     valid_split = None
@@ -74,25 +73,27 @@ def main():
     vocab, _, _ = cPickle.load(open(vocab_file, 'rb'))
 
     vocab_size = len(vocab)
-    print("\nVocab size from the dataset is: {}".format(vocab_size))
+    neon_logger.display("\nVocab size from the dataset is: {}".format(vocab_size))
 
     index_from = 2  # 0: padding 1: oov
     vocab_size_layer = vocab_size + index_from
     max_len = 30
 
+    # load trained model
+    model_dict = cPickle.load(open(args.model_file))
+
     # Vocabulary expansion trick needs to pass the correct vocab set to evaluate (for tokenization)
     if args.w2v_path:
-        print("Performing Vocabulary Expansion... Loading W2V...")
+        neon_logger.display("Performing Vocabulary Expansion... Loading W2V...")
         w2v_vocab, w2v_vocab_size = get_w2v_vocab(args.w2v_path, cache=True)
         vocab_size_layer = w2v_vocab_size + index_from
-        model = load_sent_encoder(args.model_file, expand_vocab=True, orig_vocab=vocab,
+        model = load_sent_encoder(model_dict, expand_vocab=True, orig_vocab=vocab,
                                   w2v_vocab=w2v_vocab, w2v_path=args.w2v_path, use_recur_last=True)
         vocab = w2v_vocab
     else:
         # otherwise stick with original vocab size used to train the model
-        model = load_sent_encoder(args.model_file, use_recur_last=True)
+        model = load_sent_encoder(model_dict, use_recur_last=True)
 
-    model.be.bsz = args.batch_size
     model.initialize(dataset=(max_len, 1))
 
     evaluate(model, vocab=vocab, data_path=args.eval_data_path, evaltest=True,
@@ -103,7 +104,7 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
     """
     Run experiment
     """
-    print('Preparing SICK evaluation data...')
+    neon_logger.display('Preparing SICK evaluation data...')
     # Check if SICK data exists in specified directory, otherwise download
     sick_data = SICK(path=data_path)
     train, dev, test, scores = sick_data.load_eval_data()
@@ -114,13 +115,11 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
     train_B_shuf = train[1][shuf_idxs]
     scores_shuf = scores[0][shuf_idxs]
 
-    print('Tokenizing data...')
     train_A_tok = tokenize_input(train_A_shuf, vocab=vocab)
     train_B_tok = tokenize_input(train_B_shuf, vocab=vocab)
     dev_A_tok = tokenize_input(dev[0], vocab=vocab)
     dev_B_tok = tokenize_input(dev[1], vocab=vocab)
 
-    print('Computing training skipthoughts...')
     # Get iterator from tokenized data
     train_set_A = SentenceEncode(train_A_tok, [], len(train_A_tok), vocab_size_layer,
                                  max_len=30, index_from=2)
@@ -131,7 +130,6 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
     trainA = model.get_outputs(train_set_A)
     trainB = model.get_outputs(train_set_B)
 
-    print('Computing development skipthoughts...')
     dev_set_A = SentenceEncode(dev_A_tok, [], len(dev_A_tok), vocab_size_layer,
                                max_len=30, index_from=2)
     dev_set_B = SentenceEncode(dev_B_tok, [], len(dev_B_tok), vocab_size_layer,
@@ -140,27 +138,22 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
     devA = model.get_outputs(dev_set_A)
     devB = model.get_outputs(dev_set_B)
 
-    print('Computing feature combinations...')
     trainF = np.c_[np.abs(trainA - trainB), trainA * trainB]
     devF = np.c_[np.abs(devA - devB), devA * devB]
 
-    print('Encoding labels...')
     trainY = encode_labels(scores_shuf, ndata=len(trainF))
     devY = encode_labels(scores[1], ndata=len(devF))
 
-    print('Compiling model...')
     lrmodel, opt, cost = prepare_model(ninputs=trainF.shape[1])
 
-    print('Training...')
+    neon_logger.display('Training the regression model...')
     bestlrmodel = train_model(lrmodel, opt, cost, trainF,
                               trainY, devF, devY, scores[1][:len(devF)])
 
     if evaltest:
-        print('Tokenizing test sentences....')
         test_A_tok = tokenize_input(test[0], vocab=vocab)
         test_B_tok = tokenize_input(test[1], vocab=vocab)
 
-        print('Computing test skipthoughts...')
         test_set_A = SentenceEncode(test_A_tok, [], len(test_A_tok), vocab_size_layer,
                                     max_len=30, index_from=2)
         test_set_B = SentenceEncode(test_B_tok, [], len(test_B_tok), vocab_size_layer,
@@ -169,18 +162,17 @@ def evaluate(model, vocab, data_path, seed=1234, evaltest=False, vocab_size_laye
         testA = model.get_outputs(test_set_A)
         testB = model.get_outputs(test_set_B)
 
-        print('Computing feature combinations...')
         testF = np.c_[np.abs(testA - testB), testA * testB]
 
-        print('Evaluating...')
+        neon_logger.display('Evaluating using vectors and linear regression model')
         r = np.arange(1, 6)
         yhat = np.dot(bestlrmodel.get_outputs(ArrayIterator(testF)), r)
         pr = pearsonr(yhat, scores[2][:len(yhat)])[0]
         sr = spearmanr(yhat, scores[2][:len(yhat)])[0]
         se = np.mean((yhat - scores[2][:len(yhat)]) ** 2)
-        print('Test Pearson: ' + str(pr))
-        print('Test Spearman: ' + str(sr))
-        print('Test MSE: ' + str(se))
+        neon_logger.display('Test Pearson: ' + str(pr))
+        neon_logger.display('Test Spearman: ' + str(sr))
+        neon_logger.display('Test MSE: ' + str(se))
 
         return yhat
 
@@ -221,7 +213,7 @@ def train_model(lrmodel, opt, cost, X, Y, devX, devY, devscores):
         yhat = np.dot(lrmodel.get_outputs(valid_set), r)
         score = pearsonr(yhat, devscores)[0]
         if score > best:
-            print('Dev Pearson: {}'.format(score))
+            neon_logger.display('Dev Pearson: {}'.format(score))
             best = score
             bestlrmodel = copy.copy(lrmodel)
         else:
@@ -231,7 +223,7 @@ def train_model(lrmodel, opt, cost, X, Y, devX, devY, devscores):
 
     yhat = np.dot(bestlrmodel.get_outputs(valid_set), r)
     score = pearsonr(yhat, devscores)[0]
-    print('Dev Pearson: {}'.format(score))
+    neon_logger.display('Dev Pearson: {}'.format(score))
     return bestlrmodel
 
 

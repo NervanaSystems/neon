@@ -20,7 +20,7 @@ This example allows for the training of sentence embeddings from a corpus of con
 The line below will train a sentence embedding on `.txt` files located in `books_txt`, and save the output (pre-processed data & trained weights) to `output`:
 
 ```
-python train_sent2vec.py --data_dir books_txt/ --output_dir output/ -s s2v_model.prm -e 5
+python train.py --data_dir books_txt/ --output_dir output/ -s s2v_model.prm -e 5
 ```
 
 ### Inference
@@ -28,8 +28,10 @@ python train_sent2vec.py --data_dir books_txt/ --output_dir output/ -s s2v_model
 The inference scripts allows interactive querying of a trained model to find sentences which are close to a given query in the embedded space:
 
 ```
-python inference_sent2vec.py --model_file output/s2v_model.prm --data_dir books_txt/ --output_dir output/ --vector_name output/book_vectors.pkl
+python inference.py --model_file s2v_model.prm --data_dir books_txt/ --output_dir output/ --vector_name output/book_vectors.pkl
 ```
+
+`--data_dir` points to the training data directory used for the saved model, so the script can locate the training data used and vocabulary file.
 
 `--vector_name` specifies the location to save/reload the pre-computed training set vectors.
 
@@ -38,8 +40,10 @@ python inference_sent2vec.py --model_file output/s2v_model.prm --data_dir books_
 A trained sentence2vec model can also be evaluated on the SemEval 2014 Task 1: semantic relatedness SICK dataset. Running the `eval_sick.py` script will download the data if it's unable to find it locally. The evaluation can be performed with the following command:
 
 ```
-python eval_sick.py --model_file output/s2v_model.prm --data_dir books_txt/ --eval_data_path SICK_data/ --output_path output/
+python eval_sick.py --model_file s2v_model.prm --data_dir books_txt/ --eval_data_path SICK_data/ --output_path output/
 ```
+
+`--data_dir` points to the training data directory used for the saved model, so the script can locate the training data used and vocabulary file.
 
 The data can also be found/downloded manually here: [SemEval-2014 Task1](http://alt.qcri.org/semeval2014/task1/index.php?id=data-and-tools). Download *TRAINING DATA*, *TEST DATA(including gold scores)*, and *TRIAL DATA* and collect the data into a directory.
 

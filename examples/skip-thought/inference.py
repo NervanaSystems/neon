@@ -27,9 +27,10 @@ import os
 
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
+from neon import logger as neon_logger
 
-from data_loader import load_data, load_sent_encoder, prep_data
-from sent_vectors import SentenceVector
+from data_loader import load_data
+from util import SentenceVector, prep_data, load_sent_encoder
 from data_iterator import SentenceEncode
 
 # parse the command line arguments
@@ -61,14 +62,16 @@ data_file, vocab_file = load_data(args.data_dir,
 vocab, rev_vocab, word_count = cPickle.load(open(vocab_file, 'rb'))
 
 vocab_size = len(vocab)
-print("\nVocab size from the dataset is: {}".format(vocab_size))
+neon_logger.display("\nVocab size from the dataset is: {}".format(vocab_size))
 
 index_from = 2  # 0: padding 1: oov
 oov = 1
 vocab_size_layer = vocab_size + index_from
 max_len = 30
 
-model = load_sent_encoder(args.model_file)
+# load trained model
+model_dict = cPickle.load(open(args.model_file))
+model = load_sent_encoder(model_dict)
 
 h5f = h5py.File(data_file, 'r')
 
@@ -80,22 +83,19 @@ else:
     h5train_text = h5f['report_train']
 
 if os.path.exists(args.vector_name):
-    print("cached encoded vectors exists: {}".format(args.vector_name))
+    neon_logger.display("cached encoded vectors exists: {}".format(args.vector_name))
     f = open(args.vector_name, 'rb')
     (train_vec, sentences) = cPickle.load(f)
-    model.be.bsz = 1
     model.initialize(dataset=(max_len, 1))
 else:
-    print("Encoding the entire training set....")
+    neon_logger.display("Encoding the entire training set....")
     # encode all the training sentences
-    # set the backend bsz to be 1 for inference
-    model.be.bsz = args.batch_size
     model.initialize(dataset=(max_len, 1))
     train_set = SentenceEncode(h5train, h5train_text, h5train.attrs['nsample'], vocab_size_layer,
                                max_len=max_len, index_from=index_from)
     sentences = h5train_text[:train_set.ndata].reshape(-1, 1)
     train_vec = model.get_outputs(train_set)
-    print("Encoding complete. Saving to {}".format(args.vector_name))
+    neon_logger.display("Encoding complete. Saving to {}".format(args.vector_name))
     f = open(args.vector_name, 'wb')
     cPickle.dump((train_vec, sentences), f)
 
@@ -116,10 +116,8 @@ while True:
     xdev[:] = xbuf
     query_vec = model.fprop(xdev, inference=True).get().T
 
-    print("Query vec: {}".format(query_vec))
-
     sim_sent, _ = s2v.find_similar(query_vec, n=8)
 
     print("\nSimilar sentences:\n")
     for sent in sim_sent:
-        print(sent + "\n")
+        print(sent[0][0] + "\n")

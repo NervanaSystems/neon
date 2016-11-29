@@ -21,7 +21,7 @@ Reference:
     http://arxiv.org/abs/1506.06726
 
 Usage:
-    python train_sent2vec.py -e 2 -eval 1 -r 0 --data_dir book_corpus/ \
+    python train.py -e 2 -eval 1 -r 0 --data_dir book_corpus/ \
                             --model_file output/sent2vecNet.prm \
                             -s s2v.prm --output_dir ./output/
 """
@@ -33,16 +33,15 @@ import os
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.initializers import Uniform, Orthonormal, Constant
-from neon.layers import GeneralizedCostMask, Multicost, GRU
+from neon.layers import GeneralizedCostMask, Multicost, GRU, SkipThought
 from neon.models import Model
 from neon.transforms import CrossEntropyMulti, Logistic, Tanh
 from neon.callbacks.callbacks import Callbacks, MetricCallback
+from neon.optimizers import Adam
+from neon import logger as neon_logger
 
 from data_loader import load_data
 from data_iterator import Sentence_Homogenous
-from neon.layers.container import SkipThought
-
-from neon.optimizers import Adam
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -52,6 +51,8 @@ parser.add_argument('--max_vocab_size', default=20000,
                     help='number of (most frequent) words to use from vocabulary')
 parser.add_argument('--max_len_w', default=30,
                     help='number of (most frequent) words to use from vocabulary')
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset of training dataset to use (percentage)')
 args = parser.parse_args(gen_be=False)
 
 # hyperparameters from the reference
@@ -71,31 +72,26 @@ data_file, vocab_file = load_data(args.data_dir, valid_split=valid_split,
 vocab, rev_vocab, word_count = cPickle.load(open(vocab_file, 'rb'))
 
 vocab_size = len(vocab)
-print("\nData loading complete.")
-print("\nVocab size from the dataset is: {}".format(vocab_size))
+neon_logger.display("\nData loading complete.")
+neon_logger.display("\nVocab size from the dataset is: {}".format(vocab_size))
 
 index_from = 2  # 0: padding 1: oov
 vocab_size_layer = vocab_size + index_from
 
-print("\nUsing uniform random embedding initialization.")
 init_embed_dev = Uniform(low=-0.1, high=0.1)
 
 # sent2vec network
 nhidden = 2400
 gradient_clip_norm = 5.0
 
-print("\nMax sentence length set to be: {}".format(args.max_len_w))
-
 train_set = Sentence_Homogenous(data_file=data_file, sent_name='train', text_name='report_train',
                                 nwords=vocab_size_layer, max_len=args.max_len_w,
                                 index_from=index_from)
-print("Training set prepared.")
 
 if valid_split > 0.0:
     valid_set = Sentence_Homogenous(data_file=data_file, sent_name='valid',
                                     text_name='report_valid', nwords=vocab_size_layer,
                                     max_len=args.max_len_w, index_from=index_from)
-print("Validation set prepared.")
 
 skip = SkipThought(vocab_size_layer, embed_dim, init_embed_dev, nhidden, rec_layer=GRU,
                    init_rec=Orthonormal(), activ_rec=Tanh(), activ_rec_gate=Logistic(),
@@ -103,12 +99,13 @@ skip = SkipThought(vocab_size_layer, embed_dim, init_embed_dev, nhidden, rec_lay
 model = Model(skip)
 
 if args.model_file and os.path.isfile(args.model_file):
-    print("Loading saved weights from: {}".format(args.model_file))
+    neon_logger.display("Loading saved weights from: {}".format(args.model_file))
     load_path = open(args.model_file)
     model_dict = cPickle.load(load_path)
     model.deserialize(model_dict, load_states=True)
 elif args.model_file:
-    print("Unable to find model file {}, restarting training.".format(args.model_file))
+    neon_logger.display("Unable to find model file {}, restarting training.".
+                        format(args.model_file))
 
 cost = Multicost(costs=[GeneralizedCostMask(costfunc=CrossEntropyMulti(usebits=True)),
                         GeneralizedCostMask(costfunc=CrossEntropyMulti(usebits=True))],
@@ -124,6 +121,5 @@ if valid_split > 0.0:
 else:
     callbacks = Callbacks(model, metric=valmetric, **args.callback_args)
 
-print("Model created, fitting...")
 # train model
 model.fit(train_set, optimizer=optimizer, num_epochs=args.epochs, cost=cost, callbacks=callbacks)
