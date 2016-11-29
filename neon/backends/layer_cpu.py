@@ -50,6 +50,7 @@ class ConvLayer(object):
 
     padding: amount of zero-padding around the given edge
     strides: factor to step the filters by in a given direction
+    dilation: dilation factor for each dimension
     """
 
     def __init__(self, lib, dtype,
@@ -60,13 +61,10 @@ class ConvLayer(object):
                  str_d=1, str_h=1, str_w=1,
                  dil_d=1, dil_h=1, dil_w=1):
 
-        # TODO: remove
-        assert (dil_d == 1 and dil_h == 1 and dil_w == 1)
-
         # Compute the output spatial dimensions
-        M = lib.output_dim(D, T, pad_d, str_d)
-        P = lib.output_dim(H, R, pad_h, str_h)
-        Q = lib.output_dim(W, S, pad_w, str_w)
+        M = lib.output_dim(D, T, pad_d, str_d, dilation=dil_d)
+        P = lib.output_dim(H, R, pad_h, str_h, dilation=dil_h)
+        Q = lib.output_dim(W, S, pad_w, str_w, dilation=dil_w)
 
         self.C = C
         self.K = K
@@ -93,25 +91,25 @@ class ConvLayer(object):
         self.nOut = reduce(mul, self.MPQ, 1) * K
 
         if all(x == 1 for x in self.TRS) and \
-           all(p == 0 for p in self.padding) and \
-           all(s == 1 for s in self.strides):
-
+           all(p == 0 for p in padding) and \
+           all(s == 1 for s in strides) and \
+           all(d == 1 for d in dilation):
             self.dot = True
         else:
             self.dot = False
 
-            self.mSlice = [self.fprop_slice(m, T, D, pad_d, str_d) for m in range(M)]
-            self.pSlice = [self.fprop_slice(p, R, H, pad_h, str_h) for p in range(P)]
-            self.qSlice = [self.fprop_slice(q, S, W, pad_w, str_w) for q in range(Q)]
-            self.dSlice = [self.bprop_slice(d, T, M, pad_d, str_d) for d in range(D)]
-            self.hSlice = [self.bprop_slice(h, R, P, pad_h, str_h) for h in range(H)]
-            self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w) for w in range(W)]
+            self.mSlice = [self.fprop_slice(m, T, D, pad_d, str_d, dil_d) for m in range(M)]
+            self.pSlice = [self.fprop_slice(p, R, H, pad_h, str_h, dil_h) for p in range(P)]
+            self.qSlice = [self.fprop_slice(q, S, W, pad_w, str_w, dil_w) for q in range(Q)]
+            self.dSlice = [self.bprop_slice(d, T, M, pad_d, str_d, dil_d) for d in range(D)]
+            self.hSlice = [self.bprop_slice(h, R, P, pad_h, str_h, dil_h) for h in range(H)]
+            self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w, dil_w) for w in range(W)]
 
-    def fprop_slice(self, q, S, X, padding, strides):
+    def fprop_slice(self, q, S, X, padding, strides, dilation):
         firstF = 0
         lastF = S - 1
         qs = q * strides - padding
-        x2 = qs + lastF
+        x2 = qs + lastF * dilation
         if qs < 0:
             firstF = -qs
             qs = 0
@@ -119,13 +117,13 @@ class ConvLayer(object):
             dif = x2 - X + 1
             lastF -= dif
             x2 -= dif
-        return (slice(firstF, lastF + 1), slice(qs, x2 + 1), lastF - firstF + 1)
+        return (slice(firstF, lastF + 1), slice(qs, x2 + 1, dilation), lastF - firstF + 1)
 
-    def bprop_slice(self, x, S, Q, padding, strides):
-        qs = x - (S - padding - 1)
+    def bprop_slice(self, x, S, Q, padding, strides, dilation):
+        qs = x - (dilation * (S - 1) - padding)
         firstF = None
         for s in range(S):  # TODO remove loop logic here.
-            q = qs + s
+            q = qs + s * dilation
             if q % strides == 0:
                 q //= strides
                 if q >= 0 and q < Q:
@@ -136,7 +134,7 @@ class ConvLayer(object):
                     lastE = q
         if firstF is None:
             return (slice(0, 0, 1), slice(0, 0, 1), 0)
-        return (slice(firstF, lastF + 1, strides), slice(firstE, lastE + 1, 1), 0)
+        return (slice(firstF, lastF + 1, strides), slice(firstE, lastE + 1, dilation), 0)
 
     def compound_ops(self, O, X, bias, bsum, relu, brelu, slope):
         if bias is not None:
@@ -197,7 +195,7 @@ class ConvLayer(object):
 
         if backward:
             # C <=> K and mirror T, R, S  (0, 1, 2, 3, 4) => (4, 1, 2, 3, 0)
-            F = np.transpose(F[:, ::-1, ::-1, ::-1, :], (4, 1, 2, 3, 0)).copy()
+            F = np.transpose(F[:, ::-1, ::-1, ::-1], (4, 1, 2, 3, 0)).copy()
             mSlice, pSlice, qSlice = self.dSlice, self.hSlice, self.wSlice
         else:
             mSlice, pSlice, qSlice = self.mSlice, self.pSlice, self.qSlice
@@ -211,14 +209,14 @@ class ConvLayer(object):
                 for q in range(Q):
                     sliceS, sliceW, _ = qSlice[q]
 
-                    slicedF = F[:, sliceT, sliceR, sliceS, :].reshape((-1, K))
-                    slicedI = I[:, sliceD, sliceH, sliceW, :].reshape((-1, N))
+                    slicedF = F[:, sliceT, sliceR, sliceS].reshape((-1, K))
+                    slicedI = I[:, sliceD, sliceH, sliceW].reshape((-1, N))
 
                     if beta:
-                        O[:, m, p, q, :] = alpha * np.dot(slicedF.T, slicedI) + \
-                            beta * X[:, m, p, q, :]
+                        O[:, m, p, q] = alpha * np.dot(slicedF.T, slicedI) + \
+                            beta * X[:, m, p, q]
                     else:
-                        O[:, m, p, q, :] = np.dot(slicedF.T, slicedI)
+                        O[:, m, p, q] = np.dot(slicedF.T, slicedI)
 
         if not beta:
             self.compound_ops(O, X, bias, bsum, relu, brelu, slope)
@@ -255,13 +253,13 @@ class ConvLayer(object):
                 for q in range(Q):
                     sliceS, sliceW, slen = self.qSlice[q]
 
-                    slicedI = I[:, sliceD, sliceH, sliceW, :].reshape((-1, N))
-                    slicedE = E[:, m, p, q, :]
+                    slicedI = I[:, sliceD, sliceH, sliceW].reshape((-1, N))
+                    slicedE = E[:, m, p, q]
                     update = np.dot(slicedI, slicedE.T).reshape((C, tlen, rlen, slen, K))
                     if alpha == 1.0:
-                        U[:, sliceT, sliceR, sliceS, :] += update
+                        U[:, sliceT, sliceR, sliceS] += update
                     else:
-                        U[:, sliceT, sliceR, sliceS, :] += alpha * update
+                        U[:, sliceT, sliceR, sliceS] += alpha * update
 
 
 class DeconvLayer(ConvLayer):
@@ -287,6 +285,7 @@ class DeconvLayer(ConvLayer):
 
     padding: amount of zero-padding around the given edge
     strides: factor to step the filters by in a given direction
+    dilation: dilation factor for each dimension
     """
 
     def __init__(self, lib, dtype,
@@ -294,16 +293,19 @@ class DeconvLayer(ConvLayer):
                  P, Q,
                  R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1):
+                 str_d=1, str_h=1, str_w=1,
+                 dil_d=1, dil_h=1, dil_w=1):
 
         # Set T, M and D to be consts.
         T = 1
         M = 1
         D = 1
 
+        rr = dil_h * (R - 1) + 1
+        ss = dil_w * (S - 1) + 1
         # Cannot get exact, e.g. because not unique
-        H = (P - 1) * str_h - 2 * pad_h + R
-        W = (Q - 1) * str_w - 2 * pad_w + S
+        H = (P - 1) * str_h - 2 * pad_h + rr
+        W = (Q - 1) * str_w - 2 * pad_w + ss
 
         # Add below to get H and W tracked
         self.H = H
@@ -336,19 +338,18 @@ class DeconvLayer(ConvLayer):
         self.nOut = reduce(mul, self.DHW, 1) * C
 
         if all(x == 1 for x in self.TRS) and \
-           all(p == 0 for p in self.padding) and \
-           all(s == 1 for s in self.strides):
-
+           all(p == 0 for p in padding) and \
+           all(s == 1 for s in strides) and \
+           all(d == 1 for d in dilation):
             self.dot = True
         else:
             self.dot = False
-
-            self.dSlice = [self.bprop_slice(d, T, M, pad_d, str_d) for d in range(D)]
-            self.hSlice = [self.bprop_slice(h, R, P, pad_h, str_h) for h in range(H)]
-            self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w) for w in range(W)]
-            self.mSlice = [self.fprop_slice(m, T, D, pad_d, str_d) for m in range(M)]
-            self.pSlice = [self.fprop_slice(p, R, H, pad_h, str_h) for p in range(P)]
-            self.qSlice = [self.fprop_slice(q, S, W, pad_w, str_w) for q in range(Q)]
+            self.dSlice = [self.bprop_slice(d, T, M, pad_d, str_d, dil_d) for d in range(D)]
+            self.hSlice = [self.bprop_slice(h, R, P, pad_h, str_h, dil_h) for h in range(H)]
+            self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w, dil_w) for w in range(W)]
+            self.mSlice = [self.fprop_slice(m, T, D, pad_d, str_d, dil_d) for m in range(M)]
+            self.pSlice = [self.fprop_slice(p, R, H, pad_h, str_h, dil_h) for p in range(P)]
+            self.qSlice = [self.fprop_slice(q, S, W, pad_w, str_w, dil_w) for q in range(Q)]
 
 
 class PoolLayer(object):

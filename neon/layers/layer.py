@@ -688,13 +688,17 @@ class Convolution(ParameterLayer):
             Order of the axis should be height, width, channels.  For 4d
             convolution, the order should be depth, height, width, channels.
         strides (int, dict, optional): strides to apply convolution
-            window over. An int applies to both dimensions, or a dict with
+            window over. An int applies to all dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
             to str_w = str_h = None
         padding (int, dict, optional): padding to apply to edges of
-            input. An int applies to both dimensions, or a dict with pad_h
+            input. An int applies to all dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
             to pad_w = pad_h = None
+        dilation (int, dict, optional): dilation to apply to dimensions of
+            the filter. An int applies to all dimensions, or a dict with dil_h
+            and dil_w applies to h and w dimensions distinctly.  Defaults
+            to dil_w = dil_h = None
         init (Initializer, optional): Initializer object to use for
             initializing layer weights
         name (str, optional): layer name. Defaults to "ConvolutionLayer"
@@ -737,8 +741,8 @@ class Convolution(ParameterLayer):
         str_tuple = tuple(self.convparams[k] for k in ['str_' + d for d in padstr_dim])
         dil_tuple = tuple(self.convparams[k] for k in ['dil_' + d for d in padstr_dim])
 
-        fmt_tuple = (self.name,) + self.in_shape + self.out_shape + pad_tuple + str_tuple + \
-                    dil_tuple
+        fmt_tuple = (self.name,) + self.in_shape + self.out_shape + (
+                     pad_tuple + str_tuple + dil_tuple)
         fmt_string = "Convolution Layer '%s': " + \
                      spatial_str + " inputs, " + spatial_str + " outputs, " + \
                      padstr_str + " padding, " + padstr_str + " stride, " + \
@@ -820,25 +824,30 @@ class Deconvolution(ParameterLayer):
     Arguments:
         fshape (tuple): three dimensional shape of convolution window
         strides (int, dict, optional): strides to apply convolution
-            window over. An int applies to both dimensions, or a dict with
+            window over. An int applies to all dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
             to str_w = str_h = None
         padding (int, dict, optional): padding to apply to edges of
-            input. An int applies to both dimensions, or a dict with pad_h
+            input. An int applies to all dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
             to pad_w = pad_h = None
+        dilation (int, dict, optional): dilation to apply to dimensions of
+            the filter. An int applies to all dimensions, or a dict with dil_h
+            and dil_w applies to h and w dimensions distinctly.  Defaults
+            to dil_w = dil_h = None
         init (Initializer, optional): Initializer object to use for
             initializing layer weights
         name (str, optional): layer name. Defaults to "DeconvolutionLayer"
     """
 
-    def __init__(self, fshape, strides={}, padding={}, init=None, bsum=False,
+    def __init__(self, fshape, strides={}, padding={}, dilation={}, init=None, bsum=False,
                  name=None):
         super(Deconvolution, self).__init__(init, name)
         self.nglayer = None
         self.bsum = bsum
         self.deconvparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
-                             'pad_h': 0, 'pad_w': 0, 'pad_d': 0}
+                             'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
+                             'dil_h': 1, 'dil_w': 1, 'dil_d': 1}
 
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
@@ -852,7 +861,9 @@ class Deconvolution(ParameterLayer):
             strides = {'str_h': strides, 'str_w': strides}
         if isinstance(padding, int):
             padding = {'pad_h': padding, 'pad_w': padding}
-        for d in [fshape, strides, padding]:
+        if isinstance(dilation, int):
+            dilation = {'dil_h': dilation, 'dil_w': dilation}
+        for d in [fshape, strides, padding, dilation]:
             self.deconvparams.update(d)
 
     def __str__(self):
@@ -1492,13 +1503,17 @@ class Conv(CompoundLayer):
         init (Initializer, optional): Initializer object to use for
             initializing layer weights
         strides (int, dict, optional): strides to apply convolution
-            window over. An int applies to both dimensions, or a dict with
+            window over. An int applies to all dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
             to str_w = str_h = None
-        pad (int, dict, optional): padding to apply to edges of
-            input. An int applies to both dimensions, or a dict with pad_h
+        padding (int, dict, optional): padding to apply to edges of
+            input. An int applies to all dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
             to pad_w = pad_h = None
+        dilation (int, dict, optional): dilation to apply to dimensions of
+            the filter. An int applies to all dimensions, or a dict with dil_h
+            and dil_w applies to h and w dimensions distinctly.  Defaults
+            to dil_w = dil_h = None
         bias (Initializer): an initializer to use for bias parameters
         activation (Transform): a transform object with fprop and bprop
             functions to apply
@@ -1507,7 +1522,7 @@ class Conv(CompoundLayer):
 
     """
 
-    def __init__(self, fshape, init, strides={}, padding={},
+    def __init__(self, fshape, init, strides={}, padding={}, dilation={},
                  bias=None,
                  batch_norm=False,
                  activation=None,
@@ -1515,7 +1530,7 @@ class Conv(CompoundLayer):
         super(Conv, self).__init__(bias=bias, batch_norm=batch_norm,
                                    activation=activation, name=name)
         self.append(Convolution(fshape=fshape, strides=strides, padding=padding,
-                                init=init, bsum=batch_norm,
+                                dilation=dilation, init=init, bsum=batch_norm,
                                 name=name))
         self.add_postfilter_layers()
 
@@ -1526,11 +1541,11 @@ class Deconv(CompoundLayer):
     Same as Conv layer, but implements a composite deconvolution layer.
     """
 
-    def __init__(self, fshape, init, strides={}, padding={}, bias=None, batch_norm=False,
+    def __init__(self, fshape, init, strides={}, padding={}, dilation={}, bias=None, batch_norm=False,
                  activation=None, name=None):
         super(Deconv, self).__init__(bias=bias, batch_norm=batch_norm,
                                      activation=activation, name=name)
-        self.append(Deconvolution(fshape=fshape, strides=strides, padding=padding,
+        self.append(Deconvolution(fshape=fshape, strides=strides, padding=padding, dilation=dilation,
                                   init=init, bsum=batch_norm))
         self.add_postfilter_layers()
 
