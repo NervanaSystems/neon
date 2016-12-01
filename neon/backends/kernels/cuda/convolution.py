@@ -625,6 +625,6 @@ __global__ void conv_%(operation)s(
     module = SourceModule(code, options=options)
 
     kernel = module.get_function("conv_" + operation)
-    kernel.prepare("ffPPPPIIIIIIIIIIIIIIIIIIIIIIIIIIII")
+    kernel.prepare("ffPPPPIIIIIIIIIIIIIIIIIIIIIIIIIIIIII")
     kernel.name = "conv_" + operation
     return kernel

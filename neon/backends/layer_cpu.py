@@ -77,6 +77,7 @@ class ConvLayer(object):
         self.MPQ = (M, P, Q)
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
+        self.dilation = (dil_d, dil_h, dil_w)
 
         self.dimI = (C, D, H, W, N)
         self.dimF = (C, T, R, S, K)
@@ -91,9 +92,9 @@ class ConvLayer(object):
         self.nOut = reduce(mul, self.MPQ, 1) * K
 
         if all(x == 1 for x in self.TRS) and \
-           all(p == 0 for p in padding) and \
-           all(s == 1 for s in strides) and \
-           all(d == 1 for d in dilation):
+           all(p == 0 for p in self.padding) and \
+           all(s == 1 for s in self.strides) and \
+           all(d == 1 for d in self.dilation):
             self.dot = True
         else:
             self.dot = False
@@ -322,6 +323,7 @@ class DeconvLayer(ConvLayer):
         self.MPQ = (M, P, Q)
         self.padding = (pad_d, pad_h, pad_w)
         self.strides = (str_d, str_h, str_w)
+        self.dilation = (dil_d, dil_h, dil_w)
 
         # Did not change the names of dimI, dimO, etc. even though dimI is now technically the
         # dimension of the output
@@ -338,9 +340,9 @@ class DeconvLayer(ConvLayer):
         self.nOut = reduce(mul, self.DHW, 1) * C
 
         if all(x == 1 for x in self.TRS) and \
-           all(p == 0 for p in padding) and \
-           all(s == 1 for s in strides) and \
-           all(d == 1 for d in dilation):
+           all(p == 0 for p in self.padding) and \
+           all(s == 1 for s in self.strides) and \
+           all(d == 1 for d in self.dilation):
             self.dot = True
         else:
             self.dot = False

@@ -1541,12 +1541,12 @@ class Deconv(CompoundLayer):
     Same as Conv layer, but implements a composite deconvolution layer.
     """
 
-    def __init__(self, fshape, init, strides={}, padding={}, dilation={}, bias=None, batch_norm=False,
-                 activation=None, name=None):
+    def __init__(self, fshape, init, strides={}, padding={}, dilation={},
+                 bias=None, batch_norm=False, activation=None, name=None):
         super(Deconv, self).__init__(bias=bias, batch_norm=batch_norm,
                                      activation=activation, name=name)
-        self.append(Deconvolution(fshape=fshape, strides=strides, padding=padding, dilation=dilation,
-                                  init=init, bsum=batch_norm))
+        self.append(Deconvolution(fshape=fshape, strides=strides, padding=padding,
+                                  dilation=dilation, init=init, bsum=batch_norm))
         self.add_postfilter_layers()
 
 

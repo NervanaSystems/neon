@@ -361,7 +361,7 @@ class XpropDirect(KernelGroup):
     def init_largeN(self, op):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
 
         for blockN in (128, 64):
             if N % blockN == 0:
@@ -418,7 +418,7 @@ class XpropDirect(KernelGroup):
     def init_smallN(self, op):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
 
         assert N % 4 == 0 or N in (1,2), "N dim must be multiple of 4 or equal to 1 or 2"
 
@@ -647,7 +647,7 @@ class UpdateDirect(KernelGroup):
     def init(self, autotune=False):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
-         pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+         pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
 
         for blockN in (32,16,8,4):
             if N % blockN == 0:

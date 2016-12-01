@@ -1934,6 +1934,7 @@ class NervanaGPU(Backend):
 
         padding: amount of zero-padding around the given edge
         strides: factor to step the filters by in a given direction
+        dilation: dilation factor for each dimension
 
         dtype: need to know dtype to setup proper kernels and params.
         """
@@ -2080,7 +2081,8 @@ class NervanaGPU(Backend):
                      P, Q,
                      R=1, S=1,
                      pad_d=0, pad_h=0, pad_w=0,
-                     str_d=1, str_h=1, str_w=1):
+                     str_d=1, str_h=1, str_w=1,
+                     dil_d=1, dil_h=1, dil_w=1):
         """
         Create a new DeconvLayer parameter object.
         This then is passed as an argument to all the convolution operations.
@@ -2102,11 +2104,13 @@ class NervanaGPU(Backend):
 
         padding: amount of zero-padding around the given edge
         strides: factor to step the filters by in a given direction
+        dilation: dilation factor for each dimension
 
         dtype: need to know dtype to setup proper kernels and params.
         """
         return DeconvLayer(self, dtype, N, C, K, P, Q, R, S,
-                           pad_d, pad_h, pad_w, str_d, str_h, str_w)
+                           pad_d, pad_h, pad_w, str_d, str_h, str_w,
+                           dil_d, dil_h, dil_w)
 
     def lrn_layer(self, dtype, N, C, D=1, H=1, W=1, J=1):
         """

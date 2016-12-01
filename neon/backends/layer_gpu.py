@@ -352,6 +352,7 @@ class ConvLayer(Layer):
 
     padding: amount of zero-padding around the given edge
     strides: factor to step the filters by in a given direction
+    dilation: dilation factor for each dimension
     """
 
     def __init__(self, lib, dtype,
@@ -402,8 +403,7 @@ class ConvLayer(Layer):
         self.flops = P * Q * M * K * N * C * R * S * T * 2.0
 
         args = (lib, self.dtype, N, C, K, D, H, W, T, R, S, M, P, Q,
-                pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d,
-                dil_h, dil_w)
+                pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w)
 
         #lib.enable_winograd = 0
 
@@ -547,6 +547,7 @@ class DeconvLayer(ConvLayer):
 
     padding: amount of zero-padding around the given edge
     strides: factor to step the filters by in a given direction
+    dilation: dilation factor for each dimension
     """
 
     def __init__(self, lib, dtype,
@@ -554,14 +555,17 @@ class DeconvLayer(ConvLayer):
                  P, Q,
                  R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
-                 str_d=1, str_h=1, str_w=1):
+                 str_d=1, str_h=1, str_w=1,
+                 dil_d=1, dil_h=1, dil_w=1):
 
         # Set T and D to be consts.
         D = T = 1
 
+        rr = dil_h * (R - 1) + 1
+        ss = dil_w * (S - 1) + 1
         # Cannot get exact, e.g. because not unique
-        H = (P - 1) * str_h - 2 * pad_h + R
-        W = (Q - 1) * str_w - 2 * pad_w + S
+        H = (P - 1) * str_h - 2 * pad_h + rr
+        W = (Q - 1) * str_w - 2 * pad_w + ss
 
         super(DeconvLayer, self).__init__(
             lib, dtype,
@@ -569,7 +573,8 @@ class DeconvLayer(ConvLayer):
             D, H, W,
             T, R, S,
             pad_d, pad_h, pad_w,
-            str_d, str_h, str_w)
+            str_d, str_h, str_w,
+            dil_d, dil_h, dil_w)
 
         self.nOut = reduce(mul, self.DHW, 1) * C
         self.H = H

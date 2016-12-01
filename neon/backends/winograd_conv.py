@@ -44,7 +44,7 @@ class XpropWinograd_2x2_3x3(KernelGroup):
 
         super(XpropWinograd_2x2_3x3, self).__init__(lib, dtype,
              N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
-             0, pad_h, pad_w, 1,1,1, bprop)
+             0, pad_h, pad_w, 1,1,1, 1,1,1, bprop)
 
         SMs = _get_sm_count()
 
@@ -69,7 +69,7 @@ class XpropWinograd_2x2_3x3(KernelGroup):
     def init(self, autotune=0, filter_extern=0):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
         itemsize = self.dtype.itemsize
 
         if not autotune:
@@ -299,7 +299,7 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
 
         super(UpdateWinograd_3x3_2x2, self).__init__(lib, dtype,
              N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
-             0, pad_h, pad_w, 1,1,1)
+             0, pad_h, pad_w, 1,1,1, 1,1,1)
 
         SMs = _get_sm_count()
 
@@ -319,7 +319,7 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
     def init(self, autotune=False):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
 
         loopN   = 4 if N >= 4 else N
         blkN    = 4 if N >= 3 else N
