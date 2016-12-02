@@ -54,20 +54,23 @@
     param_str_d        : c[0x0][0x1b8]
     param_str_h        : c[0x0][0x1bc]
     param_str_w        : c[0x0][0x1c0]
-    param_P            : c[0x0][0x1c4]
-    param_Q            : c[0x0][0x1c8]
-    param_PQ           : c[0x0][0x1cc]
-    param_QN           : c[0x0][0x1d0]
-    param_PQN          : c[0x0][0x1d4]
-    param_MPQN         : c[0x0][0x1d8]
-    param_magic_Q      : c[0x0][0x1dc]
-    param_shift_Q      : c[0x0][0x1e0]
-    param_magic_PQ     : c[0x0][0x1e4]
-    param_shift_PQ     : c[0x0][0x1e8]
-    param_grid_P       : c[0x0][0x1ec]
-    param_grid_Q       : c[0x0][0x1f0]
-    param_grid_PQ      : c[0x0][0x1f4]
-    param_CRSTK        : c[0x0][0x1f8]
+    param_dil_d        : c[0x0][0x1c4]
+    param_dil_h        : c[0x0][0x1c8]
+    param_dil_w        : c[0x0][0x1cc]
+    param_P            : c[0x0][0x1d0]
+    param_Q            : c[0x0][0x1d4]
+    param_PQ           : c[0x0][0x1d8]
+    param_QN           : c[0x0][0x1dc]
+    param_PQN          : c[0x0][0x1e0]
+    param_MPQN         : c[0x0][0x1e4]
+    param_magic_Q      : c[0x0][0x1e8]
+    param_shift_Q      : c[0x0][0x1ec]
+    param_magic_PQ     : c[0x0][0x1f0]
+    param_shift_PQ     : c[0x0][0x1f4]
+    param_grid_P       : c[0x0][0x1f8]
+    param_grid_Q       : c[0x0][0x1fc]
+    param_grid_PQ      : c[0x0][0x200]
+    param_CRSTK        : c[0x0][0x204]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -227,12 +230,14 @@ NEXT_P:
 --:-:-:-:1      SHR.U32   r, r, param_shift_S;
 --:-:-:-:1      XMAD   s, r, param_S, RZ;
 --:-:-:-:1      IADD   s, -s, rs;
-// y = p * u - pad_h + r
-// z = m * w - pad_d + t
+// y = p * u - pad_h + (r * dil_h)
+// z = m * w - pad_d + (t * dil_d)
 --:-:-:-:1      XMAD  pr, p,   param_str_h, RZ;
 10:-:-:-:1      XMAD  mt, mm,  param_str_d, RZ;
---:-:-:-:1      IADD3 y, pr,  -param_pad_h, r;
---:-:-:-:1      IADD3 z, mt,  -param_pad_d, t;
+--:-:-:-:1      XMAD  y,  r,   param_dil_h, pr;
+--:-:-:-:1      XMAD  z,  t,   param_dil_d, mt;
+--:-:-:-:1      IADD  y,  y,  -param_pad_h;
+--:-:-:-:1      IADD  z,  z,  -param_pad_d;
 // e = k*MPQN + m*PQN + p*QN + tidYY
 08:-:-:-:1      LOP.AND tidYY, tidYY, 1;
 --:-:-:-:1      SHL     tidYY, tidYY, 2;
@@ -272,9 +277,10 @@ NEXT_Q:
 // k < K
 --:-:-:-:1      ISETP.LT.AND P3, PT, k, param_K, PT;
 // qs = q * v - pad_w
-// x = qs + s
+// x = qs + (s dil_w)
 --:-:-:-:1      XMAD  qs, Q,  param_str_w, RZ;
---:-:-:-:1      IADD3 x, qs, -param_pad_w, s;
+--:-:-:-:1      XMAD  x,  s,  param_dil_w, qs;
+--:-:-:-:1      IADD  x,  x, -param_pad_w;
 // bounds_x = x < 0 || x > W ? -1 : 0
 --:-:-:-:1      ISET.LT.AND x0, x, RZ, PT;
 --:-:-:-:1      ISET.GE.AND xW, x,  param_W, PT;

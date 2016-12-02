@@ -51,30 +51,33 @@
     param_str_d        : c[0x0][0x1cc]
     param_str_h        : c[0x0][0x1d0]
     param_str_w        : c[0x0][0x1d4]
-    param_P2           : c[0x0][0x1d8]
-    param_Q            : c[0x0][0x1dc]
-    param_PQk          : c[0x0][0x1e0]
-    param_Qk           : c[0x0][0x1e4]
-    param_k            : c[0x0][0x1e8]
-    param_magic_PQk    : c[0x0][0x1ec]
-    param_shift_PQk    : c[0x0][0x1f0]
-    param_magic_Qk     : c[0x0][0x1f4]
-    param_shift_Qk     : c[0x0][0x1f8]
-    param_magic_k      : c[0x0][0x1fc]
-    param_shift_k      : c[0x0][0x200]
-    param_QN           : c[0x0][0x204]
-    param_PQN          : c[0x0][0x208]
-    param_MPQN         : c[0x0][0x20c]
-    param_gridN        : c[0x0][0x210]
-    param_gridQN       : c[0x0][0x214]
-    param_gridPQN      : c[0x0][0x218]
-    param_gridMPQN     : c[0x0][0x21c]
-    param_magic_str_d  : c[0x0][0x220]
-    param_shift_str_d  : c[0x0][0x224]
-    param_magic_str_h  : c[0x0][0x228]
-    param_shift_str_h  : c[0x0][0x22c]
-    param_magic_str_w  : c[0x0][0x230]
-    param_shift_str_w  : c[0x0][0x234]
+    param_dil_d        : c[0x0][0x1d8]
+    param_dil_h        : c[0x0][0x1dc]
+    param_dil_w        : c[0x0][0x1e0]
+    param_P2           : c[0x0][0x1e4]
+    param_Q            : c[0x0][0x1e8]
+    param_PQk          : c[0x0][0x1ec]
+    param_Qk           : c[0x0][0x1f0]
+    param_k            : c[0x0][0x1f4]
+    param_magic_PQk    : c[0x0][0x1f8]
+    param_shift_PQk    : c[0x0][0x1fc]
+    param_magic_Qk     : c[0x0][0x200]
+    param_shift_Qk     : c[0x0][0x204]
+    param_magic_k      : c[0x0][0x208]
+    param_shift_k      : c[0x0][0x20c]
+    param_QN           : c[0x0][0x210]
+    param_PQN          : c[0x0][0x214]
+    param_MPQN         : c[0x0][0x218]
+    param_gridN        : c[0x0][0x21c]
+    param_gridQN       : c[0x0][0x220]
+    param_gridPQN      : c[0x0][0x224]
+    param_gridMPQN     : c[0x0][0x228]
+    param_magic_str_d  : c[0x0][0x22c]
+    param_shift_str_d  : c[0x0][0x230]
+    param_magic_str_h  : c[0x0][0x234]
+    param_shift_str_h  : c[0x0][0x238]
+    param_magic_str_w  : c[0x0][0x23c]
+    param_shift_str_w  : c[0x0][0x240]
 EOF
     }
 
@@ -285,12 +288,12 @@ LUT_LOOP:
 --:-:-:-:1      SHR.U32   r, r, param_shift_S;
 --:-:-:-:1      XMAD   s, r, param_S, RZ;
 --:-:-:-:1      IADD   s, -s, rs;
-// x = qs + s
-// y = pr + r
-// z = mt + t
---:-:-:-:1      IADD x, qs, s;
---:-:-:-:1      IADD y, pr, r;
---:-:-:-:1      IADD z, mt, t;
+// x = qs + (s * dil_w)
+// y = pr + (r * dil_h)
+// z = mt + (t * dil_d)
+--:-:-:-:1      XMAD x, s, param_dil_w, qs;
+--:-:-:-:1      XMAD y, r, param_dil_h, pr;
+--:-:-:-:1      XMAD z, t, param_dil_d, mt;
 --:-:-:-:1      ISETP.GE.AND  P4, PT, x, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND  P5, PT, y, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND  P6, PT, z, RZ, P6;
@@ -343,12 +346,12 @@ LUT_LOOP:
 --:-:-:-:1      SHR.U32   r, r, param_shift_S;
 --:-:-:-:1      XMAD   s, r, param_S, RZ;
 --:-:-:-:1      IADD   s, -s, rs;
-// x = qs + s
-// y = pr + r
-// z = mt + t
---:-:-:-:1      IADD x, qs, s;
---:-:-:-:1      IADD y, pr, r;
---:-:-:-:1      IADD z, mt, t;
+// x = qs + (s * dil_w)
+// y = pr + (r * dil_h)
+// z = mt + (t * dil_d)
+--:-:-:-:1      XMAD x, s, param_dil_w, qs;
+--:-:-:-:1      XMAD y, r, param_dil_h, pr;
+--:-:-:-:1      XMAD z, t, param_dil_d, mt;
 --:-:-:-:1      ISETP.GE.AND  P4, PT, x, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND  P5, PT, y, RZ, PT;
 --:-:-:-:1      ISETP.GE.AND  P6, PT, z, RZ, P6;

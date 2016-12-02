@@ -57,55 +57,58 @@ sub output_op   { return $determ ? 'STG.E.CG' : 'RED.E.ADD.F32.FTZ.RN'; }
     param_pad_d        : c[0x0][0x18c]
     param_pad_h        : c[0x0][0x190]
     param_pad_w        : c[0x0][0x194]
-    param_DHWN         : c[0x0][0x198]
-    param_HWN          : c[0x0][0x19c]
-    param_WN           : c[0x0][0x1a0]
-    param_MPQN16p      : c[0x0][0x1a4]
-    param_MPQN         : c[0x0][0x1a8]
-    param_PQN          : c[0x0][0x1ac]
-    param_QN           : c[0x0][0x1b0]
-    param_PQkc         : c[0x0][0x1b4]
-    param_Qkc          : c[0x0][0x1b8]
-    param_kc           : c[0x0][0x1bc]
-    param_c            : c[0x0][0x1c0]
-    param_k            : c[0x0][0x1c4]
-    param_magic_PQkc   : c[0x0][0x1c8]
-    param_shift_PQkc   : c[0x0][0x1cc]
-    param_magic_Qkc    : c[0x0][0x1d0]
-    param_shift_Qkc    : c[0x0][0x1d4]
-    param_magic_kc     : c[0x0][0x1d8]
-    param_shift_kc     : c[0x0][0x1dc]
-    param_magic_c      : c[0x0][0x1e0]
-    param_shift_c      : c[0x0][0x1e4]
-    param_CTRSK        : c[0x0][0x1e8]
-    param_CTRS         : c[0x0][0x1ec]
-    param_TRS          : c[0x0][0x1f0]
-    param_RS           : c[0x0][0x1f4]
-    param_S            : c[0x0][0x1f8]
-    param_magic_TRS    : c[0x0][0x1fc]
-    param_shift_TRS    : c[0x0][0x200]
-    param_magic_RS     : c[0x0][0x204]
-    param_shift_RS     : c[0x0][0x208]
-    param_magic_S      : c[0x0][0x20c]
-    param_shift_S      : c[0x0][0x210]
-    param_superM       : c[0x0][0x214]
-    param_superP       : c[0x0][0x218]
-    param_superQ       : c[0x0][0x21c]
-    param_superN       : c[0x0][0x220]
-    param_shiftM       : c[0x0][0x224]
-    param_shiftP       : c[0x0][0x228]
-    param_shiftQ       : c[0x0][0x22c]
-    param_strideP      : c[0x0][0x230]
-    param_strideQ      : c[0x0][0x234]
-    param_stridePQ     : c[0x0][0x238]
-    param_gridP        : c[0x0][0x23c]
-    param_gridQ        : c[0x0][0x240]
-    param_loopX        : c[0x0][0x244]
-    param_loopXp       : c[0x0][0x248]
-    param_loopQ        : c[0x0][0x24c]
-    param_loopQp       : c[0x0][0x250]
-    param_loopN        : c[0x0][0x254]
-    param_loopNp       : c[0x0][0x258]
+    param_dil_d        : c[0x0][0x198]
+    param_dil_h        : c[0x0][0x19c]
+    param_dil_w        : c[0x0][0x1a0]
+    param_DHWN         : c[0x0][0x1a4]
+    param_HWN          : c[0x0][0x1a8]
+    param_WN           : c[0x0][0x1ac]
+    param_MPQN16p      : c[0x0][0x1b0]
+    param_MPQN         : c[0x0][0x1b4]
+    param_PQN          : c[0x0][0x1b8]
+    param_QN           : c[0x0][0x1bc]
+    param_PQkc         : c[0x0][0x1c0]
+    param_Qkc          : c[0x0][0x1c4]
+    param_kc           : c[0x0][0x1c8]
+    param_c            : c[0x0][0x1cc]
+    param_k            : c[0x0][0x1d0]
+    param_magic_PQkc   : c[0x0][0x1d4]
+    param_shift_PQkc   : c[0x0][0x1d8]
+    param_magic_Qkc    : c[0x0][0x1dc]
+    param_shift_Qkc    : c[0x0][0x1e0]
+    param_magic_kc     : c[0x0][0x1e4]
+    param_shift_kc     : c[0x0][0x1e8]
+    param_magic_c      : c[0x0][0x1ec]
+    param_shift_c      : c[0x0][0x1f0]
+    param_CTRSK        : c[0x0][0x1f4]
+    param_CTRS         : c[0x0][0x1f8]
+    param_TRS          : c[0x0][0x1fc]
+    param_RS           : c[0x0][0x200]
+    param_S            : c[0x0][0x204]
+    param_magic_TRS    : c[0x0][0x208]
+    param_shift_TRS    : c[0x0][0x20c]
+    param_magic_RS     : c[0x0][0x210]
+    param_shift_RS     : c[0x0][0x214]
+    param_magic_S      : c[0x0][0x218]
+    param_shift_S      : c[0x0][0x21c]
+    param_superM       : c[0x0][0x220]
+    param_superP       : c[0x0][0x224]
+    param_superQ       : c[0x0][0x228]
+    param_superN       : c[0x0][0x22c]
+    param_shiftM       : c[0x0][0x230]
+    param_shiftP       : c[0x0][0x234]
+    param_shiftQ       : c[0x0][0x238]
+    param_strideP      : c[0x0][0x23c]
+    param_strideQ      : c[0x0][0x240]
+    param_stridePQ     : c[0x0][0x244]
+    param_gridP        : c[0x0][0x248]
+    param_gridQ        : c[0x0][0x24c]
+    param_loopX        : c[0x0][0x250]
+    param_loopXp       : c[0x0][0x254]
+    param_loopQ        : c[0x0][0x258]
+    param_loopQp       : c[0x0][0x25c]
+    param_loopN        : c[0x0][0x260]
+    param_loopNp       : c[0x0][0x264]
 
 </CONSTANT_MAPPING>
 
@@ -329,13 +332,17 @@ sub output_op   { return $determ ? 'STG.E.CG' : 'RED.E.ADD.F32.FTZ.RN'; }
 --:-:-:-:1      BFE.U32 super_m, tid7, param_superM;
 --:-:-:-:1      IADD m, m, super_m;
 
-// z = m * str_d - pad_d + t
+// z = m * str_d - pad_d + (t * dil_d)
 --:-:-:-:1      XMAD  mt, m,   param_str_d, RZ;
 
---:-:-:-:1      IADD3 z0, mt, -param_pad_d, t0;
---:-:-:-:1      IADD3 z1, mt, -param_pad_d, t1;
---:-:-:-:1      IADD3 z2, mt, -param_pad_d, t2;
---:-:-:-:1      IADD3 z3, mt, -param_pad_d, t3;
+--:-:-:-:1      XMAD  z0, t0,  param_dil_d, mt;
+--:-:-:-:1      XMAD  z1, t1,  param_dil_d, mt;
+--:-:-:-:1      XMAD  z2, t2,  param_dil_d, mt;
+--:-:-:-:1      XMAD  z3, t3,  param_dil_d, mt;
+--:-:-:-:1      IADD  z0, z0, -param_pad_d;
+--:-:-:-:1      IADD  z1, z1, -param_pad_d;
+--:-:-:-:1      IADD  z2, z2, -param_pad_d;
+--:-:-:-:1      IADD  z3, z3, -param_pad_d;
 
 // czOffset = c*DHWN + z*HWN
 --:-:-:-:1      XMAD.LO2C czOffset0, c0, param_DHWN, RZ;
@@ -532,20 +539,28 @@ CALC_OFFSETS:
 --:-:-:-:1      IADD p, p, super_p;
 --:-:-:-:1      IADD q, q, super_q;
 
-// y = p * str_h - pad_h + r
-// x = q * str_w - pad_w + s
+// y = p * str_h - pad_h + (r * dil_h)
+// x = q * str_w - pad_w + (s * dil_w)
 --:-:-:-:1      XMAD  pr, p,   param_str_h, RZ;
 --:-:-:-:1      XMAD  qs, q,   param_str_w, RZ;
 
---:-:-:-:1      IADD3 y0, pr, -param_pad_h, r0;
---:-:-:-:1      IADD3 y1, pr, -param_pad_h, r1;
---:-:-:-:1      IADD3 y2, pr, -param_pad_h, r2;
---:-:-:-:1      IADD3 y3, pr, -param_pad_h, r3;
+--:-:-:-:1      XMAD  y0, r0,  param_dil_h, pr;
+--:-:-:-:1      XMAD  y1, r1,  param_dil_h, pr;
+--:-:-:-:1      XMAD  y2, r2,  param_dil_h, pr;
+--:-:-:-:1      XMAD  y3, r3,  param_dil_h, pr;
+--:-:-:-:1      IADD  y0, y0, -param_pad_h;
+--:-:-:-:1      IADD  y1, y1, -param_pad_h;
+--:-:-:-:1      IADD  y2, y2, -param_pad_h;
+--:-:-:-:1      IADD  y3, y3, -param_pad_h;
 
---:-:-:-:1      IADD3 x0, qs, -param_pad_w, s0;
---:-:-:-:1      IADD3 x1, qs, -param_pad_w, s1;
---:-:-:-:1      IADD3 x2, qs, -param_pad_w, s2;
---:-:-:-:1      IADD3 x3, qs, -param_pad_w, s3;
+--:-:-:-:1      XMAD  x0, s0,  param_dil_w, qs;
+--:-:-:-:1      XMAD  x1, s1,  param_dil_w, qs;
+--:-:-:-:1      XMAD  x2, s2,  param_dil_w, qs;
+--:-:-:-:1      XMAD  x3, s3,  param_dil_w, qs;
+--:-:-:-:1      IADD  x0, x0, -param_pad_w;
+--:-:-:-:1      IADD  x1, x1, -param_pad_w;
+--:-:-:-:1      IADD  x2, x2, -param_pad_w;
+--:-:-:-:1      IADD  x3, x3, -param_pad_w;
 
 // trackI = c*DHWN + z*HWN + y*WN + x*N + n
 --:-:-:-:1      XMAD.S16.U16.LO2C ti0, y0, param_WN, n;

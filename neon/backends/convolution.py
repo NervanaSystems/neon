@@ -408,7 +408,7 @@ class XpropDirect(KernelGroup):
         self.kernel_args.extend(_flatten([
             N, K, D, H, W, W * N, H * W * N, D * H * W * N,
             C, TRSK, TRS, RS, T, R, S, magic_RS, magic_S,
-            pad_d, pad_h, pad_w, str_d, str_h, str_w,
+            pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w,
             P2, Q, PQk, Qk, k, magic_PQk, magic_Qk, magic_k,
             Q * N, P * Q * N, M * P * Q * N, gridNw, gridQNw, gridPQNw, gridMPQNw ]))
 
@@ -509,7 +509,7 @@ class XpropDirect(KernelGroup):
         self.kernel_args = [grid, (128,1,1), None, None, None, None, None, None, None, None, None]
         self.kernel_args.extend(_flatten([
             C, D, H, W, N, K, M, P, Q,
-            str_d, str_h, str_w, pad_d, pad_h, pad_w,
+            str_d, str_h, str_w, pad_d, pad_h, pad_w, dil_d, dil_h, dil_w,
             D * H * W * N, H * W * N, W * N, M * P * Q * N, P * Q * N, Q * N,
             PQnk, Qnk, nk, n, k, magic_PQnk, magic_Qnk, magic_nk, magic_k,
             max(K - 32,0), K * 32 * self.dtype.itemsize, TRSK, TRS, RS, S, magic_RS, magic_S,
@@ -594,9 +594,9 @@ class BpropDirect(XpropDirect):
         self.filter_trans = FilterDimShuffle(lib, dtype, C, T, R, S, K)
 
         # invert padding
-        pad_d = T - pad_d - 1
-        pad_h = R - pad_h - 1
-        pad_w = S - pad_w - 1
+        pad_d = (T - 1) * dil_d - pad_d
+        pad_h = (R - 1) * dil_h - pad_h
+        pad_w = (S - 1) * dil_w - pad_w
 
         # Swap C<=>K and DHW<=>MPQ
         super(BpropDirect, self).__init__("bprop", lib, dtype,
@@ -756,7 +756,7 @@ class UpdateDirect(KernelGroup):
         self.kernel_args = [grid, (128,1,1), None, None, None, None, 1.0]
         self.kernel_args.extend(_flatten([
             C, D, H, W, N, K, M, P, Q,
-            str_d, str_h, str_w, pad_d, pad_h, pad_w,
+            str_d, str_h, str_w, pad_d, pad_h, pad_w, dil_d, dil_h, dil_w,
             D * H * W * N, H * W * N, W * N, M * P * Q * N * 16 * itemsize, M * P * Q * N, P * Q * N, Q * N,
             PQkc, Qkc, kc, c, k, magic_PQkc, magic_Qkc, magic_kc, magic_c,
             CTRSK, CTRS, TRS, RS, S, magic_TRS, magic_RS, magic_S,

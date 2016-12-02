@@ -58,20 +58,23 @@
     param_str_d        : c[0x0][0x1b8]
     param_str_h        : c[0x0][0x1bc]
     param_str_w        : c[0x0][0x1c0]
-    param_P            : c[0x0][0x1c4]
-    param_Q            : c[0x0][0x1c8]
-    param_PQ           : c[0x0][0x1cc]
-    param_QN           : c[0x0][0x1d0]
-    param_PQN          : c[0x0][0x1d4]
-    param_MPQN         : c[0x0][0x1d8]
-    param_magic_Q      : c[0x0][0x1dc]
-    param_shift_Q      : c[0x0][0x1e0]
-    param_magic_PQ     : c[0x0][0x1e4]
-    param_shift_PQ     : c[0x0][0x1e8]
-    param_grid_P       : c[0x0][0x1ec]
-    param_grid_Q       : c[0x0][0x1f0]
-    param_grid_PQ      : c[0x0][0x1f4]
-    param_CRSTK        : c[0x0][0x1f8]
+    param_dil_d        : c[0x0][0x1c4]
+    param_dil_h        : c[0x0][0x1c8]
+    param_dil_w        : c[0x0][0x1cc]
+    param_P            : c[0x0][0x1d0]
+    param_Q            : c[0x0][0x1d4]
+    param_PQ           : c[0x0][0x1d8]
+    param_QN           : c[0x0][0x1dc]
+    param_PQN          : c[0x0][0x1e0]
+    param_MPQN         : c[0x0][0x1e4]
+    param_magic_Q      : c[0x0][0x1e8]
+    param_shift_Q      : c[0x0][0x1ec]
+    param_magic_PQ     : c[0x0][0x1f0]
+    param_shift_PQ     : c[0x0][0x1f4]
+    param_grid_P       : c[0x0][0x1f8]
+    param_grid_Q       : c[0x0][0x1fc]
+    param_grid_PQ      : c[0x0][0x200]
+    param_CRSTK        : c[0x0][0x204]
 </CONSTANT_MAPPING>
 
 <REGISTER_MAPPING>
@@ -250,12 +253,18 @@ NEXT_PQ:
 --:-:-:-:1      XMAD  mt, m,   param_str_d, RZ;
 --:-:-:-:1      XMAD  pr, p,   param_str_h, RZ;
 --:-:-:-:1      XMAD  qs, Q,   param_str_w, RZ;
---:-:-:-:1      IADD3 z1, mt, -param_pad_d, t1;
---:-:-:-:1      IADD3 y1, pr, -param_pad_h, r1;
---:-:-:-:1      IADD3 x1, qs, -param_pad_w, s1;
---:-:-:-:1      IADD3 z0, mt, -param_pad_d, t0;
---:-:-:-:1      IADD3 y0, pr, -param_pad_h, r0;
---:-:-:-:1      IADD3 x0, qs, -param_pad_w, s0;
+--:-:-:-:1      XMAD  z1, t1,  param_dil_d, mt;
+--:-:-:-:1      XMAD  y1, r1,  param_dil_h, pr;
+--:-:-:-:1      XMAD  x1, s1,  param_dil_w, qs;
+--:-:-:-:1      XMAD  z0, t0,  param_dil_d, mt;
+--:-:-:-:1      XMAD  y1, r0,  param_dil_h, pr;
+--:-:-:-:1      XMAD  x1, s0,  param_str_w, qs;
+--:-:-:-:1      IADD  z1, z1, -param_pad_d;
+--:-:-:-:1      IADD  y1, y1, -param_pad_h;
+--:-:-:-:1      IADD  x1, x1, -param_pad_w;
+--:-:-:-:1      IADD  z0, z0, -param_pad_d;
+--:-:-:-:1      IADD  y0, y0, -param_pad_h;
+--:-:-:-:1      IADD  x0, x0, -param_pad_w;
 </SCHEDULE_BLOCK>
 
 // Split blocks to fit inside of 36 registers

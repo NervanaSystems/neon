@@ -408,9 +408,11 @@ class ConvLayer(Layer):
         #lib.enable_winograd = 0
 
         dilated_conv = (dil_d != 1 or dil_h != 1 or dil_w != 1)
+        if dilated_conv:
+            assert (dil_w > 0 and dil_h > 0 and dil_w > 0)
 
         ####### Cuda C ###########
-        if lib.use_cudac_kernels or dilated_conv:
+        if lib.use_cudac_kernels:
 
             #3D conv not supported yet
             if T > 1 or D > 1:
@@ -422,7 +424,7 @@ class ConvLayer(Layer):
             self.updat_kernels = convolution.UpdateCuda(*args)
 
         ####### Winograd ###########
-        elif lib.enable_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)):
+        elif lib.enable_winograd and R == 3 and S == 3 and all(x == 1 for x in (D,M,T,str_w,str_h,str_d)) and not dilated_conv:
             from .winograd_conv import (FpropWinograd_2x2_3x3, BpropWinograd_2x2_3x3, UpdateWinograd_3x3_2x2,
                                         FpropWinograd_4x4_3x3, BpropWinograd_4x4_3x3, UpdateWinograd_3x3_4x4)
 
