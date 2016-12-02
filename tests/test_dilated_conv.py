@@ -117,8 +117,8 @@ def test_dilated_conv(backend_default):
     o1, w1 = run(be, fake_dilation=False)
     o2, w2 = run(be, fake_dilation=True)
     # Verify that the results of faked dilation match those of actual dilation.
-    assert np.allclose(o1, o2)
-    assert np.allclose(w1, w2)
+    assert np.allclose(o1, o2, atol=0, rtol=1e-4)
+    assert np.allclose(w1, w2, atol=0, rtol=1e-4)
 
 
 if __name__ == '__main__':

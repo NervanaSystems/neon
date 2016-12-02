@@ -430,8 +430,8 @@ __global__ void conv_%(operation)s(
     {
         for(output_pixel_x = output_pixel_x_save; output_pixel_x < Q; output_pixel_x += grid_q)
         {
-            int base_x = output_pixel_x * stride_w - padding_w + filter_x;
-            int base_y = output_pixel_y * stride_h - padding_h + filter_y;
+            int base_x = output_pixel_x * stride_w - padding_w + filter_x * dilation_w;
+            int base_y = output_pixel_y * stride_h - padding_h + filter_y * dilation_h;
             int crs_in_bounds = (c < C) && (base_x >= 0) && (base_x < W) &&
                                 (base_y >= 0) && (base_y < H);
             int input_pixel = W * base_y + base_x;
