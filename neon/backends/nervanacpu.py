@@ -715,9 +715,20 @@ class NervanaCPU(Backend):
             CPUTensor: newly created data structure reference
         """
         dtype = self.default_dtype if dtype is None else dtype
+
+        try:
+            ary = np.zeros(shape, dtype)
+        except ValueError:
+            raise ValueError(
+                'Invalid shape or dtype. shape: {shape} dtype: {dtype}'.format(
+                    shape=shape,
+                    dtype=dtype,
+                )
+            )
+
         return self.tensor_cls(
             backend=self,
-            ary=np.zeros(shape, dtype),
+            ary=ary,
             dtype=dtype,
             name=name,
             persist_values=persist_values)
