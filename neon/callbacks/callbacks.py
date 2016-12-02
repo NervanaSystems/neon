@@ -31,7 +31,7 @@ from neon import NervanaObject, logger as neon_logger
 from neon.data import NervanaDataIterator, Ticker
 from neon.util.compat import PY3
 from neon.util.persist import load_obj, save_obj, load_class
-from neon.layers import Convolution, BatchNorm, Multicost
+from neon.layers import Convolution, BatchNorm, Multicost, Tree
 from neon.transforms.cost import Metric
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,10 @@ class Callbacks(NervanaObject):
 
         self.model_file = model_file
 
-        self.add_callback(TrainCostCallback())
+        if isinstance(self.model().layers, Tree):
+            self.add_callback(TrainMulticostCallback())
+        else:
+            self.add_callback(TrainCostCallback())
 
         if progress_bar:
             self.add_callback(ProgressBarCallback())
@@ -1019,7 +1022,11 @@ def get_progress_string(tag, epoch, minibatch, nbatches, cost, time,
     """
     max_bar_width = 20
     bar_width = int(float(minibatch) / nbatches * max_bar_width)
-    s = u'Epoch {:<3} [{} |{:<%s}| {:4}/{:<4} batches, {:.2f} cost, {:.2f}s]' % max_bar_width
+    if isinstance(cost, np.ndarray):
+        s = u'Epoch {:<3} [{} |{:<%s}| {:4}/{:<4} batches, {} costs, {:.2f}s]' % max_bar_width
+        cost = u'({})'.format(u', '.join('{:.2f}'.format(c) for c in cost))
+    else:
+        s = u'Epoch {:<3} [{} |{:<%s}| {:4}/{:<4} batches, {:.2f} cost, {:.2f}s]' % max_bar_width
     return s.format(epoch, tag, blockchar * bar_width, minibatch, nbatches, cost, time)
 
 
@@ -1062,7 +1069,12 @@ class ProgressBarCallback(Callback):
         if (now - self.last_update > self.update_thresh_s or mb_complete == self.nbatches):
             self.last_update = now
             mbstart = callback_data['time_markers/minibatch'][epoch - 1] if epoch > 0 else 0
-            train_cost = callback_data['cost/train'][mbstart + minibatch]
+            if 'cost/train' in callback_data:
+                train_cost = callback_data['cost/train'][mbstart + minibatch]
+            elif 'multicost/train' in callback_data:
+                train_cost = callback_data['multicost/train'][mbstart + minibatch]
+            else:
+                train_cost = 'na'
 
             progress_string = get_progress_string("Train", epoch, mb_complete, self.nbatches,
                                                   train_cost, now - self.start_epoch)

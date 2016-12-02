@@ -1337,11 +1337,20 @@ class Multicost(NervanaObject):
         if not isinstance(inputs, list):
             return self.costs[0].get_cost(inputs, targets)
         else:
-            ltargets = targets if type(targets) in (tuple, list) else [targets for c in self.costs]
-            costvals = [c.get_cost(i, t) for c, i, t in zip(self.costs, inputs, ltargets)]
-            sum_optree = reduce(add, [w * c for w, c in zip(self.weights, costvals)])
-            costvals[0][:] = sum_optree
-            return costvals[0]
+            if type(targets) not in (tuple, list):
+                targets = [targets] * len(self.costs)
+
+            costs = []
+            for w, c, i, t in zip(self.weights, self.costs, inputs, targets):
+                # TODO: use sentinal class instead of None
+
+                # it is important that we don't even call get_cost on costs
+                # which aren't applicable because there are hooks and state
+                # that get set that we don't want to include.
+                if t is not None:
+                    costs.append(w * c.get_cost(i, t))
+
+            return reduce(add, costs)
 
     def get_errors(self, inputs, targets):
         """
@@ -1357,8 +1366,13 @@ class Multicost(NervanaObject):
         Returns:
             list of Tensors containing errors for each input
         """
-        l_targets = targets if type(targets) in (tuple, list) else [targets for c in self.costs]
-        for cost, i, t, we in zip(self.costs, inputs, l_targets, self.weights):
+        if type(targets) not in (tuple, list):
+            targets = [targets] * len(self.costs)
+
+        for cost, i, t, we in zip(self.costs, inputs, targets, self.weights):
+            if t is None:
+                continue
+
             cost.get_errors(i, t)
             if isinstance(cost.deltas, list):
                 for delta in cost.deltas:
