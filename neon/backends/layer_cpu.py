@@ -136,9 +136,12 @@ class ConvLayer(object):
                     x2 = q
         if f1 is None:
             return (slice(0, 0, 1), slice(0, 0, 1), 0)
-        if dilation % stride == 0:
-            return (slice(f1, f2 + 1), slice(x1, x2 + 1, dilation // stride), 0)
-        return (slice(f1, f2 + 1, stride), slice(x1, x2 + 1, dilation), 0)
+
+        f_step = 1
+        while ((f_step * dilation) % stride) != 0:
+            f_step += 1
+        x_step = (f_step * dilation) // stride
+        return (slice(f1, f2 + 1, f_step), slice(x1, x2 + 1, x_step), 0)
 
     def compound_ops(self, O, X, bias, bsum, relu, brelu, slope):
         if bias is not None:
