@@ -106,36 +106,39 @@ class ConvLayer(object):
             self.hSlice = [self.bprop_slice(h, R, P, pad_h, str_h, dil_h) for h in range(H)]
             self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w, dil_w) for w in range(W)]
 
-    def fprop_slice(self, q, S, X, padding, strides, dilation):
-        firstF = 0
-        lastF = S - 1
-        qs = q * strides - padding
-        x2 = qs + lastF * dilation
-        if qs < 0:
-            firstF = -qs
-            qs = 0
-        if x2 >= X:
-            dif = x2 - X + 1
-            lastF -= dif
-            x2 -= dif
-        return (slice(firstF, lastF + 1), slice(qs, x2 + 1, dilation), lastF - firstF + 1)
-
-    def bprop_slice(self, x, S, Q, padding, strides, dilation):
-        qs = x - (dilation * (S - 1) - padding)
-        firstF = None
-        for s in range(S):  # TODO remove loop logic here.
-            q = qs + s * dilation
-            if q % strides == 0:
-                q //= strides
-                if q >= 0 and q < Q:
-                    if firstF is None:
-                        firstF = s
-                        firstE = q
-                    lastF = s
-                    lastE = q
-        if firstF is None:
+    def fprop_slice(self, q, S, X, padding, stride, dilation):
+        f1 = None
+        qs = q * stride - padding
+        for s in range(S):
+            x = qs + s * dilation
+            if f1 is None and x >= 0 and x < X:
+                x1 = x
+                f1 = s
+            if x < X:
+                x2 = x
+                f2 = s
+        if f1 is None:
             return (slice(0, 0, 1), slice(0, 0, 1), 0)
-        return (slice(firstF, lastF + 1, strides), slice(firstE, lastE + 1, dilation), 0)
+        return (slice(f1, f2 + 1), slice(x1, x2 + 1, dilation), f2 - f1 + 1)
+
+    def bprop_slice(self, x, S, Q, padding, stride, dilation):
+        qs = x - (dilation * (S - 1) - padding)
+        f1 = None
+        for s in range(S):
+            q = qs + s * dilation
+            if q % stride == 0:
+                q //= stride
+                if q >= 0 and q < Q:
+                    if f1 is None:
+                        f1 = s
+                        x1 = q
+                    f2 = s
+                    x2 = q
+        if f1 is None:
+            return (slice(0, 0, 1), slice(0, 0, 1), 0)
+        if dilation % stride == 0:
+            return (slice(f1, f2 + 1), slice(x1, x2 + 1, dilation // stride), 0)
+        return (slice(f1, f2 + 1, stride), slice(x1, x2 + 1, dilation), 0)
 
     def compound_ops(self, O, X, bias, bsum, relu, brelu, slope):
         if bias is not None:

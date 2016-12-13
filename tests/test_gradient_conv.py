@@ -53,17 +53,21 @@ def pytest_generate_tests(metafunc):
             nin_rng = [5, 8]
             nifm_rng = [1, 2, 4]
             fs_rng = [2, 3, 4]
+            dil_h_rng = [1, 2, 3, 4]
+            dil_w_rng = [1, 2, 3, 4]
         else:
             nin_rng = [10]
             nifm_rng = [1, 5]
             fs_rng = [2, 3]
-        fargs = itt.product(nin_rng, nifm_rng, fs_rng, bsz_rng)
+            dil_h_rng = [3]
+            dil_w_rng = [3]
+        fargs = itt.product(nin_rng, nifm_rng, fs_rng, bsz_rng, dil_h_rng, dil_w_rng)
         metafunc.parametrize("convargs", fargs)
 
 
 # -- conv tests --
 def test_conv(backend_cpu64, convargs):
-    nin, nifm, fside, batch_size = convargs
+    nin, nifm, fside, batch_size, dil_h, dil_w = convargs
     fshape = (fside, fside, fside)
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     sz = nin * nin * nifm * batch_size
@@ -74,7 +78,8 @@ def test_conv(backend_cpu64, convargs):
 
     lshape = (nifm, nin, nin)
     init = Gaussian()
-    layer = ConvWithReset(fshape, dilation=dict(dil_d=1, dil_h=2, dil_w=2), init=init)
+    layer = ConvWithReset(fshape, strides=2, padding=fside-1,
+                          dilation=dict(dil_d=1, dil_h=dil_h, dil_w=dil_w), init=init)
 
     pert_frac = 0.1  # test 10% of the inputs
     # select pert_frac fraction of inps to perturb

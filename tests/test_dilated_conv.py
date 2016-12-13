@@ -79,15 +79,19 @@ def load(weights, model, K):
 
 def run(be, fake_dilation):
     K = 8
+    strides = 3
+    padding = 2
     be.rng = be.gen_rng(be.rng_seed)
-    train_shape = (1, 7, 7)
+    train_shape = (1, 16, 16)
 
     inp = be.array(be.rng.randn(np.prod(train_shape), be.bsz))
     init = Gaussian()
 
-    dil_dict = dict(dil_d=2, dil_h=2, dil_w=2)
     layers = [Conv((5, 5, K), init=init),
-              Conv((2, 2, K), init=init, dilation=dil_dict),
+              Conv((2, 2, K), strides=strides, padding=padding, init=init,
+                   dilation=dict(dil_d=1, dil_h=2, dil_w=2)),
+              Conv((2, 2, K), strides=strides, padding=padding, init=init,
+                   dilation=dict(dil_d=1, dil_h=2, dil_w=2)),
               Affine(nout=1, init=init)]
     model = Model(layers=layers)
     cost = GeneralizedCost(costfunc=CrossEntropyBinary())
@@ -97,13 +101,15 @@ def run(be, fake_dilation):
         # Perform regular convolution with an expanded filter.
         weights = save(model)
         new_layers = layers
-        # Replace the middle layer.
-        new_layers[1] = Conv((3, 3, K), init=init)
+        # Replace the middle layers.
+        new_layers[1] = Conv((3, 3, K), strides=strides, padding=padding, init=init)
+        new_layers[2] = Conv((3, 3, K), strides=strides, padding=padding, init=init)
         model = Model(layers=new_layers)
         cost = GeneralizedCost(costfunc=CrossEntropyBinary())
         model.initialize(train_shape, cost)
         load(weights, model, K)
 
+    print(model)
     model.optimizer = GradientDescentMomentum(learning_rate=0.01,
                                               momentum_coef=0.9)
     outputs = fprop(model, inp)
