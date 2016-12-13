@@ -433,6 +433,12 @@ class GradientDescentMomentum(Optimizer):
         v' = \\gamma v - \\alpha(\\nabla J(\\theta; x) + \\lambda\\theta)
         theta' = \\theta + v'
 
+    The optional `nesterov` parameter implements Nesterov Accelerated Gradient.
+    If this is set, we use the following update equations instead
+    .. math::
+        v' = \\gamma^2 v + \\alpha (\\gamma + 1) (\\nabla J(\\theta; x) + \\lambda\\theta)
+        theta' = \\theta + v'
+
     Example usage:
 
     .. code-block:: python
@@ -446,7 +452,7 @@ class GradientDescentMomentum(Optimizer):
 
     def __init__(self, learning_rate, momentum_coef, stochastic_round=False,
                  wdecay=0.0, gradient_clip_norm=None, gradient_clip_value=None,
-                 name=None, schedule=Schedule()):
+                 name=None, schedule=Schedule(), nesterov=False):
         """
         Class constructor.
 
@@ -470,6 +476,8 @@ class GradientDescentMomentum(Optimizer):
                                   Defaults to "gdm".
             schedule (neon.optimizers.optimizer.Schedule, optional): Learning
                         rate schedule.  Defaults to a constant learning rate.
+            nesterov (bool, optional): Use nesterov accelerated gradient.
+                                       Defaults to False.
         """
         super(GradientDescentMomentum, self).__init__(name=name)
         self.learning_rate, self.momentum_coef = (learning_rate, momentum_coef)
@@ -478,6 +486,7 @@ class GradientDescentMomentum(Optimizer):
         self.wdecay = wdecay
         self.schedule = schedule
         self.stochastic_round = stochastic_round
+        self.nesterov = nesterov
 
     def optimize(self, layer_list, epoch):
         """
@@ -496,6 +505,8 @@ class GradientDescentMomentum(Optimizer):
             param.rounding = self.stochastic_round
             if len(states) == 0 and self.momentum_coef != 0:
                 states.append(self.be.zeros_like(grad))
+                if self.nesterov:
+                    states.append(self.be.zeros_like(grad))
             grad = grad / self.be.bsz
             grad = self.clip_gradient_value(grad, self.gradient_clip_value)
 
@@ -503,8 +514,21 @@ class GradientDescentMomentum(Optimizer):
                 velocity = - lrate * (scale_factor * grad + self.wdecay * param)
             else:
                 velocity = states[0]
+                if self.nesterov:
+                    velocity_backup = states[-1]
+                    velocity_backup[:] = velocity
+
                 velocity[:] = velocity * self.momentum_coef \
                     - lrate * (scale_factor * grad + self.wdecay * param)
+
+                # Nesterov accelerated gradient (NAG) is implemented the same
+                # as in torch's "sgd.lua". It's a reformulation of Sutskever's
+                # NAG equation found in "On the importance of initialization
+                # and momentum in deep learning".
+                if self.nesterov:
+                    velocity[:] = (1 + self.momentum_coef) * velocity - \
+                                  self.momentum_coef * velocity_backup
+
             param[:] = param + velocity
 
 

@@ -66,6 +66,30 @@ def test_gdm(backend_default):
     compare_tensors(gdm, param_list, param2, tol=1e-7)
 
 
+def test_gdm_nesterov(backend_default):
+    lrate, mom, wdecay = 0.1, 0.9, 0.005
+    gdm = GradientDescentMomentum(learning_rate=lrate, momentum_coef=mom,
+                                  wdecay=wdecay, nesterov=True)
+    # params to be updated using GDM
+    param = np.random.rand(200, 128)
+    grad = 0.01 * np.random.rand(200, 128)
+
+    # params to be update manually
+    param2 = copy.deepcopy(param)
+    grad2 = grad / 128.
+    states = [0.01 * np.random.rand(200, 128),
+              0.01 * np.zeros_like(grad)]
+    velocity = states[0]
+    velocity_backup = states[1]
+    velocity_backup[:] = velocity
+
+    param2[:] = param2 + (1 + mom) * (velocity * mom - grad2 * lrate
+                                      - wdecay * lrate * param) - mom * velocity_backup
+    param_list = [((wrap(param), wrap(grad)),
+                   [wrap(states[0]), wrap(states[1])])]
+    compare_tensors(gdm, param_list, param2, tol=1e-7)
+
+
 def test_rmsprop(backend_default):
     rms = RMSProp()
     param = np.random.rand(200, 128)
