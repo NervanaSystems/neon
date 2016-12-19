@@ -21,6 +21,7 @@ from builtins import object, round, str, zip
 import numpy as np
 import logging
 import time
+import functools
 from neon.backends.backend import Tensor, Backend, OpTreeNode, OpCollection
 from neon.backends.layer_cpu import ConvLayer, DeconvLayer, PoolLayer
 from neon.util.compat import xrange
@@ -345,9 +346,27 @@ class CPUTensor(Tensor):
         if shape == self.shape:
             return self
 
+        try:
+            ary = self._tensor.reshape(shape)
+        except ValueError:
+            def product(vec):
+                return functools.reduce(lambda x, y: x * y, vec)
+
+            raise ValueError((
+                'The total size of a reshaped tensor must be the same as its '
+                'existing size. Tensor is currently shape {current_shape} '
+                'and size {current_size}. Attempted to reshape to '
+                '{reshape_shape} which would be size {reshape_size}.'
+            ).format(
+                current_shape=self._tensor.shape,
+                current_size=product(self._tensor.shape),
+                reshape_shape=shape,
+                reshape_size=product(shape),
+            ))
+
         return self.__class__(
             backend=self.backend,
-            ary=self._tensor.reshape(shape),
+            ary=ary,
             dtype=self._tensor.dtype,
             base=self)
 
