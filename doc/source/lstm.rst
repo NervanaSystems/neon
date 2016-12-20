@@ -39,7 +39,7 @@ imdb data.
 
     # load the imdb data
     # 1. Limit vocab size, 2. Truncate length, 3. Pad with whitespace
-    data = IMDB(vocab_size, max_len, path=args.data_dir)
+    imdb = IMDB(vocab_size, max_len)
 
     train_set = imdb.train_iter
     test_set = imdb.test_iter
@@ -67,7 +67,7 @@ activations.
 The network consists of a word embedding layer, and LSTM, RecurrentSum,
 Dropout and Affine layers.
 
-1. ::py:class:`.LookupTable` is a word embedding that maps from a sparse one-hot representation to dense word vectors. The embedding is learned from the data.
+1. :py:class:`.LookupTable` is a word embedding that maps from a sparse one-hot representation to dense word vectors. The embedding is learned from the data.
 2. :py:class:`.LSTM` is a recurrent layer with "long short-term memory" units. LSTM networks are good at learning temporal dependencies during training, and often perform better than standard RNN layers.
 3. :py:class:`.RecurrentSum` is a recurrent output layer that collapses over the time dimension of the LSTM by summing outputs from individual steps.
 4. :py:class:`.Dropout` performs regularization by silencing a random subset of the units during training.

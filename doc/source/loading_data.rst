@@ -142,6 +142,7 @@ Autoencoders are a special case of regression where the desired outputs :math:`y
 
     # Example construction of ArrayIterator for Autoencoder task with MNIST
     from neon.data import MNIST
+    from neon.data import ArrayIterator
 
     mnist = MNIST()
 

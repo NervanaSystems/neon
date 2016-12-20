@@ -59,6 +59,7 @@ CIFAR10 can be fetched in the following manner:
 .. code-block:: python
 
     from neon.data import CIFAR10
+
     cifar10 = CIFAR10()
     train = cifar10.train_iter
     test = cifar10.valid_iter
@@ -79,8 +80,9 @@ The image caption data can be fetched in the following manner:
 
 .. code-block:: python
 
-    # download dataset
     from neon.data import Flickr8k
+
+    # download dataset
     flickr8k = Flickr8k()  # Other set names are Flickr30k and Coco
     train_set = flickr8k.train_iter
 
@@ -135,6 +137,9 @@ iterator for training.
 
 .. code-block:: python
 
+    from neon.data import BABI
+    from neon.data import QA
+
     # get the bAbI data
     babi = BABI(path='.', task='qa15_basic-deduction', subset='en')
 
@@ -155,6 +160,8 @@ train an autoencoder on the MNIST dataset:
 .. code-block:: python
 
     from neon.data import MNIST
+    from neon.data import ArrayIterator
+
     mnist = MNIST()
     # get the raw data arrays, both train set and validation set
     (X_train, y_train), (X_test, y_test), nclass = mnist.load_data()

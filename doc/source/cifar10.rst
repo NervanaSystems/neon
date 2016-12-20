@@ -55,7 +55,7 @@ metadata required for accessing the data.
 
     
     from neon.data import CIFAR10
-    cifar10_dataset = CIFAR()
+    cifar10_dataset = CIFAR10()
 
 We put the dataset into a format neon can understand by creating an ArrayIterator
 instance. Doing so moves the data onto the compute device (e.g. GPU or CPU)
@@ -194,7 +194,9 @@ of size 128, we fill the rest with zeros.
 
 .. code-block:: python
 
+    from neon.data import ArrayIterator
     import numpy as np
+
     x_new = np.zeros((128,3072), dtype=np.float32)
     x_new[0] = crop.reshape(1,3072)/ 255
 
