@@ -174,6 +174,7 @@ Docker images (note that these are not supported/maintained by Nervana):
 
 -  `neon (CPU only) <https://hub.docker.com/r/kaixhin/neon/>`__
 -  `neon (GPU) <https://hub.docker.com/r/kaixhin/cuda-neon/>`__
+-  `neon (CPU with Jupyter Notebook) <https://hub.docker.com/r/sofianhw/docker-neon-ipython/>`__
 
 Support
 ~~~~~~~
