@@ -195,7 +195,9 @@ class Recurrent(ParameterLayer):
             doFill = True
         else:
             # Deserialized weights and empty grad
-            assert self.W.shape == (weight_dim, g_nout)
+            if self.W.shape != (weight_dim, g_nout):
+                raise ValueError('expected {} found {}'.format(
+                    self.W.shape, (weight_dim, g_nout)))
             assert self.dW.shape == (weight_dim, g_nout)
 
         self.W_input = self.W[:nin].reshape((g_nout, nin))

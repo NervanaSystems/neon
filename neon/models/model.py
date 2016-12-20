@@ -310,13 +310,14 @@ class Model(NervanaObject):
 
         return Ypred[:dataset.ndata]
 
-    def get_outputs_beam(self, dataset, num_beams=0):
+    def get_outputs_beam(self, dataset, num_beams=0, steps=None):
         """
         Get the activation outputs of the final model layer for the dataset
 
         Arguments:
             dataset (NervanaDataIterator) Dataset iterator to perform fit on
             num_beams (int, optional) Nonzero to use beamsearch for sequence to sequence models
+            steps (Int): Length of desired output in number of time steps
 
         Returns:
             Host numpy array: the output of the final layer for the entire Dataset
@@ -332,7 +333,7 @@ class Model(NervanaObject):
         logger.info('Performing beam search with ' + str(num_beams) + ' beams')
         for idx, (x, t) in enumerate(dataset):
             if num_beams > 0:
-                x = beamsearch.beamsearch(x, num_beams)
+                x = beamsearch.beamsearch(x, num_beams, steps=steps)
             else:
                 x = self.fprop(x, inference=True)
             if Ypred is None:

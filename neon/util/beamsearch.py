@@ -25,13 +25,14 @@ class BeamSearch(NervanaObject):
         seq2seq.decoder.switch_mode(inference=True)
         self.z_shape = new_steps if self.hasLUT else (seq2seq.out_shape[0], new_steps)
 
-    def beamsearch(self, inputs, num_beams=5):
+    def beamsearch(self, inputs, num_beams=5, steps=None):
         """
         Perform an fprop path and beam search on a given set of network inputs.
 
         Arguments:
             inputs (Tensor): Minibatch of network inputs
             num_beams (Int): Number of beams (hypothesis) to search over
+            steps (Int): Length of desired output in number of time steps
         """
         self.num_beams = num_beams
 
@@ -39,7 +40,10 @@ class BeamSearch(NervanaObject):
         self.num_dead = 0
 
         # allocate space for outputs, hypotheses and associated scores
-        steps = self.layers.in_shape[1]
+        # default to the number of steps used by this decoder most recently.
+        if steps is None:
+            steps = self.layers.in_shape[1]
+
         bsz = self.be.bsz
 
         self.z_list = [self.be.iobuf(self.z_shape) for _ in range(num_beams)]
