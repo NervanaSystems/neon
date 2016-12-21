@@ -500,7 +500,12 @@ class Model(NervanaObject):
         pdict = self.get_description(get_weights=True, keep_states=keep_states)
         pdict['epoch_index'] = self.epoch_index + 1
         if self.initialized:
-            pdict['train_input_shape'] = self.layers.in_shape
+            if not hasattr(self.layers, 'decoder'):
+                pdict['train_input_shape'] = self.layers.in_shape
+            else:
+                # serialize shapes both for encoder and decoder
+                pdict['train_input_shape'] = (self.layers.encoder.in_shape +
+                                              self.layers.decoder.in_shape)
         if fn is not None:
             save_obj(pdict, fn)
             return

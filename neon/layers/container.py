@@ -1149,9 +1149,16 @@ class Seq2Seq(LayerContainer):
         return desc
 
     def configure(self, in_obj):
-        # assumes Seq2Seq will always get dataset as in_obj
-        self.encoder.configure(in_obj.shape)
-        self.decoder.configure(in_obj.decoder_shape)
+        if isinstance(in_obj, tuple):
+            assert len(in_obj) == 4, "Seq2Seq requires in_obj to provide shape and decoder_shape"
+            # assumes deserialized input with both shapes concatenated into in_obj
+            # necessary to support serialization into train_input_shape for cloud inference
+            self.encoder.configure(in_obj[0:2])
+            self.decoder.configure(in_obj[2:4])
+        else:
+            # assumes Seq2Seq will always get dataset as in_obj
+            self.encoder.configure(in_obj.shape)
+            self.decoder.configure(in_obj.decoder_shape)
 
         self.parallelism = self.decoder.parallelism
         self.out_shape = self.decoder.out_shape
