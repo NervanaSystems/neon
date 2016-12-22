@@ -968,12 +968,21 @@ class Decoder(Sequential):
     except for fprop which takes the additional init_state_list, and bprop
     which takes additional hidden_delta
     """
-    def __init__(self, layers, name=None):
+    def __init__(self, layers, name=None, start_index=None):
+        """
+        Arguments:
+            layers: the layers to use for this Decoder
+            start_index: the index of the symbol to use as the start symbol
+                         when generating a new sequence.  If None, defaults to
+                         all 0 (not the same as index 0)
+
+        """
         super(Decoder, self).__init__(layers, name)
         # list of recurrent layers only:
         self._recurrent = [l for l in self.layers if isinstance(l, Recurrent)]
         self.connections = None
         self.full_steps = None
+        self.start_index = start_index
 
     def fprop(self, x, inference=False, init_state_list=None):
 

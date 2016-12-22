@@ -44,8 +44,8 @@ class BeamSearch(NervanaObject):
 
         self.z_list = [self.be.iobuf(self.z_shape) for _ in range(num_beams)]
         for i in range(num_beams):
-            if getattr(self.layers, 'start_index', None) is not None:
-                self.z_list[i][self.layers.start_index] = 1
+            if getattr(self.layers.decoder, 'start_index', None) is not None:
+                self.z_list[i][self.layers.decoder.start_index] = 1
 
         self.candidates = [np.zeros((steps, bsz)) for _ in range(num_beams)]
         self.scores = [np.zeros(bsz) for _ in range(num_beams)]
