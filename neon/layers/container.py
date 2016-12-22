@@ -979,6 +979,14 @@ class Decoder(Sequential):
 
         if init_state_list is None:
             init_state_list = [None for _ in range(len(self._recurrent))]
+        else:
+            if len(self._recurrent) > len(init_state_list):
+                raise ValueError((
+                    'found {n} Recurrent layers, but init_state_list is only length {l}'
+                ).format(
+                    n=len(self._recurrent),
+                    l=len(init_state_list),
+                ))
 
         ii = 0  # index into init_state_list (decoder recurrent layer number)
         for l in self.layers:
@@ -987,14 +995,6 @@ class Decoder(Sequential):
 
             # special fprop for recurrent layers with init state
             if isinstance(l, Recurrent):
-                if ii >= len(init_state_list):
-                    raise ValueError((
-                        'found at least {ii} Recurrent layers, but '
-                        'init_state_list is only length {l}'
-                    ).format(
-                        ii=ii, l=len(init_state_list)
-                    ))
-
                 x = l.fprop(x, inference=inference, init_state=init_state_list[ii])
                 ii = ii + 1
             else:
