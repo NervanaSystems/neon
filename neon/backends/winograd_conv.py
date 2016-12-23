@@ -561,7 +561,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
 
         super(XpropWinograd_4x4_3x3, self).__init__(lib, dtype,
              N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
-             0, pad_h, pad_w, 1,1,1, bprop)
+             0, pad_h, pad_w, 1,1,1, 1,1,1, bprop)
 
         SMs = _get_sm_count()
 
@@ -586,7 +586,7 @@ class XpropWinograd_4x4_3x3(KernelGroup):
     def init(self, autotune=0, external=1):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
 
         if not autotune:
             autotune_db = shelve.open(self.autotune_db_file)
@@ -836,7 +836,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
 
         super(UpdateWinograd_3x3_4x4, self).__init__(lib, dtype,
              N, C, K, 1, H, W, 1, 3, 3, 1, P, Q,
-             0, pad_h, pad_w, 1,1,1)
+             0, pad_h, pad_w, 1,1,1, 1,1,1)
 
         SMs = _get_sm_count()
 
@@ -856,7 +856,7 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
     def init(self, autotune=False):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
         itemsize = self.dtype.itemsize
 
         if N == 1:
@@ -1112,7 +1112,7 @@ class XpropWinograd_2x2_5x5(KernelGroup):
 
         super(XpropWinograd_2x2_5x5, self).__init__(lib, dtype,
              N, C, K, 1, H, W, 1, 5, 5, 1, P, Q,
-             0, pad_h, pad_w, 1,1,1, bprop)
+             0, pad_h, pad_w, 1,1,1, 1,1,1, bprop)
 
         self.init()
         lib.set_scratch_size(self.filter_trans.size, self.output_trans.size)
@@ -1120,7 +1120,7 @@ class XpropWinograd_2x2_5x5(KernelGroup):
     def init(self):
 
         (N, C, K, D, H, W, T, R, S, M, P, Q,
-        pad_d, pad_h, pad_w, str_d, str_h, str_w) = self.params
+        pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
 
         if N == 1:
             shlN = 0
