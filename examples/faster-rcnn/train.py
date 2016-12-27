@@ -32,7 +32,7 @@ from __future__ import division
 from neon.backends import gen_backend
 from neon.util.argparser import NeonArgparser, extract_valid_args
 from neon.optimizers import GradientDescentMomentum, MultiOptimizer, StepSchedule
-from neon.callbacks.callbacks import Callbacks, TrainMulticostCallback
+from neon.callbacks.callbacks import Callbacks
 from neon.util.persist import save_obj, get_data_cache_dir
 from objectlocalization import PASCALVOC
 from neon.transforms import CrossEntropyMulti, SmoothL1Loss
@@ -109,7 +109,6 @@ if args.model_file is None:
     util.load_vgg_all_weights(model, cache_dir)
 
 callbacks = Callbacks(model, eval_set=train_set, **args.callback_args)
-callbacks.add_callback(TrainMulticostCallback())
 
 model.fit(train_set, optimizer=optimizer, cost=cost, num_epochs=args.epochs, callbacks=callbacks)
 
