@@ -1,5 +1,18 @@
 # ChangeLog
 
+## v1.8.0 (2016-12-28):
+
+* Skip Thought Vectors (http://arxiv.org/abs/1506.06726) example
+* Dilated convolution support
+* Nesterov Accelerated Gradient option to SGD optimizer
+* MultiMetric class to allow wrapping Metric classes
+* Support for serializing and deserializing encoder-decoder models
+* Allow specifying the number of time steps to evaluate during beam search
+* A new community-contributed Docker image
+* Improved error messages when a tensor is created with an invalid shape or reshaped to an incompatible size
+* Fix bugs in MultiCost support
+* Documentation fixes [#331]
+
 ## v1.7.0 (2016-11-21):
 
 * Update Data Loader to aeon https://github.com/NervanaSystems/aeon for flexible,

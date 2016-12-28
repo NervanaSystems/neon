@@ -18,7 +18,7 @@ from setuptools import setup, find_packages, Command
 import subprocess
 
 # Define version information
-VERSION = '1.7.0'
+VERSION = '1.8.0'
 FULLVERSION = VERSION
 write_version = True
 

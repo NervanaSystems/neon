@@ -17,6 +17,22 @@
 Previous Versions
 =================
 
+neon v1.7.0
+-----------
+
+|Docs170|_
+
+neon v1.7.0 released November 11 2016 supporting:
+
+* Update Data Loader to aeon https://github.com/NervanaSystems/aeon
+* Add Neural Machine Translation model
+* Remove Fast RCNN model (use Faster RCNN model instead)
+* Remove music_genres example
+* Fix super blocking for small N with 1D conv
+* Fix update-direct conv kernel for small N
+* Add gradient clipping to Adam optimizer
+* Documentation updates and bug fixes
+
 neon v1.6.0
 -----------
 
@@ -357,6 +373,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs170| replace:: Docs
 .. |Docs160| replace:: Docs
 .. |Docs154| replace:: Docs
 .. |Docs153| replace:: Docs
@@ -378,6 +395,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs170: http://neon.nervanasys.com/docs/1.7.0
 .. _Docs160: http://neon.nervanasys.com/docs/1.6.0
 .. _Docs154: http://neon.nervanasys.com/docs/1.5.4
 .. _Docs153: http://neon.nervanasys.com/docs/1.5.3

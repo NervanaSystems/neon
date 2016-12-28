@@ -36,14 +36,16 @@ Features include:
 
 New features in this release:
 
-* Update Data Loader to aeon https://github.com/NervanaSystems/aeon
-* Add Neural Machine Translation model
-* Remove Fast RCNN model (use Faster RCNN model instead)
-* Remove music_genres example
-* Fix super blocking for small N with 1D conv
-* Fix update-direct conv kernel for small N
-* Add gradient clipping to Adam optimizer
-* Documentation updates and bug fixes
+* Skip Thought Vectors (http://arxiv.org/abs/1506.06726) example
+* Dilated convolution support
+* Nesterov Accelerated Gradient option to SGD optimizer
+* MultiMetric class to allow wrapping Metric classes
+* Support for serializing and deserializing encoder-decoder models
+* Allow specifying the number of time steps to evaluate during beam search
+* A new community-contributed Docker image
+* Improved error messages when a tensor is created with an invalid shape or reshaped to an incompatible size
+* Fix bugs in MultiCost support
+* Documentation fixes [#331]
 * See `change log`_.
 
 We use neon internally at Nervana to solve our `customers' problems`_
