@@ -98,7 +98,7 @@ class Rectlinclip(Transform):
     Clipped ReLu activation function
     Computes the function f(x) = min(max(0, x),cutoff)
     """
-    def __init__(self, slope=0.01, name=None, xcut=20.0):
+    def __init__(self, slope=0, name=None, xcut=20.0):
         super(Rectlinclip, self).__init__(name)
         self.xcut = xcut
         self.slope = slope
