@@ -718,6 +718,7 @@ class Convolution(ParameterLayer):
         self.fshape = fshape
         self.strides = strides
         self.padding = padding
+        self.dilation = dilation
 
         if isinstance(fshape, tuple) or isinstance(fshape, list):
             fkeys = ('R', 'S', 'K') if len(fshape) == 3 else ('T', 'R', 'S', 'K')
@@ -853,6 +854,7 @@ class Deconvolution(ParameterLayer):
         self.fshape = fshape
         self.strides = strides
         self.padding = padding
+        self.dilation = dilation
 
         if isinstance(fshape, tuple):
             # fshape[2] should now map to C (nifm)
