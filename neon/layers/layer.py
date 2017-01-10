@@ -690,15 +690,15 @@ class Convolution(ParameterLayer):
         strides (int, dict, optional): strides to apply convolution
             window over. An int applies to all dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
-            to str_w = str_h = None
+            to str_w = str_h = 1
         padding (int, dict, optional): padding to apply to edges of
             input. An int applies to all dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
-            to pad_w = pad_h = None
+            to pad_w = pad_h = 0
         dilation (int, dict, optional): dilation to apply to dimensions of
             the filter. An int applies to all dimensions, or a dict with dil_h
             and dil_w applies to h and w dimensions distinctly.  Defaults
-            to dil_w = dil_h = None
+            to dil_w = dil_h = 1
         init (Initializer, optional): Initializer object to use for
             initializing layer weights
         name (str, optional): layer name. Defaults to "ConvolutionLayer"
@@ -827,15 +827,15 @@ class Deconvolution(ParameterLayer):
         strides (int, dict, optional): strides to apply convolution
             window over. An int applies to all dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
-            to str_w = str_h = None
+            to str_w = str_h = 1
         padding (int, dict, optional): padding to apply to edges of
             input. An int applies to all dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
-            to pad_w = pad_h = None
+            to pad_w = pad_h = 0
         dilation (int, dict, optional): dilation to apply to dimensions of
             the filter. An int applies to all dimensions, or a dict with dil_h
             and dil_w applies to h and w dimensions distinctly.  Defaults
-            to dil_w = dil_h = None
+            to dil_w = dil_h = 1
         init (Initializer, optional): Initializer object to use for
             initializing layer weights
         name (str, optional): layer name. Defaults to "DeconvolutionLayer"
@@ -1507,15 +1507,15 @@ class Conv(CompoundLayer):
         strides (int, dict, optional): strides to apply convolution
             window over. An int applies to all dimensions, or a dict with
             str_h and str_w applies to h and w dimensions distinctly.  Defaults
-            to str_w = str_h = None
+            to str_w = str_h = 1
         padding (int, dict, optional): padding to apply to edges of
             input. An int applies to all dimensions, or a dict with pad_h
             and pad_w applies to h and w dimensions distinctly.  Defaults
-            to pad_w = pad_h = None
+            to pad_w = pad_h = 0
         dilation (int, dict, optional): dilation to apply to dimensions of
             the filter. An int applies to all dimensions, or a dict with dil_h
             and dil_w applies to h and w dimensions distinctly.  Defaults
-            to dil_w = dil_h = None
+            to dil_w = dil_h = 1
         bias (Initializer): an initializer to use for bias parameters
         activation (Transform): a transform object with fprop and bprop
             functions to apply
