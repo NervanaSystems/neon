@@ -487,6 +487,8 @@ class GradientDescentMomentum(Optimizer):
         self.schedule = schedule
         self.stochastic_round = stochastic_round
         self.nesterov = nesterov
+        if self.momentum_coef == 0 and self.nesterov:
+            raise ValueError("nesterov requires non-zero momentum")
 
     def optimize(self, layer_list, epoch):
         """
@@ -505,31 +507,27 @@ class GradientDescentMomentum(Optimizer):
             param.rounding = self.stochastic_round
             if len(states) == 0 and self.momentum_coef != 0:
                 states.append(self.be.zeros_like(grad))
-                if self.nesterov:
-                    states.append(self.be.zeros_like(grad))
+
             grad = grad / self.be.bsz
             grad = self.clip_gradient_value(grad, self.gradient_clip_value)
+            grad = scale_factor * grad + self.wdecay * param
 
             if self.momentum_coef == 0:
-                velocity = - lrate * (scale_factor * grad + self.wdecay * param)
+                velocity = - lrate * grad
+                param[:] = param + velocity
             else:
                 velocity = states[0]
-                if self.nesterov:
-                    velocity_backup = states[-1]
-                    velocity_backup[:] = velocity
-
-                velocity[:] = velocity * self.momentum_coef \
-                    - lrate * (scale_factor * grad + self.wdecay * param)
+                velocity[:] = self.momentum_coef * velocity - lrate * grad
 
                 # Nesterov accelerated gradient (NAG) is implemented the same
                 # as in torch's "sgd.lua". It's a reformulation of Sutskever's
                 # NAG equation found in "On the importance of initialization
                 # and momentum in deep learning".
                 if self.nesterov:
-                    velocity[:] = (1 + self.momentum_coef) * velocity - \
-                                  self.momentum_coef * velocity_backup
-
-            param[:] = param + velocity
+                    param[:] = param + self.momentum_coef * velocity -\
+                               lrate * grad
+                else:
+                    param[:] = param + velocity
 
 
 class RMSProp(Optimizer):
