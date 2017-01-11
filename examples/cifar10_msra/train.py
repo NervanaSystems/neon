@@ -27,7 +27,7 @@ train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.
 config_files = [train_config] if os.path.exists(train_config) else []
 
 parser = NeonArgparser(__doc__, default_config_files=config_files)
-parser.add_argument('--depth', type=int, default=9,
+parser.add_argument('--depth', type=int, default=2,
                     help='depth of each stage (network depth will be 9n+2)')
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
