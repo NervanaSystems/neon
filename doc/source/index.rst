@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2015 Nervana Systems Inc.
+.. Copyright 2015-2017 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -36,17 +36,10 @@ Features include:
 
 New features in this release:
 
-* Skip Thought Vectors (http://arxiv.org/abs/1506.06726) example
-* Dilated convolution support
-* Nesterov Accelerated Gradient option to SGD optimizer
-* MultiMetric class to allow wrapping Metric classes
-* Support for serializing and deserializing encoder-decoder models
-* Allow specifying the number of time steps to evaluate during beam search
-* A new community-contributed Docker image
-* Improved error messages when a tensor is created with an invalid shape or reshaped to an incompatible size
-* Fix bugs in MultiCost support
-* Documentation fixes [#331]
-* See `change log`_.
+* Bug fix: Add dilation to object dict and assign defaults to dil_w = dil_h = 1 [#335, #336]
+* Bug fix: Prevent GPU backend from ignoring non-zero slope in Rectlinclip and change default slope to 0
+* Bug fix: Nesterov momentum was updating velocities incorrectly
+* See more in the `change log`_.
 
 We use neon internally at Nervana to solve our `customers' problems`_
 in many domains. Consider joining us. We are hiring across several

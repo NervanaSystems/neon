@@ -1,5 +1,11 @@
 # ChangeLog
 
+## v1.8.1 (2017-01-17):
+
+* Bug fix: Add dilation to object dict and assign defaults to dil_w = dil_h = 1 [#335, #336]
+* Bug fix: Prevent GPU backend from ignoring non-zero slope in Rectlinclip and change default slope to 0
+* Bug fix: Nesterov momentum was updating velocities incorrectly
+
 ## v1.8.0 (2016-12-28):
 
 * Skip Thought Vectors (http://arxiv.org/abs/1506.06726) example

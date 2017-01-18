@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2015-2016 Nervana Systems Inc.
+.. Copyright 2015-2017 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -16,6 +16,24 @@
 
 Previous Versions
 =================
+
+neon v1.8.0
+-----------
+
+|Docs180|_
+
+neon v1.8.0 released December 28, 2016 supporting:
+
+* Skip Thought Vectors (http://arxiv.org/abs/1506.06726) example
+* Dilated convolution support
+* Nesterov Accelerated Gradient option to SGD optimizer
+* MultiMetric class to allow wrapping Metric classes
+* Support for serializing and deserializing encoder-decoder models
+* Allow specifying the number of time steps to evaluate during beam search
+* A new community-contributed Docker image
+* Improved error messages when a tensor is created with an invalid shape or reshaped to an incompatible size
+* Fix bugs in MultiCost support
+* Documentation fixes [#331]
 
 neon v1.7.0
 -----------
@@ -373,6 +391,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs180| replace:: Docs
 .. |Docs170| replace:: Docs
 .. |Docs160| replace:: Docs
 .. |Docs154| replace:: Docs
@@ -395,6 +414,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs180: http://neon.nervanasys.com/docs/1.8.0
 .. _Docs170: http://neon.nervanasys.com/docs/1.7.0
 .. _Docs160: http://neon.nervanasys.com/docs/1.6.0
 .. _Docs154: http://neon.nervanasys.com/docs/1.5.4
