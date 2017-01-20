@@ -55,8 +55,8 @@ def main():
                         help='Output path used when training model')
     parser.add_argument('--w2v_path', required=False, default=None,
                         help='Path to GoogleNews w2v file for voab expansion.')
-    parser.add_argument('--eval_data_path', required=True, default='./SICK_data',
-                        help='')
+    parser.add_argument('--eval_data_path', required=False, default='./SICK_data',
+                        help='Path to the SICK dataset for evaluating semantic relateness')
     parser.add_argument('--max_vocab_size', required=False, default=1000000,
                         help='Limit the vocabulary expansion to fit in GPU memory')
     parser.add_argument('--subset_pct', required=False, default=100,
