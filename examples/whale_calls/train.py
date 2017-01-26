@@ -16,7 +16,7 @@
 import os
 from neon import logger as neon_logger
 from neon.util.argparser import NeonArgparser
-from neon.optimizers import Adadelta
+from neon.optimizers import RMSProp
 from neon.transforms import Misclassification
 from neon.callbacks.callbacks import Callbacks
 from network import create_network
@@ -41,7 +41,7 @@ metric = Misclassification()
 
 model.fit(dataset=train,
           cost=cost_obj,
-          optimizer=Adadelta(),
+          optimizer=RMSProp(learning_rate=1e-4),
           num_epochs=args.epochs,
           callbacks=Callbacks(model, eval_set=val, metric=metric, **args.callback_args))
 

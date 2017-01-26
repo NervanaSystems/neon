@@ -41,7 +41,7 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
             f.write('manifest = [{}]\n'.format(manifest_list_cfg))
             f.write('manifest_root = {}\n'.format(out_dir))
             f.write('log = {}\n'.format(log_file))
-            f.write('epochs = 16\nrng_seed = 0\nverbose = True\n')
+            f.write('epochs = 8\nrng_seed = 0\nverbose = True\n')
             if runtype == 'subm':
                 f.write('save_path = {}\n'.format(os.path.join(orig_out_dir, 'model.p')))
                 f.write('submission_file = {}\n'.format(os.path.join(orig_out_dir, 'subm.txt')))

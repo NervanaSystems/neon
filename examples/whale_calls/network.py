@@ -13,14 +13,14 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 
-from neon.initializers import Gaussian
+from neon.initializers import GlorotUniform
 from neon.layers import Conv, Pooling, GeneralizedCost, Affine, DeepBiRNN, RecurrentLast
 from neon.models import Model
 from neon.transforms import CrossEntropyBinary, Rectlin, Softmax
 
 
 def create_network():
-    init = Gaussian(scale=0.01)
+    init = GlorotUniform()
     layers = [
         Conv((3, 3, 128), init=init, activation=Rectlin(), strides=dict(str_h=1, str_w=2)),
         Conv((3, 3, 256), init=init, batch_norm=True, activation=Rectlin()),
