@@ -1622,7 +1622,7 @@ class NervanaCPU(Backend):
                                 if max_idx_tmp[c] == (h * W + w):
                                     array_delta[c, h, w, int(idx)] += array_E[c, ph, pw, b_id]
 
-    def nms(self, detections, threshold):
+    def nms(self, detections, threshold, normalized=False):
         """
         Function to perform non-maximal supression.
 
@@ -1631,20 +1631,29 @@ class NervanaCPU(Backend):
                                  (x1, y1, x2, y2, score). Assume the boxes have already
                                  been sorted based on score in descending order
             output_mask (Tensor): pre-allocated buffer for mask output from the kernel
-            box_count (int): number of boxes
             threshold (float): box overlap threshold, boxes with smaller overlaps will be kept
+            normalized (bool): whether box coordinates are normalized to image dimensions
 
         Outputs:
             keep_ind (list): list of indices
         """
-        dets = detections.get()
-        x1 = dets[:, 0]
-        y1 = dets[:, 1]
-        x2 = dets[:, 2]
-        y2 = dets[:, 3]
-        scores = dets[:, 4]
+        if normalized is True:
+            offset = 0
+        else:
+            offset = 1
 
-        areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+        dets = detections.get()
+
+        # remove zero score entries
+        keep = np.where(dets[:, 4] != 0)[0]
+
+        x1 = dets[keep, 0]
+        y1 = dets[keep, 1]
+        x2 = dets[keep, 2]
+        y2 = dets[keep, 3]
+        scores = dets[keep, 4]
+
+        areas = (x2 - x1 + offset) * (y2 - y1 + offset)
         order = scores.argsort()[::-1]
 
         keep = []
@@ -1656,8 +1665,8 @@ class NervanaCPU(Backend):
             xx2 = np.minimum(x2[i], x2[order[1:]])
             yy2 = np.minimum(y2[i], y2[order[1:]])
 
-            w = np.maximum(0.0, xx2 - xx1 + 1)
-            h = np.maximum(0.0, yy2 - yy1 + 1)
+            w = np.maximum(0.0, xx2 - xx1 + offset)
+            h = np.maximum(0.0, yy2 - yy1 + offset)
             inter = w * h
             ovr = inter / (areas[i] + areas[order[1:]] - inter)
 

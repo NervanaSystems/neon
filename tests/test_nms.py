@@ -25,15 +25,21 @@ import itertools as itt
 import numpy as np
 
 
-def py_cpu_nms(dets, thresh):
+def py_cpu_nms(dets, thresh, normalized):
     """Pure Python NMS baseline."""
-    x1 = dets[:, 0]
-    y1 = dets[:, 1]
-    x2 = dets[:, 2]
-    y2 = dets[:, 3]
-    scores = dets[:, 4]
+    if normalized:
+        offset = 0
+    else:
+        offset = 1
 
-    areas = (x2 - x1 + 1) * (y2 - y1 + 1)
+    keep = np.where(dets[:, 4] != 0)[0]
+    x1 = dets[keep, 0]
+    y1 = dets[keep, 1]
+    x2 = dets[keep, 2]
+    y2 = dets[keep, 3]
+    scores = dets[keep, 4]
+
+    areas = (x2 - x1 + offset) * (y2 - y1 + offset)
     order = scores.argsort()[::-1]
 
     keep = []
@@ -45,8 +51,8 @@ def py_cpu_nms(dets, thresh):
         xx2 = np.minimum(x2[i], x2[order[1:]])
         yy2 = np.minimum(y2[i], y2[order[1:]])
 
-        w = np.maximum(0.0, xx2 - xx1 + 1)
-        h = np.maximum(0.0, yy2 - yy1 + 1)
+        w = np.maximum(0.0, xx2 - xx1 + offset)
+        h = np.maximum(0.0, yy2 - yy1 + offset)
         inter = w * h
         ovr = old_div(inter, (areas[i] + areas[order[1:]] - inter))
 
@@ -61,14 +67,16 @@ def pytest_generate_tests(metafunc):
 
     thre_rng = [0.5, 0.7]
     count_rng = [300, 600, 1000]
+    num_zero_boxes = [0, 50, 100]
+    normalized = [True, False]
     if 'fargs' in metafunc.fixturenames:
-        fargs = itt.product(thre_rng, count_rng)
+        fargs = itt.product(thre_rng, count_rng, normalized, num_zero_boxes)
         metafunc.parametrize('fargs', fargs)
 
 
 def test_nms(backend_pair, fargs):
 
-    thre, box_count = fargs
+    thre, box_count, normalized, num_zero_boxes = fargs
     x1, y1, x2, y2, score = 0, 1, 2, 3, 4
 
     dets = np.zeros((box_count, 5), dtype=np.float32)
@@ -79,10 +87,11 @@ def test_nms(backend_pair, fargs):
 
     dets[:, score] = np.sort(np.random.random((box_count,)))[::-1]
 
+    dets = np.vstack([dets, np.zeros((num_zero_boxes, 5))])
     ng, nc = backend_pair
 
     # call reference nms
-    keep_ref = py_cpu_nms(dets, thre)
+    keep_ref = py_cpu_nms(dets, thre, normalized)
 
     # call cpu nms
     dets_nc = nc.array(dets)
@@ -112,7 +121,7 @@ def test_nms(backend_pair, fargs):
     # call through backend
     ng.record_mark(tic_gpu)
 
-    keep_ng = ng.nms(sorted_dets_dev, thre)
+    keep_ng = ng.nms(sorted_dets_dev, thre, normalized)
 
     ng.record_mark(toc_gpu)
     ng.synchronize_mark(toc_gpu)
@@ -129,4 +138,4 @@ if __name__ == '__main__':
     ng = NervanaGPU()
     nc = NervanaCPU()
 
-    test_nms((ng, nc), (0.7, 300))
+    test_nms((ng, nc), (0.7, 300, True, 100))

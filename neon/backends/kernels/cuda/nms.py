@@ -31,18 +31,21 @@ def _get_nms_kernel():
 #define DIVUP(m,n) ((m) / (n) + ((m) % (n) > 0))
 int const threadsPerBlock = sizeof(unsigned int) * 8;
 
-__device__ inline float devIoU(float const * const a, float const * const b) {
+__device__ inline float devIoU(float const * const a, float const * const b,
+                               int const offset) {
   float left = max(a[0], b[0]), right = min(a[2], b[2]);
   float top = max(a[1], b[1]), bottom = min(a[3], b[3]);
-  float width = max(right - left + 1, 0.f), height = max(bottom - top + 1, 0.f);
+  float width = max(right - left + offset, 0.f), height = max(bottom - top + offset, 0.f);
   float interS = width * height;
-  float Sa = (a[2] - a[0] + 1) * (a[3] - a[1] + 1);
-  float Sb = (b[2] - b[0] + 1) * (b[3] - b[1] + 1);
+  float Sa = (a[2] - a[0] + offset) * (a[3] - a[1] + offset);
+  float Sb = (b[2] - b[0] + offset) * (b[3] - b[1] + offset);
+
   return interS / (Sa + Sb - interS);
 }
 
 __global__ void nms_kernel(const int n_boxes, const float nms_overlap_thresh,
-                           const float *dev_boxes, unsigned int *dev_mask) {
+                           const float *dev_boxes, unsigned int *dev_mask,
+                           const bool normalized) {
   const int row_start = blockIdx.y;
   const int col_start = blockIdx.x;
 
@@ -52,6 +55,10 @@ __global__ void nms_kernel(const int n_boxes, const float nms_overlap_thresh,
         min(n_boxes - row_start * threadsPerBlock, threadsPerBlock);
   const int col_size =
         min(n_boxes - col_start * threadsPerBlock, threadsPerBlock);
+
+  // if boxes are not normalized to image dim, we use an offset of 1 in
+  // calculating the box width and height.
+  const float offset = normalized ? 0 : 1;
 
   __shared__ float block_boxes[threadsPerBlock * 5];
   if (threadIdx.x < col_size) {
@@ -78,7 +85,7 @@ __global__ void nms_kernel(const int n_boxes, const float nms_overlap_thresh,
       start = threadIdx.x + 1;
     }
     for (i = start; i < col_size; i++) {
-      if (devIoU(cur_box, block_boxes + i * 5) > nms_overlap_thresh) {
+      if (devIoU(cur_box, block_boxes + i * 5, offset) > nms_overlap_thresh) {
         t |= 1UL << i;
       }
     }
@@ -91,6 +98,6 @@ __global__ void nms_kernel(const int n_boxes, const float nms_overlap_thresh,
 
     module = SourceModule(code)
     kernel = module.get_function("nms_kernel")
-    sig = "1I 1f 2P"
+    sig = "1I 1f 2P 1b"
     kernel.prepare(sig)
     return kernel

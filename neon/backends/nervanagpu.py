@@ -2399,7 +2399,7 @@ class NervanaGPU(Backend):
 
         kernel.prepared_async_call(*params)
 
-    def nms(self, detections, threshold):
+    def nms(self, detections, threshold, normalized=False):
         """
         Function to perform non-maximal supression.
 
@@ -2408,6 +2408,7 @@ class NervanaGPU(Backend):
                                  (x1, y1, x2, y2, score). Assume the boxes have already
                                  been sorted based on score in descending order
             threshold (float): box overlap threshold, boxes with smaller overlaps will be kept
+            normalized (bool): whether box coordinates are normalized to image dimensions
 
         Outputs:
             keep_ind (list): list of indices
@@ -2426,13 +2427,14 @@ class NervanaGPU(Backend):
         output_mask = self.zeros((mask_size), dtype=np.uint32)
 
         params = [(col_blocks, col_blocks, 1), (threadsPerBlock, 1, 1), self.stream, box_count,
-                   threshold, detections.gpudata, output_mask.gpudata]
+                   threshold, detections.gpudata, output_mask.gpudata, normalized]
 
         kernel = nms._get_nms_kernel()
 
         kernel.prepared_async_call(*params)
 
         mask_cpu = output_mask.get().ravel()
+        scores = detections[:, -1].get()
         num_to_keep = 0
         keep = np.zeros((box_count), dtype=np.int32)
         remv = np.zeros((col_blocks), dtype=np.uint32)
@@ -2441,7 +2443,7 @@ class NervanaGPU(Backend):
             nblock = int(i / threadsPerBlock)
             inblock = int(i % threadsPerBlock)
 
-            if (remv[nblock] & (1 << inblock)) == 0:
+            if (remv[nblock] & (1 << inblock)) == 0 and scores[i] != 0:
                 keep[num_to_keep] = i
                 num_to_keep += 1
                 for j in range(nblock, col_blocks):
