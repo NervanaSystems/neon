@@ -198,16 +198,18 @@ class Softmax(Transform):
     """
     SoftMax activation function. Ensures that the activation output sums to 1.
     """
-    def __init__(self, name=None, epsilon=2**-23):
+    def __init__(self, axis=0, name=None, epsilon=2**-23):
         """
         Class constructor.
 
         Arguments:
             name (string, optional): Name (default: none)
             epsilon (float, optional): Not used.
+            axis (int, optional): axis to perform softmax (default: 0)
         """
         super(Softmax, self).__init__(name)
         self.epsilon = epsilon
+        self.ax = axis
 
     def __call__(self, x):
         """
@@ -220,8 +222,8 @@ class Softmax(Transform):
             Tensor or optree: Output activation
         """
         return (self.be.reciprocal(self.be.sum(
-                self.be.exp(x - self.be.max(x, axis=0)), axis=0)) *
-                self.be.exp(x - self.be.max(x, axis=0)))
+                self.be.exp(x - self.be.max(x, axis=self.ax)), axis=self.ax)) *
+                self.be.exp(x - self.be.max(x, axis=self.ax)))
 
     def bprop(self, x):
         """
