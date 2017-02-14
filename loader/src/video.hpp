@@ -62,9 +62,13 @@ public:
     : _params(params) {
         assert(params->_mtype == VIDEO);
         assert(params->_frameParams._mtype == IMAGE);
+        int channelCount = params->_frameParams._channelCount;
+        assert((channelCount == 1) || (channelCount == 3));
         _imgDecoder = new Image(&(_params->_frameParams), 0, id);
         _imgSize = params->_frameParams.getSize().area();
-        _decodedSize = _imgSize * params->_frameParams._channelCount ;
+        _decodedSize = _imgSize * channelCount;
+        _pixelFormat = (channelCount == 1) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_BGR24;
+        _dataType = (channelCount == 1) ? CV_8UC1 : CV_8UC3;
         av_register_all();
         av_log_set_level(AV_LOG_FATAL);
     }
@@ -91,11 +95,9 @@ public:
         avcodec_open2(codecCtx, pCodec, NULL);
 
         AVFrame* pFrameRGB = av_frame_alloc();
-        AVPixelFormat pFormat = AV_PIX_FMT_BGR24;
-
-        int numBytes = avpicture_get_size(pFormat, codecCtx->width, codecCtx->height);
+        int numBytes = avpicture_get_size(_pixelFormat, codecCtx->width, codecCtx->height);
         uint8_t* buffer = (uint8_t *) av_malloc(numBytes * sizeof(uint8_t));
-        avpicture_fill((AVPicture*) pFrameRGB, buffer, pFormat,
+        avpicture_fill((AVPicture*) pFrameRGB, buffer, _pixelFormat,
                        codecCtx->width, codecCtx->height);
         int numFrames = formatCtx->streams[videoStream]->nb_frames;
         int channelSize = numFrames * _imgSize;
@@ -104,15 +106,13 @@ public:
         AVPacket packet;
         int frameIdx = 0;
         while (av_read_frame(formatCtx, &packet) >= 0) {
-
             if (packet.stream_index == videoStream) {
-
                 AVFrame* pFrame = av_frame_alloc();
                 avcodec_decode_video2(codecCtx, pFrame, &frameFinished, &packet);
                 if (frameFinished) {
-                    convertFrameFormat(codecCtx, pFormat, pFrame, pFrameRGB);
+                    convertFrameFormat(codecCtx, _pixelFormat, pFrame, pFrameRGB);
                     Mat frame(pFrame->height, pFrame->width,
-                              CV_8UC3, pFrameRGB->data[0]);
+                              _dataType, pFrameRGB->data[0]);
                     writeFrameToBuf(frame, buf, frameIdx, channelSize);
                     frameIdx++;
                 }
@@ -198,4 +198,6 @@ private:
     Image*                      _imgDecoder;
     int                         _imgSize;
     int                         _decodedSize;
+    int                         _dataType;
+    AVPixelFormat               _pixelFormat;
 };
