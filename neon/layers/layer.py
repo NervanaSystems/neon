@@ -733,10 +733,12 @@ class Convolution(ParameterLayer):
             self.convparams.update(d)
 
     def __str__(self):
-        spatial_dim = len(self.in_shape[1:])
-        spatial_str = "%d x (" + "x".join(("%d",) * spatial_dim) + ")"
-        padstr_str = ",".join(("%d",) * spatial_dim)
-        padstr_dim = ([] if spatial_dim == 2 else ['d']) + ['h', 'w']
+        input_spatial_dim = len(self.in_shape) - 1
+        output_spatial_dim = len(self.out_shape) - 1
+        input_spatial_str = "%d x (" + "x".join(("%d",) * input_spatial_dim) + ")"
+        output_spatial_str = "%d x (" + "x".join(("%d",) * output_spatial_dim) + ")"
+        padstr_str = ",".join(("%d",) * input_spatial_dim)
+        padstr_dim = ([] if input_spatial_dim == 2 else ['d']) + ['h', 'w']
 
         pad_tuple = tuple(self.convparams[k] for k in ['pad_' + d for d in padstr_dim])
         str_tuple = tuple(self.convparams[k] for k in ['str_' + d for d in padstr_dim])
@@ -745,7 +747,7 @@ class Convolution(ParameterLayer):
         fmt_tuple = (self.name,) + self.in_shape + self.out_shape + (
                      pad_tuple + str_tuple + dil_tuple)
         fmt_string = "Convolution Layer '%s': " + \
-                     spatial_str + " inputs, " + spatial_str + " outputs, " + \
+                     input_spatial_str + " inputs, " + output_spatial_str + " outputs, " + \
                      padstr_str + " padding, " + padstr_str + " stride, " + \
                      padstr_str + " dilation"
 
