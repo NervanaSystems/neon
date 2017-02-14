@@ -16,14 +16,12 @@ The ingestion script will scale the input videos down to uniform 171x128 framesi
 
 Preprocessing needs to be done for both training and test partitions of the dataset.  Grab the necessary files (`UCF101.rar` and `UCF101TrainTestSplits-RecognitionTask.zip` from [here][ucf101]), then run the `vid_ingest.sh` script which preprocesses the entire dataset and generates the manifest files that can be used by neon for training and testing.
 
-For convenience, we use the local shell variable `V3D_DATA_PATH` to indicate where ingested files will be written to and read from.
+For convenience, we use the local shell variable `V3D_DATA_PATH` to indicate where ingested files will be written to and read from.  The files `UCF101.rar` and `UCF101TrainTestSplits-RecognitionTask.zip` are assumed to be present in the directory indicated by the shell variable `INPUT_PATH`. 
 
 ```bash
-UCF_RAR_FILE=/usr/local/data/UCF101.rar
-UCF_ZIP_FILE=/usr/local/data/UCF101TrainTestSplits-RecognitionTask.zip
+INPUT_PATH=/usr/local/data
 V3D_DATA_PATH=/usr/local/data
-
-vid_ingest.sh $UCF_RAR_FILE $UCF_ZIP_FILE $V3D_DATA_PATH
+./examples/video-c3d/vid_ingest.sh $INPUT_PATH $V3D_DATA_PATH
 ```
 The split files will be written into the output directory `$V3D_DATA_PATH/ucf-extracted` along with the necessary manifest files (list of records for training and validation).
 
