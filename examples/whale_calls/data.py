@@ -41,7 +41,7 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
             f.write('manifest = [{}]\n'.format(manifest_list_cfg))
             f.write('manifest_root = {}\n'.format(out_dir))
             f.write('log = {}\n'.format(log_file))
-            f.write('epochs = 8\nrng_seed = 0\nverbose = True\n')
+            f.write('epochs = 4\nrng_seed = 0\nverbose = True\n')
             if runtype == 'subm':
                 f.write('save_path = {}\n'.format(os.path.join(orig_out_dir, 'model.p')))
                 f.write('submission_file = {}\n'.format(os.path.join(orig_out_dir, 'subm.txt')))
@@ -60,6 +60,8 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
 
         input_csv = os.path.join(out_dir, 'data', 'train.csv')
         train_records = np.genfromtxt(input_csv, delimiter=',', skip_header=1, dtype=None)
+        np.random.seed(0)
+        np.random.shuffle(train_records)
 
         pos_list, neg_list = [], []
 
@@ -83,8 +85,6 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
         # Write out the test files
         set_lists['test'] = [os.path.relpath(fn, out_dir) for fn in glob(
                                                 os.path.join(out_dir, 'data', 'test', '*.aiff'))]
-
-        np.random.seed(0)
 
         for sn in set_names:
             if sn != 'test':

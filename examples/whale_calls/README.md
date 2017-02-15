@@ -47,4 +47,4 @@ python examples/whale_calls/make_submission.py
 ```
 
 ### Performance
-Upon training, the model should achieve better than 4 percent misclassification error.
+Upon training, the model is expected to achieve a misclassification error around 9%.
