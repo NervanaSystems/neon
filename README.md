@@ -1,7 +1,6 @@
 # neon
 
-[neon](https://github.com/NervanaSystems/neon) is Nervana's Python based
-Deep Learning framework and achieves the [fastest performance](https://github.com/soumith/convnet-benchmarks) on modern deep neural networks such as AlexNet, VGG and GoogLeNet. Designed for ease-of-use and extensibility.
+[neon](https://github.com/NervanaSystems/neon) is Intel Nervana's reference deep learning framework committed to [best performance](https://github.com/soumith/convnet-benchmarks) on all hardware. Designed for ease-of-use and extensibility.
 
 * [Tutorials](http://neon.nervanasys.com/docs/latest/tutorials.html) and [iPython notebooks](https://github.com/NervanaSystems/meetup) to get users started with using neon for deep learning.
 * Support for commonly used layers: convolution, RNN, LSTM, GRU, BatchNorm, and more.
