@@ -17,6 +17,17 @@
 Previous Versions
 =================
 
+neon v1.8.1
+-----------
+
+|Docs181|_
+
+neon v1.8.1 released January 17, 2017 supporting:
+
+* Bug fix: Add dilation to object dict and assign defaults to dil_w = dil_h = 1 [#335, #336]
+* Bug fix: Prevent GPU backend from ignoring non-zero slope in Rectlinclip and change default slope to 0
+* Bug fix: Nesterov momentum was updating velocities incorrectly
+
 neon v1.8.0
 -----------
 
@@ -391,6 +402,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs181| replace:: Docs
 .. |Docs180| replace:: Docs
 .. |Docs170| replace:: Docs
 .. |Docs160| replace:: Docs
@@ -414,6 +426,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs181: http://neon.nervanasys.com/docs/1.8.1
 .. _Docs180: http://neon.nervanasys.com/docs/1.8.0
 .. _Docs170: http://neon.nervanasys.com/docs/1.7.0
 .. _Docs160: http://neon.nervanasys.com/docs/1.6.0

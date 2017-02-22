@@ -1,5 +1,13 @@
 # ChangeLog
 
+## v1.8.2 (2017-02-23):
+
+* Make the whale calls example stable and shuffle dataset before splitting into subsets
+* Reduce default depth in cifar_msra example to 2
+* Fix the formatting of the conv layer description
+* Fix documentation error in the video-c3d example
+* Support greyscale videos
+
 ## v1.8.1 (2017-01-17):
 
 * Bug fix: Add dilation to object dict and assign defaults to dil_w = dil_h = 1 [#335, #336]

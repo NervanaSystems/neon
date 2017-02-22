@@ -36,9 +36,11 @@ Features include:
 
 New features in this release:
 
-* Bug fix: Add dilation to object dict and assign defaults to dil_w = dil_h = 1 [#335, #336]
-* Bug fix: Prevent GPU backend from ignoring non-zero slope in Rectlinclip and change default slope to 0
-* Bug fix: Nesterov momentum was updating velocities incorrectly
+* Make the whale calls example stable and shuffle dataset before splitting into subsets
+* Reduce default depth in cifar_msra example to 2
+* Fix the formatting of the conv layer description
+* Fix documentation error in the video-c3d example
+* Support greyscale videos
 * See more in the `change log`_.
 
 We use neon internally at Nervana to solve our `customers' problems`_
