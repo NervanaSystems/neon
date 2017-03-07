@@ -77,12 +77,12 @@ class TestAutodiff(object):
         m = self.m
         n = self.n
         if 'scalar' in flags:
-            m = 1.
-            n = 1.
+            m = 1
+            n = 1
         if 'row' in flags:
-            m = 1.
+            m = 1
         if 'col' in flags:
-            n = 1.
+            n = 1
         # integer
         if 'int' in flags:
             if 'pos' in flags:
