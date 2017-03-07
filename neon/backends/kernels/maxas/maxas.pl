@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 use strict;
 use MaxAs::Cubin;
 use MaxAs::MaxAs;
