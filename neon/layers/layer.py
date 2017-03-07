@@ -1375,7 +1375,7 @@ class Reshape(Layer):
         self.out_shape = list(self.reshape)
 
         if 0 in self.reshape:
-            dim_to_keep = np.where(np.array(self.reshape) == 0)[0]
+            dim_to_keep = np.where(np.array(self.reshape) == 0)[0][0]
             self.out_shape[dim_to_keep] = list(self.in_shape)[dim_to_keep]
 
         if -1 in self.reshape:
