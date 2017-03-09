@@ -57,7 +57,8 @@ class Callbacks(NervanaObject):
                  model_file=None,
                  eval_set=None,
                  metric=None,
-                 log_token=None):
+                 log_token=None,
+                 multicost=False):
         """
         Create a callbacks container with the default callbacks.
 
@@ -74,6 +75,7 @@ class Callbacks(NervanaObject):
             eval_set (NervanaDataIterator, optional): the dataset upon which to evaluate
                                                       loss or metric
             metric (Metric, optional):  metric to evaluate
+            multicost (bool, optional): use the multicost callback. default to false.
         """
         # once the deprecated args are removed the kwargs will also be removed
         # as well as the code below
@@ -102,7 +104,7 @@ class Callbacks(NervanaObject):
 
         self.model_file = model_file
 
-        if isinstance(self.model().layers, Tree):
+        if multicost is True:
             self.add_callback(TrainMulticostCallback())
         else:
             self.add_callback(TrainCostCallback())
@@ -488,7 +490,7 @@ class Callback(NervanaObject):
 
         if self.costnm is None:
             self.costnm = "Loss"  # default costname to display if we can't resolve cost function
-            if model.cost:
+            if model.cost and hasattr(model.cost, 'costfunc'):
                 self.costnm = model.cost.costfunc.__class__.__name__ + " " + self.costnm
         cost_key = 'cost/' + label
         time_key = 'time/' + label

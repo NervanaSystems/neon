@@ -109,7 +109,7 @@ alphas = [1, 0.25, 0.25]
 mlp = Model(layers=SingleOutputTree([p1, p2, p3], alphas=alphas))
 
 # setup standard fit callbacks
-callbacks = Callbacks(mlp, eval_set=valid_set, **args.callback_args)
+callbacks = Callbacks(mlp, eval_set=valid_set, multicost=True, **args.callback_args)
 
 # run fit
 mlp.fit(train_set, optimizer=optimizer,
