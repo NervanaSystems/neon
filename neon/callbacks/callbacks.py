@@ -31,7 +31,7 @@ from neon import NervanaObject, logger as neon_logger
 from neon.data import NervanaDataIterator, Ticker
 from neon.util.compat import PY3
 from neon.util.persist import load_obj, save_obj, load_class
-from neon.layers import Convolution, BatchNorm, Multicost, Tree
+from neon.layers import Convolution, BatchNorm, Multicost
 from neon.transforms.cost import Metric
 
 logger = logging.getLogger(__name__)

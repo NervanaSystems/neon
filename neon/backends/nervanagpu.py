@@ -2408,7 +2408,8 @@ class NervanaGPU(Backend):
                                  (x1, y1, x2, y2, score). Assume the boxes have already
                                  been sorted based on score in descending order
             threshold (float): box overlap threshold, boxes with smaller overlaps will be kept
-            normalized (bool): whether box coordinates are normalized to image dimensions
+            normalized (bool): whether box coordinates are normalized to image dimensions.
+                               This affects whether we use a +1 offset to compute box sizes.
 
         Outputs:
             keep_ind (list): list of indices
