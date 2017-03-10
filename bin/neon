@@ -28,7 +28,7 @@ Some of the commonly used arguments to this script are:
 
     -e | --epochs [ epochs ] : number of epochs to run fit
 
-    -d | --datatype [ fp16 | fp32 | fp64] : floating point data precision to use, note 64-bit
+    -d | --datatype [ f16 | f32 | f64 ] : floating point data precision to use, note 64-bit
                                             float only works with cpu backend
 
     -l | --log [ LOGFILE ] : log file for messages, use the -v option to control logging level, if
