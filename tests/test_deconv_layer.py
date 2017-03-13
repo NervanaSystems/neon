@@ -86,7 +86,7 @@ def test_dconv_zeros(backend_default, zeros_convargs, deltas_buffer):
 
     dtypeu = np.float32
     init_unif = Uniform(low=0.0, high=0.0)
-    inshape = (64, 28, 28)
+    inshape = (64, 28, 28, 28)
     insize = np.prod(inshape)
     neon_layer = Deconvolution(fshape=(fshape, fshape, nofm),
                                strides=1,

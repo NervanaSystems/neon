@@ -850,7 +850,8 @@ class Deconvolution(ParameterLayer):
         self.bsum = bsum
         self.deconvparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
                              'pad_h': 0, 'pad_w': 0, 'pad_d': 0,
-                             'dil_h': 1, 'dil_w': 1, 'dil_d': 1}
+                             'dil_h': 1, 'dil_w': 1, 'dil_d': 1,
+                             'T': 1, 'M': 1}  # 3D paramaters
 
         # keep around args in __dict__ for get_description.
         self.fshape = fshape
@@ -858,9 +859,9 @@ class Deconvolution(ParameterLayer):
         self.padding = padding
         self.dilation = dilation
 
-        if isinstance(fshape, tuple):
-            # fshape[2] should now map to C (nifm)
-            fshape = {'R': fshape[0], 'S': fshape[1], 'C': fshape[2]}
+        if isinstance(fshape, tuple) or isinstance(fshape, list):
+            fkeys = ('R', 'S', 'C') if len(fshape) == 3 else ('T', 'R', 'S', 'C')
+            fshape = {k: x for k, x in zip(fkeys, fshape)}
         if isinstance(strides, int):
             strides = {'str_h': strides, 'str_w': strides}
         if isinstance(padding, int):
@@ -871,10 +872,25 @@ class Deconvolution(ParameterLayer):
             self.deconvparams.update(d)
 
     def __str__(self):
-        return "Deconvolution Layer '%s': %d x (%dx%d) inputs, %d x (%dx%d) outputs" % (
-               self.name,
-               self.in_shape[0], self.in_shape[1], self.in_shape[2],
-               self.out_shape[0], self.out_shape[1], self.out_shape[2])
+        input_spatial_dim = len(self.in_shape) - 1
+        output_spatial_dim = len(self.out_shape) - 1
+        input_spatial_str = "%d x (" + "x".join(("%d",) * input_spatial_dim) + ")"
+        output_spatial_str = "%d x (" + "x".join(("%d",) * output_spatial_dim) + ")"
+        padstr_str = ",".join(("%d",) * input_spatial_dim)
+        padstr_dim = ([] if input_spatial_dim == 2 else ['d']) + ['h', 'w']
+
+        pad_tuple = tuple(self.deconvparams[k] for k in ['pad_' + d for d in padstr_dim])
+        str_tuple = tuple(self.deconvparams[k] for k in ['str_' + d for d in padstr_dim])
+        dil_tuple = tuple(self.deconvparams[k] for k in ['dil_' + d for d in padstr_dim])
+
+        fmt_tuple = (self.name,) + self.in_shape + self.out_shape + (
+                     pad_tuple + str_tuple + dil_tuple)
+        fmt_string = "Deconvolution Layer '%s': " + \
+                     input_spatial_str + " inputs, " + output_spatial_str + " outputs, " + \
+                     padstr_str + " padding, " + padstr_str + " stride, " + \
+                     padstr_str + " dilation"
+
+        return ((fmt_string % fmt_tuple))
 
     def configure(self, in_obj):
         """
@@ -891,13 +907,13 @@ class Deconvolution(ParameterLayer):
         super(Deconvolution, self).configure(in_obj)
         if self.nglayer is None:
             assert isinstance(self.in_shape, tuple)
-            shapedict = {'K': self.in_shape[0],
-                         'P': self.in_shape[1],
-                         'Q': self.in_shape[2],
-                         'N': self.be.bsz}
+            ikeys = ('K', 'P', 'Q') if len(self.in_shape) == 3 else ('K', 'M', 'P', 'Q')
+            shapedict = {k: x for k, x in zip(ikeys, self.in_shape)}
+            shapedict['N'] = self.be.bsz
             self.deconvparams.update(shapedict)
             self.nglayer = self.be.deconv_layer(self.be.default_dtype, **self.deconvparams)
-            self.out_shape = (self.nglayer.C, self.nglayer.H, self.nglayer.W)
+            (C, D, H, W, N) = self.nglayer.dimI
+            self.out_shape = (C, H, W) if D == 1 else (C, D, H, W)
         if self.weight_shape is None:
             self.weight_shape = self.nglayer.dimF2  # (C * R * S, K)
         if self.bsum:

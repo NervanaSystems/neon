@@ -297,20 +297,17 @@ class DeconvLayer(ConvLayer):
 
     def __init__(self, lib, dtype,
                  N, C, K,
-                 P, Q,
-                 R=1, S=1,
+                 M, P, Q,
+                 T=1, R=1, S=1,
                  pad_d=0, pad_h=0, pad_w=0,
                  str_d=1, str_h=1, str_w=1,
                  dil_d=1, dil_h=1, dil_w=1):
 
-        # Set T, M and D to be consts.
-        T = 1
-        M = 1
-        D = 1
-
+        tt = dil_d * (T - 1) + 1
         rr = dil_h * (R - 1) + 1
         ss = dil_w * (S - 1) + 1
         # Cannot get exact, e.g. because not unique
+        D = (M - 1) * str_d - 2 * pad_d + tt
         H = (P - 1) * str_h - 2 * pad_h + rr
         W = (Q - 1) * str_w - 2 * pad_w + ss
 
