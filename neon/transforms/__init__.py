@@ -19,4 +19,5 @@ from neon.transforms.cost import (CrossEntropyBinary, CrossEntropyMulti,
                                   SumSquared, MeanSquared, LogLoss,
                                   Misclassification, TopKMisclassification,
                                   Accuracy, PrecisionRecall, SmoothL1Loss,
-                                  SquareHingeLoss, ObjectDetection, BLEUScore)
+                                  SquareHingeLoss, ObjectDetection, BLEUScore,
+                                  GANCost)

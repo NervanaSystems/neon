@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ----------------------------------------------------------------------------
-from __future__ import division
+from __future__ import division, print_function
 from builtins import str, zip
 from collections import OrderedDict
 import logging
@@ -24,7 +24,7 @@ from neon.transforms import CrossEntropyBinary, Logistic
 from neon.util.persist import load_obj, save_obj, load_class
 from neon.util.modeldesc import ModelDescription
 from neon.layers import Sequential, Activation, Tree, SingleOutputTree, Seq2Seq
-from neon.layers.container import DeltasTree, SkipThought
+from neon.layers.container import DeltasTree, SkipThought, GenerativeAdversarial
 from neon.util.beamsearch import BeamSearch
 import numpy as np
 
@@ -71,7 +71,8 @@ class Model(NervanaObject):
             self.load_params(layers, load_states=(not weights_only))
         else:
             # Wrap the list of layers in a Sequential container if a raw list of layers
-            if type(layers) in (Sequential, Tree, SingleOutputTree, Seq2Seq):
+            if type(layers) in (Sequential, Tree, SingleOutputTree, Seq2Seq,
+                                GenerativeAdversarial):
                 self.layers = layers
             elif type(layers) == SkipThought:
                 self.layers = layers
@@ -637,3 +638,142 @@ class Model(NervanaObject):
             neon_logger.display(fmt_nums.format(units='msec', func=step, **out_stats[step]))
         neon_logger.display(sep)
         return out_stats
+
+
+class GAN(Model):
+    """
+    Model for Generative Adversarial Networks.
+
+    Arguments:
+        layers: Generative Adversarial layer container
+        noise_dim (Tuple): Dimensionality of the noise feeding the generator
+        weights_only (bool): set to True if you do not want to recreate layers
+                             and states during deserialization from a serialized model
+                             description.  Defaults to False.
+        name (str): Model name.  Defaults to "model"
+        optimizer (Optimizer): Optimizer object which defines the learning rule for updating
+                               model parameters (i.e., GradientDescentMomentum, Adadelta)
+        k (int): Number of data batches per noise batch
+    """
+    def __init__(self, layers, noise_dim, weights_only=False,
+                 name="model", optimizer=None, k=1):
+        self.noise_dim = noise_dim
+        self.k = k
+        super(GAN, self).__init__(layers, weights_only=weights_only, name=name,
+                                  optimizer=optimizer)
+
+    def initialize(self, dataset, cost=None):
+        """
+        Propagate shapes through the layers to configure, then allocate space.
+
+        Arguments:
+            dataset (NervanaDataIterator): Dataset iterator to perform initialization on
+            cost (Cost): Defines the function which the model is minimizing based
+                         on the output of the last layer and the input labels.
+        """
+        if self.initialized:
+            return
+
+        # Propagate shapes through the layers to configure
+        prev_input = self.layers.configure(self.noise_dim)
+
+        if cost is not None:
+            cost.initialize(prev_input)
+            self.cost = cost
+
+        # Now allocate space
+        self.layers.allocate()
+        self.layers.allocate_deltas()
+        self.initialized = True
+
+        self.zbuf = self.be.iobuf(self.noise_dim)
+
+    def _epoch_fit(self, dataset, callbacks):
+        """
+        Helper function for fit which performs training on a dataset for one epoch.
+
+        Arguments:
+            dataset (NervanaDataIterator): Dataset iterator to perform fit on
+        """
+        epoch = self.epoch_index
+        self.total_cost[:] = 0
+        z = self.zbuf
+
+        def fill_noise(z, normal=False):
+            """
+            Fill z with either uniform or normally distributed random numbers
+            """
+            if normal:
+                # Note fill_normal is not deterministic
+                self.be.fill_normal(z)
+            else:
+                z[:] = 2 * self.be.rand() - 1.
+
+        # iterate through minibatches of the dataset
+        for mb_idx, (x, _) in enumerate(dataset):
+            callbacks.on_minibatch_begin(epoch, mb_idx)
+            self.be.begin(Block.minibatch, mb_idx)
+
+            # train discriminator on noise
+            fill_noise(z)
+            Gz = self.fprop_gen(z)
+            y_noise = self.fprop_dis(Gz)
+            delta_noise = self.cost.costfunc.bprop_noise(y_noise)
+            self.bprop_dis(delta_noise)
+            self.optimizer.optimize(self.layers.discriminator.layers_to_optimize, epoch=epoch)
+
+            # train discriminator on data
+            y_data = self.fprop_dis(x)
+            delta_data = self.cost.costfunc.bprop_data(y_data)
+            self.bprop_dis(delta_data)
+            self.optimizer.optimize(self.layers.discriminator.layers_to_optimize, epoch=epoch)
+
+            # Accumulate total cost. Abuses get_cost(y,t) using y_noise as the "target"
+            y_noise = self.fprop_dis(Gz)
+            y_data = self.fprop_dis(x)
+            self.total_cost[:] = self.total_cost + self.cost.get_cost(y_data, y_noise)
+
+            # train generator
+            if epoch % self.k == 0:
+                fill_noise(z)
+                Gz = self.fprop_gen(z)
+                y_noise = self.fprop_dis(Gz)
+                delta_noise = self.cost.costfunc.bprop_generator(y_noise)
+                delta_dis = self.bprop_dis(delta_noise)
+                self.bprop_gen(delta_dis)
+                self.optimizer.optimize(self.layers.generator.layers_to_optimize, epoch=epoch)
+
+            self.be.end(Block.minibatch, mb_idx)
+            callbacks.on_minibatch_end(epoch, mb_idx)
+
+        # now we divide total cost by the number of batches,
+        # so it was never total cost, but sum of averages
+        # across all the minibatches we trained on
+        self.total_cost[:] = self.total_cost / dataset.nbatches
+
+        # Package a batch of data for plotting
+        self.data_batch, self.noise_batch = x, Gz
+
+    def fprop_gen(self, x, inference=False):
+        """
+        fprop the generator layer stack
+        """
+        return self.layers.generator.fprop(x, inference)
+
+    def fprop_dis(self, x, inference=False):
+        """
+        fprop the discriminator layer stack
+        """
+        return self.layers.discriminator.fprop(x, inference)
+
+    def bprop_dis(self, delta):
+        """
+        bprop the discriminator layer stack
+        """
+        return self.layers.discriminator.bprop(delta)
+
+    def bprop_gen(self, delta):
+        """
+        bprop the generator layer stack
+        """
+        return self.layers.generator.bprop(delta)

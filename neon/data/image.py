@@ -37,14 +37,19 @@ logger = logging.getLogger(__name__)
 class MNIST(Dataset):
     """
     MNIST data set from http://yann.lecun.com/exdb/mnist/
+
+    Normalize defaults to true and scales the data 0 to 1.
+    Size defaults to 28 for 28x28 pixels, specifying a smaller values allows
+    cropping to a smaller size.
     """
-    def __init__(self, path='.', subset_pct=100, normalize=True):
+    def __init__(self, path='.', subset_pct=100, normalize=True, size=28):
         super(MNIST, self).__init__('mnist.pkl.gz',
                                     'https://s3.amazonaws.com/img-datasets',
                                     15296311,
                                     path=path,
                                     subset_pct=subset_pct)
         self.normalize = normalize
+        self.size = size
 
     def load_data(self):
         """
@@ -65,8 +70,10 @@ class MNIST(Dataset):
 
         with gzip.open(filepath, 'rb') as mnist:
             (X_train, y_train), (X_test, y_test) = pickle_load(mnist)
-            X_train = X_train.reshape(-1, 784)
-            X_test = X_test.reshape(-1, 784)
+            X_train = X_train[:, :self.size, :self.size]
+            X_test = X_test[:, :self.size, :self.size]
+            X_train = X_train.reshape(-1, self.size*self.size)
+            X_test = X_test.reshape(-1, self.size*self.size)
 
             if self.normalize:
                 X_train = X_train / 255.
@@ -79,12 +86,12 @@ class MNIST(Dataset):
         train = ArrayIterator(X_train,
                               y_train,
                               nclass=nclass,
-                              lshape=(1, 28, 28),
+                              lshape=(1, self.size, self.size),
                               name='train')
         val = ArrayIterator(X_test,
                             y_test,
                             nclass=nclass,
-                            lshape=(1, 28, 28),
+                            lshape=(1, self.size, self.size),
                             name='valid')
         self._data_dict = {'train': train,
                            'valid': val}

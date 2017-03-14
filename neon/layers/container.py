@@ -371,6 +371,40 @@ class Sequential(LayerContainer):
         return terminal
 
 
+class GenerativeAdversarial(Sequential):
+    """
+    Container for Generative Adversarial Net (GAN). It contains the Generator
+    and Discriminator stacks as sequential containers.
+
+    Arguments:
+        layers (list): A list containing two Sequential containers
+    """
+    def __init__(self, generator, discriminator, name=None):
+        super(Sequential, self).__init__(name)
+
+        self.generator = generator
+        self.discriminator = discriminator
+        self.layers = self.generator.layers + self.discriminator.layers
+
+    def nested_str(self, level=0):
+        """
+        Utility function for displaying layer info with a given indentation level.
+
+        Arguments:
+            level (int, optional): indentation level
+
+        Returns:
+            str: layer info at the given indentation level
+        """
+        padstr = '\n' + '  ' * level
+        ss = '  ' * level + self.classnm + padstr
+        ss += '  ' * level + 'Generator:\n'
+        ss += padstr.join([l.nested_str(level + 1) for l in self.generator.layers])
+        ss += '\n' + '  ' * level + 'Discriminator:\n'
+        ss += padstr.join([l.nested_str(level + 1) for l in self.discriminator.layers])
+        return ss
+
+
 class Tree(LayerContainer):
     """
     Layer container that encapsulates a simple linear pathway of layers.

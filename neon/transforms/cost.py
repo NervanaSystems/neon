@@ -682,3 +682,75 @@ class BLEUScore(Metric):
         neon_logger.display("Bleu scores: " + " ".join([str(np.round(f, 2)) for f in self.bleu_n]))
 
         return self.bleu_n[-1]
+
+
+class GANCost(Cost):
+
+    """
+    Discriminator cost for a Generative Adversarial Network
+
+    The Discriminator cost is a packaged cross-entropy where the inputs with label 0
+    and the inputs with label 1 are passed in separately. It takes the form
+    :math:`C = \log (y_data) + \log (1 - y_noise)` where :math:`y_data` are the fprop
+    outputs of the data minibatch, and :math:`y_noise` are the outputs of the generator-
+    discriminator stack on a noise batch.
+
+    """
+    def __init__(self, scale=1., cost_type="dis", original_cost=False):
+        """
+        Arguments:
+            scale (float, optional): Amount by which to scale the backpropagated error (default: 1)
+            cost_type (string): select discriminator cost "dis" or generator cost "gen"
+            original_cost (bool): Selects original or modified cost function from
+                                  Goodfellow et al. 2014
+        """
+        self.scale = scale
+        self.cost_type = cost_type
+        self.original_cost = original_cost
+
+    def __call__(self, y_data, y_noise):
+        """
+        Returns either generator or discriminator cost. Note sign flip
+        of the discriminator cost relative to Goodfellow et al. 2014 so
+        we can minimize the cost rather than maximizing discriminiation.
+
+        Arguments:
+            y_data (Tensor or OpTree): Output of the data minibatch
+            y_noise (Tensor or OpTree): Output of noise minibatch
+
+        Returns:
+            OpTree: Returns the binary cross entropy cost
+        """
+        assert y_data.shape == y_noise.shape, "Noise and data output shape mismatch"
+
+        if self.cost_type == "dis":
+            cost_dis = -self.be.sum(self.be.safelog(y_data) + self.be.safelog(1-y_noise), axis=0)
+            return cost_dis
+
+        elif self.cost_type == "gen":
+            # Original cost: minimize log(1-D(G(z)))
+            cost_gen0 = self.be.sum(self.be.safelog(1-y_noise), axis=0)
+            # Modified cost: maximize log D(G(z))
+            cost_gen1 = -self.be.sum(self.be.safelog(y_noise), axis=0)
+            return cost_gen0 if self.original_cost else cost_gen1
+
+    def bprop_noise(self, y_noise):
+        """
+        Derivative of the discriminator cost wrt. y_noise.
+        """
+        return self.scale / (1. - y_noise)
+
+    def bprop_data(self, y_data):
+        """
+        Derivative of the discriminator cost wrt. y_data.
+        """
+        return self.scale * (-1. / y_data)
+
+    def bprop_generator(self, y_noise):
+        """
+        Derivative of the generator cost wrt. y_noise.
+        """
+        if self.original_cost:
+            return self.scale / (y_noise - 1.)
+        else:
+            return -self.scale / y_noise
