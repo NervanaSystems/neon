@@ -862,6 +862,7 @@ class Adam(Optimizer):
         self.stochastic_round = stochastic_round
         self.gradient_clip_norm = gradient_clip_norm
         self.gradient_clip_value = gradient_clip_value
+        self.t = 0
 
     def optimize(self, layer_list, epoch):
         """
@@ -872,8 +873,9 @@ class Adam(Optimizer):
                 corresponding to parameters, grads, and states of layers to be updated
             epoch (int): the current epoch, needed for the Schedule object.
         """
-        t = epoch + 1
-        l = self.learning_rate * self.be.sqrt(1 - self.beta_2 ** t) / (1 - self.beta_1 ** t)
+        self.t = self.t + 1
+        l = (self.learning_rate * self.be.sqrt(1 - self.beta_2 ** self.t) /
+             (1 - self.beta_1 ** self.t))
 
         param_list = get_param_list(layer_list)
 

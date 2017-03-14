@@ -160,7 +160,7 @@ def test_adam(backend_default):
     states2 = [copy.deepcopy(states[0]),
                copy.deepcopy(states[1])]
     epoch = 1
-    t = epoch + 1
+    t = 1
     l = adam.learning_rate * np.sqrt(1. - adam.beta_2 ** t) / (1. - adam.beta_1 ** t)
     m, v = states2
     m[:] = m * adam.beta_1 + (1. - adam.beta_1) * grad2
