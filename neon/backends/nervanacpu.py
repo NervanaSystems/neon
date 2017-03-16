@@ -1638,7 +1638,7 @@ class NervanaCPU(Backend):
             keep_ind (list): list of indices
         """
         # for boxes in pixel space, we calculate size as x_max - x_min+1. However,
-        # when the boxes are normalized to be between 0 and 1, we calculate 
+        # when the boxes are normalized to be between 0 and 1, we calculate
         # the size as x_max - x_min. offset controls this behavior.
         if normalized is True:
             offset = 0
