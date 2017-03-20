@@ -77,7 +77,7 @@ class Model(NervanaObject):
                 self.layers = layers
 
                 if isinstance(layers, SkipThought) and hasattr(layers, 'layer_dict'):
-                    self.layer_dict = layers.layer.dict
+                    self.layer_dict = layers.layer_dict
 
         self.layers.propagate_parallelism("Data")
 
