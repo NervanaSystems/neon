@@ -25,6 +25,7 @@ from neon.optimizers import (GradientDescentMomentum, RMSProp, Adadelta, Adam, A
                              ShiftAdaMax)
 from neon.optimizers import MultiOptimizer
 from neon.layers import Conv, Affine, LSTM, GRU
+from neon.layers.layer import ParameterLayer
 from neon.initializers import Gaussian, Constant
 from neon.transforms import Rectlin, Logistic, Tanh
 
@@ -207,6 +208,9 @@ def test_shift_adamax(backend_default):
 
 
 def test_multi_optimizer(backend_default):
+    """
+    A test for MultiOptimizer.
+    """
     opt_gdm = GradientDescentMomentum(
         learning_rate=0.001, momentum_coef=0.9, wdecay=0.005)
     opt_ada = Adadelta()
@@ -228,21 +232,27 @@ def test_multi_optimizer(backend_default):
             layer_list.extend(layer)
         else:
             layer_list.append(layer)
-
+    for l in layer_list:
+        l.configure(in_obj=(16, 28, 28))
+        l.allocate()
+    # separate layer_list into two, the last two recurrent layers and the rest
+    layer_list1, layer_list2 = layer_list[:-2], layer_list[-2:]
     opt = MultiOptimizer({'default': opt_gdm,
                           'Bias': opt_ada,
                           'Convolution': opt_adam,
                           'Linear': opt_rms,
                           'LSTM': opt_rms_1,
                           'GRU': opt_rms_1})
+    layers_to_optimize1 = [l for l in layer_list1 if isinstance(l, ParameterLayer)]
+    layers_to_optimize2 = [l for l in layer_list2 if isinstance(l, ParameterLayer)]
+    opt.optimize(layers_to_optimize1, 0)
+    assert opt.map_list[opt_adam][0].__class__.__name__ == 'Convolution'
+    assert opt.map_list[opt_ada][0].__class__.__name__ == 'Bias'
+    assert opt.map_list[opt_rms][0].__class__.__name__ == 'Linear'
+    opt.optimize(layers_to_optimize2, 0)
+    assert opt.map_list[opt_rms_1][0].__class__.__name__ == 'LSTM'
+    assert opt.map_list[opt_rms_1][1].__class__.__name__ == 'GRU'
 
-    map_list = opt._map_optimizers(layer_list)
-    assert map_list[opt_adam][0].__class__.__name__ == 'Convolution'
-    assert map_list[opt_ada][0].__class__.__name__ == 'Bias'
-    assert map_list[opt_rms][0].__class__.__name__ == 'Linear'
-    assert map_list[opt_gdm][0].__class__.__name__ == 'Activation'
-    assert map_list[opt_rms_1][0].__class__.__name__ == 'LSTM'
-    assert map_list[opt_rms_1][1].__class__.__name__ == 'GRU'
 
 if __name__ == '__main__':
     be = gen_backend(backend='gpu', batch_size=128)

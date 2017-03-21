@@ -1034,6 +1034,7 @@ class MultiOptimizer(Optimizer):
             "optimizer in layer type to optimizer mapping"
 
         self.map_list = None
+        self.map_list_cache = dict()
 
     @classmethod
     def gen_class(cls, pdict):
@@ -1096,8 +1097,11 @@ class MultiOptimizer(Optimizer):
         during training.
         """
 
-        if self.map_list is None:
+        if not id(layer_list) in self.map_list_cache:
             self.map_list = self._map_optimizers(layer_list)
+            self.map_list_cache[id(layer_list)] = self.map_list
+        else:
+            self.map_list = self.map_list_cache[id(layer_list)]
 
         for opt in self.map_list:
             opt.optimize(self.map_list[opt], epoch)
