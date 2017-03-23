@@ -94,24 +94,24 @@ class Optimizer(NervanaObject):
             scale_factor = clip_norm / max(float(grad_norm.get()), float(clip_norm))
         return scale_factor
 
-    def clip_gradient_value(self, grad, clip_value=None):
+    def clip_value(self, v, abs_bound=None):
         """
-        Element-wise clip a list of gradients to between ``-clip_value`` and ``+clip_value``.
+        Element-wise clip a gradient or parameter tensor to between
+        ``-abs_bound`` and ``+abs_bound``.
 
         Arguments:
-            grad (list): List of gradients for a single layer
-            gradient_clip_value (float, optional): Value to element-wise clip
-                                                   gradients.
-                                                   Defaults to None.
+            v (tensor): Tensor of gradients or parameters for a single layer
+            abs_bound (float, optional): Value to element-wise clip gradients
+                                         or parameters. Defaults to None.
 
         Returns:
-            grad (list): List of clipped gradients.
+            v (tensor): Tensor of clipped gradients or parameters.
 
         """
-        if clip_value:
-            return self.be.clip(grad, -abs(clip_value), abs(clip_value))
+        if abs_bound:
+            return self.be.clip(v, -abs(abs_bound), abs(abs_bound))
         else:
-            return grad
+            return v
 
 
 class Schedule(NervanaObject):
@@ -452,7 +452,8 @@ class GradientDescentMomentum(Optimizer):
 
     def __init__(self, learning_rate, momentum_coef, stochastic_round=False,
                  wdecay=0.0, gradient_clip_norm=None, gradient_clip_value=None,
-                 name=None, schedule=Schedule(), nesterov=False):
+                 param_clip_value=None, name=None, schedule=Schedule(),
+                 nesterov=False):
         """
         Class constructor.
 
@@ -472,6 +473,9 @@ class GradientDescentMomentum(Optimizer):
             gradient_clip_value (float, optional): Value to element-wise clip
                                                    gradients.
                                                    Defaults to None.
+            param_clip_value (float, optional): Value to element-wise clip
+                                                parameters.
+                                                Defaults to None.
             name (str, optional): the optimizer's layer's pretty-print name.
                                   Defaults to "gdm".
             schedule (neon.optimizers.optimizer.Schedule, optional): Learning
@@ -483,6 +487,7 @@ class GradientDescentMomentum(Optimizer):
         self.learning_rate, self.momentum_coef = (learning_rate, momentum_coef)
         self.gradient_clip_norm = gradient_clip_norm
         self.gradient_clip_value = gradient_clip_value
+        self.param_clip_value = param_clip_value
         self.wdecay = wdecay
         self.schedule = schedule
         self.stochastic_round = stochastic_round
@@ -509,7 +514,7 @@ class GradientDescentMomentum(Optimizer):
                 states.append(self.be.zeros_like(grad))
 
             grad = grad / self.be.bsz
-            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
+            grad = self.clip_value(grad, self.gradient_clip_value)
             grad = scale_factor * grad + self.wdecay * param
 
             if self.momentum_coef == 0:
@@ -524,10 +529,12 @@ class GradientDescentMomentum(Optimizer):
                 # NAG equation found in "On the importance of initialization
                 # and momentum in deep learning".
                 if self.nesterov:
-                    param[:] = param + self.momentum_coef * velocity -\
-                               lrate * grad
+                    param[:] = self.clip_value(
+                               param + self.momentum_coef * velocity
+                               - lrate * grad, self.param_clip_value)
                 else:
-                    param[:] = param + velocity
+                    param[:] = self.clip_value(
+                                param + velocity, self.param_clip_value)
 
 
 class RMSProp(Optimizer):
@@ -553,8 +560,8 @@ class RMSProp(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, decay_rate=0.95, learning_rate=2e-3, epsilon=1e-6,
-                 gradient_clip_norm=None, gradient_clip_value=None, name=None,
-                 schedule=Schedule()):
+                 gradient_clip_norm=None, gradient_clip_value=None, param_clip_value=None,
+                 name=None, schedule=Schedule()):
         """
         Class constructor.
 
@@ -571,6 +578,9 @@ class RMSProp(Optimizer):
             gradient_clip_value (float, optional): Value to element-wise clip
                                                    gradients.
                                                    Defaults to None.
+            param_clip_value (float, optional): Value to element-wise clip
+                                                parameters.
+                                                Defaults to None.
             schedule (neon.optimizers.optimizer.Schedule, optional): Learning rate schedule.
                                                                      Defaults to a constant.
         Notes:
@@ -585,6 +595,7 @@ class RMSProp(Optimizer):
         self.schedule = schedule
         self.gradient_clip_norm = gradient_clip_norm
         self.gradient_clip_value = gradient_clip_value
+        self.param_clip_value = param_clip_value
         self.stochastic_round = stochastic_round
 
     def optimize(self, layer_list, epoch):
@@ -608,14 +619,15 @@ class RMSProp(Optimizer):
                 states.append(self.be.zeros_like(grad))
 
             grad = grad / self.be.bsz
-            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
+            grad = self.clip_value(grad, self.gradient_clip_value)
 
             # update state
             state = states[0]
             state[:] = decay * state + self.be.square(grad) * (1.0 - decay)
 
-            param[:] = param \
-                - (scale_factor * grad * lrate) / (self.be.sqrt(state + epsilon) + epsilon)
+            param[:] = self.clip_value(
+                        param - (scale_factor * grad * lrate)
+                        / (self.be.sqrt(state + epsilon) + epsilon), self.param_clip_value)
 
 
 class Adagrad(Optimizer):
@@ -653,7 +665,8 @@ class Adagrad(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, learning_rate=0.01, epsilon=1e-6,
-                 gradient_clip_norm=None, gradient_clip_value=None, name=None):
+                 gradient_clip_norm=None, gradient_clip_value=None,
+                 param_clip_value=None, name=None):
         """
         Class constructor.
 
@@ -669,6 +682,9 @@ class Adagrad(Optimizer):
             gradient_clip_value (float, optional): Value to element-wise clip
                                                    gradients.
                                                    Defaults to None.
+            param_clip_value (float, optional): Value to element-wise clip
+                                                parameters.
+                                                Defaults to None.
         Notes:
             Only constant learning rate is supported currently.
         """
@@ -678,6 +694,7 @@ class Adagrad(Optimizer):
         self.learning_rate = learning_rate
         self.gradient_clip_norm = gradient_clip_norm
         self.gradient_clip_value = gradient_clip_value
+        self.param_clip_value = param_clip_value
         self.stochastic_round = stochastic_round
 
     def optimize(self, layer_list, epoch):
@@ -700,12 +717,14 @@ class Adagrad(Optimizer):
                 states.append(self.be.zeros_like(grad))
 
             grad = grad / self.be.bsz
-            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
+            grad = self.clip_value(grad, self.gradient_clip_value)
 
             # update state
             state = states[0]
             state[:] = state + self.be.square(grad)
-            param[:] = param - (scale_factor * grad * lrate) / (self.be.sqrt(state + epsilon))
+            param[:] = self.clip_value(
+                        param - (scale_factor * grad * lrate)
+                        / (self.be.sqrt(state + epsilon)), self.param_clip_value)
 
 
 class Adadelta(Optimizer):
@@ -749,7 +768,8 @@ class Adadelta(Optimizer):
 
     """
 
-    def __init__(self, stochastic_round=False, decay=0.95, epsilon=1e-6, name=None):
+    def __init__(self, stochastic_round=False, decay=0.95, epsilon=1e-6,
+                 param_clip_value=None, name=None):
         """
         Class constructor.
 
@@ -760,11 +780,15 @@ class Adadelta(Optimizer):
                                      Only affects the gpu backend.
             decay: decay parameter in Adadelta
             epsilon: epsilon parameter in Adadelta
+            param_clip_value (float, optional): Value to element-wise clip
+                                                parameters.
+                                                Defaults to None.
         """
         super(Adadelta, self).__init__(name=name)
         self.decay = decay
         self.epsilon = epsilon
         self.stochastic_round = stochastic_round
+        self.param_clip_value = param_clip_value
 
     def optimize(self, layer_list, epoch):
         """
@@ -792,7 +816,8 @@ class Adadelta(Optimizer):
             states[2][:] = self.be.sqrt((states[1] + epsilon) / (states[0] + epsilon)) * grad
             states[1][:] = states[1] * decay + (1. - decay) * states[2] * states[2]
 
-            param[:] = param - states[2]
+            param[:] = self.clip_value(param - states[2],
+                                       self.param_clip_value)
 
 
 class Adam(Optimizer):
@@ -836,7 +861,8 @@ class Adam(Optimizer):
     """
 
     def __init__(self, stochastic_round=False, learning_rate=0.001, beta_1=0.9, beta_2=0.999,
-                 epsilon=1e-8, gradient_clip_norm=None, gradient_clip_value=None, name="adam"):
+                 epsilon=1e-8, gradient_clip_norm=None, gradient_clip_value=None,
+                 param_clip_value=None, name="adam"):
         """
         Class constructor.
 
@@ -853,6 +879,8 @@ class Adam(Optimizer):
                                                   Defaults to None.
             gradient_clip_value (float, optional): Value to element-wise clip gradients.
                                                    Defaults to None.
+            param_clip_value (float, optional): Value to element-wise clip parameters.
+                                                Defaults to None.
         """
         super(Adam, self).__init__(name=name)
         self.beta_1 = beta_1
@@ -862,6 +890,7 @@ class Adam(Optimizer):
         self.stochastic_round = stochastic_round
         self.gradient_clip_norm = gradient_clip_norm
         self.gradient_clip_value = gradient_clip_value
+        self.param_clip_value = param_clip_value
         self.t = 0
 
     def optimize(self, layer_list, epoch):
@@ -888,13 +917,15 @@ class Adam(Optimizer):
                 states.extend([self.be.zeros_like(grad) for i in range(2)])
 
             grad = grad / self.be.bsz
-            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
+            grad = self.clip_value(grad, self.gradient_clip_value)
 
             m, v = states
             m[:] = m * self.beta_1 + (1. - self.beta_1) * grad
             v[:] = v * self.beta_2 + (1. - self.beta_2) * grad * grad
 
-            param[:] = param - (scale_factor * l * m) / (self.be.sqrt(v) + self.epsilon)
+            param[:] = self.clip_value(
+                        param - (scale_factor * l * m)
+                        / (self.be.sqrt(v) + self.epsilon), self.param_clip_value)
 
 
 class ShiftAdaMax(Optimizer):
