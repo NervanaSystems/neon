@@ -17,26 +17,24 @@ Defines gen_backend function
 """
 import atexit
 import logging
-import os
-import sys
 import numpy as np
-from math import ceil
 
 from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
 from neon.backends.util.check_gpu import get_device_count
 
 # These are imported to register the backends with the factory
-import neon.backends.nervanacpu
+# importing with `from` ensures links will be generated in sphinx documentation
+from neon.backends import nervanacpu
 
 try:
-    import neon.backends.nervanagpu
+    from neon.backends import nervanagpu
 except ImportError:
     pass
 
 try:
     # Register if it exists
-    import mgpu.nervanamgpu
+    from mgpu import nervanamgpu
 except ImportError:
     pass
 

@@ -96,7 +96,6 @@ and iterating through minibatches of data during training.
   neon.data.hdf5iterator.HDF5IteratorAutoencoder
   neon.data.hdf5iterator.HDF5IteratorOneHot
   neon.data.imageloader.ImageLoader
-  neon.data.batch_writer.BatchWriter
   neon.data.dataloader.DataLoader
   neon.data.media.ImageParams
   neon.data.media.VideoParams
@@ -130,9 +129,6 @@ Dataset objects for storing data from common modalities (e.g. Text), as well as 
   neon.data.imagecaption.Flickr8k
   neon.data.imagecaption.Flickr30k
   neon.data.imagecaption.Coco
-  neon.data.pascal_voc.PASCALVOC
-  neon.data.pascal_voc.PASCALVOCTrain
-  neon.data.pascal_voc.PASCALVOCInference
   neon.data.text.Text
   neon.data.text.Shakespeare
   neon.data.text.PTB
@@ -242,7 +238,7 @@ should use the other containers.
     neon.layers.container.MergeSum
     neon.layers.container.MergeBroadcast
     neon.layers.container.MergeMultistream
-    neon.layers.container.RoiPooling
+    neon.layers.layer.RoiPooling
 
 Generic cost layers are implemented in the following classes. Note that these
 classes subclass from `NervanaObject`, not any base layer class.
