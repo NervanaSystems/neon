@@ -20,6 +20,18 @@ produce plots of some of the data samples and model samples with filenames
 `mnist_dcgan1.png` after the first epoch, etc., stored in the `examples/gan`
 directory the model is called from.
 
+### LSUN Example
+This is an example of DCGAN and WGAN trained on the LSUN bedroom images.
+
+#### Download and ingest LSUN images for training
+For the first time, LSUN bedroom images need to be downloaded and ingested for AEON data loader.
+```bash
+LSUN_DATA_PATH=<some/directory/to/hold/lsun/data>
+python examples/gan/lsun_data.py --out_dir $LSUN_DATA_PATH --category bedroom --dset train --png
+```
+This script will first download, then unpack, and finally ingest LSUN images for training.
+A manifest file will be generated in the data directory and a configuration file `train.cfg` will be generated in the `examples/gan` directory.
+*Note:* Data download and ingestion could take a long time due to the large size.
 
 ## References
 ```

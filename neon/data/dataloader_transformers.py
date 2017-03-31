@@ -1,5 +1,5 @@
+from __future__ import division
 import numpy as np
-
 from neon import NervanaObject
 
 
@@ -137,6 +137,30 @@ class BGRMeanSubtract(DataLoaderTransformer):
         # work for some reason ...
         tr = t.reshape((3, -1))
         tr[:] = tr - self.pixel_mean
+        return t
+
+
+class ValueNormalize(DataLoaderTransformer):
+    """
+    normalize values at `index`
+    """
+    def __init__(self, dataloader, index, source_range=[0., 255.],
+                 target_range=[0., 1.], *args, **kwargs):
+        super(ValueNormalize, self).__init__(
+            dataloader, index=index, *args, **kwargs
+        )
+        source_range = np.asarray(source_range)
+        target_range = np.asarray(target_range)
+        self.xmin = self.be.array(source_range[0])
+        self.xspan = self.be.array(source_range[1]-source_range[0])
+        self.ymin = self.be.array(target_range[0])
+        self.yspan = self.be.array(target_range[1]-target_range[0])
+
+    def transform(self, t):
+        # create a view of t and modify that.  Modifying t directly doesn't
+        # work for some reason ...
+        tr = t.reshape((3, -1))
+        tr[:] = (tr - self.xmin) / self.xspan * self.yspan + self.ymin
         return t
 
 
