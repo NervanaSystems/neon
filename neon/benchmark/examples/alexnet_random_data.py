@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # ----------------------------------------------------------------------------
-# Copyright 2015-2016 Nervana Systems Inc.
+# Copyright 2015-2017 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -66,5 +66,6 @@ cost = GeneralizedCost(costfunc=CrossEntropyMulti())
 model.initialize(train, cost=cost)
 
 b = Benchmark(model)
+print("Forward and backward")
 res = b.time(train, niterations=5)
 b.print_stats(res, nskip=2)

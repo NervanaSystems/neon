@@ -241,6 +241,7 @@ class Sequential(LayerContainer):
     def __init__(self, layers, name=None):
         super(Sequential, self).__init__(name)
 
+        assert layers, "Provide layers"
         self.layers = [l for l in flatten(layers)]
         self._layers = [x for x in self.layers if type(x) not in (BranchNode,)]
         root = self._layers[0]
