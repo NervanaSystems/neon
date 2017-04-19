@@ -646,6 +646,7 @@ class GAN(Model):
     Arguments:
         layers: Generative Adversarial layer container
         noise_dim (Tuple): Dimensionality of the noise feeding the generator
+        noise_type (Str): Noise distribution, 'normal' (default) or 'uniform'
         weights_only (bool): set to True if you do not want to recreate layers
                              and states during deserialization from a serialized model
                              description.  Defaults to False.
@@ -654,10 +655,12 @@ class GAN(Model):
                                model parameters (i.e., GradientDescentMomentum, Adadelta)
         k (int): Number of data batches per noise batch
     """
-    def __init__(self, layers, noise_dim, weights_only=False,
-                 name="model", optimizer=None, k=1):
+    def __init__(self, layers, noise_dim, noise_type='normal', weights_only=False,
+                 name="model", optimizer=None, k=1, wgan_train_sched=False):
         self.noise_dim = noise_dim
+        self.noise_type = noise_type
         self.k = k
+        self.wgan_train_sched = wgan_train_sched
         super(GAN, self).__init__(layers, weights_only=weights_only, name=name,
                                   optimizer=optimizer)
 
@@ -686,6 +689,16 @@ class GAN(Model):
         self.initialized = True
 
         self.zbuf = self.be.iobuf(self.noise_dim)
+        self.ybuf = self.be.iobuf((1,))
+
+        self.current_batch = self.gen_iter = self.last_gen_batch = 0
+
+    # FB WGAN training schedule
+    def get_k(self, giter):
+        if self.wgan_train_sched and (giter < 25 or giter % 500 == 0):
+            return 100
+        else:
+            return self.k
 
     def _epoch_fit(self, dataset, callbacks):
         """
@@ -696,9 +709,9 @@ class GAN(Model):
         """
         epoch = self.epoch_index
         self.total_cost[:] = 0
-        z = self.zbuf
+        z, y_temp = self.zbuf, self.ybuf
 
-        def fill_noise(z, normal=False):
+        def fill_noise(z, normal=True):
             """
             Fill z with either uniform or normally distributed random numbers
             """
@@ -714,7 +727,7 @@ class GAN(Model):
             self.be.begin(Block.minibatch, mb_idx)
 
             # train discriminator on noise
-            fill_noise(z)
+            fill_noise(z, normal=(self.noise_type == 'normal'))
             Gz = self.fprop_gen(z)
             y_noise = self.fprop_dis(Gz)
             delta_noise = self.cost.costfunc.bprop_noise(y_noise)
@@ -729,21 +742,25 @@ class GAN(Model):
 
             # Accumulate total cost. Abuses get_cost(y,t) using y_noise as the "target"
             y_noise = self.fprop_dis(Gz)
+            y_temp[:] = y_noise
             y_data = self.fprop_dis(x)
-            self.total_cost[:] = self.total_cost + self.cost.get_cost(y_data, y_noise)
+            self.total_cost[:] = self.total_cost + self.cost.get_cost(y_data, y_temp)
 
             # train generator
-            if epoch % self.k == 0:
-                fill_noise(z)
+            if self.current_batch == self.last_gen_batch + self.get_k(self.gen_iter):
+                fill_noise(z, normal=(self.noise_type == 'normal'))
                 Gz = self.fprop_gen(z)
                 y_noise = self.fprop_dis(Gz)
                 delta_noise = self.cost.costfunc.bprop_generator(y_noise)
                 delta_dis = self.bprop_dis(delta_noise)
                 self.bprop_gen(delta_dis)
                 self.optimizer.optimize(self.layers.generator.layers_to_optimize, epoch=epoch)
+                self.last_gen_batch = self.current_batch
+                self.gen_iter += 1
 
             self.be.end(Block.minibatch, mb_idx)
             callbacks.on_minibatch_end(epoch, mb_idx)
+            self.current_batch += 1
 
         # now we divide total cost by the number of batches,
         # so it was never total cost, but sum of averages

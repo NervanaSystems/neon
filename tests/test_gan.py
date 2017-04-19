@@ -52,7 +52,7 @@ def test_gan_cost(backend_default):
     computed correctly.
     """
     be = backend_default
-    cost = GANCost(cost_type="dis", original_cost=False)
+    cost = GANCost(cost_type="dis", func="modified")
 
     y_data = be.iobuf(5).fill(1.)
     y_noise = be.iobuf(5).fill(2.)

@@ -33,8 +33,6 @@ from neon.util.argparser import NeonArgparser
 parser = NeonArgparser(__doc__)
 parser.add_argument('--kbatch', type=int, default=1,
                     help='number of data batches per noise batch in training')
-parser.add_argument("--original_cost", action='store_true',
-                    help="generator cost log(1-D(G(z))) rather than -log(D(G(z)))")
 args = parser.parse_args()
 
 # load up the mnist data set
@@ -80,8 +78,7 @@ layers = GenerativeAdversarial(generator=Sequential(G_layers, name="Generator"),
                                discriminator=Sequential(D_layers, name="Discriminator"))
 
 # setup cost function as CrossEntropy
-cost = GeneralizedCost(costfunc=GANCost(cost_type="dis",
-                       original_cost=args.original_cost))
+cost = GeneralizedCost(costfunc=GANCost(func="modified"))
 
 # setup optimizer
 optimizer = Adam(learning_rate=0.0005, beta_1=0.5)
