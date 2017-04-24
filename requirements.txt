@@ -3,7 +3,7 @@ numpy==1.11.1
 pyyaml==3.12
 pep8==1.7.0
 flake8==3.0.4
-funcsigs==0.4
+funcsigs==1.0.2
 pytest==3.0.1
 pytest-cov==2.3.1
 pytest-mock==1.6.0
