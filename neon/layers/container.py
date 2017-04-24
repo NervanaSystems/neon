@@ -25,6 +25,7 @@ from neon.layers.recurrent import Recurrent, get_steps
 from neon.transforms import Softmax
 from neon.util.persist import load_class
 from functools import reduce
+from funcsigs import signature
 
 
 def flatten(item):
@@ -229,6 +230,21 @@ class LayerContainer(Layer):
                     yield layer2
             yield layer
 
+    def set_acc_on(self, acc_on):
+        """
+        Set the acc_on flag according to bool argument for each layer.
+        If a layer in the container does not support accumulate_updates
+        it will be skipped.
+
+        Arguments:
+           acc_on (bool): Value to set the acc_on flag of supported layers to.
+        """
+        if (not hasattr(self, "accumulate_updates")):
+            raise BufferError("accumulate_updates not set")
+        for l in self.layers:
+            if hasattr(l, "accumulate_updates"):
+                l.set_acc_on(acc_on)
+
 
 class Sequential(LayerContainer):
     """
@@ -281,7 +297,7 @@ class Sequential(LayerContainer):
         self.out_shape = in_obj.out_shape
         return self
 
-    def allocate(self, shared_outputs=None):
+    def allocate(self, shared_outputs=None, accumulate_updates=False):
         """
         Allocate output buffer to store activations from fprop.
 
@@ -290,10 +306,17 @@ class Sequential(LayerContainer):
                                                computed into
         """
         # get the layers that own their outputs
+        self.accumulate_updates = accumulate_updates
         alloc_layers = [l for l in self.layers if l.owns_output]
-        alloc_layers[-1].allocate(shared_outputs)
+        if 'accumulate_updates' in signature(alloc_layers[-1].allocate).parameters:
+            alloc_layers[-1].allocate(shared_outputs, accumulate_updates=accumulate_updates)
+        else:
+            alloc_layers[-1].allocate(shared_outputs)
         for l in self.layers:
-            l.allocate()
+            if 'accumulate_updates' in signature(l.allocate).parameters:
+                l.allocate(accumulate_updates=accumulate_updates)
+            else:
+                l.allocate()
 
     def allocate_deltas(self, global_deltas=None):
         if global_deltas is None:

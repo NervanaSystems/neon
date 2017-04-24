@@ -684,7 +684,8 @@ class GAN(Model):
             self.cost = cost
 
         # Now allocate space
-        self.layers.allocate()
+        self.layers.generator.allocate(accumulate_updates=False)
+        self.layers.discriminator.allocate(accumulate_updates=True)
         self.layers.allocate_deltas()
         self.initialized = True
 

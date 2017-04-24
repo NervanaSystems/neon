@@ -14,6 +14,7 @@
 # ----------------------------------------------------------------------------
 from __future__ import division
 from builtins import str, zip
+from functools import wraps
 import logging
 import numpy as np
 
@@ -65,6 +66,7 @@ class Layer(NervanaObject):
         self.next_layer = None
         self.actual_bsz = None
         self.actual_seq_len = None
+        self.acc_on = False
 
     def __str__(self):
         """
@@ -261,6 +263,63 @@ class Layer(NervanaObject):
 
     def get_description(self, **kwargs):
         return super(Layer, self).get_description(**kwargs)
+
+    def set_acc_on(self, acc_on):
+        """
+        Set the acc_on flag according to bool argument. If set to true, the
+        layer will accumulate some (preset) parameters on calls to functions
+        that are decorated with the accumulates decorator. In order to use this
+        feature, accumulate_updates=True must have been passed to the layer's
+        allocate function
+
+        This currently only works for a few hard coded parameters in select layers
+
+        Arguments:
+           acc_on (bool): Value to set the acc_on flag to.
+        """
+        if (not hasattr(self, "accumulate_updates")):
+            raise BufferError("accumulate_updates not set")
+        if self.accumulate_updates:
+            self.acc_on = acc_on
+
+    @staticmethod
+    def accumulates(f):
+        """
+        Higher order decorator function that enables accumulation functionality for that function.
+        Object that use this decorator are required to have an acc_param attribute. This attribute
+        tuple declares the names for existing temp parameter and real parameter buffers. The
+        temp parameter buffer copies the value of the parameter buffer before f is called, and
+        after f is called the temp and normal buffers are summed. This decorator could be used
+        to wrap any function that may want to accumulate parameters instead of overwriting.
+        """
+        def accum_pre(self):
+            """
+            copy the real acc params to the temp buffer
+            """
+            if self.acc_on:
+                for (acc_p, p) in self.acc_params:
+                    acc_p[:] = p
+
+        def accum_post(self):
+            """
+            element wise sum of temp buffer and updated param buffers
+            """
+            if self.acc_on:
+                for (acc_p, p) in self.acc_params:
+                    p[:] = p + acc_p
+
+        @wraps(f)
+        def accum_wrapper(self, *args, **kwargs):
+            """
+            Wraps the function f with calls to accum_pre and accum_post
+            """
+            if not isinstance(self, Layer):
+                raise (TypeError("accumulates can only by subclasses of Layer"))
+            accum_pre(self)
+            out = f(self, *args, **kwargs)
+            accum_post(self)
+            return out
+        return accum_wrapper
 
 
 class BranchNode(Layer):
@@ -575,15 +634,18 @@ class ParameterLayer(Layer):
         self.states = []
         self.owns_delta = True
 
-    def allocate(self, shared_outputs=None):
+    def allocate(self, shared_outputs=None, accumulate_updates=False):
         """
         Allocate output buffer to store activations from fprop.
 
         Arguments:
             shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
                                                computed into
+            accumulate_updates (bool): allocate additional scratch accumulation
+                buffers.
         """
         super(ParameterLayer, self).allocate(shared_outputs)
+        self.accumulate_updates = accumulate_updates
         if self.W is None:
             self.init_params(self.weight_shape)
         if self.batch_sum_shape is not None:
@@ -598,6 +660,8 @@ class ParameterLayer(Layer):
         Arguments:
             shape (int, tuple): shape to allocate for layer parameter
                 buffers.
+            accumulate_updates (bool): allocate additional scratch accumulation
+                buffers.
         """
         self.W = self.be.empty(shape, **self.get_param_attrs())
         self.dW = self.be.empty_like(self.W)
@@ -608,6 +672,9 @@ class ParameterLayer(Layer):
             self.W[:] = self.init
         else:
             self.init.fill(self.W)
+        if self.accumulate_updates:
+            self.acc_dW = self.be.empty_like(self.dW)
+            self.acc_params = [(self.acc_dW, self.dW)]
 
     def get_params(self):
         """
@@ -798,6 +865,7 @@ class Convolution(ParameterLayer):
                            bsum=self.batch_sum)
         return self.outputs
 
+    @Layer.accumulates
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
         Apply the backward pass transformation to the input data.
@@ -938,6 +1006,7 @@ class Deconvolution(ParameterLayer):
                            bsum=self.batch_sum)
         return self.outputs
 
+    @Layer.accumulates
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
         bprop for deconv is equivalent to fprop for conv.
@@ -1032,6 +1101,7 @@ class Linear(ParameterLayer):
 
         return self.outputs
 
+    @Layer.accumulates
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
         Apply the backward pass transformation to the input data.
@@ -1168,6 +1238,7 @@ class Bias(ParameterLayer):
         self.y[:] = self.y + self.W
         return self.outputs
 
+    @Layer.accumulates
     def bprop(self, error):
         """
         Apply the backward pass transformation to the input data.
@@ -2080,17 +2151,20 @@ class BatchNorm(Layer):
         self.nfm = self.in_shape[0] if isinstance(self.in_shape, tuple) else self.nin
         return self
 
-    def allocate(self, shared_outputs=None):
+    def allocate(self, shared_outputs=None, accumulate_updates=False):
         """
         Allocate output buffer to store activations from fprop.
 
         Arguments:
             shared_outputs (Tensor, optional): pre-allocated tensor for activations to be
                                                computed into
+            accumulate_updates bool: allocate additional scratch accumulation
+                                               buffers.
         """
         super(BatchNorm, self).allocate(shared_outputs)
         self.y = self.outputs.reshape((self.nfm, -1))
         self.xvar = self.be.zeros((self.nfm, 1), dtype=self.stats_dtype)
+        self.accumulate_updates = accumulate_updates
         if self.allparams is None:
             self.init_params(self.nfm)
         if self.prev_layer in (None, True) or not getattr(self.prev_layer, 'batch_sum', None):
@@ -2114,6 +2188,13 @@ class BatchNorm(Layer):
         (self.gmean, self.gvar) = self.inf_params
 
         self.allparams = self.params + self.inf_params
+
+        # Scratch buffers used for accumulation
+        if self.accumulate_updates:
+            self.acc_grad_beta = self.be.empty_like(self.grad_beta)
+            self.acc_grad_gamma = self.be.empty_like(self.grad_gamma)
+            self.acc_params = [(self.acc_grad_beta, self.grad_beta),
+                               (self.acc_grad_gamma, self.grad_gamma)]
 
     @property
     def plist(self):
@@ -2161,6 +2242,7 @@ class BatchNorm(Layer):
         self.y[:] = self.y * beta + xhat * self.gamma + self.beta
         return self.outputs
 
+    @Layer.accumulates
     def bprop(self, error, alpha=1.0, beta=0.0):
         """
         Compute gradients for learning gamma and beta as well as layer weights.
