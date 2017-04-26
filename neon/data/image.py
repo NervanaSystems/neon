@@ -98,6 +98,28 @@ class MNIST(Dataset):
         return self._data_dict
 
 
+class DUMMY(Dataset):
+    def __init__(self, path='.', subset_pct=100, normalize=True,
+                 contrast_normalize=False, whiten=False, pad_classes=False):
+        super(DUMMY, self).__init__('dummy', 'dummy', 1,
+                                    path=path, subset_pct=subset_pct)
+        pass
+
+    def load_data(self):
+        X_train = np.random.uniform(-1, 1, (128, 3 * 224 * 224))
+        y_train = np.random.randint(0, 999, (128, 1000))
+
+        return X_train, y_train, 10
+
+    def gen_iterators(self):
+        (X_train, y_train, test) = self.load_data()
+        train = ArrayIterator(X_train, y_train, nclass=1000, lshape=(3, 224, 224))
+        test = ArrayIterator(X_train, y_train, nclass=1000, lshape=(3, 224, 224))
+        self._data_dict = {'train': train,
+                           'valid': test}
+        return self._data_dict
+
+
 class CIFAR10(Dataset):
     """
     CIFAR10 data set from https://www.cs.toronto.edu/~kriz/cifar.html

@@ -24,4 +24,4 @@ from neon.data.questionanswer import BABI, QA
 from neon.data.ticker import Ticker, CopyTask, RepeatCopyTask, PrioritySortTask
 from neon.data.video import Video
 from neon.data.imagecaption import ImageCaption, ImageCaptionTest, Flickr8k, Flickr30k, Coco
-from neon.data.image import MNIST, CIFAR10
+from neon.data.image import MNIST, CIFAR10, DUMMY

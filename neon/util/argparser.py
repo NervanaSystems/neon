@@ -104,6 +104,13 @@ class NeonArgparser(configargparse.ArgumentParser):
                           help="suppress running display of progress bar and "
                                "training loss")
 
+        bm_grp = self.add_argument_group('benchmark')
+        bm_grp.add_argument('--profile', action='store_true')
+        bm_grp.add_argument('--profiling_method', type=str, default='time')
+        bm_grp.add_argument('--profile_inference', action='store_true')
+        bm_grp.add_argument('--profile_iterations', type=int, default=50)
+        bm_grp.add_argument('--profile_iter_skip', type=int, default=5)
+
         # runtime specifc options
         rt_grp = self.add_argument_group('runtime')
         rt_grp.add_argument('-w', '--data_dir',

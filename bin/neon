@@ -49,6 +49,7 @@ from neon import logger
 from neon.backends import gen_backend
 from neon.callbacks.callbacks import Callbacks
 import neon.data
+from neon.models import Model
 from neon.util.argparser import NeonArgparser
 from neon.util.yaml_parse import create_objects
 
@@ -172,4 +173,15 @@ if __name__ == "__main__":
     # configure callbacks
     callbacks = Callbacks(model, eval_set=test, **args.callback_args)
 
-    model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
+    if (args.profile is True):
+        from neon.benchmark import Benchmark
+
+        inference = args.profile_inference
+        model = Model(layers=model.layers, optimizer=optim)
+        model.initialize(train, cost=cost)
+        b = Benchmark(model)
+        if (args.profiling_method == 'time'):
+            res = b.time(train, inference=inference, niterations=args.profile_iterations)
+            b.print_stats(res, nskip=args.profile_iter_skip)
+    else:
+        model.fit(train, optimizer=optim, num_epochs=num_epochs, cost=cost, callbacks=callbacks)
