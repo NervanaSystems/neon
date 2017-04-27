@@ -17,7 +17,6 @@ import os
 import shutil
 import subprocess
 import json
-import urllib2
 import zipfile
 import logging
 from tqdm import tqdm
@@ -25,6 +24,9 @@ from PIL import Image
 from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast, ValueNormalize
 from neon.util.persist import get_data_cache_or_nothing, ensure_dirs_exist
+from future import standard_library
+standard_library.install_aliases()  # triggers E402, hence noqa below
+from future.moves.urllib.request import urlopen  # noqa
 logger = logging.getLogger(__name__)
 try:
     import lmdb
@@ -44,7 +46,7 @@ def lsun_categories(tag):
     Argument:
         tag (str): version tag, use "latest" for most recent
     """
-    f = urllib2.urlopen(LSUN_URL + 'list.cgi?tag=' + tag)
+    f = urlopen(LSUN_URL + 'list.cgi?tag=' + tag)
     return json.loads(f.read())
 
 
