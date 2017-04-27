@@ -36,7 +36,7 @@ def pytest_generate_tests(metafunc):
     if 'test_args' in metafunc.fixturenames:
         batch_size = 64
         indim = 16
-        nifm = 3
+        nifm = 4
         fshape = 2
         nofm = 16
         stride = 1
