@@ -209,7 +209,7 @@ class Softmax(Transform):
         """
         super(Softmax, self).__init__(name)
         self.epsilon = epsilon
-        self.ax = axis
+        self.axis = axis
 
     def __call__(self, x):
         """
@@ -222,8 +222,8 @@ class Softmax(Transform):
             Tensor or optree: Output activation
         """
         return (self.be.reciprocal(self.be.sum(
-                self.be.exp(x - self.be.max(x, axis=self.ax)), axis=self.ax)) *
-                self.be.exp(x - self.be.max(x, axis=self.ax)))
+                self.be.exp(x - self.be.max(x, axis=self.axis)), axis=self.axis)) *
+                self.be.exp(x - self.be.max(x, axis=self.axis)))
 
     def bprop(self, x):
         """
