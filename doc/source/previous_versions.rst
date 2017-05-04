@@ -17,6 +17,19 @@
 Previous Versions
 =================
 
+neon v1.8.2
+-----------
+
+|Docs182|_
+
+neon v1.8.2 released February 23, 2017 supporting:
+
+* Make the whale calls example stable and shuffle dataset before splitting into subsets
+* Reduce default depth in cifar_msra example to 2
+* Fix the formatting of the conv layer description
+* Fix documentation error in the video-c3d example
+* Support greyscale videos
+
 neon v1.8.1
 -----------
 
@@ -402,6 +415,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs182| replace:: Docs
 .. |Docs181| replace:: Docs
 .. |Docs180| replace:: Docs
 .. |Docs170| replace:: Docs
@@ -426,6 +440,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs182: http://neon.nervanasys.com/docs/1.8.2
 .. _Docs181: http://neon.nervanasys.com/docs/1.8.1
 .. _Docs180: http://neon.nervanasys.com/docs/1.8.0
 .. _Docs170: http://neon.nervanasys.com/docs/1.7.0

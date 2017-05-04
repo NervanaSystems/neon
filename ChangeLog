@@ -1,5 +1,20 @@
 # ChangeLog
 
+## v1.9.0 (2017-05-03):
+
+* Add support for 3D deconvolution
+* Generative Adversarial Networks (GAN) implementation, and MNIST DCGAN example, following GoodFellow 2014 (http://arXiv.org/abs/1406.2661)
+* Implement Wasserstein GAN cost function and make associated API changes for GAN models
+* Add a new benchmarking script with per-layer timings
+* Add weight clipping for GDM, RMSProp, Adagrad, Adadelta and Adam optimizers
+* Make multicost an explicit choice in mnist_branch.py example
+* Enable NMS kernels to work with normalized boxes and offset
+* Fix missing links in api.rst [#366]
+* Fix docstring for --datatype option to neon [#367]
+* Fix perl shebang in maxas.py and allow for build with numpy 1.12 [#356]
+* Replace os.path.join for Windows interoperability [#351]
+* Update aeon to 0.2.7 to fix a seg fault on termination
+
 ## v1.8.2 (2017-02-23):
 
 * Make the whale calls example stable and shuffle dataset before splitting into subsets
