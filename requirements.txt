@@ -12,6 +12,6 @@ pillow==3.3.1
 pylint==1.6.4
 sphinx==1.4.6
 h5py==2.6.0
-appdirs==1.4.0
+appdirs==1.4.3
 future==0.15.2
 tqdm==4.8.4
