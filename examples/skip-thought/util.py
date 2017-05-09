@@ -15,11 +15,11 @@
 import os
 import numpy as np
 from collections import defaultdict, OrderedDict
-import re
 
 from neon.layers import LookupTable, RecurrentSum, RecurrentLast, Linear, Bias, GeneralizedCost
 from neon.initializers import Gaussian, Constant
 from neon.data import ArrayIterator
+from neon.data.text_preprocessing import clean_string
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import SumSquared
 from neon.callbacks.callbacks import Callbacks
@@ -143,24 +143,6 @@ def prep_data(raw_input, input_type, max_len, vocab, dtype='int32',
         return xbuf
     else:
         raise ValueError("Unsupported data type: %s" % input_type)
-
-
-def clean_string(string):
-    string = str(string)
-    string = re.sub(r"[^A-Za-z(),!?\'\`]", " ", string)
-    string = re.sub(r"\'s", " \'s", string)
-    string = re.sub(r"\'ve", " \'ve", string)
-    string = re.sub(r"n\'t", " n\'t", string)
-    string = re.sub(r"\'re", " \'re", string)
-    string = re.sub(r"\'d", " \'d", string)
-    string = re.sub(r"\'ll", " \'ll", string)
-    string = re.sub(r",", " , ", string)
-    string = re.sub(r"!", " ! ", string)
-    string = re.sub(r"\(", " \( ", string)
-    string = re.sub(r"\)", " \) ", string)
-    string = re.sub(r"\?", " \? ", string)
-    string = re.sub(r"\s{2,}", " ", string)
-    return string.strip().lower()
 
 
 def tokenize(s, eos=True):
