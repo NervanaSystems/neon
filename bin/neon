@@ -173,6 +173,14 @@ if __name__ == "__main__":
     # configure callbacks
     callbacks = Callbacks(model, eval_set=test, **args.callback_args)
 
+    if args.verbose > 2:
+        from neon.util.display_information import display_platform_information
+        from neon.util.display_information import display_cpu_information
+        from neon.util.display_information import display_model_params
+        display_platform_information()
+        display_cpu_information()
+        display_model_params(args, root_yaml)
+
     if (args.profile is True):
         from neon.benchmark import Benchmark
 
