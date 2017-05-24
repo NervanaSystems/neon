@@ -15,4 +15,5 @@ h5py==2.6.0
 appdirs==1.4.3
 future==0.15.2
 tqdm==4.8.4
+filelock==2.0.8
 py-cpuinfo==3.2.0

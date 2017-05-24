@@ -27,7 +27,10 @@ from math import ceil
 from operator import mul
 import sys
 import os.path
-import shelve
+
+
+from neon.util.shelver import atomic_shelve
+
 
 if sys.version_info >= (3, 0):
     from functools import reduce
@@ -684,24 +687,21 @@ class UpdateDirect(KernelGroup):
         if autotune:
             strideP, strideQ = autotune
         else:
-            autotune_db = shelve.open(self.autotune_db_file)
-
-            if self.autotune_key in autotune_db:
-                strideP, strideQ = autotune_db[self.autotune_key]
-                #print strideP, strideQ, self.autotune_key
-                self.initialized = True
-            else:
-                # prior to autotuning set the maximum for scratch space
-                # memory allocation purposes
-                if GP * GQ > 192:
-                    strideP  = 192
-                    strideQ  = 1
+            with atomic_shelve(self.autotune_db_file) as autotune_db:
+                if self.autotune_key in autotune_db:
+                    strideP, strideQ = autotune_db[self.autotune_key]
+                    #print strideP, strideQ, self.autotune_key
+                    self.initialized = True
                 else:
-                    strideP  = GP
-                    strideQ  = GQ
-                self.initialized = False
-
-            autotune_db.close()
+                    # prior to autotuning set the maximum for scratch space
+                    # memory allocation purposes
+                    if GP * GQ > 192:
+                        strideP  = 192
+                        strideQ  = 1
+                    else:
+                        strideP  = GP
+                        strideQ  = GQ
+                    self.initialized = False
 
         itemsize = self.dtype.itemsize
         RS       = R * S
@@ -836,9 +836,8 @@ class UpdateDirect(KernelGroup):
         settings = results[0][1]
         # for res in results[0:10]:
         #     print res
-        autotune_db = shelve.open(self.autotune_db_file)
-        autotune_db[self.autotune_key] = settings
-        autotune_db.close()
+        with atomic_shelve(self.autotune_db_file) as autotune_db:
+            autotune_db[self.autotune_key] = settings
 
         self.init(autotune=settings)
 

@@ -26,11 +26,11 @@ from . import kernel_specs
 from neon.backends.cuda_templates import _common_round, _common_fp16_to_fp32, _ew_types
 from neon.backends.util.source_module import SourceModule
 import os.path
-import shelve
 from .convolution import (
     KernelGroup, NoopTransform, CompoundOps, UpdateConvReduce, BatchNormSum, ConvertDataType, FilterDimShuffle,
     _get_sm_count, _ceil_div, _magic64, _div64, _magic32, _flatten, _closest_divisor)
 
+from neon.util.shelver import atomic_shelve
 
 logger = logging.getLogger(__name__)
 
@@ -73,17 +73,15 @@ class XpropWinograd_2x2_3x3(KernelGroup):
         itemsize = self.dtype.itemsize
 
         if not autotune:
-            autotune_db = shelve.open(self.autotune_db_file)
+            with atomic_shelve(self.autotune_db_file) as autotune_db:
+                if self.autotune_key in autotune_db:
+                    filter_extern = autotune_db[self.autotune_key]
+                    self.initialized = True
+                else:
+                    filter_extern    = True
+                    self.initialized = False
 
-            if self.autotune_key in autotune_db:
-                filter_extern = autotune_db[self.autotune_key]
-                self.initialized = True
-            else:
-                filter_extern    = True
-                self.initialized = False
-
-            autotune_db.close()
-            #print filter_extern, self.autotune_key
+                #print filter_extern, self.autotune_key
 
         # filter_extern = True
         self.filter_extern = filter_extern
@@ -177,9 +175,8 @@ class XpropWinograd_2x2_3x3(KernelGroup):
         # for res in results:
         #     print res
 
-        autotune_db = shelve.open(self.autotune_db_file)
-        autotune_db[self.autotune_key] = external
-        autotune_db.close()
+        with atomic_shelve(self.autotune_db_file) as autotune_db:
+            autotune_db[self.autotune_key] = external
 
         self.init(autotune=0, filter_extern=external)
 
@@ -336,24 +333,22 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         if autotune:
             strideY, strideX, external = autotune
         else:
-            autotune_db  = shelve.open(self.autotune_db_file)
-            autotune_key = " ".join(self.autotune_key)
+            with atomic_shelve(self.autotune_db_file) as autotune_db:
+                autotune_key = " ".join(self.autotune_key)
 
-            if autotune_key in autotune_db:
-                strideY, strideX, external = autotune_db[autotune_key]
-                #print strideY, strideX, external, autotune_key
-                self.initialized = True
-            else:
-                if GYS * GXS > 768:
-                    strideY  = 768
-                    strideX  = 1
+                if autotune_key in autotune_db:
+                    strideY, strideX, external = autotune_db[autotune_key]
+                    #print strideY, strideX, external, autotune_key
+                    self.initialized = True
                 else:
-                    strideY  = GYS
-                    strideX  = GXS
-                external = True
-                self.initialized = False
-
-            autotune_db.close()
+                    if GYS * GXS > 768:
+                        strideY  = 768
+                        strideX  = 1
+                    else:
+                        strideY  = GYS
+                        strideX  = GXS
+                    external = True
+                    self.initialized = False
 
         loopXI  = N * (strideX * blkXI - 1)
         loopXE  = N * (strideX * blkX  - 1)
@@ -499,17 +494,15 @@ class UpdateWinograd_3x3_2x2(KernelGroup):
         # for res in results[0:10]:
         #     print res
 
-        autotune_db = shelve.open(self.autotune_db_file)
-        autotune_db[autotune_key] = settings
-
-        # add a copy if this layer has small strides
-        # deterministic vs non-determ should make no speed difference here
-        if settings[0] * settings[1] <= 8:
-            self.autotune_key[2] = native_str(1 - int(self.autotune_key[2]))
-            autotune_key = " ".join(self.autotune_key)
+        with atomic_shelve(self.autotune_db_file) as autotune_db:
             autotune_db[autotune_key] = settings
 
-        autotune_db.close()
+            # add a copy if this layer has small strides
+            # deterministic vs non-determ should make no speed difference here
+            if settings[0] * settings[1] <= 8:
+                self.autotune_key[2] = native_str(1 - int(self.autotune_key[2]))
+                autotune_key = " ".join(self.autotune_key)
+                autotune_db[autotune_key] = settings
 
         self.init(autotune=settings)
 
@@ -589,16 +582,13 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         pad_d, pad_h, pad_w, str_d, str_h, str_w, dil_d, dil_h, dil_w) = self.params
 
         if not autotune:
-            autotune_db = shelve.open(self.autotune_db_file)
-
-            if self.autotune_key in autotune_db:
-                external = autotune_db[self.autotune_key]
-                self.initialized = True
-            else:
-                external = True
-                self.initialized = False
-
-            autotune_db.close()
+            with atomic_shelve(self.autotune_db_file) as autotune_db:
+                if self.autotune_key in autotune_db:
+                    external = autotune_db[self.autotune_key]
+                    self.initialized = True
+                else:
+                    external = True
+                    self.initialized = False
 
         # Disable due to non-determinism observed in VGG
         external = True
@@ -718,9 +708,8 @@ class XpropWinograd_4x4_3x3(KernelGroup):
         # for res in results:
         #     print res
 
-        autotune_db = shelve.open(self.autotune_db_file)
-        autotune_db[self.autotune_key] = external
-        autotune_db.close()
+        with atomic_shelve(self.autotune_db_file) as autotune_db:
+            autotune_db[self.autotune_key] = external
 
         self.init(autotune=0, external=external)
 
@@ -940,18 +929,16 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         if autotune:
             strideYXN = autotune
         else:
-            autotune_db  = shelve.open(self.autotune_db_file)
-            autotune_key = " ".join(self.autotune_key)
+            with atomic_shelve(self.autotune_db_file) as autotune_db:
+                autotune_key = " ".join(self.autotune_key)
 
-            if autotune_key in autotune_db:
-                strideYXN = autotune_db[autotune_key]
-                #print strideYXN, autotune_key
-                self.initialized = True
-            else:
-                strideYXN = self.maxYXN2
-                self.initialized = False
-
-            autotune_db.close()
+                if autotune_key in autotune_db:
+                    strideYXN = autotune_db[autotune_key]
+                    #print strideYXN, autotune_key
+                    self.initialized = True
+                else:
+                    strideYXN = self.maxYXN2
+                    self.initialized = False
 
         self.blocksCK = GC32 * GK32
         magic_sYXN    = _magic64(strideYXN)
@@ -1043,17 +1030,15 @@ class UpdateWinograd_3x3_4x4(KernelGroup):
         # for res in results[0:10]:
         #     print res
 
-        autotune_db = shelve.open(self.autotune_db_file)
-        autotune_db[autotune_key] = strideYXN
-
-        # add a copy if this layer has small strides
-        # deterministic vs non-determ should make no speed difference here
-        if strideYXN <= 8:
-            self.autotune_key[2] = native_str(1 - int(self.autotune_key[2]))
-            autotune_key = " ".join(self.autotune_key)
+        with atomic_shelve(self.autotune_db_file) as autotune_db:
             autotune_db[autotune_key] = strideYXN
 
-        autotune_db.close()
+            # add a copy if this layer has small strides
+            # deterministic vs non-determ should make no speed difference here
+            if strideYXN <= 8:
+                self.autotune_key[2] = native_str(1 - int(self.autotune_key[2]))
+                autotune_key = " ".join(self.autotune_key)
+                autotune_db[autotune_key] = strideYXN
 
         self.init(autotune=strideYXN)
 
