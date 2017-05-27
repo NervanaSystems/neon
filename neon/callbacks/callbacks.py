@@ -1566,3 +1566,44 @@ class WatchTickerCallback(Callback):
 
             # Only do this for one minibatch - it's a diagnostic tool, not a log
             break
+
+
+class GANCostCallback(Callback):
+    """
+    Callback for computing average training cost periodically during training.
+    """
+    def __init__(self):
+        super(GANCostCallback, self).__init__(epoch_freq=1)
+
+    def on_train_begin(self, callback_data, model, epochs):
+        """
+        Called when training is about to begin
+
+        Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
+            epochs (int): Total epochs
+        """
+        # preallocate space for the number of minibatches in the whole run
+        points = callback_data['config'].attrs['total_minibatches']
+        callback_data.create_dataset("gan/gen_iter", (points,))
+        callback_data.create_dataset("gan/cost_dis", (points,))
+
+        # clue in the data reader to use the 'minibatch' time_markers
+        callback_data['gan/gen_iter'].attrs['time_markers'] = 'minibatch'
+        callback_data['gan/cost_dis'].attrs['time_markers'] = 'minibatch'
+
+    def on_minibatch_end(self, callback_data, model, epoch, minibatch):
+        """
+        Log GAN cost data. Called when minibatch is about to end
+
+        Arguments:
+            callback_data (HDF5 dataset): shared data between callbacks
+            model (Model): model object
+            epoch (int): index of current epoch
+            minibatch (int): index of minibatch that is ending
+        """
+        if model.current_batch == model.last_gen_batch and model.last_gen_batch > 0:
+            mbstart = callback_data['time_markers/minibatch'][epoch - 1] if epoch > 0 else 0
+            callback_data['gan/gen_iter'][mbstart + minibatch] = model.gen_iter
+            callback_data['gan/cost_dis'][mbstart + minibatch] = model.cost_dis[0]

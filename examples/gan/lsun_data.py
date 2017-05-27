@@ -104,7 +104,7 @@ def ingest_lsun(lsun_dir, category, dset, lbl_map, overwrite=False, png_conv=Fal
         f.write('manifest = [{}:{}]\n'.format(dset, manifest_file))
         f.write('manifest_root = {}\n'.format(lsun_dir))
         f.write('log = {}\n'.format(log_file))
-        f.write('epochs = 8\nrng_seed = 0\nverbose = True\neval_freq = 0\n')
+        f.write('epochs = 25\nrng_seed = 0\nverbose = True\neval_freq = 0\n')
         f.write('backend = gpu\nbatch_size = 64\n')
     if os.path.exists(manifest_file) and not overwrite:
         print("LSUN {0} {1} dataset ingested.".format(category, dset))
@@ -174,7 +174,7 @@ def wrap_dataloader(dl):
 def make_loader(manifest_file, manifest_root, backend_obj, subset_pct=100, random_seed=0):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = False
+    aeon_config['shuffle_every_epoch'] = True
     aeon_config['random_seed'] = random_seed
     aeon_config['image']['center'] = True
     aeon_config['image']['flip_enable'] = False

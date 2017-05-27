@@ -17,8 +17,9 @@
 Simple DCGAN implementation for generating MNIST images.
 """
 
-from os.path import splitext
-from neon.callbacks.callbacks import Callbacks
+import os
+from datetime import datetime
+from neon.callbacks.callbacks import Callbacks, GANCostCallback
 from neon.callbacks.plotting_callbacks import GANPlotCallback
 from neon.data.image import MNIST
 from neon.initializers import Gaussian
@@ -28,6 +29,7 @@ from neon.models.model import GAN
 from neon.optimizers import Adam
 from neon.transforms import Rectlin, Logistic, GANCost
 from neon.util.argparser import NeonArgparser
+from neon.util.persist import ensure_dirs_exist
 
 # parse the command line arguments
 parser = NeonArgparser(__doc__)
@@ -89,7 +91,14 @@ gan = GAN(layers=layers, noise_dim=noise_dim, k=args.kbatch)
 
 # configure callbacks
 callbacks = Callbacks(gan, eval_set=valid_set, **args.callback_args)
-callbacks.add_callback(GANPlotCallback(filename=splitext(__file__)[0], hw=27))
+fdir = ensure_dirs_exist(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'results/'))
+fname = os.path.splitext(os.path.basename(__file__))[0] +\
+    '_[' + datetime.now().strftime('%Y-%m-%d-%H-%M-%S') + ']'
+im_args = dict(filename=os.path.join(fdir, fname), hw=27,
+               num_samples=args.batch_size, nchan=1, sym_range=True)
+callbacks.add_callback(GANPlotCallback(**im_args))
+callbacks.add_callback(GANCostCallback())
+
 # run fit
 gan.fit(train_set, optimizer=optimizer,
         num_epochs=args.epochs, cost=cost, callbacks=callbacks)

@@ -712,7 +712,7 @@ class GANCost(Cost):
         self.one_buf = self.be.iobuf(1)
         self.one_buf.fill(1)
 
-    def __call__(self, y_data, y_noise):
+    def __call__(self, y_data, y_noise, cost_type='dis'):
         """
         Returns the discriminator cost. Note sign flip of the discriminator
         cost relative to Goodfellow et al. 2014 so we can minimize the cost
@@ -720,21 +720,32 @@ class GANCost(Cost):
         Args:
             y_data (Tensor or OpTree): Output of the data minibatch
             y_noise (Tensor or OpTree): Output of noise minibatch
+            cost_type (str): 'dis' (default), 'dis_data', 'dis_noise' or 'gen'
         Returns:
             OpTree: discriminator or generator cost, controlled by cost_type
         """
         assert y_data.shape == y_noise.shape, "Noise and data output shape mismatch"
         if self.func == 'original':
-            cost_dis = -self.be.sum(self.be.safelog(y_data) + self.be.safelog(1-y_noise), axis=0)
-            cost_gen = -self.be.sum(self.be.safelog(y_noise), axis=0)
+            cost_dis_data = -self.be.safelog(y_data)
+            cost_dis_noise = -self.be.safelog(1-y_noise)
+            cost_gen = -self.be.safelog(y_noise)
         elif self.func == 'modified':
-            cost_dis = -self.be.sum(self.be.safelog(y_data) + self.be.safelog(1-y_noise), axis=0)
-            cost_gen = self.be.sum(self.be.safelog(1-y_noise), axis=0)
+            cost_dis_data = -self.be.safelog(y_data)
+            cost_dis_noise = -self.be.safelog(1-y_noise)
+            cost_gen = self.be.safelog(1-y_noise)
         elif self.func == 'wasserstein':
-            cost_dis = self.be.sum(y_data - y_noise, axis=0)
-            cost_gen = self.be.sum(y_noise, axis=0)
+            cost_dis_data = y_data
+            cost_dis_noise = -y_noise
+            cost_gen = y_noise
 
-        return cost_gen if (self.cost_type == "gen") else cost_dis
+        if cost_type == 'dis':
+            return self.be.mean(cost_dis_data + cost_dis_noise, axis=0)
+        elif cost_type == 'dis_data':
+            return self.be.mean(cost_dis_data, axis=0)
+        elif cost_type == 'dis_noise':
+            return self.be.mean(cost_dis_noise, axis=0)
+        elif cost_type == 'gen':
+            return self.be.mean(cost_gen, axis=0)
 
     def bprop_noise(self, y_noise):
         """

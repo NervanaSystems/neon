@@ -2040,6 +2040,40 @@ class GeneralizedCost(NervanaObject):
         return self.deltas
 
 
+class GeneralizedGANCost(GeneralizedCost):
+
+    """
+    A cost layer that applies the provided cost function and computes errors
+    with respect to inputs and targets. Supports different typer of cost for
+    GAN models
+
+    Arguments:
+       costfunc (Cost): class with costfunc that computes errors
+    """
+
+    def __init__(self, costfunc, name=None):
+        super(GeneralizedGANCost, self).__init__(costfunc, name)
+
+    def get_cost(self, inputs, targets, cost_type=None):
+        """
+        Compute the cost function over the inputs and targets.
+
+        Arguments:
+            inputs (Tensor): Tensor containing input values to be compared to
+                targets
+            targets (Tensor): Tensor containing target values.
+            cost_type (String, default None): Cost type for GAN models
+
+        Returns:
+            Tensor containing cost
+
+        """
+        self.outputs[:] = self.costfunc(inputs, targets, cost_type)
+        self.be.mean(self.outputs, axis=1, out=self.cost_buffer)
+        self.cost = self.cost_buffer.get()
+        return self.cost
+
+
 class GeneralizedCostMask(GeneralizedCost):
 
     """

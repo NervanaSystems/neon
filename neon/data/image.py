@@ -42,14 +42,17 @@ class MNIST(Dataset):
     Size defaults to 28 for 28x28 pixels, specifying a smaller values allows
     cropping to a smaller size.
     """
-    def __init__(self, path='.', subset_pct=100, normalize=True, size=28):
+    def __init__(self, path='.', subset_pct=100, normalize=True, sym_range=False,
+                 size=28, shuffle=False):
         super(MNIST, self).__init__('mnist.pkl.gz',
                                     'https://s3.amazonaws.com/img-datasets',
                                     15296311,
                                     path=path,
                                     subset_pct=subset_pct)
         self.normalize = normalize
+        self.sym_range = sym_range
         self.size = size
+        self.shuffle = shuffle
 
     def load_data(self):
         """
@@ -70,14 +73,28 @@ class MNIST(Dataset):
 
         with gzip.open(filepath, 'rb') as mnist:
             (X_train, y_train), (X_test, y_test) = pickle_load(mnist)
-            X_train = X_train[:, :self.size, :self.size]
-            X_test = X_test[:, :self.size, :self.size]
-            X_train = X_train.reshape(-1, self.size*self.size)
-            X_test = X_test.reshape(-1, self.size*self.size)
+            if self.size > 28:
+                n_train, n_test = X_train.shape[0], X_test.shape[0]
+                X_train_ = np.zeros(shape=(n_train, self.size, self.size))
+                X_test_ = np.zeros(shape=(n_test, self.size, self.size))
+                X_train_[:, :28, :28] = X_train
+                X_test_[:, :28, :28] = X_test
+            else:
+                X_train_ = X_train[:, :self.size, :self.size]
+                X_test_ = X_test[:, :self.size, :self.size]
+            X_train = X_train_.reshape(-1, self.size*self.size)
+            X_test = X_test_.reshape(-1, self.size*self.size)
 
             if self.normalize:
                 X_train = X_train / 255.
                 X_test = X_test / 255.
+                if self.sym_range:
+                    X_train = X_train * 2. - 1.
+                    X_test = X_test * 2. - 1.
+
+            if self.shuffle:
+                np.random.seed(0)
+                np.random.shuffle(X_train)
 
         return (X_train, y_train), (X_test, y_test), 10
 

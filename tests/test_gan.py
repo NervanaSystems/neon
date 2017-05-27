@@ -46,9 +46,9 @@ def test_gan_container(backend_default):
     assert layers.discriminator.layers == layers.layers[2:4]
 
 
-def test_gan_cost(backend_default):
+def test_modified_gan_cost(backend_default):
     """
-    Set up a GANCost transform and make sure cost and errors are getting
+    Set up a modified GANCost transform and make sure cost and errors are getting
     computed correctly.
     """
     be = backend_default
@@ -74,3 +74,32 @@ def test_gan_cost(backend_default):
 
     delta[:] = cost.bprop_generator(y_noise)
     assert np.allclose(delta.get(), -1. / 2.)
+
+
+def test_wgan_cost(backend_default):
+    """
+    Set up a Wasserstein GANCost transform and make sure cost and errors are getting
+    computed correctly.
+    """
+    be = backend_default
+    cost = GANCost(func="wasserstein")
+    y_data = be.iobuf(5).fill(1.)
+    y_noise = be.iobuf(5).fill(2.)
+    output = be.iobuf(1)
+    expected = be.iobuf(1)
+    delta = be.iobuf(5)
+
+    # fprop for discriminator cost
+    output[:] = cost(y_data, y_noise)
+    expected[:] = be.sum(y_data - y_noise, axis=0)
+    tensors_allclose(output, expected)
+
+    # bprop for wasserstein cost
+    delta[:] = cost.bprop_data(y_data)
+    assert np.allclose(delta.get(), 1.)
+
+    delta[:] = cost.bprop_noise(y_noise)
+    assert np.allclose(delta.get(), -1.)
+
+    delta[:] = cost.bprop_generator(y_noise)
+    assert np.allclose(delta.get(), 1.)

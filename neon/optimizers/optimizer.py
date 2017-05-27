@@ -519,7 +519,7 @@ class GradientDescentMomentum(Optimizer):
 
             if self.momentum_coef == 0:
                 velocity = - lrate * grad
-                param[:] = param + velocity
+                param[:] = self.clip_value(param + velocity, self.param_clip_value)
             else:
                 velocity = states[0]
                 velocity[:] = self.momentum_coef * velocity - lrate * grad
@@ -627,7 +627,8 @@ class RMSProp(Optimizer):
 
             param[:] = self.clip_value(
                         param - (scale_factor * grad * lrate)
-                        / (self.be.sqrt(state + epsilon) + epsilon), self.param_clip_value)
+                        / (self.be.sqrt(state + epsilon) + epsilon),
+                        self.param_clip_value)
 
 
 class Adagrad(Optimizer):
@@ -816,8 +817,7 @@ class Adadelta(Optimizer):
             states[2][:] = self.be.sqrt((states[1] + epsilon) / (states[0] + epsilon)) * grad
             states[1][:] = states[1] * decay + (1. - decay) * states[2] * states[2]
 
-            param[:] = self.clip_value(param - states[2],
-                                       self.param_clip_value)
+            param[:] = self.clip_value(param - states[2], self.param_clip_value)
 
 
 class Adam(Optimizer):
