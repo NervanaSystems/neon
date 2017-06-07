@@ -47,7 +47,7 @@ def lsun_categories(tag):
         tag (str): version tag, use "latest" for most recent
     """
     f = urlopen(LSUN_URL + 'list.cgi?tag=' + tag)
-    return json.loads(f.read())
+    return json.loads(f.read().decode("utf-8"))
 
 
 def download_lsun(lsun_dir, category, dset, tag, overwrite=False):
@@ -128,13 +128,13 @@ def ingest_lsun(lsun_dir, category, dset, lbl_map, overwrite=False, png_conv=Fal
     with env.begin(write=False) as txn:
         cursor = txn.cursor()
         for key, val in tqdm(cursor):
-            image_out_path = os.path.join(dpath, key + '.webp')
-            with open(image_out_path, 'w') as fp:
+            image_out_path = os.path.join(dpath, key.decode("utf-8") + '.webp')
+            with open(image_out_path, 'wb') as fp:
                 fp.write(val)
             count += 1
             if png_conv:  # in case WEBP is not supported, extra step of conversion to PNG
                 image_out_path_ = image_out_path
-                image_out_path = os.path.join(dpath, key + '.png')
+                image_out_path = os.path.join(dpath, key.decode("utf-8") + '.png')
                 im = Image.open(image_out_path_).convert('RGB')
                 im.save(image_out_path, 'png')
                 os.remove(image_out_path_)
