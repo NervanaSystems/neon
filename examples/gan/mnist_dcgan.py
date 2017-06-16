@@ -23,7 +23,7 @@ from neon.callbacks.callbacks import Callbacks, GANCostCallback
 from neon.callbacks.plotting_callbacks import GANPlotCallback
 from neon.data.image import MNIST
 from neon.initializers import Gaussian
-from neon.layers import GeneralizedCost, Sequential, Conv, Deconv
+from neon.layers import GeneralizedGANCost, Sequential, Conv, Deconv
 from neon.layers.container import GenerativeAdversarial
 from neon.models.model import GAN
 from neon.optimizers import Adam
@@ -80,7 +80,7 @@ layers = GenerativeAdversarial(generator=Sequential(G_layers, name="Generator"),
                                discriminator=Sequential(D_layers, name="Discriminator"))
 
 # setup cost function as CrossEntropy
-cost = GeneralizedCost(costfunc=GANCost(func="modified"))
+cost = GeneralizedGANCost(costfunc=GANCost(func="modified"))
 
 # setup optimizer
 optimizer = Adam(learning_rate=0.0005, beta_1=0.5)
