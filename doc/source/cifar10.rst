@@ -126,7 +126,7 @@ We now have a cost function that we want to minimize, typically by following the
 
 .. code-block:: python
 
-    from neon.optimizers import GradientDescentMomentum, RMSProp
+    from neon.optimizers import GradientDescentMomentum
     optimizer = GradientDescentMomentum(learning_rate=0.005,
                                         momentum_coef=0.9)
 
