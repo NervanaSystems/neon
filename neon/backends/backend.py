@@ -623,6 +623,27 @@ class Backend(AbstractBackend):
         """
         return None
 
+    def convert_data(self, tensor, layer_mkl):
+        """
+        For MKL backends to convert data from mkl layout to norm numpy layout
+        """
+        return None
+
+    def clean_data(self, tensor, layer_mkl):
+        """
+        For MKL backends to clean mkl data (memory not freed)
+        """
+        return None
+
+    def allocate_new_deltas(self, delta, in_shape, parallelism):
+        """
+        For MKL backends, allocate new deltas for broadcast
+        """
+        return delta
+
+    def allocate_new_outputs(self, layer, share_output):
+        layer.allocate(shared_outputs=share_output)
+
     def revert_tensor(self, tensor):
         """
         Reverts a tensor to its original state after being distributed by

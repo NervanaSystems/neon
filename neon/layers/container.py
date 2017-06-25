@@ -81,6 +81,10 @@ class LayerContainer(Layer):
     Layer containers are a generic class that are used to encapsulate groups of layers and
     provide methods for propagating through the constituent layers, allocating memory.
     """
+    def __init__(self, name=None):
+        super(LayerContainer, self).__init__(name)
+        self.is_mklop = True
+
     @property
     def layers_to_optimize(self):
         lto = []
@@ -350,6 +354,9 @@ class Sequential(LayerContainer):
             altered_tensor = l.be.distribute_data(x, l.parallelism)
             l.revert_list = [altered_tensor] if altered_tensor else []
 
+            # try to convert to mkl
+            l.be.convert_data(x, l.get_is_mklop())
+
             if l is self.layers[-1] and beta != 0:
                 x = l.fprop(x, inference=inference, beta=beta)
             else:
@@ -376,6 +383,12 @@ class Sequential(LayerContainer):
         """
         for l in reversed(self._layers):
             altered_tensor = l.be.distribute_data(error, l.parallelism)
+
+            # try to convert to mkl
+            l.be.convert_data(error, l.get_is_mklop())
+            if l.deltas is not None:
+                l.be.clean_data(l.deltas, l.get_is_mklop())
+
             if altered_tensor:
                 l.revert_list.append(altered_tensor)
             if type(l.prev_layer) is BranchNode or l is self._layers[0]:
@@ -652,6 +665,11 @@ class Broadcast(LayerContainer):
         assert nested_deltas is not None
         for l in self.layers:
             l.layers[0].set_deltas(delta_buffers)
+
+            # mkl need allocate new deltas
+            l.layers[0].deltas = self.be.allocate_new_deltas(
+                l.layers[0].deltas, l.layers[0].in_shape, l.layers[0].parallelism)
+
             delta_buffers.buffers.reverse()  # undo that last reverse
             for sublayer in l.layers[1:]:
                 sublayer.set_deltas(nested_deltas)
@@ -676,6 +694,9 @@ class Broadcast(LayerContainer):
 class MergeSum(Broadcast):
     """
     """
+    def __init__(self, layers, name=None):
+        super(MergeSum, self).__init__(layers, name)
+        self.ngLayer = self.be.mergesum_layer(len(layers))
 
     def allocate(self, shared_outputs=None):
         """
@@ -689,7 +710,7 @@ class MergeSum(Broadcast):
             self.outputs = self.be.iobuf(self.out_shape, shared=shared_outputs,
                                          parallelism=self.parallelism)
         for l in self.layers:
-            l.allocate(shared_outputs=self.outputs)
+            self.be.allocate_new_outputs(l, self.outputs)
 
     def _configure_merge(self):
         """
@@ -708,9 +729,8 @@ class MergeSum(Broadcast):
         Returns:
             Tensor: output data
         """
-        for l in self.layers:
-            beta = 0 if l is self.layers[0] else 1
-            l.fprop(inputs, inference, beta=beta)
+        self.be.fprop_mergesum(self.ngLayer, inputs, inference,
+                               self.layers, self.outputs, self.out_shape)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
@@ -727,9 +747,8 @@ class MergeSum(Broadcast):
         Returns:
             Tensor: deltas to propagate to the adjacent lower layer
         """
-        for l in reversed(self.layers):
-            b = beta if l is self.layers[-1] else 1
-            l.bprop(error, alpha=alpha, beta=b)
+        self.be.bprop_mergesum(self.ngLayer, alpha, beta,
+                               self.layers, error, self.deltas)
         return self.deltas
 
 
@@ -775,6 +794,7 @@ class MergeBroadcast(Broadcast):
         self.merge = merge  # How this MergeBroadcast gets merged
         assert self.merge in ("recurrent", "depth", "stack")
         self.error_views = None
+        self.ngLayer = self.be.mergebroadcast_layer(len(layers))
 
     def get_partitions(self, x, slices):
         """
@@ -840,8 +860,9 @@ class MergeBroadcast(Broadcast):
         Returns:
             Tensor: output data
         """
-        for l in self.layers:
-            l.fprop(inputs, inference)
+        self.be.fprop_mergebroadcast(
+            self.ngLayer, inputs, inference, self.outputs,
+            self.layers, self.out_shape)
         return self.outputs
 
     def bprop(self, error, alpha=1.0, beta=0.0):
@@ -858,12 +879,11 @@ class MergeBroadcast(Broadcast):
         Returns:
             Tensor: deltas to propagate to the adjacent lower layer
         """
-        self.betas[-1] = beta
         if self.error_views is None:
             self.error_views = self.get_partitions(error, self.slices)
-        for l, e, a, b in reversed(list(zip(self.layers, self.error_views, self.alphas,
-                                            self.betas))):
-            l.bprop(e, alpha=a * alpha, beta=b)
+        self.be.bprop_mergebroadcast(
+            self.ngLayer, self.layers, self.error_views, error,
+            self.deltas, self.out_shape, alpha, beta, self.alphas, self.betas)
         return self.deltas
 
 

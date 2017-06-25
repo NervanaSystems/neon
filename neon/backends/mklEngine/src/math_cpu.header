@@ -1,0 +1,53 @@
+/*
+ Copyright 2017 Nervana Systems Inc.
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
+void cmath_copy(const float* in_tensor, size_t sz, float* out_tensor);
+void cmath_neg(const float* in_tensor, size_t sz, float* out_tensor);
+void cmath_sqrt(const float* in_tensor, size_t sz, float* out_tensor);
+void cmath_square(const float* in_tensor, size_t sz, float* out_tensor);
+void cmath_exp(const float* in_tensor, size_t sz, float* out_tensor);
+void cmath_log(const float* in_tensor, size_t sz, float* out_tensor);
+void cmath_safelog(const float* in_tensor, size_t sz, float* out_tensor);
+void cmath_add(const float* in_tensor_l, float* in_tensor_r, size_t sz, float* out_tensor);
+void cmath_sub(const float* in_tensor_l, const float* in_tensor_r, size_t sz, float* out_tensor);
+void cmath_mul(const float* in_tensor, size_t sz, double s, float* out_tensor);
+void cmath_div(const float* in_tensor, size_t sz, double s, float* out_tensor);
+void cmath_addmv(const float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float* out_tensor2d);
+void cmath_submv(const float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float* out_tensor2d);
+void cmath_mulmv(const float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float* out_tensor2d);
+void cmath_divmv(const float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float* out_tensor2d);
+void cmath_mulmm(const float* in_tensor_l, const float* in_tensor_r, size_t sz, float* out_tensor);
+void cmath_divmm(const float* in_tensor_l, const float* in_tensor_r, size_t sz, float* out_tensor);
+void cmath_gemm(const char transa, const char transb, const size_t m, const size_t n, const size_t k,
+        const float alpha, const float* a, const size_t lda, const float* b, const size_t ldb, 
+        const float beta, float* c, const size_t ldc);
+void cmath_sum(const float* in_tensor, int axis, size_t row, size_t col, float* out_tensor);
+void cmath_axpby(size_t sz, const float a, const float* x, const float b, float* y);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

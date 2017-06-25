@@ -29,8 +29,9 @@ neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/install
     cd neon
     make
     . .venv/bin/activate
-    neon examples/mnist_mlp.yaml
-    # alternatively, use a script:
+    # run an example with the mkl backend (defaults to the cpu backend (non-mkl):
+    neon examples/mnist_mlp.yaml -b mkl
+    # alternatively, use a script (defaults to gpu backend if available):
     python examples/mnist_mlp.py
 ```
 

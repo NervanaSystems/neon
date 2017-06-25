@@ -28,6 +28,7 @@ class Transform(NervanaObject):
         Class constructor.
         """
         super(Transform, self).__init__(name)
+        self.is_mklop = False
 
     def __call__(self, x):
         """

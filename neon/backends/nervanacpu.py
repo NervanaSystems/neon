@@ -474,7 +474,7 @@ class CustomNumpy(object):
 def _assign_right_to_left(left, right):
     left[:] = right
 
-numpy_call_dict = {
+numpy_call_dict_cpu = {
     # assign
     "assign": _assign_right_to_left,
     # zero_operand ops
@@ -645,7 +645,7 @@ class NervanaCPU(Backend):
         """
         ary[:] = np.random.standard_normal(ary.shape) * stdv + mean
 
-    def execute(self, optree):
+    def execute(self, optree, numpy_call_dict=numpy_call_dict_cpu):
         """
         Execute the optree. Break optree into sub-optrees if necessary.
 
@@ -1680,8 +1680,9 @@ class NervanaCPU(Backend):
 
         return keep
 
-    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
-                          accumbeta=0.0, relu=False, binary=False):
+    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y,
+                          eps, rho, compute_batch_sum, accumbeta=0.0, relu=False,
+                          binary=False, inference=False, outputs=None, layer=None):
         """
         Function to perform batch normalization forward pass. Included
         for API compatibility with GPU compound kernel call.
@@ -1698,6 +1699,14 @@ class NervanaCPU(Backend):
             eps (float): constant for numerical stability
             rho (float): exponential window averaging constant
         """
+        if inference:
+            xhat = (x - gmean) / self.sqrt(gvar + eps)  # Op-tree only
+            y[:] = y * accumbeta + xhat * gamma + beta
+            return
+
+        if compute_batch_sum:
+            xsum[:] = self.sum(x, axis=1)
+
         xvar[:] = self.var(x, axis=1, binary=binary)
         xsum[:] = xsum / x.shape[1]  # reuse xsum instead of computing xmean
 
@@ -1707,14 +1716,14 @@ class NervanaCPU(Backend):
         if binary:
             xhat = self.shift(x - xsum, 1.0 / self.sqrt(xvar + eps))
             outputs = y.reshape(xhat.shape)
-            outputs[:] = self.shift(xhat, gamma) + beta
+            outputs[:] = self.shift(xhat, gamma) + beta + accumbeta * outputs
         else:
             xhat = (x - xsum) / self.sqrt(xvar + eps)
             outputs = y.reshape(xhat.shape)
-            outputs[:] = xhat * gamma + beta
+            outputs[:] = xhat * gamma + beta + accumbeta * outputs
 
     def compound_bprop_bn(self, delta_out, grad_gamma, grad_beta, delta_in, x, xsum, xvar,
-                          gamma, eps, binary=False):
+                          gamma, eps, binary=False, layer=None):
         """
         Function to perform batch normalization backward pass. Included
         for API compatibility with GPU compound kernel call.
@@ -1889,3 +1898,58 @@ class NervanaCPU(Backend):
             time elapsed between start and end time marks in milliseconds
         """
         return (end['time'] - start['time']) * 1000.0
+
+    def relu_layer(self):
+        return None
+
+    def fprop_relu(self, layer, x, slope):
+        return self.maximum(x, 0) + slope * self.minimum(0, x)
+
+    def bprop_relu(self, layer, x, error, deltas, slope):
+        return self.greater(x, 0) + slope * self.less(x, 0)
+
+    def fprop_softmax(self, x, axis):
+        return (self.reciprocal(self.sum(
+                self.exp(x - self.max(x, axis=axis)), axis=axis)) *
+                self.exp(x - self.max(x, axis=axis)))
+
+    def batchnorm_layer(self, in_shape):
+        return None
+
+    def fprop_transform(self, ngLayer, transform, inputs, outputs, relu=False):
+        outputs[:] = transform(inputs)
+
+    def bprop_transform(self, ngLayer, transform, outputs, error, deltas, relu):
+        deltas[:] = transform.bprop(outputs) * error
+
+    def fprop_skipnode(self, x, y, beta):
+        y[:] = y * beta + x
+
+    def bprop_skipnode(self, error, deltas, alpha, beta):
+        deltas[:] = deltas * beta + alpha * error
+
+    def mergesum_layer(self, layer_num):
+        return None
+
+    def fprop_mergesum(self, ngLayer, inputs, inference, layers, outputs, out_shape):
+        for l in layers:
+            beta = 0 if l is layers[0] else 1
+            l.fprop(inputs, inference, beta=beta)
+
+    def bprop_mergesum(self, ngLayer, alpha, beta, layers, error, deltas):
+        for l in reversed(layers):
+            b = beta if l is layers[-1] else 1
+            l.bprop(error, alpha=alpha, beta=b)
+
+    def mergebroadcast_layer(self, layer_num):
+        return None
+
+    def fprop_mergebroadcast(self, ngLayer, inputs, inference, outputs, layers, out_shape):
+        for l in layers:
+            l.fprop(inputs, inference)
+
+    def bprop_mergebroadcast(self, ngLayer, layers, error_views, error,
+                             delta, out_shape, alpha, beta, alphas, betas):
+        betas[-1] = beta
+        for l, e, a, b in reversed(list(zip(layers, error_views, alphas, betas))):
+            l.bprop(e, alpha=a * alpha, beta=b)

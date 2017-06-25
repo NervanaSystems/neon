@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014-2016 Nervana Systems Inc.
+# Copyright 2014-2017 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -33,6 +33,11 @@ except ImportError:
     pass
 
 try:
+    from neon.backends import nervanamkl
+except ImportError:
+    pass
+
+try:
     # Register if it exists
     from mgpu import nervanamgpu
 except ImportError:
@@ -49,7 +54,7 @@ def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
     backend is returned.
 
     Arguments:
-        backend (string, optional): 'cpu' or 'gpu'.
+        backend (string, optional): 'cpu', 'mkl' or 'gpu'.
         rng_seed (numeric, optional): Set this to a numeric value which can be used to seed the
                                       random number generator of the instantiated backend.
                                       Defaults to None, which doesn't explicitly seed (so each run

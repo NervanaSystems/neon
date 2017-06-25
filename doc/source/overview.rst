@@ -22,7 +22,7 @@ follows:
 
 1. **Generate a backend**
 
-   The backend defines where computations are executed in neon. We support both CPU and GPU (Pascal, Maxwell or Kepler architectures) backends.
+   The backend defines where computations are executed in neon. We support CPU, MKL, and GPU (Pascal, Maxwell or Kepler architectures) backends.
 
    See :doc:`neon backend <backends>`
 
@@ -69,7 +69,7 @@ Neon Features
 
 Neon currently supports the following:
 
--  Backends - :py:class:`NervanaGPU<neon.backends.nervanagpu.NervanaGPU>`, :py:class:`NervanaCPU<neon.backends.nervanacpu.NervanaCPU>`
+-  Backends - :py:class:`NervanaGPU<neon.backends.nervanagpu.NervanaGPU>`, :py:class:`NervanaCPU<neon.backends.nervanacpu.NervanaCPU>`, :py:class:`NervanaCPU<neon.backends.nervanamkl.NervanaMKL>`
 -  Datasets
 
    -  Images: MNIST, CIFAR-10, ImageNet 1K, PASCAL VOC, Mini-Places2

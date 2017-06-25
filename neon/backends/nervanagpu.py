@@ -2453,9 +2453,9 @@ class NervanaGPU(Backend):
 
         return keep[:num_to_keep].tolist()
 
-    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho,
+    def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y, eps, rho, compute_batch_sum,
                           accumbeta=0.0, relu=False, threads=None, repeat=1,
-                          binary=False):
+                          binary=False, inference=False, outputs=None, layer=None):
         """
         Function to perform compound kernel call for batch normalization
         forward pass.
@@ -2478,6 +2478,14 @@ class NervanaGPU(Backend):
             binary (bool): Binary shift based computations
         """
         assert xsum.dtype.type is np.float32
+
+        if inference:
+            xhat = (x - gmean) / self.sqrt(gvar + eps)  # Op-tree only
+            y[:] = y * accumbeta + xhat * gamma + beta
+            return
+
+        if compute_batch_sum:
+            xsum[:] = self.sum(x, axis=1)
 
         K = int(x.shape[0])
         N = int(x.shape[1])
@@ -2508,7 +2516,7 @@ class NervanaGPU(Backend):
 
     def compound_bprop_bn(self, delta_out, grad_gamma, grad_beta, delta_in,
                           x, xsum, xvar, gamma, eps, threads=None,
-                          repeat=1, binary=False):
+                          repeat=1, binary=False, layer=None):
         """
         Function to perform batch normalization forward pass.
 
@@ -3161,6 +3169,59 @@ class NervanaGPU(Backend):
         """
         return end.time_since(start)
 
+    def relu_layer(self):
+        return None
+
+    def fprop_relu(self, layer, x, slope):
+        return self.maximum(x, 0) + slope * self.minimum(0, x)
+
+    def bprop_relu(self, layer, x, error, deltas, slope):
+        return self.greater(x, 0) + slope * self.less(x, 0)
+
+    def fprop_softmax(self, x, axis):
+        return (self.reciprocal(self.sum(
+                self.exp(x - self.max(x, axis=axis)), axis=axis)) *
+                self.exp(x - self.max(x, axis=axis)))
+
+    def batchnorm_layer(self, in_shape):
+        return None
+
+    def fprop_transform(self, ngLayer, transform, inputs, outputs, relu=False):
+        outputs[:] = transform(inputs)
+
+    def bprop_transform(self, ngLayer, transform, outputs, error, deltas, relu):
+        deltas[:] = transform.bprop(outputs) * error
+
+    def fprop_skipnode(self, x, y, beta):
+        y[:] = y * beta + x
+
+    def bprop_skipnode(self, error, deltas, alpha, beta):
+        deltas[:] = deltas * beta + alpha * error
+
+    def mergesum_layer(self, layer_num):
+        return None
+
+    def fprop_mergesum(self, ngLayer, inputs, inference, layers, outputs, out_shape):
+        for l in layers:
+            beta = 0 if l is layers[0] else 1
+            l.fprop(inputs, inference, beta=beta)
+
+    def bprop_mergesum(self, ngLayer, alpha, beta, layers, error, deltas):
+        for l in reversed(layers):
+            b = beta if l is layers[-1] else 1
+            l.bprop(error, alpha=alpha, beta=b)
+
+    def mergebroadcast_layer(self, layer_num):
+        return None
+
+    def fprop_mergebroadcast(self, ngLayer, inputs, inference, outputs, layers, out_shape):
+        for l in layers:
+            l.fprop(inputs, inference)
+
+    def bprop_mergebroadcast(self, ngLayer, layers, error_views, error, delta, out_shape, alpha, beta, alphas, betas):
+        betas[-1] = beta
+        for l, e, a, b in reversed(list(zip(layers, error_views, alphas, betas))):
+            l.bprop(e, alpha=a * alpha, beta=b)
 
 # Note the strides computed here do not include the dtype.itemsize
 def _contiguous_strides(shape):

@@ -288,7 +288,7 @@ def test_bibn(backend_default, fargs, deltas_buffer):
     xsum[:] = birnn.be.sum(birnn.h_ff_buffer, axis=1)
     birnn.be.compound_fprop_bn(
         birnn.h_ff_buffer, xsum, xvar, gmean, gvar,
-        gamma, beta, out_ref, birnn.eps, birnn.rho,
+        gamma, beta, out_ref, birnn.eps, birnn.rho, False,
         accumbeta=0, relu=False)
 
     # call the bibnrnn layer fprop_bn

@@ -27,7 +27,7 @@ API for specific function definitions.
     :delim: |
 
     :py:mod:`neon` | Holds NervanaObject, the base object available to all other classes |
-    :py:mod:`neon.backends` | Computational backend (CPU or GPU) | :doc:`neon backend<backends>`
+    :py:mod:`neon.backends` | Computational backend (CPU, MKL or GPU) | :doc:`neon backend<backends>`
     :py:mod:`neon.data` | Data loading and handling | :doc:`Data loading<loading_data>`, :doc:`Datasets<datasets>`
     :py:mod:`neon.models` | Model architecture | :doc:`Models<models>`
     :py:mod:`neon.layers` | Layer objects | :doc:`Layers<layers>`, :doc:`Creating new layers<creating_new_layers>`, :doc:`Layer containers<layer_containers>`
@@ -71,6 +71,8 @@ hardware. Included are classes that implement neon's auto-differentiation featur
    neon.backends.backend.Block
    neon.backends.nervanacpu.CPUTensor
    neon.backends.nervanacpu.NervanaCPU
+   neon.backends.nervanamkl.MKLTensor
+   neon.backends.nervanamkl.NervanaMKL
    neon.backends.nervanagpu.GPUTensor
    neon.backends.nervanagpu.NervanaGPU
    neon.backends.autodiff.Autodiff

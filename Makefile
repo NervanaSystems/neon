@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2014-2016 Nervana Systems Inc.  All rights reserved.
+# Copyright 2014-2017 Nervana Systems Inc.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -72,6 +72,9 @@ endif
 DOC_DIR := doc
 DOC_PUB_RELEASE_PATH := $(DOC_PUB_PATH)/$(RELEASE)
 
+#neon mklEngine object
+MKL_ENGINE  := neon/backends/mklEngine
+
 # neon compiled objects
 DATA_LOADER := loader
 
@@ -90,7 +93,7 @@ endif
 .PHONY: default all env sysinstall sysinstall_nodeps neon_install python2 python3 \
 	    sysdeps sysuninstall clean_py clean_so \
 	    clean test coverage style lint lint3k check doc html release examples \
-	    serialize_check $(DATA_LOADER)
+	    serialize_check $(DATA_LOADER) $(MKL_ENGINE)
 
 default: env
 
@@ -98,7 +101,7 @@ all:
 	$(MAKE) PY=3 TEST_OPTS='$(TEST_OPTS)' test
 	$(MAKE) PY=2 TEST_OPTS='$(TEST_OPTS)' test
 
-env: $(ACTIVATE) $(DATA_LOADER)
+env: $(MKL_ENGINE) $(DATA_LOADER) $(ACTIVATE)
 
 python2: VIRTUALENV_EXE := virtualenv -p python2.7
 python2: VIRTUALENV_DIR := $(VIRTUALENV_DIR_BASE)2
@@ -141,8 +144,12 @@ endif
 	@echo "###########################################################"
 	@touch $(ACTIVATE)
 	@echo
+$(MKL_ENGINE):
+	@echo "Building MKL Engine..."
+	@./install_mkl.sh intel
 
 $(DATA_LOADER):
+	@echo "Building Data Loader..."
 	-@cd $(DATA_LOADER) && $(MAKE) bin/loader.so HAS_GPU=$(HAS_GPU)
 
 # TODO: handle kernel/.so compilation via setup.py directly
@@ -184,6 +191,7 @@ clean_py:
 clean_so:
 	@echo "Cleaning compiled shared object files..."
 	@cd $(DATA_LOADER) && $(MAKE) clean
+	@cd $(MKL_ENGINE) && $(MAKE) clean
 	@echo
 
 clean: clean_py clean_so

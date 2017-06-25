@@ -67,8 +67,9 @@ class Rectlin(Transform):
         """
         super(Rectlin, self).__init__(name)
         self.slope = slope
+        self.is_mklop = True
 
-    def __call__(self, x):
+    def __call__(self, x, nglayer=None):
         """
         Returns the Exponential Linear activation
 
@@ -78,9 +79,9 @@ class Rectlin(Transform):
         Returns:
             Tensor or optree: output activation
         """
-        return self.be.maximum(x, 0) + self.slope * self.be.minimum(0, x)
+        return self.be.fprop_relu(nglayer, x, self.slope)
 
-    def bprop(self, x):
+    def bprop(self, x, nglayer=None, error=None, deltas=None):
         """
         Returns the derivative.
 
@@ -90,7 +91,7 @@ class Rectlin(Transform):
         Returns:
             Tensor or optree: Derivative
         """
-        return self.be.greater(x, 0) + self.slope * self.be.less(x, 0)
+        return self.be.bprop_relu(nglayer, x, error, deltas, self.slope)
 
 
 class Rectlinclip(Transform):
@@ -221,9 +222,7 @@ class Softmax(Transform):
         Returns:
             Tensor or optree: Output activation
         """
-        return (self.be.reciprocal(self.be.sum(
-                self.be.exp(x - self.be.max(x, axis=self.axis)), axis=self.axis)) *
-                self.be.exp(x - self.be.max(x, axis=self.axis)))
+        return self.be.fprop_softmax(x, self.axis)
 
     def bprop(self, x):
         """

@@ -21,6 +21,7 @@ import numpy as np
 from neon import NervanaObject
 from neon.backends import Autodiff
 from neon.backends.backend import Tensor
+from neon.transforms.activation import Rectlin
 
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ class Layer(NervanaObject):
         self.actual_bsz = None
         self.actual_seq_len = None
         self.acc_on = False
+        self.is_mklop = False
 
     def __str__(self):
         """
@@ -164,6 +166,9 @@ class Layer(NervanaObject):
             layer (layer): Next layer
         """
         self.next_layer = layer
+
+    def get_is_mklop(self):
+        return self.is_mklop
 
     def fprop(self, inputs, inference=False):
         """
@@ -426,6 +431,7 @@ class SkipNode(Layer):
     def __init__(self, name=None):
         super(SkipNode, self).__init__(name)
         self.owns_delta = True
+        self.is_mklop = True
 
     def fprop(self, inputs=None, inference=False, beta=0):
         """
@@ -439,7 +445,7 @@ class SkipNode(Layer):
         Returns:
             Tensor: output data
         """
-        self.outputs[:] = self.outputs * beta + inputs
+        self.be.fprop_skipnode(inputs, self.outputs, beta)
         return self.outputs
 
     def configure(self, in_obj):
@@ -472,7 +478,9 @@ class SkipNode(Layer):
         Returns:
             Tensor: deltas to propagate to the adjacent lower layer
         """
-        self.deltas[:] = self.deltas * beta + alpha * error
+        # for better performance, mkl do nothing
+        # otherwise, convert back and deal with beta and alpha.
+        self.be.bprop_skipnode(error, self.deltas, alpha, beta)
         return self.deltas
 
 
@@ -509,6 +517,7 @@ class Pooling(Layer):
         self.strides = strides
         self.padding = padding
         self.owns_delta = True
+        self.is_mklop = True
         if isinstance(fshape, int):
             fshape = {'R': fshape, 'S': fshape}
         elif isinstance(fshape, tuple):
@@ -774,6 +783,7 @@ class Convolution(ParameterLayer):
     def __init__(self, fshape, strides={}, padding={}, dilation={}, init=None,
                  bsum=False, name=None, parallelism="Data"):
         super(Convolution, self).__init__(init, name, parallelism)
+        self.is_mklop = True
         self.nglayer = None
         self.bsum = bsum
         self.convparams = {'str_h': 1, 'str_w': 1, 'str_d': 1,
@@ -1092,7 +1102,6 @@ class Linear(ParameterLayer):
         else:
             bsz = self.be.bsz if self.actual_bsz is None else self.actual_bsz
             steps = self.nsteps if self.actual_seq_len is None else self.actual_seq_len
-
             self.be.compound_dot(A=self.W,
                                  B=self.inputs[:, :bsz * steps],
                                  C=self.outputs[:, :bsz * steps],
@@ -1272,6 +1281,7 @@ class Activation(Layer):
     def __init__(self, transform, name=None):
         super(Activation, self).__init__(name)
         self.transform = transform
+        self.nglayer = self.be.relu_layer()
         self.owns_output = False
         self.owns_delta = True
 
@@ -1296,6 +1306,9 @@ class Activation(Layer):
         (self.nout, _) = interpret_in_shape(self.in_shape)
         return self
 
+    def get_is_mklop(self):
+        return self.transform.is_mklop
+
     def fprop(self, inputs, inference=False):
         """
         Apply the forward pass transformation to the input data.
@@ -1308,7 +1321,8 @@ class Activation(Layer):
             Tensor: output data
         """
         self.outputs = self.inputs = inputs
-        self.outputs[:] = self.transform(self.inputs)
+        self.be.fprop_transform(self.nglayer, self.transform, self.inputs,
+                                self.outputs, type(self.transform) == Rectlin)
         return self.outputs
 
     def bprop(self, error):
@@ -1321,7 +1335,8 @@ class Activation(Layer):
         Returns:
             Tensor: deltas to propagate to the adjacent lower layer
         """
-        self.deltas[:] = self.transform.bprop(self.outputs) * error
+        self.be.bprop_transform(self.nglayer, self.transform, self.outputs,
+                                error, self.deltas, type(self.transform) == Rectlin)
         return self.deltas
 
 
@@ -2147,6 +2162,7 @@ class BatchNorm(Layer):
     def __init__(self, rho=0.9, eps=1e-3, name=None, binary=False):
         super(BatchNorm, self).__init__(name)
         self.allparams = None
+        self.is_mklop = True
         self.x = None  # used to point to reshaped view of inputs
         self.xhat = None
         self.has_params = True
@@ -2183,6 +2199,7 @@ class BatchNorm(Layer):
         self.out_shape = self.in_shape
         (self.nin, self.nsteps) = interpret_in_shape(self.in_shape)
         self.nfm = self.in_shape[0] if isinstance(self.in_shape, tuple) else self.nin
+        self.nglayer = self.be.batchnorm_layer(self.in_shape)
         return self
 
     def allocate(self, shared_outputs=None, accumulate_updates=False):
@@ -2255,16 +2272,10 @@ class BatchNorm(Layer):
         if self.inputs is None or self.inputs.base is not inputs:
             self.inputs = inputs.reshape((self.nfm, -1))
 
-        if inference:
-            return self._fprop_inference(self.inputs, beta)
-
-        if self.compute_batch_sum:
-            self.xsum[:] = self.be.sum(self.inputs, axis=1)
-
         self.be.compound_fprop_bn(
             self.inputs, self.xsum, self.xvar, self.gmean, self.gvar, self.gamma,
-            self.beta, self.outputs, self.eps, self.rho, beta, self.relu,
-            binary=self.binary)
+            self.beta, self.y, self.eps, self.rho, self.compute_batch_sum, beta, self.relu,
+            binary=self.binary, inference=inference, outputs=self.outputs, layer=self.nglayer)
 
         return self.outputs
 
@@ -2298,7 +2309,7 @@ class BatchNorm(Layer):
         self.be.compound_bprop_bn(self.deltas, self.grad_gamma, self.grad_beta,
                                   self.error_view,
                                   self.inputs, self.xsum, self.xvar, self.gamma,
-                                  self.eps, binary=self.binary)
+                                  self.eps, binary=self.binary, layer=self.nglayer)
         return self.deltas
 
     def get_params(self):

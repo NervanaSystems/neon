@@ -19,7 +19,7 @@ Design Decisions
 Computation backend
 -------------------
 * All objects inherit from ``NervanaObject`` which has a static ``be`` variable
-  which is the computation backend being used (gpu or cpu).
+  which is the computation backend being used (gpu, mkl, or cpu).
 
   * ``be`` stores other important attributes like batch size and data type.
   * A backend must first be generated before running a model using ``gen_backend``.

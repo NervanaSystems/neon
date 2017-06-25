@@ -515,12 +515,13 @@ class GradientDescentMomentum(Optimizer):
 
             grad = grad / self.be.bsz
             grad = self.clip_value(grad, self.gradient_clip_value)
-            grad = scale_factor * grad + self.wdecay * param
 
             if self.momentum_coef == 0:
-                velocity = - lrate * grad
-                param[:] = self.clip_value(param + velocity, self.param_clip_value)
+                param[:] = (- lrate * scale_factor) * grad +\
+                           (1 - lrate * self.wdecay) * param
+                param = self.clip_value(param, self.param_clip_value)
             else:
+                grad = scale_factor * grad + self.wdecay * param
                 velocity = states[0]
                 velocity[:] = self.momentum_coef * velocity - lrate * grad
 

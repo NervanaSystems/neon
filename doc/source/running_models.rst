@@ -1,5 +1,5 @@
 .. ---------------------------------------------------------------------------
-.. Copyright 2015 Nervana Systems Inc.
+.. Copyright 2015-2017 Nervana Systems Inc.
 .. Licensed under the Apache License, Version 2.0 (the "License");
 .. you may not use this file except in compliance with the License.
 .. You may obtain a copy of the License at
@@ -52,6 +52,6 @@ command line. Some commonly used flags include:
    ``-e~, --epochs``, Number of epochs to run during training (default: ``10``)
    ``-s~, --save_path``, Path to save the model snapshots (default: ``None``)
    ``-o~, --output_file``, Path to save the metrics and callback data generated during training. Can be used by ``nvis`` for visualization  (default: ``None``)
-   ``-b~, --backend {cpu~,gpu}``, Which backend to use (default: ``cpu``)
+   ``-b~, --backend {cpu,mkl,gpu}``, Which backend to use (default: ``cpu``)
    ``-z~, --batch_size``, Batch size for training (default: ``128``)
    ``-v~``, Verbose output. Displays each layer's shape information.
