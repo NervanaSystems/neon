@@ -18,11 +18,11 @@ Running models
 
 With the virtual environment activated, there are two ways to run models
 through neon. The first is to simply execute the python script
-containing the model, as mentioned before:
+containing the model (with ``-b mkl``), as mentioned before:
 
 .. code-block:: bash
 
-    examples/mnist_mlp.py
+    examples/mnist_mlp.py -b mkl
 
 This will run the multilayer perceptron (MLP) model and print the final
 misclassification error after 10 training epochs. On the first run, neon will download the MNIST dataset. It will create a ``~/nervana`` directory where the raw datasets are kept. The data directory can be controlled with the ``-w`` flag.
@@ -35,6 +35,8 @@ file for the MLP example, enter from the neon repository directory:
 .. code-block:: bash
 
     neon examples/mnist_mlp.yaml
+
+In a YAML file, the mkl backend can be specified by adding ``backend: mkl``.
 
 Arguments
 ---------

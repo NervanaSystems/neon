@@ -15,6 +15,9 @@ visualizing the results. We recommend reading the section on the neon
 * :doc:`Tutorial 4 <creating_new_layers>`: Creating new layers
 * :doc:`Tutorial 5 <tools>`: Visualizing the results
 
+Since neon v2.0.0+ is now released with MKL backend support, we encourage users
+to use ``-b mkl`` on Intel CPUs for all the tutorial examples used. 
+
 .. toctree::
    :hidden:
    :maxdepth: 0

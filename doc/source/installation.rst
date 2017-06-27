@@ -16,7 +16,7 @@
 Installation
 ===============
 
-Let's get you started using Neon to build deep learning models!
+Let's get you started using neon to build deep learning models!
 
 Requirements
 ~~~~~~~~~~~~
@@ -40,10 +40,11 @@ packages (different system names shown):
    To enable neon's :py:class:`.DataLoader`, several optional libraries should be installed. For image processing, install `OpenCV <http://opencv.org/>`__. For audio and video data, install `ffmpeg <https://ffmpeg.org/>`__. We recommend installing with a package manager (e.g. apt-get or homebrew). 
 
 
-Additionally, there are several other optional libraries.
+Additionally, there are several other libraries.
 
-* To enable multi-threading operations on a CPU, install `OpenBLAS <http://www.openblas.net/>`__, then recompile numpy with links to openBLAS (see sample instructions `here <https://hunseblog.wordpress.com/2014/09/15/installing-numpy-and-openblas/>`_). While Neon will run on the CPU, you'll get far better performance using GPUs.
-* Enabling Neon to use GPUs requires installation of `CUDA SDK and drivers <https://developer.nvidia.com/cuda-downloads>`__. We support `Pascal <http://developer.nvidia.com/pascal>`__ ,  `Maxwell <http://maxwell.nvidia.com/>`__ and `Kepler <http://www.nvidia.com/object/nvidia-kepler.html>`__ GPU architectures, but our backend is optimized for Maxwell GPUs. Remember to add the CUDA path to your environment variables.
+* Neon v2.0.0+ by default comes with Intel Math Kernel Library (MKL) support, which enables multi-threading operations on Intel CPU. It is the recommended library to use for best performance on CPU. When installing neon, MKL support will be automatically enabled.
+* (optional) If interested to compare multi-threading performance of MKL optimized neon, install `OpenBLAS <http://www.openblas.net/>`__, then recompile numpy with links to openBLAS (see sample instructions `here <https://hunseblog.wordpress.com/2014/09/15/installing-numpy-and-openblas/>`_). While neon will run on the CPU with OpenBLAS, you'll get better performance using MKL on CPUs or CUDA on GPUs.
+* Enabling neon to use GPUs requires installation of `CUDA SDK and drivers <https://developer.nvidia.com/cuda-downloads>`__. We support `Pascal <http://developer.nvidia.com/pascal>`__ ,  `Maxwell <http://maxwell.nvidia.com/>`__ and `Kepler <http://www.nvidia.com/object/nvidia-kepler.html>`__ GPU architectures, but our backend is optimized for Maxwell GPUs. Remember to add the CUDA path to your environment variables.
 
 For GPU users, remember to add the CUDA path. For example, on Ubuntu:
 
@@ -62,7 +63,7 @@ Or on Mac OS X:
 Installation
 ~~~~~~~~~~~~
 
-We recommend installing Neon within a `virtual
+We recommend installing neon within a `virtual
 environment <http://docs.python-guide.org/en/latest/dev/virtualenvs/>`__
 to ensure a self-contained environment. To install neon within an
 already existing virtual environment, see the System-wide Install section.
@@ -76,7 +77,10 @@ setup neon in this manner, run the following commands:
     cd neon; make
 
 This will install the files in the ``neon/.venv/`` directory and will use the python version in the
-default PATH.  To instead force a Python2 or Python3 install, supply this as an optional parameter:
+default PATH. Note that neon would automatically download the released MKLML library that 
+features MKL support.
+
+To instead force a Python2 or Python3 install, supply this as an optional parameter:
 
 .. code-block:: bash
 
@@ -95,12 +99,22 @@ To activate the virtual environment, type
     . .venv/bin/activate
 
 You will see the prompt change to reflect the activated environment. To
-start Neon and run the MNIST multi-layer perceptron example (the "Hello
+start neon and run the MNIST multi-layer perceptron example (the "Hello
 World" of deep learning), enter
 
 .. code-block:: bash
 
     examples/mnist_mlp.py
+
+For better performance on Intel CPUs, start neon and run the MNIST multi-layer
+perceptron example with ``-b mkl`` 
+
+.. code-block:: bash
+
+    examples/mnist_mlp.py -b mkl
+
+.. note::
+   To achieve best performance, we recommend setting KMP_AFFINITY and OMP_NUM_THREADS in this way: ``export KMP_AFFINITY=compact,1,0,granularity=fine`` and ``export OMP_NUM_THREADS=<Number of Physical Cores>``. You can set these environment variables in bash and do ``source ~/.bashrc`` to activate it. You may need to activate the virtual environment again after sourcing bashrc. For detailed information about KMP_AFFINITY, please read here: https://software.intel.com/en-us/node/522691. We encourage users to experiment with this thread affinity configurations to achieve even better performance. 
 
 When you are finished, remember to deactivate the environment
 
@@ -125,7 +139,7 @@ the guide at http://docs.python-guide.org/en/latest/dev/virtualenvs/.
 System-wide install
 ~~~~~~~~~~~~~~~~~~~
 
-If you would prefer not to use a new virtual environment, Neon can be
+If you would prefer not to use a new virtual environment, neon can be
 installed system-wide with
 
 .. code-block:: bash
@@ -170,7 +184,7 @@ Docker
 
 If you would prefer having a containerized installation of neon and its
 dependencies, the open source community has contributed the following
-Docker images (note that these are not supported/maintained by Nervana):
+Docker images (note that these are not supported/maintained by Intel Nervana):
 
 -  `neon (CPU only) <https://hub.docker.com/r/kaixhin/neon/>`__
 -  `neon (GPU) <https://hub.docker.com/r/kaixhin/cuda-neon/>`__

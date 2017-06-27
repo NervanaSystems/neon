@@ -11,11 +11,12 @@ For fast iteration and model exploration, neon has the fastest performance among
 * 2.5s/macrobatch (3072 images) on AlexNet on Titan X (Full run on 1 GPU ~ 26 hrs)
 * Training VGG with 16-bit floating point on 1 Titan X takes ~10 days (original paper: 4 GPUs for 2-3 weeks)
 
-We use neon internally at Nervana to solve our customers' problems across many
+We use neon internally at Intel Nervana to solve our customers' problems across many
 [domains](http://www.nervanasys.com/solutions/). We are hiring across several
 roles. Apply [here](http://www.nervanasys.com/careers/)!
 
 See the [new features](https://github.com/NervanaSystems/neon/blob/master/ChangeLog) in our latest release.
+We want to highlight that neon v2.0.0+ has been optimized for much better performance on CPUs by enabling Intel Math Kernel Library (MKL). Remember to turn on MKL by adding `-b mkl` when running neon on Intel Xeon and Xeon Phi CPUs! The DNN (Deep Neural Networks) component of MKL that is used by neon is provided free of charge and downloaded automatically as part of the neon installation. 
 
 ## Quick Install
 
@@ -29,11 +30,24 @@ neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/install
     cd neon
     make
     . .venv/bin/activate
-    # run an example with the mkl backend (defaults to the cpu backend (non-mkl):
-    neon examples/mnist_mlp.yaml -b mkl
-    # alternatively, use a script (defaults to gpu backend if available):
-    python examples/mnist_mlp.py
+    # use a script to  run an example with the **optimized** CPU (mkl) backend (defaults to the non-optimized CPU backend (cpu) if no `-b mkl` is specified):
+    python examples/mnist_mlp.py -b mkl
+    # alternatively, use a yaml file (defaults to gpu backend if available, adding a line that contains``backend: mkl`` to enable MKL backend):
+    neon examples/mnist_mlp.yaml
 ```
+
+## Recommended Settings for neon with MKL on Intel Architectures
+
+The Intel Math Kernel Library takes advantages of the parallelization and vectorization capabilities of Intel Xeon and Xeon Phi systems. When hyperthreading is enabled on the system, we recommend 
+the following KMP_AFFINITY setting to make sure parallel threads are 1:1 mapped to the available physical cores. 
+
+```bash
+    export OMP_NUM_THREADS=<Number of Physical Cores>
+    export KMP_AFFINITY=compact,1,0,granularity=fine
+```
+For more information about KMP_AFFINITY, please check [here](https://software.intel.com/en-us/node/522691).
+We encourage users to set out trying and establishing their own best performance settings. 
+
 
 ## Documentation
 

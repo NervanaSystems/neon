@@ -129,7 +129,7 @@ class Dataset(NervanaObject):
             destfile (str): Path to the destination.
             totalsz (int): Size of the file to be downloaded.
         """
-        req = Request('/'.join([url, sourcefile]), headers={'User-Agent': 'neon'})
+        req = Request(os.path.join(url, sourcefile), headers={'User-Agent': 'neon'})
         # backport https limitation and workaround per http://python-future.org/imports.html
         cloudfile = urlopen(req)
         neon_logger.display("Downloading file: {}".format(destfile))

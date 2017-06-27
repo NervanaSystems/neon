@@ -36,21 +36,15 @@ Features include:
 
 New features in this release:
 
-* Add support for 3D deconvolution
-* Generative Adversarial Networks (GAN) implementation, and MNIST DCGAN example, following GoodFellow 2014 (http://arXiv.org/abs/1406.2661)
-* Implement Wasserstein GAN cost function and make associated API changes for GAN models
-* Add a new benchmarking script with per-layer timings
-* Add weight clipping for GDM, RMSProp, Adagrad, Adadelta and Adam optimizers
-* Make multicost an explicit choice in mnist_branch.py example
-* Enable NMS kernels to work with normalized boxes and offset
-* Fix missing links in api.rst [#366]
-* Fix docstring for --datatype option to neon [#367]
-* Fix perl shebang in maxas.py and allow for build with numpy 1.12 [#356]
-* Replace os.path.join for Windows interoperability [#351]
-* Update aeon to 0.2.7 to fix a seg fault on termination
+* Added support for MKL backend (-b mkl) on Linux, which boosts neon CPU performance significantly
+* Added WGAN model examples for LSUN and MNIST data
+* Enabled WGAN and DCGAN model examples for Python3
+* Added fix (using file locking) to prevent race conditions running multiple jobs on the same machine with multiple GPUs
+* Added functionality to display some information about hardware, OS and model used
+* Updated appdirs to 1.4.3 to be compatibile on Centos 7.3 for appliance
 * See more in the `change log`_.
 
-We use neon internally at Nervana to solve our `customers' problems`_
+We use neon internally at Intel Nervana to solve our `customers' problems`_
 in many domains. Consider joining us. We are hiring across several
 roles. Apply here_!
 

@@ -85,7 +85,7 @@ iterators can be obtained with the following code:
 Model specification
 -------------------
 
-Training a deep learning model in Neon requires specifying the dataset,
+Training a deep learning model in neon requires specifying the dataset,
 a list of layers, a cost function, and the learning rule. Here we guide
 you through each item in turn.
 
@@ -244,7 +244,7 @@ Next steps
 ~~~~~~~~~~
 
 This simple example guides you through the basic operations needed to
-create and fit a neural network. However, Neon contains a rich feature
+create and fit a neural network. However, neon contains a rich feature
 set of customizable layers, metrics, and options. To learn more, we
 recommend reading through the :doc:`CIFAR10 tutorial <cifar10>`,
 which introduces convolutional neural networks.

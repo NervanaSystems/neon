@@ -17,6 +17,26 @@
 Previous Versions
 =================
 
+neon v1.9.0
+-----------
+
+|Docs190|_
+
+neon v1.9.0 released May 3, 2017 supporting:
+
+* Add support for 3D deconvolution
+* Generative Adversarial Networks (GAN) implementation, and MNIST DCGAN example, following GoodFellow 2014 (http://arXiv.org/abs/1406.2661)
+* Implement Wasserstein GAN cost function and make associated API changes for GAN models
+* Add a new benchmarking script with per-layer timings
+* Add weight clipping for GDM, RMSProp, Adagrad, Adadelta and Adam optimizers
+* Make multicost an explicit choice in mnist_branch.py example
+* Enable NMS kernels to work with normalized boxes and offset
+* Fix missing links in api.rst [#366]
+* Fix docstring for --datatype option to neon [#367]
+* Fix perl shebang in maxas.py and allow for build with numpy 1.12 [#356]
+* Replace os.path.join for Windows interoperability [#351]
+* Update aeon to 0.2.7 to fix a seg fault on termination
+
 neon v1.8.2
 -----------
 
@@ -415,6 +435,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs190| replace:: Docs
 .. |Docs182| replace:: Docs
 .. |Docs181| replace:: Docs
 .. |Docs180| replace:: Docs
@@ -440,6 +461,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs190: http://neon.nervanasys.com/docs/1.9.0
 .. _Docs182: http://neon.nervanasys.com/docs/1.8.2
 .. _Docs181: http://neon.nervanasys.com/docs/1.8.1
 .. _Docs180: http://neon.nervanasys.com/docs/1.8.0

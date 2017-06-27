@@ -1,5 +1,14 @@
 # ChangeLog
 
+## v2.0.0 (2017-06-27):
+
+* Added support for MKL backend (-b mkl) on Linux, which boosts neon CPU performance significantly
+* Added WGAN model examples for LSUN and MNIST data
+* Enabled WGAN and DCGAN model examples for Python3
+* Added fix (using file locking) to prevent race conditions running multiple jobs on the same machine with multiple GPUs
+* Added functionality to display some information about hardware, OS and model used
+* Updated appdirs to 1.4.3 to be compatibile on Centos 7.3 for appliance
+
 ## v1.9.0 (2017-05-03):
 
 * Add support for 3D deconvolution
