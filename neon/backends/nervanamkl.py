@@ -19,6 +19,7 @@ from __future__ import division
 import logging
 
 from neon.backends import layer_mkl
+from neon.backends.util.check_mkl import get_mkl_lib
 from neon.backends.nervanacpu import CPUTensor, NervanaCPU, CustomNumpy
 import ctypes
 from cffi import FFI
@@ -173,18 +174,15 @@ class NervanaMKL(NervanaCPU):
                                          hist_bins, hist_offset, compat_mode=compat_mode)
         self.tensor_cls = MKLTensor
         logger.info("Initialized NervanaMKL")
+        assert get_mkl_lib(), "MKL is not installed correctly"
 
         path = os.path.dirname(os.path.realpath(__file__))
         mkl_engine_path = os.path.join(path, os.pardir, 'backends', 'mklEngine', 'mklEngine.so')
-        assert os.path.isfile(mkl_engine_path), "mklEngine is not installed correctly"
         self.mklEngine = ctypes.cdll.LoadLibrary(mkl_engine_path)
 
         math_engine_path = os.path.join(os.path.dirname(__file__), 'mklEngine', 'cmath.so')
-        assert os.path.isfile(math_engine_path), "cmath.so not found.  Run make"
         header_path = os.path.join(os.path.dirname(__file__), 'mklEngine',
                                    'src', 'math_cpu.header')
-        assert os.path.isfile(header_path), "math_cpu.header not found"
-
         ffi = FFI()
         with open(header_path) as header:
             ffi.cdef(header.read())

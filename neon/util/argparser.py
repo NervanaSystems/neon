@@ -32,6 +32,7 @@ from neon import __version__ as neon_version
 from neon.backends import gen_backend
 from neon.backends.backend import Backend
 from neon.backends.util.check_gpu import get_compute_capability, get_device_count
+from neon.backends.util.check_mkl import get_mkl_lib
 from neon.callbacks.callbacks import Callbacks
 
 logger = logging.getLogger(__name__)
@@ -152,6 +153,7 @@ class NeonArgparser(configargparse.ArgumentParser):
         be_grp = self.add_argument_group('backend')
         be_grp.add_argument('-b', '--backend', choices=Backend.backend_choices(),
                             default='gpu' if get_compute_capability() >= 3.0
+                                    else 'mkl' if get_mkl_lib()
                                     else 'cpu',
                             help='backend type. Multi-GPU support is a premium '
                                  'feature available exclusively through the '

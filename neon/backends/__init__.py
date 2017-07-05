@@ -22,6 +22,7 @@ import numpy as np
 from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
 from neon.backends.util.check_gpu import get_device_count
+from neon.backends.util.check_mkl import get_mkl_lib
 
 # These are imported to register the backends with the factory
 # importing with `from` ensures links will be generated in sphinx documentation
@@ -44,7 +45,8 @@ except ImportError:
     pass
 
 
-def gen_backend(backend='cpu', rng_seed=None, datatype=np.float32,
+def gen_backend(backend='mkl' if get_mkl_lib() else 'cpu',
+                rng_seed=None, datatype=np.float32,
                 batch_size=0, stochastic_round=False, device_id=0,
                 max_devices=get_device_count(), compat_mode=None,
                 deterministic_update=None, deterministic=None):
