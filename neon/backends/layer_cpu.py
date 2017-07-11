@@ -161,7 +161,7 @@ class ConvLayer(object):
             bsum[:] = np.sum(O.reshape((O.shape[0], -1)), axis=1, keepdims=True)
 
     def xprop_conv(self, I, F, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
-                   relu=False, brelu=False, slope=0.0, backward=False):
+                   relu=False, brelu=False, slope=0.0, backward=False, layer_op=None):
 
         if X is None:
             X = O
@@ -228,7 +228,7 @@ class ConvLayer(object):
         if not beta:
             self.compound_ops(O, X, bias, bsum, relu, brelu, slope)
 
-    def update_conv(self, I, E, U, alpha=1.0, beta=0.0):
+    def update_conv(self, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
 
         C = self.C
         K, M, P, Q, N = self.dimO

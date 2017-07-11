@@ -123,6 +123,8 @@ static void BatchNormInit(
     primitives[BN_BUFFER_BACKP_INPUT]      = (long long)buffer_backp_input;
     primitives[BN_BUFFER_BACKP_OUTPUT]     = (long long)buffer_backp_output;
     primitives[BN_BUFFER_BACKP_SCALESHIFT] = (long long)buffer_backp_scaleshift;
+ERR_RETURN:
+    return;
 }
 
 void BatchNormFprop(
@@ -189,6 +191,8 @@ void BatchNormFprop(
         cblas_saxpby(inC, reborn, BatchNorm_res[dnnResourceMean], 1, decay, (float*)run_mean, 1);
         cblas_saxpby(inC, reborn, BatchNorm_res[dnnResourceVariance], 1, decay, (float*)run_var, 1);
 	}
+ERR_RETURN:
+    return;
 }
 
 static void Batch_InitB(long long* primitives, long long* gradOut)
@@ -203,6 +207,8 @@ static void Batch_InitB(long long* primitives, long long* gradOut)
     CHECK_ERR( try_convert(&cv_out_b, &buf_out_b, lt_out, (dnnLayout_t)primitives[BN_LT_BACKP_OUTPUT]) , err );
 	primitives[BN_CV_BACKP_OUTPUT]      = (long long)cv_out_b;
 	primitives[BN_BUFFER_BACKP_OUTPUT]  = (long long)buf_out_b;
+ERR_RETURN:
+    return;
 }
 
 void BatchNormBackp(
@@ -264,4 +270,7 @@ void BatchNormBackp(
     ((long long*)gradInput)[MKLPtr]  = (long long)primitives[BN_BUFFER_BACKP_INPUT];
     ((long long*)gradInput)[MKLLayout] = (long long)primitives[BN_LT_BACKP_INPUT];
     ((long long*)gradInput)[CPULayout] = (long long)primitives[BN_LT_IN_FORP_BACKP_PLAIN];
+
+ERR_RETURN:
+    return;
 }

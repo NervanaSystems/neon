@@ -1098,7 +1098,7 @@ class NervanaCPU(Backend):
     def fprop_conv(self, layer, I, F, O,
                    X=None, bias=None, bsum=None,
                    alpha=1.0, beta=0.0,
-                   relu=False, brelu=False, slope=0.0):
+                   relu=False, brelu=False, slope=0.0, layer_op=None):
         """
         Forward propagate the inputs of a convolutional network layer to
         produce output.
@@ -1128,12 +1128,13 @@ class NervanaCPU(Backend):
                 O *= (X > 0) + beta*(X < 0)
                 can be combined with bsum tensor to output bprop_bias
         """
-        layer.xprop_conv(I, F, O, X, bias, bsum, alpha, beta, relu, brelu, slope)
+        layer.xprop_conv(I, F, O, X, bias, bsum, alpha,
+                         beta, relu, brelu, slope, layer_op=layer_op)
 
     def bprop_conv(self, layer, F, E, grad_I,
                    X=None, bias=None, bsum=None,
                    alpha=1.0, beta=0.0,
-                   relu=False, brelu=False, slope=0.0):
+                   relu=False, brelu=False, slope=0.0, layer_op=None):
         """
         Backward propagate the error through a convolutional network layer.
 
@@ -1163,9 +1164,9 @@ class NervanaCPU(Backend):
                 can be combined with bsum tensor to output bprop_bias
         """
         layer.xprop_conv(E, F, grad_I, X, bias, bsum, alpha, beta, relu, brelu, slope,
-                         backward=True)
+                         backward=True, layer_op=layer_op)
 
-    def update_conv(self, layer, I, E, U, alpha=1.0, beta=0.0):
+    def update_conv(self, layer, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
         """
         Compute the updated gradient for a convolutional network layer.
 
@@ -1181,7 +1182,7 @@ class NervanaCPU(Backend):
         assert layer.sizeO == E.size
         assert layer.sizeF == U.size
 
-        layer.update_conv(I, E, U, alpha, beta)
+        layer.update_conv(I, E, U, alpha, beta, layer_op=layer_op)
 
     def deconv_layer(self, dtype,
                      N, C, K,

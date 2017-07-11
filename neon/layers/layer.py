@@ -170,6 +170,12 @@ class Layer(NervanaObject):
     def get_is_mklop(self):
         return self.is_mklop
 
+    def set_is_mklop(self):
+        self.is_mklop = True
+
+    def set_not_mklop(self):
+        self.is_mklop = False
+
     def fprop(self, inputs, inference=False):
         """
         Apply the forward pass transformation to the input data.
@@ -872,7 +878,7 @@ class Convolution(ParameterLayer):
         """
         self.inputs = inputs
         self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, beta=beta,
-                           bsum=self.batch_sum)
+                           bsum=self.batch_sum, layer_op=self)
         return self.outputs
 
     @Layer.accumulates
@@ -892,8 +898,8 @@ class Convolution(ParameterLayer):
         """
         if self.deltas:
             self.be.bprop_conv(self.nglayer, self.W, error, self.deltas,
-                               alpha=alpha, beta=beta)
-        self.be.update_conv(self.nglayer, self.inputs, error, self.dW)
+                               alpha=alpha, beta=beta, layer_op=self)
+        self.be.update_conv(self.nglayer, self.inputs, error, self.dW, layer_op=self)
         return self.deltas
 
 

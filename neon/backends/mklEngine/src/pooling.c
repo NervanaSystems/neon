@@ -45,13 +45,15 @@ static void Init_f(
 	size_t kernelStride[2]     = {   dW,   dH};
 
 	//calculate pad
-	int pad2 = (outH-1)*dH + kH - inH - padW;
+	int padH2 = (outH-1)*dH + kH - inH - padH;
+	int padW2 = (outW-1)*dW + kW - inW - padW;
 	int symm = 0;
-	if (pad2==padW) symm = 1;
-	if (pad2<0)     pad2=0;
+	if (padH2==padH && padW2==padW) symm = 1;
+	if (padH2<0)    padH2 = 0;
+	if (padW2<0)    padW2 = 0;
 
-	int pad[DIM4]           = {-padW, -padH, - pad2,-pad2};
-	int pad_[DIM2]          = {-padW, -padH};
+	int pad_dim4[DIM4]      = {-padW, -padH, -padW2,-padH2};
+	int pad_dim2[DIM2]      = {-padW, -padH};
 	int inputOffset[DIM2]   = {    0,    0};
 
     //create user layout
@@ -76,27 +78,29 @@ static void Init_f(
 
 	if (useMaxPooling==1)
 	{
-		if(useCaffe || symm )
+		if(useCaffe || symm)
 		{
-		    CHECK_ERR( dnnPoolingCreateForward_F32 (&pool_f, attributes, dnnAlgorithmPoolingMax,lt_in_f, kernelSize, kernelStride, pad_, dnnBorderZeros), err );
-	        CHECK_ERR( dnnPoolingCreateBackward_F32(&pool_b, attributes, dnnAlgorithmPoolingMax,lt_in_f, kernelSize, kernelStride, pad_, dnnBorderZeros), err );
+		    CHECK_ERR( dnnPoolingCreateForward_F32 (&pool_f, attributes, dnnAlgorithmPoolingMax,lt_in_f, kernelSize, kernelStride, pad_dim2, dnnBorderZeros), err );
+	        CHECK_ERR( dnnPoolingCreateBackward_F32(&pool_b, attributes, dnnAlgorithmPoolingMax,lt_in_f, kernelSize, kernelStride, pad_dim2, dnnBorderZeros), err );
 		}
-		else{
-            CHECK_ERR( dnnPoolingCreateForward_F32 (&pool_f, attributes, dnnAlgorithmPoolingMax,lt_in_f, kernelSize, kernelStride, pad, dnnBorderZerosAsymm), err );
-            CHECK_ERR( dnnPoolingCreateBackward_F32(&pool_b, attributes, dnnAlgorithmPoolingMax,lt_in_f, kernelSize, kernelStride, pad, dnnBorderZerosAsymm), err );
+		else
+		{
+            CHECK_ERR( dnnPoolingCreateForward_F32 (&pool_f, attributes, dnnAlgorithmPoolingMax,lt_in_f, kernelSize, kernelStride, pad_dim4, dnnBorderZerosAsymm), err );
+            CHECK_ERR( dnnPoolingCreateBackward_F32(&pool_b, attributes, dnnAlgorithmPoolingMax,lt_in_f, kernelSize, kernelStride, pad_dim4, dnnBorderZerosAsymm), err );
 	    }
 	}
 	else
 	{
-		if(useCaffe || padW == pad2)
+		if(useCaffe || symm)
 		{
-		    CHECK_ERR( dnnPoolingCreateForward_F32 (&pool_f, attributes, dnnAlgorithmPoolingAvg,lt_in_f, kernelSize, kernelStride, pad_, dnnBorderZeros), err );
-	        CHECK_ERR( dnnPoolingCreateBackward_F32(&pool_b, attributes, dnnAlgorithmPoolingAvg,lt_in_f, kernelSize, kernelStride, pad_, dnnBorderZeros), err );
+		    CHECK_ERR( dnnPoolingCreateForward_F32 (&pool_f, attributes, dnnAlgorithmPoolingAvg,lt_in_f, kernelSize, kernelStride, pad_dim2, dnnBorderZeros), err );
+	        CHECK_ERR( dnnPoolingCreateBackward_F32(&pool_b, attributes, dnnAlgorithmPoolingAvg,lt_in_f, kernelSize, kernelStride, pad_dim2, dnnBorderZeros), err );
 
 		}
-		else{
-            CHECK_ERR( dnnPoolingCreateForward_F32 (&pool_f, attributes, dnnAlgorithmPoolingAvg,lt_in_f, kernelSize, kernelStride, pad, dnnBorderZerosAsymm), err );
-            CHECK_ERR( dnnPoolingCreateBackward_F32(&pool_b, attributes, dnnAlgorithmPoolingAvg,lt_in_f, kernelSize, kernelStride, pad, dnnBorderZerosAsymm), err );
+		else
+		{
+            CHECK_ERR( dnnPoolingCreateForward_F32 (&pool_f, attributes, dnnAlgorithmPoolingAvg,lt_in_f, kernelSize, kernelStride, pad_dim4, dnnBorderZerosAsymm), err );
+            CHECK_ERR( dnnPoolingCreateBackward_F32(&pool_b, attributes, dnnAlgorithmPoolingAvg,lt_in_f, kernelSize, kernelStride, pad_dim4, dnnBorderZerosAsymm), err );
 	    }
 	}
 	primitives[POOLING_FORWARD]  = (long long)pool_f;
@@ -104,7 +108,7 @@ static void Init_f(
 
     //create mkl layout for output
     dnnLayout_t lt_out_f = NULL, lt_out_b = NULL, lt_in_b = NULL;
-	CHECK_ERR( dnnLayoutCreateFromPrimitive_F32(&lt_out_f, pool_f, dnnResourceDst),       err );
+	CHECK_ERR( dnnLayoutCreateFromPrimitive_F32(&lt_out_f, pool_f, dnnResourceDst),   err );
 	CHECK_ERR( dnnLayoutCreateFromPrimitive_F32(&lt_in_b,  pool_f, dnnResourceSrc),   err );
 	CHECK_ERR( dnnLayoutCreateFromPrimitive_F32(&lt_out_b, pool_f, dnnResourceDst),   err );
     primitives[POOL_L_F_O] = (long long)lt_out_f;
@@ -122,6 +126,9 @@ static void Init_f(
     float* buf_out_f = NULL;
     CHECK_ERR( dnnAllocateBuffer_F32((void**)(&buf_out_f), lt_out_f), err );
     primitives[BUFFER_POOLING_FORWARD_OUTPUT] = (long long)buf_out_f;
+
+ERR_RETURN:
+    return;
 }
 
 void MaxPooling_fprop(
@@ -167,6 +174,8 @@ void MaxPooling_fprop(
     ((long long*)output)[MKLPtr]    = primitives[BUFFER_POOLING_FORWARD_OUTPUT];
     ((long long*)output)[MKLLayout] = primitives[POOL_L_F_O];
 
+ERR_RETURN:
+    return;
 }
 
 static void Init_b(long long * gradIn, long long * gradOut, long long * primitives)
@@ -190,6 +199,9 @@ static void Init_b(long long * gradIn, long long * gradOut, long long * primitiv
     float* buf_in_b = NULL;
     CHECK_ERR( dnnAllocateBuffer_F32((void**)(&buf_in_b), lt_in_b), err );
     primitives[BUFFER_POOLING_BACKWARD_INPUT] = (long long)buf_in_b;
+
+ERR_RETURN:
+    return;
 }
 
 void MaxPooling_bprop(
@@ -234,4 +246,7 @@ void MaxPooling_bprop(
 
 	((long long *)gradInput)[MKLLayout] = primitives[POOL_L_B_I];
     ((long long *)gradInput)[MKLPtr]    = primitives[BUFFER_POOLING_BACKWARD_INPUT];
+
+ERR_RETURN:
+    return;
 }

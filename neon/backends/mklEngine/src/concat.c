@@ -97,7 +97,11 @@ static void Init_f(
 	CHECK_ERR( dnnAllocateBuffer_F32((void**)(&buf), lt_f), err );
 	primitives[CONCAT_BUF_F_OUT] = (long long)buf;
     output[CPULayout] = (long long)lt_out;
-    free(layouts);
+
+
+ERR_RETURN:
+    if(layouts != NULL)
+        free(layouts);
 }
 
 void Concat_f(
@@ -129,6 +133,10 @@ void Concat_f(
 
     ((long long*)output)[MKLLayout] = (long long)primitives[CONCAT_LAYOUT_FORWARD_OUTPUT];
     ((long long*)output)[MKLPtr]    = (long long)primitives[CONCAT_BUF_F_OUT];
+
+ERR_RETURN:
+    return;
+
 }
 
 static void Init_b(
@@ -191,7 +199,11 @@ static void Init_b(
 		pLayout[i] = (long long)lt_out_branch;
 		pMem[i]    = (long long)buf;
 	}
-    free(split_channels);
+
+
+ERR_RETURN:
+    if(split_channels != NULL)
+        free(split_channels);
 }
 
 void Concat_b(
@@ -225,6 +237,9 @@ void Concat_b(
     //get gradOut
     split_res[dnnResourceSrc] = GetPtr(gradOut);
 	CHECK_ERR(dnnExecute_F32((dnnPrimitive_t)primitives[CONCAT_BACKWARD], split_res), err);
+
+ERR_RETURN:
+    return;
 }
 
 //inputs:        tensors to be summed up
@@ -288,4 +303,6 @@ void SumTensor(
 	    }
         cblas_saxpy(len, 1.0, pNewBuf, 1, pSumBuf, 1);
     }
+ERR_RETURN:
+    return;
 }

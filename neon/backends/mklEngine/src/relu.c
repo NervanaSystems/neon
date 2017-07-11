@@ -64,6 +64,9 @@ static void Init_f(
     primitives[RELU_L_B_I] = (long long)lt_in_b;
 
     primitives[BUF_RELU_FORWARD_IN] = (long long)GetPtr((unsigned long long)input);
+
+ERR_RETURN:
+    return;
 }
 
 void Relu_f(
@@ -85,7 +88,8 @@ void Relu_f(
 
 	CHECK_ERR( dnnExecute_F32((dnnPrimitive_t)(primitives[RELU_FORWARD]), (void**)resRelu), err );
 
-    //relu will not change input's layout
+ERR_RETURN:
+    return;
 }
 
 static void Init_b(long long * gradOut, long long * primitives)
@@ -112,6 +116,9 @@ static void Init_b(long long * gradOut, long long * primitives)
     {
         gradOut[CPULayout] = (long long)lt_out;
     }
+
+ERR_RETURN:
+    return;
 }
 
 void Relu_b(
@@ -146,4 +153,7 @@ void Relu_b(
     }
 
 	CHECK_ERR( dnnExecute_F32((dnnPrimitive_t)primitives[RELU_BACKWARD], (void**)resRelu), err );
+
+ERR_RETURN:
+    return;
 }

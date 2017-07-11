@@ -108,7 +108,12 @@ class ConvLayerMKL(ConvLayer):
         O.shape5D = self.dimO
 
     def xprop_conv(self, I, F, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
-                   relu=False, brelu=False, slope=0.0, backward=False):
+                   relu=False, brelu=False, slope=0.0, backward=False, layer_op=None):
+
+        if not layer_op.get_is_mklop():
+            super(ConvLayerMKL, self).xprop_conv(
+                I, F, O, X, bias, bsum, alpha, beta, relu, brelu, slope, backward, layer_op)
+            return
 
         # hack for dealing with dilated conv
         if self.dilated:
@@ -119,8 +124,6 @@ class ConvLayerMKL(ConvLayer):
         if X is None:
             X = O
 
-        # call MKL
-        # TODO, consider concact and beta
         # TODO, support bias
         C, D, H, W, N = self.dimI
         C, T, R, S, K = self.dimF
@@ -129,8 +132,9 @@ class ConvLayerMKL(ConvLayer):
         str_d, str_h, str_w = self.strides
         primitives = c_longlong(self.dnnPrimitives.ctypes.data)
 
+        mkl_res = 0
         if not backward:
-            I.backend.mklEngine.Conv_forward(
+            mkl_res = I.backend.mklEngine.Conv_forward(
                 I.get_prim(), O.get_prim(), F.get_prim(), primitives, self.init_f,
                 N, C, H, W, S, R, str_h, str_w, pad_w, pad_h, K, P, Q)
             self.init_f = 1
@@ -142,8 +146,20 @@ class ConvLayerMKL(ConvLayer):
                 N, K, P, Q, self.init_bd, beta_)
             O.shape5D = self.dimI
             self.init_bd = 1
+        if mkl_res != 0:
+            super(ConvLayerMKL, self).xprop_conv(
+                I, F, O, X, bias, bsum, alpha, beta, relu, brelu, slope, backward, layer_op)
+            I.clean_mkl()
+            O.clean_mkl()
+            layer_op.set_not_mklop()
+            return
 
-    def update_conv(self, I, E, U, alpha=1.0, beta=0.0):
+    def update_conv(self, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
+
+        if not layer_op.get_is_mklop():
+            super(ConvLayerMKL, self).update_conv(I, E, U, alpha, beta, layer_op=layer_op)
+            return
+
         # not deal with alpha, beta yet
         K, M, P, Q, N = self.dimO
         primitives = c_longlong(self.dnnPrimitives.ctypes.data)

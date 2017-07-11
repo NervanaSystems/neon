@@ -163,6 +163,7 @@ typedef enum {
     (err) = (f); \
     if ((err) != E_SUCCESS) { \
         fprintf(stderr,"[%s:%d] err (%d)\n", __FILE__, __LINE__, err); \
+        goto ERR_RETURN; \
     } \
 } while(0)
 

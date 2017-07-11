@@ -30,12 +30,13 @@ void ConvertBack(unsigned long long tensor_, int N, int C, int H, int W)
 	size_t inSize[DIM4]   =   { W, H, C, N};
 	size_t inStride[DIM4] =   { 1, W, W*H, W*H*C};
 	dnnLayout_t lt_NCHW = NULL, lt_CHWN = NULL;
+	float* newPtr = NULL;
 	CHECK_ERR( dnnLayoutCreate_F32(&lt_NCHW, DIM4, inSize, inStride),  err );
 	if (!dnnLayoutCompare_F32((dnnLayout_t)tensor[MKLLayout], (dnnLayout_t)tensor[CPULayout]))
 	{
 		float* cpuPtr = (float *)tensor[CPUPtr];
 		float* mklPtr = (float *)tensor[MKLPtr];
-		float* newPtr = NULL;
+
 		if (!dnnLayoutCompare_F32((dnnLayout_t)tensor[MKLLayout], lt_NCHW))
 		{
 		    dnnPrimitive_t cv;
@@ -45,10 +46,6 @@ void ConvertBack(unsigned long long tensor_, int N, int C, int H, int W)
             mklPtr = newPtr;
 		}
         mkl_somatcopy('r', 't', N, C*H*W, 1.0, mklPtr, C*H*W, cpuPtr, N);
- 	    if (newPtr!=NULL)
- 	    {
- 	        free(newPtr);
- 	    }
 	}
 	else
 	{
@@ -61,6 +58,11 @@ void ConvertBack(unsigned long long tensor_, int N, int C, int H, int W)
             destPtr[i] = srcPtr[i];
         }
     }
+ERR_RETURN:
+    if (newPtr!=NULL)
+ 	{
+ 	    free(newPtr);
+ 	}
 }
 
 void ConvertToMKL(unsigned long long tensor_)
@@ -86,6 +88,8 @@ void ConvertToMKL(unsigned long long tensor_)
 	{
 	    memcpy((void*)tensor[MKLPtr], (void*)tensor[CPUPtr], dnnLayoutGetMemorySize_F32((dnnLayout_t)tensor[MKLLayout]));
     }
+ERR_RETURN:
+    return;
 }
 
 void CleanPrimitive(long long * primitives, int length)
@@ -110,7 +114,7 @@ void MatTrans(
     mkl_somatcopy('r', 't', m, n, 1.0, (float*)input, n, (float*)output, m);
 }
 
-static void Conv_f_init(
+static int Conv_f_init(
   long long * input,
   long long * output,
   long long * weight,
@@ -140,7 +144,7 @@ static void Conv_f_init(
     //CHWN
     size_t filterStridesCHWN[DIM4] = {outC,  outC*kW,      outC*kW*kH,     1};
     size_t inputStridesCHWN[DIM4]  = {N,  N*inW,   N*inW*inH,    1};
-    size_t outputStridesCHWN[DIM4] = {N, N*outW, N*outW*outH, 1};
+    size_t outputStridesCHWN[DIM4] = {N,  N*outW,  N*outW*outH,  1};
 
     //create execute and save into primitives
     dnnPrimitiveAttributes_t attributes = NULL;
@@ -227,9 +231,14 @@ static void Conv_f_init(
 	float* buf_out_f = NULL;
     CHECK_ERR( dnnAllocateBuffer_F32((void**)(&buf_out_f), lt_out_f), err );
     primitives[BUFFER_FORWARD_OUTPUT] = (long long)buf_out_f;
+
+    return 0;
+
+ERR_RETURN:
+    return 1;
 }
 
-void Conv_forward(
+int Conv_forward(
   unsigned long long input,
   unsigned long long output,
   unsigned long long weight,
@@ -246,7 +255,11 @@ void Conv_forward(
 	if(initOk == 0)
 	{
 		//for the first time, initialize layout and conversion
-		Conv_f_init((long long *)input,	(long long *)output, (long long *)weight, primitives,N,inC,inH,inW,kH,kW,dH,dW,padH,padW,outC,outH,outW);
+		int res = Conv_f_init((long long *)input,	(long long *)output, (long long *)weight, primitives,N,inC,inH,inW,kH,kW,dH,dW,padH,padW,outC,outH,outW);
+	    if(res)
+	    {
+	        return 1;
+	    }
 	}
 
 	//get memory as resource
@@ -292,6 +305,11 @@ void Conv_forward(
     //always fill in MKL information for output
 	((long long*)output)[MKLPtr]    = primitives[BUFFER_FORWARD_OUTPUT];
     ((long long*)output)[MKLLayout] = (long long)primitives[L_F_O];
+
+    return 0;
+
+ERR_RETURN:
+    return 1;
 }
 
 //gradOut: output gradient of CONV layer, known parameters
@@ -337,6 +355,9 @@ static void Conv_bdata_init(
 		gradOutTransPtr = (float*)malloc(N*oC*oH*oW*sizeof(float));
 	}
 	primitives[BUFFER_TRANS_OUTPUT] = (long long)gradOutTransPtr;
+
+ERR_RETURN:
+    return;
 }
 
 //gradOutput, conv output gradient, also as the input
@@ -396,6 +417,9 @@ void Conv_bwdData(
 
     ((long long*)gradInput)[MKLLayout] = (long long)primitives[L_BD_I];
     ((long long*)gradInput)[MKLPtr]    = (long long)primitives[BUFFER_BWDDATA_INPUT];
+
+ERR_RETURN:
+    return;
 }
 
 static void Conv_bfilter_init(
@@ -447,6 +471,8 @@ static void Conv_bfilter_init(
     primitives[BUFFER_BWDFILTER_INPUT]  = (long long)buf_in_bfilter;
     primitives[CONVERT_BWDFILTER_INPUT] = (long long)cv_in_bfilter;
 
+ERR_RETURN:
+    return;
 }
 
 void Conv_bwdFilter(
@@ -525,4 +551,7 @@ void Conv_bwdFilter(
     {
        CHECK_ERR( dnnConversionExecute_F32(cv_filter_bfilter, buf_filter_bfilter, filterPtr), err );
     }
+
+ERR_RETURN:
+    return;
 }
