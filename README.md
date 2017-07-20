@@ -30,11 +30,43 @@ neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/install
     cd neon
     make
     . .venv/bin/activate
-    # use a script to  run an example with the **optimized** CPU (mkl) backend (defaults to the non-optimized CPU backend (cpu) if no `-b mkl` is specified):
+```
+
+### Use a script to run an example
+
+```bash
+    python examples/mnist_mlp.py 
+```
+
+#### Selecting a backend engine from the command line
+
+The gpu backend is selected by default, so the above command is equivalent to if a compatible GPU resource is found on the system:
+
+```bash
+    python examples/mnist_mlp.py -b gpu
+```
+
+When no GPU is available, the **optimized** CPU (MKL) backend is now selected by default as of neon v2.1, which means the above command is now equivalent to:
+
+```bash
     python examples/mnist_mlp.py -b mkl
-    # alternatively, use a yaml file (defaults to gpu backend if available, adding a line that contains``backend: mkl`` to enable MKL backend):
+```
+
+If you are interested in comparing the default mkl backend with the non-optimized CPU backend, use the following command:
+
+```bash
+    python examples/mnist_mlp.py -b cpu
+```
+
+### Use a yaml file to run an example
+
+Alternatively, a yaml file may be used run an example.
+
+```bash
     neon examples/mnist_mlp.yaml
 ```
+
+To select a specific backend in a yaml file, add or modify a line that contains ``backend: mkl`` to enable mkl backend, or ``backend: cpu`` to enable cpu backend.  The gpu backend is selected by default if a GPU is available.
 
 ## Recommended Settings for neon with MKL on Intel Architectures
 
@@ -43,7 +75,12 @@ the following KMP_AFFINITY setting to make sure parallel threads are 1:1 mapped 
 
 ```bash
     export OMP_NUM_THREADS=<Number of Physical Cores>
-    export KMP_AFFINITY=compact,1,0,granularity=fine
+    export KMP_AFFINITY=compact,1,0,granularity=fine  
+```
+or 
+```bash
+    export OMP_NUM_THREADS=<Number of Physical Cores>
+    export KMP_AFFINITY=verbose,granularity=fine,proclist=[0-<Number of Physical Cores>],explicit
 ```
 For more information about KMP_AFFINITY, please check [here](https://software.intel.com/en-us/node/522691).
 We encourage users to set out trying and establishing their own best performance settings. 

@@ -22,7 +22,7 @@ containing the model (with ``-b mkl``), as mentioned before:
 
 .. code-block:: bash
 
-    examples/mnist_mlp.py -b mkl
+    examples/mnist_mlp.py # equivalent to examples/mnist_mlp.py -b mkl
 
 This will run the multilayer perceptron (MLP) model and print the final
 misclassification error after 10 training epochs. On the first run, neon will download the MNIST dataset. It will create a ``~/nervana`` directory where the raw datasets are kept. The data directory can be controlled with the ``-w`` flag.
@@ -54,6 +54,6 @@ command line. Some commonly used flags include:
    ``-e~, --epochs``, Number of epochs to run during training (default: ``10``)
    ``-s~, --save_path``, Path to save the model snapshots (default: ``None``)
    ``-o~, --output_file``, Path to save the metrics and callback data generated during training. Can be used by ``nvis`` for visualization  (default: ``None``)
-   ``-b~, --backend {cpu,mkl,gpu}``, Which backend to use (default: ``cpu``)
+   ``-b~, --backend {cpu,mkl,gpu}``, Which backend to use (default: ``mkl``)
    ``-z~, --batch_size``, Batch size for training (default: ``128``)
    ``-v~``, Verbose output. Displays each layer's shape information.

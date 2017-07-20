@@ -16,7 +16,7 @@
 neon backend
 ============
 
-neon features highly optimized CPU and GPU computational backends for
+neon features highly optimized CPU (MKL) and GPU computational backends for
 fast matrix operations. Understanding how to work with backend is
 critical to creating custom layers or cost functions. In fact, the
 backend API is exposed, allowing direct access for any application.
@@ -32,13 +32,13 @@ run for both the GPU and CPU backends.
 Directly calling the backend
 ----------------------------
 
-To generate a CPU backend, we call
+To generate an MKL backend, we call
 
 .. code-block:: python
 
     from neon.backends import gen_backend
 
-    be = gen_backend(backend='cpu')
+    be = gen_backend(backend='mkl')
 
 The method :py:meth:`gen_backend()<neon.backends.gen_backend>` takes several optional arguments (see the :doc:`API<api>` for a full list).
 

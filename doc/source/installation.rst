@@ -37,7 +37,7 @@ packages (different system names shown):
    pkg-config, pkg-config, Retrieves information about installed libraries
 
 .. note::
-   To enable neon's :py:class:`.DataLoader`, several optional libraries should be installed. For image processing, install `OpenCV <http://opencv.org/>`__. For audio and video data, install `ffmpeg <https://ffmpeg.org/>`__. We recommend installing with a package manager (e.g. apt-get or homebrew). 
+   To enable neon's :py:class:`.DataLoader`, several optional libraries should be installed. For image processing, install `OpenCV <http://opencv.org/>`__. For audio and video data, install `ffmpeg <https://ffmpeg.org/>`__. We recommend installing with a package manager (e.g. apt-get or homebrew). If you have encountered error messages about failing to install aeon while building neon, please visit `aeon <https://github.com/NervanaSystems/aeon>`__ page for how to install prerequisites for aeon to enable neon with aeon data loader. 
 
 
 Additionally, there are several other libraries.
@@ -106,8 +106,7 @@ World" of deep learning), enter
 
     examples/mnist_mlp.py
 
-For better performance on Intel CPUs, start neon and run the MNIST multi-layer
-perceptron example with ``-b mkl`` 
+Note that since neon v2.1 the above is equivalent to explicitly add ``-b mkl`` for better performance on Intel CPUs. In other words, mkl backend is the default backend
 
 .. code-block:: bash
 

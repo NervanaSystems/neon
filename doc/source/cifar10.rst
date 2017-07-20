@@ -27,7 +27,7 @@ We start by generating the backend:
 .. code-block:: python
 
     from neon.backends import gen_backend
-    be = gen_backend(backend='cpu', batch_size=128)
+    be = gen_backend(backend='mkl', batch_size=128)
 
 There isn't much we can do with the backend right now, but if we print it, you will
 see that we have a CPU backend object.
