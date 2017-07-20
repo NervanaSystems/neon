@@ -47,7 +47,7 @@ if [[ `uname` == 'Linux' ]]; then
 
 
     RETURN_STRING=`./prepare_mkl.sh $ICC_ON`
-    export MKLROOT=`echo $RETURN_STRING | awk '{print $1}'`
+    export MKLROOT=`echo $RETURN_STRING | awk -F "=" '{print $2}' | awk '{print $1}'`
     echo -e "mkl root: ${GREEN}$MKLROOT${NORM}"
     export LD_LIBRARY_PATH=$MKLROOT/lib:$LD_LIBRARY_PATH
     export LIBRARY_PATH=$MKLROOT/lib:$LIBRARY_PATH
