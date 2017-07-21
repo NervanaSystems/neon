@@ -23,25 +23,25 @@ import re  # noqa
 from neon.util.compat import pickle  # noqa
 
 
-def clean_string(string):
+def clean_string(base):
     """
     Tokenization/string cleaning.
-    Original taken from https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
+    Original from https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
     """
-    string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
-    string = re.sub(r"\'s", " \'s", string)
-    string = re.sub(r"\'ve", " \'ve", string)
-    string = re.sub(r"n\'t", " n\'t", string)
-    string = re.sub(r"\'re", " \'re", string)
-    string = re.sub(r"\'d", " \'d", string)
-    string = re.sub(r"\'ll", " \'ll", string)
-    string = re.sub(r",", " , ", string)
-    string = re.sub(r"!", " ! ", string)
-    string = re.sub(r"\(", " \( ", string)
-    string = re.sub(r"\)", " \) ", string)
-    string = re.sub(r"\?", " \? ", string)
-    string = re.sub(r"\s{2,}", " ", string)
-    return string.strip().lower()
+    base = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", base)
+    base = re.sub(r"\'re", " \'re", base)
+    base = re.sub(r"\'d", " \'d", base)
+    base = re.sub(r"\'ll", " \'ll", base)
+    base = re.sub(r"\'s", " \'s", base)
+    base = re.sub(r"\'ve", " \'ve", base)
+    base = re.sub(r"n\'t", " n\'t", base)
+    base = re.sub(r"!", " ! ", base)
+    base = re.sub(r",", " , ", base)
+    base = re.sub(r"\)", " \) ", base)
+    base = re.sub(r"\(", " \( ", base)
+    base = re.sub(r"\?", " \? ", base)
+    base = re.sub(r"\s{2,}", " ", base)
+    return base.strip().lower()
 
 
 def pad_sentences(sentences, sentence_length=None, dtype=np.int32, pad_val=0.):
