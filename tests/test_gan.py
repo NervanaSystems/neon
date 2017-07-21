@@ -17,13 +17,12 @@ Unit tests for Generative Adversarial Networks. Tests the API of the
 GenerativeAdversarial container and the GANCost cost function
 
 """
-import numpy as np
 
 from neon.initializers.initializer import Gaussian
 from neon.layers import Affine
 from neon.transforms import GANCost
 from neon.layers.container import Sequential, GenerativeAdversarial
-from utils import tensors_allclose
+from utils import tensors_allclose, allclose_with_out
 
 
 def test_gan_container(backend_default):
@@ -67,13 +66,13 @@ def test_modified_gan_cost(backend_default):
 
     # bprop for modified cost
     delta[:] = cost.bprop_data(y_data)
-    assert np.allclose(delta.get(), -1. / 1)
+    assert allclose_with_out(delta.get(), -1. / 1)
 
     delta[:] = cost.bprop_noise(y_noise)
-    assert np.allclose(delta.get(), 1. - 2.)
+    assert allclose_with_out(delta.get(), 1. - 2.)
 
     delta[:] = cost.bprop_generator(y_noise)
-    assert np.allclose(delta.get(), -1. / 2.)
+    assert allclose_with_out(delta.get(), -1. / 2.)
 
 
 def test_wgan_cost(backend_default):
@@ -96,10 +95,10 @@ def test_wgan_cost(backend_default):
 
     # bprop for wasserstein cost
     delta[:] = cost.bprop_data(y_data)
-    assert np.allclose(delta.get(), 1.)
+    assert allclose_with_out(delta.get(), 1.)
 
     delta[:] = cost.bprop_noise(y_noise)
-    assert np.allclose(delta.get(), -1.)
+    assert allclose_with_out(delta.get(), -1.)
 
     delta[:] = cost.bprop_generator(y_noise)
-    assert np.allclose(delta.get(), 1.)
+    assert allclose_with_out(delta.get(), 1.)

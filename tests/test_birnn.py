@@ -102,10 +102,10 @@ def test_biRNN_fprop_rnn(backend_default, fargs, deltas_buffer):
     # asserts for fprop
     for x_rnn, x_f, x_b, y_f, y_b in zip(out_rnn_s, out_lr_f_s, out_lr_b_s,
                                          reversed(out_rl_f_s), reversed(out_rl_b_s)):
-        assert np.allclose(x_f, y_b, rtol=0.0, atol=1.0e-5)
-        assert np.allclose(x_b, y_f, rtol=0.0, atol=1.0e-5)
-        assert np.allclose(x_rnn, x_f, rtol=0.0, atol=1.0e-5)
-        assert np.allclose(x_rnn, y_b, rtol=0.0, atol=1.0e-5)
+        assert allclose_with_out(x_f, y_b, rtol=0.0, atol=1.0e-5)
+        assert allclose_with_out(x_b, y_f, rtol=0.0, atol=1.0e-5)
+        assert allclose_with_out(x_rnn, x_f, rtol=0.0, atol=1.0e-5)
+        assert allclose_with_out(x_rnn, y_b, rtol=0.0, atol=1.0e-5)
 
 
 def test_biRNN_fprop(backend_default, fargs):
@@ -153,8 +153,8 @@ def test_biRNN_fprop(backend_default, fargs):
     # asserts
     for x_f, x_b, y_f, y_b in zip(out_lr_f_s, out_lr_b_s,
                                   reversed(out_rl_f_s), reversed(out_rl_b_s)):
-        assert np.allclose(x_f, y_b, rtol=0.0, atol=1.0e-5)
-        assert np.allclose(x_b, y_f, rtol=0.0, atol=1.0e-5)
+        assert allclose_with_out(x_f, y_b, rtol=0.0, atol=1.0e-5)
+        assert allclose_with_out(x_b, y_f, rtol=0.0, atol=1.0e-5)
 
 
 def test_biRNN_bprop(backend_default, fargs, deltas_buffer):
@@ -211,7 +211,7 @@ def test_biRNN_bprop(backend_default, fargs, deltas_buffer):
     del_lr_s = get_steps(del_lr, in_shape)
     del_rl_s = get_steps(del_rl, in_shape)
     for (x, y) in zip(del_lr_s, reversed(del_rl_s)):
-        assert np.allclose(x, y, rtol=0.0, atol=1.0e-5)
+        assert allclose_with_out(x, y, rtol=0.0, atol=1.0e-5)
 
 
 def test_biSum(backend_default, fargs, deltas_buffer):

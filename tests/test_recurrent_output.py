@@ -21,6 +21,7 @@ import numpy as np
 from neon.backends import gen_backend
 from neon import NervanaObject
 from neon.layers.recurrent import RecurrentSum, RecurrentMean, RecurrentLast
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):
@@ -72,8 +73,8 @@ def test_recurrent_sum(backend_default, refgruargs, deltas_buffer):
     inp_g = layer.be.array(inp)
     out = layer.fprop(inp_g)
     err = layer.bprop(out)
-    assert np.allclose(out.get(), seq_len * rinp)
-    assert np.allclose(err.get(), seq_len * inp)
+    assert allclose_with_out(out.get(), seq_len * rinp)
+    assert allclose_with_out(err.get(), seq_len * inp)
 
     # full random
     inp = np.random.random((nin, seq_len * batch_size))
@@ -85,8 +86,8 @@ def test_recurrent_sum(backend_default, refgruargs, deltas_buffer):
     for i in range(seq_len):
         out_comp[:] = out_comp + inp[:, i * batch_size:(i + 1) * batch_size]
         err_comp[:, i * batch_size:(i + 1) * batch_size] = out.get()
-    assert np.allclose(out_comp, out.get())
-    assert np.allclose(err_comp, err.get())
+    assert allclose_with_out(out_comp, out.get())
+    assert allclose_with_out(err_comp, err.get())
 
 
 def test_recurrent_mean(backend_default, refgruargs, deltas_buffer):
@@ -123,8 +124,8 @@ def test_recurrent_mean(backend_default, refgruargs, deltas_buffer):
     inp_g = layer.be.array(inp)
     out = layer.fprop(inp_g)
     err = layer.bprop(out)
-    assert np.allclose(out.get(), rinp)
-    assert np.allclose(err.get(), 1. / seq_len * inp)
+    assert allclose_with_out(out.get(), rinp)
+    assert allclose_with_out(err.get(), 1. / seq_len * inp)
 
     # full random
     inp = np.random.random((nin, seq_len * batch_size))
@@ -138,8 +139,8 @@ def test_recurrent_mean(backend_default, refgruargs, deltas_buffer):
         err_comp[:, i * batch_size:(i + 1) * batch_size] = out.get() / float(seq_len)
     out_comp[:] /= float(seq_len)
 
-    assert np.allclose(out_comp, out.get())
-    assert np.allclose(err_comp, err.get())
+    assert allclose_with_out(out_comp, out.get())
+    assert allclose_with_out(err_comp, err.get())
 
 
 def test_recurrent_last(backend_default, refgruargs, deltas_buffer):
@@ -178,8 +179,8 @@ def test_recurrent_last(backend_default, refgruargs, deltas_buffer):
     inp_g = layer.be.array(inp)
     out = layer.fprop(inp_g)
     err = layer.bprop(out)
-    assert np.allclose(out.get(), rinp)
-    assert np.allclose(err[:, -batch_size:].get(), rinp)
+    assert allclose_with_out(out.get(), rinp)
+    assert allclose_with_out(err[:, -batch_size:].get(), rinp)
 
     # full random
     inp = np.random.random((nin, seq_len * batch_size))

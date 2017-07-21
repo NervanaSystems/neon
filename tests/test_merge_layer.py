@@ -22,6 +22,7 @@ import numpy as np
 from neon import NervanaObject
 from neon.initializers.initializer import Uniform
 from neon.layers import Affine, MergeMultistream, Sequential
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):
@@ -63,7 +64,7 @@ def test_concat_l1_l1(backend_default, allrand_args, deltas_buffer):
     weights = [layer.W.get() for layer in sublayers]
     out_exp = np.concatenate([np.dot(w, inp.get()) for (w, inp) in zip(weights, inputs)])
 
-    assert np.allclose(out, out_exp, atol=1e-3)
+    assert allclose_with_out(out, out_exp, atol=1e-3)
 
     err_lst = [dtypeu(np.random.random((nout, batch_size))) for nout in nouts]
     err_concat = np.concatenate(err_lst)
@@ -71,7 +72,7 @@ def test_concat_l1_l1(backend_default, allrand_args, deltas_buffer):
     dW_exp_lst = [np.dot(err, inp.get().T) for (err, inp) in zip(err_lst, inputs)]
 
     for layer, dW_exp in zip(sublayers, dW_exp_lst):
-        assert np.allclose(layer.dW.get(), dW_exp)
+        assert allclose_with_out(layer.dW.get(), dW_exp)
     return
 
 
@@ -106,7 +107,7 @@ def test_concat_sequence_l1_l1(backend_default, allrand_args, deltas_buffer):
     weights = [layer.W.get() for layer in sublayers]
     out_exp = np.concatenate([np.dot(w, inp.get()) for (w, inp) in zip(weights, inputs)], axis=1)
 
-    assert np.allclose(out, out_exp, atol=1e-3)
+    assert allclose_with_out(out, out_exp, atol=1e-3)
 
     err_lst = [dtypeu(np.random.random((nout, batch_size * step))) for step in steps]
     err_concat = be.array(np.concatenate(err_lst, axis=1))
@@ -114,5 +115,5 @@ def test_concat_sequence_l1_l1(backend_default, allrand_args, deltas_buffer):
     dW_exp_lst = [np.dot(err, inp.get().T) for (err, inp) in zip(err_lst, inputs)]
 
     for layer, dW_exp in zip(sublayers, dW_exp_lst):
-        assert np.allclose(layer.dW.get(), dW_exp)
+        assert allclose_with_out(layer.dW.get(), dW_exp)
     return

@@ -23,6 +23,7 @@ from neon import NervanaObject
 from neon import logger as neon_logger
 from neon.initializers.initializer import GlorotUniform
 from neon.layers.layer import LookupTable
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):
@@ -157,8 +158,8 @@ def test_lookuptable_rand_error(backend_default, basic_linargs, deltas_buffer):
             if w_id == wrd_id:
                 dw_exp[:] = dw_exp[:] + err[:, i]
                 cnt_exp += 1
-        assert np.allclose(dw[wrd_id, :], dw_exp, atol=0, rtol=1e-4)
-        assert np.allclose(dw_exp, dw[wrd_id, :], atol=0, rtol=1e-4)
+        assert allclose_with_out(dw[wrd_id, :], dw_exp, atol=0, rtol=1e-4)
+        assert allclose_with_out(dw_exp, dw[wrd_id, :], atol=0, rtol=1e-4)
         assert cnt == cnt_exp
 
     return

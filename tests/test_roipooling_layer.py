@@ -22,6 +22,7 @@ from timeit import default_timer as timeit
 
 from neon import NervanaObject, logger as neon_logger
 from neon.backends import gen_backend
+from utils import allclose_with_out
 
 spatial_scale = 1.0 / 16
 
@@ -185,7 +186,7 @@ def test_roipooling_fprop_random(backend_default, fargs):
     neon_logger.display("Nervana backend roipooling fprop (sec): {}".format(timeit() - start_time))
 
     outputs_be = outputs_dev.get().reshape(-1, rois_per_batch)
-    assert np.allclose(outputs_np, outputs_be, atol=1e-6, rtol=0)
+    assert allclose_with_out(outputs_np, outputs_be, atol=1e-6, rtol=0)
 
 
 def test_roipooling_fprop_ref(backend_default, rois=None, inputs=None, outputs_ref=None):
@@ -204,7 +205,7 @@ def test_roipooling_fprop_ref(backend_default, rois=None, inputs=None, outputs_r
                                       img_fm_c, img_fm_h, img_fm_w,
                                       bsz, rois_per_image, roi_size, roi_size)
 
-    assert np.allclose(outputs_ref_in, outputs_np, atol=1e-6, rtol=0)
+    assert allclose_with_out(outputs_ref_in, outputs_np, atol=1e-6, rtol=0)
 
     # call NervanaGPU roipooling kernel
     NervanaObject.be.bsz = bsz
@@ -224,7 +225,7 @@ def test_roipooling_fprop_ref(backend_default, rois=None, inputs=None, outputs_r
 
     neon_logger.display("Nervana backend roipooling fprop (sec): {}".format(timeit() - start_time))
 
-    assert np.allclose(outputs_ref_in, outputs_backend, atol=1e-6, rtol=0)
+    assert allclose_with_out(outputs_ref_in, outputs_backend, atol=1e-6, rtol=0)
 
 
 def test_roipooling_bprop_random(backend_default, fargs):
@@ -288,7 +289,7 @@ def test_roipooling_bprop_random(backend_default, fargs):
     assert output_error_dev.get().sum() == input_errors.sum()
 
     outputs_be = output_error_dev.get()
-    assert np.allclose(outputs_np, outputs_be, atol=1e-6, rtol=0)
+    assert allclose_with_out(outputs_np, outputs_be, atol=1e-6, rtol=0)
 
 
 def test_roipooling_bprop_ref(backend_default, rois=None, inputs=None, outputs_fprop_ref=None,
@@ -322,7 +323,7 @@ def test_roipooling_bprop_ref(backend_default, rois=None, inputs=None, outputs_f
 
     outputs_fprop_be = outputs_dev.get().reshape(-1, rois_per_batch)
 
-    assert np.allclose(
+    assert allclose_with_out(
         outputs_fprop_ref_in, outputs_fprop_be, atol=1e-6, rtol=0)
 
     start_time = timeit()
@@ -332,7 +333,7 @@ def test_roipooling_bprop_ref(backend_default, rois=None, inputs=None, outputs_f
     neon_logger.display("NervanaGPU roipooling bprop (sec): {}".format(timeit() - start_time))
     outputs_backend = output_error_dev.get()
 
-    assert np.allclose(outputs_fprop_ref_in, outputs_backend, atol=1e-6, rtol=0)
+    assert allclose_with_out(outputs_fprop_ref_in, outputs_backend, atol=1e-6, rtol=0)
 
 
 if __name__ == '__main__':

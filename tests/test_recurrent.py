@@ -243,7 +243,7 @@ def gradient_check(seq_len, input_size, hidden_size, batch_size,
         if min_max_err < 0.0 or dd < min_max_err:
             min_max_err = dd
         # reset the seed so models are same in each run
-        # allclose_with_out(grad_est,deltas, rtol=0.0, atol=0.0)
+        allclose_with_out(grad_est, deltas, rtol=0.0, atol=0.0)
         NervanaObject.be.rng_reset()
 
     # check that best value of worst case error is less than threshold

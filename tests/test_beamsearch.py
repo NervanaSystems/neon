@@ -22,6 +22,7 @@ from neon.transforms import Tanh, Logistic
 import numpy as np
 from neon import NervanaObject
 from neon.util.beamsearch import BeamSearch
+from utils import allclose_with_out
 
 
 def reformat_samples(seq2seq_obj, num_beams, batch_size):
@@ -178,8 +179,8 @@ def test_beamsearch(backend_default):
 
     # extract all candidates
     examples = reformat_samples(beamsearch, num_beams, batch_size)
-    assert np.allclose(examples[0], ex0)
-    assert np.allclose(examples[1], ex1)
+    assert allclose_with_out(examples[0], ex0)
+    assert allclose_with_out(examples[1], ex1)
 
 if __name__ == '__main__':
     be = gen_backend(backend='gpu', batch_size=2)

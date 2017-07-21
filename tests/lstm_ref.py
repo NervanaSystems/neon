@@ -9,6 +9,7 @@ The adaptation includes
 from builtins import input
 import numpy as np
 from neon import logger as neon_logger
+from utils import allclose_with_out
 
 
 class LSTM(object):
@@ -220,7 +221,7 @@ def checkSequentialMatchesBatch():
 
     # sanity check: perform batch forward to check that we get the same thing
     H, _, _, batch_cache = LSTM.forward(X, WLSTM, c0, h0)
-    assert np.allclose(H, Hcat), 'Sequential and Batch forward don''t match!'
+    assert allclose_with_out(H, Hcat), 'Sequential and Batch forward don''t match!'
 
     # eval loss
     wrand = np.random.randn(*Hcat.shape)

@@ -18,6 +18,7 @@ import pytest
 from neon import NervanaObject
 from neon.layers import Deconvolution
 from neon.initializers import Uniform
+from utils import allclose_with_out
 try:
     from neon.backends.nervanagpu import NervanaGPU
 except:
@@ -230,7 +231,7 @@ def test_dconv_rand(backend_default, rand_convargs, deltas_buffer):
     ref_layer.fprop(inpa.T, permute=True)
     ref_out2 = ref_layer.berror
     atol = 10 * np.max(np.abs(ref_out - ref_out2))
-    assert np.allclose(ref_out.T, neon_out, atol=atol, rtol=0.0), \
+    assert allclose_with_out(ref_out.T, neon_out, atol=atol, rtol=0.0), \
         '%e %e' % (np.max(np.abs(ref_out.T - neon_out)), atol)
 
     # generate err array

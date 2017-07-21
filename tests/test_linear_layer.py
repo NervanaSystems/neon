@@ -21,6 +21,7 @@ import numpy as np
 from neon import NervanaObject
 from neon.initializers.initializer import Uniform
 from neon.layers.layer import Linear
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):
@@ -113,7 +114,7 @@ def test_linear_ones(backend_default, basic_linargs, deltas_buffer):
 
     # for larger layers need to estimate numerical precision
     # atol = est_mm_prec(w, inp.get())
-    assert np.allclose(sums, out, atol=0.0, rtol=0.0), \
+    assert allclose_with_out(sums, out, atol=0.0, rtol=0.0), \
         '%e' % np.max(np.abs(out - sums))
     return
 
@@ -150,7 +151,7 @@ def test_all_rand(backend_default, allrand_args, deltas_buffer):
 
     # for larger layers need to estimate numerical precision
     atol = 2 * est_mm_prec(w, inp, ntrials=1)
-    assert np.allclose(out_exp, out, atol=atol, rtol=0.0), \
+    assert allclose_with_out(out_exp, out, atol=atol, rtol=0.0), \
         '%e %e' % (np.max(np.abs(out - out_exp)), atol)
 
     err = np.random.random((nout, batch_size))
@@ -161,12 +162,12 @@ def test_all_rand(backend_default, allrand_args, deltas_buffer):
 
     deltas_exp = np.dot(w.T, err)
     atol = 2 * est_mm_prec(w.T, err, ntrials=1)
-    assert np.allclose(deltas_exp, deltas, atol=atol, rtol=0.0), \
+    assert allclose_with_out(deltas_exp, deltas, atol=atol, rtol=0.0), \
         '%e %e' % (np.max(np.abs(deltas_exp - deltas)), atol)
 
     dw_exp = np.dot(err, inp.T)
     atol = 2 * est_mm_prec(err, inp.T, ntrials=1)
-    assert np.allclose(dw_exp, dw, atol=atol, rtol=0.0), \
+    assert allclose_with_out(dw_exp, dw, atol=atol, rtol=0.0), \
         '%e %e' % (np.max(np.abs(dw_exp - dw)), atol)
 
     return

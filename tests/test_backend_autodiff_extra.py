@@ -20,6 +20,7 @@ import pytest
 
 from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
+from utils import allclose_with_out
 
 
 class CustomFunc(object):
@@ -228,9 +229,9 @@ class TestAutodiff(object):
         # check function values
         numerical_grads_and_val[1] = numerical_grads_and_val[
             1].reshape(autodiff_grads_and_val[1].shape)
-        assert np.allclose(autodiff_grads_and_val[1].astype(self.dtype),
-                           numerical_grads_and_val[1].astype(self.dtype),
-                           rtol=rtol, atol=atol)
+        assert allclose_with_out(autodiff_grads_and_val[1].astype(self.dtype),
+                                 numerical_grads_and_val[1].astype(self.dtype),
+                                 rtol=rtol, atol=atol)
 
         # check gradient
         count = 0
@@ -371,7 +372,7 @@ class TestAutodiff(object):
         x2_grad = be.array(np.ones((3, 3)) * -1, dtype=self.dtype)
         x3_grad = be.array(np.ones((3, 3)) * 75, dtype=self.dtype)
 
-        assert np.allclose(ad.get_grad_asnumpyarray([x0])[0], x0_grad.get(), atol=1e-5)
-        assert np.allclose(ad.get_grad_asnumpyarray([x1])[0], x1_grad.get(), atol=1e-5)
-        assert np.allclose(ad.get_grad_asnumpyarray([x2])[0], x2_grad.get(), atol=1e-5)
-        assert np.allclose(ad.get_grad_asnumpyarray([x3])[0], x3_grad.get(), atol=1e-5)
+        assert allclose_with_out(ad.get_grad_asnumpyarray([x0])[0], x0_grad.get(), atol=1e-5)
+        assert allclose_with_out(ad.get_grad_asnumpyarray([x1])[0], x1_grad.get(), atol=1e-5)
+        assert allclose_with_out(ad.get_grad_asnumpyarray([x2])[0], x2_grad.get(), atol=1e-5)
+        assert allclose_with_out(ad.get_grad_asnumpyarray([x3])[0], x3_grad.get(), atol=1e-5)

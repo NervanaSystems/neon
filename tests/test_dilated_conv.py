@@ -24,6 +24,7 @@ from neon.models import Model
 from neon.initializers.initializer import Gaussian
 from neon.transforms import CrossEntropyBinary
 from neon.optimizers import GradientDescentMomentum
+from utils import allclose_with_out
 
 
 def pytest_generate_tests(metafunc):
@@ -158,8 +159,8 @@ def test_dilated_conv(backend_default, fargs_tests):
     o1, w1 = run(be, False, fsz, stride, 1, dil)
     o2, w2 = run(be, True, fsz, stride, 1, dil)
     # Verify that the results of faked dilation match those of actual dilation.
-    assert np.allclose(o1, o2, atol=0, rtol=3e-3)
-    assert np.allclose(w1, w2, atol=0, rtol=1e-3)
+    assert allclose_with_out(o1, o2, atol=0, rtol=3e-3)
+    assert allclose_with_out(w1, w2, atol=0, rtol=1e-3)
 
 
 if __name__ == '__main__':

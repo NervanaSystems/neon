@@ -23,6 +23,7 @@ import numpy as np
 
 from neon import NervanaObject
 from neon.data import HDF5Iterator, HDF5IteratorOneHot, HDF5IteratorAutoencoder
+from utils import allclose_with_out
 
 logging.basicConfig(level=20)
 logger = logging.getLogger()
@@ -229,7 +230,7 @@ def test_hdf5meansubtract(backend_default, meansubhdf):
         elif typ == 'full_mean':
             x_exp = x_exp.reshape((-1, bsz)) - mn
         x_exp = x_exp.flatten()
-        assert np.allclose(x_, x_exp, atol=0.0, rtol=1.0e-7)
+        assert allclose_with_out(x_, x_exp, atol=0.0, rtol=1.0e-7)
         cnt_image += len(x_)
 
     datit.cleanup()

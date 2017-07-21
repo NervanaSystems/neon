@@ -188,7 +188,7 @@ def test_conv_ones(backend_default, ones_convargs, deltas_buffer):
     ref_layer.weights = np.ones(neon_layer.W.shape).T.astype(dtypeu)
     ref_layer.fprop(inp.get().T)
     out_exp = ref_layer.y.copy()
-    assert np.allclose(out_exp.T, out, atol=0.0, rtol=0.0)
+    assert allclose_with_out(out_exp.T, out, atol=0.0, rtol=0.0)
 
     # generate err array
     err = np.ones(out.shape).astype(np.float32)
@@ -205,7 +205,7 @@ def test_conv_ones(backend_default, ones_convargs, deltas_buffer):
     updates_exp = ref_layer.updates.T
 
     # check dw from neon layer
-    assert np.allclose(dw, updates_exp, atol=0.0, rtol=0.0)
+    assert allclose_with_out(dw, updates_exp, atol=0.0, rtol=0.0)
 
     # the deltas are more complicated since the matricies are not
     # uniform, going to use the reference code directly here

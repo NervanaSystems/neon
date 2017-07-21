@@ -15,7 +15,7 @@
 '''
 Test of the acc_on functionality
 '''
-from utils import tensors_allclose
+from utils import tensors_allclose, allclose_with_out
 import numpy as np
 import pytest
 
@@ -127,7 +127,7 @@ def check_acc_on(layer, out_shape, buffers):
         layer.bprop(err1)
         dW_p = getattr(terminal_layer, b).get()
 
-        assert (np.allclose(dW_p, (dW + dW_s)))
+        assert allclose_with_out(dW_p, (dW + dW_s))
 
         # Turning acc_on off should reset on next bprop
         layer.set_acc_on(False)
@@ -135,7 +135,7 @@ def check_acc_on(layer, out_shape, buffers):
         layer.bprop(err2)
         dW_dp = getattr(terminal_layer, b).get()
 
-        assert (np.allclose(dW_dp, dW))
+        assert allclose_with_out(dW_dp, dW)
 
 
 def test_unsupported_layer():

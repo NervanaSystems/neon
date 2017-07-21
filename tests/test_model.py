@@ -25,6 +25,7 @@ from neon.layers import (GeneralizedCost, Affine, DeepBiRNN, DeepBiLSTM, LSTM, G
 from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
+from utils import allclose_with_out
 
 
 def test_model_get_outputs_rnn(backend_default, data):
@@ -48,8 +49,8 @@ def test_model_get_outputs_rnn(backend_default, data):
 
     # since the init are all constant and model is un-trained:
     # along the feature dim, the values should be all the same
-    assert np.allclose(output[0, 0], output[0, 0, 0], rtol=0, atol=1e-5)
-    assert np.allclose(output[0, 1], output[0, 1, 0], rtol=0, atol=1e-5)
+    assert allclose_with_out(output[0, 0], output[0, 0, 0], rtol=0, atol=1e-5)
+    assert allclose_with_out(output[0, 1], output[0, 1, 0], rtol=0, atol=1e-5)
 
     # along the time dim, the values should be increasing:
     assert np.alltrue(output[0, 2] > output[0, 1])
@@ -90,7 +91,7 @@ def test_model_get_outputs(backend_default, data):
 
     train_set.reset()
     output = mlp.get_outputs(train_set)
-    assert np.allclose(output, ref_output[:output.shape[0], :])
+    assert allclose_with_out(output, ref_output[:output.shape[0], :])
 
     # test model benchmark inference
     mlp.benchmark(train_set, inference=True, niterations=5)
@@ -156,22 +157,22 @@ def test_model_serialize(backend_default, data):
 
     # Check outputs, states, and params are the same
     for output, output_exp in zip(outputs, outputs_exp):
-        assert np.allclose(output.get(), output_exp.get())
+        assert allclose_with_out(output.get(), output_exp.get())
 
     for pd, pd_exp in zip(pdicts, pdicts_exp):
         for s, s_e in zip(pd['states'], pd_exp['states']):
             if isinstance(s, list):  # this is the batch norm case
                 for _s, _s_e in zip(s, s_e):
-                    assert np.allclose(_s, _s_e)
+                    assert allclose_with_out(_s, _s_e)
             else:
-                assert np.allclose(s, s_e)
+                assert allclose_with_out(s, s_e)
         for p, p_e in zip(pd['params'], pd_exp['params']):
             assert type(p) == type(p_e)
             if isinstance(p, list):  # this is the batch norm case
                 for _p, _p_e in zip(p, p_e):
-                    assert np.allclose(_p, _p_e)
+                    assert allclose_with_out(_p, _p_e)
             elif isinstance(p, np.ndarray):
-                assert np.allclose(p, p_e)
+                assert allclose_with_out(p, p_e)
             else:
                 assert p == p_e
 

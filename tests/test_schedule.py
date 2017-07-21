@@ -17,6 +17,7 @@ import numpy as np
 
 from neon.optimizers import (Schedule, ExpSchedule, PowerSchedule, StepSchedule,
                              ShiftSchedule)
+from utils import allclose_with_out
 
 
 def test_schedule(backend_default):
@@ -40,18 +41,18 @@ def test_schedule(backend_default):
         # test a repeated call for the same epoch
         lr2 = sch.get_learning_rate(learning_rate=lr_init, epoch=epoch)
         # print epoch, lr, lr2
-        assert np.allclose(lr, lr_init * change**(np.floor(epoch // step_config)))
-        assert np.allclose(lr2, lr_init * change**(np.floor(epoch // step_config)))
+        assert allclose_with_out(lr, lr_init * change**(np.floor(epoch // step_config)))
+        assert allclose_with_out(lr2, lr_init * change**(np.floor(epoch // step_config)))
 
     # test a list step schedule
     sch = Schedule(step_config=[2, 3], change=.1)
-    assert np.allclose(.1, sch.get_learning_rate(learning_rate=.1, epoch=0))
-    assert np.allclose(.1, sch.get_learning_rate(learning_rate=.1, epoch=1))
-    assert np.allclose(.01, sch.get_learning_rate(learning_rate=.1, epoch=2))
+    assert allclose_with_out(.1, sch.get_learning_rate(learning_rate=.1, epoch=0))
+    assert allclose_with_out(.1, sch.get_learning_rate(learning_rate=.1, epoch=1))
+    assert allclose_with_out(.01, sch.get_learning_rate(learning_rate=.1, epoch=2))
     # test a repeated call for the same epoch
-    assert np.allclose(.01, sch.get_learning_rate(learning_rate=.1, epoch=2))
-    assert np.allclose(.001, sch.get_learning_rate(learning_rate=.1, epoch=3))
-    assert np.allclose(.001, sch.get_learning_rate(learning_rate=.1, epoch=4))
+    assert allclose_with_out(.01, sch.get_learning_rate(learning_rate=.1, epoch=2))
+    assert allclose_with_out(.001, sch.get_learning_rate(learning_rate=.1, epoch=3))
+    assert allclose_with_out(.001, sch.get_learning_rate(learning_rate=.1, epoch=4))
 
 
 def test_step_schedule(backend_default):
@@ -65,7 +66,7 @@ def test_step_schedule(backend_default):
     target_lr = [1.0, 0.1, 0.1, 0.1, 0.3, 0.4, 0.4, 0.4, 0.4]
 
     for e, lr in enumerate(target_lr):
-        assert np.allclose(lr, sch.get_learning_rate(learning_rate=1.0, epoch=e))
+        assert allclose_with_out(lr, sch.get_learning_rate(learning_rate=1.0, epoch=e))
 
 
 def test_power_schedule(backend_default):
@@ -77,7 +78,7 @@ def test_power_schedule(backend_default):
     target_lr = [1.0, 1.0, 0.5, 0.5, 0.25, 0.25, 0.125, 0.125]
 
     for e, lr in enumerate(target_lr):
-        assert np.allclose(lr, sch.get_learning_rate(learning_rate=1.0, epoch=e))
+        assert allclose_with_out(lr, sch.get_learning_rate(learning_rate=1.0, epoch=e))
 
 
 def test_exp_schedule(backend_default):
@@ -89,7 +90,7 @@ def test_exp_schedule(backend_default):
     sch = ExpSchedule(decay)
     for epoch in range(10):
         lr = sch.get_learning_rate(learning_rate=lr_init, epoch=epoch)
-        assert np.allclose(lr, lr_init / (1. + decay * epoch))
+        assert allclose_with_out(lr, lr_init / (1. + decay * epoch))
 
 
 def test_shift_schedule(backend_default):
@@ -101,4 +102,4 @@ def test_shift_schedule(backend_default):
     sch = ShiftSchedule(interval)
     for epoch in range(10):
         lr = sch.get_learning_rate(learning_rate=lr_init, epoch=epoch)
-        assert np.allclose(lr, lr_init / (2 ** epoch))
+        assert allclose_with_out(lr, lr_init / (2 ** epoch))
