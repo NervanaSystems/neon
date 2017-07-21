@@ -25,6 +25,11 @@ ifeq ($(UNAME_S), FreeBSD)
 	CC          := clang++
 endif
 
+PKGCONFIG := $(shell command -v pkg-config 2> /dev/null)
+ifndef PKGCONFIG
+    $(error "pkg-config must be installed. Consider `sudo apt-get install pkg-config` or `brew install pkg-config`.")
+endif
+
 ifeq ($(shell pkg-config --exists opencv; echo $$?), 0)
 	IMGFLAG     := -DHAS_IMGLIB
 	CFLAGS      := $(shell pkg-config --cflags opencv) $(CFLAGS)

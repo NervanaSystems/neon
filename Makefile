@@ -78,6 +78,11 @@ MKL_ENGINE  := neon/backends/mklEngine
 # neon compiled objects
 DATA_LOADER := loader
 
+VIRTUALENV := $(shell command -v virtualenv 2> /dev/null)
+ifndef VIRTUALENV
+    $(error "virtualenv must be installed. Consider `pip install virtualenv`.")
+endif
+
 ifeq ($(PY), 2)
 	VIRTUALENV_EXE := virtualenv -p python2.7
 	PYLINT3K_ARGS := --disable=no-absolute-import
