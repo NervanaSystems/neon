@@ -34,19 +34,21 @@ def module_factory(nfm, bottleneck=True, stride=1):
             Activation(Rectlin())]
 
 
-def create_network(stage_depth, bottleneck):
-    if stage_depth in (0, 18):
+def create_network(stage_depth):
+    if stage_depth in (18, 18):
         stages = (2, 2, 2, 2)
-    elif stage_depth in (1, 34, 50):
+    elif stage_depth in (34, 50):
         stages = (3, 4, 6, 3)
-    elif stage_depth in (2, 68, 101):
+    elif stage_depth in (68, 101):
         stages = (3, 4, 23, 3)
-    elif stage_depth in (3, 102, 152):
+    elif stage_depth in (102, 152):
         stages = (3, 8, 36, 3)
-    elif stage_depth in (4, 98, 138):
-        stages = (3, 7, 35, 3)
     else:
         raise ValueError('Invalid stage_depth value'.format(stage_depth))
+
+    bottleneck = False
+    if stage_depth in (50, 101, 152):
+        bottleneck = True
 
     layers = [Conv(**conv_params(7, 64, strides=2)),
               Pooling(3, strides=2)]

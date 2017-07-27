@@ -27,14 +27,12 @@ train_config = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'train.
 config_files = [train_config] if os.path.exists(train_config) else []
 
 parser = NeonArgparser(__doc__, default_config_files=config_files)
-parser.add_argument('--depth', type=int, default=0, help='network configuration')
-parser.add_argument('--bottleneck', action="store_true",
-                    help="use bottleneck modules compared to double 3x3 modules")
+parser.add_argument('--depth', type=int, default=18, help='network configuration')
 parser.add_argument('--subset_pct', type=float, default=100,
                     help='subset of training dataset to use (percentage)')
 args = parser.parse_args()
 
-model, cost = create_network(args.depth, args.bottleneck)
+model, cost = create_network(args.depth)
 rseed = 0 if args.rng_seed is None else args.rng_seed
 
 # setup data provider

@@ -46,11 +46,6 @@ A basic residual network for imagenet can be trained using the command,
 python examples/imagenet/i1k_msra.py --save_path </path/to/save/weights>
 ```
 
-For bottleneck architectures one can supply the optional argument `--bottleneck` to the training command
-
-For deeper architectures, one can select from several depth configurations that are [described in the original paper][msra1] by supplying the optional argument `--depth {0|1|2|3|4}`.  When combined with the `--bottleneck` option, many combinations are possible.  However, because deeper configurations are more demanding of memory, one might need to reduce the batch size accordingly.
-
-
 ## Citation
 ```
 ImageNet Classification with Deep Convolutional Neural Networks
