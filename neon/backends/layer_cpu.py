@@ -21,6 +21,7 @@ import math
 from operator import mul
 import numpy as np
 from functools import reduce
+from neon.layers.layer import Layer
 
 
 def ceil_div(x, y):
@@ -30,7 +31,7 @@ def ceil_div(x, y):
     return -(-x // y)
 
 
-class ConvLayer(object):
+class ConvLayer(Layer):
 
     """
     ConvLayer parameter object.
