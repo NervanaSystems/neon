@@ -159,7 +159,7 @@ $(DATA_LOADER):
 
 # TODO: handle kernel/.so compilation via setup.py directly
 sysinstall_nodeps: $(DATA_LOADER) neon_install
-sysinstall: sysdeps $(DATA_LOADER) neon_install
+sysinstall: $(MKL_ENGINE) sysdeps $(DATA_LOADER) neon_install
 neon_install:
 	@echo "Installing neon system wide..."
 	@python setup.py install
