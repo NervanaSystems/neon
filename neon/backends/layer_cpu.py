@@ -21,7 +21,6 @@ import math
 from operator import mul
 import numpy as np
 from functools import reduce
-from neon.layers.layer import Layer
 
 
 def ceil_div(x, y):
@@ -31,7 +30,7 @@ def ceil_div(x, y):
     return -(-x // y)
 
 
-class ConvLayer(Layer):
+class ConvLayer(object):
 
     """
     ConvLayer parameter object.
@@ -106,6 +105,16 @@ class ConvLayer(Layer):
             self.dSlice = [self.bprop_slice(d, T, M, pad_d, str_d, dil_d) for d in range(D)]
             self.hSlice = [self.bprop_slice(h, R, P, pad_h, str_h, dil_h) for h in range(H)]
             self.wSlice = [self.bprop_slice(w, S, Q, pad_w, str_w, dil_w) for w in range(W)]
+        self.is_mklop = False
+
+    def get_is_mklop(self):
+        return self.is_mklop
+
+    def set_is_mklop(self):
+        self.is_mklop = True
+
+    def set_not_mklop(self):
+        self.is_mklop = False
 
     def fprop_slice(self, q, S, X, padding, stride, dilation):
         f1 = None
