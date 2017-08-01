@@ -7,6 +7,17 @@ Normalization, strided convolutions and other tricks described in
 excellent [NIPS tutorial][goodfellow16] by Ian Goodfellow.
 
 
+### Pre-requisites:
+Installations of matplotlib, scipy, and lmdb are required to run the following
+examples.
+
+```bash
+. .venv2/bin/activate
+pip install matplotlib
+pip install scipy
+pip install lmdb
+```
+
 ### MNIST Data
 This is an example of DCGAN and WGAN trained with MNIST images, which allows
 quick validation of GAN models.
