@@ -53,12 +53,24 @@ def allclose_with_out(x, y, atol=0.0, rtol=1.0e-5):
         neon_logger.display('abs errors: %e [%e, %e] Abs Thresh = %e'
                             % (np.median(dd), np.min(dd), np.max(dd), atol))
         amax = np.argmax(dd)
-        neon_logger.display('worst case: %e %e' % (x.flat[amax], y.flat[amax]))
+
+        if np.isscalar(x):
+            neon_logger.display('worst case: %e %e' % (x, y.flat[amax]))
+        elif np.isscalar(y):
+            neon_logger.display('worst case: %e %e' % (x.flat[amax], y))
+        else:
+            neon_logger.display('worst case: %e %e' % (x.flat[amax], y.flat[amax]))
+
         dd = np.abs(dd - atol) / np.abs(y)
         neon_logger.display('rel errors: %e [%e, %e] Rel Thresh = %e'
                             % (np.median(dd), np.min(dd), np.max(dd), rtol))
         amax = np.argmax(dd)
-        neon_logger.display('worst case: %e %e' % (x.flat[amax], y.flat[amax]))
+        if np.isscalar(x):
+            neon_logger.display('worst case: %e %e' % (x, y.flat[amax]))
+        elif np.isscalar(y):
+            neon_logger.display('worst case: %e %e' % (x.flat[amax], y))
+        else:
+            neon_logger.display('worst case: %e %e' % (x.flat[amax], y.flat[amax]))
     return ac
 
 
