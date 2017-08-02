@@ -21,6 +21,81 @@ def slicable(dim, pad=0):
     return (dim0, dim[-1])
 
 
+def test_pooling_mkl(backend_pair_bench_mkl):
+    nm, nc = backend_pair_bench_mkl
+    layer_args = dict(dtype=np.float32, N=122, C=16, D=1, H=32, W=32, J=5)
+    pool_test_args = dict(ones=0, cpu=1, nm=nm, nc=nc,
+                          alpha=1.0,  # not supported in CPU
+                          ascale=1.2,
+                          beta=0.0,  # not supported in CPU
+                          bpower=0.5,
+                          layer_m=nm.lrn_layer(**layer_args),  # returns a pool layer
+                          layer_c=nc.lrn_layer(**layer_args),
+                          **layer_args)
+
+    lrn_helper_mkl(**pool_test_args)
+
+
+def lrn_helper_mkl(dtype, ones, cpu, alpha, beta, ascale, bpower,
+                   nm, nc, layer_m, layer_c, N, C, D, H, W, J):
+
+    dimI = layer_m.dimI
+    dimO = layer_m.dimO
+
+    # cpu input arrays
+    # Note that we truncte these to 16 bits so that the cpu and gpu
+    # will agree on an index if there is a tie.
+    if ones:
+        cpuI = np.ones(slicable(dimI), dtype=np.float32)
+        cpuB = np.ones(slicable(dimI), dtype=np.float32)
+        cpuE = np.ones(dimO, dtype=np.float32)
+        cpuO = np.ones(dimO, dtype=np.float32)
+    else:
+        cpuI = np.random.uniform(-1.0, 1.0, slicable(dimI)).astype(np.float16).astype(np.float32)
+        cpuB = np.random.uniform(-1.0, 1.0, slicable(dimI)).astype(np.float16).astype(np.float32)
+        cpuE = np.random.uniform(-1.0, 1.0, dimO).astype(np.float16).astype(np.float32)
+        cpuO = np.random.uniform(-1.0, 1.0, dimO).astype(np.float16).astype(np.float32)
+
+    # give gpu the input array without zero padding (not needed)
+    devI = nm.array(cpuI.reshape(dimI), dtype=dtype)
+    devB = nm.array(cpuB.reshape(dimI), dtype=dtype)  # delta "backprop"
+    devE = nm.array(cpuE, dtype=dtype)
+    devO = nm.array(cpuO, dtype=dtype)
+    devD = nm.empty(dimO, dtype=dtype)  # denom
+
+    cccI = nc.array(cpuI.reshape(dimI), dtype=dtype)
+    cccB = nc.array(cpuB.reshape(dimI), dtype=dtype)  # delta "backprop"
+    cccE = nc.array(cpuE, dtype=dtype)
+    cccO = nc.array(cpuO, dtype=dtype)
+    cccD = nc.empty(dimO, dtype=dtype)  # denom
+
+    # layer, I, O, denom, ascale=1, bpower=1
+    nm.fprop_lrn(layer_m, devI, devO, devD, alpha, beta, ascale, bpower)  # I, O, denom
+    nc.fprop_lrn(layer_c, cccI, cccO, cccD, None, None, ascale, bpower)  # CPU has no alpha, beta
+
+    neon_logger.display("== denom ==")
+    neon_logger.display("CPU fprop")
+    neon_logger.display(cccD.get().reshape(C * D * H * W, N)[0:4, 0:4])
+    neon_logger.display("MKL fprop")
+    neon_logger.display(devD.get().reshape(C * D * H * W, N)[0:4, 0:4])
+
+    neon_logger.display("== output ==")
+    neon_logger.display("CPU fprop")
+    neon_logger.display(cccO.get().reshape(C * D * H * W, N)[0:4, 0:4])
+    neon_logger.display("MKL fprop")
+    neon_logger.display(devO.get().reshape(C * D * H * W, N)[0:4, 0:4])
+
+    # I, O, E, delta, denom
+    nm.bprop_lrn(layer_m, devI, devO, devE, devB, devD, alpha, beta, ascale, bpower)
+    nc.bprop_lrn(layer_c, cccI, cccO, cccE, cccB, cccD, None, None, ascale, bpower)
+
+    neon_logger.display("== bprop ==")
+    neon_logger.display("CPU bprop")
+    neon_logger.display(cccB.get().reshape(C * D * H * W, N)[0:4, 0:4])
+    neon_logger.display("MKL bprop")
+    neon_logger.display(devB.get().reshape(C * D * H * W, N)[0:4, 0:4])
+
+
 @pytest.mark.hasgpu
 def test_pooling(backend_pair_bench):
     ng, nc = backend_pair_bench
@@ -99,3 +174,4 @@ def lrn_helper(dtype, ones, cpu, alpha, beta, ascale, bpower,
 
 if __name__ == '__main__':
     test_pooling(0)
+    test_pooling_mkl(0)

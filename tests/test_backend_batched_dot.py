@@ -15,11 +15,13 @@
 # pylint: skip-file
 
 """
-test batched_dot behaviors between NervanaCPU, and NervanaGPU backend
+test batched_dot behaviors between NervanaCPU, NervanaMKL, and NervanaGPU backend
 against numpy.
 In NervanaGPU, it supports both N as inside dimension or as outer dimension.
 In NervanaCPU, it only supports N as inside dimension, since this is what we use.
+In NervanaMKL, it supports both N as inside dimension or as outer dimension.
 """
+from __future__ import print_function
 import numpy as np
 import pytest
 
@@ -50,7 +52,7 @@ def run_batched_dot(lib, I, E, W, X, dtype):
     devB = lib.zeros(I.shape, dtype=dtype)
     devU = lib.zeros(W.shape, dtype=dtype)
 
-    if lib.__class__.__name__.endswith("CPU"):
+    if (lib.__class__.__name__.endswith("CPU") | lib.__class__.__name__.endswith("MKL")):
         lib.batched_dot(devW, devI, devO)  # fprop
         lib.batched_dot(devW.T, devE, devB)  # bprop
         lib.batched_dot(devE, devI.T, devU)  # update
@@ -65,6 +67,34 @@ def run_batched_dot(lib, I, E, W, X, dtype):
             devU += np.dot(E[i], I[i].T)  # update
 
     return devO, devB, devU
+
+
+def test_batched_dot_mkl(backend_pair_bench_mkl):
+    np.set_printoptions(threshold=8192 * 4, linewidth=600,
+                        formatter={'int': lambda x: "%2d" % x, 'float': lambda x: "%2.0f" % x})
+
+    nm, nc = backend_pair_bench_mkl
+
+    dtype = np.float32  # np.float16 or np.float32
+
+    X = 100   # Batch Size
+    N = 32   # Minibatch Size
+    C = 1536  # Input  Features
+    K = 768  # Output Features
+
+    cpuI, cpuE, cpuW = setup_test_data(X, N, C, K, dtype)
+
+    ncO, ncB, ncU = run_batched_dot(nc, cpuI, cpuE, cpuW, X, dtype)
+    npO, npB, npU = run_batched_dot(np, cpuI, cpuE, cpuW, X, dtype)
+    nmO, nmB, nmU = run_batched_dot(nm, cpuI, cpuE, cpuW, X, dtype)
+
+    assert tensors_allclose(npO, nmO, rtol=0, atol=1e-3)
+    assert tensors_allclose(npB, nmB, rtol=0, atol=1e-3)
+    assert tensors_allclose(npU, nmU, rtol=0, atol=1e-3)
+
+    assert tensors_allclose(npO, ncO, rtol=0, atol=1e-3)
+    assert tensors_allclose(npB, ncB, rtol=0, atol=1e-3)
+    assert tensors_allclose(npU, ncU, rtol=0, atol=1e-3)
 
 
 @pytest.mark.hasgpu

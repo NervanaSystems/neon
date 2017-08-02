@@ -17,11 +17,18 @@ Convolution layer tests
 """
 from builtins import zip
 import numpy as np
+import pytest
 from neon import NervanaObject
 from neon.layers import Sequential, Conv, MergeSum, SkipNode, Activation
 from neon.initializers.initializer import Gaussian, IdentityInit
 from neon.transforms import Rectlin
 from utils import allclose_with_out
+try:
+    from neon.backends.nervanamkl import NervanaMKL
+except:
+    # stub out the class
+    class NervanaMKL(object):
+        pass
 
 init1 = Gaussian(scale=0.01)
 relu = Rectlin()
@@ -68,19 +75,25 @@ def module_factory_copy(ref_module, modfunc, nfm, stride=1, name="i"):
     return (mm[0].layers[0].layers, mm[0].layers[1].layers)
 
 
-def test_skip_noupsample(backend_gpu):
+def test_skip_noupsample(backend_default):
+    if isinstance(NervanaObject.be, NervanaMKL):
+        pytest.xfail(reason="Known MKL precision issue. See #916")
     be = NervanaObject.be
     be.bsz = 64
     mergesum_test_config(be, modfunc=identity_skip, use_stride=1)
 
 
-def test_skip_upsample(backend_gpu):
+def test_skip_upsample(backend_default):
+    if isinstance(NervanaObject.be, NervanaMKL):
+        pytest.xfail(reason="Known MKL precision issue. See #916")
     be = NervanaObject.be
     be.bsz = 64
     mergesum_test_config(be, modfunc=identity_skip, use_stride=2)
 
 
-def test_proj_upsample(backend_gpu):
+def test_proj_upsample(backend_default):
+    if isinstance(NervanaObject.be, NervanaMKL):
+        pytest.xfail(reason="Known MKL precision issue. See #916")
     be = NervanaObject.be
     be.bsz = 64
     mergesum_test_config(be, modfunc=projection_skip, use_stride=2)

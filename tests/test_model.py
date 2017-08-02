@@ -26,6 +26,7 @@ from neon.models import Model
 from neon.optimizers import GradientDescentMomentum
 from neon.transforms import Rectlin, Logistic, CrossEntropyBinary
 from utils import allclose_with_out
+from neon import NervanaObject
 
 
 def test_model_get_outputs_rnn(backend_default, data):
@@ -49,8 +50,8 @@ def test_model_get_outputs_rnn(backend_default, data):
 
     # since the init are all constant and model is un-trained:
     # along the feature dim, the values should be all the same
-    assert allclose_with_out(output[0, 0], output[0, 0, 0], rtol=0, atol=1e-5)
-    assert allclose_with_out(output[0, 1], output[0, 1, 0], rtol=0, atol=1e-5)
+    assert allclose_with_out(output[0, 0], output[0, 0, 0], rtol=0, atol=1e-4)
+    assert allclose_with_out(output[0, 1], output[0, 1, 0], rtol=0, atol=1e-4)
 
     # along the time dim, the values should be increasing:
     assert np.alltrue(output[0, 2] > output[0, 1])
@@ -182,7 +183,7 @@ def test_model_serialize(backend_default, data):
 def test_conv_rnn(backend_default):
     train_shape = (1, 17, 142)
 
-    be = backend_default
+    be = NervanaObject.be
     inp = be.array(be.rng.randn(np.prod(train_shape), be.bsz))
     delta = be.array(be.rng.randn(10, be.bsz))
 
@@ -222,5 +223,9 @@ def test_conv_rnn(backend_default):
 
 
 if __name__ == '__main__':
-    be = gen_backend(backend='gpu', batch_size=128)
-    test_conv_rnn(be)
+    be_gpu = gen_backend(backend='gpu', batch_size=128)
+    test_conv_rnn(be_gpu)
+    be_cpu = gen_backend(backend='cpu', batch_size=128)
+    test_conv_rnn(be_cpu)
+    be_mkl = gen_backend(backend='mkl', batch_size=128)
+    test_conv_rnn(be_mkl)

@@ -107,6 +107,40 @@ def test_cpu_randomstate():
     del(be)
 
 
+def test_mkl_randomstate():
+    # run 1
+    be = gen_backend(backend='mkl', rng_seed=100)
+
+    a = be.empty((3, 3))
+    be.make_binary_mask(a, keepthresh=be.rng.rand())
+    x0 = a.get()
+    be.make_binary_mask(a, keepthresh=be.rng.rand())
+    x1 = a.get()
+
+    # run 2, using reset
+    be.rng_reset()
+    be.make_binary_mask(a, keepthresh=be.rng.rand())
+    y0 = a.get()
+    be.make_binary_mask(a, keepthresh=be.rng.rand())
+    y1 = a.get()
+
+    del(be)
+
+    # run 3, using a new backend
+    be = gen_backend(backend='mkl', rng_seed=100)
+
+    a = be.empty((3, 3))
+    be.make_binary_mask(a, keepthresh=be.rng.rand())
+    z0 = a.get()
+    be.make_binary_mask(a, keepthresh=be.rng.rand())
+    z1 = a.get()
+
+    # check equality
+    assert tensors_allclose([x0, x1], [y0, y1], rtol=0., atol=0.)
+    assert tensors_allclose([x0, x1], [z0, z1], rtol=0., atol=0.)
+    del(be)
+
+
 @pytest.mark.hasgpu
 def test_rng_funcs(backend_default):
     # like the tests above but also tests the rng_get_state and rng_set_state funcs

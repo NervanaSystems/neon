@@ -87,7 +87,7 @@ def call_func(f, backend, tensors):
 
     Arguments:
         f (lambda): Usage f(backend, *tensors)
-        backend (Backend or numpy): one of (np, NervanaGPU, NervanaCPU)
+        backend (Backend or numpy): one of (np, NervanaGPU, NervanaCPU, NervanaMKL)
         tensors (list): list of tensors
 
     Returns:
@@ -139,7 +139,7 @@ def funcs_allclose(f, backends, backend_tensors, rtol=0, atol=1e-7):
 
     Arguments:
         f (lambda): Usage f(backend, *tensors)
-        backend (Backend or numpy): one of (np, NervanaGPU, NervanaCPU)
+        backend (Backend or numpy): one of (np, NervanaGPU, NervanaCPU, NervanaMKL)
         tensors (list): list of tensors
         rtol (float, optional): Relative tolerance.
         atol (float, optional): Absolute tolerance.
@@ -161,7 +161,7 @@ def gen_backend_tensors(backends, tensor_dims, flags=None, dtype=np.float32):
     Generates random number for all backends.
 
     Arguments:
-        backends (list): List of backends, one of (np, NervanaGPU, NervanaCPU)
+        backends (list): List of backends, one of (np, NervanaGPU, NervanaCPU, NervanaMKL)
         tensor_dims (list): List of dimensions of the tensors, for example
                             [(1, 2), (3, 4), (5, 6)]
         dtype (data-type): One of (np.float16, np.float32), must be the same
@@ -178,7 +178,8 @@ def gen_backend_tensors(backends, tensor_dims, flags=None, dtype=np.float32):
         For example:
         [[np.ndarray, np.ndarray, np.ndarray],
          [GPUTensor, GPUTensor, GPUTensor],
-         [CPUTensor, CPUTensor, CPUTensor]]
+         [CPUTensor, CPUTensor, CPUTensor],
+         [MKLTensor, MKLTensor, MKLTensor]]
     """
 
     tensor_num = len(tensor_dims)
@@ -234,7 +235,7 @@ class BackendPool(object):
     def get_backend(backend_module, dtype):
         """
         Arguments:
-            backend_module: NervanaGPU or NervanaCPU
+            backend_module: NervanaGPU, NervanaCPU, NervanaMKL
             dtype: np.float32, np.float16, etc
 
         Returns:

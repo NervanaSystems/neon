@@ -21,6 +21,7 @@ import numpy as np
 from neon import NervanaObject
 from neon.backends.autodiff import Autodiff
 from utils import call_func, gen_backend_tensors, tensors_allclose
+import pytest
 
 
 def get_audiff_gradient(f, be, tensors):
@@ -128,10 +129,40 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("custom_args", fargs)
 
 
+def test_gradients_mkl(backend_tests_mkl, custom_args):
+    test_idx, f, flag, dim = custom_args
+
+    # backend_tests fixture will parameterize over cpu and mkl
+    # backends as well as float16 and float32
+    # pull the be and dtype from the actions of the fixture
+    be = NervanaObject.be
+    dtype = be.default_dtype
+
+    # tensors
+    tensors = gen_backend_tensors([np, be], [dim] * 5, [flag] * 5, dtype=dtype)
+
+    # compare function value and gradient
+    numpy_func_val = call_func(f, np, tensors[0])
+    backend_func_val = call_func(f, be, tensors[1])
+    numerical_gradient = get_numerical_gradient(f, tensors[0])
+    ad = get_audiff_gradient(f, be, tensors[1])
+    autodiff_gradient = ad.get_grad_asnumpyarray(tensors[1])
+
+    # TODO: stricter test to fix numerical issues
+    assert tensors_allclose(numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)
+    assert tensors_allclose(numerical_gradient, autodiff_gradient, rtol=1e-02, atol=1e-3)
+
+    # cleanup diff tree
+    ad.cleanup()
+    dtype = None
+    be = None
+
+
+@pytest.mark.hasgpu
 def test_gradients(backend_tests, custom_args):
     test_idx, f, flag, dim = custom_args
 
-    # backend_tests fixture will parameterize over cpu and gpu
+    # backend_tests fixture will parameterize over cpu, gpu, and mkl
     # backends as well as float16 and float32
     # pull the be and dtype from the actions of the fixture
     be = NervanaObject.be

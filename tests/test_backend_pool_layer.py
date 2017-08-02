@@ -13,7 +13,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 """
-To test pool layer operations between NervanaGPU, NervanaCPU against numpy.
+To test pool layer operations between NervanaGPU, NervanaCPU, NervanaMKL against numpy.
 """
 import itertools as itt
 import numpy as np
@@ -138,6 +138,71 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize('poolargs', fargs)
 
 
+def test_pool_layer_mkl(poolargs, backend_pair_bench_mkl):
+
+    op = poolargs[0]
+
+    dtype = np.float32
+    nm, nc = backend_pair_bench_mkl
+
+    N, C = 32, 32
+    D, H, W = 1, 32, 32
+    J, T, R, S = 2, 1, 3, 3
+    padding_j, padding_d, padding_h, padding_w = 0, 0, 0, 0
+    strides_j, strides_d, strides_h, strides_w = 2, 1, 2, 2
+
+    pool_nm = nm.pool_layer(
+        dtype,
+        op,
+        N,
+        C, D, H, W,
+        J, T, R, S,
+        padding_j, padding_d, padding_h, padding_w,
+        strides_j, strides_d, strides_h, strides_w)
+
+    pool_nc = nc.pool_layer(
+        dtype,
+        op,
+        N,
+        C, D, H, W,
+        J, T, R, S,
+        padding_j, padding_d, padding_h, padding_w,
+        strides_j, strides_d, strides_h, strides_w)
+
+    assert pool_nm.dimI == pool_nc.dimI
+    assert pool_nm.dimO == pool_nc.dimO
+
+    dimI = pool_nm.dimI
+    dimO = pool_nm.dimO
+
+    # generating input arrays for inputs and errors
+    cpuI = np.random.uniform(0.0, 1.0, sliceable(dimI, 1)).astype(
+        np.float16).astype(dtype)
+    cpuE = np.random.uniform(-0.2, 0.2, dimO).astype(dtype)
+
+    # zero pad the last row of cpu input for the sake of numpy
+    if op == "max":
+        cpuI[-1, :] = np.finfo(dtype).min
+    else:
+        cpuI[-1, :] = 0
+
+    # ========= MKL, CPU and numpy ==========
+    beI = cpuI[:-1, :].reshape(dimI)
+    beE = cpuE
+
+    nmO, nmB = run_backend_pool(nm, pool_nm, beI, beE, dtype)
+    ncO, ncB = run_backend_pool(nc, pool_nc, beI, beE, dtype)
+    cpuO, cpuB = run_numpy_pool(op, cpuI, cpuE, dtype, pool_nm)
+
+    for opA, nmA, ncA, cpuA in (
+            ("fprop", nmO, ncO, cpuO),
+            ("bprop", nmB, ncB.reshape(dimI), cpuB[:-1, :].reshape(dimI))):
+
+        neon_logger.display(opA)
+        assert allclose_with_out(nmA.get(), ncA.get(), rtol=0, atol=1e-4)
+        assert allclose_with_out(ncA.get(), cpuA, rtol=0, atol=1e-5)
+
+
 @pytest.mark.hasgpu
 def test_pool_layer(poolargs, backend_pair_bench):
 
@@ -187,7 +252,7 @@ def test_pool_layer(poolargs, backend_pair_bench):
     else:
         cpuI[-1, :] = 0
 
-    # =========GPU and CPU and numpy ==========
+    # ========= GPU, CPU and numpy ==========
     beI = cpuI[:-1, :].reshape(dimI)
     beE = cpuE
 
@@ -207,3 +272,4 @@ def test_pool_layer(poolargs, backend_pair_bench):
 if __name__ == '__main__':
     fargs = ["max"]
     test_pool_layer(fargs)
+    test_pool_layer_mkl(fargs)

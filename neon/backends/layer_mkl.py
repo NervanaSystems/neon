@@ -44,6 +44,8 @@ class ConvLayerMKL(ConvLayer):
         self.init_bw = 0  # backward weight
         self.dilated = any(d != 1 for d in self.dilation)
         self.is_mklop = True
+        if D != 1 or T != 1 or self.dilated:
+            self.is_mklop = False
 
     def xprop_conv_dilated(self, I, F, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
                            relu=False, brelu=False, slope=0.0, backward=False):
@@ -111,7 +113,13 @@ class ConvLayerMKL(ConvLayer):
     def xprop_conv(self, I, F, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
                    relu=False, brelu=False, slope=0.0, backward=False, layer_op=None):
 
+        if layer_op is None:
+            layer_op = self
         if not layer_op.get_is_mklop():
+            I.backend.convert(I)
+            F.backend.convert(F)
+            I.clean_mkl()
+            F.clean_mkl()
             super(ConvLayerMKL, self).xprop_conv(
                 I, F, O, X, bias, bsum, alpha, beta, relu, brelu, slope, backward)
             return
@@ -132,12 +140,11 @@ class ConvLayerMKL(ConvLayer):
         pad_d, pad_h, pad_w = self.padding
         str_d, str_h, str_w = self.strides
         primitives = c_longlong(self.dnnPrimitives.ctypes.data)
-
         mkl_res = 0
         if not backward:
             mkl_res = I.backend.mklEngine.Conv_forward(
                 I.get_prim(), O.get_prim(), F.get_prim(), primitives, self.init_f,
-                N, C, H, W, S, R, str_h, str_w, pad_w, pad_h, K, P, Q)
+                N, C, H, W, R, S, str_h, str_w, pad_h, pad_w, K, P, Q)
             self.init_f = 1
             O.shape5D = self.dimO
         else:
@@ -158,6 +165,10 @@ class ConvLayerMKL(ConvLayer):
     def update_conv(self, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
 
         if not self.get_is_mklop():
+            I.backend.convert(I)
+            I.clean_mkl()
+            E.backend.convert(E)
+            E.clean_mkl()
             super(ConvLayerMKL, self).update_conv(I, E, U, alpha, beta)
             return
 

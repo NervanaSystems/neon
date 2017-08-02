@@ -14,6 +14,7 @@
 # ----------------------------------------------------------------------------
 
 import numpy as np
+import pytest
 
 from builtins import zip
 from neon import NervanaObject
@@ -300,7 +301,7 @@ def check_broadcast(ms_layer):
 
 def check_deltas_swap(root_layer):
     # make sure that the deltas_buffers are
-    # swapping back and fourth and not using
+    # swapping back and forth and not using
     # the same allocated memory between layers
     last_buffer = None
     last_layer = None
@@ -347,14 +348,32 @@ def check_ms_model(root_layer):
     check_deltas_swap(root_layer.layers[1:])
 
 
-def test_inception(backend_gpu):
+@pytest.mark.hasgpu
+def test_inception_gpu(backend_gpu):
     NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
     network = InceptionModel()
     model = network.model
     check_deltas_swap(model.layers.layers)
 
 
-def test_tree(backend_gpu):
+@pytest.mark.skip(reason="Not implemented")
+def test_inception_mkl(backend_mkl):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = InceptionModel()
+    model = network.model
+    check_deltas_swap(model.layers.layers)
+
+
+@pytest.mark.skip(reason="Not implemented")
+def test_inception_cpu(backend_cpu):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = InceptionModel()
+    model = network.model
+    check_deltas_swap(model.layers.layers)
+
+
+@pytest.mark.hasgpu
+def test_tree_gpu(backend_gpu):
     NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
     network = TreeModel()
     model = network.model
@@ -363,7 +382,44 @@ def test_tree(backend_gpu):
     print_deltas(model)
 
 
-def test_multistream(backend_gpu):
+@pytest.mark.skip(reason="Not implemented")
+def test_tree_mkl(backend_mkl):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = TreeModel()
+    model = network.model
+    check_tree_model(model.layers)
+
+    print_deltas(model)
+
+
+@pytest.mark.skip(reason="Not implemented")
+def test_tree_cpu(backend_cpu):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = TreeModel()
+    model = network.model
+    check_tree_model(model.layers)
+
+    print_deltas(model)
+
+
+@pytest.mark.hasgpu
+def test_multistream_gpu(backend_gpu):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = MultistreamModel()
+    model = network.model
+    check_ms_model(model.layers)
+
+
+@pytest.mark.skip(reason="Not implemented")
+def test_multistream_mkl(backend_mkl):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = MultistreamModel()
+    model = network.model
+    check_ms_model(model.layers)
+
+
+@pytest.mark.skip(reason="Not implemented")
+def test_multistream_cpu(backend_cpu):
     NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
     network = MultistreamModel()
     model = network.model
@@ -389,14 +445,48 @@ def print_deltas(model):
         print('%s - %d' % (ll.name, deltas_.index(gd)))
 
 
-def test_resnet(backend_gpu):
+@pytest.mark.hasgpu
+def test_resnet_gpu(backend_gpu):
     NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
     network = ResnetModel()
     model = network.model
     check_deltas_swap(model.layers.layers)
 
 
-def test_sequential(backend_gpu):
+@pytest.mark.skip(reason="Not implemented")
+def test_resnet_mkl(backend_mkl):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = ResnetModel()
+    model = network.model
+    check_deltas_swap(model.layers.layers)
+
+
+@pytest.mark.skip(reason="Not implemented")
+def test_resnet_cpu(backend_cpu):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = ResnetModel()
+    model = network.model
+    check_deltas_swap(model.layers.layers)
+
+
+@pytest.mark.hasgpu
+def test_sequential_gpu(backend_gpu):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = SequentialModel()
+    model = network.model
+    check_deltas_swap(model.layers.layers)
+
+
+@pytest.mark.skip(reason="Not implemented")
+def test_sequential_mkl(backend_mkl):
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
+    network = SequentialModel()
+    model = network.model
+    check_deltas_swap(model.layers.layers)
+
+
+@pytest.mark.skip(reason="Not implemented")
+def test_sequential_cpu(backend_cpu):
     NervanaObject.be.bsz = NervanaObject.be.batch_size = 32
     network = SequentialModel()
     model = network.model

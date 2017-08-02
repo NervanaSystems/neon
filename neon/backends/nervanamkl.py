@@ -491,6 +491,8 @@ class NervanaMKL(NervanaCPU):
     def fprop_relu(self, layer, x, slope):
         if layer is None:
             layer = layer_mkl.ReluLayerMKL()
+        if not hasattr(x, 'shape5D'):
+            return self.maximum(x, 0) + slope * self.minimum(0, x)
         if slope != 0:
             self.convert(x)
             x.clean_mkl()
@@ -556,10 +558,17 @@ class NervanaMKL(NervanaCPU):
                 nglayer, transform, outputs, error, deltas, relu)
 
     def compound_fprop_bn(self, x, xsum, xvar, gmean, gvar, gamma, beta, y,
-                          eps, rho, compute_batch_sume,
+                          eps, rho, compute_batch_sum,
                           accumbeta=0.0, relu=False, binary=False,
                           inference=False, outputs=None, layer=None):
-        assert layer is not None and outputs is not None
+        if layer is None or outputs is None or not isinstance(layer.in_shape, tuple):
+            super(NervanaMKL, self).compound_fprop_bn(x, xsum, xvar, gmean, gvar,
+                                                      gamma, beta, y, eps, rho,
+                                                      compute_batch_sum,
+                                                      accumbeta, relu, binary,
+                                                      inference, outputs, layer
+                                                      )
+            return
 
         primitives = c_longlong(layer.dnnPrimitives.ctypes.data)
         if len(layer.in_shape) == 3:
@@ -589,8 +598,14 @@ class NervanaMKL(NervanaCPU):
 
     def compound_bprop_bn(self, deltas, grad_gamma, grad_beta,
                           error, inputs, xsum, xvar, gamma,
-                          eps, binary=False, layer=False):
-        assert layer is not None
+                          eps, binary=False, layer=None):
+        if not layer or not isinstance(layer.in_shape, tuple):
+            super(NervanaMKL, self).compound_bprop_bn(deltas, grad_gamma,
+                                                      grad_beta, error,
+                                                      inputs, xsum, xvar,
+                                                      gamma, eps, binary,
+                                                      layer)
+            return
 
         primitives = c_longlong(layer.dnnPrimitives.ctypes.data)
 

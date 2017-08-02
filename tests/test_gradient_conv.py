@@ -18,6 +18,7 @@ Generalized gradient testing applied to dilated conv layer
 """
 import itertools as itt
 import numpy as np
+import pytest
 from neon import NervanaObject
 from neon.layers.layer import Convolution
 from neon.initializers.initializer import Gaussian
@@ -67,6 +68,35 @@ def pytest_generate_tests(metafunc):
 
 # -- conv tests --
 def test_conv(backend_cpu64, convargs):
+    nin, nifm, fside, batch_size, dil_h, dil_w = convargs
+    fshape = (fside, fside, fside)
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
+    sz = nin * nin * nifm * batch_size
+    epsilon = 1.0e-5
+    inp = np.arange(sz) * 2.5 * epsilon
+    np.random.shuffle(inp)
+    inp = inp.reshape((nin * nin * nifm, batch_size))
+
+    lshape = (nifm, nin, nin)
+    init = Gaussian()
+    layer = ConvWithReset(fshape, strides=2, padding=fside-1,
+                          dilation=dict(dil_d=1, dil_h=dil_h, dil_w=dil_w), init=init)
+
+    pert_frac = 0.1  # test 10% of the inputs
+    # select pert_frac fraction of inps to perturb
+    pert_cnt = int(np.ceil(inp.size * pert_frac))
+    pert_inds = np.random.permutation(inp.size)[0:pert_cnt]
+
+    (max_abs, max_rel) = general_gradient_comp(layer,
+                                               inp,
+                                               epsilon=epsilon,
+                                               lshape=lshape,
+                                               pert_inds=pert_inds)
+    assert max_abs < 1.0e-7
+
+
+@pytest.mark.xfail(reason="Precision differences with MKL backend. #914")
+def test_conv_mkl(backend_mkl, convargs):
     nin, nifm, fside, batch_size, dil_h, dil_w = convargs
     fshape = (fside, fside, fside)
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size

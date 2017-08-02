@@ -104,3 +104,20 @@ def test_vs_numpy(backend_tests, custom_args):
     backend_func_val = call_func(f, be, tensors[1])
 
     assert tensors_allclose(numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)
+
+
+def test_vs_numpy_mkl(backend_tests_mkl, custom_args):
+    test_idx, f, flag, dim = custom_args
+
+    # backend
+    be = NervanaObject.be
+    dtype = be.default_dtype
+
+    # tensors
+    tensors = gen_backend_tensors([np, be], [dim] * 4, [flag] * 4, dtype=dtype)
+
+    # compare function values
+    numpy_func_val = call_func(f, np, tensors[0])
+    backend_func_val = call_func(f, be, tensors[1])
+
+    assert tensors_allclose(numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)

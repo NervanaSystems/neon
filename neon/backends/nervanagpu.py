@@ -2467,7 +2467,7 @@ class NervanaGPU(Backend):
             gmean (Tensor): global mean ()
             gvar (Tensor): global variance
             gamma (Tensor): scale parameter
-            beta (Tensor): location paramter
+            beta (Tensor): location parameter
             y (Tensor): normalized output
             eps (float): constant for numerical stability
             rho (float): exponential window averaging constant

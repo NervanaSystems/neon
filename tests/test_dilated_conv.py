@@ -15,9 +15,12 @@
 """
 Dilated convolution layer tests
 """
-
+from __future__ import print_function
 import itertools as itt
 import numpy as np
+import os
+import pytest
+import subprocess as subp
 from neon.backends import gen_backend
 from neon.layers import Conv, Affine, GeneralizedCost
 from neon.models import Model
@@ -25,6 +28,19 @@ from neon.initializers.initializer import Gaussian
 from neon.transforms import CrossEntropyBinary
 from neon.optimizers import GradientDescentMomentum
 from utils import allclose_with_out
+from neon import NervanaObject
+try:
+    from neon.backends.nervanagpu import NervanaGPU
+except:
+    # stub out the class
+    class NervanaGPU(object):
+        pass
+try:
+    from neon.backends.nervanamkl import NervanaMKL
+except:
+    # stub out the class
+    class NervanaMKL(object):
+        pass
 
 
 def pytest_generate_tests(metafunc):
@@ -151,6 +167,9 @@ def run(be, fake_dilation, fsz, stride, pad, dilation):
 
 
 def test_dilated_conv(backend_default, fargs_tests):
+    if isinstance(NervanaObject.be, NervanaMKL):
+        pytest.xfail(reason="Known MKL bug. See #913")
+
     fsz = fargs_tests[0]
     dil = fargs_tests[1]
     stride = fargs_tests[2]
@@ -160,11 +179,46 @@ def test_dilated_conv(backend_default, fargs_tests):
     o2, w2 = run(be, True, fsz, stride, 1, dil)
     # Verify that the results of faked dilation match those of actual dilation.
     assert allclose_with_out(o1, o2, atol=0, rtol=3e-3)
-    assert allclose_with_out(w1, w2, atol=0, rtol=1e-3)
+    try:
+        assert allclose_with_out(w1, w2, atol=0, rtol=1e-3)
+    except:
+        # xfail for cpu/mkl backends on KNM/KNL platforms
+        if not isinstance(NervanaObject.be, NervanaGPU):
+            if os.getenv("PLATFORM"):
+                platform = os.getenv("PLATFORM")
+            else:
+                if os.path.exists("/proc/cpuinfo"):
+                    cat_cmd = 'cat /proc/cpuinfo | grep "model name" | tail -1 | cut -f 2 -d \':\' | \
+                           cut -f 3 -d \')\' | cut -f 1 -d \'@\' | cut -f 2,3 -d \' \''
+                    cpu_model_name = subp.check_output(cat_cmd, shell=True)
+                    print('CPU model name = {}'.format(cpu_model_name))
+                else:
+                    cpu_model_name = "unknown"
+
+            if cpu_model_name == 'CPU E5-2699\n':
+                platform = "BDW"
+            elif cpu_model_name == 'CPU 7250\n':
+                platform = "KNL"
+            # temporary identification for KNM model name
+            elif cpu_model_name == 'CPU 0000\n':
+                platform = "KNM"
+            else:
+                platform = "unknown"
+
+            print('Test platform = {}'.format(platform))
+            if platform == "KNL" or platform == "KNM":
+                pytest.xfail(reason="xfail issue #853 with {} PLATFORM".format(platform))
+            else:
+                assert allclose_with_out(w1, w2, atol=0, rtol=1e-3)
 
 
 if __name__ == '__main__':
-    be = gen_backend(backend='cpu', rng_seed=0, batch_size=128)
+    be_cpu = gen_backend(backend='cpu', rng_seed=0, batch_size=128)
     fargs_tests = [3, 2, 1]
-    test_dilated_conv(be)
+    test_dilated_conv(be_cpu)
+    print('OK')
+
+    be_mkl = gen_backend(backend='mkl', rng_seed=0, batch_size=128)
+    fargs_tests = [3, 2, 1]
+    test_dilated_conv(be_mkl)
     print('OK')

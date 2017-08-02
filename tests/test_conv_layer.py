@@ -28,6 +28,12 @@ except:
     # stub out the class
     class NervanaGPU(object):
         pass
+try:
+    from neon.backends.nervanamkl import NervanaMKL
+except:
+    # stub out the class
+    class NervanaMKL(object):
+        pass
 
 
 def pytest_generate_tests(metafunc):
@@ -149,6 +155,8 @@ def test_conv_ones(backend_default, ones_convargs, deltas_buffer):
     if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
         if nifm % 4 != 0:
             pytest.skip(msg="C dim must be a multiple of 4 for Kepler bprop kernel")
+    if isinstance(NervanaObject.be, NervanaMKL):
+        pytest.xfail(reason="Known MKL bug. See #913")
 
     NervanaObject.be.bsz = batch_size
 
@@ -222,6 +230,9 @@ def test_conv_rand(backend_default, rand_convargs, deltas_buffer):
     if isinstance(NervanaObject.be, NervanaGPU) and NervanaObject.be.compute_capability < (5, 0):
         if nifm % 4 != 0:
             pytest.skip(msg="C dim must be a multiple of 4 for Kepler bprop kernel")
+    if isinstance(NervanaObject.be, NervanaMKL):
+        pytest.xfail(reason="Known MKL bug. See #913")
+
     NervanaObject.be.bsz = batch_size
     inp_rng = [0.0, rng_max]
     dtypeu = np.float32

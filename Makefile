@@ -63,9 +63,9 @@ TEST_DIRS := tests/
 # turn off GPU tests if no GPU present
 # TODO: refactor neon/backends/tests to run under CPU
 ifneq ($(HAS_GPU), true)
-	TEST_DIRS := -k cpu -m "not hasgpu" $(TEST_DIRS)
+	TEST_DIRS := -k "cpu or mkl" -m "not hasgpu" $(TEST_DIRS)
 else
-	TEST_DIRS := -m "hasgpu or not hasgpu" $(TEST_DIRS)
+	TEST_DIRS := -m "hasgpu or not hasgpu and not mkl_only" $(TEST_DIRS)
 endif
 
 # this variable controls where we publish Sphinx docs to

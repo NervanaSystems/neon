@@ -22,6 +22,7 @@ import re
 
 from neon.backends import gen_backend
 from neon.backends.nervanacpu import NervanaCPU
+from neon.backends.nervanamkl import NervanaMKL
 from neon.layers.container import DeltasTree
 
 
@@ -57,20 +58,42 @@ def get_backend(request, datatype=np.float32):
     return be
 
 
-@pytest.fixture(scope='module', params=['gpu', 'cpu'])
+@pytest.fixture(scope='module', params=['gpu', 'cpu', 'mkl'])
 def backend_default(request):
     '''
     Fixture to setup the backend before running a test.  Also registers the teardown function to
     clean up the backend after a test is done.  This has module scope, so this will be run once
     for each test in a given test file (module).
 
-    This fixture is parameterized to run both the cpu and gpu backends for every test
+    This fixture is parameterized to run the mkl, cpu, and gpu backends for every test
     '''
     be = get_backend(request)
 
     # add a cleanup call - will run after all test in module are done
     def cleanup():
         be = request.getfixturevalue('backend_default')
+        del be
+    request.addfinalizer(cleanup)
+
+    # tests using this fixture can access the backend object from
+    # backend or use the NervanaObject.be global
+    return be
+
+
+@pytest.fixture(scope='module', params=['mkl', 'cpu'])
+def backend_default_mkl(request):
+    '''
+    Fixture to setup the backend before running a test.  Also registers the teardown function to
+    clean up the backend after a test is done.  This has module scope, so this will be run once
+    for each test in a given test file (module).
+
+    This fixture is parameterized to run both the mkl and cpu backends for every test
+    '''
+    be = get_backend(request)
+
+    # add a cleanup call - will run after all test in module are done
+    def cleanup():
+        be = request.getfixturevalue('backend_default_mkl')
         del be
     request.addfinalizer(cleanup)
 
@@ -105,7 +128,7 @@ def backend_gpu(request):
 def backend_cpu(request):
     '''
     Fixture that returns a cpu backend using 32 bit dtype.
-    For use in tests like gradient checking whihch need higher
+    For use in tests like gradient checking which need higher
     precision
     '''
     be = get_backend(request, datatype=np.float32)
@@ -125,7 +148,7 @@ def backend_cpu(request):
 def backend_cpu64(request):
     '''
     Fixture that returns a cpu backend using 64 bit dtype.
-    For use in tests like gradient checking whihch need higher
+    For use in tests like gradient checking which need higher
     precision
     '''
     be = get_backend(request, datatype=np.float64)
@@ -133,6 +156,26 @@ def backend_cpu64(request):
     # add a cleanup call - will run after all tests in module are done
     def cleanup():
         be = request.getfixturevalue('backend_cpu64')
+        del be
+    request.addfinalizer(cleanup)
+
+    # tests using this fixture can access the backend object from
+    # backend or use the NervanaObject.be global
+    return be
+
+
+@pytest.fixture(scope='module', params=['mkl'])
+def backend_mkl(request):
+    '''
+    Fixture that returns a mkl backend using 32 bit dtype.
+    For use in tests like gradient checking which need higher
+    precision
+    '''
+    be = get_backend(request, datatype=np.float32)
+
+    # add a cleanup call - will run after all tests in module are done
+    def cleanup():
+        be = request.getfixturevalue('backend_mkl')
         del be
     request.addfinalizer(cleanup)
 
@@ -150,12 +193,13 @@ def idfunc(vals):
 
 
 gpu_cpu_32_16 = itertools.product(['gpu', 'cpu'], [np.float16, np.float32])
+mkl_cpu_32 = itertools.product(['mkl', 'cpu'], [np.float32])
 
 
 @pytest.fixture(scope='module', params=list(gpu_cpu_32_16), ids=idfunc)
 def backend_tests(request):
     '''
-    Fixture that returns cpu and gpu backends for 16 and 32 bit
+    Fixture that returns gpu and cpu backends for 16 and 32 bit
     '''
     be = gen_backend(backend=request.param[0],
                      datatype=request.param[1],
@@ -174,11 +218,39 @@ def backend_tests(request):
     return be
 
 
+@pytest.fixture(scope='module', params=list(mkl_cpu_32), ids=idfunc)
+def backend_tests_mkl(request):
+    '''
+    Fixture that returns mkl and cpu backends for 32 bit
+    '''
+    be = gen_backend(backend=request.param[0],
+                     datatype=request.param[1],
+                     batch_size=128,
+                     device_id=request.config.getoption("--device_id"),
+                     rng_seed=0)
+
+    # add a cleanup call - will run after all tests in module are done
+    def cleanup():
+        be = request.getfixturevalue('backend_tests_mkl')
+        del be
+    request.addfinalizer(cleanup)
+
+    # tests using this fixture can access the backend object from
+    # backend or use the NervanaObject.be global
+    return be
+
+
 def get_backend_pair(device_id, dtype=np.float32, bench=False):
     from neon.backends.nervanagpu import NervanaGPU
     ng = NervanaGPU(default_dtype=dtype, bench=bench, device_id=device_id)
     nc = NervanaCPU(default_dtype=dtype)
     return (ng, nc)
+
+
+def get_backend_pair_mkl(device_id, dtype=np.float32, bench=False):
+    nm = NervanaMKL(default_dtype=dtype)
+    nc = NervanaCPU(default_dtype=dtype)
+    return (nm, nc)
 
 
 @pytest.fixture(scope='module')
@@ -195,6 +267,19 @@ def backend_pair(request):
 
 
 @pytest.fixture(scope='module')
+def backend_pair_mkl(request):
+    nm, nc = get_backend_pair_mkl(device_id=request.config.getoption("--device_id"))
+
+    def cleanup():
+        nm, nc = request.getfixturevalue('backend_pair_mkl')
+        del nm
+        del nc
+    request.addfinalizer(cleanup)
+
+    return (nm, nc)
+
+
+@pytest.fixture(scope='module')
 def backend_pair_bench(request):
     ng, nc = get_backend_pair(device_id=request.config.getoption("--device_id"), bench=True)
 
@@ -205,6 +290,19 @@ def backend_pair_bench(request):
     request.addfinalizer(cleanup)
 
     return (ng, nc)
+
+
+@pytest.fixture(scope='module')
+def backend_pair_bench_mkl(request):
+    nm, nc = get_backend_pair_mkl(device_id=request.config.getoption("--device_id"), bench=True)
+
+    def cleanup():
+        nm, nc = request.getfixturevalue('backend_pair_bench_mkl')
+        del nm
+        del nc
+    request.addfinalizer(cleanup)
+
+    return (nm, nc)
 
 
 @pytest.fixture(scope='module', params=[np.float16, np.float32])
@@ -219,6 +317,36 @@ def backend_pair_dtype(request):
     request.addfinalizer(cleanup)
 
     return (ng, nc)
+
+
+# mkl backend only supports dtype=float32
+@pytest.fixture(scope='module', params=[np.float32])
+def backend_pair_dtype_mkl_32(request):
+    nm, nc = get_backend_pair_mkl(dtype=request.param,
+                                  device_id=request.config.getoption("--device_id"))
+
+    def cleanup():
+        nm, nc = request.getfixturevalue('backend_pair_dtype_mkl_32')
+        del nm
+        del nc
+    request.addfinalizer(cleanup)
+
+    return (nm, nc)
+
+
+# mkl backend only supports dtype=float32 - placeholder to test error condition
+@pytest.fixture(scope='module', params=[np.float16])
+def backend_pair_dtype_mkl_16(request):
+    nm, nc = get_backend_pair_mkl(dtype=request.param,
+                                  device_id=request.config.getoption("--device_id"))
+
+    def cleanup():
+        nm, nc = request.getfixturevalue('backend_pair_dtype_mkl_16')
+        del nm
+        del nc
+    request.addfinalizer(cleanup)
+
+    return (nm, nc)
 
 
 @pytest.fixture

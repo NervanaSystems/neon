@@ -17,8 +17,10 @@
 Generalized gradient testing applied to mlp/linear layer
 """
 
+from __future__ import print_function
 import itertools as itt
 import numpy as np
+import pytest
 from neon import NervanaObject
 from neon.layers.layer import Linear
 from neon.initializers.initializer import Gaussian
@@ -67,6 +69,30 @@ def pytest_generate_tests(metafunc):
 
 
 def test_mlp(backend_cpu64, mlpargs):
+    nin, nout, batch_size = mlpargs
+    # run the gradient check on an mlp
+    batch_size = batch_size
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
+
+    init = Gaussian()
+    layer = LinearWithReset(nout=nout, init=init)
+    inp = np.random.randn(nin, batch_size)
+
+    epsilon = 1.0e-5
+    pert_frac = 0.1  # test 10% of the inputs
+    # select pert_frac fraction of inps to perturb
+    pert_cnt = int(np.ceil(inp.size * pert_frac))
+    pert_inds = np.random.permutation(inp.size)[0:pert_cnt]
+
+    (max_abs, max_rel) = general_gradient_comp(layer,
+                                               inp,
+                                               epsilon=epsilon,
+                                               pert_inds=pert_inds)
+    assert max_abs < 1.0e-7
+
+
+@pytest.mark.xfail(reason="Precision differences with MKL backend. #914")
+def test_mlp_mkl(backend_mkl, mlpargs):
     nin, nout, batch_size = mlpargs
     # run the gradient check on an mlp
     batch_size = batch_size

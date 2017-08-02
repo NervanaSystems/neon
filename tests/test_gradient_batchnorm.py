@@ -18,6 +18,7 @@ Generalized gradient testing applied to batchnorm layer
 """
 import itertools as itt
 import numpy as np
+import pytest
 from neon import NervanaObject
 from neon.layers.layer import BatchNorm
 from grad_funcs import general_gradient_comp
@@ -63,6 +64,33 @@ def pytest_generate_tests(metafunc):
 
 
 def test_batchnorm(backend_cpu64, bnargs):
+    n, batch_size = bnargs
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
+
+    layer = BatchNormWithReset()
+    inp_shape = None
+    inp_size = n
+    if isinstance(n, tuple):
+        inp_shape = n
+        inp_size = np.prod(n)
+    inp = np.random.randn(inp_size, batch_size)
+
+    epsilon = 1.0e-5
+    pert_frac = 0.1  # test 10% of the inputs
+    # select pert_frac fraction of inps to perturb
+    pert_cnt = int(np.ceil(inp.size * pert_frac))
+    pert_inds = np.random.permutation(inp.size)[0:pert_cnt]
+
+    (max_abs, max_rel) = general_gradient_comp(layer,
+                                               inp,
+                                               epsilon=epsilon,
+                                               lshape=inp_shape,
+                                               pert_inds=pert_inds)
+    assert max_abs < 1.0e-7
+
+
+@pytest.mark.xfail(reason="Precision differences with MKL backend. #914")
+def test_batchnorm_mkl(backend_mkl, bnargs):
     n, batch_size = bnargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
 

@@ -139,9 +139,9 @@ void MaxPooling_fprop(
   int useMaxPooling,
   int N, int inC,
   int inH, int inW,
-  int kW, int kH,
-  int dW, int dH,
-  int padW, int padH,
+  int kH, int kW,
+  int dH, int dW,
+  int padH, int padW,
   int outC, int outH, int outW,
   int bCeil)
 {

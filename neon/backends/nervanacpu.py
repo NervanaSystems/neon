@@ -1129,7 +1129,7 @@ class NervanaCPU(Backend):
                 can be combined with bsum tensor to output bprop_bias
         """
         layer.xprop_conv(I, F, O, X, bias, bsum, alpha,
-                         beta, relu, brelu, slope, layer_op=layer_op)
+                         beta, relu, brelu, slope, layer_op=layer)
 
     def bprop_conv(self, layer, F, E, grad_I,
                    X=None, bias=None, bsum=None,
@@ -1164,7 +1164,7 @@ class NervanaCPU(Backend):
                 can be combined with bsum tensor to output bprop_bias
         """
         layer.xprop_conv(E, F, grad_I, X, bias, bsum, alpha, beta, relu, brelu, slope,
-                         backward=True, layer_op=layer_op)
+                         backward=True, layer_op=layer)
 
     def update_conv(self, layer, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
         """
@@ -1182,7 +1182,7 @@ class NervanaCPU(Backend):
         assert layer.sizeO == E.size
         assert layer.sizeF == U.size
 
-        layer.update_conv(I, E, U, alpha, beta, layer_op=layer_op)
+        layer.update_conv(I, E, U, alpha, beta, layer_op=layer)
 
     def deconv_layer(self, dtype,
                      N, C, K,
@@ -1695,7 +1695,7 @@ class NervanaCPU(Backend):
             gmean (Tensor): global mean ()
             gvar (Tensor): global variance
             gamma (Tensor): scale parameter
-            beta (Tensor): location paramter
+            beta (Tensor): location parameter
             y (Tensor): normalized output
             eps (float): constant for numerical stability
             rho (float): exponential window averaging constant

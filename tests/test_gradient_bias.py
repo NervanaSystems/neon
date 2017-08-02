@@ -18,6 +18,7 @@ Generalized gradient testing applied to bias layer
 """
 import itertools as itt
 import numpy as np
+import pytest
 from neon import NervanaObject
 from neon.layers.layer import Bias
 from neon.initializers.initializer import Gaussian
@@ -64,6 +65,28 @@ def pytest_generate_tests(metafunc):
 
 
 def test_bias(backend_cpu64, biasargs):
+    n, batch_size = biasargs
+    NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
+    init = Gaussian()
+    layer = BiasWithReset(init=init)
+    inp = np.random.randn(n, batch_size)
+
+    epsilon = 1.0e-5
+    pert_frac = 0.1  # test 10% of the inputs
+    # select pert_frac fraction of inps to perturb
+    pert_cnt = int(np.ceil(inp.size * pert_frac))
+    pert_inds = np.random.permutation(inp.size)[0:pert_cnt]
+
+    (max_abs, max_rel) = general_gradient_comp(layer,
+                                               inp,
+                                               epsilon=epsilon,
+                                               lshape=inp.shape,
+                                               pert_inds=pert_inds)
+    assert max_abs < 1.0e-7
+
+
+@pytest.mark.xfail(reason="Precision differences with MKL backend. #914")
+def test_bias_mkl(backend_mkl, biasargs):
     n, batch_size = biasargs
     NervanaObject.be.bsz = NervanaObject.be.batch_size = batch_size
     init = Gaussian()

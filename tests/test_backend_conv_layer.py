@@ -76,7 +76,6 @@ def pixel_indices(conv, mt, pr, qs):
 
 
 def run_backend_conv(lib, layer, I, F, E, dtype):
-
     beI = lib.array(I, dtype=dtype)
     beF = lib.array(F, dtype=dtype)
     beE = lib.array(E, dtype=dtype)
@@ -127,6 +126,122 @@ def pytest_generate_tests(metafunc):
     if 'fargs_tests' in metafunc.fixturenames:
         fargs = itt.product(N_C_K, D_H_W, T_R_S, pad_d_h_w, str_d_h_w)
         metafunc.parametrize("fargs_tests", fargs)
+
+
+def test_conv_layer_mkl(fargs_tests, backend_pair_mkl):
+
+    dtype = np.float32
+    nm, nc = backend_pair_mkl
+
+    N, C, K = fargs_tests[0]
+    D, H, W = fargs_tests[1]
+    T, R, S = fargs_tests[2]
+    padding_d, padding_h, padding_w = fargs_tests[3]
+    strides_d, strides_h, strides_w = fargs_tests[4]
+
+    conv_nm = nm.conv_layer(
+        dtype,
+        N, C, K,
+        D, H, W,
+        T, R, S,
+        padding_d, padding_h, padding_w,
+        strides_d, strides_h, strides_w)
+
+    conv_nc = nc.conv_layer(
+        dtype,
+        N, C, K,
+        D, H, W,
+        T, R, S,
+        padding_d, padding_h, padding_w,
+        strides_d, strides_h, strides_w)
+
+    assert conv_nc.dimI == conv_nm.dimI
+    assert conv_nc.dimF == conv_nm.dimF
+    assert conv_nc.dimO == conv_nm.dimO
+    assert conv_nc.M == conv_nm.M
+
+    dimI = conv_nm.dimI
+    dimF = conv_nm.dimF
+    dimO = conv_nm.dimO
+
+    if any(np.array(dimO) <= 0):
+        return
+
+    # cpu input arrays
+    cpuI = np.random.uniform(-0.8, 0.8, slicable(dimI, 1)).astype(np.float32)
+    cpuF = np.random.uniform(0.0, 0.3, slicable(dimF)).astype(np.float32)
+    cpuE = np.random.uniform(-0.2, 0.2, dimO).astype(np.float32)
+
+    # zero pad the last row of cpu input for the sake of numpy
+    cpuI[-1, :] = 0.0
+
+    # =======MKL and CPU==========
+    beI = cpuI[:-1, :].reshape(dimI)
+    beF = cpuF.reshape(dimF)
+    beE = cpuE
+
+    start_mkl = default_timer()
+    nmO, nmB, nmU = run_backend_conv(nm, conv_nm, beI, beF, beE, dtype)
+    end_mkl = default_timer()
+
+    start_cpu = default_timer()
+    ncO, ncB, ncU = run_backend_conv(nc, conv_nc, beI, beF, beE, dtype)
+    end_cpu = default_timer()
+
+    neon_logger.display("mkltime: %s, cputime %s" %
+                        (end_mkl - start_mkl, end_cpu - start_cpu))
+
+    # ======numpy===========
+    # cpu output arrays
+    cpuO = np.zeros(dimO, dtype=dtype)
+    cpuB = np.zeros(slicable(dimI, 1), dtype=dtype)
+    cpuU = np.zeros(slicable(dimF), dtype=dtype)
+
+    D, H, W = conv_nc.DHW
+    T, R, S = conv_nc.TRS
+    M, P, Q = conv_nc.MPQ
+
+    pad_d, pad_h, pad_w = conv_nc.padding
+    str_d, str_h, str_w = conv_nc.strides
+
+    for m in range(M):
+        mt = m * str_d - pad_d
+
+        for p in range(P):
+            pr = p * str_h - pad_h
+
+            for q in range(Q):
+                qs = q * str_w - pad_w
+
+                idx = pixel_indices(conv_nc, mt, pr, qs)
+
+                cpuO[:, m, p, q, :] = np.dot(cpuF.T, cpuI[idx, :])
+
+                cpuB[idx, :] += np.dot(cpuF, cpuE[:, m, p, q, :])
+
+                cpuU += np.dot(cpuI[idx, :], cpuE[:, m, p, q, :].T)
+
+    for op, nmA, ncA, cpuA, w in (
+            ("fprop", nmO, ncO, cpuO, Q),
+            ("bprop", nmB, ncB.reshape(dimI), cpuB[:-1, :].reshape(dimI), W),
+            ("update", nmU, ncU.reshape(dimF), cpuU.reshape(dimF), S)):
+
+        neon_logger.display(op)
+        ncAnp = ncA.get().astype(np.float32)
+        nmAnp = nmA.get().astype(np.float32)
+        ncdif = cpuA - ncAnp
+        nmdif = cpuA - nmAnp
+        maxval = abs(cpuA).max()
+        ncmaxdif = abs(ncdif).max()
+        nmmaxdif = abs(nmdif).max()
+        ncRatio = ncmaxdif / float(maxval)
+        nmRatio = nmmaxdif / float(maxval)
+
+        assert ncRatio < 1e-5
+        assert nmRatio < 1e-5
+
+        assert allclose_with_out(ncA.get(), cpuA, rtol=0, atol=1e-5)
+        assert allclose_with_out(nmA.get(), cpuA, rtol=0, atol=1e-3)
 
 
 @pytest.mark.hasgpu
@@ -226,12 +341,12 @@ def test_conv_layer(fargs_tests, backend_pair):
 
                 cpuU += np.dot(cpuI[idx, :], cpuE[:, m, p, q, :].T)
 
-    for op, ngA, ncA, cpuA, w in (
+    for opA, ngA, ncA, cpuA, w in (
             ("fprop", ngO, ncO, cpuO, Q),
             ("bprop", ngB, ncB.reshape(dimI), cpuB[:-1, :].reshape(dimI), W),
             ("update", ngU, ncU.reshape(dimF), cpuU.reshape(dimF), S)):
 
-        neon_logger.display(op)
+        neon_logger.display(opA)
         ncAnp = ncA.get().astype(np.float32)
         ngAnp = ngA.get().astype(np.float32)
         ncdif = cpuA - ncAnp
@@ -245,5 +360,5 @@ def test_conv_layer(fargs_tests, backend_pair):
         assert ncRatio < 1e-5
         assert ngRatio < 1e-5
 
-        assert allclose_with_out(ncA.get(), cpuA, rtol=0, atol=1e-4)
-        assert allclose_with_out(ngA.get(), cpuA, rtol=0, atol=1e-3)
+        assert allclose_with_out(ncA.get(), cpuA, rtol=1e-5, atol=1e-4)
+        assert allclose_with_out(ngA.get(), cpuA, rtol=1e-5, atol=1e-3)

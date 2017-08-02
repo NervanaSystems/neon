@@ -87,6 +87,60 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("nbin_offset_dim_dtype_inp", fargs)
 
 
+def test_edge_cases_mkl(backend_pair_mkl):
+    """
+    Test several edge cases related to min/max bin, and rounding.
+
+    Also test backend dump_hist_data functionality.
+    """
+    nm, nc = backend_pair_mkl
+
+    # edge case test
+    np_ref = dict()
+    inputs = [
+        ("edges", np.array([2 ** -48, 2 ** 15], dtype=np.float32)),
+        ("rounding", np.array([2 ** 5, 63.99998856, 2 ** 6, 2 ** -3, 2 ** -4,
+                               0.11262291, 92.22483826], dtype=np.float32)),
+        ("fp16 rounding", np.array([45.21875], dtype=np.float16))
+    ]
+    for tag, inp in inputs:
+        np_ref[tag] = ref_hist(inp)
+        for be in [nm, nc]:
+            be_inp = be.array(inp)
+            be_hist = be_inp.hist(tag)
+            assert tensors_allclose(np_ref[tag], be_hist), tag + str(be)
+
+    # dump_hist_data test
+    for be in [nm, nc]:
+        be_hist_data, be_hist_map = be.dump_hist_data()
+        for tag, inp in inputs:
+            be_data = be_hist_data[be_hist_map[tag]]
+            assert tensors_allclose(np_ref[tag], be_data), tag + str(be)
+
+
+def test_hist_mkl(nbin_offset_dim_dtype_inp, backend_pair_mkl):
+    """
+    Compare the nervanamkl and nervanacpu hist implementation to the reference
+    implementation above.
+
+    Parameterized test case, uses pytest_generate_test to enumerate dim_dtype_inp
+    tuples that drive the test.
+    """
+
+    (nbins, offset), dim, dtype, (name, inp_gen) = nbin_offset_dim_dtype_inp
+
+    nm, nc = backend_pair_mkl
+    nm.set_hist_buffers(nbins, offset)
+    nc.set_hist_buffers(nbins, offset)
+
+    np_inp = inp_gen(dim).astype(dtype)
+    np_hist = ref_hist(np_inp, nbins=nbins, offset=offset)
+    for be in [nm, nc]:
+        be_inp = be.array(np_inp, dtype=dtype)
+        be_hist = be_inp.hist(name)
+        assert tensors_allclose(np_hist, be_hist)
+
+
 @pytest.mark.hasgpu
 def test_edge_cases(backend_pair):
     """

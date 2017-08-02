@@ -40,6 +40,49 @@ def pytest_generate_tests(metafunc):
         metafunc.parametrize("shape_inp", fargs)
 
 
+def test_copy_transpose_mkl_32(shape_inp, backend_pair_dtype_mkl_32):
+    """
+    Parameterized test case, uses pytest_generate_test to enumerate dim_inp
+    tuples that drive the test.
+    """
+
+    shape, (name, inp_gen) = shape_inp
+    nm, nc = backend_pair_dtype_mkl_32
+    np_inp = inp_gen(shape).astype(nc.default_dtype)
+    ndims = len(shape)
+
+    axes = [None] + list(itt.permutations(range(ndims), ndims))
+    axes.remove(tuple(range(ndims)))
+    for be, ax in itt.product([nm, nc], axes):
+        be_inp = be.array(np_inp)
+        np_trans = np.transpose(np_inp, axes=ax)
+        be_trans = be.zeros(np_trans.shape)
+        be.copy_transpose(be_inp, be_trans, axes=ax)
+        assert tensors_allclose(np_trans, be_trans)
+
+
+@pytest.mark.skip(reason="mkl backend does not support float16")
+def test_copy_transpose_mkl_16(shape_inp, backend_pair_dtype_mkl_16):
+    """
+    Parameterized test case, uses pytest_generate_test to enumerate dim_inp
+    tuples that drive the test.
+    """
+
+    shape, (name, inp_gen) = shape_inp
+    nm, nc = backend_pair_dtype_mkl_16
+    np_inp = inp_gen(shape).astype(nc.default_dtype)
+    ndims = len(shape)
+
+    axes = [None] + list(itt.permutations(range(ndims), ndims))
+    axes.remove(tuple(range(ndims)))
+    for be, ax in itt.product([nm, nc], axes):
+        be_inp = be.array(np_inp)
+        np_trans = np.transpose(np_inp, axes=ax)
+        be_trans = be.zeros(np_trans.shape)
+        be.copy_transpose(be_inp, be_trans, axes=ax)
+        assert tensors_allclose(np_trans, be_trans)
+
+
 @pytest.mark.hasgpu
 def test_copy_transpose(shape_inp, backend_pair_dtype):
     """
