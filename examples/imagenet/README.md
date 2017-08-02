@@ -28,7 +28,6 @@ By default, images are resized so that their short side is less than or equal to
 
 Ingest only needs to occur once, and after the files are unpacked, the original tars are not used by the training scripts.
 
-
 ## Training
 ### AlexNet
 This example trains something very similar to the deep convolutional neural network original implemented by [Krizhevsky et. al.][kriz]  The model can be trained using the command,
@@ -45,6 +44,13 @@ A basic residual network for imagenet can be trained using the command,
 ```bash
 python examples/imagenet/i1k_msra.py --save_path </path/to/save/weights>
 ```
+
+## Recommended Settings for Best Performance on Non-Uniform Memory Archiecture (NUMA) Enabled Systems
+The aeon data loader of neon itself is not NUMA-aware. Specific NUMA configurations can greatly improve training performance of topologies like Resnet-50 on systems that have NUMA turned on (e.g. a dual-socket system where NUMA is enabled via the BIOS). The recommended settings is to use `numactl` command combined with `--interleave=all` option, i.e.,
+```bash
+numactl --interleave=all python examples/imagenet/i1k_msra.py --depth 50 --save_path </path/to/save/weights>
+```
+`numactl` is a standard Linux utility tool and could be obtained via package managers like `apt-get` on Ubuntu or `yum` on CentOS etc. Users are encouraged to explore other `numactl` options for their specific models and datasets.
 
 ## Citation
 ```
