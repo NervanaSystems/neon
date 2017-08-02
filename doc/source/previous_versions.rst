@@ -17,6 +17,20 @@
 Previous Versions
 =================
 
+neon v2.0.0
+-----------
+
+|Docs200|_
+
+neon v2.0.0 released June 27, 2017 supporting:
+
+* Added support for MKL backend (-b mkl) on Linux, which boosts neon CPU performance significantly
+* Added WGAN model examples for LSUN and MNIST data
+* Enabled WGAN and DCGAN model examples for Python3
+* Added fix (using file locking) to prevent race conditions running multiple jobs on the same machine with multiple GPUs
+* Added functionality to display some information about hardware, OS and model used
+* Updated appdirs to 1.4.3 to be compatibile on Centos 7.3 for appliance
+
 neon v1.9.0
 -----------
 
@@ -435,6 +449,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs200| replace:: Docs
 .. |Docs190| replace:: Docs
 .. |Docs182| replace:: Docs
 .. |Docs181| replace:: Docs
@@ -461,6 +476,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs200: http://neon.nervanasys.com/docs/2.0.0
 .. _Docs190: http://neon.nervanasys.com/docs/1.9.0
 .. _Docs182: http://neon.nervanasys.com/docs/1.8.2
 .. _Docs181: http://neon.nervanasys.com/docs/1.8.1

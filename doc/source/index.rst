@@ -36,12 +36,12 @@ Features include:
 
 New features in this release:
 
-* Added support for MKL backend (-b mkl) on Linux, which boosts neon CPU performance significantly
-* Added WGAN model examples for LSUN and MNIST data
-* Enabled WGAN and DCGAN model examples for Python3
-* Added fix (using file locking) to prevent race conditions running multiple jobs on the same machine with multiple GPUs
-* Added functionality to display some information about hardware, OS and model used
-* Updated appdirs to 1.4.3 to be compatibile on Centos 7.3 for appliance
+* Set MKL backend (-b mkl) as the default CPU backend on Linux (use -b cpu to specify original CPU backend)
+* Update MKLML version 20170720 (AVX512 code paths enabled by default and conversion optimizations)
+* Simplify ResNet example
+* Makefiles now check for virtualenv and pkg-config (NervanaSystems/neon#383)
+* Fix Deep Speech2 model on MKL backend
+* Fix MKL installation for "make sysinstall"
 * See more in the `change log`_.
 
 We use neon internally at Intel Nervana to solve our `customers' problems`_
