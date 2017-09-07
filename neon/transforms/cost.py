@@ -169,7 +169,7 @@ class CrossEntropyMulti(Cost):
             OpTree: Returns the (mean) shortcut derivative of the multiclass
             entropy cost function ``(y - t) / y.shape[1]``
         """
-        return self.scale * (y - t)
+        return self.logscale * self.scale * (y - t)
 
 
 class SumSquared(Cost):

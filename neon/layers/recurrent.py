@@ -210,7 +210,7 @@ class Recurrent(ParameterLayer):
             gatelist = [g * nout for g in range(0, self.ngates + 1)]
             for wtnm in wtlist:
                 wtmat = getattr(self, wtnm)
-                if wtnm is 'W_recur' and self.init_inner is not None:
+                if wtnm == 'W_recur' and self.init_inner is not None:
                     initfunc = self.init_inner
                 else:
                     initfunc = self.init
@@ -256,6 +256,7 @@ class Recurrent(ParameterLayer):
         self.h_prev_bprop = [0] + self.h[:-1]
 
         if init_state:
+            self.h_prev_bprop[0] = init_state
             self.h[-1][:] = init_state
 
         # feedforward input

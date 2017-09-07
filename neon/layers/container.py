@@ -1203,6 +1203,7 @@ class Seq2Seq(LayerContainer):
 
         self.encoder.set_connections(self.decoder_connections)
         self.decoder.set_connections(self.decoder_connections)
+        self.prev_layer = None
 
     @classmethod
     def gen_class(cls, pdict):
