@@ -1472,6 +1472,15 @@ class BiBNRNN(BiRNN):
     def init_params(self, shape):
         super(BiBNRNN, self).init_params(shape)
         nf = self.out_shape[0]
+
+        if self.gmean is None:
+            self.gmean = self.be.zeros((nf, 1), dtype=self.stats_dtype,
+                                       **self.get_param_attrs())
+        if self.gvar is None:
+            self.gvar = self.be.zeros((nf, 1), dtype=self.stats_dtype,
+                                      **self.get_param_attrs())
+        self.inf_params = [self.gmean, self.gvar]
+
         self.xmean = self.be.empty((nf, 1), dtype=self.stats_dtype,
                                    **self.get_param_attrs())
         self.xvar = self.be.empty((nf, 1), dtype=self.stats_dtype,
@@ -1483,9 +1492,7 @@ class BiBNRNN(BiRNN):
 
         self.params = [self.beta, self.gamma]
         self.grad_params = [self.be.zeros_like(p) for p in self.params]
-        self.inf_params = [self.be.zeros_like(p) for p in self.params]
         (self.grad_beta, self.grad_gamma) = self.grad_params
-        (self.gmean, self.gvar) = self.inf_params
 
         self.allparams = self.params + self.inf_params
         self.states_bn = [[] for gradp in self.grad_params]
@@ -1512,6 +1519,15 @@ class BiBNRNN(BiRNN):
 
     def get_params(self):
         return self.plist
+
+    def get_description(self, get_weights=False, keep_states=True):
+        serial_dict = super(BiBNRNN, self).get_description(get_weights, keep_states)
+
+        if get_weights:
+            for key in ['gmean', 'gvar']:
+                serial_dict['params'][key] = getattr(self, key).get()
+
+        return serial_dict
 
     def fprop(self, inputs, inference=False):
         """
