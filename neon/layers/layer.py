@@ -1941,7 +1941,7 @@ class LookupTable(ParameterLayer):
         return self
 
     def allocate(self, shared_outputs=None):
-        super(LookupTable, self).allocate()
+        super(LookupTable, self).allocate(shared_outputs=shared_outputs)
         if self.inputs is None:
             self.inputs = self.be.zeros((1, self.nin * self.be.bsz),
                                         dtype=np.int32)  # inputs is np.float32
