@@ -618,9 +618,14 @@ class NervanaMKL(NervanaCPU):
 
     def fprop_skipnode(self, x, y, beta):
         y.set_mkl(x)
+        # skipnode will do nothing for mkltensor but copy for CPU tensor
+        if not x.primitive[2]:
+            super(NervanaMKL, self).fprop_skipnode(x, y, beta)
 
     def bprop_skipnode(self, error, delta, alpha, beta):
         delta.set_mkl(error)
+        if not error.primitive[2]:
+            super(NervanaMKL, self).bprop_skipnode(error, delta, alpha, beta)
 
     def mergesum_layer(self, layer_num):
         return layer_mkl.MergeSumLayerMKL(layer_num)

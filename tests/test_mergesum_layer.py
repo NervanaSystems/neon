@@ -17,7 +17,6 @@ Convolution layer tests
 """
 from builtins import zip
 import numpy as np
-import pytest
 from neon import NervanaObject
 from neon.layers import Sequential, Conv, MergeSum, SkipNode, Activation
 from neon.initializers.initializer import Gaussian, IdentityInit
@@ -76,24 +75,18 @@ def module_factory_copy(ref_module, modfunc, nfm, stride=1, name="i"):
 
 
 def test_skip_noupsample(backend_default):
-    if isinstance(NervanaObject.be, NervanaMKL):
-        pytest.xfail(reason="Known MKL precision issue. See #916")
     be = NervanaObject.be
     be.bsz = 64
     mergesum_test_config(be, modfunc=identity_skip, use_stride=1)
 
 
 def test_skip_upsample(backend_default):
-    if isinstance(NervanaObject.be, NervanaMKL):
-        pytest.xfail(reason="Known MKL precision issue. See #916")
     be = NervanaObject.be
     be.bsz = 64
     mergesum_test_config(be, modfunc=identity_skip, use_stride=2)
 
 
 def test_proj_upsample(backend_default):
-    if isinstance(NervanaObject.be, NervanaMKL):
-        pytest.xfail(reason="Known MKL precision issue. See #916")
     be = NervanaObject.be
     be.bsz = 64
     mergesum_test_config(be, modfunc=projection_skip, use_stride=2)
@@ -136,6 +129,9 @@ def mergesum_test_config(be, modfunc, use_stride=1):
 
     o1 = path1.fprop(inp)
     o2 = path2.fprop(inp)
+    # convert mkl buffer to cpu for following cpu execution
+    be.convert_data(o1, False)
+    be.convert_data(o2, False)
     neon_out_ref = be.empty_like(o1)
     neon_out_ref[:] = be.maximum(o1 + o2, 0)
 
@@ -160,6 +156,8 @@ def mergesum_test_config(be, modfunc, use_stride=1):
     for l in reversed(path2.layers[pstart:]):
         eb2 = l.bprop(eb2)
 
+    be.convert_data(eb1, False)
+    be.convert_data(eb2, False)
     err_ref = be.empty_like(eb1)
     err_ref[:] = eb1 + eb2
 
