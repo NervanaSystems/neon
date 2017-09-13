@@ -348,7 +348,7 @@ def test_shift_adamax(backend_default):
     compare_tensors(shiftadamax, param_list, param2, tol=1e-4, epoch=epoch)
 
 
-def test_multi_optimizer(backend_default):
+def test_multi_optimizer(backend_default_mkl):
     """
     A test for MultiOptimizer.
     """
@@ -381,14 +381,18 @@ def test_multi_optimizer(backend_default):
     opt = MultiOptimizer({'default': opt_gdm,
                           'Bias': opt_ada,
                           'Convolution': opt_adam,
+                          'Convolution_bias': opt_adam,
                           'Linear': opt_rms,
                           'LSTM': opt_rms_1,
                           'GRU': opt_rms_1})
     layers_to_optimize1 = [l for l in layer_list1 if isinstance(l, ParameterLayer)]
     layers_to_optimize2 = [l for l in layer_list2 if isinstance(l, ParameterLayer)]
     opt.optimize(layers_to_optimize1, 0)
-    assert opt.map_list[opt_adam][0].__class__.__name__ == 'Convolution'
-    assert opt.map_list[opt_ada][0].__class__.__name__ == 'Bias'
+    if l1[0].be.is_mkl():
+        assert opt.map_list[opt_adam][0].__class__.__name__ is 'Convolution_bias'
+    else:
+        assert opt.map_list[opt_adam][0].__class__.__name__ is 'Convolution'
+        assert opt.map_list[opt_ada][0].__class__.__name__ == 'Bias'
     assert opt.map_list[opt_rms][0].__class__.__name__ == 'Linear'
     opt.optimize(layers_to_optimize2, 0)
     assert opt.map_list[opt_rms_1][0].__class__.__name__ == 'LSTM'

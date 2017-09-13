@@ -14,7 +14,7 @@
 # ----------------------------------------------------------------------------
 from neon.initializers.initializer import Uniform
 from neon.transforms.activation import Rectlin
-from neon.layers.layer import Linear, Convolution, Conv, Bias, Activation, Affine
+from neon.layers.layer import Linear, Convolution, Convolution_bias, Conv, Bias, Activation, Affine
 
 
 def test_conv_wrapper(backend_default):
@@ -28,9 +28,13 @@ def test_conv_wrapper(backend_default):
 
     conv = Conv((4, 4, 3), Uniform(), bias=Uniform())
     assert isinstance(conv, list)
-    assert len(conv) == 2
-    assert isinstance(conv[0], Convolution)
-    assert isinstance(conv[1], Bias)
+    if conv[0].be.is_mkl():
+        assert len(conv) == 1
+        assert isinstance(conv[0], Convolution_bias)
+    else:
+        assert len(conv) == 2
+        assert isinstance(conv[0], Convolution)
+        assert isinstance(conv[1], Bias)
 
     conv = Conv((4, 4, 3), Uniform(), activation=Rectlin())
     assert isinstance(conv, list)
@@ -40,10 +44,15 @@ def test_conv_wrapper(backend_default):
 
     conv = Conv((4, 4, 3), Uniform(), bias=Uniform(), activation=Rectlin())
     assert isinstance(conv, list)
-    assert isinstance(conv[0], Convolution)
-    assert isinstance(conv[1], Bias)
-    assert isinstance(conv[2], Activation)
-    assert len(conv) == 3
+    if conv[0].be.is_mkl():
+        assert isinstance(conv[0], Convolution_bias)
+        assert isinstance(conv[1], Activation)
+        assert len(conv) == 2
+    else:
+        assert isinstance(conv[0], Convolution)
+        assert isinstance(conv[1], Bias)
+        assert isinstance(conv[2], Activation)
+        assert len(conv) == 3
 
 
 def test_affine_wrapper(backend_default):

@@ -1166,7 +1166,7 @@ class NervanaCPU(Backend):
         layer.xprop_conv(E, F, grad_I, X, bias, bsum, alpha, beta, relu, brelu, slope,
                          backward=True, layer_op=layer)
 
-    def update_conv(self, layer, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
+    def update_conv(self, layer, I, E, U, alpha=1.0, beta=0.0, grad_bias=None, layer_op=None):
         """
         Compute the updated gradient for a convolutional network layer.
 
@@ -1181,8 +1181,7 @@ class NervanaCPU(Backend):
         assert layer.sizeI == I.size
         assert layer.sizeO == E.size
         assert layer.sizeF == U.size
-
-        layer.update_conv(I, E, U, alpha, beta, layer_op=layer)
+        layer.update_conv(I, E, U, alpha, beta, grad_bias=grad_bias, layer_op=layer_op)
 
     def deconv_layer(self, dtype,
                      N, C, K,
@@ -1190,7 +1189,8 @@ class NervanaCPU(Backend):
                      T=1, R=1, S=1,
                      pad_d=0, pad_h=0, pad_w=0,
                      str_d=1, str_h=1, str_w=1,
-                     dil_d=1, dil_h=1, dil_w=1):
+                     dil_d=1, dil_h=1, dil_w=1
+                     ):
         """
         Create a new DeconvLayer parameter object.
         This then is passed as an argument to all the convolution operations.

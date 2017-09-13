@@ -641,6 +641,9 @@ class Backend(AbstractBackend):
         """
         return delta
 
+    def is_mkl(self):
+        return False
+
     def allocate_new_outputs(self, layer, share_output):
         layer.allocate(shared_outputs=share_output)
 

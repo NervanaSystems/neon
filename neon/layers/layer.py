@@ -168,6 +168,10 @@ class Layer(NervanaObject):
         self.next_layer = layer
 
     def get_is_mklop(self):
+        """
+        is_mklop true means this op is on mkl backend
+        and may require convert when from non-mkl op
+        """
         return self.is_mklop
 
     def set_is_mklop(self):
@@ -900,6 +904,155 @@ class Convolution(ParameterLayer):
             self.be.bprop_conv(self.nglayer, self.W, error, self.deltas,
                                alpha=alpha, beta=beta, layer_op=self)
         self.be.update_conv(self.nglayer, self.inputs, error, self.dW, layer_op=self)
+        return self.deltas
+
+
+class Convolution_bias(Convolution):
+    """
+    Convolutional layer with bias.
+    Contains weight and bias as parameters which are updated during training.
+
+    Arguments:
+        init: init method for weight
+        bias: init method for bias
+
+    """
+    def __init__(self, fshape, strides={}, padding={}, dilation={}, init=None,
+                 bsum=False, name=None, bias=None, parallelism="Data"):
+        assert NervanaObject.be.is_mkl(), "Only mkl backend support Convoultion_bias"
+
+        super(Convolution_bias, self).__init__(fshape, strides=strides,
+                                               padding=padding, dilation=dilation,
+                                               init=init,
+                                               bsum=bsum, name=name,
+                                               parallelism=parallelism)
+        self.init_bias = bias
+        self.weight_bias = None
+        self.grad_bias = None
+        self.states = [[] for i in range(2)]
+
+    def init_params(self, shape):
+        # init weight
+        super(Convolution_bias, self).init_params(shape)
+        self.states = [[] for i in range(2)]
+
+        # init bias, using channel number
+        dim0 = self.out_shape[0]
+        self.weight_bias = self.be.zeros((dim0, 1), **self.get_param_attrs())
+        self.grad_bias = self.be.empty_like(self.weight_bias)
+        if isinstance(self.init_bias, Tensor) or isinstance(self.init_bias, np.ndarray):
+            assert self.init.shape == self.bias.shape, "Initial weights shape does not match"
+            self.weight_bias[:] = self.init
+        else:
+            self.init_bias.fill(self.weight_bias)
+        if self.accumulate_updates:
+            self.acc_grad_bias = self.be.empty_like(self.grad_bias)
+            self.acc_params += [(self.acc_grad_bias, self.grad_bias)]
+
+    def configure(self, in_obj):
+        """
+        Sets shape based parameters of this layer given an input tuple or int
+        or input layer.
+
+        Arguments:
+            in_obj (int, tuple, Layer or Tensor): object that provides shape
+                                                  information for layer
+
+        Returns:
+            (tuple): shape of output data
+        """
+        super(Convolution_bias, self).configure(in_obj)
+        return self
+
+    def get_params(self):
+        return [((self.W, self.dW), self.states[0]),
+                ((self.weight_bias, self.grad_bias), self.states[1])]
+
+    def get_description(self, get_weights=False, keep_states=True):
+        serial_dict = super(ParameterLayer, self).get_description()
+        if get_weights:
+            serial_dict['params'] = {}
+            for key in ['W', 'weight_bias']:
+                serial_dict['params'][key] = getattr(self, key).get()
+            if keep_states:
+                serial_dict['states'] = [[s.get() for s in slist] for slist in self.states]
+        return serial_dict
+
+    def set_params(self, pdict):
+        """
+        Set layer parameters (weights). Allocate space for other parameters but do not initialize
+        them.
+        Arguments:
+            pdict (dict, ndarray): dictionary or ndarray with layer parameters
+                                   [support for ndarray is DEPRECATED and will be removed]
+        """
+        assert type(pdict) is dict
+        for key in pdict['params']:
+            if not hasattr(self, key):
+                setattr(self, key, None)
+
+            attr = getattr(self, key)
+            if isinstance(attr, Tensor):
+                # this attr has already been allocated
+                # get set the values
+                attr.set(pdict['params'][key])
+            elif type(pdict['params'][key]) is np.ndarray:
+                setattr(self, key, self.be.array(pdict['params'][key], **self.get_param_attrs()))
+            else:
+                setattr(self, key, pdict['params'][key])
+
+        if self.dW is None:
+            self.dW = self.be.empty_like(self.W)
+
+        if self.grad_bias is None:
+            self.grad_bias = self.be.empty_like(self.weight_bias)
+
+    def set_states(self, pdict):
+        if not any(self.states):
+            self.states = [[self.be.array(x, **self.get_param_attrs()) for x in slist]
+                           for slist in pdict['states']]
+        else:
+            for dlist, slist in zip(self.states, pdict['states']):
+                for dst, src in zip(dlist, slist):
+                    dst.set(src)
+
+    def fprop(self, inputs, inference=False, beta=0.0):
+        """
+        Apply the forward pass transformation to the input data.
+
+        Arguments:
+            inputs (Tensor): input data
+            inference (bool): is inference only
+            beta (float, optional): scale to apply to the outputs
+
+        Returns:
+            Tensor: output data
+        """
+        self.inputs = inputs
+        self.be.fprop_conv(self.nglayer, inputs, self.W, self.outputs, beta=beta,
+                           bias=self.weight_bias, bsum=self.batch_sum, layer_op=self)
+        return self.outputs
+
+    @Layer.accumulates
+    def bprop(self, error, alpha=1.0, beta=0.0):
+        """
+        Apply the backward pass transformation to the input data.
+
+        Arguments:
+            error (Tensor): deltas back propagated from the adjacent higher layer
+            alpha (float, optional): scale to apply to input for activation
+                                     gradient bprop.  Defaults to 1.0
+            beta (float, optional): scale to apply to output activation
+                                    gradient bprop.  Defaults to 0.0
+
+        Returns:
+            Tensor: deltas to propagate to the adjacent lower layer
+        """
+        if self.deltas:
+            self.be.bprop_conv(self.nglayer, self.W, error, self.deltas,
+                               alpha=alpha, beta=beta, layer_op=self)
+        self.be.update_conv(self.nglayer, self.inputs, error, self.dW,
+                            grad_bias=self.grad_bias, layer_op=self)
         return self.deltas
 
 
@@ -1641,10 +1794,28 @@ class Conv(CompoundLayer):
                  name=None):
         super(Conv, self).__init__(bias=bias, batch_norm=batch_norm,
                                    activation=activation, name=name)
-        self.append(Convolution(fshape=fshape, strides=strides, padding=padding,
-                                dilation=dilation, init=init, bsum=batch_norm,
-                                name=name))
+        if bias and NervanaObject.be.is_mkl():
+            self.append(Convolution_bias(fshape=fshape, strides=strides, padding=padding,
+                                         dilation=dilation, init=init, bsum=batch_norm, bias=bias,
+                                         name=name))
+        else:
+            self.append(Convolution(fshape=fshape, strides=strides, padding=padding,
+                                    dilation=dilation, init=init, bsum=batch_norm,
+                                    name=name))
         self.add_postfilter_layers()
+
+    def add_postfilter_layers(self):
+        self.init_base_name()
+        # mklbackend will do conv+bias
+        if self.bias is not None and not NervanaObject.be.is_mkl():
+            name = self.base_name + '_bias'
+            self.append(Bias(init=self.bias, name=name))
+        if self.batch_norm:
+            name = self.base_name + '_bnorm'
+            self.append(BatchNorm(name=name))
+        if self.activation is not None:
+            name = self.base_name + '_' + self.activation.classnm
+            self.append(Activation(transform=self.activation, name=name))
 
 
 class Deconv(CompoundLayer):

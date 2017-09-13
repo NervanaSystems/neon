@@ -2025,7 +2025,7 @@ class NervanaGPU(Backend):
 
         return self._execute_conv("bprop", layer, layer.bprop_kernels, repeat)
 
-    def update_conv(self, layer, I, E, grad_F, alpha=1.0, beta=0.0, repeat=1, layer_op=None):
+    def update_conv(self, layer, I, E, grad_F, alpha=1.0, beta=0.0, repeat=1, grad_bias=None, layer_op=None):
         """
         update_conv:
 

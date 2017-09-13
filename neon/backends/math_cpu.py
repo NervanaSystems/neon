@@ -17,7 +17,7 @@ import numpy as np
 from cffi import FFI
 from neon import NervanaObject
 ffi = FFI()
-omp_threshold = 10000
+omp_threshold = 100000
 
 
 def isccontiguous(x):

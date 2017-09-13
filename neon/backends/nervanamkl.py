@@ -85,7 +85,10 @@ class MKLTensor(CPUTensor):
             base_id = id(self._tensor.base)
         else:
             base_id = id(self._tensor)
-        return ("MKLTensor(base 0x%x" % (base_id))
+        return ("MKLTensor(base 0x%x) name:%s shape:%s dtype:%s strides:%s"
+                " is_c_contiguous:%s" % (base_id, self.name, self.shape,
+                                         self.dtype, self._tensor.strides,
+                                         self._tensor.flags.c_contiguous))
 
     def get(self):
         """
@@ -187,6 +190,9 @@ class NervanaMKL(NervanaCPU):
         with open(header_path) as header:
             ffi.cdef(header.read())
         self.mathlib = ffi.dlopen(math_engine_path)
+
+    def is_mkl(self):
+        return True
 
     def convert(self, a):
         if a.primitive[2] == 0:
@@ -634,7 +640,7 @@ class NervanaMKL(NervanaCPU):
         inp = c_longlong(tensors.ctypes.data)
         size = c_longlong(np.prod(output.shape))
         prim = c_longlong(sum.ctypes.data)
-        self.mklEngine.SumTensor(layer_num, inp, size, output.get_prim(), prim)
+        self.mklEngine.MklSumTensor(layer_num, inp, size, output.get_prim(), prim)
 
     def fprop_mergesum(self, ngLayer, inputs, inference, layers, outputs, out_shape):
         ngLayer.shape5D = inputs.shape5D

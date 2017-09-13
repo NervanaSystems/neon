@@ -238,7 +238,8 @@ class ConvLayer(object):
         if not beta:
             self.compound_ops(O, X, bias, bsum, relu, brelu, slope)
 
-    def update_conv(self, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
+    # grad_bias is added for convolution layer with bias
+    def update_conv(self, I, E, U, alpha=1.0, beta=0.0, grad_bias=None, layer_op=None):
 
         C = self.C
         K, M, P, Q, N = self.dimO

@@ -74,6 +74,15 @@ typedef enum {
     L_W    = 37,
     L_I_CHWN = 39,
     L_O_CHWN = 41,
+    BDW_BIAS_INDEX   = 42,
+    L_B              = 44,
+    L_B_B            = 45,
+    L_B_O            = 46,
+    CV_BIAS_BIAS     = 47,
+    BUFFER_BIAS_BIAS = 48,
+    CV_BIAS_OUT      = 49,
+    BUFFER_BIAS_OUT  = 50,
+
 
 } mkldnnConvolutionIndex_t;
 

@@ -38,7 +38,7 @@ class ConvLayerMKL(ConvLayer):
                                            N, C, K, D, H, W, T, R, S,
                                            pad_d, pad_h, pad_w, str_d, str_h, str_w,
                                            dil_d, dil_h, dil_w)
-        self.dnnPrimitives = np.zeros((1, 50), dtype=np.uint64)
+        self.dnnPrimitives = np.zeros((1, 51), dtype=np.uint64)
         self.init_f = 0  # forward init flag
         self.init_bd = 0  # backward data
         self.init_bw = 0  # backward weight
@@ -140,10 +140,14 @@ class ConvLayerMKL(ConvLayer):
         pad_d, pad_h, pad_w = self.padding
         str_d, str_h, str_w = self.strides
         primitives = c_longlong(self.dnnPrimitives.ctypes.data)
+        bias_prim = c_longlong(0)
+        if bias is not None:
+            bias_prim = bias.get_prim()
+
         mkl_res = 0
         if not backward:
             mkl_res = I.backend.mklEngine.Conv_forward(
-                I.get_prim(), O.get_prim(), F.get_prim(), primitives, self.init_f,
+                I.get_prim(), O.get_prim(), F.get_prim(), bias_prim, primitives, self.init_f,
                 N, C, H, W, R, S, str_h, str_w, pad_h, pad_w, K, P, Q)
             self.init_f = 1
             O.shape5D = self.dimO
@@ -162,7 +166,8 @@ class ConvLayerMKL(ConvLayer):
             layer_op.set_not_mklop()
             return
 
-    def update_conv(self, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
+    # grad_bias is added for convolution layer with bias
+    def update_conv(self, I, E, U, alpha=1.0, beta=0.0,  grad_bias=None, layer_op=None):
 
         if not self.get_is_mklop():
             I.backend.convert(I)
@@ -175,8 +180,11 @@ class ConvLayerMKL(ConvLayer):
         # not deal with alpha, beta yet
         K, M, P, Q, N = self.dimO
         primitives = c_longlong(self.dnnPrimitives.ctypes.data)
+        bias_prim = c_longlong(0)
+        if grad_bias is not None:
+            bias_prim = grad_bias.get_prim()
         I.backend.mklEngine.Conv_bwdFilter(
-            I.get_prim(), E.get_prim(), U.get_prim(), primitives,
+            I.get_prim(), E.get_prim(), U.get_prim(), bias_prim, primitives,
             N, K, P, Q, self.init_bw, self.init_bd)
         self.init_bw = 1
 
@@ -217,7 +225,7 @@ class DeconvLayerMKL(DeconvLayer):
         super(DeconvLayerMKL, self).xprop_conv(I, F, O, X, bias, bsum, alpha, beta,
                                                relu, brelu, slope, backward, layer_op)
 
-    def update_conv(self, I, E, U, alpha=1.0, beta=0.0, layer_op=None):
+    def update_conv(self, I, E, U, alpha=1.0, beta=0.0, grad_bias=None, layer_op=None):
 
         I.backend.convert(I)
         I.clean_mkl()
@@ -225,7 +233,7 @@ class DeconvLayerMKL(DeconvLayer):
         E.backend.convert(E)
         E.clean_mkl()
 
-        super(DeconvLayerMKL, self).update_conv(I, E, U, alpha, beta, layer_op)
+        super(DeconvLayerMKL, self).update_conv(I, E, U, alpha, beta, grad_bias, layer_op)
 
 
 class PoolLayerMKL(PoolLayer):
