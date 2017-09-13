@@ -1,5 +1,5 @@
 configargparse==0.10.0
-numpy==1.11.1
+numpy==1.13.1
 pyyaml==3.12
 pep8==1.7.0
 flake8==3.0.4
