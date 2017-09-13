@@ -53,6 +53,8 @@ Layer deconvolution visualization
 `Guided Backprop <http://arxiv.org/pdf/1412.6806.pdf>`__ based
 visualization of convolutional layer activations is also supported via
 the :py:class:`DeconvCallback<neon.callbacks.callbacks.DeconvCallback>` class or :py:meth:`add_deconv_callback()<neon.callbacks.callbacks.Callbacks.add_deconv_callback>` function.
+Note that unlike in the paper, :py:meth:`add_deconv_callback() does not support networks that utilize max pooling.
+
 For example, one can provide the `--deconv` argument to ``examples/imagenet/allcnn.py`` to ensure that the callback gets added:
 
 .. code-block:: bash
