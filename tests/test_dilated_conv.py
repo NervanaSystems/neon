@@ -35,12 +35,6 @@ except:
     # stub out the class
     class NervanaGPU(object):
         pass
-try:
-    from neon.backends.nervanamkl import NervanaMKL
-except:
-    # stub out the class
-    class NervanaMKL(object):
-        pass
 
 
 def pytest_generate_tests(metafunc):
@@ -167,8 +161,6 @@ def run(be, fake_dilation, fsz, stride, pad, dilation):
 
 
 def test_dilated_conv(backend_default, fargs_tests):
-    if isinstance(NervanaObject.be, NervanaMKL):
-        pytest.xfail(reason="Known MKL bug. See #913")
 
     fsz = fargs_tests[0]
     dil = fargs_tests[1]

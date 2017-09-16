@@ -722,7 +722,7 @@ class NervanaMKL(NervanaCPU):
         size = c_longlong(np.prod(ngLayer.in_shape5D))
         prim = c_longlong(ngLayer.sum_prim.ctypes.data)
         tensors = c_longlong(ngLayer.tensors_temp.ctypes.data)
-        self.mklEngine.SumTensor(ngLayer.layer_num, tensors, size, deltas.get_prim(), prim)
+        self.mklEngine.MklSumTensor(ngLayer.layer_num, tensors, size, deltas.get_prim(), prim)
 
         deltas.shape5D = ngLayer.in_shape5D
 

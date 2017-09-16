@@ -245,71 +245,6 @@ ERR_RETURN:
 //inputs:        tensors to be summed up
 //sum:           resulting tensor
 //primitives:    MKL memory, will give to sum tensor
-void SumTensor(
-  int iN,
-  unsigned long long inputs,
-  unsigned long long len,
-  unsigned long long sum,
-  unsigned long long dnnprimitives)
-{
-    dnnError_t err;
-    long long* primitives = (long long*)dnnprimitives;
-    long long* pInput     = (long long*)inputs;
-    long long* pOut       = (long long*)sum;
-
-    dnnLayout_t lt_in_first = (dnnLayout_t)pInput[MKLLayout];
-    if (lt_in_first == NULL)
-    {
-        lt_in_first = (dnnLayout_t)pInput[CPULayout];
-    }
-    float* pFirstBuf = GetPtr(inputs);
-
-    //allocate memory for resulting sum, if necessary
-    float* pSumBuf= (float*)primitives[0];
-    if (pSumBuf == NULL)
-    {
-        CHECK_ERR( dnnAllocateBuffer_F32((void**)&pSumBuf, lt_in_first) , err );
-        primitives[0] = (long long)pSumBuf;
-    }
-    pOut[MKLPtr] = (long long)pSumBuf;
-
-    //set layout and memory, will be changed by Neon Python, thus need to
-    //  be set every time
-    pOut[MKLLayout] = (long long)lt_in_first;
-    pOut[CPULayout] = pInput[CPULayout];
-
-    //initialize buf memory with the first input tensor
-    if (lt_in_first != NULL)
-    {
-        len = (long long)dnnLayoutGetMemorySize_F32(lt_in_first) / 4 ;
-    }
-    cblas_scopy(len, pFirstBuf, 1, pSumBuf, 1);
-
-    //do sum of the remaining tensors
-    for (int i = 1; i < iN; ++i)
-    {
-        long long* temp = pInput +  i * 4;
-        float* pNewBuf = GetPtr((unsigned long long)temp);
-
-        //if layout diff with the first tensor, do conversion
-        dnnLayout_t lt_src = (dnnLayout_t)temp[MKLLayout];
-        if(lt_src == NULL) lt_src = (dnnLayout_t)temp[CPULayout];
-        if (!dnnLayoutCompare_F32(lt_in_first, lt_src))
-        {
-            dnnPrimitive_t cv;
-            CHECK_ERR( dnnConversionCreate_F32(&cv, lt_src, lt_in_first), err );
-            CHECK_ERR( dnnConversionExecute_F32(cv, pNewBuf, pFirstBuf), err );
-            pNewBuf = pFirstBuf;
-	    }
-        cblas_saxpy(len, 1.0, pNewBuf, 1, pSumBuf, 1);
-    }
-ERR_RETURN:
-    return;
-}
-
-//inputs:        tensors to be summed up
-//sum:           resulting tensor
-//primitives:    MKL memory, will give to sum tensor
 void MklSumTensor(
   int iN,
   unsigned long long inputs,
@@ -318,65 +253,101 @@ void MklSumTensor(
   unsigned long long dnnprimitives)
 {
     dnnError_t err;
-    dnnPrimitive_t p_sum = NULL;
-    void* sum_res[dnnResourceNumber] = {0};
     long long* primitives = (long long*)dnnprimitives;
     long long* pInput     = (long long*)inputs;
     long long* pOut       = (long long*)sum;
-    float* coeffs = (float*) malloc(iN*sizeof(float));
-    for (int i = 0; i < iN; i++) coeffs[i] = 1.0;
 
+    // use layout of first tensor as default layout
     dnnLayout_t lt_in_first = (dnnLayout_t)pInput[MKLLayout];
-    if (lt_in_first == NULL)
-    {
-        lt_in_first = (dnnLayout_t)pInput[CPULayout];
-    }
-	CHECK_ERR(dnnSumCreate_F32(&p_sum, NULL, iN, lt_in_first, coeffs), err);
+    if (lt_in_first == NULL)  lt_in_first = (dnnLayout_t)pInput[CPULayout];
 
-    float* pFirstBuf = GetPtr(inputs);
-
-    //allocate memory for resulting sum, if necessary
+    // allocate memory for resulting sum, if necessary
+    // save it in primitive
     float* pSumBuf= (float*)primitives[0];
     if (pSumBuf == NULL)
     {
         CHECK_ERR( dnnAllocateBuffer_F32((void**)&pSumBuf, lt_in_first) , err );
         primitives[0] = (long long)pSumBuf;
     }
+    // set layout and memory, will be changed by Neon Python, thus need to
+    // be set every time
     pOut[MKLPtr] = (long long)pSumBuf;
-
-    //set layout and memory, will be changed by Neon Python, thus need to
-    //  be set every time
     pOut[MKLLayout] = (long long)lt_in_first;
     pOut[CPULayout] = pInput[CPULayout];
 
-    //initialize buf memory with the first input tensor
-    if (lt_in_first != NULL)
-    {
-        len = (long long)dnnLayoutGetMemorySize_F32(lt_in_first) / 4 ;
-    }
-    //cblas_scopy(len, pFirstBuf, 1, pSumBuf, 1);
-    sum_res[dnnResourceDst] = pSumBuf;
-    //convert if necessary
-    for (int i = 0; i < iN; ++i)
-    {
-        long long* temp = pInput +  i * 4;
-        float* pNewBuf = GetPtr((unsigned long long)temp);
+    // create dnnSum
+    dnnPrimitive_t p_sum = NULL;
+    float* coeffs = (float*) malloc(iN*sizeof(float));
+    for (int i = 0; i < iN; i++) coeffs[i] = 1.0;
+	err = dnnSumCreate_F32(&p_sum, NULL, iN, lt_in_first, coeffs);
 
-        //if layout diff with the first tensor, do conversion
-        dnnLayout_t lt_src = (dnnLayout_t)temp[MKLLayout];
-        if(lt_src == NULL) lt_src = (dnnLayout_t)temp[CPULayout];
-        if (!dnnLayoutCompare_F32(lt_in_first, lt_src))
+    // For some layout dnnSumCreate fails
+    if (err == E_SUCCESS)
+    {
+        void* sum_res[dnnResourceNumber] = {0};
+        sum_res[dnnResourceDst] = pSumBuf;
+        void* temp_memory[dnnResourceNumber]  = {0};
+
+        //convert if necessary
+        for (int i = 0; i < iN; ++i)
         {
-            dnnPrimitive_t cv;
-            CHECK_ERR( dnnConversionCreate_F32(&cv, lt_src, lt_in_first), err );
-            CHECK_ERR( dnnConversionExecute_F32(cv, pNewBuf, pFirstBuf), err );
-            pNewBuf = pFirstBuf;
-	    }
-        sum_res[dnnResourceMultipleSrc + i] = pNewBuf;
+            long long* temp = pInput +  i * 4;
+            float* pBuf = GetPtr((unsigned long long)temp);
+
+            //if layout diff with the first tensor, do conversion
+            dnnLayout_t lt_src = (dnnLayout_t)temp[MKLLayout];
+            if(lt_src == NULL) lt_src = (dnnLayout_t)temp[CPULayout];
+            if (!dnnLayoutCompare_F32(lt_in_first, lt_src))
+            {
+                dnnPrimitive_t cv;
+                float* pNewBuf = NULL;
+                CHECK_ERR( dnnAllocateBuffer_F32((void**)&pNewBuf, lt_in_first) , err );
+                CHECK_ERR( dnnConversionCreate_F32(&cv, lt_src, lt_in_first), err );
+                CHECK_ERR( dnnConversionExecute_F32(cv, pBuf, pNewBuf), err );
+                pBuf = pNewBuf;
+                temp_memory[i] = pBuf;
+            }
+            sum_res[dnnResourceMultipleSrc + i] = pBuf;
+        }
+	    CHECK_ERR( dnnExecute_F32(p_sum,(void*)sum_res), err );
+
+        for (int i=0; i<iN; ++i)
+        {
+            if (temp_memory[i] != NULL) dnnReleaseBuffer_F32(temp_memory[i]);
+        }
+        free(coeffs);
+        dnnDelete_F32(p_sum);
     }
-	CHECK_ERR( dnnExecute_F32(p_sum,(void*)sum_res), err );
-    free(coeffs);
-    dnnDelete_F32(p_sum);
+
+    else //use blas to sum tensors
+    {
+        float* pFirstBuf = GetPtr(inputs);
+        len = (long long)dnnLayoutGetMemorySize_F32(lt_in_first) / 4 ;
+        cblas_scopy(len, pFirstBuf, 1, pSumBuf, 1);
+
+        float* temp_memory = NULL;
+        for (int i = 1; i < iN; ++i) //do sum of the remaining tensors
+        {
+            long long* temp = pInput +  i * 4;
+            float* pBuf = GetPtr((unsigned long long)temp);
+
+            //if layout diff with the first tensor, do conversion
+            dnnLayout_t lt_src = (dnnLayout_t)temp[MKLLayout];
+            if(lt_src == NULL) lt_src = (dnnLayout_t)temp[CPULayout];
+            if (!dnnLayoutCompare_F32(lt_in_first, lt_src))
+            {
+                if (temp_memory == NULL)
+                    CHECK_ERR( dnnAllocateBuffer_F32((void**)&temp_memory, lt_in_first) , err );
+                dnnPrimitive_t cv = NULL;
+                CHECK_ERR( dnnConversionCreate_F32(&cv, lt_src, lt_in_first), err );
+                CHECK_ERR( dnnConversionExecute_F32(cv, pBuf, temp_memory), err );
+                pBuf = temp_memory;
+            }
+            cblas_saxpy(len, 1.0, pBuf, 1, pSumBuf, 1);
+        }
+        if (temp_memory != NULL)
+            dnnReleaseBuffer_F32(temp_memory);
+    }
 
 ERR_RETURN:
     return;
