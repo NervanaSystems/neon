@@ -12,7 +12,7 @@ Installations of matplotlib, scipy, and lmdb are required to run the following
 examples.
 
 ```bash
-. .venv2/bin/activate
+. .venv/bin/activate
 pip install matplotlib
 pip install scipy
 pip install lmdb
