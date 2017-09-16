@@ -31,6 +31,9 @@ neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/install
     make
     . .venv/bin/activate
 ```
+**Warning**
+
+> Between Neon 2.1 and 2.2 manifest file format has been changed. When updating from Neon < 2.2 manifests have to be recreated using ingest scripts (in examples folder) or updated using examples/convert_manifest.py script.
 
 ### Use a script to run an example
 

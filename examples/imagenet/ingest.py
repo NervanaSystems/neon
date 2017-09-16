@@ -105,13 +105,14 @@ def transform_and_save(target_size, tar_handle, img_object, output_filename):
 
 
 class IngestI1K(object):
-    def __init__(self, input_dir, out_dir, target_size=256):
+    def __init__(self, input_dir, out_dir, target_size=256, overwrite=False):
         np.random.seed(0)
 
         self.orig_out_dir = out_dir
         self.out_dir = os.path.join(out_dir, 'i1k-extracted')
         self.input_dir = os.path.expanduser(input_dir) if input_dir is not None else None
         self.devkit = os.path.join(self.input_dir, 'ILSVRC2012_devkit_t12.tar.gz')
+        self.overwrite = overwrite
 
         self.manifests, self.tars = dict(), dict()
         for setn in ('train', 'val'):
@@ -206,24 +207,32 @@ class IngestI1K(object):
             f.write('log = {}\n'.format(log_file))
             f.write('epochs = 90\nrng_seed = 0\nverbose = True\neval_freq = 1\n')
 
+        if (all([os.path.exists(manifest) for manifest in self.manifests.values()])
+                and not self.overwrite):
+            print("Found manfiest files, skipping ingest, use --overwrite to overwrite them.")
+            return
+
         for setn, manifest in self.manifests.items():
-            if not os.path.exists(manifest):
-                pairs = self.train_or_val_pairs(setn)
-                records = [(os.path.relpath(fname, self.out_dir),
-                            os.path.relpath(self._target_filename(int(tgt)), self.out_dir))
-                           for fname, tgt in pairs]
-                np.savetxt(manifest, records, fmt='%s,%s')
+            pairs = self.train_or_val_pairs(setn)
+            records = [(os.path.relpath(fname, self.out_dir), int(tgt))
+                       for fname, tgt in pairs]
+            records.insert(0, ('@FILE', 'STRING'))
+            np.savetxt(manifest, records, fmt='%s\t%s')
 
 if __name__ == "__main__":
     parser = ArgParser()
-    parser.add_argument('--input_dir', help='Directory to find input tars', default=None)
-    parser.add_argument('--out_dir', help='Directory to write ingested files', default=None)
+    parser.add_argument('--input_dir', required=True,
+                        help='Directory to find input tars', default=None)
+    parser.add_argument('--out_dir', required=True,
+                        help='Directory to write ingested files', default=None)
     parser.add_argument('--target_size', type=int, default=256,
                         help='Size in pixels to scale shortest side DOWN to (0 means no scaling)')
+    parser.add_argument('--overwrite', action='store_true', default=False, help='Overwrite files')
     args = parser.parse_args()
 
     logger = logging.getLogger(__name__)
 
-    bw = IngestI1K(input_dir=args.input_dir, out_dir=args.out_dir, target_size=args.target_size)
+    bw = IngestI1K(input_dir=args.input_dir, out_dir=args.out_dir, target_size=args.target_size,
+                   overwrite=args.overwrite)
 
     bw.run()

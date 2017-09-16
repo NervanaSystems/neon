@@ -18,14 +18,14 @@ from tqdm import tqdm
 from neon.data import CIFAR10
 from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast, BGRMeanSubtract
-from neon.util.persist import get_data_cache_or_nothing, ensure_dirs_exist
+from neon.util.persist import get_data_cache_or_nothing
 from PIL import Image
 
 
 def ingest_cifar10(out_dir, padded_size, overwrite=False):
-    '''
+    """
     Save CIFAR-10 dataset as PNG files
-    '''
+    """
     dataset = dict()
     cifar10 = CIFAR10(path=out_dir, normalize=False)
     dataset['train'], dataset['val'], _ = cifar10.load_data()
@@ -47,47 +47,49 @@ def ingest_cifar10(out_dir, padded_size, overwrite=False):
         f.write('backend = gpu\nbatch_size = 64\n')
 
     if (all([os.path.exists(manifest) for manifest in manifest_files]) and not overwrite):
+        print("Found existing manfiest files, skipping ingest, use --overwrite to rerun ingest.")
         return manifest_files
-
-    # Write out label files and setup directory structure
-    lbl_paths, img_paths = dict(), dict(train=dict(), val=dict())
-    for lbl in range(10):
-        lbl_paths[lbl] = ensure_dirs_exist(os.path.join(out_dir, 'labels', str(lbl) + '.txt'))
-        np.savetxt(lbl_paths[lbl], [lbl], fmt='%d')
-        for setn in ('train', 'val'):
-            img_paths[setn][lbl] = ensure_dirs_exist(os.path.join(out_dir, setn, str(lbl) + '/'))
 
     # Now write out image files and manifests
     for setn, manifest in zip(set_names, manifest_files):
-        records = []
+        img_path = os.path.join(out_dir, setn)
+        if not os.path.isdir(img_path):
+            os.makedirs(img_path)
+
+        records = [('@FILE', 'STRING')]
+
         for idx, (img, lbl) in enumerate(tqdm(zip(*dataset[setn]))):
-            img_path = os.path.join(img_paths[setn][lbl[0]], str(idx) + '.png')
+            fname = os.path.join(img_path, '{}_{:05d}.png'.format(lbl[0], idx))
             im = np.pad(img.reshape((3, 32, 32)), pad_width, mode='mean')
             im = Image.fromarray(np.uint8(np.transpose(im, axes=[1, 2, 0]).copy()))
-            im.save(os.path.join(out_dir, img_path), format='PNG')
-            records.append((os.path.relpath(img_path, out_dir),
-                            os.path.relpath(lbl_paths[lbl[0]], out_dir)))
-        np.savetxt(manifest, records, fmt='%s,%s')
+            im.save(fname, format='PNG')
+            records.append((os.path.relpath(fname, out_dir), lbl[0]))
 
-    return manifest_files
+        np.savetxt(manifest, records, fmt='%s\t%s')
+
+    print("Manifest files written to:\n" + "\n".join(manifest_files))
 
 
 def common_config(manifest_file, manifest_root, batch_size, subset_pct):
     cache_root = get_data_cache_or_nothing('cifar-cache/')
 
-    return {
-               'manifest_filename': manifest_file,
-               'manifest_root': manifest_root,
-               'minibatch_size': batch_size,
-               'subset_fraction': float(subset_pct/100.0),
-               'macrobatch_size': 5000,
-               'type': 'image,label',
-               'cache_directory': cache_root,
-               'image': {'height': 32,
-                         'width': 32,
-                         'scale': [0.8, 0.8]},
-               'label': {'binary': False}
-            }
+    image_config = {"type": "image",
+                    "height": 32,
+                    "width": 32}
+    label_config = {"type": "label",
+                    "binary": False}
+    augmentation = {"type": "image",
+                    "scale": [0.8, 0.8],
+                    "crop_enable": True}
+
+    return {'manifest_filename': manifest_file,
+            'manifest_root': manifest_root,
+            'batch_size': batch_size,
+            'block_size': 5000,
+            'subset_fraction': float(subset_pct/100.0),
+            'cache_directory': cache_root,
+            'etl': [image_config, label_config],
+            'augmentation': [augmentation]}
 
 
 def wrap_dataloader(dl):
@@ -99,36 +101,34 @@ def wrap_dataloader(dl):
 
 def make_train_loader(manifest_file, manifest_root, backend_obj, subset_pct=100, random_seed=0):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
-    aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = True
-    aeon_config['random_seed'] = random_seed
-    aeon_config['image']['center'] = False
-    aeon_config['image']['flip_enable'] = True
 
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
+    aeon_config['iteration_mode'] = "ONCE"
+    aeon_config['shuffle_manifest'] = True
+    aeon_config['shuffle_enable'] = True
+    aeon_config['random_seed'] = random_seed
+    aeon_config['augmentation'][0]["center"] = False
+    aeon_config['augmentation'][0]["flip_enable"] = True
+
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
 
 def make_validation_loader(manifest_file, manifest_root, backend_obj, subset_pct=100):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
 
 def make_tuning_loader(manifest_file, manifest_root, backend_obj):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct=20)
     aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = True
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
 
 if __name__ == '__main__':
     from configargparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument('--out_dir', required=True, help='path to extract files into')
-    parser.add_argument('--input_dir', default=None, help='unused argument')
-    parser.add_argument('--padded_size', type=int, default=40,
-                        help='Size of image after padding (each side)')
+    parser.add_argument('--out_dir', required=True, help='Directory to write ingested files')
+    parser.add_argument('--padded_size', type=int, default=40, help='Size of image after padding')
+    parser.add_argument('--overwrite', action='store_true', default=False, help='Overwrite files')
     args = parser.parse_args()
 
-    generated_files = ingest_cifar10(args.out_dir, args.padded_size)
-
-    print("Manifest files written to:\n" + "\n".join(generated_files))
+    ingest_cifar10(args.out_dir, args.padded_size, overwrite=args.overwrite)

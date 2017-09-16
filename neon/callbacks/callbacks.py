@@ -24,6 +24,7 @@ import os
 import signal
 import sys
 import time
+import math
 from timeit import default_timer
 import weakref
 
@@ -254,7 +255,9 @@ class Callbacks(NervanaObject):
         # data iterator wraps around to avoid partial minibatches
         # callbacks producing per-minibatch data need a way to preallocate buffers
         config = self.callback_data.create_group('config')
-        total_minibatches = -((-self.model().ndata * epochs) // self.be.bsz)
+
+        total_minibatches = math.ceil(self.model().ndata / self.be.bsz) * epochs
+
         config.attrs['total_minibatches'] = total_minibatches
 
         config.attrs['total_epochs'] = epochs
@@ -625,6 +628,7 @@ class TrainCostCallback(Callback):
         """
         # preallocate space for the number of minibatches in the whole run
         points = callback_data['config'].attrs['total_minibatches']
+
         callback_data.create_dataset("cost/train", (points,))
 
         # make sure our window size is less than or equal to total number of minibatches
@@ -647,6 +651,7 @@ class TrainCostCallback(Callback):
         self.cost_history.append(model.cost.cost)
         mean_cost = sum(self.cost_history) / len(self.cost_history)
         mbstart = callback_data['time_markers/minibatch'][epoch - 1] if epoch > 0 else 0
+
         callback_data['cost/train'][mbstart + minibatch] = mean_cost
 
 

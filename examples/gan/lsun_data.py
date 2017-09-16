@@ -19,11 +19,13 @@ import subprocess
 import json
 import zipfile
 import logging
+
 from tqdm import tqdm
 from PIL import Image
 from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast, ValueNormalize
-from neon.util.persist import get_data_cache_or_nothing, ensure_dirs_exist
+from neon.util.persist import get_data_cache_or_nothing
+
 from future import standard_library
 standard_library.install_aliases()  # triggers E402, hence noqa below
 from future.moves.urllib.request import urlopen  # noqa
@@ -47,7 +49,7 @@ def lsun_categories(tag):
         tag (str): version tag, use "latest" for most recent
     """
     f = urlopen(LSUN_URL + 'list.cgi?tag=' + tag)
-    return json.loads(f.read().decode("utf-8"))
+    return json.loads(f.read())
 
 
 def download_lsun(lsun_dir, category, dset, tag, overwrite=False):
@@ -116,31 +118,25 @@ def ingest_lsun(lsun_dir, category, dset, lbl_map, overwrite=False, png_conv=Fal
         os.remove(manifest_file)
     os.makedirs(dpath)
 
-    lbl_paths = dict()
-    for lbl in lbl_map:
-        lbl_paths[lbl] = ensure_dirs_exist(os.path.join(lsun_dir, 'labels', lbl + '.txt'))
-        np.savetxt(lbl_paths[lbl], [lbl_map[lbl]], fmt='%d')
-
     print('Exporting images...')
     env = lmdb.open(dpath+'_lmdb', map_size=MAP_SIZE,
                     max_readers=MAX_NUM_INGEST_PROC, readonly=True)
-    count, records = 0, []
+    count, records = 0, [('@FILE', 'STRING')]
     with env.begin(write=False) as txn:
         cursor = txn.cursor()
         for key, val in tqdm(cursor):
-            image_out_path = os.path.join(dpath, key.decode("utf-8") + '.webp')
-            with open(image_out_path, 'wb') as fp:
+            image_out_path = os.path.join(dpath, key + '.webp')
+            with open(image_out_path, 'w') as fp:
                 fp.write(val)
             count += 1
             if png_conv:  # in case WEBP is not supported, extra step of conversion to PNG
                 image_out_path_ = image_out_path
-                image_out_path = os.path.join(dpath, key.decode("utf-8") + '.png')
+                image_out_path = os.path.join(dpath, key + '.png')
                 im = Image.open(image_out_path_).convert('RGB')
                 im.save(image_out_path, 'png')
                 os.remove(image_out_path_)
-            records.append((os.path.relpath(image_out_path, lsun_dir),
-                            os.path.relpath(lbl_paths[category], lsun_dir)))
-        np.savetxt(manifest_file, records, fmt='%s,%s')
+            records.append((os.path.relpath(image_out_path, lsun_dir), lbl_map[category]))
+        np.savetxt(manifest_file, records, fmt='%s\t%s')
     print("LSUN {0} {1} dataset ingested.".format(category, dset))
     print("Manifest file is: " + manifest_file)
     return manifest_file
@@ -149,19 +145,22 @@ def ingest_lsun(lsun_dir, category, dset, lbl_map, overwrite=False, png_conv=Fal
 def common_config(manifest_file, manifest_root, batch_size, subset_pct):
     cache_root = get_data_cache_or_nothing('lsun_cache/')
 
-    return {
-               'manifest_filename': manifest_file,
-               'manifest_root': manifest_root,
-               'minibatch_size': batch_size,
-               'subset_fraction': float(subset_pct/100.0),
-               'macrobatch_size': 5000,
-               'type': 'image,label',
-               'cache_directory': cache_root,
-               'image': {'height': 64,
-                         'width': 64,
-                         'scale': [1., 1.]},
-               'label': {'binary': False}
-            }
+    image_config = {"type": "image",
+                    "height": 64,
+                    "width": 64}
+    label_config = {"type": "label",
+                    "binary": False}
+    augmentation = {"type": "image",
+                    "scale": [1., 1.]}
+
+    return {'manifest_filename': manifest_file,
+            'manifest_root': manifest_root,
+            'batch_size': batch_size,
+            'subset_fraction': float(subset_pct/100.0),
+            'block_size': 5000,
+            'cache_directory': cache_root,
+            'etl': [image_config, label_config],
+            'augmentation': [augmentation]}
 
 
 def wrap_dataloader(dl):
@@ -174,12 +173,12 @@ def wrap_dataloader(dl):
 def make_loader(manifest_file, manifest_root, backend_obj, subset_pct=100, random_seed=0):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = True
+    aeon_config['shuffle_enable'] = True
     aeon_config['random_seed'] = random_seed
-    aeon_config['image']['center'] = True
-    aeon_config['image']['flip_enable'] = False
+    aeon_config['augmentation'][0]['center'] = True
+    aeon_config['augmentation'][0]['flip_enable'] = False
 
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
 
 if __name__ == '__main__':

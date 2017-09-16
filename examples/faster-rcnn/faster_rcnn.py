@@ -17,7 +17,7 @@ from neon.transforms import Rectlin, Identity, Softmax, PixelwiseSoftmax
 from neon.layers import Conv, Affine, BranchNode, Tree, Dropout, RoiPooling
 from neon.models import Model
 from neon.data.dataloader_transformers import BGRMeanSubtract, TypeCast
-from aeon import DataLoader
+from neon.data.aeon_shim import AeonDataLoader
 from proposal_layer import ProposalLayer
 from objectlocalization import ObjectLocalization
 import util
@@ -118,7 +118,7 @@ def build_model(dataset, frcn_rois_per_img, train_pre_nms_N=12000,
         return model
 
 
-def build_dataloader(config, be, frcn_rois_per_img):
+def build_dataloader(config, frcn_rois_per_img):
     """
     Builds the dataloader for the Faster-RCNN network using our aeon loader.
     Besides, the base loader, we add several operations:
@@ -139,10 +139,10 @@ def build_dataloader(config, be, frcn_rois_per_img):
     Returns:
         dataloader object.
     """
-    dl = DataLoader(config, be)
+    dl = AeonDataLoader(config)
     dl = TypeCast(dl, index=0, dtype=np.float32)  # cast image to float
     dl = BGRMeanSubtract(dl, index=0, pixel_mean=util.FRCN_PIXEL_MEANS)  # subtract means
-    dl = ObjectLocalization(dl, frcn_rois_per_img=frcn_rois_per_img)  # repack for faster-rcnn
+    dl = ObjectLocalization(dl, frcn_rois_per_img=frcn_rois_per_img)  # repack faster-rcnn
     return dl
 
 

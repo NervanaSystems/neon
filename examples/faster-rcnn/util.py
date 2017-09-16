@@ -106,7 +106,7 @@ def scale_bbreg_weights(model, means, stds, num_classes):
 
 def load_vgg_all_weights(model, path):
     # load a pre-trained VGG16 from Neon model zoo to the local
-    url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG'
+    url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/'
     filename = 'VGG_D.p'
     size = 554227541
 

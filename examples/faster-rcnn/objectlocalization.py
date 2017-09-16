@@ -23,7 +23,7 @@ from neon.util.persist import get_data_cache_or_nothing
 class ObjectLocalization(DataLoaderTransformer):
     """
     Transforms the dataloader inputs for provisioning to the Faster-RCNN model.
-    Provided dataloader must be of the (image, localization) type.
+    Provided dataloader must be of the (image, localization_rcnn) type.
 
     To support the Faster-RCNN model, this transformer:
     1. allocates buffers to start the targets for the classification layers. These
@@ -43,13 +43,14 @@ class ObjectLocalization(DataLoaderTransformer):
         super(ObjectLocalization, self).__init__(dataloader, None, *args, **kwargs)
 
         # obtain settings from the dataloader config
-        self.CLASSES = self.dataloader.config['localization']['class_names']
-        self.conv_scale = self.dataloader.config['localization']['scaling_factor']
-        self.conv_height = int(np.floor(self.dataloader.config['image']['height'] *
+        config = dataloader.config
+        self.CLASSES = config['etl'][1]['class_names']
+        self.conv_scale = config['etl'][1]['scaling_factor']
+        self.conv_height = int(np.floor(config['etl'][0]['height'] *
                                         self.conv_scale))
-        self.conv_width = int(np.floor(self.dataloader.config['image']['width'] *
+        self.conv_width = int(np.floor(config['etl'][0]['width'] *
                                        self.conv_scale))
-        self.rpn_rois_per_img = self.dataloader.config['localization']['rois_per_image']
+        self.rpn_rois_per_img = config['etl'][1]['rois_per_image']
 
         self.num_classes = len(self.CLASSES)
         self.frcn_rois_per_img = frcn_rois_per_img
@@ -97,7 +98,7 @@ class ObjectLocalization(DataLoaderTransformer):
     def transform(self, t):
         # unpack buffers
         (img, bbtargets, bbtargets_mask, labels, labels_mask, self.im_shape, gt_boxes,
-            self.num_gt_boxes, self.gt_classes, self.im_scale, self.difficult) = t
+         self.num_gt_boxes, self.gt_classes, self.im_scale, self.difficult) = t
 
         self.gt_boxes = gt_boxes.reshape((-1, 4))
 
@@ -127,23 +128,31 @@ def PASCALVOC(manifest_file, manifest_root, rois_per_img=256,
     # if inference, we do not shuffle or flip
     do_transforms = not inference
 
-    image_decode_cfg = dict(height=height, width=width, flip_enable=do_transforms,
-                            crop_enable=False, fixed_aspect_ratio=True)
-    localization_cfg = dict(rois_per_image=rois_per_img,
-                            class_names=CLASSES, scaling_factor=1. / 16)
+    image_config = {"type": "image",
+                    "height": height,
+                    "width": width}
 
-    return dict(
-        manifest_filename=manifest_file,
-        manifest_root=manifest_root,
-        type='image,localization',
-        image=image_decode_cfg,
-        cache_directory=get_data_cache_or_nothing(subdir='pascalvoc_cache'),
-        shuffle_every_epoch=do_transforms,
-        shuffle_manifest=do_transforms,
-        minibatch_size=1,
-        macrobatch_size=100,
-        localization=localization_cfg,
-    )
+    localization_config = {"type": "localization_rcnn",
+                           "height": height,
+                           "width": width,
+                           "rois_per_image": rois_per_img,
+                           "class_names": CLASSES,
+                           "scaling_factor": 1. / 16}
+
+    augmentation = {"type": "image",
+                    "fixed_aspect_ratio": True,
+                    "flip_enable": do_transforms,
+                    "crop_enable": False}
+
+    return {'manifest_filename': manifest_file,
+            'manifest_root': manifest_root,
+            'etl': [image_config, localization_config],
+            'cache_directory': get_data_cache_or_nothing(subdir='pascalvoc_cache'),
+            'shuffle_enable': do_transforms,
+            'shuffle_manifest': do_transforms,
+            'batch_size': 1,
+            'block_size': 100,
+            'augmentation': [augmentation]}
 
 
 def KITTI(manifest_file, manifest_root, rois_per_img=256,
@@ -160,20 +169,28 @@ def KITTI(manifest_file, manifest_root, rois_per_img=256,
     # if inference, we do not shuffle or flip
     do_transforms = not inference
 
-    image_decode_cfg = dict(height=height, width=width, flip_enable=do_transforms,
-                            crop_enable=False, fixed_aspect_ratio=True)
-    localization_cfg = dict(rois_per_image=rois_per_img,
-                            class_names=CLASSES, scaling_factor=1. / 16)
+    image_config = {"type": "image",
+                    "height": height,
+                    "width": width}
 
-    return dict(
-        manifest_filename=manifest_file,
-        manifest_root=manifest_root,
-        type='image,localization',
-        image=image_decode_cfg,
-        cache_directory=get_data_cache_or_nothing(subdir='kitti_cache'),
-        shuffle_every_epoch=do_transforms,
-        shuffle_manifest=do_transforms,
-        minibatch_size=1,
-        macrobatch_size=100,
-        localization=localization_cfg,
-    )
+    localization_config = {"type": "localization_rcnn",
+                           "rois_per_image": rois_per_img,
+                           "height": height,
+                           "width": width,
+                           "class_names": CLASSES,
+                           "scaling_factor": 1. / 16}
+
+    augmentation = {"type": "image",
+                    "fixed_aspect_ratio": True,
+                    "flip_enable": do_transforms,
+                    "crop_enable": False}
+
+    return {'manifest_filename': manifest_file,
+            'manifest_root': manifest_root,
+            'etl': [image_config, localization_config],
+            'cache_directory': get_data_cache_or_nothing(subdir='kitti_cache'),
+            'shuffle_enable': do_transforms,
+            'shuffle_manifest': do_transforms,
+            'batch_size': 1,
+            'block_size': 100,
+            'augmentation': [augmentation]}

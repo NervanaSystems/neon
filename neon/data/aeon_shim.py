@@ -1,5 +1,5 @@
 # ----------------------------------------------------------------------------
-# Copyright 2015-2016 Nervana Systems Inc.
+# Copyright 2017 Nervana Systems Inc.
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
@@ -15,12 +15,20 @@
 
 import sys
 from neon import logger as neon_logger
+from neon.data.dataloaderadapter import DataLoaderAdapter
 
 
 try:
-    from aeon import DataLoader as AeonDataLoader  # noqa
+    from aeon import DataLoader as AeonLoader
 except ImportError:
-    neon_logger.error('Unable to load aeon dataloading module.')
+    neon_logger.error('Unable to load Aeon data loading module.')
     neon_logger.error('Please follow installation instructions at:')
     neon_logger.error('https://github.com/NervanaSystems/aeon')
     sys.exit(1)
+
+
+def AeonDataLoader(config, adapter=True):
+    if adapter:
+        return DataLoaderAdapter(AeonLoader(config))
+    else:
+        return AeonLoader(config)

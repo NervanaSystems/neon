@@ -19,21 +19,25 @@ from neon.data.aeon_shim import AeonDataLoader
 
 
 def common_config(manifest_file, manifest_root, batch_size, subset_pct):
+    # export NEON_DATA_CACHE_DIR=</data/cache/>
     cache_root = get_data_cache_or_nothing('i1k-cache/')
+    image_config = {"type": "image",
+                    "height": 224,
+                    "width": 224}
+    label_config = {"type": "label",
+                    "binary": False}
+    augmentation = {"type": "image",
+                    "scale": [0.875, 0.875],
+                    "crop_enable": True}
 
-    return {
-               'manifest_filename': manifest_file,
-               'manifest_root': manifest_root,
-               'minibatch_size': batch_size,
-               'subset_fraction': float(subset_pct/100.0),
-               'macrobatch_size': 5000,
-               'type': 'image,label',
-               'cache_directory': cache_root,
-               'image': {'height': 224,
-                         'width': 224,
-                         'scale': [0.875, 0.875]},
-               'label': {'binary': False}
-            }
+    return {'manifest_filename': manifest_file,
+            'manifest_root': manifest_root,
+            'batch_size': batch_size,
+            'subset_fraction': float(subset_pct/100.0),
+            'block_size': 5000,
+            'cache_directory': cache_root,
+            'etl': [image_config, label_config],
+            'augmentation': [augmentation]}
 
 
 def wrap_dataloader(dl, dtype=np.float32):
@@ -47,42 +51,40 @@ def make_alexnet_train_loader(manifest_file, manifest_root, backend_obj,
                               subset_pct=100, random_seed=0, dtype=np.float32):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = True
+    aeon_config['shuffle_enable'] = True
     aeon_config['random_seed'] = random_seed
-    aeon_config['image']['center'] = False
-    aeon_config['image']['flip_enable'] = True
+    aeon_config['augmentation'][0]["center"] = False
+    aeon_config['augmentation'][0]["flip_enable"] = True
 
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj), dtype=dtype)
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
 
 def make_msra_train_loader(manifest_file, manifest_root, backend_obj,
                            subset_pct=100, random_seed=0, dtype=np.float32):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
     aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = True
+    aeon_config['shuffle_enable'] = True
     aeon_config['random_seed'] = random_seed
-    aeon_config['image']['center'] = False
-    aeon_config['image']['flip_enable'] = True
-    aeon_config['image']['scale'] = [0.08, 1.0]
-    aeon_config['image']['do_area_scale'] = True
-    aeon_config['image']['horizontal_distortion'] = [0.75, 1.33]
-    aeon_config['image']['lighting'] = [0.0, 0.01]
-    aeon_config['image']['contrast'] = [0.9, 1.1]
-    aeon_config['image']['brightness'] = [0.9, 1.1]
-    aeon_config['image']['saturation'] = [0.9, 1.1]
+    aeon_config['augmentation'][0]["center"] = False
+    aeon_config['augmentation'][0]["flip_enable"] = True
+    aeon_config['augmentation'][0]['scale'] = [0.08, 1.0]
+    aeon_config['augmentation'][0]['do_area_scale'] = True
+    aeon_config['augmentation'][0]['horizontal_distortion'] = [0.75, 1.33]
+    aeon_config['augmentation'][0]['lighting'] = [0.0, 0.01]
+    aeon_config['augmentation'][0]['contrast'] = [0.9, 1.1]
+    aeon_config['augmentation'][0]['brightness'] = [0.9, 1.1]
+    aeon_config['augmentation'][0]['saturation'] = [0.9, 1.1]
 
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj), dtype)
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
 
 def make_validation_loader(manifest_file, manifest_root, backend_obj, subset_pct=100,
                            dtype=np.float32):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct)
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj), dtype)
 
-
-def make_tuning_loader(manifest_file, manifest_root, backend_obj, dtype=np.float32):
+def make_tuning_loader(manifest_file, manifest_root, backend_obj):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz, subset_pct=10)
     aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = True
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj), dtype)
+    return wrap_dataloader(AeonDataLoader(aeon_config))

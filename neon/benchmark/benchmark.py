@@ -96,6 +96,7 @@ class Benchmark(object):
                 self.model.be.record_mark(fprop_end)  # mark end of fprop and start of bprop
 
                 if inference is False:
+                    self.model.cost.get_cost(x, t)
                     delta = self.model.cost.get_errors(x, t)
                     self.model.bprop(delta)
                     self.model.optimizer.optimize(self.model.layers_to_optimize, epoch=0)

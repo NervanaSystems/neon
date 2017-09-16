@@ -70,7 +70,7 @@ config = PASCALVOC(args.manifest['val'], args.manifest_root,
                    width=args.width, height=args.height,
                    rois_per_img=rpn_rois_per_img, inference=True)
 
-valid_set = faster_rcnn.build_dataloader(config, be, frcn_rois_per_img)
+valid_set = faster_rcnn.build_dataloader(config, frcn_rois_per_img)
 
 num_classes = valid_set.num_classes
 

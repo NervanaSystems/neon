@@ -19,6 +19,7 @@
 .SUFFIXES:
 
 # Choose default Python version; overrideable with "make python2" or "make python3".
+
 PY := $(shell python --version 2>&1  | cut -c8)
 VIRTUALENV_DIR_BASE := .venv
 STYLEVIRTUALENV_DIR_BASE := .styleenv
@@ -167,7 +168,7 @@ neon_install:
 
 aeon_install:
 	@echo "Attempting to install optional aeon dataloader..."
-	-@pip install git+https://github.com/NervanaSystems/aeon.git@v0.2.7
+	-@git clone https://github.com/NervanaSystems/aeon.git aeon ; cd aeon && git fetch && git checkout d38732e9fbe557084cace1b9a8855f9b7fbd7e2c && mkdir -p build && cd build && rm -rf * && cmake .. && pip install .
 
 sysdeps:
 	@echo "Installing neon dependencies system wide..."
@@ -201,6 +202,7 @@ clean_so:
 
 clean: clean_py clean_so
 	@echo "Removing virtual environment files..."
+	@rm -rf aeon
 	@rm -rf $(VIRTUALENV_DIR_BASE) $(VIRTUALENV_DIR_BASE)2 $(VIRTUALENV_DIR_BASE)3 $(STYLEVIRTUALENV_DIR_BASE)
 	@echo
 

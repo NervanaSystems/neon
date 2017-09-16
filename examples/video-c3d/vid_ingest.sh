@@ -89,13 +89,19 @@ export -f split_vid
 
 for setn in train test; do
     echo Processing $setn data...
+    outfile=$OUTDIR/${setn}-index.csv
     listfile=$OUTDIR/${setn}list.txt
     unzip -q -c $ZIPFILE ucfTrainTestlist/${setn}list01.txt | col -b | awk -vO=$VIDDIR/ '{print O$1}' > $listfile
     # Split the raw video files
     cat $listfile | parallel --joblog $OUTDIR/${setn}split.log --progress split_vid {}
     cat $(cat $listfile | sed "s/.avi$/.csv/") |
         awk -vFS=',' '{if ($3-$2>=0.63) {print $1}}' |
-        sed "s|^$OUTDIR/\(.*\)/\(.*.avi\)|\1/\2,\1/label.txt|" > $OUTDIR/${setn}-index.csv
+        sed "s|^$OUTDIR/\(.*\)/\(.*.avi\)|\1/\2,\1/label.txt|" > $outfile
+    tmpfile=$(mktemp)
+    paste -d$'\t' <(cut -d',' -f1 $outfile) <(cut -d',' -f2 $outfile | sed "s|\(.*\)|$OUTDIR/\1|" | xargs cat) > $tmpfile
+    mv $tmpfile $outfile
+    rm -rf $tmpfile
+    sed -i "1s/^/@FILE\\tASCII_INT\n/" $outfile
 done
 
 unset split_vid

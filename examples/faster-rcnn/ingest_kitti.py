@@ -197,7 +197,7 @@ def ingest_kitti(input_dir, out_dir, train_percent=90, overwrite=False):
 
 
 def create_manifest(manifest_path, index_list, annot_dir, image_dir, root_dir):
-    records = []
+    records = [('@FILE', 'FILE')]
 
     for tag in index_list:
         image = os.path.join(image_dir, tag + '.png')
@@ -210,7 +210,7 @@ def create_manifest(manifest_path, index_list, annot_dir, image_dir, root_dir):
                         os.path.relpath(annot, root_dir)))
 
     print("Writing manifest file to: {}".format(manifest_path))
-    np.savetxt(manifest_path, records, fmt='%s,%s')
+    np.savetxt(manifest_path, records, fmt='%s\t%s')
 
 
 if __name__ == '__main__':

@@ -21,7 +21,7 @@ from neon.data.aeon_shim import AeonDataLoader
 from neon.data.dataloader_transformers import OneHot, TypeCast
 
 
-def ingest_whales(input_dir, out_dir, train_frac=0.8):
+def ingest_whales(input_dir, out_dir, overwrite=False, train_frac=0.8):
     '''
     save_ingested_whale_files
     '''
@@ -46,17 +46,11 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
                 f.write('save_path = {}\n'.format(os.path.join(orig_out_dir, 'model.p')))
                 f.write('submission_file = {}\n'.format(os.path.join(orig_out_dir, 'subm.txt')))
 
-    if all([os.path.exists(manifests[sn]) for sn in set_names]):
+    if (all([os.path.exists(manifests[sn]) for sn in set_names]) and not overwrite):
         return [manifests[sn] for sn in set_names]
 
     with ZipFile(zfilename, 'r') as zf:
         zf.extractall(out_dir)
-
-        # create label files
-        lbl_files = [os.path.join('data', lbl + '.txt') for lbl in ('neg', 'pos')]
-
-        np.savetxt(os.path.join(out_dir, lbl_files[0]), [0], fmt='%d')
-        np.savetxt(os.path.join(out_dir, lbl_files[1]), [1], fmt='%d')
 
         input_csv = os.path.join(out_dir, 'data', 'train.csv')
         train_records = np.genfromtxt(input_csv, delimiter=',', skip_header=1, dtype=None)
@@ -66,7 +60,10 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
         pos_list, neg_list = [], []
 
         for aiff, lbl in train_records:
-            record = (os.path.join('data', 'train', aiff), lbl_files[lbl])
+            try:
+                record = (os.path.join('data', 'train', aiff), lbl)
+            except:
+                record = (os.path.join('data', 'train', aiff.decode()), lbl)
             if lbl == 1:
                 pos_list.append(record)
             else:
@@ -90,7 +87,11 @@ def ingest_whales(input_dir, out_dir, train_frac=0.8):
             if sn != 'test':
                 np.random.shuffle(set_lists[sn])
 
-            format_str = '%s' if sn in ('noise', 'test') else '%s,%s'
+            format_str = '%s' if sn in ('noise', 'test') else '%s\t%s'
+            if sn not in ('noise', 'test'):
+                set_lists[sn].insert(0, ('@FILE', 'STRING'))
+            else:
+                set_lists[sn].insert(0, '@FILE')
             np.savetxt(manifests[sn], set_lists[sn], fmt=format_str)
 
     return [manifests[sn] for sn in set_names]
@@ -105,46 +106,51 @@ def wrap_dataloader(dl):
 def common_config(manifest_file, manifest_root, batch_size):
     cache_root = get_data_cache_or_nothing('whale-cache/')
 
-    return {
-               'manifest_filename': manifest_file,
-               'manifest_root': manifest_root,
-               'minibatch_size': batch_size,
-               'macrobatch_size': batch_size * 12,
-               'type': 'audio,label',
-               'cache_directory': cache_root,
-               'audio': {'sample_freq_hz': 2000,
-                         'max_duration': '2 seconds',
-                         'frame_length': '80 milliseconds',
-                         'frame_stride': '40 milliseconds'},
-               'label': {'binary': False}
-            }
+    audio_config = {"type": "audio",
+                    "sample_freq_hz": 2000,
+                    "max_duration": '2 seconds',
+                    "frame_length": '80 milliseconds',
+                    "frame_stride": '40 milliseconds'}
+
+    label_config = {"type": "label",
+                    "binary": False}
+
+    return {'manifest_filename': manifest_file,
+            'manifest_root': manifest_root,
+            'batch_size': batch_size,
+            'block_size': batch_size * 12,
+            'cache_directory': cache_root,
+            'etl': [audio_config, label_config]}
 
 
 def make_val_loader(manifest_file, manifest_root, backend_obj):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
 
 def make_train_loader(manifest_file, manifest_root, backend_obj, noise_file=None, random_seed=0):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = True
+    aeon_config['shuffle_enable'] = True
     aeon_config['random_seed'] = random_seed
 
     if noise_file is not None:
-        aeon_config['audio']['noise_index_file'] = noise_file
-        aeon_config['audio']['noise_root'] = manifest_root
-        aeon_config['audio']['add_noise_probability'] = 0.5
-        aeon_config['audio']['noise_level'] = [0.0, 0.5]
+        aeon_config['augmentation'] = []
+        aeon_config['augmentation'].append(dict())
+        aeon_config['augmentation'][0]['type'] = "audio"
+        aeon_config['augmentation'][0]['noise_index_file'] = noise_file
+        aeon_config['augmentation'][0]['noise_root'] = os.path.dirname(noise_file)
+        aeon_config['augmentation'][0]['add_noise_probability'] = 0.5
+        aeon_config['augmentation'][0]['noise_level'] = (0.0, 0.5)
 
-    return wrap_dataloader(AeonDataLoader(aeon_config, backend_obj))
+    return wrap_dataloader(AeonDataLoader(aeon_config))
 
 
 def make_test_loader(manifest_file, manifest_root, backend_obj):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['type'] = 'audio'  # No labels provided
     aeon_config.pop('label', None)
-    dl = AeonDataLoader(aeon_config, backend_obj)
+    dl = AeonDataLoader(aeon_config)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
 
@@ -154,8 +160,9 @@ if __name__ == '__main__':
     parser = ArgumentParser()
     parser.add_argument('--input_dir', required=True, help='path to whale_data.zip')
     parser.add_argument('--out_dir', required=True, help='destination path of extracted files')
+    parser.add_argument('--overwrite', required=False, default=False, help='overwriting manifest')
     args = parser.parse_args()
 
-    generated_files = ingest_whales(args.input_dir, args.out_dir)
+    generated_files = ingest_whales(args.input_dir, args.out_dir, args.overwrite)
 
     print("Manifest files written to:\n" + "\n".join(generated_files))

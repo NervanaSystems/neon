@@ -223,8 +223,9 @@ applying augmentation and/or transformations, and transferring the resulting out
 (if necessary). The module also adds optional functionality for applying
 transformations (scale, flip, and rotation).
 
-.. warning:: The old :py:class:`.DataLoader` and :py:class:`.ImageLoader` classes will be deprecated with the upcoming release of neon v2.0. Documentation for these classes can be found `here <http://neon.nervanasys.com/docs/latest/previous_versions.html#neon-v1-5.4>`_.
+.. warning:: The old :py:class:`.DataLoader` and :py:class:`.ImageLoader` classes will be deprecated. Documentation for these classes can be found `here <http://neon.nervanasys.com/docs/latest/previous_versions.html#neon-v1-5.4>`_.
 
+.. warning:: In neon v2.2, we have moved to using a new version of aeon (v1.0+), which has a different manifest format, and also a different API in the provisioned data. We have provided a helper script in ``data/convert_manifest.py`` to assist in converting manifest files. In addition, by default the data loader object is wrapped with an adapter to convert the data from aeon v1.0 into the format expected the neon examples. See: ``AeonDataLoader` in ``data/aeon_shim.py`` and ``data/dataloaderadapter.py`` for more details.
 
 Quick start guide
 ~~~~~~~~~~~~~~~~~

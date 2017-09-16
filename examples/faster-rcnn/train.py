@@ -73,7 +73,7 @@ config = PASCALVOC(args.manifest['train'], args.manifest_root,
                    rois_per_img=rpn_rois_per_img, inference=False)
 config['subset_fraction'] = float(args.subset_pct / 100.0)
 
-train_set = faster_rcnn.build_dataloader(config, be, frcn_rois_per_img)
+train_set = faster_rcnn.build_dataloader(config, frcn_rois_per_img)
 
 # build the Faster-RCNN model
 model = faster_rcnn.build_model(train_set, frcn_rois_per_img, inference=False)

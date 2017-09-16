@@ -91,7 +91,7 @@ def create_manifest(manifest_path, index_file, annot_dir, image_dir, root_dir):
         root_dir (string): paths will be made relative to this directory
         ext (string, optional): image extension (default=.jpg)
     """
-    records = []
+    records = [('@FILE', 'FILE')]
     with open(index_file) as f:
         for img in f:
             tag = img.rstrip(os.linesep)
@@ -105,7 +105,7 @@ def create_manifest(manifest_path, index_file, annot_dir, image_dir, root_dir):
             records.append((os.path.relpath(image, root_dir),
                             os.path.relpath(annot, root_dir)))
 
-    np.savetxt(manifest_path, records, fmt='%s,%s')
+    np.savetxt(manifest_path, records, fmt='%s\t%s')
 
 
 if __name__ == '__main__':

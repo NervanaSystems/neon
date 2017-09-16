@@ -39,9 +39,9 @@ rseed = 0 if args.rng_seed is None else args.rng_seed
 assert 'train' in args.manifest, "Missing train manifest"
 assert 'val' in args.manifest, "Missing validation manifest"
 train = make_alexnet_train_loader(args.manifest['train'], args.manifest_root,
-                                  model.be, args.subset_pct, rseed, dtype=args.datatype)
+                                  model.be, args.subset_pct, rseed)
 valid = make_validation_loader(args.manifest['val'], args.manifest_root,
-                               model.be, args.subset_pct, dtype=args.datatype)
+                               model.be, args.subset_pct)
 
 weight_sched = Schedule(20, 0.1)
 opt_gdm = GradientDescentMomentum(0.01, 0.9, wdecay=0.0005, schedule=weight_sched,

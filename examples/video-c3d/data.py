@@ -22,44 +22,51 @@ from neon.util.persist import get_data_cache_or_nothing
 
 def common_config(manifest_file, manifest_root, batch_size):
     cache_root = get_data_cache_or_nothing('ucf-cache/')
-    return {
-               'manifest_filename': manifest_file,
-               'manifest_root': manifest_root,
-               'minibatch_size': batch_size,
-               'macrobatch_size': batch_size * 12,
-               'type': 'video,label',
-               'cache_directory': cache_root,
-               'video': {'max_frame_count': 16,
-                         'frame': {'height': 112,
-                                   'width': 112,
-                                   'scale': [0.875, 0.875]}},
-               'label': {'binary': False}
-            }
+
+    video_config = {"type": "video",
+                    "max_frame_count": 16,
+                    "frame": {"height": 112,
+                              "width": 112}}
+
+    label_config = {"type": "label",
+                    "binary": True}
+
+    augmentation = {"type": "image",
+                    "scale": [0.875, 0.875]}
+
+    return {"manifest_filename": manifest_file,
+            "manifest_root": manifest_root,
+            "batch_size": batch_size,
+            "block_size": 5000,
+            "cache_directory": cache_root,
+            "etl": [video_config, label_config],
+            "augmentation": [augmentation]}
+
+
+def wrap_dataloader(aeon_config):
+    dl = AeonDataLoader(aeon_config)
+    dl = OneHot(dl, index=1, nclasses=101)
+    dl = TypeCast(dl, index=0, dtype=np.float32)
+    return dl
 
 
 def make_test_loader(manifest_file, manifest_root, backend_obj, subset_pct=100):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['subset_fraction'] = float(subset_pct/100.0)
-    dl = AeonDataLoader(aeon_config, backend_obj)
-    dl = OneHot(dl, index=1, nclasses=101)
-    dl = TypeCast(dl, index=0, dtype=np.float32)
-    return dl
+    return wrap_dataloader(aeon_config)
 
 
 def make_train_loader(manifest_file, manifest_root, backend_obj, subset_pct=100, random_seed=0):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['subset_fraction'] = float(subset_pct/100.0)
     aeon_config['shuffle_manifest'] = True
-    aeon_config['shuffle_every_epoch'] = True
+    aeon_config['shuffle_enable'] = True
     aeon_config['random_seed'] = random_seed
 
-    aeon_config['video']['frame']['center'] = False
-    aeon_config['video']['frame']['flip_enable'] = True
+    aeon_config["augmentation"][0]["center"] = False
+    aeon_config["augmentation"][0]["flip_enable"] = True
 
-    dl = AeonDataLoader(aeon_config, backend_obj)
-    dl = OneHot(dl, index=1, nclasses=101)
-    dl = TypeCast(dl, index=0, dtype=np.float32)
-    return dl
+    return wrap_dataloader(aeon_config)
 
 
 def make_inference_loader(manifest_file, backend_obj):
@@ -67,7 +74,7 @@ def make_inference_loader(manifest_file, backend_obj):
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
     aeon_config['type'] = 'video'  # No labels provided
     aeon_config.pop('label', None)
-    dl = AeonDataLoader(aeon_config, backend_obj)
+    dl = AeonDataLoader(aeon_config)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
 
