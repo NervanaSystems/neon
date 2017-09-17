@@ -15,6 +15,7 @@
 from builtins import zip
 import numpy as np
 import os
+import pytest
 
 from neon.backends import gen_backend
 from neon.data import ArrayIterator, MNIST, PTB
@@ -98,6 +99,7 @@ def test_model_get_outputs(backend_default, data):
     mlp.benchmark(train_set, inference=True, niterations=5)
 
 
+@pytest.mark.xfail(reason="Intermittent failure. #971")
 def test_model_serialize(backend_default, data):
     dataset = MNIST(path=data)
     (X_train, y_train), (X_test, y_test), nclass = dataset.load_data()

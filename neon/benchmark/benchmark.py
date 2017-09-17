@@ -16,7 +16,7 @@
 from functools import wraps
 
 from neon import NervanaObject
-from neon.layers import Sequential
+from neon.layers import Sequential, Seq2Seq
 from collections import OrderedDict
 from neon import __version__ as __neon_version__
 from neon import logger as neon_logger
@@ -45,7 +45,12 @@ class Benchmark(object):
         if not time_layers:
             return
 
-        for layer in model.layers if not type(model.layers) is Sequential else model.layers.layers:
+        if isinstance(model.layers, (Sequential, Seq2Seq)):
+            layers = model.layers.layers
+        else:
+            layers = model.layers
+
+        for layer in layers:
             self.layer_times['fprop ' + layer.name] = []
             self.layer_times['bprop ' + layer.name] = []
             layer.fprop = benchmarked(layer.fprop, self.start,
