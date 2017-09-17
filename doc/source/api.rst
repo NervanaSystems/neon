@@ -97,13 +97,8 @@ and iterating through minibatches of data during training.
   neon.data.hdf5iterator.HDF5Iterator
   neon.data.hdf5iterator.HDF5IteratorAutoencoder
   neon.data.hdf5iterator.HDF5IteratorOneHot
-  neon.data.imageloader.ImageLoader
-  neon.data.dataloader.DataLoader
-  neon.data.media.ImageParams
-  neon.data.media.VideoParams
-  neon.data.media.AudioParams
 
-.. warning:: The :py:class:`.DataLoader` and :py:class:`.ImageLoader` classes will be deprecated with the upcoming release of neon v2.0 in favor of the new Aeon-based DataLoader. For documentation of the aeon package, see http://aeon.nervanasys.com.
+.. warning:: The :py:class:`.DataLoader` and :py:class:`.ImageLoader` classes were deprecated in favor of the new Aeon-based DataLoader. For documentation of the aeon package, see http://aeon.nervanasys.com.
 
 The new Aeon-based dataloader supports several classes that perform transformations on the data provisioned by aeon:
 
@@ -143,8 +138,6 @@ Dataset objects for storing data from common modalities (e.g. Text), as well as 
   neon.data.ticker.CopyTask
   neon.data.ticker.RepeatCopyTask
   neon.data.ticker.PrioritySortTask
-  neon.data.speech.Speech
-  neon.data.video.Video
 
 ``neon.models``
 ---------------

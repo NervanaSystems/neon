@@ -37,7 +37,7 @@ packages (different system names shown):
    pkg-config, pkg-config, Retrieves information about installed libraries
 
 .. note::
-   To enable neon's :py:class:`.DataLoader`, several optional libraries should be installed. For image processing, install `OpenCV <http://opencv.org/>`__. For audio and video data, install `ffmpeg <https://ffmpeg.org/>`__. We recommend installing with a package manager (e.g. apt-get or homebrew). If you have encountered error messages about failing to install aeon while building neon, please visit `aeon <https://github.com/NervanaSystems/aeon>`__ page for how to install prerequisites for aeon to enable neon with aeon data loader. 
+   To enable Aeon, neon's dataloader, several optional libraries should be installed. For image processing, install `OpenCV <http://opencv.org/>`__. For audio and video data, install `ffmpeg <https://ffmpeg.org/>`__. We recommend installing with a package manager (e.g. apt-get or homebrew). If you have encountered error messages about failing to install aeon while building neon, please visit `aeon <https://github.com/NervanaSystems/aeon>`__ page for how to install prerequisites for aeon to enable neon with aeon data loader.
 
 
 Additionally, there are several other libraries.
@@ -77,7 +77,7 @@ setup neon in this manner, run the following commands:
     cd neon; make
 
 This will install the files in the ``neon/.venv/`` directory and will use the python version in the
-default PATH. Note that neon would automatically download the released MKLML library that 
+default PATH. Note that neon would automatically download the released MKLML library that
 features MKL support.
 
 To instead force a Python2 or Python3 install, supply this as an optional parameter:
@@ -113,7 +113,7 @@ Note that since neon v2.1 the above is equivalent to explicitly add ``-b mkl`` f
     examples/mnist_mlp.py -b mkl
 
 .. note::
-   To achieve best performance, we recommend setting KMP_AFFINITY and OMP_NUM_THREADS in this way: ``export KMP_AFFINITY=compact,1,0,granularity=fine`` and ``export OMP_NUM_THREADS=<Number of Physical Cores>``. You can set these environment variables in bash and do ``source ~/.bashrc`` to activate it. You may need to activate the virtual environment again after sourcing bashrc. For detailed information about KMP_AFFINITY, please read here: https://software.intel.com/en-us/node/522691. We encourage users to experiment with this thread affinity configurations to achieve even better performance. 
+   To achieve best performance, we recommend setting KMP_AFFINITY and OMP_NUM_THREADS in this way: ``export KMP_AFFINITY=compact,1,0,granularity=fine`` and ``export OMP_NUM_THREADS=<Number of Physical Cores>``. You can set these environment variables in bash and do ``source ~/.bashrc`` to activate it. You may need to activate the virtual environment again after sourcing bashrc. For detailed information about KMP_AFFINITY, please read here: https://software.intel.com/en-us/node/522691. We encourage users to experiment with this thread affinity configurations to achieve even better performance.
 
 When you are finished, remember to deactivate the environment
 

@@ -76,9 +76,6 @@ DOC_PUB_RELEASE_PATH := $(DOC_PUB_PATH)/$(RELEASE)
 #neon mklEngine object
 MKL_ENGINE  := neon/backends/mklEngine
 
-# neon compiled objects
-DATA_LOADER := loader
-
 VIRTUALENV := $(shell command -v virtualenv 2> /dev/null)
 ifndef VIRTUALENV
     $(error "virtualenv must be installed. Consider `pip install virtualenv`.")
@@ -99,7 +96,7 @@ endif
 .PHONY: default all env sysinstall sysinstall_nodeps neon_install python2 python3 \
 	    sysdeps sysuninstall clean_py clean_so \
 	    clean test coverage style lint lint3k check doc html release examples \
-	    serialize_check $(DATA_LOADER) $(MKL_ENGINE)
+	    serialize_check $(MKL_ENGINE)
 
 default: env
 
@@ -107,7 +104,7 @@ all:
 	$(MAKE) PY=3 TEST_OPTS='$(TEST_OPTS)' test
 	$(MAKE) PY=2 TEST_OPTS='$(TEST_OPTS)' test
 
-env: $(MKL_ENGINE) $(DATA_LOADER) $(ACTIVATE)
+env: $(MKL_ENGINE) $(ACTIVATE)
 
 python2: VIRTUALENV_EXE := virtualenv -p python2.7
 python2: VIRTUALENV_DIR := $(VIRTUALENV_DIR_BASE)2
@@ -154,13 +151,9 @@ $(MKL_ENGINE):
 	@echo "Building MKL Engine..."
 	@./install_mkl.sh intel
 
-$(DATA_LOADER):
-	@echo "Building Data Loader..."
-	-@cd $(DATA_LOADER) && $(MAKE) bin/loader.so HAS_GPU=$(HAS_GPU)
-
 # TODO: handle kernel/.so compilation via setup.py directly
-sysinstall_nodeps: $(DATA_LOADER) neon_install
-sysinstall: $(MKL_ENGINE) sysdeps $(DATA_LOADER) neon_install
+sysinstall_nodeps: neon_install
+sysinstall: $(MKL_ENGINE) sysdeps neon_install
 neon_install:
 	@echo "Installing neon system wide..."
 	@python setup.py install
@@ -196,7 +189,6 @@ clean_py:
 
 clean_so:
 	@echo "Cleaning compiled shared object files..."
-	@cd $(DATA_LOADER) && $(MAKE) clean
 	@cd $(MKL_ENGINE) && $(MAKE) clean
 	@echo
 

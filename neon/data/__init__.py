@@ -17,11 +17,7 @@ from neon.data.dataiterator import NervanaDataIterator, ArrayIterator
 from neon.data.hdf5iterator import HDF5Iterator, HDF5IteratorOneHot, HDF5IteratorAutoencoder
 from neon.data.datasets import Dataset
 from neon.data.text import Text, Shakespeare, PTB, HutterPrize, IMDB, SICK
-from neon.data.dataloader import DataLoader
-from neon.data.media import ImageParams, ImageIngestParams, VideoParams, AudioParams
-from neon.data.imageloader import ImageLoader
 from neon.data.questionanswer import BABI, QA
 from neon.data.ticker import Ticker, CopyTask, RepeatCopyTask, PrioritySortTask
-from neon.data.video import Video
 from neon.data.imagecaption import ImageCaption, ImageCaptionTest, Flickr8k, Flickr30k, Coco
 from neon.data.image import MNIST, CIFAR10, DUMMY
