@@ -465,15 +465,15 @@ class NervanaMKL(NervanaCPU):
         # else:
         #     C[:] = alpha * self.dot(A, B) + beta * C
 
-        if beta == 0:
+        if not relu:
             if C._tensor.flags['C_CONTIGUOUS'] is not True:
                 tmp = np.empty(C.shape, dtype=C.dtype)
-                math_cpu.blas_dot(A._tensor, B._tensor, tmp)
-                C._tensor[:] = tmp.copy()
+                if beta != 0:
+                    tmp[:] = C._tensor
+                math_cpu.blas_dot(A._tensor, B._tensor, tmp, alpha, beta)
+                C._tensor[:] = tmp
             else:
-                math_cpu.blas_dot(A._tensor, B._tensor, C._tensor)
-            if relu:
-                self.Relu(C._tensor, C._tensor)
+                math_cpu.blas_dot(A._tensor, B._tensor, C._tensor, alpha, beta)
         else:
             # mfma: change np.multiply to mul
             if beta != 1:

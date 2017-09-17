@@ -281,12 +281,15 @@ def _force_corder(x):
         return (x, 'n')
 
 
-def blas_dot(a, b, c=None):
+def blas_dot(a, b, c=None, alpha=1.0, beta=0):
+    # convert non-contiguous tensor into contiguous to speed up
+    if not iscontiguous(a):
+        a = np.ascontiguousarray(a, dtype=np.float32)
+    if not iscontiguous(b):
+        b = np.ascontiguousarray(b, dtype=np.float32)
     if (iscontiguous(a) and iscontiguous(b) and c is None) \
             or (iscontiguous(a) and iscontiguous(b) and iscontiguous(c)) \
             and sys.version_info < (3, 4):
-        alpha = 1.0
-        beta = 0
         m = a.shape[0]
         n = b.shape[1]
         k = a.shape[1]
@@ -306,13 +309,22 @@ def blas_dot(a, b, c=None):
         _c = ffi.cast("float *", ffi.from_buffer(c))
         _transa = ffi.cast("char", transa)
         _transb = ffi.cast("char", transb)
-
         NervanaObject.be.mathlib.cmath_gemm(
             _transa, _transb, m, n, k, alpha, _a, lda, _b, ldb, beta, _c, ldc)
-
-        return c
     else:
-        return np.dot(a, b, c)
+        if beta == 0:
+            np.dot(a, b, c)
+            if alpha != 1:
+                np.multiply(c, alpha, c)
+            return c
+        if beta != 1:
+            np.multiply(c, beta, c)
+        tmp = np.empty(c.shape, dtype=c.dtype)
+        np.dot(a, b, tmp)
+        if alpha != 1:
+            np.multiply(tmp, alpha, tmp)
+        np.add(c, tmp, c)
+    return c
 
 
 def sum(x, axis=None, keepdims=True):
