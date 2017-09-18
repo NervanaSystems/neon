@@ -16,47 +16,68 @@
 from functools import wraps
 
 from neon import NervanaObject
-from neon.layers import Sequential, Seq2Seq
 from collections import OrderedDict
 from neon import __version__ as __neon_version__
 from neon import logger as neon_logger
+from neon.layers.container import LayerContainer
 import numpy as np
 
 
-def benchmarked(func, start, end, output):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        NervanaObject.be.record_mark(start)
-        res = func(*args, **kwargs)
-        NervanaObject.be.record_mark(end)
-        NervanaObject.be.synchronize_mark(end)
-        output.append(NervanaObject.be.get_time(start, end))
-        return res
-    return wrapper
+@property
+def flatten_layers(self):
+    lf = []
+    for l in self.layers:
+        if isinstance(l, LayerContainer):
+            lf += l.flatten_layers
+        else:
+            lf.append(l)
+    return lf
 
 
 class Benchmark(object):
 
     def __init__(self, model, time_layers=True):
-        self.start = model.be.init_mark()
-        self.end = model.be.init_mark()
         self.model = model
         self.layer_times = OrderedDict()
         if not time_layers:
             return
 
-        if isinstance(model.layers, (Sequential, Seq2Seq)):
-            layers = model.layers.layers
-        else:
-            layers = model.layers
+        self.start = self.model.be.init_mark()
+        self.end = self.model.be.init_mark()
+        LayerContainer.flatten_layers = flatten_layers
+        for idx, layer in enumerate(self.model.layers.flatten_layers):
+            l_name = layer.name
 
-        for layer in layers:
-            self.layer_times['fprop ' + layer.name] = []
-            self.layer_times['bprop ' + layer.name] = []
-            layer.fprop = benchmarked(layer.fprop, self.start,
-                                      self.end, self.layer_times['fprop ' + layer.name])
-            layer.bprop = benchmarked(layer.bprop, self.start,
-                                      self.end, self.layer_times['bprop ' + layer.name])
+            f_l_name = 'fprop ' + l_name
+            b_l_name = 'bprop ' + l_name
+            self.layer_times[f_l_name] = []
+            self.layer_times[b_l_name] = []
+            layer.fprop = Benchmark.benchmarked(layer.fprop, self.start,
+                                                self.end, self.layer_times[f_l_name])
+            layer.bprop = Benchmark.benchmarked(layer.bprop, self.start,
+                                                self.end, self.layer_times[b_l_name])
+
+    @staticmethod
+    def benchmarked(func, start, end, output):
+        '''
+        :param func: Function that is timed
+        :param start: Start marker
+        :param end: End marker
+        :param output: Array to which func execution time will be appended
+        :return: Wrapped function
+        '''
+        nerv_be = NervanaObject.be
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            nerv_be.record_mark(start)
+            res = func(*args, **kwargs)
+            nerv_be.record_mark(end)
+            nerv_be.synchronize_mark(end)
+            output.append(nerv_be.get_time(start, end))
+            return res
+
+        return wrapper
 
     def time(self, dataset, inference=False, niterations=20):
         """
@@ -159,6 +180,8 @@ class Benchmark(object):
         msg += '%s\n%s\n%s\n' % (sep, head_str, sep)
         out_stats = {}
         for step in stats:
+            if not any(stats[step]):
+                continue
             timesu = np.array(stats[step][nskip:])  # in ms
             out_stats[step] = {}
             for function in functions:
