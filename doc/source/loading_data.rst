@@ -234,26 +234,27 @@ The user guide for aeon is found at http://aeon.nervanasys.com. Here we provide 
 
 Users interact with the aeon dataloader by providing two items:
 
-1. Manifest file, a comma-separated file (*.csv).
+1. Manifest file, a tab-separated file (*.tsv).
 2. Configuration parameters, as a python dictionary.
 
 Operations such as generating training/testing splits, or balancing labels for imbalanced datasets should be implemented outside of the dataloader by the user during **ingest** to create the appropriate manifest files. Several example ingest scripts are in the neon repository.
 
 **Manifest files**
 
-Manifest files are comma-separated files. Each row is a path to the input and the target. For example:
+The manifest file contains UTF-8 text lines. Each line is one of header, comment, or record. For reference, please take a look at `aeon documentation <https://github.com/NervanaSystems/aeon/blob/rc1-master/doc/source/user_guide.rst#manifest-file>`_.
 
 .. code-block:: bash
 
-    /image_dir/faces/naveen_rao.jpg,/labels/0.txt
-    /image_dir/faces/arjun_bansal.jpg,/labels/0.txt
-    /image_dir/faces/amir_khosrowshahi.jpg, /labels/0.txt
-    /image_dir/fruits/apple.jpg,/labels/1.txt
-    /image_dir/fruits/pear.jpg,/labels/1.txt
-    /image_dir/animals/lion.jpg,/labels/2.txt
-    /image_dir/animals/tiger.jpg,/labels/2.txt
+    @FILE FILE
+    /image_dir/faces/naveen_rao.jpg	/labels/0.txt
+    /image_dir/faces/arjun_bansal.jpg	/labels/0.txt
+    /image_dir/faces/amir_khosrowshahi.jpg	 /labels/0.txt
+    /image_dir/fruits/apple.jpg	/labels/1.txt
+    /image_dir/fruits/pear.jpg	/labels/1.txt
+    /image_dir/animals/lion.jpg	/labels/2.txt
+    /image_dir/animals/tiger.jpg	/labels/2.txt
     ...
-    /image_dir/vehicles/toyota.jpg,/labels/3.txt
+    /image_dir/vehicles/toyota.jpg	/labels/3.txt
 
 **Configuration parameters**
 
@@ -267,7 +268,7 @@ Aeon is divided into separate providers for different modalities and problems. F
     config = dict(type="image,label",
                   image=image_config,
                   label=label_config,
-                  manifest_filename='train.csv',
+                  manifest_filename='train.tsv',
                   minibatch_size=128)
 
 For a full list of supported providers and their associated configurations, see documentation at: http://aeon.nervanasys.com.
