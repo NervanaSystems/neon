@@ -119,7 +119,7 @@ if __name__ == '__main__':
     config["manifest_filename"] = args.manifest['val']
     config["batch_size"] = be.bsz
 
-    val_set = build_dataloader(config)
+    val_set = build_dataloader(config, args.manifest_root, args.batch_size)
 
     model = Model(layers=SSD(ssd_config=config['ssd_config'], dataset=val_set))
     model.initialize(dataset=val_set)
