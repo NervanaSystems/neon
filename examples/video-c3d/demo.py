@@ -34,8 +34,9 @@ def segment_video(infile, tmpdir):
 
     manifest_file = os.path.join(tmpdir, 'manifest.csv')
     all_clips = np.genfromtxt(segments_out, dtype=None, delimiter=',')
+    all_clips = np.atleast_1d(all_clips)
     valid_clips = [l[0] for l in all_clips if l[2] - l[1] > 0.63]
-    np.savetxt(manifest_file, valid_clips, fmt='%s')
+    np.savetxt(manifest_file, valid_clips, fmt='%s', header='@FILE', comments='')
     return manifest_file
 
 
@@ -75,7 +76,9 @@ clip_pred = model.get_outputs(test)
 tot_prob = clip_pred[:test.ndata, :].mean(axis=0)
 top_5 = np.argsort(tot_prob)[-5:]
 
-hyps = ["{:0.5f} {}".format(tot_prob[i], category_map[i]) for i in reversed(top_5)]
+hyps = ["{:0.5f} {}".format(tot_prob[i],
+                            category_map.keys()[
+                                category_map.values().index(i)]) for i in reversed(top_5)]
 np.savetxt(caption_file, hyps, fmt='%s')
 
 caption_video(args.input_video, caption_file, args.output_video)

@@ -31,16 +31,13 @@ def common_config(manifest_file, manifest_root, batch_size):
     label_config = {"type": "label",
                     "binary": True}
 
-    augmentation = {"type": "image",
-                    "scale": [0.875, 0.875]}
-
     return {"manifest_filename": manifest_file,
             "manifest_root": manifest_root,
             "batch_size": batch_size,
             "block_size": 5000,
             "cache_directory": cache_root,
             "etl": [video_config, label_config],
-            "augmentation": [augmentation]}
+            "augmentation": []}
 
 
 def wrap_dataloader(aeon_config):
@@ -72,8 +69,11 @@ def make_train_loader(manifest_file, manifest_root, backend_obj, subset_pct=100,
 def make_inference_loader(manifest_file, backend_obj):
     manifest_root = ""  # This is used for demo script which generates abs path manifest
     aeon_config = common_config(manifest_file, manifest_root, backend_obj.bsz)
-    aeon_config['type'] = 'video'  # No labels provided
-    aeon_config.pop('label', None)
+    video_config = {"type": "video",
+                    "max_frame_count": 16,
+                    "frame": {"height": 112,
+                              "width": 112}}
+    aeon_config['etl'] = [video_config]
     dl = AeonDataLoader(aeon_config)
     dl = TypeCast(dl, index=0, dtype=np.float32)
     return dl
@@ -85,7 +85,8 @@ def accumulate_video_pred(manifest_file, manifest_root, clip_preds):
     #  video_clip_file will be video_path/v_WritingOnBoard_g05,
     #  where WritingOnBoard_g05 is the video name
     video_pred = {}
-    clip_files = np.genfromtxt(manifest_file, dtype=None, delimiter=',', usecols=(0))
+    clip_files = np.genfromtxt(
+        manifest_file, dtype=None, delimiter=',', usecols=(0), skip_header=1)
     for clip_file, pred in zip(clip_files, clip_preds):
         clip_file_abs = os.path.join(manifest_root, clip_file)
         video_name = '_'.join(os.path.basename(clip_file_abs).split('_')[1:-2])
