@@ -36,7 +36,7 @@ arg_defaults = {'batch_size': 0}
 parser = NeonArgparser(__doc__, default_overrides=arg_defaults)
 parser.add_argument('--height', type=int, help='image height')
 parser.add_argument('--width', type=int, help='image width')
-parser.add_argument('--subset_pct', type=float, default=1.0,
+parser.add_argument('--subset_pct', type=float, default=100.0,
                     help='fraction of full training data set to use')
 parser.add_argument('--ssd_config', action='append', required=True, help='path to ssd json file')
 parser.add_argument('--lr_scale', type=float, default=1.0, help='scale lr by this amount')

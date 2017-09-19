@@ -73,7 +73,7 @@ def build_dataloader(config, manifest_root, batch_size, subset_pct=100,
     # 'Dataloader config\'s minibatch size not matching backend bsz'
     config["manifest_root"] = manifest_root
     config["batch_size"] = batch_size
-    # config["subset_fraction"] = float(subset_pct/100.0)
+    config["subset_fraction"] = float(subset_pct/100.0)
 
     dl = DataLoaderAdapter(DataLoader(config))
     dl = TypeCast(dl, index=5, dtype=np.float32)  # cast image to float
