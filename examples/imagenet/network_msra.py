@@ -1,7 +1,7 @@
 from builtins import zip
 import itertools as itt
 from neon.initializers import Kaiming
-from neon.layers import Conv, Pooling, GeneralizedCost, Activation
+from neon.layers import Conv, Pooling, GeneralizedCost, Affine, Activation
 from neon.layers import MergeSum, SkipNode
 from neon.transforms import Rectlin, Softmax, CrossEntropyMulti
 from neon.models import Model
@@ -65,6 +65,5 @@ def create_network(stage_depth):
         layers.append(module_factory(nfm, bottleneck, stride))
 
     layers.append(Pooling('all', op='avg'))
-    layers.append(Conv(**conv_params(1, 1000, relu=False)))
-    layers.append(Activation(Softmax()))
+    layers.append(Affine(nout=1000, init=Kaiming(local=False), activation=Softmax()))
     return Model(layers=layers), GeneralizedCost(costfunc=CrossEntropyMulti())
