@@ -21,7 +21,7 @@ import tarfile
 import ingest_utils as util
 from collections import OrderedDict
 from tqdm import tqdm
-from os.path import expanduser
+from neon.util.persist import get_data_cache_or_nothing
 
 
 def get_ssd_config(img_reshape, inference=False):
@@ -32,8 +32,7 @@ def get_ssd_config(img_reshape, inference=False):
     if inference:
         ssd_config['batch_size'] = 1
     ssd_config['block_size'] = 50
-    ssd_config['cache_directory'] = expanduser("~") + "/temp"
-    ssd_config['random_seed'] = 123
+    ssd_config['cache_directory'] = get_data_cache_or_nothing(subdir='pascalvoc_cache')
     ssd_config["etl"] = [{
                 "type": "localization_ssd",
                 "height": img_reshape[0],
@@ -45,8 +44,8 @@ def get_ssd_config(img_reshape, inference=False):
                                 "sheep", "sofa", "train", "tvmonitor"]
                 }, {
                     "type": "image",
-                    "height": 300,
-                    "width": 300,
+                    "height": img_reshape[0],
+                    "width": img_reshape[1],
                     "channels": 3
                 }]
     if not inference:
@@ -174,7 +173,7 @@ def ingest_pascal(data_dir, out_dir, img_reshape=(300, 300), overwrite=False, sk
     train_manifest = os.path.join(root_dir, 'train_{}.csv'.format(hw))
     val_manifest = os.path.join(root_dir, 'val_{}.csv'.format(hw))
 
-    if os.path.exists(train_manifest) and os.path.exists(val_manifest):
+    if os.path.exists(train_manifest) and os.path.exists(val_manifest) and not overwrite:
         print("Manifest files already found, skipping ingest.")
         print("Use --overwrite flag to force re-ingest.")
         return

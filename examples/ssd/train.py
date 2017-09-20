@@ -23,6 +23,7 @@ from ssd_container import SSD, load_vgg_weights
 from ssd_dataloader import build_dataloader
 from callbacks import MAP_Callback, ssd_image_callback
 from mboxloss import MBoxLoss
+from collections import OrderedDict
 import json
 
 """
@@ -50,8 +51,8 @@ if args.ssd_config:
 
 # directory to store VGG weights
 cache_dir = get_data_cache_dir(args.data_dir, subdir='ssd_cache')
-train_config = json.load(open(args.ssd_config['train']))
-val_config = json.load(open(args.ssd_config['val']))
+train_config = json.load(open(args.ssd_config['train']), object_pairs_hook=OrderedDict)
+val_config = json.load(open(args.ssd_config['val']), object_pairs_hook=OrderedDict)
 
 if args.batch_size == 0:
     args.batch_size = train_config["batch_size"]

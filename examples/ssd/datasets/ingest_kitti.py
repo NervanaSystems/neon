@@ -23,7 +23,7 @@ import math
 from tqdm import tqdm
 from collections import OrderedDict
 import ingest_utils as util
-from os.path import expanduser
+from neon.util.persist import get_data_cache_or_nothing
 
 
 def get_ssd_config(img_reshape, inference=False):
@@ -32,8 +32,7 @@ def get_ssd_config(img_reshape, inference=False):
     if inference:
         ssd_config['batch_size'] = 1
     ssd_config['block_size'] = 50
-    ssd_config['cache_directory'] = expanduser("~") + "/temp"
-    ssd_config['random_seed'] = 123
+    ssd_config['cache_directory'] = get_data_cache_or_nothing(subdir='kitti_cache')
     ssd_config["etl"] = [{
                     "type": "localization_ssd",
                     "height": img_reshape[0],
@@ -43,8 +42,8 @@ def get_ssd_config(img_reshape, inference=False):
                                     'Person_sitting', 'Cyclist', 'Tram', 'Misc', 'DontCare']
                 }, {
                     "type": "image",
-                    "height": 300,
-                    "width": 994,
+                    "height": img_reshape[0],
+                    "width": img_reshape[1],
                     "channels": 3
                 }]
     if not inference:
@@ -221,6 +220,14 @@ def ingest_kitti(input_dir, out_dir, img_reshape=(300, 994),
     zip_files = ['data_object_image_2.zip', 'data_object_label_2.zip']
 
     root_dir = os.path.join(out_dir, 'kitti')
+    train_manifest = os.path.join(root_dir, 'train_{}.csv'.format(hw))
+    val_manifest = os.path.join(root_dir, 'val_{}.csv'.format(hw))
+
+    if os.path.exists(train_manifest) and os.path.exists(val_manifest) and not overwrite:
+        print("Manifest files already found, skipping ingest.")
+        print("Use --overwrite flag to force re-ingest.")
+        return
+
     util.make_dir(root_dir)
 
     tags = {'trainval': [], 'test': []}
@@ -265,9 +272,6 @@ def ingest_kitti(input_dir, out_dir, img_reshape=(300, 994),
     train_count = (len(manifest) * train_percent) // 100
     train = manifest[:train_count]
     val = manifest[train_count:]
-
-    train_manifest = os.path.join(root_dir, 'train_{}.csv'.format(hw))
-    val_manifest = os.path.join(root_dir, 'val_{}.csv'.format(hw))
 
     util.create_manifest(train_manifest, train, root_dir)
     util.create_manifest(val_manifest, val, root_dir)

@@ -26,6 +26,7 @@ import pickle
 import os
 from sys import exit
 from util.util import plot_image
+from collections import OrderedDict
 
 """
 Runs inference using a trained model to compute the MAP score.
@@ -104,7 +105,7 @@ if __name__ == '__main__':
     if args.ssd_config:
         args.ssd_config = {k: v for k, v in [ss.split(':') for ss in args.ssd_config]}
 
-    config = json.load(open(args.ssd_config['val']))
+    config = json.load(open(args.ssd_config['val']), object_pairs_hook=OrderedDict)
 
     if args.batch_size == 0:
         args.batch_size = config["batch_size"]
@@ -138,7 +139,7 @@ if __name__ == '__main__':
                                           args.score_threshold)
 
     if args.output is not None:
-        pickle.dump(all_boxes, open(args.output, 'w'))
+        pickle.dump(all_boxes, open(args.output, 'wb'))
 
     print('Evaluating detections')
 
