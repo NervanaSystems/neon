@@ -59,10 +59,6 @@ def make_train_loader(manifest_file, manifest_root, backend_obj, subset_pct=100,
     aeon_config['shuffle_manifest'] = True
     aeon_config['shuffle_enable'] = True
     aeon_config['random_seed'] = random_seed
-
-    aeon_config["augmentation"][0]["center"] = False
-    aeon_config["augmentation"][0]["flip_enable"] = True
-
     return wrap_dataloader(aeon_config)
 
 
