@@ -117,14 +117,15 @@ class MNIST(Dataset):
 
 class DUMMY(Dataset):
     def __init__(self, path='.', subset_pct=100, normalize=True,
-                 contrast_normalize=False, whiten=False, pad_classes=False):
+                 contrast_normalize=False, whiten=False, pad_classes=False, batch_size=128):
         super(DUMMY, self).__init__('dummy', 'dummy', 1,
                                     path=path, subset_pct=subset_pct)
+        self.batch_size = batch_size
         pass
 
     def load_data(self):
-        X_train = np.random.uniform(-1, 1, (128, 3 * 224 * 224))
-        y_train = np.random.randint(0, 999, (128, 1000))
+        X_train = np.random.uniform(-1, 1, (self.batch_size, 3 * 224 * 224))
+        y_train = np.random.randint(0, 999, (self.batch_size, 1000))
 
         return X_train, y_train, 10
 
