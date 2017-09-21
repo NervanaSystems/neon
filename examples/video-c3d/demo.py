@@ -35,7 +35,7 @@ def segment_video(infile, tmpdir):
     manifest_file = os.path.join(tmpdir, 'manifest.csv')
     all_clips = np.genfromtxt(segments_out, dtype=None, delimiter=',')
     all_clips = np.atleast_1d(all_clips)
-    valid_clips = [l[0] for l in all_clips if l[2] - l[1] > 0.63]
+    valid_clips = [l[0].decode() for l in all_clips if l[2] - l[1] > 0.63]
     np.savetxt(manifest_file, valid_clips, fmt='%s', header='@FILE', comments='')
     return manifest_file
 
@@ -61,8 +61,8 @@ assert args.model_file is not None, "need a model file for testing"
 model = Model(args.model_file)
 
 assert 'categories' in args.manifest, "Missing categories file"
-category_map = {t[0]: t[1] for t in np.genfromtxt(args.manifest['categories'],
-                                                  dtype=None, delimiter=',')}
+category_map = {t[0].decode(): t[1] for t in np.genfromtxt(args.manifest['categories'],
+                                                           dtype=None, delimiter=',')}
 
 # Make a temporary directory and clean up afterwards
 outdir = mkdtemp()
@@ -75,10 +75,10 @@ test = make_inference_loader(manifest, model.be)
 clip_pred = model.get_outputs(test)
 tot_prob = clip_pred[:test.ndata, :].mean(axis=0)
 top_5 = np.argsort(tot_prob)[-5:]
-
+category_vals = list(category_map.values())
+category_keys = list(category_map.keys())
 hyps = ["{:0.5f} {}".format(tot_prob[i],
-                            category_map.keys()[
-                                category_map.values().index(i)]) for i in reversed(top_5)]
+                            category_keys[category_vals.index(i)]) for i in reversed(top_5)]
 np.savetxt(caption_file, hyps, fmt='%s')
 
 caption_video(args.input_video, caption_file, args.output_video)

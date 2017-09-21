@@ -84,7 +84,7 @@ def accumulate_video_pred(manifest_file, manifest_root, clip_preds):
     clip_files = np.genfromtxt(
         manifest_file, dtype=None, delimiter=',', usecols=(0), skip_header=1)
     for clip_file, pred in zip(clip_files, clip_preds):
-        clip_file_abs = os.path.join(manifest_root, clip_file)
+        clip_file_abs = os.path.join(manifest_root, clip_file.decode())
         video_name = '_'.join(os.path.basename(clip_file_abs).split('_')[1:-2])
         category = os.path.split(os.path.dirname(clip_file_abs))[-1]
         video_pred.setdefault(video_name, (category, [])).__getitem__(1).append(pred)

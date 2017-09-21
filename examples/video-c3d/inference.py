@@ -34,8 +34,8 @@ model = Model(args.model_file)
 assert 'test' in args.manifest, "Missing test manifest"
 assert 'categories' in args.manifest, "Missing categories file"
 
-category_map = {t[0]: t[1] for t in np.genfromtxt(args.manifest['categories'],
-                                                  dtype=None, delimiter=',')}
+category_map = {t[0].decode(): t[1] for t in np.genfromtxt(args.manifest['categories'],
+                                                           dtype=None, delimiter=',')}
 
 test = make_test_loader(args.manifest['test'], args.manifest_root, model.be)
 
