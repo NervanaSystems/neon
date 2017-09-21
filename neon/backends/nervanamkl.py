@@ -581,19 +581,27 @@ class NervanaMKL(NervanaCPU):
             C = layer.in_shape[0]
             H = layer.in_shape[1]
             W = layer.in_shape[2]
+            D = 1
         elif len(layer.in_shape) == 2:
             C = layer.in_shape[0]
             H = layer.in_shape[1]
             W = layer.in_shape[1]
-        N = int(x.shape[-1]) // H // W
+            D = 1
+        elif len(layer.in_shape) == 4:
+            C = layer.in_shape[0]
+            H = layer.in_shape[1]
+            W = layer.in_shape[2]
+            D = layer.in_shape[3]
+
+        N = int(x.shape[-1]) // H // W // D  # this is/corresponds to the batch size
         gmean = c_longlong(gmean._tensor.ctypes.data)
         gvar = c_longlong(gvar._tensor.ctypes.data)
         self.mklEngine.BatchNormFprop(x.get_prim(), outputs.get_prim(),
                                       gamma.get_prim(), beta.get_prim(), gmean, gvar,
-                                      c_float(rho), N, C, H, W, c_double(eps),
+                                      c_float(rho), N, C, H, W * D, c_double(eps),
                                       primitives, layer.init_f, c_int(inference))
         layer.init_f = 1
-        layer.shape5D = outputs.shape5D = C, 1, H, W, N
+        layer.shape5D = outputs.shape5D = C, D, H, W, N
         if inference:
             self.convert(outputs)
             y[:] = y * gamma + beta
