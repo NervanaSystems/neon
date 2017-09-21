@@ -87,7 +87,7 @@ callbacks = Callbacks(model, eval_set=test, metric=top5, **args.callback_args)
 
 model.load_params(args.model_file)
 mets = model.eval(test, metric=TopKMisclassification(k=5))
-print 'Validation set metrics:'
-print 'LogLoss: %.2f, Accuracy: %.1f %% (Top-1), %.1f %% (Top-5)' % (mets[0],
+print('Validation set metrics:')
+print('LogLoss: %.2f, Accuracy: %.1f %% (Top-1), %.1f %% (Top-5)' % (mets[0],
                                                                      (1.0-mets[1])*100,
-                                                                     (1.0-mets[2])*100)
+                                                                     (1.0-mets[2])*100))
