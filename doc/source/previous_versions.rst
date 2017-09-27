@@ -16,6 +16,17 @@
 
 Previous Versions
 =================
+neon v2.1.0
+-----------
+
+neon v2.1.0 released August 2, 2017 supporting:
+
+* Set MKL backend (-b mkl) as the default CPU backend on Linux (use -b cpu to specify original CPU backend)
+* Update MKLML version 20170720 (AVX512 code paths enabled by default and conversion optimizations)
+* Simplify ResNet example
+* Makefiles now check for virtualenv and pkg-config (NervanaSystems/neon#383)
+* Fix Deep Speech2 model on MKL backend
+* Fix MKL installation for "make sysinstall"
 
 neon v2.0.0
 -----------

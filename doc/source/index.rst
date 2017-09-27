@@ -36,12 +36,10 @@ Features include:
 
 New features in this release:
 
-* Set MKL backend (-b mkl) as the default CPU backend on Linux (use -b cpu to specify original CPU backend)
-* Update MKLML version 20170720 (AVX512 code paths enabled by default and conversion optimizations)
-* Simplify ResNet example
-* Makefiles now check for virtualenv and pkg-config (NervanaSystems/neon#383)
-* Fix Deep Speech2 model on MKL backend
-* Fix MKL installation for "make sysinstall"
+* Update MKLML version 20170908 that fixes a bug related to data conversions)
+* Add SSD example for bounding box object detection that works for both GPU and MKL backend
+* Add DeepSpeech2 MKL backend optimization that features ~3X improvement
+* Update aeon to 1.0.0 including new version of manifest (doc/source/loading_data.rst#aeon-dataloader)
 * See more in the `change log`_.
 
 We use neon internally at Intel Nervana to solve our `customers' problems`_

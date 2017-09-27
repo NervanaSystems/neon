@@ -1,8 +1,14 @@
 # ChangeLog
 
-## v2.2.0 (2017-08-XX):
+## v2.2.0 (2017-09-27):
 
+* Update MKLML version 20170908 that fixes a bug related to data conversions)
+* Add SSD example for bounding box object detection that works for both GPU and MKL backend
+* Add DeepSpeech2 MKL backend optimization that features ~3X improvement
 * Update aeon to 1.0.0 including new version of manifest (doc/source/loading_data.rst#aeon-dataloader)
+* Add CHWD Support for Batch Normalization in mkl backend
+* Modify ResNet-50 model's last layer to match the original ResNet-50 model paper
+* Enable Seq2Seq testing and benchmarking
 
 ## v2.1.0 (2017-08-02):
 

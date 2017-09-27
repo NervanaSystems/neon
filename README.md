@@ -32,7 +32,7 @@ neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/install
     . .venv/bin/activate
 ```
 
-Starting after neon v2.2.0, the master branch of neon will be updated weekly with work-in-progress toward the next release. Check out a release tag (e.g., "git checkout v2.2.0") for a stable release.
+Starting after neon v2.2.0, the master branch of neon will be updated weekly with work-in-progress toward the next release. Check out a release tag (e.g., "git checkout v2.2.0") for a stable release. Or simply check out the "latest" release tag to get the latest stable release (i.e., "git checkout latest")
 
 **Warning**
 

@@ -74,7 +74,16 @@ setup neon in this manner, run the following commands:
 .. code-block:: bash
 
     git clone https://github.com/NervanaSystems/neon.git
+    cd neon; git checkout latest; make
+
+The above checks out the latest stable release (e.g. a tagged release version v2.2.0) and build neon.
+Alternatively, you can check out and build the latest master branch:
+
+.. code-block:: bash
+
+    git clone https://github.com/NervanaSystems/neon.git
     cd neon; make
+
 
 This will install the files in the ``neon/.venv/`` directory and will use the python version in the
 default PATH. Note that neon would automatically download the released MKLML library that
