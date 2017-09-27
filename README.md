@@ -16,7 +16,7 @@ We use neon internally at Intel Nervana to solve our customers' problems across 
 roles. Apply [here](http://www.nervanasys.com/careers/)!
 
 See the [new features](https://github.com/NervanaSystems/neon/blob/master/ChangeLog) in our latest release.
-We want to highlight that neon v2.0.0+ has been optimized for much better performance on CPUs by enabling Intel Math Kernel Library (MKL). Remember to turn on MKL by adding `-b mkl` when running neon on Intel Xeon and Xeon Phi CPUs! The DNN (Deep Neural Networks) component of MKL that is used by neon is provided free of charge and downloaded automatically as part of the neon installation. 
+We want to highlight that neon v2.0.0+ has been optimized for much better performance on CPUs by enabling Intel Math Kernel Library (MKL). The DNN (Deep Neural Networks) component of MKL that is used by neon is provided free of charge and downloaded automatically as part of the neon installation.
 
 ## Quick Install
 
@@ -31,9 +31,12 @@ neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/install
     make
     . .venv/bin/activate
 ```
+
+Starting after neon v2.2.0, the master branch of neon will be updated weekly with work-in-progress toward the next release. Check out a release tag (e.g., "git checkout v2.2.0") for a stable release.
+
 **Warning**
 
-> Between Neon 2.1 and 2.2 manifest file format has been changed. When updating from Neon < 2.2 manifests have to be recreated using ingest scripts (in examples folder) or updated using [this](neon/data/convert_manifest.py) script.
+> Between neon v2.1.0 and v2.2.0, the aeon manifest file format has been changed. When updating from neon < v2.2.0 manifests have to be recreated using ingest scripts (in examples folder) or updated using [this](neon/data/convert_manifest.py) script.
 
 ### Use a script to run an example
 
@@ -49,7 +52,7 @@ The gpu backend is selected by default, so the above command is equivalent to if
     python examples/mnist_mlp.py -b gpu
 ```
 
-When no GPU is available, the **optimized** CPU (MKL) backend is now selected by default as of neon v2.1, which means the above command is now equivalent to:
+When no GPU is available, the **optimized** CPU (MKL) backend is now selected by default as of neon v2.1.0, which means the above command is now equivalent to:
 
 ```bash
     python examples/mnist_mlp.py -b mkl
