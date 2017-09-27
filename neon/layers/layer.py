@@ -1794,7 +1794,8 @@ class Conv(CompoundLayer):
                  name=None):
         super(Conv, self).__init__(bias=bias, batch_norm=batch_norm,
                                    activation=activation, name=name)
-        if bias and NervanaObject.be.is_mkl():
+        # temp fall back to old conv and bias for bug of weights save/load
+        if False and bias and NervanaObject.be.is_mkl():
             self.append(Convolution_bias(fshape=fshape, strides=strides, padding=padding,
                                          dilation=dilation, init=init, bsum=batch_norm, bias=bias,
                                          name=name))
@@ -1807,7 +1808,8 @@ class Conv(CompoundLayer):
     def add_postfilter_layers(self):
         self.init_base_name()
         # mklbackend will do conv+bias
-        if self.bias is not None and not NervanaObject.be.is_mkl():
+        # fall back
+        if self.bias is not None:
             name = self.base_name + '_bias'
             self.append(Bias(init=self.bias, name=name))
         if self.batch_norm:

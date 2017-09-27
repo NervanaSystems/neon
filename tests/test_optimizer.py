@@ -388,7 +388,8 @@ def test_multi_optimizer(backend_default_mkl):
     layers_to_optimize1 = [l for l in layer_list1 if isinstance(l, ParameterLayer)]
     layers_to_optimize2 = [l for l in layer_list2 if isinstance(l, ParameterLayer)]
     opt.optimize(layers_to_optimize1, 0)
-    if l1[0].be.is_mkl():
+    # temp roll back conv_bias
+    if False and l1[0].be.is_mkl():
         assert opt.map_list[opt_adam][0].__class__.__name__ is 'Convolution_bias'
     else:
         assert opt.map_list[opt_adam][0].__class__.__name__ is 'Convolution'
