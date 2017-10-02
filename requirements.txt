@@ -10,11 +10,11 @@ pytest-mock==1.6.0
 posix_ipc==1.0.0
 pillow==3.3.1
 pylint==1.6.4
-sphinx==1.4.6
+sphinx==1.6.3
 h5py==2.6.0
 appdirs==1.4.3
 future==0.15.2
 tqdm==4.8.4
-cffi==1.9.1
+cffi==1.11.0
 filelock==2.0.8
 py-cpuinfo==3.2.0

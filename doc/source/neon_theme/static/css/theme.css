@@ -3849,7 +3849,7 @@ div[class^='highlight'] td.code {
   border-right: solid 1px #e6e9ea;
   margin: 0;
   padding: 12px 12px;
-  font-family: Monaco, Consolas, "Menlo", "Andale Mono WT", "Andale Mono", "Lucida Console";
+  font-family: Monaco, Consolas, "Menlo", "Andale Mono WT", "Andale Mono", "Lucida Console", monospace;
   font-size: 14px;
   line-height: 1.5;
   color: #d9d9d9;
@@ -3859,7 +3859,7 @@ div[class^='highlight'] pre {
   white-space: pre-wrap;
   margin: 0;
   padding: 12px 12px;
-  font-family: Monaco, Consolas, "Menlo", "Andale Mono WT", "Andale Mono", "Lucida Console";
+  font-family: Monaco, Consolas, "Menlo", "Andale Mono WT", "Andale Mono", "Lucida Console", monospace;
   font-size: 14px;
   line-height: 1.5;
   display: block;
