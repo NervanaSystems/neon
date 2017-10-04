@@ -195,6 +195,7 @@ dependencies, the open source community has contributed the following
 Docker images (note that these are not supported/maintained by Intel Nervana):
 
 -  `neon (CPU only) <https://hub.docker.com/r/kaixhin/neon/>`__
+-  `neon (MKL) <https://hub.docker.com/r/aminaka/mkl-neon/>`__
 -  `neon (GPU) <https://hub.docker.com/r/kaixhin/cuda-neon/>`__
 -  `neon (CPU with Jupyter Notebook) <https://hub.docker.com/r/sofianhw/docker-neon-ipython/>`__
 
