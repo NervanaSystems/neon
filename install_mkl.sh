@@ -57,6 +57,13 @@ if [[ `uname` == 'Linux' ]]; then
     cd $MKL_ENGINE_PATH && make clean && make
     cd $THIS_DIR
 
+elif [[ "$(expr substr $(uname -s) 1 10)" == "MINGW32_NT" || "$(expr substr $(uname -s) 1 7)" == "MSYS_NT" ]]; then
+    echo -e "Windows detected"
+    #build neon mklEngine
+    MKL_ENGINE_PATH='neon/backends/mklEngine'
+    cd $MKL_ENGINE_PATH && make clean && ./make_msys64.bat
+    cd $THIS_DIR
+
 else
     echo -e "Currently only Linux Environment supported, skipping MKL install"
 fi

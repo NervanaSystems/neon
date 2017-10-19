@@ -28,6 +28,9 @@ else
 	CFLAGS := -fopenmp -lmklml_gnu -fPIC -march=native -g -liomp5
 endif
 
+ifeq   ($(WIN_BUILD), 1)
+	CFLAGS := -fopenmp -lmklml -fPIC -march=native -g -liomp5md
+endif
 
 .PHONY: clean
 
@@ -42,5 +45,5 @@ $(MATH_CPU_SO): src/math_cpu.c
 	$(CC) $^ -shared -o $@ $(COMMON_FLAGS) $(CFLAGS)
 
 clean:
-	@rm -vf *.o *.so
+	@rm -vf *.o *.so *.dll
 
