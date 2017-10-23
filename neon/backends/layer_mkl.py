@@ -47,87 +47,18 @@ class ConvLayerMKL(ConvLayer):
         if D != 1 or T != 1 or self.dilated:
             self.is_mklop = False
 
-    def xprop_conv_dilated(self, I, F, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
-                           relu=False, brelu=False, slope=0.0, backward=False):
-
-        O_ = O.get()
-        F_ = F.get()
-        I_ = I.get()
-
-        if backward:
-            raise ValueError()
-            I = I._tensor.reshape(self.dimO)
-            O = O._tensor.reshape(self.dimI)
-        else:
-            I_ = I_.reshape(self.dimI)
-            O_ = O_.reshape(self.dimO)
-
-        F_ = F_.reshape(self.dimF)
-        if bias is not None:
-            raise ValueError()
-            bias = bias._tensor.reshape((O.shape[0], 1))
-        if bsum is not None:
-            raise ValueError()
-            bsum = bsum._tensor.reshape((O.shape[0], 1))
-        if self.dot:
-            raise ValueError()
-            C = F.shape[0]
-            K = F.shape[-1]
-            if backward:
-                F = F.reshape((C, K))
-                I = I.reshape((K, -1))
-            else:
-                F = F.reshape((C, K)).T
-                I = I.reshape((C, -1))
-            if beta:
-                O[:] = alpha * np.dot(F, I).reshape(O.shape) + beta * X
-            else:
-                O[:] = np.dot(F, I).reshape(O.shape)
-                self.compound_ops(O, X, bias, bsum, relu, brelu, slope)
-            return
-        if backward:
-            raise ValueError()
-            F = np.transpose(F[:, ::-1, ::-1, ::-1], (4, 1, 2, 3, 0)).copy()
-            mSlice, pSlice, qSlice = self.dSlice, self.hSlice, self.wSlice
-        else:
-            mSlice, pSlice, qSlice = self.mSlice, self.pSlice, self.qSlice
-        K, M, P, Q, N = O_.shape
-        for m in range(M):
-            sliceT, sliceD, _ = mSlice[m]
-            for p in range(P):
-                sliceR, sliceH, _ = pSlice[p]
-                for q in range(Q):
-                    sliceS, sliceW, _ = qSlice[q]
-                    slicedF = F_[:, sliceT, sliceR, sliceS].reshape((-1, K))
-                    slicedI = I_[:, sliceD, sliceH, sliceW].reshape((-1, N))
-                    if beta:
-                        raise ValueError()
-                        O[:, m, p, q] = \
-                            alpha * np.dot(slicedF.T, slicedI) + beta * X[:, m, p, q]
-                    else:
-                        O_[:, m, p, q] = np.dot(slicedF.T, slicedI)
-        O[:] = O_.flatten()
-        O.backend.convert_mkl(O)
-        O.shape5D = self.dimO
-
     def xprop_conv(self, I, F, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
                    relu=False, brelu=False, slope=0.0, backward=False, layer_op=None):
 
         if layer_op is None:
             layer_op = self
-        if not layer_op.get_is_mklop():
+        if self.dilated or (not layer_op.get_is_mklop()):
             I.backend.convert(I)
             F.backend.convert(F)
             I.clean_mkl()
             F.clean_mkl()
             super(ConvLayerMKL, self).xprop_conv(
                 I, F, O, X, bias, bsum, alpha, beta, relu, brelu, slope, backward)
-            return
-
-        # hack for dealing with dilated conv
-        if self.dilated:
-            self.xprop_conv_dilated(I, F, O, X, bias, bsum, alpha,
-                                    beta, relu, brelu, slope, backward)
             return
 
         if X is None:

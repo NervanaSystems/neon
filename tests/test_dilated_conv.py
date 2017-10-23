@@ -54,6 +54,7 @@ def pytest_generate_tests(metafunc):
 def fprop(model, inputs):
     layers = model.layers
     for l in layers._layers:
+        l.be.convert_data(inputs, l.get_is_mklop())
         inputs = l.fprop(inputs)
     # Return outputs from the last layer.
     return layers._layers[-1].outputs
@@ -62,6 +63,7 @@ def fprop(model, inputs):
 def bprop(model, delta):
     layers = model.layers
     for l in reversed(layers._layers):
+        l.be.convert_data(delta, l.get_is_mklop())
         delta = l.bprop(delta)
     # Return weights from the first layer.
     return layers._layers[0].W
@@ -198,10 +200,7 @@ def test_dilated_conv(backend_default, fargs_tests):
                 platform = "unknown"
 
             print('Test platform = {}'.format(platform))
-            if platform == "KNL" or platform == "KNM":
-                pytest.xfail(reason="xfail issue #853 with {} PLATFORM".format(platform))
-            else:
-                assert allclose_with_out(w1, w2, atol=0, rtol=1e-3)
+            assert allclose_with_out(w1, w2, atol=1e-1, rtol=1e-3)
 
 
 if __name__ == '__main__':
