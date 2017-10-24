@@ -26,6 +26,7 @@ from cffi import FFI
 from ctypes import c_longlong, c_float, c_double, c_int
 import numpy as np
 from neon.backends import math_cpu
+from neon.backends.backend import OpTreeNode
 import os
 
 _none_slice = slice(None, None, None)
@@ -210,11 +211,13 @@ class NervanaMKL(NervanaCPU):
             if type(tensor) == MKLTensor:
                 self.convert(tensor)
                 tensor.clean_mkl()
-            elif type(tensor) is list:
+            elif type(tensor) is list or type(tensor) is tuple:
                 for i in tensor:
                     self.convert_data(i, layer_mkl)
+            elif type(tensor) is OpTreeNode:
+                return
             else:
-                assert False, 'input must be tensors or list of tensors'
+                assert False, 'unsupported input for convert'
 
     def clean_data(self, tensor, layer_mkl):
         if layer_mkl and tensor is not None and type(tensor) == MKLTensor:
