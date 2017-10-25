@@ -68,16 +68,16 @@ def inception_bare(ref_module, kvals, name="i"):
     if p1[0]:
         for ll, lr in zip(branch1.layers, branch1_ref.layers):
             if ll.has_params:
-                ll.set_params({'params': {'W': lr.W.get()}})
+                ll.set_params({'params': {'W': lr.W.get(), 'weight_bias': lr.weight_bias.get()}})
 
     for ll, lr in zip(branch2.layers, branch2_ref.layers):
         if ll.has_params:
-            ll.set_params({'params': {'W': lr.W.get()}})
+            ll.set_params({'params': {'W': lr.W.get(), 'weight_bias': lr.weight_bias.get()}})
 
     if p3[1]:
         for ll, lr in zip(branch3.layers, branch3_ref.layers):
             if ll.has_params:
-                ll.set_params({'params': {'W': lr.W.get()}})
+                ll.set_params({'params': {'W': lr.W.get(), 'weight_bias': lr.weight_bias.get()}})
 
     return (branch1.layers, branch2.layers, branch3.layers)
 
@@ -130,10 +130,10 @@ def test_branch_model(backend_gpu):
         for ll in main2 + bb:
             oshape = ll.configure(oshape)
 
-    main1_trunk = neon_layer.layers[:8]
+    main1_trunk = neon_layer.layers[:6]
     for ll, lo in zip(main2, main1_trunk):
         if ll.has_params:
-            ll.set_params({'params': {'W': lo.W.get()}})
+            ll.set_params({'params': {'W': lo.W.get(), 'weight_bias': lo.weight_bias.get()}})
         ll.allocate()
 
         temp_buff = DeltasTree()
@@ -150,7 +150,7 @@ def test_branch_model(backend_gpu):
             ll.set_deltas(temp_buff)
 
     # Create the combined output buffer
-    merge_output = be.empty_like(neon_layer.layers[8].outputs)
+    merge_output = be.empty_like(neon_layer.layers[6].outputs)
 
     x = inp
     for ll in main2:
@@ -177,11 +177,11 @@ def test_branch_model(backend_gpu):
     neon_logger.display("Beginning Back prop")
     erra = np.random.random(neon_out.shape)
     err = be.array(erra)
-    for ll in reversed(neon_layer.layers[8:]):
+    for ll in reversed(neon_layer.layers[6:]):
         err = ll.bprop(err)
 
     neon_deltas = err.get()
-    for bb, errb in zip((b1, b2, b3), neon_layer.layers[8].error_views):
+    for bb, errb in zip((b1, b2, b3), neon_layer.layers[6].error_views):
         for ll in reversed(bb):
             errb = ll.bprop(errb)
 
@@ -242,10 +242,10 @@ def test_branch_model_fork(backend_gpu):
         for ll in main2 + bb:
             oshape = ll.configure(oshape)
 
-    main1_trunk = neon_layer.layers[0].layers[:8]
+    main1_trunk = neon_layer.layers[0].layers[:6]
     for ll, lo in zip(main2, main1_trunk):
         if ll.has_params:
-            ll.set_params({'params': {'W': lo.W.get()}})
+            ll.set_params({'params': {'W': lo.W.get(), 'weight_bias': lo.weight_bias.get()}})
         ll.allocate()
         temp_deltas = DeltasTree()
         temp_deltas.proc_layer(ll)
@@ -265,7 +265,7 @@ def test_branch_model_fork(backend_gpu):
             ll.set_deltas(temp_deltas)
 
     # Create the combined output buffer
-    merge_output = be.empty_like(neon_layer.layers[0].layers[9].outputs)
+    merge_output = be.empty_like(neon_layer.layers[0].layers[7].outputs)
 
     x = inp
     for ll in main2:

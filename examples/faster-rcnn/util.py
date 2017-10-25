@@ -107,8 +107,8 @@ def scale_bbreg_weights(model, means, stds, num_classes):
 def load_vgg_all_weights(model, path):
     # load a pre-trained VGG16 from Neon model zoo to the local
     url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/'
-    filename = 'VGG_D.p'
-    size = 554227541
+    filename = 'VGG_D_fused_conv_bias.p'
+    size = 553440655
 
     workdir, filepath = Dataset._valid_path_append(path, '', filename)
     if not os.path.exists(filepath):
@@ -122,16 +122,17 @@ def load_vgg_all_weights(model, path):
 
     i = 0
     for layer, ps in zip(param_layers, param_dict_list):
-        i += 1
-        if i == 43:
+        # finished loading param_dict_list[00 - 29] and param_layers[00-29]
+        if i == 30:
             break
-        layer.load_weights(ps, load_states=True)
+        layer.load_weights(ps, load_states=False)
+        i += 1
         print(layer.name + " <-- " + ps['config']['name'])
 
     # to load the fc6 and fc7 from caffe into neon fc layers after ROI pooling
     neon_fc_layers = model.layers.layers[2].layers[1].layers[0].layers[2:5] +\
         model.layers.layers[2].layers[1].layers[0].layers[6:9]
-    vgg_fc_layers = param_dict_list[44:47] + param_dict_list[48:51]
+    vgg_fc_layers = param_dict_list[31:34] + param_dict_list[35:38]
 
     for layer, ps in zip(neon_fc_layers, vgg_fc_layers):
         layer.load_weights(ps, load_states=True)
@@ -140,8 +141,8 @@ def load_vgg_all_weights(model, path):
 
 def load_vgg_weights(model, path):
     url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/VGG/'
-    filename = 'VGG_D_Conv.p'
-    size = 169645138
+    filename = 'VGG_D_Conv_fused_conv_bias.p'
+    size = 58867537
 
     workdir, filepath = Dataset._valid_path_append(path, '', filename)
     if not os.path.exists(filepath):
@@ -153,8 +154,13 @@ def load_vgg_weights(model, path):
     param_layers = [l for l in model.layers.layers[0].layers]
     param_dict_list = pdict['model']['config']['layers']
 
+    i = 0
     for layer, ps in zip(param_layers, param_dict_list):
-        layer.load_weights(ps, load_states=True)
+        # finished loading param_dict_list[00 - 29] and param_layers[00-29]
+        if i == 30:
+            break
+        layer.load_weights(ps, load_states=False)
+        i += 1
         print(layer.name + " <-- " + ps['config']['name'])
 
 

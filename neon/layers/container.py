@@ -28,6 +28,14 @@ from functools import reduce
 from funcsigs import signature
 
 
+# modified from https://docs.python.org/3/library/itertools.html
+def pairwise(iterable):
+    "s -> (s0,s1), (s1,s2), (s2, s3), ..., (sN, None)"
+    a, b = itt.tee(iterable + [None])
+    next(b, None)
+    return zip(a, b)
+
+
 def flatten(item):
     if hasattr(item, '__iter__'):
         for i in iter(item):
@@ -154,6 +162,28 @@ class LayerContainer(Layer):
         self._desc = desc
         return desc
 
+    def fusion_pass(self, layers):
+        """
+        Groups patterns together in list. If pattern is [a, b], will transform
+        [a, b, c, d, a, b, e] -> [[a, b], c, d, [a, b], e]. Support for multiple
+        patterns.
+        """
+        patterns = [lambda x, y: x['type'] == 'neon.layers.layer.Convolution' and
+                    y['type'] == 'neon.layers.layer.Bias']
+
+        result = []
+        skip_next = False
+        for (l1, l2) in pairwise(layers):
+            if any([pattern(l1, l2) for pattern in patterns]):
+                result.append([l1, l2])
+                skip_next = True
+            elif skip_next:
+                skip_next = False
+            else:
+                result.append(l1)
+
+        return result
+
     def load_weights(self, pdict, load_states=True):
         """
         Load weights.
@@ -165,6 +195,8 @@ class LayerContainer(Layer):
         Returns:
 
         """
+        pdict['config']['layers'] = self.fusion_pass(pdict['config']['layers'])
+
         assert len(pdict['config']['layers']) == len(self.layers)
         for branch, bdict in zip(self.layers, pdict['config']['layers']):
             branch.load_weights(bdict, load_states=load_states)

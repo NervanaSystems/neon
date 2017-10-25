@@ -17,6 +17,7 @@ from builtins import str, zip
 from functools import wraps
 import logging
 import numpy as np
+import copy
 
 from neon import NervanaObject
 from neon.backends import Autodiff
@@ -919,7 +920,6 @@ class Convolution_bias(Convolution):
     """
     def __init__(self, fshape, strides={}, padding={}, dilation={}, init=None,
                  bsum=False, name=None, bias=None, parallelism="Data"):
-        assert NervanaObject.be.is_mkl(), "Only mkl backend support Convoultion_bias"
 
         super(Convolution_bias, self).__init__(fshape, strides=strides,
                                                padding=padding, dilation=dilation,
@@ -929,6 +929,7 @@ class Convolution_bias(Convolution):
         self.init_bias = bias
         self.weight_bias = None
         self.grad_bias = None
+        self.bias = bias
         self.states = [[] for i in range(2)]
 
     def init_params(self, shape):
@@ -978,6 +979,20 @@ class Convolution_bias(Convolution):
                 serial_dict['states'] = [[s.get() for s in slist] for slist in self.states]
         return serial_dict
 
+    def convert_format(self, pdict):
+        assert isinstance(pdict, list) and len(pdict) == 2
+
+        (p1, p2) = pdict
+        p = copy.deepcopy(p1)
+        p['config']['bias'] = p2['config']['init']
+        # Assume p1 and p2 will both have 'states' key or both will not have 'states' key
+        if 'states' in p1 and 'states' in p2:
+            p['states'] = [p1['states'], p2['states']]
+        p['params']['weight_bias'] = p2['params']['W']
+        p['type'] = 'neon.layers.layer.Convolution_bias'
+
+        return p
+
     def set_params(self, pdict):
         """
         Set layer parameters (weights). Allocate space for other parameters but do not initialize
@@ -986,28 +1001,41 @@ class Convolution_bias(Convolution):
             pdict (dict, ndarray): dictionary or ndarray with layer parameters
                                    [support for ndarray is DEPRECATED and will be removed]
         """
-        assert type(pdict) is dict
-        for key in pdict['params']:
+
+        if type(pdict) is list:
+            logger.error('Using old serialization format with unfused bias. This will be'
+                         ' deprecated in future release. Resave serialized file'
+                         ' using current format.')
+            pdict = self.convert_format(pdict)
+
+        for key, val in pdict['params'].items():
             if not hasattr(self, key):
                 setattr(self, key, None)
 
-            attr = getattr(self, key)
-            if isinstance(attr, Tensor):
-                # this attr has already been allocated
-                # get set the values
-                attr.set(pdict['params'][key])
-            elif type(pdict['params'][key]) is np.ndarray:
-                setattr(self, key, self.be.array(pdict['params'][key], **self.get_param_attrs()))
+            if isinstance(getattr(self, key), Tensor):
+                getattr(self, key).set(val)
+            elif isinstance(val, np.ndarray):
+                setattr(self, key, self.be.array(val, **self.get_param_attrs()))
             else:
-                setattr(self, key, pdict['params'][key])
+                setattr(self, key, val)
 
         if self.dW is None:
+            assert self.W is not None
             self.dW = self.be.empty_like(self.W)
 
         if self.grad_bias is None:
+            assert self.weight_bias is not None
             self.grad_bias = self.be.empty_like(self.weight_bias)
 
     def set_states(self, pdict):
+        if type(pdict) is list:
+            pdict = self.convert_format(pdict)
+        assert 'states' in pdict.keys() \
+               and any(pdict['states']), "weights " \
+                                         "do not contain states information, " \
+                                         "consider setting load_states=False " \
+                                         "in load_params"
+
         if not any(self.states):
             self.states = [[self.be.array(x, **self.get_param_attrs()) for x in slist]
                            for slist in pdict['states']]
@@ -1794,8 +1822,8 @@ class Conv(CompoundLayer):
                  name=None):
         super(Conv, self).__init__(bias=bias, batch_norm=batch_norm,
                                    activation=activation, name=name)
-        # temp fall back to old conv and bias for bug of weights save/load
-        if False and bias and NervanaObject.be.is_mkl():
+
+        if bias is not None:
             self.append(Convolution_bias(fshape=fshape, strides=strides, padding=padding,
                                          dilation=dilation, init=init, bsum=batch_norm, bias=bias,
                                          name=name))
@@ -1807,11 +1835,7 @@ class Conv(CompoundLayer):
 
     def add_postfilter_layers(self):
         self.init_base_name()
-        # mklbackend will do conv+bias
-        # fall back
-        if self.bias is not None:
-            name = self.base_name + '_bias'
-            self.append(Bias(init=self.bias, name=name))
+
         if self.batch_norm:
             name = self.base_name + '_bnorm'
             self.append(BatchNorm(name=name))

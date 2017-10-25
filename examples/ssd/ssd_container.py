@@ -387,6 +387,10 @@ class SSD(Tree):
 
         # fprop through the model base
         x = super(SSD, self).fprop(inputs, inference=inference)
+
+        for tensor in x:
+            self.be.convert_data(tensor, False)
+
         x = self.unnest(x)  # reorder x
 
         # for mgpu, convert to singlenode tensor
@@ -463,8 +467,8 @@ def load_caffe_weights(model, file_path):
 
 def load_vgg_weights(model, path):
     url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/'
-    filename = 'VGG_ILSVRC_16_layers_fc_reduced.p'
-    size = 244190212
+    filename = 'VGG_ILSVRC_16_layers_fc_reduced_fused_conv_bias.p'
+    size = 86046032
 
     workdir, filepath = Dataset._valid_path_append(path, '', filename)
     if not os.path.exists(filepath):
@@ -474,13 +478,15 @@ def load_vgg_weights(model, path):
     pdict = load_obj(filepath)
 
     model_layers = [l for l in model.layers.layers[0].layers]
-
     # convert source model into dictionary with layer name as keys
     src_layers = {layer['config']['name']: layer for layer in pdict['model']['config']['layers']}
 
+    i = 0
     for layer in model_layers:
-        if layer.name in src_layers.keys():
-            layer.load_weights(src_layers[layer.name], load_states=True)
+        if layer.classnm == 'Convolution_bias' and i < 15:
+            # no states in above parameter file
+            layer.load_weights(src_layers['Convolution_bias_'+str(i)], load_states=False)
             print('{} loaded from source file'.format(layer.name))
+            i += 1
         elif hasattr(layer, 'W'):
             print('Skipping {} layer'.format(layer.name))

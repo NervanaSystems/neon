@@ -19,7 +19,6 @@ from __future__ import print_function
 import itertools as itt
 import numpy as np
 import os
-import pytest
 import subprocess as subp
 from neon.backends import gen_backend
 from neon.layers import Conv, Affine, GeneralizedCost

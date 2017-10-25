@@ -28,14 +28,8 @@ def test_conv_wrapper(backend_default):
 
     conv = Conv((4, 4, 3), Uniform(), bias=Uniform())
     assert isinstance(conv, list)
-    # temp roll back conv_bias
-    if False and conv[0].be.is_mkl():
-        assert len(conv) == 1
-        assert isinstance(conv[0], Convolution_bias)
-    else:
-        assert len(conv) == 2
-        assert isinstance(conv[0], Convolution)
-        assert isinstance(conv[1], Bias)
+    assert len(conv) == 1
+    assert isinstance(conv[0], Convolution_bias)
 
     conv = Conv((4, 4, 3), Uniform(), activation=Rectlin())
     assert isinstance(conv, list)
@@ -45,16 +39,9 @@ def test_conv_wrapper(backend_default):
 
     conv = Conv((4, 4, 3), Uniform(), bias=Uniform(), activation=Rectlin())
     assert isinstance(conv, list)
-    # temp roll back conv_bias
-    if False and conv[0].be.is_mkl():
-        assert isinstance(conv[0], Convolution_bias)
-        assert isinstance(conv[1], Activation)
-        assert len(conv) == 2
-    else:
-        assert isinstance(conv[0], Convolution)
-        assert isinstance(conv[1], Bias)
-        assert isinstance(conv[2], Activation)
-        assert len(conv) == 3
+    assert isinstance(conv[0], Convolution_bias)
+    assert isinstance(conv[1], Activation)
+    assert len(conv) == 2
 
 
 def test_affine_wrapper(backend_default):
