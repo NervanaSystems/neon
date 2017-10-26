@@ -76,18 +76,18 @@ g_uni = GlorotUniform()
 
 if args.rlayer_type == 'lstm':
     rlayer = LSTM(hidden_size, g_uni, activation=Tanh(),
-                  gate_activation=Logistic(), reset_cells=True)
+                  gate_activation=Logistic(), reset_cells=reset_cells)
 elif args.rlayer_type == 'bilstm':
     rlayer = DeepBiLSTM(hidden_size, g_uni, activation=Tanh(), depth=1,
-                        gate_activation=Logistic(), reset_cells=True)
+                        gate_activation=Logistic(), reset_cells=reset_cells)
 elif args.rlayer_type == 'rnn':
-    rlayer = Recurrent(hidden_size, g_uni, activation=Tanh(), reset_cells=True)
+    rlayer = Recurrent(hidden_size, g_uni, activation=Tanh(), reset_cells=reset_cells)
 elif args.rlayer_type == 'birnn':
     rlayer = DeepBiRNN(hidden_size, g_uni, activation=Tanh(),
-                       depth=1, reset_cells=True, batch_norm=False)
+                       depth=1, reset_cells=reset_cells, batch_norm=False)
 elif args.rlayer_type == 'bibnrnn':
     rlayer = DeepBiRNN(hidden_size, g_uni, activation=Tanh(),
-                       depth=1, reset_cells=True, batch_norm=True)
+                       depth=1, reset_cells=reset_cells, batch_norm=True)
 
 layers = [
     LookupTable(vocab_size=vocab_size, embedding_dim=embedding_dim, init=uni),
