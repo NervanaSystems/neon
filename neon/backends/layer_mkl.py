@@ -272,3 +272,35 @@ class MergeBroadcastLayerMKL(object):
 
         # to record input channels
         self.channels = np.zeros(layer_num, dtype=np.uint64)
+
+class BiBNRNNLayerMKL(object):
+    '''
+    BiBNRNN for MKL backend
+    Initialize parameters
+    '''
+    def __init__(self, h_buffer_all, h_ff_buffer, W_recur_f, W_recur_b, nsteps, nout):
+        self.h_all_contiguous = h_buffer_all.backend.empty_like(h_buffer_all)
+        h_all_tmp = self.h_all_contiguous.reshape(nsteps + 2, 2 *nout, -1)
+        h_all_contiguous_f_list = [h_all_tmp[step,0:nout, :] for step in range(nsteps + 2)]
+        self.h_prev_contiguous = h_all_contiguous_f_list[0:nsteps]
+        self.h_f_contiguous = h_all_contiguous_f_list[1:nsteps + 1]
+
+        h_all_contiguous_b_list = [h_all_tmp[step, nout:, :] for step in range(nsteps + 2)]
+        self.h_next_contiguous = h_all_contiguous_b_list[2:nsteps + 2]
+        self.h_b_contiguous = h_all_contiguous_b_list[1:nsteps + 1]
+
+        self.h_ff_buffer_contiguous = h_buffer_all.backend.empty_like(h_ff_buffer)
+        h_ff_tmp = self.h_ff_buffer_contiguous.reshape(nsteps, 2 *nout, -1)
+        self.h_ff_f_contiguous = [h_ff_tmp[step, 0:nout, :] for step in range(nsteps)]
+        self.h_ff_b_contiguous = [h_ff_tmp[step,nout:, :] for step in range(nsteps)]
+
+        self.error_contiguous = h_buffer_all.backend.empty((2 *nout, nsteps * h_ff_tmp.shape[2]))
+        error_tmp = self.error_contiguous.reshape(nsteps, 2 *nout, -1)
+        self.in_deltas_f = [error_tmp[step, 0:nout, :] for step in range(nsteps)]
+        self.prev_in_deltas = self.in_deltas_f[-1:] + self.in_deltas_f[:-1]
+        self.in_deltas_b = [error_tmp[step,nout:, :] for step in range(nsteps)]
+        self.next_in_deltas = self.in_deltas_b[1:] + self.in_deltas_b[:1]
+
+        self.W_recur_f_T_contiguous = h_buffer_all.backend.empty_like(W_recur_f)
+        self.W_recur_b_T_contiguous = h_buffer_all.backend.empty_like(W_recur_b)
+

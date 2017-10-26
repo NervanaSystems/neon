@@ -1469,6 +1469,11 @@ class BiBNRNN(BiRNN):
         self.h_ff_buffer_b = self.h_ff_buffer[nout:]
         self.h_ff_f = get_steps(self.h_ff_buffer_f, self.o_shape)
         self.h_ff_b = get_steps(self.h_ff_buffer_b, self.o_shape)
+        self.prev_in_deltas = None
+        self.next_in_deltas = None
+        # initialize temp buffer for internel calculation, only for MKL backend
+        self.ngLayer = self.be.bibnrnn_layer(self.h_buffer_all, self.h_ff_buffer, self.W_recur_f,
+                                                 self.W_recur_b, self.nsteps, self.nout)
 
     def init_params(self, shape):
         super(BiBNRNN, self).init_params(shape)
@@ -1569,17 +1574,10 @@ class BiBNRNN(BiRNN):
 
         self._fprop_bn(self.h_ff_buffer, inference)
 
-        self.be.compound_rnn_unroll_fprop(self.W_recur_f, self.h_prev,
-                                          self.h_ff_f, self.h_f, self.b_f,
-                                          self.nout, self.nsteps,
-                                          self.nsteps,
-                                          self.activation, False)
-
-        self.be.compound_rnn_unroll_fprop(self.W_recur_b, self.h_next,
-                                          self.h_ff_b, self.h_b, self.b_b,
-                                          self.nout, self.nsteps,
-                                          self.nsteps,
-                                          self.activation, True)
+        self.be.compound_rnn_unroll_fprop_bibnrnn(self.ngLayer, self.h_buffer_all, self.h_ff_buffer,self.W_recur_f,
+                                                      self.h_prev, self.h_ff_f, self.h_f, self.b_f, self.W_recur_b,
+                                                      self.h_next, self.h_ff_b, self.h_b, self.b_b, self.nout,
+                                                      self.nsteps, self.nsteps, self.activation)
 
         return self.h_buffer
 
@@ -1614,7 +1612,6 @@ class BiBNRNN(BiRNN):
                 for each mini-batch element
                 shape: (input_size, sequence_length * batch_size)
         """
-
         if self.in_deltas_f is None:
             self.in_deltas_f = get_steps(error[:self.nout], self.o_shape)
             self.prev_in_deltas = self.in_deltas_f[-1:] + self.in_deltas_f[:-1]
@@ -1623,19 +1620,13 @@ class BiBNRNN(BiRNN):
             self.in_deltas_b = get_steps(error[self.nout:], self.o_shape)
             self.next_in_deltas = self.in_deltas_b[1:] + self.in_deltas_b[:1]
 
+
         self.out_deltas_buffer[:] = 0
 
-        self.be.compound_rnn_unroll_bprop(self.W_recur_f.T, self.prev_in_deltas,
-                                          self.in_deltas_f, self.h_f,
-                                          self.nout, self.nsteps,
-                                          self.nsteps,
-                                          self.activation, True)
-
-        self.be.compound_rnn_unroll_bprop(self.W_recur_b.T, self.next_in_deltas,
-                                          self.in_deltas_b, self.h_b,
-                                          self.nout, self.nsteps,
-                                          self.nsteps,
-                                          self.activation, False)
+        self.be.compound_rnn_unroll_bprop_bibnrnn(self.ngLayer, error, self.in_deltas_f, self.prev_in_deltas,
+                                                      self.in_deltas_b, self.next_in_deltas, self.W_recur_f,
+                                                      self.W_recur_b, self.h_f, self.h_b,self.nout,self.nsteps,
+                                                      self.nsteps, self.activation, self.h_buffer_all)
 
         # Update gradients and output deltas for forward pass
         in_deltas_all_f = error[:self.nout]
@@ -2040,3 +2031,4 @@ class DeepBiLSTM(list):
             self.append(
                 BiLSTM(nout, init, init_inner, activation, gate_activation,
                        reset_cells, split_inputs=True))
+

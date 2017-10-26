@@ -13,6 +13,7 @@
  limitations under the License.
 */
 #include <stdlib.h>
+#include <stdbool.h>
 #include <omp.h>
 #include <math.h>
 #include "MKLDNN.h"
@@ -111,11 +112,11 @@ void CMATH_(div)(const float* in_tensor, size_t sz, double s, float* out_tensor)
 
 /* numpy broadcast tensor add */
 void CMATH_(addmv)(const float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float* out_tensor2d) {
-    size_t i, j, index;
+    size_t i, j;
     #pragma omp parallel for collapse(2) private(i,j)
     for (j = 0; j < row; j++) {
         for (i = 0; i < col; i++) {
-            index = j * col + i;
+            size_t index = j * col + i;
             out_tensor2d[index] = in_tensor2d[index] + in_tensor1d[j];
         }
     }
@@ -123,11 +124,11 @@ void CMATH_(addmv)(const float* in_tensor2d, const float* in_tensor1d, size_t ro
 
 /* numpy broadcast tensor sub */
 void CMATH_(submv)(const float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float* out_tensor2d) {
-    size_t i, j, index;
+    size_t i, j;
     #pragma omp parallel for collapse(2) private(i,j)
     for (j = 0; j < row; j++) {
         for (i = 0; i < col; i++) {
-            index = j * col + i;
+            size_t index = j * col + i;
             out_tensor2d[index] = in_tensor2d[index] - in_tensor1d[j];
         }
     }
@@ -135,11 +136,11 @@ void CMATH_(submv)(const float* in_tensor2d, const float* in_tensor1d, size_t ro
 
 /* numpy broadcast tensor mul */
 void CMATH_(mulmv)(const float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float* out_tensor2d) {
-    size_t i, j, index;
+    size_t i, j;
     #pragma omp parallel for collapse(2) private(i,j)
     for (j = 0; j < row; j++) {
         for (i = 0; i < col; i++) {
-            index = j * col + i;
+            size_t index = j * col + i;
             out_tensor2d[index] = in_tensor2d[index] * in_tensor1d[j];
         }
     }
@@ -147,11 +148,11 @@ void CMATH_(mulmv)(const float* in_tensor2d, const float* in_tensor1d, size_t ro
 
 /* numpy broadcast tensor div */
 void CMATH_(divmv)(const float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float* out_tensor2d) {
-    size_t i, j, index;
+    size_t i, j;
     #pragma omp parallel for collapse(2) private(i,j)
     for (j = 0; j < row; j++) {
         for (i = 0; i < col; i++) {
-            index = j * col + i;
+            size_t index = j * col + i;
             out_tensor2d[index] = in_tensor2d[index] / in_tensor1d[j];
         }
     }
@@ -189,7 +190,7 @@ void CMATH_(gemm)(const char transa, const char transb, const size_t m, const si
 
 /* tensor sum */
 void CMATH_(sum)(const float* in_tensor, int axis, size_t row, size_t col, float* out_tensor) {
-    size_t i, j, index;
+    size_t i, j;
     float sum;
 
     if (axis == 1) {
@@ -197,7 +198,7 @@ void CMATH_(sum)(const float* in_tensor, int axis, size_t row, size_t col, float
         for (j = 0; j < row; j++) {
             sum = 0.0f;
             for (i = 0; i < col; i++) {
-                index = j * col + i;
+                size_t index = j * col + i;
                 sum += in_tensor[index];
             }
             out_tensor[j] = sum;
@@ -207,7 +208,7 @@ void CMATH_(sum)(const float* in_tensor, int axis, size_t row, size_t col, float
         for (i = 0; i < col; i++) {
             sum = 0.0f;
             for (j = 0; j < row; j++) {
-                index = j * col + i;
+                size_t index = j * col + i;
                 sum += in_tensor[index];
             }
             out_tensor[i] = sum;
@@ -221,13 +222,76 @@ void CMATH_(axpby)(size_t sz, const float a, const float* x, const float b, floa
     cblas_saxpy(sz, a, x, 1, y, 1);
 }
 
+/*  memory int_tensor[row,:,:] contiguous to out_tensor[:,col,:] contiguous, out[j][i][k] = in[i][j][k]*/
+void CMATH_(change_data_store_order)(const float * restrict in_tensor, int axis, size_t row, size_t col, size_t len, float * restrict out_tensor) {
+    size_t i, j, k;
+    //axis 1: i,j,k -> j,i,k
+    if(axis == 1)
+    {
+        #pragma omp parallel for private(i,j,k)
+        for (i = 0; i < row; i++) {
+            for (j = 0; j < col; j++) {
+                for(k = 0; k < len; k++)
+                {
+                      out_tensor[j*row*len + i*len + k] = in_tensor[i*col*len + j*len + k];
+                }
+            }
+        }
+    }
+    else
+    {
+        //TODO add other axis support
+        printf("axis %d not support !", axis);
+        exit(0);
+    }
+}
 
+/* part of  fprop bibnrnn h[:] = activation(h + h_ff + bias) */
+void CMATH_(add_and_act)(float* in_out_tensor2d, float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float cut) {
+    size_t i, j;
+    #pragma omp parallel for private(i,j) 
+    for (j = 0; j < row; j++) {
+        for (i = 0; i < col; i++) {
+            size_t index = j * col + i;
+            in_out_tensor2d[index] += in_tensor2d[index] + in_tensor1d[j];
+            in_out_tensor2d[index] = in_out_tensor2d[index]>=0 ? in_out_tensor2d[index] : 0;
+            in_out_tensor2d[index] = in_out_tensor2d[index]<=cut ? in_out_tensor2d[index] : cut;
+        }
+    }
+}
 
+/* 2d matrix out = in' : out_1[i][j] = in_1[j][i]，out_2[i][j] = in_2[j][i]*/
+void CMATH_(trans2d)(const float* restrict in_0, const float* restrict in_1, size_t row, size_t col, \
+            float* restrict out_0, float* restrict out_1) {
+    size_t i,j;
 
+    if((in_0 == out_0) || (in_1 == out_1))
+    {
+        printf("in place is not support");
+        exit(0);
+    }
+    else
+    {
+        #pragma omp parallel for private(i,j) 
+        for (i = 0; i < row; i++) {
+            for (j = 0; j < col; j++) {
+                size_t index_in = i*col + j;
+                size_t index_out = j*row + i;
+                out_0[index_out] = in_0[index_in];
+                out_1[index_out] = in_1[index_in];
+            }
+        }
+    }
+}
 
-
-
-
-
-
+/* part of  bprop bibnrnn  in_deltas[:] = activation.bprop(hs) * in_deltas       *
+ * activation.bprop(x): self.be.greater(x, 0) + self.slope * self.be.less(x, 0)) *
+ * self.be.greater(self.xcut, x)    for:self.slope=0,true=1,false=0              */
+void CMATH_(act_and_mul)(float* _in_deltas, float* _hs, size_t size, float xcut) {
+    size_t i;
+    #pragma omp parallel for private(i)
+    for (i = 0; i < size; i++) {
+       _in_deltas[i] = ((_hs[i] > 0) && (_hs[i] < xcut)) ? _in_deltas[i] : 0;
+    }
+}
 

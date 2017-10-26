@@ -1636,6 +1636,45 @@ class Backend(AbstractBackend):
             in_deltas[:] = activation.bprop(hs) * in_deltas
             self.compound_dot(W_recur, in_deltas, prev_in_deltas, beta=1.0)
 
+    def bibnrnn_layer(self, h_buffer_all, h_ff_buffer, W_recur_f, W_recur_b, nsteps, nout):
+        """
+        bibnrnn_layer: now is used in mkl to create new layer. CPU and GPU return None
+
+        """
+        return None
+
+
+    def compound_rnn_unroll_fprop_bibnrnn(self, ngLayer, h_buffer_all,
+                                               h_ff_buffer, W_recur_f, h_prev, h_ff_f, h_f, b_f, W_recur_b,
+                                               h_next, h_ff_b, h_b, b_b, nout, nsteps, used_nsteps, activation):
+        self.compound_rnn_unroll_fprop(W_recur_f, h_prev,
+                                       h_ff_f, h_f, b_f,
+                                       nout, nsteps,
+                                       used_nsteps,
+                                       activation, False)
+
+        self.compound_rnn_unroll_fprop(W_recur_b, h_next,
+                                       h_ff_b, h_b, b_b,
+                                       nout, nsteps,
+                                       used_nsteps,
+                                       activation, True)
+
+    def compound_rnn_unroll_bprop_bibnrnn(self, ngLayer, error, in_deltas_f, prev_in_deltas,
+                                                  in_deltas_b, next_in_deltas, W_recur_f,
+                                                  W_recur_b, h_f, h_b, nout, nsteps, used_nsteps,
+                                                  activation, h_buffer_all):
+
+        self.compound_rnn_unroll_bprop(W_recur_f.T, prev_in_deltas,
+                                       in_deltas_f, h_f,
+                                       nout, nsteps,
+                                       used_nsteps,
+                                       activation, True)
+
+        self.compound_rnn_unroll_bprop(W_recur_b.T, next_in_deltas,
+                                       in_deltas_b, h_b,
+                                       nout, nsteps,
+                                       used_nsteps,
+                                       activation, False)
 
 # For constructing an op tree used in lazy evaluation
 class OpTreeNode(tuple):

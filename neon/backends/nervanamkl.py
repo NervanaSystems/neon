@@ -734,6 +734,89 @@ class NervanaMKL(NervanaCPU):
 
         deltas.shape5D = ngLayer.in_shape5D
 
+    def compound_rnn_unroll_fprop(self, W_recur, h_prev_s, h_ff_s, h_s, bias,
+                                  nout, num_steps, num_used_steps, activation,
+                                  reverse=False):
+        """
+        Time step unrolling portion of recurrent layer fprop.
+
+        Arguments:
+            W_recur (Tensor): Recurrent weight matrix.
+            h_prev_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            h_ff_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            h_s (Array): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            bias (Tensor): Bias tensor to add at each time step.
+            nout (integer): Number of output units for the layer.
+            num_steps (integer): Total number of time steps in the buffer.
+            num_used_steps (integer): Number of time steps being used for real
+                data.
+            activation (Transform): Activation function for the layer.
+            reverse (boolean): When true, unrolling will iterate over time steps
+                in reverse (for BiRNN).
+        """
+        if num_used_steps is not None and num_used_steps < num_steps:
+            h_s = h_s[:num_used_steps]
+            h_prev_s = h_prev_s[:num_used_steps]
+            h_ff_s = h_ff_s[:num_used_steps]
+
+        if reverse:
+            steps = reversed(list(zip(h_s, h_prev_s, h_ff_s)))
+        else:
+            steps = zip(h_s, h_prev_s, h_ff_s)
+
+        for (h, h_prev, h_ff) in steps:
+            if h_ff is h:
+                self.compound_dot(W_recur, h_prev, h, beta=1.0)
+                h[:] = activation(h + bias)
+            else:
+                self.compound_dot(W_recur, h_prev, h)
+                if not math_cpu.add_and_act(h._tensor,h_ff._tensor,bias._tensor,activation):
+                    h[:] = activation(h + h_ff + bias)
+
+    def compound_rnn_unroll_bprop(self, W_recur, delta_prev_s, delta_s, h_s,
+                                  nout, num_steps, num_used_steps, activation,
+                                  reverse=True):
+        """
+        Time step unrolling portion of recurrent layer bprop.
+
+        Arguments:
+            W_recur (Tensor): Recurrent weight matrix.
+            delta_prev_s (Array): Array of per time step input delta tensors.
+                Each element in the array is a single time step view into one
+                tensor containing all of the time steps in sequence.
+            delta_s (Array): Array of per time step input delta tensors.
+                Each element in the array is a single time step view into one
+                tensor containing all of the time steps in sequence.
+            h_s (Tensor): Array of per time step hidden state tensors. Each
+                element in the array is a single time step view into one tensor
+                containing all of the time steps in sequence.
+            nout (integer): Number of output units for the layer.
+            num_steps (integer): Total number of time steps in the buffer.
+            num_used_steps (integer): Number of time steps being used for real
+                data.
+            activation (Transform): Activation function for the layer.
+            reverse (boolean): When true, unrolling will iterate over time steps
+                in reverse (default case for RNN).
+        """
+        if num_used_steps is not None and num_used_steps < num_steps:
+            h_s = h_s[:num_used_steps]
+
+        if reverse:
+            steps = reversed(list(zip(h_s, delta_s, delta_prev_s)))
+        else:
+            steps = zip(h_s, delta_s, delta_prev_s)
+
+        for (hs, in_deltas, prev_in_deltas) in steps:
+            if not math_cpu.act_and_mul(in_deltas, hs, activation):
+                in_deltas[:] = activation.bprop(hs) * in_deltas
+            self.compound_dot(W_recur, in_deltas, prev_in_deltas, beta=1.0)
+
     def allocate_new_deltas(self, delta, in_shape, parallelism):
         """
         For MKL backends, allocate new deltas for broadcast
@@ -742,3 +825,65 @@ class NervanaMKL(NervanaCPU):
 
     def allocate_new_outputs(self, layer, share_output):
         layer.allocate()
+
+    def change_data_store_order(self, a, a_row, a_col, a_len, axis=1, b=None):       
+        return math_cpu.change_data_store_order(a, a_row, a_col, a_len, axis=1,b=b)
+
+    def trans2d(self, W_recur_f, W_recur_b, W_recur_f_contiguous, W_recur_b_contiguous):
+        math_cpu.trans2d(W_recur_f, W_recur_b, W_recur_f_contiguous, W_recur_b_contiguous)
+
+    def bibnrnn_layer(self, h_buffer_all, h_ff_buffer, W_recur_f, W_recur_b, nsteps, nout):
+        """
+        Create a new BiBNRNN parameter object. To change the data storage type
+        This then is passed as an argument to all the BiBNRNN operations.
+
+        N: Number of images in mini-batch
+        C: Number of output feature maps
+        K: Number of input feature maps
+
+
+        """
+        return layer_mkl.BiBNRNNLayerMKL(h_buffer_all, h_ff_buffer, W_recur_f, W_recur_b, nsteps, nout)
+
+
+    def compound_rnn_unroll_fprop_bibnrnn(self, ngLayer, h_buffer_all, h_ff_buffer, W_recur_f, 
+                                              h_prev_not_used_in_mkl, h_ff_f_not_used_in_mkl, h_f_not_used_in_mkl, b_f, 
+                                              W_recur_b, h_next_not_used_in_mkl, h_ff_b_not_used_in_mkl,
+                                              h_b_not_used_in_mkl, b_b, nout, nsteps, nsteps_used, activation):
+        self.change_data_store_order(h_buffer_all, h_buffer_all.shape[0], nsteps + 2,
+                             h_buffer_all.shape[1] // (nsteps + 2), b=ngLayer.h_all_contiguous)
+        self.change_data_store_order(h_ff_buffer, h_ff_buffer.shape[0], nsteps,
+                             h_ff_buffer.shape[1] // nsteps, b=ngLayer.h_ff_buffer_contiguous)
+        self.compound_rnn_unroll_fprop(W_recur_f, ngLayer.h_prev_contiguous,
+                                  ngLayer.h_ff_f_contiguous, ngLayer.h_f_contiguous, b_f,
+                                  nout, nsteps, nsteps_used, activation, False)
+
+        self.compound_rnn_unroll_fprop(W_recur_b, ngLayer.h_next_contiguous,
+                                  ngLayer.h_ff_b_contiguous, ngLayer.h_b_contiguous, b_b,
+                                  nout, nsteps, nsteps_used, activation, True)
+
+        self.change_data_store_order(ngLayer.h_all_contiguous, nsteps + 2, ngLayer.h_all_contiguous.shape[0],
+                     ngLayer.h_all_contiguous.shape[1] // (nsteps + 2), b=h_buffer_all)
+        self.change_data_store_order(ngLayer.h_ff_buffer_contiguous, nsteps, ngLayer.h_ff_buffer_contiguous.shape[0],
+                     ngLayer.h_ff_buffer_contiguous.shape[1] // nsteps, b=h_ff_buffer)
+
+
+    def compound_rnn_unroll_bprop_bibnrnn(self, ngLayer, error, in_deltas_f_not_used_in_mkl,
+                                               prev_in_deltas_not_used_in_mkl, in_deltas_b_not_used_in_mkl,
+                                               next_in_deltas_not_used_in_mkl, W_recur_f, W_recur_b, h_f_not_used_in_mkl,
+                                               h_b_not_used_in_mkl,nout, nsteps, nsteps_used, activation, h_buffer_all):
+        self.change_data_store_order(error, error.shape[0], nsteps, error.shape[1] // nsteps, b=ngLayer.error_contiguous)
+        self.trans2d(W_recur_f, W_recur_b, ngLayer.W_recur_f_T_contiguous, ngLayer.W_recur_b_T_contiguous)
+        self.compound_rnn_unroll_bprop(ngLayer.W_recur_f_T_contiguous, ngLayer.prev_in_deltas,
+                                       ngLayer.in_deltas_f, ngLayer.h_f_contiguous,
+                                       nout, nsteps, nsteps_used, activation, True)
+
+        self.compound_rnn_unroll_bprop(ngLayer.W_recur_b_T_contiguous, ngLayer.next_in_deltas,
+                                       ngLayer.in_deltas_b, ngLayer.h_b_contiguous,
+                                       nout, nsteps, nsteps_used, activation, False)
+
+        self.change_data_store_order(ngLayer.h_all_contiguous, nsteps + 2, ngLayer.h_all_contiguous.shape[0],
+                     ngLayer.h_all_contiguous.shape[1] // (nsteps + 2), b=h_buffer_all)
+        self.change_data_store_order(ngLayer.error_contiguous, nsteps, ngLayer.error_contiguous.shape[0],
+                     ngLayer.error_contiguous.shape[1] // nsteps, b=error)
+

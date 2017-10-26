@@ -34,6 +34,10 @@ void cmath_gemm(const char transa, const char transb, const size_t m, const size
         const float beta, float* c, const size_t ldc);
 void cmath_sum(const float* in_tensor, int axis, size_t row, size_t col, float* out_tensor);
 void cmath_axpby(size_t sz, const float a, const float* x, const float b, float* y);
+void cmath_change_data_store_order(const float * restrict in_tensor, int axis, size_t row, size_t col, size_t len, float * restrict out_tensor); 
+void cmath_add_and_act(float* in_out_tensor2d, float* in_tensor2d, const float* in_tensor1d, size_t row, size_t col, float cut);
+void cmath_trans2d(const float* restrict in_0, const float* restrict in_1, size_t row, size_t col,float* restrict out_0, const float* restrict out_1);
+void cmath_act_and_mul(float* _in_deltas, float* _hs, size_t size, float xcut);
 
 
 

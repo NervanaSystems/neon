@@ -16,6 +16,8 @@ import sys
 import numpy as np
 from cffi import FFI
 from neon import NervanaObject
+from neon.transforms import Rectlinclip
+
 ffi = FFI()
 omp_threshold = 100000
 
@@ -356,3 +358,50 @@ def blas_axpby(a, x, b, y):
         NervanaObject.be.mathlib.cmath_axpby(x.size, a, _x, b, _y)
     else:
         y = a*x + b*y
+
+
+def change_data_store_order(a, a_row, a_col, a_len, b, axis=1):
+    if iscontiguous(a._tensor) :
+        _a = ffi.cast("float *", ffi.from_buffer(a._tensor))
+        _b = ffi.cast("float *", ffi.from_buffer(b._tensor))
+        NervanaObject.be.mathlib.cmath_change_data_store_order(_a, axis, a_row, a_col, a_len, _b)
+
+        return b
+    else:
+        raise AttributeError('a should be contiguous')
+
+def add_and_act(h,h_ff,bias,activation):
+    if iscontiguous(h) and iscontiguous(h_ff) and iscontiguous(bias):
+        if isinstance(activation,Rectlinclip) and (activation.slope==0):
+            _h = ffi.cast("float *", ffi.from_buffer(h))
+            _h_ff = ffi.cast("float *", ffi.from_buffer(h_ff))
+            _bias = ffi.cast("float *", ffi.from_buffer(bias))
+            NervanaObject.be.mathlib.cmath_add_and_act(_h, _h_ff, _bias, h.shape[0], h.shape[1], activation.xcut)
+            return True
+        else:
+            return False
+    else:
+        return False
+
+def trans2d(W_recur_f, W_recur_b, W_recur_f_contiguous, W_recur_b_contiguous):
+    if iscontiguous(W_recur_f._tensor) and iscontiguous(W_recur_b._tensor) \
+       and W_recur_f.shape == W_recur_b.shape:
+        _in_0 = ffi.cast("float *", ffi.from_buffer(W_recur_f._tensor))
+        _in_1 = ffi.cast("float *", ffi.from_buffer(W_recur_b._tensor))
+        _out_0 = ffi.cast("float *", ffi.from_buffer(W_recur_f_contiguous._tensor))
+        _out_1 = ffi.cast("float *", ffi.from_buffer(W_recur_b_contiguous._tensor))
+        NervanaObject.be.mathlib.cmath_trans2d(_in_0, _in_1, W_recur_f.shape[0], \
+                                               W_recur_f.shape[1], _out_0, _out_1)
+
+def act_and_mul(in_deltas, hs, activation):
+    if iscontiguous(in_deltas._tensor) and iscontiguous(hs._tensor):
+        if isinstance(activation,Rectlinclip) and (activation.slope==0):
+            _in_deltas = ffi.cast("float *", ffi.from_buffer(in_deltas._tensor))
+            _hs = ffi.cast("float *", ffi.from_buffer(hs._tensor))
+            NervanaObject.be.mathlib.cmath_act_and_mul(_in_deltas, _hs, in_deltas.size, activation.xcut)
+            return True
+        else:
+            return False
+    else:
+        return False
+
