@@ -76,7 +76,7 @@ setup neon in this manner, run the following commands:
     git clone https://github.com/NervanaSystems/neon.git
     cd neon; git checkout latest; make
 
-The above checks out the latest stable release (e.g. a tagged release version v2.2.0) and build neon.
+The above checks out the latest stable release (e.g. a tagged release version v2.3.0) and build neon.
 Alternatively, you can check out and build the latest master branch:
 
 .. code-block:: bash

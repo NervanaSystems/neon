@@ -36,10 +36,11 @@ Features include:
 
 New features in this release:
 
-* Update MKLML version 20170908 that fixes a bug related to data conversions)
-* Add SSD example for bounding box object detection that works for both GPU and MKL backend
-* Add DeepSpeech2 MKL backend optimization that features ~3X improvement
-* Update aeon to 1.0.0 including new version of manifest (doc/source/loading_data.rst#aeon-dataloader)
+* Optimized DeepSpeech2 MKL backend performance (~7X improvement over the CPU backend)
+* Fused convolution and bias layer which significantly boosted AlexNet and VGG performance on Intel architectures with MKL backend
+* Made SSD and Faster-RNN use VGG weight files in new format
+* Fixed use of reset_cells hyperparameter
+* Fixed MKL backend bug for GAN and Faster-RCNN models
 * See more in the `change log`_.
 
 We use neon internally at Intel Nervana to solve our `customers' problems`_

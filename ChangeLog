@@ -1,5 +1,13 @@
 # ChangeLog
 
+## v2.3.0 (2017-10-27):
+
+* Optimized DeepSpeech2 MKL backend performance (~7X improvement over the CPU backend)
+* Fused convolution and bias layer which significantly boosted AlexNet and VGG performance on Intel architectures with MKL backend
+* Made SSD and Faster-RNN use VGG weight files in new format
+* Fixed use of reset_cells hyperparameter
+* Fixed MKL backend bug for GAN and Faster-RCNN models
+
 ## v2.2.0 (2017-09-27):
 
 * Update MKLML version 20170908 that fixes a bug related to data conversions)

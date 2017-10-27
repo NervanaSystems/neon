@@ -16,6 +16,19 @@
 
 Previous Versions
 =================
+neon v2.2.0
+-----------
+
+|Docs220|_
+
+* Update MKLML version 20170908 that fixes a bug related to data conversions)
+* Add SSD example for bounding box object detection that works for both GPU and MKL backend
+* Add DeepSpeech2 MKL backend optimization that features ~3X improvement
+* Update aeon to 1.0.0 including new version of manifest (doc/source/loading_data.rst#aeon-dataloader)
+* Add CHWD Support for Batch Normalization in mkl backend
+* Modify ResNet-50 model's last layer to match the original ResNet-50 model paper
+* Enable Seq2Seq testing and benchmarking
+
 neon v2.1.0
 -----------
 
@@ -460,6 +473,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs220| replace:: Docs
 .. |Docs200| replace:: Docs
 .. |Docs190| replace:: Docs
 .. |Docs182| replace:: Docs
@@ -487,6 +501,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs220: http://neon.nervanasys.com/docs/2.2.0
 .. _Docs200: http://neon.nervanasys.com/docs/2.0.0
 .. _Docs190: http://neon.nervanasys.com/docs/1.9.0
 .. _Docs182: http://neon.nervanasys.com/docs/1.8.2
