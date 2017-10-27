@@ -78,7 +78,7 @@ num_classes = valid_set.num_classes
 (model, proposalLayer) = faster_rcnn.build_model(valid_set, frcn_rois_per_img, inference=True)
 
 # load parameters and initialize model
-model.load_params(args.model_file)
+model.load_params(args.model_file, load_states=False)
 model.initialize(dataset=valid_set)
 
 # normalize the model by the bbtarget mean and std if needed
