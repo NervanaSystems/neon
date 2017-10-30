@@ -15,7 +15,7 @@
 # ----------------------------------------------------------------------------
 import os
 from neon.optimizers import GradientDescentMomentum, Schedule
-from neon.transforms import Misclassification
+from neon.transforms import TopKMisclassification
 from neon.callbacks.callbacks import Callbacks, BatchNormTuneCallback
 from neon.util.argparser import NeonArgparser
 
@@ -49,7 +49,8 @@ test = make_validation_loader(args.manifest['val'], args.manifest_root, model.be
 tune_set = make_tuning_loader(args.manifest['train'], args.manifest_root, model.be)
 
 # configure callbacks
-callbacks = Callbacks(model, eval_set=test, metric=Misclassification(), **args.callback_args)
+valmetric = TopKMisclassification(k=5)
+callbacks = Callbacks(model, eval_set=test, metric=valmetric, **args.callback_args)
 callbacks.add_callback(BatchNormTuneCallback(tune_set), insert_pos=0)
 
 # begin training
