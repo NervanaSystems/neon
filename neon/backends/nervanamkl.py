@@ -776,7 +776,7 @@ class NervanaMKL(NervanaCPU):
                 h[:] = activation(h + bias)
             else:
                 self.compound_dot(W_recur, h_prev, h)
-                if not math_cpu.add_and_act(h._tensor,h_ff._tensor,bias._tensor,activation):
+                if not math_cpu.add_and_act(h._tensor, h_ff._tensor, bias._tensor, activation):
                     h[:] = activation(h + h_ff + bias)
 
     def compound_rnn_unroll_bprop(self, W_recur, delta_prev_s, delta_s, h_s,
@@ -826,8 +826,8 @@ class NervanaMKL(NervanaCPU):
     def allocate_new_outputs(self, layer, share_output):
         layer.allocate()
 
-    def change_data_store_order(self, a, a_row, a_col, a_len, axis=1, b=None):       
-        return math_cpu.change_data_store_order(a, a_row, a_col, a_len, axis=1,b=b)
+    def change_data_store_order(self, a, a_row, a_col, a_len, axis=1, b=None):
+        return math_cpu.change_data_store_order(a, a_row, a_col, a_len, axis=1, b=b)
 
     def trans2d(self, W_recur_f, W_recur_b, W_recur_f_contiguous, W_recur_b_contiguous):
         math_cpu.trans2d(W_recur_f, W_recur_b, W_recur_f_contiguous, W_recur_b_contiguous)
@@ -843,37 +843,49 @@ class NervanaMKL(NervanaCPU):
 
 
         """
-        return layer_mkl.BiBNRNNLayerMKL(h_buffer_all, h_ff_buffer, W_recur_f, W_recur_b, nsteps, nout)
+        return layer_mkl.BiBNRNNLayerMKL(h_buffer_all, h_ff_buffer, W_recur_f, W_recur_b, nsteps,
+                                         nout)
 
-
-    def compound_rnn_unroll_fprop_bibnrnn(self, ngLayer, h_buffer_all, h_ff_buffer, W_recur_f, 
-                                              h_prev_not_used_in_mkl, h_ff_f_not_used_in_mkl, h_f_not_used_in_mkl, b_f, 
-                                              W_recur_b, h_next_not_used_in_mkl, h_ff_b_not_used_in_mkl,
-                                              h_b_not_used_in_mkl, b_b, nout, nsteps, nsteps_used, activation):
+    def compound_rnn_unroll_fprop_bibnrnn(self, ngLayer, h_buffer_all, h_ff_buffer, W_recur_f,
+                                          h_prev_not_used_in_mkl, h_ff_f_not_used_in_mkl,
+                                          h_f_not_used_in_mkl, b_f, W_recur_b,
+                                          h_next_not_used_in_mkl, h_ff_b_not_used_in_mkl,
+                                          h_b_not_used_in_mkl, b_b, nout, nsteps, nsteps_used,
+                                          activation):
         self.change_data_store_order(h_buffer_all, h_buffer_all.shape[0], nsteps + 2,
-                             h_buffer_all.shape[1] // (nsteps + 2), b=ngLayer.h_all_contiguous)
+                                     h_buffer_all.shape[1] // (nsteps + 2),
+                                     b=ngLayer.h_all_contiguous)
         self.change_data_store_order(h_ff_buffer, h_ff_buffer.shape[0], nsteps,
-                             h_ff_buffer.shape[1] // nsteps, b=ngLayer.h_ff_buffer_contiguous)
+                                     h_ff_buffer.shape[1] // nsteps,
+                                     b=ngLayer.h_ff_buffer_contiguous)
         self.compound_rnn_unroll_fprop(W_recur_f, ngLayer.h_prev_contiguous,
-                                  ngLayer.h_ff_f_contiguous, ngLayer.h_f_contiguous, b_f,
-                                  nout, nsteps, nsteps_used, activation, False)
+                                       ngLayer.h_ff_f_contiguous, ngLayer.h_f_contiguous, b_f,
+                                       nout, nsteps, nsteps_used, activation, False)
 
         self.compound_rnn_unroll_fprop(W_recur_b, ngLayer.h_next_contiguous,
-                                  ngLayer.h_ff_b_contiguous, ngLayer.h_b_contiguous, b_b,
-                                  nout, nsteps, nsteps_used, activation, True)
+                                       ngLayer.h_ff_b_contiguous, ngLayer.h_b_contiguous, b_b,
+                                       nout, nsteps, nsteps_used, activation, True)
 
-        self.change_data_store_order(ngLayer.h_all_contiguous, nsteps + 2, ngLayer.h_all_contiguous.shape[0],
-                     ngLayer.h_all_contiguous.shape[1] // (nsteps + 2), b=h_buffer_all)
-        self.change_data_store_order(ngLayer.h_ff_buffer_contiguous, nsteps, ngLayer.h_ff_buffer_contiguous.shape[0],
-                     ngLayer.h_ff_buffer_contiguous.shape[1] // nsteps, b=h_ff_buffer)
-
+        self.change_data_store_order(ngLayer.h_all_contiguous, nsteps + 2,
+                                     ngLayer.h_all_contiguous.shape[0],
+                                     ngLayer.h_all_contiguous.shape[1] // (nsteps + 2),
+                                     b=h_buffer_all)
+        self.change_data_store_order(ngLayer.h_ff_buffer_contiguous, nsteps,
+                                     ngLayer.h_ff_buffer_contiguous.shape[0],
+                                     ngLayer.h_ff_buffer_contiguous.shape[1] // nsteps,
+                                     b=h_ff_buffer)
 
     def compound_rnn_unroll_bprop_bibnrnn(self, ngLayer, error, in_deltas_f_not_used_in_mkl,
-                                               prev_in_deltas_not_used_in_mkl, in_deltas_b_not_used_in_mkl,
-                                               next_in_deltas_not_used_in_mkl, W_recur_f, W_recur_b, h_f_not_used_in_mkl,
-                                               h_b_not_used_in_mkl,nout, nsteps, nsteps_used, activation, h_buffer_all):
-        self.change_data_store_order(error, error.shape[0], nsteps, error.shape[1] // nsteps, b=ngLayer.error_contiguous)
-        self.trans2d(W_recur_f, W_recur_b, ngLayer.W_recur_f_T_contiguous, ngLayer.W_recur_b_T_contiguous)
+                                          prev_in_deltas_not_used_in_mkl,
+                                          in_deltas_b_not_used_in_mkl,
+                                          next_in_deltas_not_used_in_mkl, W_recur_f, W_recur_b,
+                                          h_f_not_used_in_mkl,
+                                          h_b_not_used_in_mkl, nout, nsteps, nsteps_used,
+                                          activation, h_buffer_all):
+        self.change_data_store_order(error, error.shape[0], nsteps, error.shape[1] // nsteps,
+                                     b=ngLayer.error_contiguous)
+        self.trans2d(W_recur_f, W_recur_b, ngLayer.W_recur_f_T_contiguous,
+                     ngLayer.W_recur_b_T_contiguous)
         self.compound_rnn_unroll_bprop(ngLayer.W_recur_f_T_contiguous, ngLayer.prev_in_deltas,
                                        ngLayer.in_deltas_f, ngLayer.h_f_contiguous,
                                        nout, nsteps, nsteps_used, activation, True)
@@ -882,8 +894,10 @@ class NervanaMKL(NervanaCPU):
                                        ngLayer.in_deltas_b, ngLayer.h_b_contiguous,
                                        nout, nsteps, nsteps_used, activation, False)
 
-        self.change_data_store_order(ngLayer.h_all_contiguous, nsteps + 2, ngLayer.h_all_contiguous.shape[0],
-                     ngLayer.h_all_contiguous.shape[1] // (nsteps + 2), b=h_buffer_all)
-        self.change_data_store_order(ngLayer.error_contiguous, nsteps, ngLayer.error_contiguous.shape[0],
-                     ngLayer.error_contiguous.shape[1] // nsteps, b=error)
-
+        self.change_data_store_order(ngLayer.h_all_contiguous, nsteps + 2,
+                                     ngLayer.h_all_contiguous.shape[0],
+                                     ngLayer.h_all_contiguous.shape[1] // (nsteps + 2),
+                                     b=h_buffer_all)
+        self.change_data_store_order(ngLayer.error_contiguous, nsteps,
+                                     ngLayer.error_contiguous.shape[0],
+                                     ngLayer.error_contiguous.shape[1] // nsteps, b=error)
