@@ -35,6 +35,7 @@ from PIL import Image
 import sys
 import warnings
 from neon import logger as neon_logger
+from neon.transforms.activation import Identity
 
 try:
     from scipy.ndimage import zoom
@@ -81,7 +82,7 @@ class MaximizeActivations(Cost):
 
 class Dream(Activation):
     def __init__(self, name=None):
-        super(Dream, self).__init__(name)
+        super(Dream, self).__init__(Identity(), name)
         self.owns_output = True
 
     def fprop(self, inputs, inference=False):
