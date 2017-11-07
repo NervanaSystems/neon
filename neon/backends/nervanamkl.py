@@ -16,6 +16,7 @@
 MKL based backend interface and tensor data structure.
 """
 from __future__ import division
+from builtins import zip
 import logging
 
 from neon.backends import layer_mkl
