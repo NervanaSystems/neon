@@ -1468,7 +1468,6 @@ class Activation(Layer):
     def __init__(self, transform, name=None):
         super(Activation, self).__init__(name)
         self.transform = transform
-        self.nglayer = self.be.relu_layer()
         self.owns_output = False
         self.owns_delta = True
 
@@ -1489,11 +1488,14 @@ class Activation(Layer):
             (tuple): shape of output data
         """
         super(Activation, self).configure(in_obj)
+        self.nglayer = self.be.relu_layer()
         self.out_shape = self.in_shape
         (self.nout, _) = interpret_in_shape(self.in_shape)
         return self
 
     def get_is_mklop(self):
+        if self.transform is None:
+            return False
         return self.transform.is_mklop
 
     def fprop(self, inputs, inference=False):
@@ -2239,6 +2241,7 @@ class GeneralizedCost(NervanaObject):
         self.outputs[:] = self.costfunc(inputs, targets)
         self.be.mean(self.outputs, axis=1, out=self.cost_buffer)
         self.cost = self.cost_buffer.get()
+        self.be.clean_data(self.cost, True)
         return self.cost
 
     def get_errors(self, inputs, targets):
@@ -2255,6 +2258,7 @@ class GeneralizedCost(NervanaObject):
             deltas.
         """
         self.deltas[:] = self.costfunc.bprop(inputs, targets)
+        self.be.clean_data(self.deltas, True)
         return self.deltas
 
 
