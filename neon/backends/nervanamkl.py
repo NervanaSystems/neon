@@ -215,10 +215,10 @@ class NervanaMKL(NervanaCPU):
             elif type(tensor) is list or type(tensor) is tuple:
                 for i in tensor:
                     self.convert_data(i, layer_mkl)
-            elif type(tensor) is OpTreeNode:
+            elif type(tensor) is OpTreeNode or type(tensor) is np.ndarray:
                 return
             else:
-                assert False, 'unsupported input for convert'
+                assert False, 'unsupported input for convert ' + str(type(tensor))
 
     def clean_data(self, tensor, layer_mkl):
         if layer_mkl and tensor is not None and type(tensor) == MKLTensor:
