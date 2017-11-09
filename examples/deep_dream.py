@@ -101,8 +101,8 @@ class DreamModel(Model):
     def load_imagenet_weights(self, model_path):
         # download trained Alexnet weights
         url = 'https://s3-us-west-1.amazonaws.com/nervana-modelzoo/alexnet/'
-        filename = 'alexnet_conv_ns.p'
-        size = 20550623
+        filename = 'alexnet_conv_ns_fused_conv_bias.p'
+        size = 19763308
 
         _, filepath = Dataset._valid_path_append(model_path, '', filename)
         if not osp.exists(filepath):
