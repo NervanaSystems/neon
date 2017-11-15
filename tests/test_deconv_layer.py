@@ -21,7 +21,7 @@ from neon.initializers import Uniform
 from utils import allclose_with_out
 try:
     from neon.backends.nervanagpu import NervanaGPU
-except:
+except ImportError:
     # stub out the class
     class NervanaGPU(object):
         pass

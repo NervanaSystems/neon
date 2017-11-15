@@ -326,6 +326,7 @@ def checkBatchGradient():
                                 % (status, name, repr(np.unravel_index(i, mat.shape)), old_val,
                                    grad_analytic, grad_numerical, rel_error))
 
+
 if __name__ == "__main__":
     checkSequentialMatchesBatch()
     input('check OK, press key to continue to gradient check')

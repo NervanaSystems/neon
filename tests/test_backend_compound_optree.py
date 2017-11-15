@@ -23,7 +23,7 @@ from neon import NervanaObject
 from utils import call_func, gen_backend_tensors, tensors_allclose
 try:
     from neon.backends.nervanagpu import NervanaGPU
-except:
+except ImportError:
     # stub out the class
     class NervanaGPU(object):
         pass
@@ -116,7 +116,7 @@ def test_vs_numpy(backend_tests, custom_args):
 
     try:
         assert tensors_allclose(numpy_func_val, backend_func_val, rtol=1e-2, atol=1e-2)
-    except:
+    except AssertionError:
         # xfail for gpu backend on TITAN XP platforms
         if isinstance(NervanaObject.be, NervanaGPU):
 

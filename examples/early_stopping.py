@@ -67,6 +67,7 @@ def stop_func(s, v):
 
     return (min(v, s), v > s)
 
+
 # fit and validate
 optimizer = GradientDescentMomentum(learning_rate=0.1, momentum_coef=0.9)
 

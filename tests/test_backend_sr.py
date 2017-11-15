@@ -70,5 +70,6 @@ def test_sr(backend_gpu):
     assert sum([C_host.flatten()[i] in [1.5] for i in range(n**2)]) > .1 * n**2
     assert sum([C_host.flatten()[i] in [1.] for i in range(n**2)]) > .7 * n**2
 
+
 if __name__ == '__main__':
     test_sr()

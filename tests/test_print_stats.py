@@ -32,6 +32,7 @@ class TestOutput(object):
     def display(self, data):
         self.display_output = data
 
+
 test_stats = {'feature_name': [10, 10.5, 11, 11.6]}
 
 

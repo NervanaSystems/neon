@@ -24,7 +24,7 @@ from neon.initializers.initializer import Uniform
 from utils import allclose_with_out
 try:
     from neon.backends.nervanagpu import NervanaGPU
-except:
+except ImportError:
     # stub out the class
     class NervanaGPU(object):
         pass
@@ -311,6 +311,7 @@ def test_conv_rand(backend_default, rand_convargs, deltas_buffer):
     atol = 4 * np.max(np.abs(ref_dW - ref_dW_perm))
     assert allclose_with_out(ref_dW.T, neon_dW, atol=atol, rtol=1.e-4)
     return
+
 
 """
 Conv check code adapted from ref-des

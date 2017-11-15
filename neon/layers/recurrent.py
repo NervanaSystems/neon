@@ -1514,7 +1514,7 @@ class BiBNRNN(BiRNN):
             self.gamma.auto_reduce = False
         except (SystemExit, KeyboardInterrupt):
             raise
-        except:
+        except Exception:
             pass
 
     def set_deltas(self, delta_buffers):

@@ -25,7 +25,7 @@ from neon import logger as neon_logger
 def add_param_to_output(output_string, param_name, param):
     try:
         output_string += '{:>25}: {}\n'.format(param_name, param)
-    except:
+    except Exception:
         output_string += '{:>25}: UNKNOWN\n'.format(param_name)
     return output_string
 
@@ -56,7 +56,7 @@ def display_model_params(neon_args, neon_root_yaml):
         output_string = add_param_to_output(output_string,
                                             'momentum coef',
                                             neon_root_yaml['optimizer']['config']['momentum_coef'])
-    except:
+    except Exception:
         output_string += 'Some parameters cannot be displayed\n'
     output_string += '----------------------------------------'
     neon_logger.display(output_string)
@@ -101,7 +101,7 @@ def display_cpu_information():
         output_string = add_param_to_output(output_string,
                                             'l2 cache size',
                                             cpu_info['l2_cache_size'])
-    except:
+    except Exception:
         output_string += 'Some CPU information cannot be displayed\n'
     output_string += '----------------------------------------'
     neon_logger.display(output_string)
@@ -138,7 +138,7 @@ def display_platform_information():
                                             'python compiler',
                                             platform.python_compiler())
 
-    except:
+    except Exception:
         output_string += 'Some platform information cannot be displayed\n'
     output_string += '----------------------------------------'
     neon_logger.display(output_string)

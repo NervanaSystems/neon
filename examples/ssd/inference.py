@@ -81,6 +81,7 @@ def get_boxes(model, val_set, num_images=0, image_dir=None, score_threshold=0.6)
 
     return (all_boxes, all_gt_boxes)
 
+
 if __name__ == '__main__':
     """
 

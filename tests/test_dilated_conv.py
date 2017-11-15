@@ -30,7 +30,7 @@ from utils import allclose_with_out
 from neon import NervanaObject
 try:
     from neon.backends.nervanagpu import NervanaGPU
-except:
+except ImportError:
     # stub out the class
     class NervanaGPU(object):
         pass
@@ -174,7 +174,7 @@ def test_dilated_conv(backend_default, fargs_tests):
     assert allclose_with_out(o1, o2, atol=0, rtol=3e-3)
     try:
         assert allclose_with_out(w1, w2, atol=0, rtol=1e-3)
-    except:
+    except AssertionError:
         # xfail for cpu/mkl backends on KNM/KNL platforms
         if not isinstance(NervanaObject.be, NervanaGPU):
             if os.getenv("PLATFORM"):

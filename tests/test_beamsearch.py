@@ -182,6 +182,7 @@ def test_beamsearch(backend_default):
     assert allclose_with_out(examples[0], ex0)
     assert allclose_with_out(examples[1], ex1)
 
+
 if __name__ == '__main__':
     be = gen_backend(backend='gpu', batch_size=2)
     test_beamsearch(be)

@@ -88,6 +88,7 @@ def sample(prob):
     prob = prob / (prob.sum() + 1e-6)
     return np.argmax(np.random.multinomial(1, prob, 1))
 
+
 # Set batch size and time_steps to 1 for generation and reset buffers
 model.be.bsz = 1
 time_steps = 1

@@ -207,5 +207,6 @@ def create_h5py(data_dir, dataset, split, s_vocab=None, t_vocab=None,
 
     return s_vocab, t_vocab
 
+
 if __name__ == "__main__":
     get_data()

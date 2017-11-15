@@ -216,6 +216,7 @@ def err(y, t):
     feature_axis = 1
     return (0.5 * np.square(y - t).mean(axis=feature_axis).mean())
 
+
 if __name__ == '__main__':
 
     # parse the command line arguments

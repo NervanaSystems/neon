@@ -474,6 +474,7 @@ class CustomNumpy(object):
 def _assign_right_to_left(left, right):
     left[:] = right
 
+
 numpy_call_dict_cpu = {
     # assign
     "assign": _assign_right_to_left,

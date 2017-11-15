@@ -111,6 +111,7 @@ class MKLTensor(CPUTensor):
 def _assign_right_to_left(left, right):
     math_cpu.blas_copy(left, right)
 
+
 # how to overlaod numpy_call_dict?
 numpy_call_dict_mkl = {
     # assign

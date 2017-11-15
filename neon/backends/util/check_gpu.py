@@ -103,5 +103,6 @@ def get_device_count(verbose=False):
 
     return count
 
+
 if __name__ == '__main__':
     neon_logger.display(get_compute_capability(verbose=False))

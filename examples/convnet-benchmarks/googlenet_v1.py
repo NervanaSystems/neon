@@ -64,6 +64,7 @@ def inception(kvals):
     branch4 = [Pooling(op="max", **pool3s1p1), Conv((1, 1, p4[0]), **common)]
     return MergeBroadcast(layers=[branch1, branch2, branch3, branch4], merge="depth")
 
+
 model = Model(layers=[
     Conv((7, 7, 64), padding=3, strides=2, **common),
     Pooling(**pool3s2p1),

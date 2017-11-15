@@ -32,6 +32,7 @@ def compare_tensors(func, inputs, outputs, deriv=False, tol=0.):
     cond = np.sum(np.abs(temp.get() - outputs) <= tol)
     assert cond == np.prod(outputs.shape)
 
+
 """Identity
 """
 
@@ -46,6 +47,7 @@ def test_identity_derivative(backend_default):
     inputs = np.array([0, 1, -2]).reshape((3, 1))
     outputs = np.ones((1, 1))
     compare_tensors(Identity(), inputs, outputs, deriv=True)
+
 
 """Rectified Linear unit
 """
@@ -85,6 +87,7 @@ def test_rectlin_derivative_mixed(backend_default):
     inputs = np.array([[4, 0], [-2, 9]])
     outputs = np.array([[1, 0], [0, 1]])
     compare_tensors(Rectlin(), inputs, outputs, deriv=True)
+
 
 """Leaky Rectified Linear unit
 """
@@ -131,6 +134,7 @@ def test_leaky_rectlin_derivative_mixed(backend_default):
     outputs = np.array([[1, 0], [slope, 1]])
     compare_tensors(Rectlin(slope=slope), inputs, outputs, deriv=True, tol=1e-7)
 
+
 """Softmax
 """
 
@@ -173,6 +177,7 @@ def test_softmax_big_inputs(backend_default):
 
     assert allclose_with_out(y_, x.get(), atol=0.0, rtol=1.0e-5)
 
+
 """PixelwiseSoftmax
 """
 
@@ -192,6 +197,7 @@ def test_pixelwise_softmax_derivative(backend_default):
     inputs = inputs.reshape((1, -1))
     outputs = outputs.reshape((1, -1))
     compare_tensors(PixelwiseSoftmax(c=2), inputs, outputs, deriv=True, tol=1e-6)
+
 
 """Tanh
 """
@@ -213,6 +219,7 @@ def test_tanh_derivative(backend_default):
                         1 - true_tanh(-2) ** 2]).reshape((3, 1))
     compare_tensors(Tanh(), inputs, outputs, deriv=True, tol=1e-7)
 
+
 """Logistic
 """
 
@@ -230,6 +237,7 @@ def test_logistic_derivative(backend_default):
     outputs = inputs * (1.0 - inputs)
     compare_tensors(Logistic(shortcut=False),
                     inputs, outputs, deriv=True, tol=1e-7)
+
 
 """Sign
 """

@@ -43,6 +43,7 @@ def convert_manifest(source_manifest, output_manifest):
         os.remove(output_manifest)
     shutil.move(tmp_manifest, output_manifest)
 
+
 if __name__ == '__main__':
     from configargparse import ArgumentParser
     parser = ArgumentParser()

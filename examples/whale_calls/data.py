@@ -62,7 +62,7 @@ def ingest_whales(input_dir, out_dir, overwrite=False, train_frac=0.8):
         for aiff, lbl in train_records:
             try:
                 record = (os.path.join('data', 'train', aiff), lbl)
-            except:
+            except Exception:
                 record = (os.path.join('data', 'train', aiff.decode()), lbl)
             if lbl == 1:
                 pos_list.append(record)

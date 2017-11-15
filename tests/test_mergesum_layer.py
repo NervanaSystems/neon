@@ -24,7 +24,7 @@ from neon.transforms import Rectlin
 from utils import allclose_with_out
 try:
     from neon.backends.nervanamkl import NervanaMKL
-except:
+except ImportError:
     # stub out the class
     class NervanaMKL(object):
         pass

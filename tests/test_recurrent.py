@@ -44,7 +44,7 @@ from recurrent_ref import Recurrent as RefRecurrent
 from utils import allclose_with_out
 try:
     from neon.backends.nervanacpu import NervanaCPU
-except:
+except ImportError:
     # stub out the class
     class NervanaCPU(object):
         pass
@@ -99,7 +99,7 @@ def test_ref_compare_rand(backend_default, refgruargs):
     try:
         check_rnn(seq_len, input_size, hidden_size, batch_size,
                   Gaussian())
-    except:
+    except Exception:
         # xfail for cpu backend on pascal
         if not isinstance(NervanaObject.be, NervanaCPU):
             check_rnn(seq_len, input_size, hidden_size, batch_size,

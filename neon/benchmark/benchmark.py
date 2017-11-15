@@ -161,7 +161,8 @@ class Benchmark(object):
 
         min_iterations = self.model.get_k(self.model.gen_iter) + 1
         if niterations < min_iterations:
-            raise ValueError("Invalid iterations number. Run at least " + str(min_iterations) + " iterations.")
+            raise ValueError("Invalid iterations number. Run at least " +
+                             str(min_iterations) + " iterations.")
 
         # iterate through minibatches of the dataset
         times = OrderedDict()
@@ -171,7 +172,6 @@ class Benchmark(object):
         count = 0
 
         epoch = self.model.epoch_index
-        last_gen_iter = self.model.gen_iter
         z, y_temp = self.model.zbuf, self.model.ybuf
 
         fprop_start = self.model.be.init_mark()
@@ -184,8 +184,9 @@ class Benchmark(object):
             for mb_idx, (x, t) in enumerate(dataset):
                 # clip all discriminator parameters to a cube in case of WGAN
                 if self.model.wgan_param_clamp:
-                    self.model.clip_param_in_layers(self.model.layers.discriminator.layers_to_optimize,
-                                                    self.model.wgan_param_clamp)
+                    self.model.clip_param_in_layers(
+                        self.model.layers.discriminator.layers_to_optimize,
+                        self.model.wgan_param_clamp)
                 # benchmark discriminator on noise
                 self.model.fill_noise(z, normal=(self.model.noise_type == 'normal'))
                 self.model.be.record_mark(fprop_start)  # mark start of fprop
@@ -197,7 +198,7 @@ class Benchmark(object):
                 self.model.be.record_mark(bprop_start)  # mark start of bprop
                 delta_noise = self.model.cost.costfunc.bprop_noise(y_noise)
                 self.model.bprop_dis(delta_noise)
-                self.model.be.record_mark(bprop_end) # mark end of bprop
+                self.model.be.record_mark(bprop_end)  # mark end of bprop
                 times['bprop'][count] += self.model.be.get_time(bprop_start, bprop_end)
                 self.model.layers.discriminator.set_acc_on(True)
 
@@ -209,13 +210,15 @@ class Benchmark(object):
                 self.model.be.record_mark(bprop_start)
                 delta_data = self.model.cost.costfunc.bprop_data(y_data)
                 self.model.bprop_dis(delta_data)
-                self.model.optimizer.optimize(self.model.layers.discriminator.layers_to_optimize, epoch=epoch)
+                self.model.optimizer.optimize(self.model.layers.discriminator.layers_to_optimize,
+                                              epoch=epoch)
                 self.model.be.record_mark(bprop_end)
                 times['bprop'][count] += self.model.be.get_time(bprop_start, bprop_end)
                 self.model.layers.discriminator.set_acc_on(False)
 
                 # benchmark generator
-                if self.model.current_batch == self.model.last_gen_batch + self.model.get_k(self.model.gen_iter):
+                if self.model.current_batch == self.model.last_gen_batch + \
+                        self.model.get_k(self.model.gen_iter):
                     self.model.fill_noise(z, normal=(self.model.noise_type == 'normal'))
                     self.model.be.record_mark(fprop_start)
                     Gz = self.model.fprop_gen(z)
@@ -227,7 +230,8 @@ class Benchmark(object):
                     delta_noise = self.model.cost.costfunc.bprop_generator(y_noise)
                     delta_dis = self.model.bprop_dis(delta_noise)
                     self.model.bprop_gen(delta_dis)
-                    self.model.optimizer.optimize(self.model.layers.generator.layers_to_optimize, epoch=epoch)
+                    self.model.optimizer.optimize(self.model.layers.generator.layers_to_optimize,
+                                                  epoch=epoch)
                     self.model.be.record_mark(bprop_end)
                     times['bprop'][count] += self.model.be.get_time(bprop_start, bprop_end)
                     self.model.last_gen_batch = self.model.current_batch

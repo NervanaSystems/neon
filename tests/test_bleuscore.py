@@ -43,5 +43,6 @@ def test_bleuscore():
     for score, reference in zip(bleu_metric.bleu_n, bleu_score_references):
         assert round(score, 1) == reference
 
+
 if __name__ == '__main__':
     test_bleuscore()

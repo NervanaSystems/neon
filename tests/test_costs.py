@@ -55,6 +55,7 @@ def compare_tensors(func, y, t, outputs, deriv=False, tol=0.):
     cond = np.sum(np.abs(temp.get() - outputs) <= tol)
     assert cond == np.prod(outputs.shape)
 
+
 """
     CrossEntropyBinary
 """
@@ -93,6 +94,7 @@ def test_cross_entropy_binary_derivative(backend_default):
         CrossEntropyBinary(), outputs, targets, expected_result, deriv=True,
         tol=1e-6)
 
+
 """
     CrossEntropyMulti
 """
@@ -125,6 +127,7 @@ def test_cross_entropy_multi_derivative(backend_default):
     compare_tensors(CrossEntropyMulti(), outputs, targets, expected_result,
                     deriv=True, tol=1e-6)
 
+
 """
     SumSquared
 """
@@ -150,6 +153,7 @@ def test_sum_squared_derivative(backend_default):
     expected_result = (outputs - targets) / outputs.shape[1]
     compare_tensors(SumSquared(), outputs,
                     targets, expected_result, deriv=True, tol=1e-8)
+
 
 """
     MeanSquared
@@ -177,6 +181,7 @@ def test_mean_squared_derivative(backend_default):
     compare_tensors(MeanSquared(), outputs,
                     targets, expected_result, deriv=True, tol=1e-8)
 
+
 """
     Misclassification
 """
@@ -198,6 +203,7 @@ def test_misclassification(backend_default):
     expected_result = np.ones((1, 1)) / 3.
     compare_metric(Misclassification(),
                    outputs, targets, expected_result, tol=1e-7)
+
 
 """
     Precision / Recall
@@ -225,6 +231,7 @@ def test_precision_recall_binarize(backend_default):
     expected_result = np.array([1 + 1 + 0, 1 + 0.5 + 0]) / 3.
     compare_metric(PrecisionRecall(3, binarize=True), preds, targets,
                    expected_result, tol=1e-6)
+
 
 """
     Smooth L1 loss
@@ -302,6 +309,7 @@ def test_smoothL1_random_derivative(backend_default, fargs):
     compare_tensors(SmoothL1Loss(sigma=sigma), outputs,
                     targets, expected_result,
                     deriv=True, tol=1e-5)
+
 
 """
     SquareHingeLoss

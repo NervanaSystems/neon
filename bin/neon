@@ -24,7 +24,8 @@ To run this script, first activate the virtualenv and then run
 
 Some of the commonly used arguments to this script are:
 
-    -b | --backend [ gpu | cpu | mkl ] : backend to use (gpu backend works on Pascal, Maxwell and Kepler)
+    -b | --backend [ gpu | cpu | mkl ] : backend to use (gpu backend works on Pascal,
+                                         Maxwell and Kepler)
 
     -e | --epochs [ epochs ] : number of epochs to run fit
 

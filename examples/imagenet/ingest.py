@@ -219,6 +219,7 @@ class IngestI1K(object):
             records.insert(0, ('@FILE', 'STRING'))
             np.savetxt(manifest, records, fmt='%s\t%s')
 
+
 if __name__ == "__main__":
     parser = ArgParser()
     parser.add_argument('--input_dir', required=True,
