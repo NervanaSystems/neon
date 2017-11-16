@@ -61,6 +61,29 @@ if write_version:
     finally:
         a.close()
 
+requirements = [
+    "configargparse",
+    "numpy",
+    "pyyaml",
+    "pep8",
+    "flake8",
+    "funcsigs",
+    "pytest",
+    "pytest-cov",
+    "pytest-mock",
+    "posix_ipc",
+    "pillow",
+    "pylint",
+    "sphinx",
+    "h5py",
+    "appdirs",
+    "future",
+    "tqdm",
+    "cffi",
+    "filelock",
+    "py-cpuinfo",
+]
+
 
 setup(name='nervananeon',
       version=VERSION,
@@ -72,6 +95,7 @@ setup(name='nervananeon',
       license='License :: OSI Approved :: Apache Software License',
       scripts=['bin/neon', 'bin/nvis'],
       packages=find_packages(),
+      install_requires=requirements,
       package_data={'neon': ['backends/kernels/sass/*.sass',
                              'backends/kernels/cubin/*.cubin',
                              'backends/kernels/maxas/*.pl',
