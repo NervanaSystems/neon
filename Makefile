@@ -285,7 +285,7 @@ endif
 
 dist: env
 	@echo "Prepping distribution..."
-	@python setup.py sdist
+	@python setup.py bdist_wheel
 
 release: check dist
 	@echo "Bump version number in setup.py"

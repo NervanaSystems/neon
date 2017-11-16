@@ -14,7 +14,7 @@
 # limitations under the License.
 # ----------------------------------------------------------------------------
 import os
-from setuptools import setup, find_packages, Command
+from setuptools import setup, find_packages
 import subprocess
 
 # Define version information
@@ -28,8 +28,9 @@ try:
     (so, serr) = pipe.communicate()
     if pipe.returncode == 0:
         FULLVERSION += "+%s" % so.strip().decode("utf-8")
-except:
+except Exception:
     pass
+
 
 if write_version:
     txt = "# " + ("-" * 77) + "\n"
@@ -61,13 +62,13 @@ if write_version:
         a.close()
 
 
-setup(name='neon',
+setup(name='nervananeon',
       version=VERSION,
       description="Nervana's deep learning framework",
       long_description=open('README.md').read(),
       author='Nervana Systems',
-      author_email='info@nervanasys.com',
-      url='http://www.nervanasys.com',
+      author_email='intelnervana@intel.com',
+      url='http://www.intelnervana.com',
       license='License :: OSI Approved :: Apache Software License',
       scripts=['bin/neon', 'bin/nvis'],
       packages=find_packages(),
@@ -77,6 +78,7 @@ setup(name='neon',
                              'backends/kernels/maxas/MaxAs/*.pm',
                              'backends/mklEngine/*.so',
                              'backends/mklEngine/src/*.header',
+                             '../mklml_lnx_*/lib/*.so',
                              '../loader/bin/*.so']},
       classifiers=['Development Status :: 3 - Alpha',
                    'Environment :: Console',
