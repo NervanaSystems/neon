@@ -35,13 +35,13 @@ def flatten_layers(self):
 
 
 class Benchmark(object):
-
     def __init__(self, model, time_layers=True):
         self.model = model
         self.layer_times = OrderedDict()
         if not time_layers:
             return
 
+        self.time_layers = time_layers
         self.start = self.model.be.init_mark()
         self.end = self.model.be.init_mark()
         LayerContainer.flatten_layers = flatten_layers
@@ -105,16 +105,20 @@ class Benchmark(object):
         # iterate through minibatches of the dataset
         times = OrderedDict()
         time_keys = ['fprop'] if inference else ['fprop', 'bprop', 'iteration']
+        if self.time_layers:
+            time_keys.append('data_loading')
         for ky in time_keys:
             times[ky] = np.full(niterations, -1.0)
         count = 0
 
+        data_loading_mark = self.model.be.init_mark()
         fprop_start = self.model.be.init_mark()
         fprop_end = self.model.be.init_mark()
         bprop_end = self.model.be.init_mark()
 
         while count < niterations:
             dataset.reset()
+            self.model.be.record_mark(data_loading_mark)
             for _, (x, t) in enumerate(dataset):
 
                 self.model.be.record_mark(fprop_start)  # mark start of fprop
@@ -132,10 +136,17 @@ class Benchmark(object):
                 else:
                     self.model.be.synchronize_mark(fprop_end)
 
-                times['fprop'][count] = self.model.be.get_time(fprop_start, fprop_end)
+                data_loading_time = self.model.be.get_time(data_loading_mark, fprop_start)
+                if self.time_layers:
+                    times['data_loading'][count] = data_loading_time
+                times['fprop'][count] = self.model.be.get_time(fprop_start,
+                                                               fprop_end) + data_loading_time
                 if inference is False:
                     times['bprop'][count] = self.model.be.get_time(fprop_end, bprop_end)
-                    times['iteration'][count] = times['fprop'][count] + times['bprop'][count]
+                    times['iteration'][count] = times['fprop'][
+                        count] + times['bprop'][count]
+
+                self.model.be.record_mark(data_loading_mark)
 
                 count += 1
                 if count >= niterations:
@@ -167,6 +178,8 @@ class Benchmark(object):
         # iterate through minibatches of the dataset
         times = OrderedDict()
         time_keys = ['fprop', 'bprop', 'iteration']
+        if self.time_layers:
+            time_keys.append('data_loading')
         for ky in time_keys:
             times[ky] = np.full(niterations, -1.0)
         count = 0
@@ -174,6 +187,7 @@ class Benchmark(object):
         epoch = self.model.epoch_index
         z, y_temp = self.model.zbuf, self.model.ybuf
 
+        data_loading_mark = self.model.be.init_mark()
         fprop_start = self.model.be.init_mark()
         fprop_end = self.model.be.init_mark()
         bprop_start = self.model.be.init_mark()
@@ -181,6 +195,7 @@ class Benchmark(object):
 
         while count < niterations:
             dataset.reset()
+            self.model.be.record_mark(data_loading_mark)
             for mb_idx, (x, t) in enumerate(dataset):
                 # clip all discriminator parameters to a cube in case of WGAN
                 if self.model.wgan_param_clamp:
@@ -193,7 +208,11 @@ class Benchmark(object):
                 Gz = self.model.fprop_gen(z)
                 y_noise = self.model.fprop_dis(Gz)
                 self.model.be.record_mark(fprop_end)  # mark end of fprop
-                times['fprop'][count] += self.model.be.get_time(fprop_start, fprop_end)
+                data_loading_time = self.model.be.get_time(data_loading_mark, fprop_start)
+                if self.time_layers:
+                    times['data_loading'][count] = data_loading_time
+                times['fprop'][count] += self.model.be.get_time(fprop_start,
+                                                                fprop_end) + data_loading_time
                 y_temp[:] = y_noise
                 self.model.be.record_mark(bprop_start)  # mark start of bprop
                 delta_noise = self.model.cost.costfunc.bprop_noise(y_noise)
@@ -238,7 +257,9 @@ class Benchmark(object):
                     self.model.gen_iter += 1
 
                 self.model.current_batch += 1
-                times['iteration'][count] = times['fprop'][count] + times['bprop'][count]
+                times['iteration'][count] = times['data_loading'][count] + times['fprop'][
+                     count] + times['bprop'][count]
+                self.model.be.record_mark(data_loading_mark)
                 count += 1
                 if count >= niterations:
                     break
@@ -267,15 +288,15 @@ class Benchmark(object):
 
         function_names = tuple(function.__name__.title() for function in functions)
 
-        fmt_titles = '| {name:^33} '.format(name='Func') + '| {:^11} ' * len(function_names)\
+        fmt_titles = '| {name:^33} '.format(name='Func') + '| {:^11} ' * len(function_names) \
                      + '|    Units    |'
-        fmt_nums = '| {func:<33} ' + '|  {%s:<10.5g} ' * len(function_names) % function_names\
+        fmt_nums = '| {func:<33} ' + '|  {%s:<10.5g} ' * len(function_names) % function_names \
                    + '| {units:^11} |'
 
         head_str = fmt_titles.format(*function_names)
         sep = '+' + '-' * (len(head_str) - 2) + '+'
 
-        msg = '\n{sep:}\n|{prefix:-^105}|\n'\
+        msg = '\n{sep:}\n|{prefix:-^105}|\n' \
             .format(sep=sep, prefix='  Intel Neon Benchmark: 0.0.2 Neon Version: %s  '
                                     % __neon_version__[:5])
         msg += '%s\n%s\n%s\n' % (sep, head_str, sep)
