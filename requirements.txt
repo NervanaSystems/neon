@@ -18,3 +18,5 @@ tqdm==4.8.4
 cffi==1.11.0
 filelock==2.0.8
 py-cpuinfo==3.2.0
+pypandoc==1.4
+pandoc==1.0.2

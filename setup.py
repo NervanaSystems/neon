@@ -32,6 +32,13 @@ except Exception:
     pass
 
 
+try:
+    import pypandoc
+    readme_file = pypandoc.convert('README.md', 'rst') 
+except:
+    readme_file = open('README.md').read()
+
+
 if write_version:
     txt = "# " + ("-" * 77) + "\n"
     txt += "# Copyright 2017 Nervana Systems Inc.\n"
@@ -82,13 +89,15 @@ requirements = [
     "cffi",
     "filelock",
     "py-cpuinfo",
+    "pypandoc",
+    "pandoc"
 ]
 
 
 setup(name='nervananeon',
       version=VERSION,
       description="Nervana's deep learning framework",
-      long_description=open('README.md').read(),
+      long_description=readme_file,
       author='Nervana Systems',
       author_email='intelnervana@intel.com',
       url='http://www.intelnervana.com',
