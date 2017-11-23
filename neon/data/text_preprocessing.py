@@ -152,8 +152,8 @@ def get_google_word2vec_W(fname, vocab, vocab_size=1000000, index_from=3):
         word = []
         while True:
             ch = f.read(1)
-            if ch == ' ':
-                word = ''.join(word)
+            if ch == b' ':
+                word = b''.join(word)
                 break
             if ch != '\n':
                 word.append(ch)
