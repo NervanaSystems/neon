@@ -16,6 +16,17 @@
 
 Previous Versions
 =================
+neon v2.3.0
+-----------
+
+|Docs230|_
+
+* Optimized DeepSpeech2 MKL backend performance (~7X improvement over the CPU backend)
+* Fused convolution and bias layer which significantly boosted AlexNet and VGG performance on Intel architectures with MKL backend
+* Made SSD and Faster-RNN use VGG weight files in new format
+* Fixed use of reset_cells hyperparameter
+* Fixed MKL backend bug for GAN and Faster-RCNN models
+
 neon v2.2.0
 -----------
 
@@ -473,6 +484,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs230| replace:: Docs
 .. |Docs220| replace:: Docs
 .. |Docs200| replace:: Docs
 .. |Docs190| replace:: Docs
@@ -501,6 +513,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs230: http://neon.nervanasys.com/docs/2.3.0
 .. _Docs220: http://neon.nervanasys.com/docs/2.2.0
 .. _Docs200: http://neon.nervanasys.com/docs/2.0.0
 .. _Docs190: http://neon.nervanasys.com/docs/1.9.0

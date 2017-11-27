@@ -34,6 +34,14 @@ neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/install
 
 Starting after neon v2.2.0, the master branch of neon will be updated weekly with work-in-progress toward the next release. Check out a release tag (e.g., "git checkout v2.2.0") for a stable release. Or simply check out the "latest" release tag to get the latest stable release (i.e., "git checkout latest")
 
+From version 2.4.0, we re-enabled pip install. Neon can be installed using package name nervananeon. 
+
+```bash
+    pip install nervananeon
+```
+
+It is noted that [aeon](https://aeon.nervanasys.com/index.html/getting_started.html) needs to be installed separately. The latest release v2.4.0 uses aeon v1.2.0.
+
 **Warning**
 
 > Between neon v2.1.0 and v2.2.0, the aeon manifest file format has been changed. When updating from neon < v2.2.0 manifests have to be recreated using ingest scripts (in examples folder) or updated using [this](neon/data/convert_manifest.py) script.

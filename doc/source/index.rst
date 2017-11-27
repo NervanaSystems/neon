@@ -28,7 +28,7 @@ Features include:
 * Support for commonly used models including convnets, RNNs, LSTMs, and
   autoencoders.  You can find many pre-trained implementations of these in our
   `model zoo`_
-* Tight integration with our `state-of-the-art`_ GPU kernel library
+* Tight integration with our `state-of-the-art`_ GPU kernel library and Intel CPU MKLML library
 * 3s/macrobatch (3072 images) on AlexNet on Titan X (Full run on 1 GPU ~ 32 hrs)
 * Basic automatic differentiation support
 * Framework for visualization
@@ -36,11 +36,14 @@ Features include:
 
 New features in this release:
 
-* Optimized DeepSpeech2 MKL backend performance (~7X improvement over the CPU backend)
-* Fused convolution and bias layer which significantly boosted AlexNet and VGG performance on Intel architectures with MKL backend
-* Made SSD and Faster-RNN use VGG weight files in new format
-* Fixed use of reset_cells hyperparameter
-* Fixed MKL backend bug for GAN and Faster-RCNN models
+* Enabled pip install through pypi
+* Updated MKLML to version 20171007 with up to 3X performance increase
+* Updated resnet model to optimize performance with MKLML 20171007
+* Updated Alexnet weight file and fixed bug for deep dream
+* Fixed faster-rcnn inference model loading issue
+* Added data_loading time measurement and enabled GAN networks benchmarking
+* Updated Aeon version to 1.2.0
+* Enabled neon build with mklEngine on Windows systems
 * See more in the `change log`_.
 
 We use neon internally at Intel Nervana to solve our `customers' problems`_

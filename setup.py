@@ -18,7 +18,7 @@ from setuptools import setup, find_packages
 import subprocess
 
 # Define version information
-VERSION = '2.3.0'
+VERSION = '2.4.0'
 FULLVERSION = VERSION
 write_version = True
 
@@ -96,9 +96,9 @@ requirements = [
 
 setup(name='nervananeon',
       version=VERSION,
-      description="Nervana's deep learning framework",
+      description="Intel Nervana's deep learning framework",
       long_description=readme_file,
-      author='Nervana Systems',
+      author='Intel Nervana Systems',
       author_email='intelnervana@intel.com',
       url='http://www.intelnervana.com',
       license='License :: OSI Approved :: Apache Software License',

@@ -1,5 +1,16 @@
 # ChangeLog
 
+## v2.4.0 (2017-11-27):
+
+* Enabled pip install through pypi
+* Updated MKLML to version 20171007 with performance improve of ~3X for mnist datalayer/nondatalayer and ~1.6X for DCGAN/WGAN datalayer
+* Updated resnet model to optimize performance with MKLML 20171007
+* Updated Alexnet weight file and fixed bug for deep dream
+* Fixed faster-rcnn inference model loading issue
+* Added data_loading time measurement and enabled GAN networks benchmarking
+* Updated to Aeon version 1.2.0
+* Enabled neon build with mklEngine on Windows systems
+
 ## v2.3.0 (2017-10-27):
 
 * Optimized DeepSpeech2 MKL backend performance (~7X improvement over the CPU backend)
