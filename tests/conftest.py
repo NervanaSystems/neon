@@ -33,6 +33,7 @@ def pytest_addoption(parser):
     '''
     parser.addoption("--all", action="store_true", help="run all tests")
     parser.addoption("--device_id", type=int, default=0, help="GPU device to use")
+    parser.addoption("--data_dir", type=str, default="~/nervana/data", help="data dir to use")
     return
 
 
@@ -42,9 +43,8 @@ def device_id(request):
 
 
 @pytest.fixture(scope='session')
-def data():
-    path_to_data = '~/nervana/data/'
-    return path_to_data
+def data(request):
+    return request.config.getoption("--data_dir")
 
 
 def get_backend(request, datatype=np.float32):
