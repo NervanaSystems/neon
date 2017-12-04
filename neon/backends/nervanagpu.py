@@ -974,7 +974,13 @@ class NervanaGPU(Backend):
                                                 1) numpy random number state vector
                                                 2) array of uint32 specifying on dev RNG state
         """
-        assert type(rng_states) is tuple and len(rng_states) == 2
+        # This is probably a CPU-trained model, but loaded on the GPU for
+        # predictions
+        if len(rng_states) != 2:
+            self.rng_reset()
+            self.rng.set_state(rng_states)
+            return
+
         self._set_rand_state_dev(state=rng_states[1])
         self.rng.set_state(rng_states[0])
 
