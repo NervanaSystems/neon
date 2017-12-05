@@ -35,10 +35,12 @@ from neon.util.persist import ensure_dirs_exist
 parser = NeonArgparser(__doc__)
 parser.add_argument('--kbatch', type=int, default=1,
                     help='number of data batches per noise batch in training')
+parser.add_argument('--subset_pct', type=float, default=100,
+                    help='subset percentage of training dataset to use')
 args = parser.parse_args()
 
 # load up the mnist data set
-dataset = MNIST(path=args.data_dir, size=27)
+dataset = MNIST(path=args.data_dir, subset_pct=args.subset_pct, size=27)
 train_set = dataset.train_iter
 valid_set = dataset.valid_iter
 

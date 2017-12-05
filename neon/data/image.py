@@ -47,12 +47,12 @@ class MNIST(Dataset):
         super(MNIST, self).__init__('mnist.pkl.gz',
                                     'https://s3.amazonaws.com/img-datasets',
                                     15296311,
-                                    path=path,
-                                    subset_pct=subset_pct)
+                                    path=path)
         self.normalize = normalize
         self.sym_range = sym_range
         self.size = size
         self.shuffle = shuffle
+        self.subset_pct = subset_pct
 
     def load_data(self):
         """
@@ -73,6 +73,14 @@ class MNIST(Dataset):
 
         with gzip.open(filepath, 'rb') as mnist:
             (X_train, y_train), (X_test, y_test) = pickle_load(mnist)
+
+            if self.subset_pct < 100:
+                X_train = X_train[:int(X_train.shape[0] * self.subset_pct / 100.)]
+                y_train = y_train[:int(y_train.shape[0] * self.subset_pct / 100.)]
+                X_test = X_test[:int(X_test.shape[0] * self.subset_pct / 100.)]
+                y_test = y_test[:int(y_test.shape[0] * self.subset_pct / 100.)]
+                logger.debug("subset %d%% of data", self.subset_pct*100)
+
             if self.size > 28:
                 n_train, n_test = X_train.shape[0], X_test.shape[0]
                 X_train_ = np.zeros(shape=(n_train, self.size, self.size))
