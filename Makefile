@@ -259,10 +259,14 @@ check: env
 	@echo
 
 doc: env
+ifeq ($(HAS_GPU), true)
 	@. $(ACTIVATE); neon --help > doc/source/neon_help_output.txt
 	$(MAKE) -C $(DOC_DIR) clean
 	@. $(ACTIVATE); $(MAKE) -C $(DOC_DIR) html
 	@echo "Documentation built in $(DOC_DIR)/build/html"
+else
+	@echo "Skip documentation built as no GPU found"
+endif
 	@echo
 
 html: doc
