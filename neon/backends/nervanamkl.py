@@ -615,10 +615,6 @@ class NervanaMKL(NervanaCPU):
                                       primitives, layer.init_f, c_int(inference))
         layer.init_f = 1
         layer.shape5D = outputs.shape5D = C, D, H, W, N
-        if inference:
-            self.convert(outputs)
-            y[:] = y * gamma + beta
-            self.convert_mkl(outputs)
 
     def batchnorm_layer(self, in_shape):
         return layer_mkl.BatchNormLayerMKL(in_shape)

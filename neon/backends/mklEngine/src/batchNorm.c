@@ -53,7 +53,7 @@ static void BatchNormInit(
     
     //create forward and backward primitives and operation
     CHECK_ERR( dnnBatchNormalizationCreateForward_v2_F32(&bn_forp,     NULL, lt_in_forp_raw, eps, dnnUseScaleShift), err );
-    CHECK_ERR( dnnBatchNormalizationCreateForward_v2_F32(&bn_forp_inf, NULL, lt_in_forp_raw, eps, dnnUseInputMeanVariance), err );
+    CHECK_ERR( dnnBatchNormalizationCreateForward_v2_F32(&bn_forp_inf, NULL, lt_in_forp_raw, eps, dnnUseScaleShift | dnnUseInputMeanVariance), err );
     CHECK_ERR( dnnBatchNormalizationCreateBackward_v2_F32(&bn_backp,   NULL, lt_in_forp_raw, eps, dnnUseScaleShift), err );
 
     //primitive layout 
