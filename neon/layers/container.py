@@ -418,8 +418,6 @@ class Sequential(LayerContainer):
 
             # try to convert to mkl
             l.be.convert_data(error, l.get_is_mklop())
-            if l.deltas is not None:
-                l.be.clean_data(l.deltas, l.get_is_mklop())
 
             if altered_tensor:
                 l.revert_list.append(altered_tensor)
@@ -427,6 +425,10 @@ class Sequential(LayerContainer):
                 error = l.bprop(error, alpha, beta)
             else:
                 error = l.bprop(error)
+
+            # for not-mkl op, deltas is cpu tensor, but it is shared thus may have
+            # meanless mkl tensor info, thus clean it for further operation (beta add)
+            l.be.clean_data(l.deltas, not l.get_is_mklop())
 
             for tensor in l.revert_list:
                 self.be.revert_tensor(tensor)

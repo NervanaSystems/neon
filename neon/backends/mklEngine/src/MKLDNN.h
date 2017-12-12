@@ -32,31 +32,37 @@
 #define DIM4 (4)
 
 typedef enum {
-    FORWARD_INDEX   			    = 0,
-    BWD_DATA_INDEX  			    = 1,
-    BWD_FILTER_INDEX  			    = 2,
-    CONVERT_FORWARD_INPUT 		    = 3,
-    CONVERT_FORWARD_FILTER        	= 4,
-    CONVERT_FORWARD_BIAS     		= 5,
-    CONVERT_FORWARD_OUTPUT   		= 6,
-    CONVERT_BWDDATA_INPUT 		    = 7,
-    CONVERT_BWDDATA_FILTER        	= 8,
-    CONVERT_BWDDATA_OUTPUT   		= 9,
-    CONVERT_BWDFILTER_INPUT 		= 10,
+    FORWARD_INDEX                   = 0,
+    BWD_DATA_INDEX                  = 1,
+    BWD_FILTER_INDEX                = 2,
+    BDW_BIAS_INDEX                  = 42,
+    CONVERT_FORWARD_INPUT           = 3,
+    CONVERT_FORWARD_FILTER          = 4,
+    CONVERT_FORWARD_BIAS            = 5,
+    CONVERT_FORWARD_OUTPUT          = 6,
+    CONVERT_BWDDATA_INPUT           = 7,
+    CONVERT_BWDDATA_FILTER          = 8,
+    CONVERT_BWDDATA_OUTPUT          = 9,
+    CONVERT_BWDFILTER_INPUT         = 10,
     CONVERT_BWDFILTER_FILTER        = 11,
-    CONVERT_BWDFILTER_OUTPUT   		= 12,
-    BUFFER_FORWARD_INPUT 		    = 13,
-    BUFFER_FORWARD_FILTER        	= 14,
-    BUFFER_FORWARD_BIAS     		= 15,
-    BUFFER_FORWARD_OUTPUT   		= 16,
-    BUFFER_BWDDATA_INPUT 		    = 17,
-    BUFFER_BWDDATA_FILTER        	= 18,
-    BUFFER_BWDDATA_OUTPUT   		= 19,
-    BUFFER_BWDFILTER_INPUT 		    = 20,
-    BUFFER_BWDFILTER_FILTER        	= 21,
-    BUFFER_BWDFILTER_OUTPUT   		= 22,
-    BUFFER_TRANS_INPUT   	     	= 38,
-    BUFFER_TRANS_OUTPUT   		    = 40,
+    CONVERT_BWDFILTER_OUTPUT        = 12,
+    CONVERT_BIAS_BIAS               = 47,
+    CONVERT_BIAS_OUTPUT             = 49,
+    BUFFER_FORWARD_INPUT            = 13,
+    BUFFER_FORWARD_FILTER           = 14,
+    BUFFER_FORWARD_BIAS             = 15,
+    BUFFER_FORWARD_OUTPUT           = 16,
+    BUFFER_BWDDATA_INPUT            = 17,
+    BUFFER_BWDDATA_FILTER           = 18,
+    BUFFER_BWDDATA_OUTPUT           = 19,
+    BUFFER_BWDFILTER_INPUT          = 20,
+    BUFFER_BWDFILTER_FILTER         = 21,
+    BUFFER_BWDFILTER_OUTPUT         = 22,
+    BUFFER_TRANS_INPUT              = 38,
+    BUFFER_TRANS_OUTPUT             = 40,
+    BUFFER_BIAS_BIAS                = 48,
+    BUFFER_BIAS_OUT                 = 50,
+    BUFFER_GRADINPUT_COL            = 51,
     L_F_I  = 23,
     L_F_W  = 24,
     L_F_O  = 25,
@@ -74,16 +80,9 @@ typedef enum {
     L_W    = 37,
     L_I_CHWN = 39,
     L_O_CHWN = 41,
-    BDW_BIAS_INDEX   = 42,
     L_B              = 44,
     L_B_B            = 45,
     L_B_O            = 46,
-    CV_BIAS_BIAS     = 47,
-    BUFFER_BIAS_BIAS = 48,
-    CV_BIAS_OUT      = 49,
-    BUFFER_BIAS_OUT  = 50,
-
-
 } mkldnnConvolutionIndex_t;
 
 typedef enum {
@@ -145,12 +144,12 @@ typedef enum {
 
 
 typedef enum {
-    CONCAT_LAYOUT_INPUT			    = 0,
-    CONCAT_LAYOUT_OUTPUT		    = 1,
-    CONCAT_LAYOUT_FORWARD_OUTPUT	= 2,
-    CONCAT_LAYOUT_BACKWARD_INPUT	= 3,
-    CONCAT_FORWARD			        = 4,
-    CONCAT_BACKWARD			        = 5,
+    CONCAT_LAYOUT_INPUT                = 0,
+    CONCAT_LAYOUT_OUTPUT            = 1,
+    CONCAT_LAYOUT_FORWARD_OUTPUT    = 2,
+    CONCAT_LAYOUT_BACKWARD_INPUT    = 3,
+    CONCAT_FORWARD                    = 4,
+    CONCAT_BACKWARD                    = 5,
     CONCAT_BUF_BACKWARD_INPUT       = 6,
     CONCAT_BUF_BRANCHES             = 7,
     CONCAT_LT_BRANCHES              = 8,
@@ -181,11 +180,11 @@ static float* GetPtr(long long tensor)
 {
     long long* ptr = (long long *)tensor;
     long long ptr1 = ptr[MKLPtr];
-	if (ptr1 == 0)
-	{
-	    ptr1 = ptr[CPUPtr];
-	}
-	return (float*)ptr1;
+    if (ptr1 == 0)
+    {
+        ptr1 = ptr[CPUPtr];
+    }
+    return (float*)ptr1;
 }
 
 //cv is created to convert some input with layout lt_src
@@ -200,23 +199,23 @@ static int try_convert(
   dnnLayout_t lt_src,
   dnnLayout_t lt_des)
 {
-	dnnError_t err = E_SUCCESS;
-	*memory = NULL;
-	if((lt_src != NULL) && (lt_des != NULL))
-	{
-		if (!dnnLayoutCompare_F32(lt_src, lt_des))
-		{
-			err = dnnConversionCreate_F32(cv, lt_src, lt_des);
-			if(err) return err;
-			err = dnnAllocateBuffer_F32((void**)memory, lt_des);
-			if(err) return err;
-		}
-		return err;
-	}
-	else
-	{
-	    fprintf(stderr, "wrong input for try_convert!\n");
-	    return err;
-	}
+    dnnError_t err = E_SUCCESS;
+    *memory = NULL;
+    if((lt_src != NULL) && (lt_des != NULL))
+    {
+        if (!dnnLayoutCompare_F32(lt_src, lt_des))
+        {
+            err = dnnConversionCreate_F32(cv, lt_src, lt_des);
+            if(err) return err;
+            err = dnnAllocateBuffer_F32((void**)memory, lt_des);
+            if(err) return err;
+        }
+        return err;
+    }
+    else
+    {
+        fprintf(stderr, "wrong input for try_convert!\n");
+        return err;
+    }
 }
 #endif

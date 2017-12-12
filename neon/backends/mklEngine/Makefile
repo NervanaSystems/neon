@@ -36,7 +36,7 @@ endif
 
 all:$(MKL_ENGINE_SO) $(MATH_CPU_SO)
 
-$(MKL_ENGINE_SO): src/conv.c src/pooling.c src/relu.c src/batchNorm.c src/concat.c src/softmax.c $(SRCS)
+$(MKL_ENGINE_SO): src/conv.c src/pooling.c src/relu.c src/batchNorm.c src/concat.c src/softmax.c src/conv_dilate.c $(SRCS)
 	@echo "Building $@..."
 	$(CC) $^ -shared -o $@ $(COMMON_FLAGS) $(CFLAGS)
 

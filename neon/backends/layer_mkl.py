@@ -38,13 +38,13 @@ class ConvLayerMKL(ConvLayer):
                                            N, C, K, D, H, W, T, R, S,
                                            pad_d, pad_h, pad_w, str_d, str_h, str_w,
                                            dil_d, dil_h, dil_w)
-        self.dnnPrimitives = np.zeros((1, 51), dtype=np.uint64)
+        self.dnnPrimitives = np.zeros((1, 52), dtype=np.uint64)
         self.init_f = 0  # forward init flag
         self.init_bd = 0  # backward data
         self.init_bw = 0  # backward weight
         self.dilated = any(d != 1 for d in self.dilation)
         self.is_mklop = True
-        if D != 1 or T != 1 or self.dilated:
+        if D != 1 or T != 1 or dil_d != 1:
             self.is_mklop = False
 
     def xprop_conv(self, I, F, O, X=None, bias=None, bsum=None, alpha=1.0, beta=0.0,
@@ -52,7 +52,8 @@ class ConvLayerMKL(ConvLayer):
 
         if layer_op is None:
             layer_op = self
-        if self.dilated or (not layer_op.get_is_mklop()):
+
+        if not self.get_is_mklop():
             I.backend.convert(I)
             F.backend.convert(F)
             I.clean_mkl()
@@ -64,12 +65,12 @@ class ConvLayerMKL(ConvLayer):
         if X is None:
             X = O
 
-        # TODO, support bias
         C, D, H, W, N = self.dimI
         C, T, R, S, K = self.dimF
         K, M, P, Q, N = self.dimO
         pad_d, pad_h, pad_w = self.padding
         str_d, str_h, str_w = self.strides
+        dil_d, dil_h, dil_w = self.dilation
         primitives = c_longlong(self.dnnPrimitives.ctypes.data)
         bias_prim = c_longlong(0)
         if bias is not None:
@@ -79,14 +80,14 @@ class ConvLayerMKL(ConvLayer):
         if not backward:
             mkl_res = I.backend.mklEngine.Conv_forward(
                 I.get_prim(), O.get_prim(), F.get_prim(), bias_prim, primitives, self.init_f,
-                N, C, H, W, R, S, str_h, str_w, pad_h, pad_w, K, P, Q)
+                N, C, H, W, R, S, str_h, str_w, pad_h, pad_w, dil_h, dil_w, K, P, Q)
             self.init_f = 1
             O.shape5D = self.dimO
         else:
-            beta_ = c_float(beta)
             I.backend.mklEngine.Conv_bwdData(
                 I.get_prim(), O.get_prim(), F.get_prim(), primitives,
-                N, K, P, Q, self.init_bd, beta_)
+                N, C, H, W, R, S, str_h, str_w, pad_h, pad_w,
+                dil_h, dil_w, K, P, Q, self.init_bd, c_float(beta))
             O.shape5D = self.dimI
             self.init_bd = 1
         if mkl_res != 0:
@@ -105,18 +106,24 @@ class ConvLayerMKL(ConvLayer):
             I.clean_mkl()
             E.backend.convert(E)
             E.clean_mkl()
-            super(ConvLayerMKL, self).update_conv(I, E, U, alpha, beta)
+            super(ConvLayerMKL, self).update_conv(I, E, U, alpha, beta, grad_bias, layer_op)
             return
 
         # not deal with alpha, beta yet
         K, M, P, Q, N = self.dimO
+        C, D, H, W, N = self.dimI
+        C, T, R, S, K = self.dimF
+        pad_d, pad_h, pad_w = self.padding
+        str_d, str_h, str_w = self.strides
+        dil_d, dil_h, dil_w = self.dilation
         primitives = c_longlong(self.dnnPrimitives.ctypes.data)
         bias_prim = c_longlong(0)
         if grad_bias is not None:
             bias_prim = grad_bias.get_prim()
         I.backend.mklEngine.Conv_bwdFilter(
             I.get_prim(), E.get_prim(), U.get_prim(), bias_prim, primitives,
-            N, K, P, Q, self.init_bw, self.init_bd)
+            N, C, H, W, R, S, str_h, str_w, pad_h, pad_w,
+            dil_h, dil_w, K, P, Q, self.init_bw, self.init_bd)
         self.init_bw = 1
 
 

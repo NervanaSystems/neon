@@ -248,6 +248,10 @@ class ConvLayer(object):
         E = E._tensor.reshape(self.dimO)
         U = U._tensor.reshape(self.dimF)
 
+        if grad_bias is not None:
+            grad = E.reshape((K, -1))
+            grad_bias[:] = np.sum(grad, axis=1)
+
         # 1x1 conv can be cast as a simple dot operation
         if self.dot:
             # CxK = CxHWN . KxHWN.T

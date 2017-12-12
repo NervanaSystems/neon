@@ -451,7 +451,7 @@ class NervanaMKL(NervanaCPU):
 
         primitives = c_longlong(layer.dnnPrimitives.ctypes.data)
         self.mklEngine.MaxPooling_bprop(I.get_prim(), O.get_prim(),
-                                        primitives, layer.initOk_b)
+                                        primitives, layer.initOk_b, c_float(beta))
         layer.initOk_b = 1
         O.shape5D = layer.dimI
 
