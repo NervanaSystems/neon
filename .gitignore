@@ -32,3 +32,6 @@ neon/backends/kernels/pre
 neon/backends/kernels/dump
 neon/data/loader/loader
 .idea/
+aeon
+dist
+mklml_lnx_*

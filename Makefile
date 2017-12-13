@@ -194,7 +194,7 @@ clean_so:
 
 clean: clean_py clean_so
 	@echo "Removing virtual environment files..."
-	@rm -rf aeon
+	@rm -rf aeon build dist mklml_lnx*
 	@rm -rf $(VIRTUALENV_DIR_BASE) $(VIRTUALENV_DIR_BASE)2 $(VIRTUALENV_DIR_BASE)3 $(STYLEVIRTUALENV_DIR_BASE)
 	@echo
 
