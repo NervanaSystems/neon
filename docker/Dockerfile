@@ -2,8 +2,6 @@ FROM ubuntu:16.04
 
 MAINTAINER Baojun Liu <baojun.liu@intel.com>
 
-ARG neon_branch=master
-
 RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
         apt-utils \
         build-essential \
@@ -11,6 +9,9 @@ RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
         clang \
         cmake \
         curl \
+        libboost-filesystem-dev \
+        libboost-system-dev \
+        libssl-dev \
         libhdf5-dev \
         libsox-dev \
         libopencv-dev \
@@ -22,6 +23,7 @@ RUN apt-get update --fix-missing && apt-get install -y --no-install-recommends \
         python-dev \
         python-pip \
         python-virtualenv \
+        python3-numpy \
         software-properties-common \
         unzip \
         wget \
@@ -47,7 +49,7 @@ RUN echo '[ ! -z "$TERM" -a -r /etc/motd ] && cat /etc/issue && cat /etc/motd' \
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||\n\
 |								\n\
 | Docker container running Ubuntu				\n\
-| with Neon ${neon_branch} optimized for CPU		        \n\
+| with Neon optimized for CPU		        \n\
 | with Intel(R) MKL						\n\
 |								\n\
 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||\n\
