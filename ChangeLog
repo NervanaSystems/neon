@@ -1,5 +1,15 @@
 # ChangeLog
 
+## v2.5.0 (2017-12-21):
+
+* Optimized SSD MKL backend performance (~3X boost version over version)
+* Bumped aeon version to v1.3.0
+* Fixed inference performance issue of MKL batchnorm
+* Fixed batch prediction issue for gpu backend
+* Enabled subset_pct for MNIST_DCGAN example
+* Updated "make clean" to clean up mkl artifacts
+* Added dockerfile for IA mkl
+
 ## v2.4.0 (2017-11-27):
 
 * Enabled pip install through pypi

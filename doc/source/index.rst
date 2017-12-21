@@ -36,30 +36,29 @@ Features include:
 
 New features in this release:
 
-* Enabled pip install through pypi
-* Updated MKLML to version 20171007 with up to 3X performance increase
-* Updated resnet model to optimize performance with MKLML 20171007
-* Updated Alexnet weight file and fixed bug for deep dream
-* Fixed faster-rcnn inference model loading issue
-* Added data_loading time measurement and enabled GAN networks benchmarking
-* Updated Aeon version to 1.2.0
-* Enabled neon build with mklEngine on Windows systems
+* Optimized SSD MKL backend performance (~3X boost version over version)
+* Bumped aeon version to v1.3.0
+* Fixed inference performance issue of MKL batchnorm
+* Fixed batch prediction issue for gpu backend
+* Enabled subset_pct for MNIST_DCGAN example
+* Updated "make clean" to clean up mkl artifacts
+* Added dockerfile for IA mkl
 * See more in the `change log`_.
 
-We use neon internally at Intel Nervana to solve our `customers' problems`_
+We use neon internally at Intel to solve our `customers' problems`_
 in many domains. Consider joining us. We are hiring across several
 roles. Apply here_!
 
 
 .. |(TM)| unicode:: U+2122
    :ltrim:
-.. _nervana: http://nervanasys.com
+.. _nervana: http://www.intelnervana.com
 .. |neo| replace:: neon
 .. _neo: https://github.com/nervanasystems/neon
 .. _model zoo: https://github.com/NervanaSystems/ModelZoo
 .. _state-of-the-art: https://github.com/soumith/convnet-benchmarks
 .. _customers' problems: http://www.nervanasys.com/solutions
-.. _here: http://www.nervanasys.com/careers
+.. _here: https://www.intelnervana.com/careers/
 .. _highest performance: https://github.com/soumith/convnet-benchmarks
 .. _change log: https://github.com/NervanaSystems/neon/blob/master/ChangeLog
 

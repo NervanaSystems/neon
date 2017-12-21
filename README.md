@@ -1,6 +1,6 @@
 # neon
 
-[neon](https://github.com/NervanaSystems/neon) is Intel Nervana's reference deep learning framework committed to [best performance](https://github.com/soumith/convnet-benchmarks) on all hardware. Designed for ease-of-use and extensibility.
+[neon](https://github.com/NervanaSystems/neon) is Intel's reference deep learning framework committed to [best performance](https://github.com/soumith/convnet-benchmarks) on all hardware. Designed for ease-of-use and extensibility.
 
 * [Tutorials](http://neon.nervanasys.com/docs/latest/tutorials.html) and [iPython notebooks](https://github.com/NervanaSystems/meetup) to get users started with using neon for deep learning.
 * Support for commonly used layers: convolution, RNN, LSTM, GRU, BatchNorm, and more.
@@ -34,13 +34,15 @@ neon (conda users see the [guide](http://neon.nervanasys.com/docs/latest/install
 
 Starting after neon v2.2.0, the master branch of neon will be updated weekly with work-in-progress toward the next release. Check out a release tag (e.g., "git checkout v2.2.0") for a stable release. Or simply check out the "latest" release tag to get the latest stable release (i.e., "git checkout latest")
 
+* [Install via pypi](https://pypi.python.org/pypi/nervananeon)
+
 From version 2.4.0, we re-enabled pip install. Neon can be installed using package name nervananeon. 
 
 ```bash
     pip install nervananeon
 ```
 
-It is noted that [aeon](https://aeon.nervanasys.com/index.html/getting_started.html) needs to be installed separately. The latest release v2.4.0 uses aeon v1.2.0.
+It is noted that [aeon](https://aeon.nervanasys.com/index.html/getting_started.html) needs to be installed separately. The latest release v2.5.0 uses aeon v1.3.0.
 
 **Warning**
 

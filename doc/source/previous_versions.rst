@@ -16,6 +16,20 @@
 
 Previous Versions
 =================
+neon v2.4.0
+-----------
+
+|Docs240|_
+
+* Enabled pip install through pypi
+* Updated MKLML to version 20171007 with performance improve of ~3X for mnist datalayer/nondatalayer and ~1.6X for DCGAN/WGAN datalayer
+* Updated resnet model to optimize performance with MKLML 20171007
+* Updated Alexnet weight file and fixed bug for deep dream
+* Fixed faster-rcnn inference model loading issue
+* Added data_loading time measurement and enabled GAN networks benchmarking
+* Updated to Aeon version 1.2.0
+* Enabled neon build with mklEngine on Windows systems
+
 neon v2.3.0
 -----------
 
@@ -484,6 +498,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs240| replace:: Docs
 .. |Docs230| replace:: Docs
 .. |Docs220| replace:: Docs
 .. |Docs200| replace:: Docs
@@ -513,6 +528,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs240: http://neon.nervanasys.com/docs/2.4.0
 .. _Docs230: http://neon.nervanasys.com/docs/2.3.0
 .. _Docs220: http://neon.nervanasys.com/docs/2.2.0
 .. _Docs200: http://neon.nervanasys.com/docs/2.0.0
