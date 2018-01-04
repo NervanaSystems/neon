@@ -910,3 +910,30 @@ class NervanaMKL(NervanaCPU):
         self.change_data_store_order(ngLayer.error_contiguous, nsteps,
                                      ngLayer.error_contiguous.shape[0],
                                      ngLayer.error_contiguous.shape[1] // nsteps, b=error)
+
+    def detectionOutput_fprop(self, conf_view, loc_view, detection, prior_boxes,
+                              proposals, nms_top_k, image_top_k, score_threshold, nms_threshold):
+        conf = c_longlong(conf_view._tensor.ctypes.data)
+        loc = c_longlong(loc_view._tensor.ctypes.data)
+        detection = c_longlong(detection._tensor.ctypes.data)
+        prior_boxes = c_longlong(prior_boxes._tensor.ctypes.data)
+        L, num_class, bs = conf_view.shape
+        proposals = c_longlong(proposals._tensor.ctypes.data)
+        result = np.zeros((bs, image_top_k, 6), dtype=np.float32)
+        result_ptr = c_longlong(result.ctypes.data)
+        result_len = np.zeros(bs, dtype=np.int64)
+        result_len_ptr = c_longlong(result_len.ctypes.data)
+
+        self.mklEngine.detection_fprop(conf, loc, result_ptr, prior_boxes,
+                                       result_len_ptr, c_longlong(L), c_longlong(num_class),
+                                       c_longlong(bs), c_longlong(nms_top_k),
+                                       c_longlong(image_top_k),
+                                       c_float(score_threshold),
+                                       c_float(nms_threshold))
+        batch_all_detections = [None] * self.bsz
+        for i in range(bs):
+            leng = np.long(result_len[i])
+            res_batch = np.zeros((leng, 6))
+            res_batch[:] = result[i, 0:leng, :]
+            batch_all_detections[i] = res_batch
+        return batch_all_detections

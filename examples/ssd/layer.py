@@ -162,6 +162,13 @@ class DetectionOutput(Layer):
         conf_view = self.conf.reshape((-1, self.num_classes, self.be.bsz))
         loc_view = self.loc.reshape((-1, 4, self.be.bsz))
 
+        # for mkl backend optimization
+        if self.be.is_mkl():
+            return self.be.detectionOutput_fprop(conf_view, loc_view, self.detections,
+                                                 prior_boxes, self.proposals,
+                                                 self.nms_topk, self.topk,
+                                                 self.threshold, self.nms_threshold)
+
         # convert the prior boxes to bbox predictions by applying
         # the loc regression targets
         # process each image individually

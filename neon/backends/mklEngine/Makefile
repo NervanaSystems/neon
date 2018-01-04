@@ -23,7 +23,7 @@ COMMON_FLAGS    := -std=c99 -O3 -I$(MKL_PATH)/include -L$(MKL_PATH)/lib -Wl,-rpa
 
 ifeq   ($(CC), icc)
 	CFLAGS  := -qopenmp -lmklml_intel -fPIC -march=native
-	#CFLAGS := -qopenmp -lmklml_intel -fPIC -g -liomp5 -xMIC-AVX512
+	#CFLAGS := -qopenmp -lmklml_intel -fPIC -g -liomp5 -xCommon-AVX512
 else
 	CFLAGS := -fopenmp -lmklml_gnu -fPIC -march=native -g -liomp5
 endif
@@ -36,7 +36,7 @@ endif
 
 all:$(MKL_ENGINE_SO) $(MATH_CPU_SO)
 
-$(MKL_ENGINE_SO): src/conv.c src/pooling.c src/relu.c src/batchNorm.c src/concat.c src/softmax.c src/conv_dilate.c $(SRCS)
+$(MKL_ENGINE_SO): src/conv.c src/pooling.c src/relu.c src/batchNorm.c src/concat.c src/softmax.c src/conv_dilate.c src/detection.c $(SRCS)
 	@echo "Building $@..."
 	$(CC) $^ -shared -o $@ $(COMMON_FLAGS) $(CFLAGS)
 
