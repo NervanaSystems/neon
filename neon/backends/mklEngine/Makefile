@@ -28,6 +28,14 @@ else
 	CFLAGS := -fopenmp -lmklml_gnu -fPIC -march=native -g -liomp5
 endif
 
+ifeq   ($(MAC_BUILD), 1)
+	CFLAGS := -fopenmp -lmklml -fPIC -march=native -g -liomp5
+	COMMON_FLAGS    := -std=c99 -O3 -I$(MKL_PATH)/include -L$(MKL_PATH)/lib
+	MKL_ENGINE_SO   := mklEngine.dylib
+	MATH_CPU_SO	:= cmath.dylib
+	CC := gcc-7 
+endif
+
 ifeq   ($(WIN_BUILD), 1)
 	CFLAGS := -fopenmp -lmklml -fPIC -march=native -g -liomp5md
 endif
@@ -45,5 +53,5 @@ $(MATH_CPU_SO): src/math_cpu.c
 	$(CC) $^ -shared -o $@ $(COMMON_FLAGS) $(CFLAGS)
 
 clean:
-	@rm -vf *.o *.so *.dll
+	@rm -vrf *.o *.so *.dylib *.dSYM *.dll
 

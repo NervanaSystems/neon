@@ -19,6 +19,7 @@ wraps :mod:`numpy` ndarray and related operations
 from __future__ import division
 from builtins import object, round, str, zip
 import numpy as np
+import sys
 import logging
 import time
 import functools
@@ -563,8 +564,9 @@ class NervanaCPU(Backend):
                             "performance may suffer.  Consider installing "
                             "one of openblas, Atlas, MKL, or vecLib")
         except (AttributeError, KeyError):
-            logger.warn("Problems inferring BLAS info, CPU performance may "
-                        "be suboptimal")
+            if sys.platform != 'darwin':
+                logger.warn("Problems inferring BLAS info, CPU performance may "
+                            "be suboptimal")
 
         self.device_type = 0
         self.device_id = 0

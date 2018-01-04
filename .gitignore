@@ -1,3 +1,6 @@
+*.dll
+*.dylib
+*.dSYM
 *.sublime-project
 *.sublime-workspace
 *.pyc
@@ -34,4 +37,4 @@ neon/data/loader/loader
 .idea/
 aeon
 dist
-mklml_lnx_*
+mklml_*

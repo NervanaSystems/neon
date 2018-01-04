@@ -57,6 +57,22 @@ if [[ `uname` == 'Linux' ]]; then
     cd $MKL_ENGINE_PATH && make clean && make
     cd $THIS_DIR
 
+elif [[ `uname` == 'Darwin' ]]; then
+    echo -e "Mac detected"
+    RETURN_STRING=`./prepare_mkl.sh 2`
+    export MKLROOT=`echo $RETURN_STRING | awk -F "=" '{print $2}' | awk '{print $1}'`
+    echo -e "mkl root: ${GREEN}$MKLROOT${NORM}"
+    export LD_LIBRARY_PATH=$MKLROOT/lib:$LD_LIBRARY_PATH
+    export LIBRARY_PATH=$MKLROOT/lib:$LIBRARY_PATH
+    export CPATH=$MKLROOT/include:$CPATH
+    #build neon mklEngine
+    MKL_ENGINE_PATH='neon/backends/mklEngine'
+    export DYLD_LIBRARY_PATH=$MKLROOT/lib:$THIS_DIR/$MKL_ENGINE_PATH:$DYLD_LIBRARY_PATH
+    export MAC_BUILD=1
+    cd $MKL_ENGINE_PATH && make clean && make
+    cp ${MKLROOT}/lib/*.dylib .
+    cd $THIS_DIR
+
 elif [[ "$(expr substr $(uname -s) 1 10)" == "MINGW32_NT" || "$(expr substr $(uname -s) 1 7)" == "MSYS_NT" ]]; then
     echo -e "Windows detected"
     #build neon mklEngine
@@ -65,5 +81,5 @@ elif [[ "$(expr substr $(uname -s) 1 10)" == "MINGW32_NT" || "$(expr substr $(un
     cd $THIS_DIR
 
 else
-    echo -e "Currently only Linux Environment supported, skipping MKL install"
+    echo -e "Environment not supported, skipping MKL install"
 fi

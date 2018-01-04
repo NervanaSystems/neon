@@ -39,7 +39,7 @@ RUN pip --no-cache-dir install --upgrade \
 
 RUN git clone https://github.com/NervanaSystems/neon /neon && \
     make -C /neon sysinstall && \
-    rm -rf /neon/mklml_lnx_*.tgz
+    rm -rf /neon/mklml_*.tgz
 
 WORKDIR /neon
 

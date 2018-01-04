@@ -20,7 +20,10 @@ FindLibrary()
     intel|1)
       LOCALMKL=`find $DST -name libmklml_intel.so`   # name of MKL SDL lib
       ;;
-    *)
+     2)
+      LOCALMKL=`find $DST -name libmklml.dylib`
+      ;;
+     *)
       LOCALMKL=`find $DST -name libmklml_gnu.so`   # name of MKL SDL lib
       ;;
   esac
@@ -40,12 +43,16 @@ echo $VERSION_LINE  # Return Version Line
 }
 
 # MKL
+PLATFORM=lnx
+if [ `uname` = 'Darwin' ]; then
+    PLATFORM=mac
+fi
 DST=`dirname $0`
 OMP=0
-VERSION_MATCH=20171007
-ARCHIVE_BASE=mklml_lnx_2018.0.1.$VERSION_MATCH
+VERSION_MATCH=20171227
+ARCHIVE_BASE=mklml_${PLATFORM}_2018.0.1.$VERSION_MATCH
 ARCHIVE_BASENAME=$ARCHIVE_BASE.tgz
-GITHUB_RELEASE_TAG=v0.11
+GITHUB_RELEASE_TAG=v0.12
 MKLURL="https://github.com/01org/mkl-dnn/releases/download/$GITHUB_RELEASE_TAG/$ARCHIVE_BASENAME"
 # there are diffrent MKL lib to be used for GCC and for ICC
 reg='^[0-9]+$'

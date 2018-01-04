@@ -194,6 +194,19 @@ class NervanaMKL(NervanaCPU):
                                            'mklEngine.dll')
             self.mklEngine = ctypes.windll.LoadLibrary(mkl_engine_path)
             math_engine_path = os.path.join(os.path.dirname(__file__), 'mklEngine', 'cmath.dll')
+
+        elif sys.platform == 'darwin':
+            mkl_ml_path = os.path.join(path, os.pardir, 'backends', 'mklEngine',
+                                       'libmklml.dylib')
+            ctypes.cdll.LoadLibrary(mkl_ml_path)
+            iomp5_path = os.path.join(path, os.pardir, 'backends', 'mklEngine',
+                                      'libiomp5.dylib')
+            ctypes.cdll.LoadLibrary(iomp5_path)
+            mkl_engine_path = os.path.join(path, os.pardir, 'backends', 'mklEngine',
+                                           'mklEngine.dylib')
+            self.mklEngine = ctypes.cdll.LoadLibrary(mkl_engine_path)
+            math_engine_path = os.path.join(os.path.dirname(__file__), 'mklEngine', 'cmath.dylib')
+
         else:
             mkl_engine_path = os.path.join(path, os.pardir, 'backends', 'mklEngine',
                                            'mklEngine.so')
