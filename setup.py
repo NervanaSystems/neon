@@ -74,7 +74,6 @@ requirements = [
     "pyyaml",
     "pep8",
     "flake8",
-    "funcsigs",
     "pytest",
     "pytest-cov",
     "pytest-mock",

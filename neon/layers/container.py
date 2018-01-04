@@ -18,6 +18,7 @@ from builtins import str, zip, range
 import numpy as np
 import itertools as itt
 from operator import add
+import inspect
 
 from neon import NervanaObject
 from neon.layers.layer import Layer, BranchNode, Dropout, DataTransform, LookupTable, Affine
@@ -25,7 +26,6 @@ from neon.layers.recurrent import Recurrent, get_steps
 from neon.transforms import Softmax
 from neon.util.persist import load_class
 from functools import reduce
-from funcsigs import signature
 
 
 # modified from https://docs.python.org/3/library/itertools.html
@@ -344,12 +344,12 @@ class Sequential(LayerContainer):
         # get the layers that own their outputs
         self.accumulate_updates = accumulate_updates
         alloc_layers = [l for l in self.layers if l.owns_output]
-        if 'accumulate_updates' in signature(alloc_layers[-1].allocate).parameters:
+        if 'accumulate_updates' in inspect.getargspec(alloc_layers[-1].allocate).args:
             alloc_layers[-1].allocate(shared_outputs, accumulate_updates=accumulate_updates)
         else:
             alloc_layers[-1].allocate(shared_outputs)
         for l in self.layers:
-            if 'accumulate_updates' in signature(l.allocate).parameters:
+            if 'accumulate_updates' in inspect.getargspec(l.allocate).args:
                 l.allocate(accumulate_updates=accumulate_updates)
             else:
                 l.allocate()
