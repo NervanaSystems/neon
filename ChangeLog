@@ -1,5 +1,11 @@
 # ChangeLog
 
+## v2.6.0 (2018-01-05):
+
+* Further optimized MKL backend performance for SSD inference
+* Updated MKLML to version 20171227
+* Enabled neon install with MKLML on Mac OSX
+
 ## v2.5.0 (2017-12-21):
 
 * Optimized SSD MKL backend performance (~3X boost version over version)

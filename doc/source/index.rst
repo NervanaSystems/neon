@@ -36,13 +36,9 @@ Features include:
 
 New features in this release:
 
-* Optimized SSD MKL backend performance (~3X boost version over version)
-* Bumped aeon version to v1.3.0
-* Fixed inference performance issue of MKL batchnorm
-* Fixed batch prediction issue for gpu backend
-* Enabled subset_pct for MNIST_DCGAN example
-* Updated "make clean" to clean up mkl artifacts
-* Added dockerfile for IA mkl
+* Further optimized MKL backend performance for SSD inference
+* Updated MKLML to version 20171227
+* Enabled neon install with MKLML on Mac OSX
 * See more in the `change log`_.
 
 We use neon internally at Intel to solve our `customers' problems`_

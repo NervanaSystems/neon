@@ -42,7 +42,7 @@ From version 2.4.0, we re-enabled pip install. Neon can be installed using packa
     pip install nervananeon
 ```
 
-It is noted that [aeon](https://aeon.nervanasys.com/index.html/getting_started.html) needs to be installed separately. The latest release v2.5.0 uses aeon v1.3.0.
+It is noted that [aeon](https://aeon.nervanasys.com/index.html/getting_started.html) needs to be installed separately. The latest release v2.6.0 uses aeon v1.3.0.
 
 **Warning**
 

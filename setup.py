@@ -18,7 +18,7 @@ from setuptools import setup, find_packages
 import subprocess
 
 # Define version information
-VERSION = '2.5.0'
+VERSION = '2.6.0'
 FULLVERSION = VERSION
 write_version = True
 

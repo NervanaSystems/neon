@@ -76,7 +76,7 @@ setup neon in this manner, run the following commands:
     git clone https://github.com/NervanaSystems/neon.git
     cd neon; git checkout latest; make
 
-The above checks out the latest stable release (e.g. a tagged release version v2.5.0) and build neon.
+The above checks out the latest stable release (e.g. a tagged release version v2.6.0) and build neon.
 Alternatively, you can check out and build the latest master branch:
 
 .. code-block:: bash
@@ -168,7 +168,7 @@ Neon v2.4.0 and after is pip installable via pypi with package name nervananeon.
 
     pip install nervananeon
 
-It is noted `aeon <https://aeon.nervanasys.com/index.html/getting_started.html>`__ needs to be installed separately. The latest release v2.5.0 uses aeon v1.3.0.
+It is noted `aeon <https://aeon.nervanasys.com/index.html/getting_started.html>`__ needs to be installed separately. The latest release v2.6.0 uses aeon v1.3.0.
 
 Anaconda install
 ~~~~~~~~~~~~~~~~

@@ -16,6 +16,19 @@
 
 Previous Versions
 =================
+neon v2.5.0
+-----------
+
+|Docs250|_
+
+* Optimized SSD MKL backend performance (~3X boost version over version)
+* Bumped aeon version to v1.3.0
+* Fixed inference performance issue of MKL batchnorm
+* Fixed batch prediction issue for gpu backend
+* Enabled subset_pct for MNIST_DCGAN example
+* Updated "make clean" to clean up mkl artifacts
+* Added dockerfile for IA mkl
+
 neon v2.4.0
 -----------
 
@@ -498,6 +511,7 @@ neon v0.8.1
 
 Initial public release of neon.
 
+.. |Docs250| replace:: Docs
 .. |Docs240| replace:: Docs
 .. |Docs230| replace:: Docs
 .. |Docs220| replace:: Docs
@@ -528,6 +542,7 @@ Initial public release of neon.
 .. |Docs9| replace:: Docs
 .. |Docs8| replace:: Docs
 .. _cudanet: https://github.com/NervanaSystems/cuda-convnet2
+.. _Docs250: http://neon.nervanasys.com/docs/2.5.0
 .. _Docs240: http://neon.nervanasys.com/docs/2.4.0
 .. _Docs230: http://neon.nervanasys.com/docs/2.3.0
 .. _Docs220: http://neon.nervanasys.com/docs/2.2.0
