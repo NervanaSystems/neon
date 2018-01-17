@@ -666,29 +666,32 @@ class NervanaMKL(NervanaCPU):
     def mergesum_layer(self, layer_num):
         return layer_mkl.MergeSumLayerMKL(layer_num)
 
-    def sum_tensor(self, sum, layer_num, tensors, output):
+    def sum_tensor(self, sum, layer_num, tensors, output, shape5D):
+        C, D, H, W, N = shape5D
         inp = c_longlong(tensors.ctypes.data)
         size = c_longlong(np.prod(output.shape))
         prim = c_longlong(sum.ctypes.data)
-        self.mklEngine.MklSumTensor(layer_num, inp, size, output.get_prim(), prim)
+        self.mklEngine.MklSumTensor(layer_num, inp, size, output.get_prim(), prim, N, C, H, W)
 
     def fprop_mergesum(self, ngLayer, inputs, inference, layers, outputs, out_shape):
         ngLayer.shape5D = inputs.shape5D
+        C, H, W = out_shape
+        outputs.shape5D = (C, 1, H, W, outputs.shape[-1])
+        if inputs.shape5D is None:
+            ngLayer.shape5D = inputs.shape5D = outputs.shape5D
         for i, l in enumerate(layers):
             l.fprop(inputs, inference)
             alloc_layers = [ll for ll in l.layers if ll.owns_output]
             ngLayer.tensors[(i * 4):(i * 4 + 4)] = alloc_layers[-1].outputs.primitive[0:4]
-
-        C, H, W = out_shape
-        outputs.shape5D = (C, 1, H, W, outputs.shape[-1])
-        self.sum_tensor(ngLayer.sum_prim_f, ngLayer.layer_num, ngLayer.tensors, outputs)
+        self.sum_tensor(ngLayer.sum_prim_f, ngLayer.layer_num,
+                        ngLayer.tensors, outputs, inputs.shape5D)
 
     def bprop_mergesum(self, ngLayer, alpha, beta, layers, error, deltas):
         for i, l in enumerate(reversed(layers)):
             e = l.bprop(error)
             ngLayer.tensors[(i * 4):(i * 4 + 4)] = e.primitive[0:4]
-
-        self.sum_tensor(ngLayer.sum_prim_b, ngLayer.layer_num, ngLayer.tensors, deltas)
+        self.sum_tensor(ngLayer.sum_prim_b, ngLayer.layer_num,
+                        ngLayer.tensors, deltas, ngLayer.shape5D)
         deltas.shape5D = ngLayer.shape5D
 
     def mergebroadcast_layer(self, layer_num):

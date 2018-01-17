@@ -250,7 +250,8 @@ void MklSumTensor(
   unsigned long long inputs,
   unsigned long long len,
   unsigned long long sum,
-  unsigned long long dnnprimitives)
+  unsigned long long dnnprimitives,
+  int N, int C, int H, int W)
 {
     dnnError_t err;
     long long* primitives = (long long*)dnnprimitives;
@@ -260,6 +261,13 @@ void MklSumTensor(
     // use layout of first tensor as default layout
     dnnLayout_t lt_in_first = (dnnLayout_t)pInput[MKLLayout];
     if (lt_in_first == NULL)  lt_in_first = (dnnLayout_t)pInput[CPULayout];
+    if (lt_in_first == NULL) //create for CHWN
+    {
+        size_t inSize[DIM4]    = {W, H, C, N};
+	    size_t inStrides[DIM4] = {N, N*W, N*W*H, 1};
+	    CHECK_ERR( dnnLayoutCreate_F32(&lt_in_first, DIM4, inSize, inStrides) , err );
+	    pInput[CPULayout] = (long long)lt_in_first;
+    }
 
     // allocate memory for resulting sum, if necessary
     // save it in primitive
@@ -297,6 +305,12 @@ void MklSumTensor(
             //if layout diff with the first tensor, do conversion
             dnnLayout_t lt_src = (dnnLayout_t)temp[MKLLayout];
             if(lt_src == NULL) lt_src = (dnnLayout_t)temp[CPULayout];
+            if(lt_src == NULL)
+            {
+                size_t inSize[DIM4]    = {W, H, C, N};
+                size_t inStrides[DIM4] = {N, N*W, N*W*H, 1};
+                CHECK_ERR( dnnLayoutCreate_F32(&lt_src, DIM4, inSize, inStrides) , err );
+            }
             if (!dnnLayoutCompare_F32(lt_in_first, lt_src))
             {
                 dnnPrimitive_t cv;
@@ -307,6 +321,7 @@ void MklSumTensor(
                 pBuf = pNewBuf;
                 temp_memory[i] = pBuf;
             }
+
             sum_res[dnnResourceMultipleSrc + i] = pBuf;
         }
 	    CHECK_ERR( dnnExecute_F32(p_sum,(void*)sum_res), err );
@@ -315,8 +330,6 @@ void MklSumTensor(
         {
             if (temp_memory[i] != NULL) dnnReleaseBuffer_F32(temp_memory[i]);
         }
-        free(coeffs);
-        dnnDelete_F32(p_sum);
     }
 
     else //use blas to sum tensors
@@ -350,5 +363,7 @@ void MklSumTensor(
     }
 
 ERR_RETURN:
+    free(coeffs);
+    dnnDelete_F32(p_sum);
     return;
 }
