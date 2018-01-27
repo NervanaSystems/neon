@@ -53,7 +53,7 @@ VERSION_MATCH=20171227
 ARCHIVE_BASE=mklml_${PLATFORM}_2018.0.1.$VERSION_MATCH
 ARCHIVE_BASENAME=$ARCHIVE_BASE.tgz
 GITHUB_RELEASE_TAG=v0.12
-MKLURL="https://github.com/01org/mkl-dnn/releases/download/$GITHUB_RELEASE_TAG/$ARCHIVE_BASENAME"
+MKLURL="https://github.com/intel/mkl-dnn/releases/download/$GITHUB_RELEASE_TAG/$ARCHIVE_BASENAME"
 # there are diffrent MKL lib to be used for GCC and for ICC
 reg='^[0-9]+$'
 echo Checking MKLML dependencies...
