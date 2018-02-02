@@ -241,7 +241,7 @@ Operations such as generating training/testing splits, or balancing labels for i
 
 **Manifest files**
 
-The manifest file contains UTF-8 text lines. Each line is one of header, comment, or record. For reference, please take a look at `aeon documentation <https://github.com/NervanaSystems/aeon/blob/rc1-master/doc/source/user_guide.rst#manifest-file>`_.
+The manifest file contains UTF-8 text lines. Each line is one of header, comment, or record. For reference, please take a look at `aeon documentation <https://github.com/NervanaSystems/aeon/blob/master/doc/source/user_guide.rst#manifest-file>`_.
 
 .. code-block:: bash
 
