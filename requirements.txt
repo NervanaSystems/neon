@@ -7,7 +7,7 @@ pytest==3.0.1
 pytest-cov==2.3.1
 pytest-mock==1.6.0
 posix_ipc==1.0.0
-pillow==3.3.1
+pillow==3.3.2
 pylint==1.6.4
 sphinx==1.6.5
 h5py==2.6.0
